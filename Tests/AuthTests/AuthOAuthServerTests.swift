@@ -170,7 +170,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func decodeOAuthAuthorizationDetailsResponseSurfacesBothErrorsWhenNeitherShapeMatches() throws {
+    func decodeOAuthAuthorizationDetailsResponseSurfacesTheDetailsError() throws {
       let json = """
         {
           "authorization_id": "abc123def456",
@@ -187,20 +187,12 @@ extension AuthMockerTests {
         }
         """.data(using: .utf8)!
 
-      do {
-        _ = try AuthClient.Configuration.jsonDecoder.decode(
+      let error = try #require(throws: DecodingError.self) {
+        try AuthClient.Configuration.jsonDecoder.decode(
           OAuthAuthorizationDetailsResponse.self, from: json
         )
-        Issue.record("Expected decoding to throw")
-      } catch let combined as AllDecodingAttemptsFailedError {
-        #expect(combined.errors.count == 2)
-        #expect(
-          "\(combined.errors[0])".lowercased().contains("uuid"),
-          "first attempt's error should mention the invalid UUID, got \(combined.errors[0])"
-        )
-      } catch {
-        Issue.record("Expected AllDecodingAttemptsFailedError, got \(error)")
       }
+      #expect("\(error)".lowercased().contains("uuid"), "got \(error)")
     }
 
     @Test

@@ -230,6 +230,94 @@ struct AuthAPITests {
     #expect(response.lastPage == 3)
   }
 
+  @Test
+  func signUpDecodesASessionOrAUser() throws {
+    let request = try api.signUp(
+      email: "a@b.c", password: "p", data: nil, redirectTo: nil, captchaToken: nil, pkce: nil)
+
+    let session = try request.decode(ok, json(named: "session"))
+    #expect(session.session != nil)
+
+    let user = try request.decode(ok, json(named: "user"))
+    #expect(user.session == nil)
+    #expect(user.user.id == UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B"))
+
+    // The obfuscated user GoTrue returns for an email that is already registered.
+    var obfuscated = try #require(
+      JSONSerialization.jsonObject(with: json(named: "user")) as? [String: Any])
+    obfuscated["identities"] = [Any]()
+    let fakeUser = try request.decode(ok, JSONSerialization.data(withJSONObject: obfuscated))
+    #expect(fakeUser.session == nil)
+    #expect(fakeUser.user.identities == [])
+  }
+
+  @Test
+  func signUpSurfacesTheSessionErrorForAMalformedSession() throws {
+    let request = try api.signUp(
+      email: "a@b.c", password: "p", data: nil, redirectTo: nil, captchaToken: nil, pkce: nil)
+    var session = try #require(
+      JSONSerialization.jsonObject(with: json(named: "session")) as? [String: Any])
+    session["token_type"] = nil
+
+    let error = try #require(throws: AuthError.self) {
+      try request.decode(ok, JSONSerialization.data(withJSONObject: session))
+    }
+    guard case .keyNotFound(let key, _) = error.underlyingError as? DecodingError else {
+      Issue.record("Expected keyNotFound, got \(error)")
+      return
+    }
+    #expect(key.stringValue == "tokenType")
+  }
+
+  @Test
+  func verifyOTPDecodesASessionOrAnEmailChangeConfirmation() throws {
+    let request = try api.verifyOTP(tokenHash: "h", type: .emailChange)
+
+    let session = try request.decode(ok, json(named: "session"))
+    #expect(session.session != nil)
+
+    let pending = try request.decode(ok, json(named: "email-change-single-confirmation"))
+    guard case .emailChangeConfirmationPending(let confirmation) = pending else {
+      Issue.record("Expected .emailChangeConfirmationPending, got \(pending)")
+      return
+    }
+    #expect(confirmation.code == "200")
+  }
+
+  @Test
+  func oauthAuthorizationDetailsDecodesDetailsOrARedirect() throws {
+    let request = api.oauthAuthorizationDetails(id: "abc", accessToken: "token")
+
+    let details = try request.decode(
+      ok,
+      Data(
+        """
+        {
+          "authorization_id": "abc",
+          "redirect_uri": "https://example.com/callback",
+          "client": {"id": "\(id)", "name": "Client"},
+          "user": {"id": "\(id)", "email": "a@b.c"},
+          "scope": "email"
+        }
+        """.utf8)
+    )
+    guard case .details(let value) = details else {
+      Issue.record("Expected .details, got \(details)")
+      return
+    }
+    #expect(value.authorizationId == "abc")
+
+    let redirect = try request.decode(
+      ok, Data(#"{"redirect_url":"https://example.com/callback?code=1"}"#.utf8))
+    guard case .redirect(let value) = redirect else {
+      Issue.record("Expected .redirect, got \(redirect)")
+      return
+    }
+    #expect(value.redirectURL == URL(string: "https://example.com/callback?code=1"))
+  }
+
+  private let ok = HTTPTypes.HTTPResponse(status: .ok)
+
   private func query<Response>(_ request: AuthRequest<Response>) -> [String: String] {
     let items = URLComponents(string: request.head.path ?? "")?.queryItems ?? []
     return Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })

@@ -753,17 +753,10 @@ public enum AuthResponse: Decodable, Hashable, Sendable {
   case user(User)
 
   public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    if let value = try? container.decode(Session.self) {
-      self = .session(value)
-    } else if let value = try? container.decode(User.self) {
-      self = .user(value)
-    } else {
-      throw DecodingError.dataCorruptedError(
-        in: container,
-        debugDescription: "Data could not be decoded as any of the expected types (Session, User)."
-      )
-    }
+    self =
+      try decoder.isSessionBody()
+      ? .session(Session(from: decoder))
+      : .user(User(from: decoder))
   }
 
   /// The user in either case of the response.
@@ -781,6 +774,21 @@ public enum AuthResponse: Decodable, Hashable, Sendable {
   }
 }
 
+private enum SessionKeys: String, CodingKey {
+  case accessToken, refreshToken, expiresIn
+}
+
+extension Decoder {
+  /// Whether the body is a session, the test auth-js applies: `access_token`, `refresh_token`,
+  /// and `expires_in` are all present. `/signup` otherwise returns a bare user, and `/verify` the
+  /// `{msg, code}` of a half-confirmed email change.
+  func isSessionBody() throws -> Bool {
+    let container = try container(keyedBy: SessionKeys.self)
+    return container.contains(.accessToken) && container.contains(.refreshToken)
+      && container.contains(.expiresIn)
+  }
+}
+
 /// The response from ``AuthClient/verifyOTP(tokenHash:type:)`` and its overloads.
 public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
   /// A full session was created, meaning the user is signed in.
@@ -793,18 +801,10 @@ public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
   case emailChangeConfirmationPending(EmailChangeConfirmation)
 
   public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    if let value = try? container.decode(Session.self) {
-      self = .session(value)
-    } else if let value = try? container.decode(EmailChangeConfirmation.self) {
-      self = .emailChangeConfirmationPending(value)
-    } else {
-      throw DecodingError.dataCorruptedError(
-        in: container,
-        debugDescription:
-          "Data could not be decoded as any of the expected types (Session, EmailChangeConfirmation)."
-      )
-    }
+    self =
+      try decoder.isSessionBody()
+      ? .session(Session(from: decoder))
+      : .emailChangeConfirmationPending(EmailChangeConfirmation(from: decoder))
   }
 
   /// The session, or `nil` if the email change is still pending its other confirmation. Access
@@ -2091,11 +2091,17 @@ public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
 }
 
 extension OAuthAuthorizationDetailsResponse: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case authorizationId
+  }
+
+  /// Details carry an `authorization_id`; the auto-approve body is `{redirect_url}` alone.
   public init(from decoder: any Decoder) throws {
-    self = try decodeOneOf(
-      { .details(try OAuthAuthorizationDetails(from: decoder)) },
-      { .redirect(try OAuthRedirect(from: decoder)) }
-    )
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self =
+      container.contains(.authorizationId)
+      ? .details(try OAuthAuthorizationDetails(from: decoder))
+      : .redirect(try OAuthRedirect(from: decoder))
   }
 }
 
