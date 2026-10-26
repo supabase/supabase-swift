@@ -155,6 +155,10 @@ public actor RealtimeChannel {
   /// of server closes so a close for a previous incarnation of the topic is ignored.
   var joinRef: String?
 
+  /// The access token the current `phx_join` was sent with, so a token stored while the join
+  /// waits for its reply is still sent to the channel.
+  var joinAccessToken: String?
+
   /// Resumed by the server's join confirmation; failed by a close, a reset, or cancellation.
   var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
 

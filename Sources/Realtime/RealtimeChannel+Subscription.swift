@@ -268,6 +268,7 @@ extension RealtimeChannel {
     // would treat as a duplicate.
     try Task.checkCancellation()
     joinRef = ref
+    joinAccessToken = accessToken
     await performJoin(ref: ref, accessToken: accessToken)
 
     // Wait for `didReceiveSubscribedOK`. A close, a reset or cancellation fails the waiter.
