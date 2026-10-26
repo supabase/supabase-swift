@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux) && !os(Android)
+#if canImport(Security)
   import Foundation
   import Security
   import Testing
@@ -93,7 +93,8 @@
     func setQueryWithDataProtectionSetsAccessibility() {
       let keychain = Keychain(service: "service", useDataProtectionKeychain: true)
       let query = keychain.setQuery(forKey: "key", data: Data())
-      #expect(query[kSecAttrAccessible as String] != nil)
+      let accessible = query[kSecAttrAccessible as String] as? String
+      #expect(accessible == kSecAttrAccessibleAfterFirstUnlock as String)
     }
   }
 #endif

@@ -797,6 +797,33 @@ features:
       - AuthClient.Configuration.localStorage
     supporting_symbols:
       - AuthLocalStorage
+      # The async v3 storage protocol and its implementations, added alongside
+      # AuthLocalStorage. AuthClient adopts them in a later Auth v3 change.
+      - AuthStorage
+      - AuthStorage.load
+      - AuthStorage.save
+      - AuthStorage.remove
+      - InMemoryAuthStorage
+      - InMemoryAuthStorage.init
+      - InMemoryAuthStorage.load
+      - InMemoryAuthStorage.save
+      - InMemoryAuthStorage.remove
+      - FileAuthStorage
+      - FileAuthStorage.init
+      - FileAuthStorage.load
+      - FileAuthStorage.save
+      - FileAuthStorage.remove
+      - KeychainStorage
+      - KeychainStorage.init
+      - KeychainStorage.load
+      - KeychainStorage.save
+      - KeychainStorage.remove
+      - KeychainStorage.Accessibility
+      - KeychainStorage.Accessibility.whenUnlocked
+      - KeychainStorage.Accessibility.whenUnlockedThisDeviceOnly
+      - KeychainStorage.Accessibility.afterFirstUnlock
+      - KeychainStorage.Accessibility.afterFirstUnlockThisDeviceOnly
+      - KeychainStorage.Accessibility.whenPasscodeSetThisDeviceOnly
   client.session_management.persist_session:
     status: implemented
     note: "Sessions persist by default via AuthClient.Configuration.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
