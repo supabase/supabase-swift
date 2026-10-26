@@ -3166,6 +3166,45 @@ extension AuthMockerTests {
     }
 
     @Test
+    func signInRejectedAsBannedKeepsStoredSession() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 403,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "user_banned",
+              "msg": "User is banned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      sut.dependencies.sessionStorage.store(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            try await sut.signIn(email: "banned@example.com", password: "secret")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.errorCode == .userBanned)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStorage.get() == .valid)
+    }
+
+    @Test
     func userWithForeignJWTKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
       let sut = makeSUT()
 

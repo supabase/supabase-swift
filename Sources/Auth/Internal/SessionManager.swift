@@ -6,8 +6,8 @@ import Logging
 /// Which stored session a request may clear when the server says the session it was issued for
 /// is gone.
 enum SessionOwnership: Sendable {
-  /// The request was issued for no particular stored session — sign-in, sign-up, `/logout`.
-  /// Cleanup clears whatever is stored, as it always has.
+  /// The request was issued for no particular stored session, such as sign-in or sign-up. A
+  /// rejection of it says nothing about the stored session, so cleanup never clears storage.
   case unscoped
   /// The stored session the request was issued for, read before the request went out; `nil` when
   /// storage was empty then. Cleanup clears storage only while it still holds exactly this, so a
@@ -177,7 +177,7 @@ private actor LiveSessionManager {
   /// caller that read storage itself and then awaited `remove()` would leave a window for a
   /// concurrent sign-in to store its session and have this deletion take it.
   func removeIfUnchanged(since ownership: SessionOwnership) -> Bool {
-    if case .snapshot(let snapshot) = ownership, sessionStorage.changed(since: snapshot) {
+    guard case .snapshot(let snapshot) = ownership, !sessionStorage.changed(since: snapshot) else {
       return false
     }
     sessionStorage.delete()
