@@ -190,6 +190,41 @@ struct TypesTests {
     #expect(user.identities == expected)
   }
 
+  @Test
+  func identityWithoutIdentityIDFailsDecoding() {
+    let json = Data(
+      #"""
+      {
+        "id": "105012345678901234567",
+        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "provider": "google"
+      }
+      """#.utf8
+    )
+
+    #expect(throws: DecodingError.self) {
+      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    }
+  }
+
+  @Test
+  func identityDecodesIdentityID() throws {
+    let json = Data(
+      #"""
+      {
+        "id": "105012345678901234567",
+        "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "provider": "google"
+      }
+      """#.utf8
+    )
+
+    let identity = try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+
+    #expect(identity.identityId == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+  }
+
   private func decodeUser(_ fields: String) throws -> User {
     let json = """
       {

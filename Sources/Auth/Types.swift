@@ -429,9 +429,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     id = try container.decode(String.self, forKey: .id)
-    identityId =
-      try container.decodeIfPresent(UUID.self, forKey: .identityId)
-      ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    identityId = try container.decode(UUID.self, forKey: .identityId)
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
