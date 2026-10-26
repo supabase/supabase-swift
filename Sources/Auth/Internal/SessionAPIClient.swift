@@ -13,8 +13,9 @@ struct SessionAPIClient: Sendable {
   /// `ownership` names the stored session the request is issued for. A response saying that
   /// session is gone then only clears storage while ``SessionOwnership`` still covers what is
   /// stored, so a request that outlived a sign-out cannot sign out whoever signed in after it.
-  /// Callers with no session of their own (sign-in, sign-up, `/logout`) leave the default and
-  /// keep the unconditional cleanup they have always had.
+  /// Callers with no session of their own (sign-in, sign-up) leave the default, and their
+  /// failures never clear storage: a banned user's sign-in attempt must not sign out whoever is
+  /// signed in.
   func execute(
     _ request: HTTPRequest, body: Data? = nil, for ownership: SessionOwnership = .unscoped
   ) async throws -> Data {

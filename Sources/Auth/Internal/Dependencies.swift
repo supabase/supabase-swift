@@ -38,8 +38,7 @@ extension Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
     let eventEmitter = AuthStateChangeEventEmitter(logger: logger)
-    let api = APIClient(
-      headers: configuration.headers, http: http, decoder: configuration.resolvedDecoder)
+    let api = APIClient(headers: configuration.headers, http: http)
     let sessionStorage = SessionStorage.live(configuration: configuration)
     let sessionManager = SessionManager.live(
       configuration: configuration,

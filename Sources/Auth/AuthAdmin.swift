@@ -296,8 +296,7 @@ extension AuthAdmin {
       redirectToURL: redirectToURL,
       api: APIClient(
         headers: headers,
-        http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger),
-        decoder: AuthClient.Configuration.jsonDecoder
+        http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger)
       ),
       encoder: AuthClient.Configuration.jsonEncoder,
       decoder: AuthClient.Configuration.jsonDecoder

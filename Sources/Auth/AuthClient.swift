@@ -177,7 +177,9 @@ public final class AuthClient: Sendable {
 
   /// Returns the session, refreshing it if necessary.
   ///
-  /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
+  /// Throws an error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no session is
+  /// stored, and of kind ``AuthError/Kind-swift.struct/sessionInvalidated`` when the server
+  /// rejects the refresh of an expired session.
   public var session: Session {
     get async throws {
       try await sessionManager.session()
@@ -1196,7 +1198,7 @@ public final class AuthClient: Sendable {
         for: .snapshot(session)
       )
     } catch let error as AuthError
-      where error.kind == .sessionMissing
+      where error.kind == .sessionInvalidated
       || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
     {}
   }

@@ -44,13 +44,51 @@ struct AuthErrorTests {
   }
 
   @Test
-  func weakPasswordCarriesReasons() {
-    let error = AuthError.weakPassword(
-      message: "Password is weak", reasons: ["length", "characters", "pwned"])
+  func catchMatchesErrorCode() {
+    func signIn() throws {
+      throw AuthError(kind: .server, message: "Invalid", errorCode: .invalidCredentials)
+    }
 
-    #expect(error.kind == .server)
-    #expect(error.errorCode == .weakPassword)
-    #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
+    var caught = false
+    do {
+      try signIn()
+    } catch ErrorCode.emailNotConfirmed {
+      Issue.record("Matched the wrong code")
+    } catch ErrorCode.invalidCredentials {
+      caught = true
+    } catch {
+      Issue.record("Expected ErrorCode.invalidCredentials, got \(error)")
+    }
+    #expect(caught)
+  }
+
+  @Test
+  func catchMatchesKind() {
+    func refresh() throws {
+      throw AuthError(
+        kind: .sessionInvalidated, message: "Refresh Token Not Found",
+        errorCode: .refreshTokenNotFound)
+    }
+
+    var caught = false
+    do {
+      try refresh()
+    } catch AuthError.Kind.sessionMissing {
+      Issue.record("Matched the wrong kind")
+    } catch AuthError.Kind.sessionInvalidated {
+      caught = true
+    } catch {
+      Issue.record("Expected AuthError.Kind.sessionInvalidated, got \(error)")
+    }
+    #expect(caught)
+  }
+
+  @Test
+  func patternsDoNotMatchOtherErrors() {
+    let error: any Error = URLError(.timedOut)
+
+    #expect(!(ErrorCode.unknown ~= error))
+    #expect(!(AuthError.Kind.transport ~= error))
   }
 
   @Test

@@ -31,7 +31,6 @@ extension HTTPClient {
 struct APIClient: Sendable {
   let headers: [String: String]
   let http: HTTPClient
-  let decoder: JSONDecoder
 
   /// Sends `request` and returns the response body.
   func execute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
@@ -59,117 +58,11 @@ struct APIClient: Sendable {
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    guard 200..<300 ~= response.status.code else {
-      throw Self.error(response: response, data: data, decoder: decoder)
+    if let error = ErrorDecoder.error(response: response, data: data, request: request) {
+      throw error
     }
 
     return (response, data)
-  }
-
-  /// Error codes GoTrue returns when the session a request was issued for no longer exists: the
-  /// user signed out, was deleted, or the session was otherwise terminated.
-  static let sessionCleanupErrorCodes: [ErrorCode] = [
-    .sessionNotFound,
-    .sessionExpired,
-    .refreshTokenNotFound,
-    .refreshTokenAlreadyUsed,
-  ]
-
-  /// Maps a non-2xx response to the error the caller sees.
-  ///
-  /// Pure: no storage or session access. A response carrying one of ``sessionCleanupErrorCodes``
-  /// maps to ``AuthError/sessionMissing`` with the response attached, which is what
-  /// ``AuthError/invalidatesSession`` keys off. Acting on it is the session layer's job.
-  static func error(response: HTTPResponse, data: Data, decoder: JSONDecoder) -> AuthError {
-    let errorResponse = HTTPErrorResponse(response, body: data)
-
-    guard let error = try? decoder.decode(_RawAPIErrorResponse.self, from: data) else {
-      let statusCode = response.status.code
-      let message: String
-      if 500..<600 ~= statusCode {
-        let description = HTTPURLResponse.localizedString(forStatusCode: statusCode)
-        message = description.isEmpty ? "HTTP \(statusCode)" : "HTTP \(statusCode): \(description)"
-      } else {
-        message = "Unexpected response with status code \(statusCode)."
-      }
-
-      return AuthError(
-        kind: .server,
-        message: message,
-        errorCode: .unexpectedFailure,
-        response: errorResponse
-      )
-    }
-
-    let responseAPIVersion = parseResponseAPIVersion(response)
-
-    let errorCode: ErrorCode? =
-      if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp,
-        let code = error.code
-      {
-        ErrorCode(code)
-      } else {
-        error.errorCode
-      }
-
-    if errorCode == nil, let weakPassword = error.weakPassword {
-      var result = AuthError.weakPassword(
-        message: error._getErrorMessage(), reasons: weakPassword.reasons ?? [])
-      result.response = errorResponse
-      return result
-    } else if errorCode == .weakPassword {
-      var result = AuthError.weakPassword(
-        message: error._getErrorMessage(), reasons: error.weakPassword?.reasons ?? [])
-      result.response = errorResponse
-      return result
-    } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
-      var result = AuthError.sessionMissing
-      result.response = errorResponse
-      return result
-    } else {
-      return AuthError(
-        kind: .server,
-        message: error._getErrorMessage(),
-        errorCode: errorCode ?? .unknown,
-        response: errorResponse
-      )
-    }
-  }
-
-  private static func parseResponseAPIVersion(_ response: HTTPResponse) -> Date? {
-    guard let apiVersion = response.headerFields[.apiVersionHeaderName] else { return nil }
-
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.date(from: "\(apiVersion)T00:00:00.0Z")
-  }
-}
-
-extension AuthError {
-  /// Whether the server reported that the session the request was issued for is gone.
-  ///
-  /// Only ``APIClient/error(response:data:decoder:)`` produces a `sessionMissing` error with a
-  /// response attached; a locally raised one (nothing in storage) has none.
-  var invalidatesSession: Bool {
-    kind == .sessionMissing && response != nil
-  }
-}
-
-struct _RawAPIErrorResponse: Decodable {
-  let msg: String?
-  let message: String?
-  let errorDescription: String?
-  let error: String?
-  let code: String?
-  let errorCode: ErrorCode?
-  let weakPassword: _WeakPassword?
-
-  struct _WeakPassword: Decodable {
-    let reasons: [String]?
-  }
-
-  func _getErrorMessage() -> String {
-    msg ?? message ?? errorDescription ?? error ?? "Unknown"
   }
 }
 
