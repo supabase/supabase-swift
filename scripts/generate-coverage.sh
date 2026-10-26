@@ -6,8 +6,10 @@ OUTPUT_FILE="lcov.info"     # Output coverage file name
 TEMP_COVERAGE_DIR="temp_coverage" # Temporary directory for intermediate coverage files
 
 # Step 2: Find the profdata file
+# The DerivedData cache can restore profiles from earlier runs, even from another branch. Only the
+# newest belongs to this run.
 PROFDATA_DIR="$DERIVED_DATA_PATH/Build/ProfileData"
-PROFDATA_FILE=$(find "$PROFDATA_DIR" -name "*.profdata" | head -n 1)
+PROFDATA_FILE=$(find "$PROFDATA_DIR" -name "*.profdata" -print0 | xargs -0 ls -t | head -n 1)
 
 if [ -z "$PROFDATA_FILE" ]; then
   echo "No profdata file found. Exiting."
@@ -56,18 +58,23 @@ done
 echo "Merging coverage data..."
 rm -f "$OUTPUT_FILE" # Ensure the output file doesn't already exist
 
+# One lcov call for every tracefile: each call writes `--output-file` from scratch.
+TRACEFILE_ARGS=()
 for INFO_FILE in "$TEMP_COVERAGE_DIR"/*.info; do
   if [ -f "$INFO_FILE" ]; then
-    lcov \
-      --ignore-errors inconsistent \
-      --add-tracefile "$INFO_FILE" \
-      --output-file "$OUTPUT_FILE"
-    if [ $? -ne 0 ]; then
-      echo "Failed to merge $INFO_FILE into $OUTPUT_FILE. Exiting."
-      exit 1
-    fi
+    TRACEFILE_ARGS+=(--add-tracefile "$INFO_FILE")
   fi
 done
+
+if [ "${#TRACEFILE_ARGS[@]}" -eq 0 ]; then
+  echo "No coverage data was exported. Exiting."
+  exit 1
+fi
+
+if ! lcov --ignore-errors inconsistent "${TRACEFILE_ARGS[@]}" --output-file "$OUTPUT_FILE"; then
+  echo "Failed to merge coverage data into $OUTPUT_FILE. Exiting."
+  exit 1
+fi
 
 echo "Coverage data exported to $OUTPUT_FILE"
 

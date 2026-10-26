@@ -54,6 +54,11 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+      - name: Clear cached coverage inputs
+        # The DerivedData cache can restore profiles and test bundles from an earlier run, even
+        # from another branch. Coverage must come only from what this run builds and tests.
+        if: matrix.command == 'test' && matrix.platform == 'IOS'
+        run: rm -rf ~/.derivedData/Debug/Build/ProfileData ~/.derivedData/Debug/Build/Products/Debug-iphonesimulator/*.xctest
       - name: Debug
         if: matrix.skip_debug != '1'
         run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
