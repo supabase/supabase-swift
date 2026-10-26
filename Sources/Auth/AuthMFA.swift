@@ -29,7 +29,7 @@ public struct AuthMFA: Sendable {
   var api: SessionAPIClient { client.dependencies.sessionAPI }
   var authAPI: AuthAPI { client.dependencies.authAPI }
   var sessionManager: SessionManager { client.dependencies.sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
+  var sessionStore: SessionStore { client.dependencies.sessionStore }
 
   /// Contains all recovery code methods.
   public var recoveryCodes: AuthMFARecoveryCodes {
@@ -70,9 +70,7 @@ public struct AuthMFA: Sendable {
       try authAPI.verifyFactor(params, accessToken: $0)
     }
 
-    await sessionManager.update(response)
-
-    eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+    try await sessionStore.commit(.signedIn(response, event: .mfaChallengeVerified))
 
     return response
   }

@@ -52,6 +52,39 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
+  func clientsForOneProjectAndStorageKeyObserveOneSignIn() async throws {
+    let url = URL(string: "http://localhost:54321/auth")!
+    let storageKey = uniqueStorageKey()
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+    let signingIn = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: InMemoryLocalStorage(),
+        http: .init(transport: transport)
+      )
+    )
+    let observing = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: InMemoryLocalStorage()
+      )
+    )
+    let changes = observing.authStateChanges
+    let observed = Task { await changes.prefix(2).collect() }
+
+    try await signingIn.signIn(email: "user@example.com", password: "secret")
+
+    let events = await observed.value
+    #expect(events.map(\.event) == [.initialSession, .signedIn])
+    #expect(events.last?.session?.accessToken == Session.valid.accessToken)
+    #expect(observing.currentSession?.accessToken == Session.valid.accessToken)
+  }
+
+  @Test
   func clientWithNoOtherOwnerDeallocates() async {
     let url = URL(string: "http://localhost:54321/auth")!
 
@@ -111,7 +144,7 @@ struct AuthClientMultipleInstancesTests {
   @Test
   func oauthServerOutlivesClient() async throws {
     let (oauthServer, transport) = releasedClientSubClient(\.oauthServer)
-    oauthServer.client.dependencies.sessionStorage.store(.valid)
+    try await oauthServer.client.seedSession(.valid)
 
     try await oauthServer.revokeGrant(id: UUID())
 
@@ -123,7 +156,7 @@ struct AuthClientMultipleInstancesTests {
     let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     let (mfa, _) = releasedClientSubClient(
       \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
-    mfa.client.dependencies.sessionStorage.store(.valid)
+    try await mfa.client.seedSession(.valid)
 
     let response = try await mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
 

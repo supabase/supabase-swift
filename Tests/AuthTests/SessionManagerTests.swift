@@ -58,9 +58,9 @@ struct SessionManagerTests {
   }
 
   @Test
-  func cancellationFromTransportIsNotWrapped() async {
+  func cancellationFromTransportIsNotWrapped() async throws {
     http.respond { _, _ in throw CancellationError() }
-    dependencies.sessionStorage.store(.expired)
+    try await dependencies.seedSession(.expired)
 
     await #expect(throws: CancellationError.self) {
       _ = try await sut.session()
@@ -68,10 +68,10 @@ struct SessionManagerTests {
   }
 
   @Test
-  func customFetchErrorIsNotWrapped() async {
+  func customFetchErrorIsNotWrapped() async throws {
     struct FetchError: Error {}
     http.respond { _, _ in throw FetchError() }
-    dependencies.sessionStorage.store(.expired)
+    try await dependencies.seedSession(.expired)
 
     await #expect(throws: FetchError.self) {
       _ = try await sut.session()
@@ -82,7 +82,7 @@ struct SessionManagerTests {
   func session_shouldReturnValidSession() async throws {
     try await withMainSerialExecutor {
       let session = Session.valid
-      dependencies.sessionStorage.store(session)
+      try await dependencies.seedSession(session)
 
       let returnedSession = try await sut.session()
       expectNoDifference(returnedSession, session)
@@ -93,7 +93,7 @@ struct SessionManagerTests {
   func session_shouldRefreshSession_whenCurrentSessionExpired() async throws {
     try await withMainSerialExecutor {
       let currentSession = Session.expired
-      dependencies.sessionStorage.store(currentSession)
+      try await dependencies.seedSession(currentSession)
 
       let validSession = Session.valid
 
@@ -138,7 +138,7 @@ struct SessionManagerTests {
     let dependencies = Self.makeDependencies(http: http, clock: clock)
     let sut = dependencies.sessionManager
 
-    dependencies.sessionStorage.store(.expired)
+    try await dependencies.seedSession(.expired)
 
     let refreshCount = LockIsolated(0)
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
@@ -199,10 +199,22 @@ struct SessionManagerTests {
 
   private func collectAuthEvents() -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
     let events = LockIsolated<[AuthChangeEvent]>([])
-    let token = dependencies.eventEmitter.attach { event, _ in
-      events.withValue { $0.append(event) }
+    let changes = dependencies.sessionStore.changes()
+    let task = Task {
+      for await change in changes {
+        events.withValue { $0.append(change.event) }
+      }
     }
-    return (events, { token.cancel() })
+    return (events, { task.cancel() })
+  }
+
+  /// The events collected once `count` arrived, after giving any later event the chance to.
+  private func settled(
+    _ events: LockIsolated<[AuthChangeEvent]>, count: Int
+  ) async -> [AuthChangeEvent] {
+    await waitUntil { events.value.count >= count }
+    await Task.megaYield()
+    return events.value
   }
 
   @Test
@@ -211,7 +223,7 @@ struct SessionManagerTests {
     let userB = session("B")
     let refreshedA = session("A2")
 
-    dependencies.sessionStorage.store(userA)
+    try await dependencies.seedSession(userA)
     let (requestSeen, release) = heldTokenResponse {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
     }
@@ -222,15 +234,16 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    await sut.remove()
-    await sut.update(userB)
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    try await dependencies.seedSession(userB)
 
     release()
     let result = await refresh.result
 
     expectNoDifference(
-      dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
-    #expect(!events.value.contains(.tokenRefreshed))
+      dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
+    let collected = await settled(events, count: 3)
+    expectNoDifference(collected, [.initialSession, .signedOut, .signedIn])
     #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
   }
 
@@ -239,7 +252,7 @@ struct SessionManagerTests {
     let userA = session("A")
     let userB = session("B")
 
-    dependencies.sessionStorage.store(userA)
+    try await dependencies.seedSession(userA)
     let (requestSeen, release) = heldTokenResponse {
       (
         HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
@@ -253,15 +266,16 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    await sut.remove()
-    await sut.update(userB)
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    try await dependencies.seedSession(userB)
 
     release()
     let result = await refresh.result
 
     expectNoDifference(
-      dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
-    #expect(!events.value.contains(.signedOut))
+      dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
+    let collected = await settled(events, count: 3)
+    expectNoDifference(collected, [.initialSession, .signedOut, .signedIn])
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
@@ -272,7 +286,7 @@ struct SessionManagerTests {
     let refreshedA = session("A2")
     let refreshedB = session("B2")
 
-    dependencies.sessionStorage.store(userA)
+    try await dependencies.seedSession(userA)
 
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
@@ -300,7 +314,7 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
     #expect(sawRequest)
 
-    await sut.update(userB)
+    try await dependencies.seedSession(userB)
     let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
     _ = await waitUntil { tokensRequested.value.count == 2 }
 
@@ -318,7 +332,7 @@ struct SessionManagerTests {
     let userA = session("A")
     let userB = session("B")
 
-    dependencies.sessionStorage.store(userA)
+    try await dependencies.seedSession(userA)
 
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
@@ -369,7 +383,7 @@ struct SessionManagerTests {
 
     expectNoDifference(result.refreshToken, hydrated.refreshToken)
     expectNoDifference(
-      dependencies.sessionStorage.get()?.refreshToken, hydrated.refreshToken)
+      dependencies.sessionStore.currentSession?.refreshToken, hydrated.refreshToken)
   }
 
   @Test
@@ -387,13 +401,14 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    await sut.update(userB)
+    try await dependencies.seedSession(userB)
 
     release()
     let result = await refresh.result
 
-    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
-    #expect(!events.value.contains(.tokenRefreshed))
+    expectNoDifference(dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
+    let collected = await settled(events, count: 2)
+    expectNoDifference(collected, [.initialSession, .signedIn])
     #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
   }
 
@@ -416,20 +431,21 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    await sut.update(userB)
+    try await dependencies.seedSession(userB)
 
     release()
     let result = await refresh.result
 
-    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
-    #expect(!events.value.contains(.signedOut))
+    expectNoDifference(dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
+    let collected = await settled(events, count: 2)
+    expectNoDifference(collected, [.initialSession, .signedIn])
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
   @Test
   func foreignRefreshTokenFailureDoesNotSignOutTheStoredSession() async throws {
     let userB = session("B")
-    dependencies.sessionStorage.store(userB)
+    try await dependencies.seedSession(userB)
 
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       (
@@ -442,8 +458,9 @@ struct SessionManagerTests {
 
     let result = await Task { try await sut.refreshSession("foreign-refresh") }.result
 
-    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
-    #expect(!events.value.contains(.signedOut))
+    expectNoDifference(dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
+    let collected = await settled(events, count: 1)
+    expectNoDifference(collected, [.initialSession])
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
@@ -451,7 +468,7 @@ struct SessionManagerTests {
   func foreignRefreshTokenSuccessReplacesTheStoredSession() async throws {
     let userB = session("B")
     let refreshedA = session("A2")
-    dependencies.sessionStorage.store(userB)
+    try await dependencies.seedSession(userB)
 
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
@@ -460,6 +477,7 @@ struct SessionManagerTests {
     let result = try await sut.refreshSession("A-refresh")
 
     expectNoDifference(result.refreshToken, refreshedA.refreshToken)
-    expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, refreshedA.refreshToken)
+    expectNoDifference(
+      dependencies.sessionStore.currentSession?.refreshToken, refreshedA.refreshToken)
   }
 }

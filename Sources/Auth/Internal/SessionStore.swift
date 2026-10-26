@@ -148,6 +148,11 @@ actor SessionStore {
     currentStatus.session
   }
 
+  /// The number of live ``changes()`` streams, so tests can tell a released stream from a leak.
+  nonisolated var subscriberCount: Int {
+    published.value.subscribers.count
+  }
+
   /// A lossless stream of changes.
   ///
   /// The first element is ``AuthChangeEvent/initialSession`` with the status once storage was

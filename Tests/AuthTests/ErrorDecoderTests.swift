@@ -264,7 +264,7 @@ struct ErrorDecoderTests {
             )
           })
       ))
-    sut.dependencies.sessionStorage.store(.valid)
+    try await sut.seedSession(.valid)
 
     let error = await #expect(throws: AuthError.self) {
       try await sut.mfa.unenroll(params: MFAUnenrollParams(factorId: UUID()))

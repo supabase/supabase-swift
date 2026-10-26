@@ -72,8 +72,7 @@ extension AuthClient {
     )
 
     if let session = response.session {
-      await dependencies.sessionManager.update(session)
-      dependencies.eventEmitter.emit(.signedIn, session: session)
+      try await dependencies.sessionStore.commit(.signedIn(session, event: .signedIn))
     }
 
     return response

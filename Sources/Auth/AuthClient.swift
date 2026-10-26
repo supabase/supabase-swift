@@ -160,14 +160,15 @@ public final class AuthClient: Sendable {
 
   private var date: @Sendable () -> Date { dependencies.date }
   private var sessionManager: SessionManager { dependencies.sessionManager }
-  private var eventEmitter: AuthStateChangeEventEmitter {
-    dependencies.eventEmitter
-  }
+  private var sessionStore: SessionStore { dependencies.sessionStore }
   private var logger: Logging.Logger {
     dependencies.configuration.logger
   }
-  private var sessionStorage: SessionStorage { dependencies.sessionStorage }
   private var pkce: PKCE { dependencies.pkce }
+
+  /// Loads the stored session when the first read failed, then posts
+  /// ``didChangeAuthStateNotification`` for each change, for as long as the client lives.
+  private let notificationTask: Task<Void, Never>
 
   #if canImport(ObjectiveC) && canImport(Combine)
     @MainActor
@@ -189,7 +190,7 @@ public final class AuthClient: Sendable {
   ///
   /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
   public var currentSession: Session? {
-    sessionStorage.get()
+    sessionStore.currentSession
   }
 
   /// Returns the current user, if any.
@@ -240,18 +241,22 @@ public final class AuthClient: Sendable {
       return logger
     }()
 
-    dependencies = .live(
+    let dependencies = Dependencies.live(
       configuration: configuration,
       logger: logger,
       date: date,
       pkce: pkce,
       urlOpener: urlOpener
     )
+    self.dependencies = dependencies
+    notificationTask = Self.postAuthStateChangeNotifications(
+      sessionStore: dependencies.sessionStore, logger: logger)
 
     Task { @MainActor in observeAppLifecycleChanges() }
   }
 
   deinit {
+    notificationTask.cancel()
     let sessionManager = dependencies.sessionManager
     Task { await sessionManager.stopAutoRefresh() }
   }
@@ -319,9 +324,21 @@ public final class AuthClient: Sendable {
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
   ) async -> some AuthStateChangeListenerRegistration {
-    let token = eventEmitter.attach(listener)
-    await emitInitialSession(forToken: token)
-    return token
+    try? await sessionStore.load()
+
+    let (initialSessionDelivered, delivered) = AsyncStream<Never>.makeStream()
+    let task = Self.observeAuthStateChanges(
+      sessionStore: sessionStore, sessionManager: sessionManager
+    ) { event, session in
+      listener(event, session)
+      delivered.finish()
+    }
+
+    // While storage stays unreadable there is no initial session to wait for.
+    if sessionStore.currentStatus != .loading {
+      for await _ in initialSessionDelivered {}
+    }
+    return ObservationToken { task.cancel() }
   }
 
   /// Listen for auth state changes.
@@ -342,16 +359,14 @@ public final class AuthClient: Sendable {
       )
     >.makeStream(bufferingPolicy: .unbounded)
 
-    let token = eventEmitter.attach { event, session in
+    let task = Self.observeAuthStateChanges(
+      sessionStore: sessionStore, sessionManager: sessionManager
+    ) { event, session in
       continuation.yield((event, session))
     }
 
     continuation.onTermination = { _ in
-      token.remove()
-    }
-
-    Task {
-      await emitInitialSession(forToken: token)
+      task.cancel()
     }
 
     return stream
@@ -414,8 +429,7 @@ public final class AuthClient: Sendable {
     let response = try await api.execute(request)
 
     if let session = response.session {
-      await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session)
+      try await sessionStore.commit(.signedIn(session, event: .signedIn))
     }
 
     return response
@@ -496,8 +510,7 @@ public final class AuthClient: Sendable {
   private func _signIn(_ request: AuthRequest<Session>) async throws -> Session {
     let session = try await api.execute(request)
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session)
+    try await sessionStore.commit(.signedIn(session, event: .signedIn))
 
     return session
   }
@@ -628,8 +641,7 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.remove(flowId)
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session)
+    try await sessionStore.commit(.signedIn(session, event: .signedIn))
 
     return session
   }
@@ -961,11 +973,10 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session)
+    try await sessionStore.commit(.signedIn(session, event: .signedIn))
 
     if let type = params["type"], type == "recovery" {
-      eventEmitter.emit(.passwordRecovery, session: session)
+      try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
     }
 
     return session
@@ -1027,8 +1038,7 @@ public final class AuthClient: Sendable {
       )
     }
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.signedIn, session: session)
+    try await sessionStore.commit(.signedIn(session, event: .signedIn))
     return session
   }
 
@@ -1043,8 +1053,7 @@ public final class AuthClient: Sendable {
     }
 
     if scope != .others {
-      await sessionManager.remove()
-      eventEmitter.emit(.signedOut, session: nil)
+      try await sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
     }
 
     do {
@@ -1106,8 +1115,7 @@ public final class AuthClient: Sendable {
     let response = try await api.execute(request)
 
     if let session = response.session {
-      await sessionManager.update(session)
-      eventEmitter.emit(.signedIn, session: session)
+      try await sessionStore.commit(.signedIn(session, event: .signedIn))
     }
 
     return response
@@ -1178,13 +1186,10 @@ public final class AuthClient: Sendable {
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
     let pkce = user.email != nil ? prepareForPKCE().challenge : nil
 
-    var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute {
       try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
-    session.user = updatedUser
-    await sessionManager.update(session)
-    eventEmitter.emit(.userUpdated, session: session)
+    try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser
   }
 
@@ -1206,8 +1211,7 @@ public final class AuthClient: Sendable {
         credentials: credentials, linkingTo: session.accessToken)
     )
 
-    await sessionManager.update(session)
-    eventEmitter.emit(.userUpdated, session: session)
+    try await sessionStore.commit(.signedIn(session, event: .userUpdated))
 
     return session
   }
@@ -1342,17 +1346,51 @@ public final class AuthClient: Sendable {
     Task { await sessionManager.stopAutoRefresh() }
   }
 
-  private func emitInitialSession(forToken token: ObservationToken) async {
-    guard let currentSession else {
-      eventEmitter.emit(.initialSession, session: nil, token: token)
-      return
+  /// Calls `deliver` with every change of the session store, in the order the store applied
+  /// them, starting with ``AuthChangeEvent/initialSession`` once storage was read.
+  ///
+  /// An expired initial session is refreshed in the background, so expect a
+  /// ``AuthChangeEvent/tokenRefreshed`` after it. The task holds no reference to the client.
+  private static func observeAuthStateChanges(
+    sessionStore: SessionStore,
+    sessionManager: SessionManager,
+    deliver: @escaping @Sendable (_ event: AuthChangeEvent, _ session: Session?) -> Void
+  ) -> Task<Void, Never> {
+    let changes = sessionStore.changes()
+    return Task {
+      try? await sessionStore.load()
+      for await change in changes {
+        let session = change.status.session
+        deliver(change.event, session)
+
+        if change.event == .initialSession, let session, session.isExpired {
+          Task { _ = try? await sessionManager.refreshSession(session.refreshToken) }
+        }
+      }
     }
+  }
 
-    eventEmitter.emit(.initialSession, session: currentSession, token: token)
-
-    if currentSession.isExpired {
-      Task {
-        _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
+  private static func postAuthStateChangeNotifications(
+    sessionStore: SessionStore,
+    logger: Logging.Logger
+  ) -> Task<Void, Never> {
+    let changes = sessionStore.changes()
+    return Task {
+      do {
+        try await sessionStore.load()
+      } catch {
+        logger.error("Failed to load the stored session: \(error)")
+      }
+      for await change in changes {
+        logger.trace("Auth state changed: \(change.event)")
+        NotificationCenter.default.post(
+          name: AuthClient.didChangeAuthStateNotification,
+          object: nil,
+          userInfo: [
+            AuthClient.authChangeEventInfoKey: change.event,
+            AuthClient.authChangeSessionInfoKey: change.status.session as Any,
+          ]
+        )
       }
     }
   }

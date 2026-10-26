@@ -2,26 +2,9 @@ import ConcurrencyExtras
 import Foundation
 import Logging
 
-/// Which stored session a request may clear when the server says the session it was issued for
-/// is gone.
-enum SessionOwnership: Sendable {
-  /// The request was issued for no particular stored session, such as sign-in or sign-up. A
-  /// rejection of it says nothing about the stored session, so cleanup never clears storage.
-  case unscoped
-  /// The stored session the request was issued for, read before the request went out; `nil` when
-  /// storage was empty then. Cleanup clears storage only while it still holds exactly this, so a
-  /// request that outlived a sign-out cannot sign out whoever signed in after it.
-  case snapshot(Session?)
-}
-
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-  var update: @Sendable (_ session: Session) async -> Void
-  var remove: @Sendable () async -> Void
-  /// Deletes the stored session only while `ownership` still covers it. Returns whether it
-  /// deleted, so the caller emits `.signedOut` for a sign-out that actually happened.
-  var removeIfUnchanged: @Sendable (_ ownership: SessionOwnership) async -> Bool
 
   var startAutoRefresh: @Sendable () async -> Void
   var stopAutoRefresh: @Sendable () async -> Void
@@ -35,24 +18,19 @@ extension SessionManager {
     configuration: AuthClient.Configuration,
     authAPI: AuthAPI,
     api: APIClient,
-    sessionStorage: SessionStorage,
-    eventEmitter: AuthStateChangeEventEmitter,
+    sessionStore: SessionStore,
     logger: Logging.Logger
   ) -> Self {
     let instance = LiveSessionManager(
       configuration: configuration,
       authAPI: authAPI,
       api: api,
-      sessionStorage: sessionStorage,
-      eventEmitter: eventEmitter,
+      sessionStore: sessionStore,
       logger: logger
     )
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
-      update: { await instance.update($0) },
-      remove: { await instance.remove() },
-      removeIfUnchanged: { await instance.removeIfUnchanged(since: $0) },
       startAutoRefresh: { await instance.startAutoRefreshToken() },
       stopAutoRefresh: { await instance.stopAutoRefreshToken() },
       isAutoRefreshRunning: { await instance.isAutoRefreshTokenRunning() }
@@ -64,8 +42,7 @@ private actor LiveSessionManager {
   private let configuration: AuthClient.Configuration
   private let authAPI: AuthAPI
   private let api: APIClient
-  private let sessionStorage: SessionStorage
-  private let eventEmitter: AuthStateChangeEventEmitter
+  private let sessionStore: SessionStore
   private let logger: Logging.Logger
 
   private var clock: any Clock<Duration> { configuration.clock }
@@ -77,21 +54,23 @@ private actor LiveSessionManager {
     configuration: AuthClient.Configuration,
     authAPI: AuthAPI,
     api: APIClient,
-    sessionStorage: SessionStorage,
-    eventEmitter: AuthStateChangeEventEmitter,
+    sessionStore: SessionStore,
     logger: Logging.Logger
   ) {
     self.configuration = configuration
     self.authAPI = authAPI
     self.api = api
-    self.sessionStorage = sessionStorage
-    self.eventEmitter = eventEmitter
+    self.sessionStore = sessionStore
     self.logger = logger
   }
 
   func session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = sessionStorage.get() else {
+      if sessionStore.currentStatus == .loading {
+        try await sessionStore.load()
+      }
+
+      guard let currentSession = sessionStore.currentSession else {
         logger.debug("session missing")
         throw AuthError.sessionMissing
       }
@@ -106,8 +85,6 @@ private actor LiveSessionManager {
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    let storedAtStart = sessionStorage.get()
-
     let logger: Logging.Logger = {
       var scopedLogger = self.logger
       scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
@@ -128,52 +105,29 @@ private actor LiveSessionManager {
           logger.debug("Refresh task ended")
         }
 
+        let fromGeneration = await sessionStore.generation
+        let refreshesHeldSession = sessionStore.currentSession?.refreshToken == refreshToken
+
         let session: Session
         do {
           session = try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
         } catch let error as AuthError where error.invalidatesSession {
-          let owned = storedAtStart?.refreshToken == refreshToken ? storedAtStart : nil
-          if removeIfUnchanged(since: .snapshot(owned)) {
-            eventEmitter.emit(.signedOut, session: nil)
-          }
+          try? await sessionStore.commit(
+            .invalidated(
+              SignOutReason(invalidatedBy: error),
+              refreshToken: refreshesHeldSession ? refreshToken : nil
+            )
+          )
           throw error
         }
 
-        if sessionStorage.changed(since: storedAtStart) {
-          logger.debug("Refresh discarded: the session it started from is no longer stored")
-          throw AuthError.refreshDiscarded
-        }
-
-        update(session)
-        eventEmitter.emit(.tokenRefreshed, session: session)
-
+        try await sessionStore.commit(.refreshed(session, fromGeneration: fromGeneration))
         return session
       }
       inFlightRefreshes[refreshToken] = refreshTask
 
       return try await refreshTask.value
     }
-  }
-
-  func update(_ session: Session) {
-    sessionStorage.store(session)
-  }
-
-  func remove() {
-    sessionStorage.delete()
-  }
-
-  /// Deletes the stored session, but only while `ownership` still covers it.
-  ///
-  /// The check and the delete are one actor-isolated step with no suspension between them. A
-  /// caller that read storage itself and then awaited `remove()` would leave a window for a
-  /// concurrent sign-in to store its session and have this deletion take it.
-  func removeIfUnchanged(since ownership: SessionOwnership) -> Bool {
-    guard case .snapshot(let snapshot) = ownership, !sessionStorage.changed(since: snapshot) else {
-      return false
-    }
-    sessionStorage.delete()
-    return true
   }
 
   func startAutoRefreshToken() {
@@ -202,7 +156,7 @@ private actor LiveSessionManager {
     await trace(using: logger) {
       let now = Date().timeIntervalSince1970
 
-      guard let session = sessionStorage.get() else {
+      guard let session = sessionStore.currentSession else {
         return
       }
 
