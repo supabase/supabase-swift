@@ -34,6 +34,8 @@ Changes that still compile but behave differently. Check each one by hand.
   `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
   means only that no session is stored. Search for `.sessionMissing` and also handle
   `.sessionInvalidated` where you send the user back to sign-in.
+- **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
+  user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
 

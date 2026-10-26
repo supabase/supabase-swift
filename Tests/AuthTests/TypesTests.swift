@@ -160,4 +160,31 @@ struct TypesTests {
     let scope2: SignOutScope = "global"
     #expect(scope1 == scope2)
   }
+
+  @Test
+  func userDecodesEmptyEmailAndPhoneAsNil() throws {
+    let user = try decodeUser(#""email": "", "phone": """#)
+    #expect(user.email == nil)
+    #expect(user.phone == nil)
+  }
+
+  @Test
+  func userKeepsNonEmptyEmailAndPhone() throws {
+    let user = try decodeUser(#""email": "a@example.com", "phone": "15551234567""#)
+    #expect(user.email == "a@example.com")
+    #expect(user.phone == "15551234567")
+  }
+
+  private func decodeUser(_ fields: String) throws -> User {
+    let json = """
+      {
+        "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "aud": "authenticated",
+        "created_at": "2026-09-22T10:42:45Z",
+        "updated_at": "2026-09-22T10:42:45Z",
+        \(fields)
+      }
+      """
+    return try AuthClient.Configuration.jsonDecoder.decode(User.self, from: Data(json.utf8))
+  }
 }

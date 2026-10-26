@@ -336,8 +336,13 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     newEmail = try container.decodeIfPresent(String.self, forKey: .newEmail)
     invitedAt = try container.decodeIfPresent(Date.self, forKey: .invitedAt)
     actionLink = try container.decodeIfPresent(String.self, forKey: .actionLink)
-    email = try container.decodeIfPresent(String.self, forKey: .email)
-    phone = try container.decodeIfPresent(String.self, forKey: .phone)
+    // GoTrue sends `""`, never `null`, for a user without an email or phone.
+    email = try container.decodeIfPresent(String.self, forKey: .email).flatMap {
+      $0.isEmpty ? nil : $0
+    }
+    phone = try container.decodeIfPresent(String.self, forKey: .phone).flatMap {
+      $0.isEmpty ? nil : $0
+    }
     createdAt = try container.decode(Date.self, forKey: .createdAt)
     confirmedAt = try container.decodeIfPresent(Date.self, forKey: .confirmedAt)
     emailConfirmedAt = try container.decodeIfPresent(Date.self, forKey: .emailConfirmedAt)
