@@ -220,7 +220,7 @@ struct RealtimeChannelSubscriptionTests {
   /// steps, and the last step repeats.
   @Test(.timeLimit(.minutes(1)))
   func transientJoinErrorsKeepRejoiningOnTheSteps() async throws {
-    let h = Harness()
+    let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
 
     let subscription = Task { try await channel.subscribe() }
@@ -259,7 +259,7 @@ struct RealtimeChannelSubscriptionTests {
 
   @Test(.timeLimit(.minutes(1)))
   func rateLimitedJoinBacksOffForTheLongInterval() async throws {
-    let h = Harness()
+    let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
 
     let subscription = Task { try await channel.subscribe() }
@@ -354,7 +354,8 @@ struct RealtimeChannelSubscriptionTests {
     let h = Harness(connectOnSubscribe: false)
     let channel = await h.client.channel("room")
 
-    await withKnownIssue {
+    // `reportIssue` records no issue on Linux.
+    await withKnownIssue(isIntermittent: true) {
       let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
       #expect(error?.kind == .notConnected)
       #expect(error?.isRetryable == false)
@@ -383,6 +384,25 @@ struct RealtimeChannelSubscriptionTests {
 
     try await subscription.value
     #expect(await channel.joinRef == secondJoin.ref)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func okJoinReplyWithoutPostgresChangesConfirmsTheJoin() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+        payload: ["status": "ok", "response": [:]]
+      )
+    )
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
   /// Without an attempt limit, a channel that outlives its client must not retry forever.
@@ -822,6 +842,10 @@ struct RealtimeChannelSubscriptionTests {
       }
     }
   }
+
+  /// A join timeout no step of these tests reaches. With the default 10 s, a step of 10 s or
+  /// more can fire the timeout before the channel handles the error reply the test sent.
+  private static let noJoinTimeout: Duration = .seconds(3600)
 
   /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
   private struct Harness {

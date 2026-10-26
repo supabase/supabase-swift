@@ -579,11 +579,10 @@ public actor RealtimeChannel {
       return
     }
 
-    guard response?.objectValue?.keys.contains(ChannelEvent.postgresChanges) == true else {
-      return
+    guard status == .ok else { return }
+    if let changes = response?.objectValue?[ChannelEvent.postgresChanges] {
+      serverChanges = try changes.decode(as: [PostgresJoinConfig].self)
     }
-    serverChanges =
-      try response?.objectValue?["postgres_changes"]?.decode(as: [PostgresJoinConfig].self) ?? []
     didReceiveSubscribedOK()
   }
 
