@@ -7,7 +7,7 @@
 
 /// The channel lifecycle as a pure function of state and event.
 ///
-/// Same contract as ``ConnectionMachine``: the engine feeds events in and performs the effects.
+/// No I/O: a caller feeds events in and performs the effects that come out.
 /// The state is the channel status; no effect carries one or an error.
 package enum ChannelMachine {
   package enum State: Sendable {

@@ -66,6 +66,9 @@ public actor RealtimeClient {
   nonisolated let serializer = RealtimeSerializer()
   nonisolated let clock: any Clock<Duration>
   nonisolated let webSocketURL: URL
+  nonisolated let reconnectBackoff: BackoffPolicy
+  /// The random source for the backoff jitter. Tests pin it to make the waits exact.
+  nonisolated let jitter: @Sendable (ClosedRange<Double>) -> Double
 
   /// The executor this client and its channels share.
   nonisolated let isolation = RealtimeExecutor()
@@ -100,12 +103,14 @@ public actor RealtimeClient {
   var pendingHeartbeatRef: String?
 
   enum ConnectionState: Equatable {
-    case disconnected
-    /// `connect()` is waiting on the transport (`connectAttempt`).
-    case connecting
+    /// Idle or stopped. Carries the error when a failure, not the user, stopped the client.
+    case disconnected(RealtimeError?)
+    /// The transport is opening a socket (`connectAttempt`). Attempt 1 is the user's
+    /// `connect()`; later attempts are automatic retries after a drop.
+    case connecting(attempt: Int)
     case connected(any WebSocketConnection)
-    /// The reconnect loop (`tasks`, at `.connection`) is retrying with backoff.
-    case reconnecting
+    /// Waiting `retryIn` (the timer in `tasks`, at `.connection`) before attempt `attempt + 1`.
+    case reconnecting(attempt: Int, retryIn: Duration, lastError: RealtimeError)
 
     var status: RealtimeClientStatus {
       switch self {
@@ -115,13 +120,24 @@ public actor RealtimeClient {
       }
     }
 
+    var error: RealtimeError? {
+      switch self {
+      case .disconnected(let error): error
+      case .reconnecting(_, _, let error): error
+      case .connecting, .connected: nil
+      }
+    }
+
     static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
       switch (lhs, rhs) {
-      case (.disconnected, .disconnected), (.connecting, .connecting),
-        (.reconnecting, .reconnecting):
-        true
+      case (.disconnected(let a), .disconnected(let b)):
+        a?.isSameFailure(as: b) ?? (b == nil)
+      case (.connecting(let a), .connecting(let b)):
+        a == b
       case (.connected(let a), .connected(let b)):
         a === b
+      case (.reconnecting(let a, let da, let ea), .reconnecting(let b, let db, let eb)):
+        a == b && da == db && ea.isSameFailure(as: eb)
       default:
         false
       }
@@ -129,7 +145,7 @@ public actor RealtimeClient {
   }
 
   /// Only ever written by `apply(_:)`.
-  var connection: ConnectionState = .disconnected
+  var connection: ConnectionState = .disconnected(nil)
 
   /// The `connect()` attempt in flight while `connection` is `.connecting`. Kept outside the
   /// state so the transition table stays pure and comparable.
@@ -142,7 +158,7 @@ public actor RealtimeClient {
   /// Why an unstructured task exists. Starting a new run of some work replaces the previous
   /// run at the same location, so nothing has to be cancelled by hand.
   enum TaskLocation: Hashable {
-    /// The reconnect loop (`initiateReconnect`).
+    /// The backoff timer before the next reconnect attempt.
     case connection
     /// The loop reading frames from the current socket.
     case socketReader
@@ -220,7 +236,8 @@ public actor RealtimeClient {
     options: RealtimeClientOptions,
     transport: any WebSocketTransport,
     http: HTTPClient,
-    clock: any Clock<Duration>
+    clock: any Clock<Duration>,
+    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) {
     var options = options
     if options.headers[.xClientInfo] == nil {
@@ -236,6 +253,8 @@ public actor RealtimeClient {
     let start = Date()
     self.elapsed = elapsed
     self.now = { start.addingTimeInterval(elapsed().timeInterval) }
+    self.reconnectBackoff = Self.reconnectBackoff(baseDelay: options.reconnectDelay)
+    self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
       apikey: options.apikey,
@@ -263,9 +282,7 @@ public actor RealtimeClient {
       conn.close(code: .normalClosure, reason: "Client deallocated")
     case .connecting:
       connectAttempt?.cancel()
-    case .reconnecting:
-      break
-    case .disconnected:
+    case .reconnecting, .disconnected:
       break
     }
     // `tasks` cancels its own contents when it is destroyed right after this body.
@@ -373,8 +390,7 @@ public actor RealtimeClient {
     _ topic: String,
     options configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannel {
-    // Cancel any pending deferred disconnect — a new channel is being added.
-    tasks.cancel(at: .idleDisconnect)
+    apply(.channelAdded)
 
     let realtimeTopic = "realtime:\(topic)"
 
@@ -421,23 +437,9 @@ public actor RealtimeClient {
       if options.disconnectOnEmptyChannelsAfter <= .zero {
         await disconnect()
       } else {
-        schedulePendingDisconnect()
+        apply(.lastChannelRemoved(disconnectAfter: options.disconnectOnEmptyChannelsAfter))
       }
     }
-  }
-
-  private func schedulePendingDisconnect() {
-    let delay = options.disconnectOnEmptyChannelsAfter
-    // Detached and weak: the sleep must not keep a released client alive for up to `delay`.
-    let task = Task.detached { [weak self, clock] in
-      do {
-        try await clock.sleep(for: delay)
-        await self?.disconnect()
-      } catch {
-        // Cancelled: a new channel was added or disconnect() was called directly.
-      }
-    }
-    tasks.replace([task], at: .idleDisconnect)
   }
 
   /// Forgets a channel the server closed. The channel ends its own streams.
@@ -469,8 +471,7 @@ public actor RealtimeClient {
       channels[channel.topic] = nil
     }
 
-    // Cancel any pending deferred disconnect and disconnect immediately.
-    tasks.cancel(at: .idleDisconnect)
+    // `disconnect()` also cancels a pending idle disconnect.
     await disconnect()
   }
 

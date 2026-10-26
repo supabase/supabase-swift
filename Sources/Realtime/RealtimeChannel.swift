@@ -214,6 +214,12 @@ public actor RealtimeChannel {
   /// The `postgres_changes` bindings the server echoed back on join, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
 
+  // MARK: Presence
+
+  /// The server's presence set for the current join. Diffs that arrive before the join's first
+  /// `presence_state` wait in it for that state.
+  var presence = PresenceTracker()
+
   init(
     topic: String,
     config: RealtimeChannelConfig,
@@ -268,6 +274,10 @@ public actor RealtimeChannel {
     let previous = status
     state = newState
     guard newState.status != previous else { return }
+    // A new join waits for its own first presence state.
+    if case .subscribing = newState {
+      presence.reset()
+    }
     for case .status(let continuation) in listeners.map(\.listener) {
       continuation.yield(newState.status)
     }
@@ -645,12 +655,14 @@ public actor RealtimeChannel {
   }
 
   private func handlePresenceDiff(_ message: RealtimeMessageV2) throws {
+    _ = presence.applyDiff(message.payload)
     let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
     let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
     deliverPresence(joins: joins, leaves: leaves, rawMessage: message)
   }
 
   private func handlePresenceState(_ message: RealtimeMessageV2) throws {
+    _ = presence.applyState(message.payload)
     let joins = try message.payload.decode(as: [String: PresenceV2].self)
     deliverPresence(joins: joins, leaves: [:], rawMessage: message)
   }

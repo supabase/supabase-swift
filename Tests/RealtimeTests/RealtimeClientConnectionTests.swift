@@ -13,7 +13,8 @@ struct RealtimeClientConnectionTests {
   func reconnectBackoffClampsAnUnusableBaseDelay() {
     // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
     for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
-      let delay = RealtimeClient.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
+      let delay = RealtimeClient.reconnectBackoff(baseDelay: base)
+        .delay(forAttempt: 1, random: { $0.upperBound })
       #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
     }
   }
@@ -258,10 +259,10 @@ struct RealtimeClientConnectionTests {
 
     #expect(await statuses.next() == .connected)
     #expect(await statuses.next() == .connecting)
-    // The first wait is in `reconnectDelay/2 ... reconnectDelay`.
-    await h.clock.advance(by: .milliseconds(900))
+    // The harness pins the jitter, so the first wait is exactly `reconnectDelay`.
+    await h.clock.advance(by: .milliseconds(1900))
     #expect(h.connects.value.count == 1)
-    await h.clock.advance(by: .milliseconds(1100))
+    await h.clock.advance(by: .milliseconds(100))
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
   }
@@ -312,6 +313,80 @@ struct RealtimeClientConnectionTests {
     #expect(h.connects.value.count == 2)
   }
 
+  @Test
+  func reconnectWaitIsDrawnFromTheJitterRange() async throws {
+    // Full jitter: the first wait is anywhere in `0...reconnectDelay`, here its midpoint.
+    let h = Harness(reconnectDelay: .seconds(2), jitter: { _ in 0.5 })
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+    await h.clock.advance(by: .milliseconds(900))
+    #expect(h.connects.value.count == 1)
+    await h.clock.advance(by: .milliseconds(100))
+    #expect(await statuses.next() == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test
+  func refusedUpgradeStopsReconnecting() async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 2 { throw RealtimeError.upgradeFailed(status: 401) }
+      }
+    )
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+    await h.clock.advance(by: .seconds(1))
+    // A 401 cannot succeed by retrying: the client stops and keeps the reason.
+    #expect(await statuses.next() == .disconnected)
+    #expect(await h.client.connection.error?.isRetryable == false)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test
+  func connectWhileWaitingToRetryTriesAtOnce() async throws {
+    let h = Harness(reconnectDelay: .seconds(30))
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+
+    try await h.client.connect()
+
+    #expect(await h.client.status == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test
+  func foregroundCutsTheBackoffShort() async throws {
+    let h = Harness(reconnectDelay: .seconds(30))
+    try await h.client.connect()
+    await h.client.handleAppBackground()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .connecting)
+
+    await h.client.handleAppForeground()
+
+    #expect(await statuses.next() == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
   // MARK: - Harness
 
   /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
@@ -329,6 +404,7 @@ struct RealtimeClientConnectionTests {
       headers: [String: String] = [:],
       heartbeatInterval: Duration = .seconds(3600),
       reconnectDelay: Duration = .seconds(1),
+      jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound },
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
       let clock = SignalingTestClock()
@@ -359,7 +435,8 @@ struct RealtimeClientConnectionTests {
           return socket
         },
         http: HTTPClient(transport: RecordingTransport()),
-        clock: clock
+        clock: clock,
+        jitter: jitter
       )
     }
 

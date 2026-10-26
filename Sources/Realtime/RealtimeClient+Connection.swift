@@ -14,26 +14,35 @@ import Logging
 
 extension RealtimeClient {
   /// Everything that can move the connection. Events come from the public API, from the
-  /// connecting and reconnecting tasks, and from the socket reader.
+  /// connect attempt, from the timers, and from the socket reader.
   enum Event {
     /// `connect()` was called.
     case connectRequested
     /// The transport handed back an open socket.
     case socketOpened(any WebSocketConnection)
-    /// The transport failed while `connect()` was waiting on it.
-    case socketOpenFailed
+    /// The transport failed to open a socket.
+    case socketOpenFailed(RealtimeError)
     /// `disconnect(code:reason:)` was called.
     case disconnectRequested(code: Int?, reason: String?)
     /// The remote closed the current socket.
     case socketClosed(code: Int?, reason: String?)
     /// The current socket failed (for now, a heartbeat that was never acknowledged).
-    case socketFailed(reason: String)
+    case socketFailed(RealtimeError)
+    /// The backoff wait before the next reconnect attempt is over.
+    case retryTimerFired
+    /// A hint that the network may be back (the app came to the foreground). Cuts a backoff
+    /// wait short; ignored in every other state.
+    case wake
+    /// The last channel was removed; disconnect after `disconnectAfter` unless one is added.
+    case lastChannelRemoved(disconnectAfter: Duration)
+    /// A channel was added.
+    case channelAdded
   }
 
   /// What the transition asks the actor to do once the state is updated. Effects run in order,
   /// after `connection` has its new value, so nothing observes a half-applied transition.
   enum Effect: Equatable {
-    /// Start the `connect()` attempt.
+    /// Start a connect attempt.
     case openSocket
     /// Start the reader and heartbeat loops and flush buffered frames. After an automatic
     /// reconnect, also rejoin the channels.
@@ -42,21 +51,27 @@ extension RealtimeClient {
     case closeSocket(any WebSocketConnection, code: Int?, reason: String)
     /// Stop the reader and heartbeat loops of the socket that just went away.
     case stopSocketLoops
-    /// Cancel every task the client owns, including a `connect()` attempt in flight.
+    /// Cancel every task the client owns, including a connect attempt in flight.
     case cancelAllTasks
-    /// Start the reconnect loop.
-    case startReconnect(reason: String)
+    /// Fire `.retryTimerFired` after `after`.
+    case scheduleRetry(after: Duration)
+    case cancelRetry
+    /// Disconnect after `after`.
+    case scheduleIdleDisconnect(after: Duration)
+    case cancelIdleDisconnect
 
     static func == (lhs: Effect, rhs: Effect) -> Bool {
       switch (lhs, rhs) {
       case (.openSocket, .openSocket), (.stopSocketLoops, .stopSocketLoops),
-        (.cancelAllTasks, .cancelAllTasks):
+        (.cancelAllTasks, .cancelAllTasks), (.cancelRetry, .cancelRetry),
+        (.cancelIdleDisconnect, .cancelIdleDisconnect):
         return true
       case (.installSocket(let a, let ra), .installSocket(let b, let rb)):
         return a === b && ra == rb
       case (.closeSocket(let a, let ca, let ra), .closeSocket(let b, let cb, let rb)):
         return a === b && ca == cb && ra == rb
-      case (.startReconnect(let a), .startReconnect(let b)):
+      case (.scheduleRetry(let a), .scheduleRetry(let b)),
+        (.scheduleIdleDisconnect(let a), .scheduleIdleDisconnect(let b)):
         return a == b
       default:
         return false
@@ -65,65 +80,92 @@ extension RealtimeClient {
   }
 
   /// The pure transition table. It never touches the actor: given the current state and an
-  /// event, it updates the state and says which effects follow.
-  static func transition(_ state: inout ConnectionState, _ event: Event) -> [Effect] {
+  /// event, it updates the state and says which effects follow. `retryDelay(n)` is the wait
+  /// after the n-th attempt failed.
+  static func transition(
+    _ state: inout ConnectionState, _ event: Event, retryDelay: (_ attempt: Int) -> Duration
+  ) -> [Effect] {
+    func waitToRetry(after attempt: Int, _ error: RealtimeError) -> Effect {
+      let delay = retryDelay(attempt)
+      state = .reconnecting(attempt: attempt, retryIn: delay, lastError: error)
+      return .scheduleRetry(after: delay)
+    }
+
     switch (state, event) {
     // connect()
     case (.disconnected, .connectRequested):
-      state = .connecting
+      state = .connecting(attempt: 1)
       return [.openSocket]
-    case (_, .connectRequested):
+    case (.reconnecting(let attempt, _, _), .connectRequested),
+      (.reconnecting(let attempt, _, _), .wake):
+      state = .connecting(attempt: attempt + 1)
+      return [.cancelRetry, .openSocket]
+    case (_, .connectRequested), (_, .wake):
+      return []
+
+    case (.reconnecting(let attempt, _, _), .retryTimerFired):
+      state = .connecting(attempt: attempt + 1)
+      return [.openSocket]
+    case (_, .retryTimerFired):
       return []
 
     // The transport answered.
-    case (.connecting, .socketOpened(let conn)):
+    case (.connecting(let attempt), .socketOpened(let conn)):
       state = .connected(conn)
-      return [.installSocket(conn, rejoinChannels: false)]
-    case (.reconnecting, .socketOpened(let conn)):
-      state = .connected(conn)
-      return [.installSocket(conn, rejoinChannels: true)]
+      return [.installSocket(conn, rejoinChannels: attempt > 1)]
     case (_, .socketOpened(let conn)):
       // `disconnect()` ran while the handshake was in flight and already moved on.
       return [.closeSocket(conn, code: nil, reason: "Connection cancelled")]
-    case (.connecting, .socketOpenFailed):
-      state = .disconnected
-      return []
+    case (.connecting(let attempt), .socketOpenFailed(let error)):
+      // The user's own `connect()` reports the failure and stops; so does a retry that can
+      // never succeed. Any other failed retry waits longer and tries again.
+      guard attempt > 1, error.isRetryable else {
+        state = .disconnected(error)
+        return []
+      }
+      return [waitToRetry(after: attempt, error)]
     case (_, .socketOpenFailed):
-      // The reconnect loop retries by itself; `.disconnected` is not for a failed attempt.
       return []
 
     // disconnect()
     case (.connected(let conn), .disconnectRequested(let code, let reason)):
-      state = .disconnected
+      state = .disconnected(nil)
       return [
         .cancelAllTasks, .closeSocket(conn, code: code, reason: reason ?? "Client disconnect"),
       ]
     case (_, .disconnectRequested):
-      state = .disconnected
+      state = .disconnected(nil)
       return [.cancelAllTasks]
 
     // The socket went away.
     case (.connected, .socketClosed(let code, let reason)):
+      let error = RealtimeError.socketClosed(
+        code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
       // Application-level close codes (4000–4999) typically signal auth or protocol errors.
       // Reconnecting with the same bad token would loop; the caller must re-authenticate.
       if let code, code >= 4000 {
-        state = .disconnected
+        state = .disconnected(error)
         return [.stopSocketLoops]
       }
-      state = .reconnecting
-      let closeReason = "code: \(code?.description ?? "none"), reason: \(reason ?? "none")"
-      return [.stopSocketLoops, .startReconnect(reason: closeReason)]
-    case (.connected(let conn), .socketFailed(let reason)):
-      state = .reconnecting
+      return [.stopSocketLoops, waitToRetry(after: 1, error)]
+    case (.connected(let conn), .socketFailed(let error)):
       return [
         // 1001 rather than a normal closure: the client gives up on a connection that failed.
-        .closeSocket(conn, code: 1001, reason: "error: \(reason)"),
+        .closeSocket(conn, code: 1001, reason: "error: \(error.message)"),
         .stopSocketLoops,
-        .startReconnect(reason: "error: \(reason)"),
+        waitToRetry(after: 1, error),
       ]
     case (_, .socketClosed), (_, .socketFailed):
       // Not connected: the socket this came from is already gone.
       return []
+
+    // Channels come and go.
+    case (.disconnected, .lastChannelRemoved):
+      return []
+    case (_, .lastChannelRemoved(let delay)):
+      return [.scheduleIdleDisconnect(after: delay)]
+    case (_, .channelAdded):
+      return [.cancelIdleDisconnect]
     }
   }
 
@@ -143,8 +185,10 @@ extension RealtimeClient {
 
     while !pendingEvents.isEmpty {
       let next = pendingEvents.removeFirst()
-      let effects = Self.transition(&connection, next)
-      options.logger.debug("Connection → \(connection.status.rawValue) on \(next)")
+      let effects = Self.transition(&connection, next) { [reconnectBackoff, jitter] attempt in
+        reconnectBackoff.delay(forAttempt: attempt, random: jitter)
+      }
+      options.logger.debug("Connection → \(connection) on \(next)")
       setStatus(connection.status)
       for effect in effects {
         run(effect)
@@ -189,9 +233,49 @@ extension RealtimeClient {
       pendingHeartbeatRef = nil
       generation += 1
 
-    case .startReconnect(let reason):
-      startReconnect(reason: reason)
+    case .scheduleRetry(let delay):
+      if case .reconnecting(let attempt, _, let error) = connection {
+        options.logger.debug(
+          "Reconnect attempt \(attempt + 1) in \(delay) after: \(error.message)")
+      }
+      tasks.replace([timer(after: delay) { $0.fireRetryTimer() }], at: .connection)
+
+    case .cancelRetry:
+      tasks.cancel(at: .connection)
+
+    case .scheduleIdleDisconnect(let delay):
+      tasks.replace(
+        [timer(after: delay) { await $0.fireIdleDisconnect() }], at: .idleDisconnect)
+
+    case .cancelIdleDisconnect:
+      tasks.cancel(at: .idleDisconnect)
     }
+  }
+
+  /// Sleeps `delay`, then runs `fire` on the client.
+  ///
+  /// Detached and weak: the sleep must not keep a released client alive until it ends.
+  private func timer(
+    after delay: Duration,
+    fire: @escaping @Sendable (isolated RealtimeClient) async -> Void
+  ) -> Task<Void, Never> {
+    Task.detached { [weak self, clock] in
+      try? await clock.sleep(for: delay)
+      guard let self else { return }
+      await fire(self)
+    }
+  }
+
+  /// Checks cancellation here, on the actor: a timer cancelled after its sleep ended but
+  /// before it got here must not fire.
+  private func fireRetryTimer() {
+    guard !Task.isCancelled else { return }
+    apply(.retryTimerFired)
+  }
+
+  private func fireIdleDisconnect() async {
+    guard !Task.isCancelled else { return }
+    await disconnect()
   }
 }
 
@@ -200,8 +284,10 @@ extension RealtimeClient {
 extension RealtimeClient {
   /// Opens the WebSocket connection and suspends until it is established.
   ///
-  /// Calling this method when already connected is a no-op; calling it while a connection or
-  /// an automatic reconnect is in progress waits for that attempt. If
+  /// Calling this method when already connected is a no-op, and calling it while a connection
+  /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
+  /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
+  /// automatic reconnect carries on. If
   /// ``RealtimeClientOptions/defaultConnectOnSubscribe`` is `true` (the default), this is called
   /// automatically when a channel is subscribed to.
   ///
@@ -223,16 +309,7 @@ extension RealtimeClient {
       options.logger.debug("Connection already in progress, waiting...")
       try await awaitConnectAttempt()
 
-    case .reconnecting:
-      options.logger.debug("Reconnection in progress, waiting...")
-      for task in tasks.tasks(at: .connection) {
-        await task.value
-      }
-      guard case .connected = connection else {
-        throw RealtimeError.transport("Connection failed")
-      }
-
-    case .disconnected:
+    case .reconnecting, .disconnected:
       options.logger.debug("Initiating new connection")
       apply(.connectRequested)
       try await awaitConnectAttempt()
@@ -287,9 +364,17 @@ extension RealtimeClient {
     wasConnectedBeforeBackground = false
 
     guard wasConnected else { return }
-    // Skip if already connected OR if an auto-reconnect is in flight (.connecting): the
-    // reconnect drives `rejoinChannels()` itself when it completes.
-    guard status == .disconnected else { return }
+    switch connection {
+    case .connected, .connecting:
+      // An attempt in flight drives `rejoinChannels()` itself when it completes.
+      return
+    case .reconnecting:
+      // The network is likely back; do not wait out the rest of the backoff.
+      apply(.wake)
+      return
+    case .disconnected:
+      break
+    }
 
     let hadChannels = !channels.isEmpty
     try? await connect()
@@ -315,12 +400,12 @@ extension RealtimeClient {
     }
   }
 
-  /// Runs the transport for `connect()` and reports the outcome to the machine. Every caller
-  /// that awaits this task observes `.connected` once it returns.
+  /// Runs the transport for one connect attempt and reports the outcome to the machine. Every
+  /// caller that awaits this task observes `.connected` once it returns.
   ///
-  /// `.cancelAllTasks` cancels this task but cannot stop the transport call already in flight.
-  /// The table has no attempt identity, so a cancelled attempt drops its outcome here instead
-  /// of handing it to whichever attempt is current by then.
+  /// `.cancelAllTasks` and `.cancelRetry` cancel this task but cannot stop the transport call
+  /// already in flight. A cancelled attempt drops its outcome here instead of handing it to
+  /// whichever attempt is current by then.
   private func openSocket() async throws {
     let conn: any WebSocketConnection
     do {
@@ -328,7 +413,7 @@ extension RealtimeClient {
     } catch {
       options.logger.error("Connection failed: \(error)")
       if !Task.isCancelled {
-        apply(.socketOpenFailed)
+        apply(.socketOpenFailed(Self.realtimeError(error)))
       }
       throw error
     }
@@ -404,7 +489,7 @@ extension RealtimeClient {
       options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       recordHeartbeat(.timeout)
       pendingHeartbeatRef = nil
-      apply(.socketFailed(reason: RealtimeError.heartbeatTimeout.message))
+      apply(.socketFailed(.heartbeatTimeout))
       return
     }
 
@@ -482,68 +567,19 @@ extension RealtimeClient {
 
   // MARK: Reconnect
 
-  /// Keeps retrying with exponential backoff until a connection is established or the task is
-  /// cancelled (`disconnect()` / `deinit`).
-  ///
-  /// State stays `.reconnecting` for every attempt — a failed attempt here does not flip state
-  /// to `.disconnected`, so a `connect()` caller waiting on the task sees one outcome.
-  private func startReconnect(reason: String) {
-    options.logger.debug("Connection lost, initiating reconnect: \(reason)")
-    // Captured by value so the sleep below doesn't need `self` at all — held only while
-    // actually attempting a connection, not for the whole backoff wait. Otherwise a released
-    // client would be kept alive for up to the current attempt's delay.
-    let clock = self.clock
-    let backoff = Self.reconnectBackoff(baseDelay: options.reconnectDelay)
-    let logger = options.logger
-
-    let reconnectTask = Task.detached { [weak self] in
-      var attempt = 0
-      while !Task.isCancelled {
-        attempt += 1
-        try? await clock.sleep(for: backoff.backoffDelay(retry: attempt))
-        guard !Task.isCancelled, let self else { return }
-        logger.debug("Attempting to reconnect (attempt \(attempt))...")
-
-        do {
-          try await self.performReconnectAttempt()
-          return
-        } catch is CancellationError {
-          return
-        } catch {
-          logger.debug(
-            "Reconnect attempt \(attempt) failed: \(error.localizedDescription). Retrying with backoff."
-          )
-        }
-      }
-    }
-
-    tasks.replace([reconnectTask], at: .connection)
-  }
-
-  /// A single reconnect attempt. Only succeeds into `.connected`; a failure is left for the
-  /// loop in `startReconnect` to retry.
-  private func performReconnectAttempt() async throws {
-    guard case .reconnecting = connection else { throw CancellationError() }
-    apply(.socketOpened(try await openConnection()))
-    // `disconnect()` ran during the handshake; the machine closed the late socket.
-    guard case .connected = connection else { throw CancellationError() }
-  }
-
-  /// Equal-jitter exponential backoff capped at 30s (phoenix.js's `reconnectAfterMs`
-  /// ladder is the same shape: a growing delay that levels off rather than giving
-  /// up). Jitter spreads the clients that lost the same connection instead of
-  /// letting them all reconnect at the same instant. Only the delay math of
-  /// `RetryPolicy` is used here: attempts are unbounded, and there is no HTTP
-  /// status or method to consult.
-  ///
-  /// The n-th wait is in `cap/2...cap` with `cap = min(30s, baseDelay · 2^(n-1))`,
-  /// so a test that advances a manual clock by `cap` always fires the sleep, and
-  /// one that advances by less than `cap/2` never does.
+  /// Full-jitter exponential backoff: the n-th wait is a random duration in
+  /// `0...min(30s, baseDelay · 2^(n-1))`. Spreading the waits over the whole range keeps
+  /// clients that lost the same server from reconnecting in step. Attempts are unbounded.
   ///
   /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to `0...30s` here.
-  static func reconnectBackoff(baseDelay: Duration) -> RetryPolicy {
+  static func reconnectBackoff(baseDelay: Duration) -> BackoffPolicy {
     let maxDelay: Duration = .seconds(30)
-    return RetryPolicy(baseDelay: min(max(baseDelay, .zero), maxDelay), maxDelay: maxDelay)
+    return .fullJitter(base: min(max(baseDelay, .zero), maxDelay), cap: maxDelay)
+  }
+
+  /// The transport's failure as the error the connection state carries.
+  static func realtimeError(_ error: any Error) -> RealtimeError {
+    error as? RealtimeError ?? .transport(error.localizedDescription, underlyingError: error)
   }
 
   /// `CancellationError` and `RealtimeError` pass through; anything else the transport threw
