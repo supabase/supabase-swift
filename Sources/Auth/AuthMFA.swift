@@ -1,5 +1,4 @@
 import Foundation
-import HTTPTypes
 
 /// Contains the full multi-factor authentication API.
 ///
@@ -27,10 +26,8 @@ public struct AuthMFA: Sendable {
   /// value kept past its call site keeps the client alive instead of dangling.
   let client: AuthClient
 
-  var configuration: AuthClient.Configuration { client.configuration }
   var api: SessionAPIClient { client.dependencies.sessionAPI }
-  var encoder: JSONEncoder { configuration.resolvedEncoder }
-  var decoder: JSONDecoder { configuration.resolvedDecoder }
+  var authAPI: AuthAPI { client.dependencies.authAPI }
   var sessionManager: SessionManager { client.dependencies.sessionManager }
   var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
 
@@ -51,13 +48,7 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for enrolling a new MFA factor.
   /// - Returns: An authentication response after enrolling the factor.
   public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("factors")
-      ), body: encoder.encode(params)
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { try authAPI.enrollFactor(params, accessToken: $0) }
   }
 
   /// Prepares a challenge used to verify that a user has access to a MFA factor.
@@ -65,22 +56,7 @@ public struct AuthMFA: Sendable {
   /// - Parameter params: The parameters for creating a challenge.
   /// - Returns: An authentication response with the challenge information.
   public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    let body: Data?
-    if let webAuthn = params.webAuthn {
-      body = try encoder.encode(["webauthn": webAuthn])
-    } else if params.channel != nil {
-      body = try encoder.encode(["channel": params.channel])
-    } else {
-      body = nil
-    }
-
-    return try await api.authorizedExecute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/challenge")
-      ), body: body
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { try authAPI.challengeFactor(params, accessToken: $0) }
   }
 
   /// Verifies a code against a challenge. The verification code is
@@ -90,25 +66,9 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after verifying the factor.
   @discardableResult
   public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let body: Data
-    if let credentialResponse = params.credentialResponse {
-      // WebAuthn credential responses use W3C camelCase field names (e.g. `clientDataJSON`).
-      // Encode without the snake_case strategy so they reach the backend verbatim.
-      body = try encodeWebAuthnBody([
-        "factor_id": .string(params.factorId.uuidString),
-        "challenge_id": .string(params.challengeId.uuidString),
-        "webauthn": ["credential_response": credentialResponse],
-      ])
-    } else {
-      body = try encoder.encode(params)
+    let response = try await api.authorizedExecute {
+      try authAPI.verifyFactor(params, accessToken: $0)
     }
-
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)/verify")
-      ), body: body
-    ).decoded(decoder: decoder)
 
     await sessionManager.update(response)
 
@@ -124,13 +84,7 @@ public struct AuthMFA: Sendable {
   /// - Returns: An authentication response after unenrolling the factor.
   @discardableResult
   public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .delete,
-        url: configuration.url.appendingPathComponent("factors/\(params.factorId)")
-      )
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.unenrollFactor(params, accessToken: $0) }
   }
 
   /// Helper method which creates a challenge and immediately uses the given code to verify against

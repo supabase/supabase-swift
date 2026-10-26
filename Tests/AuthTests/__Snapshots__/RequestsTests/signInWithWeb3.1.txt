@@ -1,0 +1,8 @@
+curl \
+	--request POST \
+	--header "Apikey: dummy.api.key" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--header "X-Supabase-Api-Version: 2024-01-01" \
+	--data "{\"chain\":\"ethereum\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"message\":\"example.com wants you to sign in\",\"signature\":\"0xsignature\"}" \
+	"http://localhost:54321/auth/v1/token?grant_type=web3"
