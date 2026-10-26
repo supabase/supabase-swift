@@ -251,6 +251,124 @@ struct SessionStoreTests {
   }
 
   @Test
+  func invalidationSignsOutOnlyWhileTheStoreHoldsTheSession() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage)
+    try await store.commit(.signedIn(makeSession("b"), event: .signedIn))
+    let generation = await store.generation
+    var changes = store.changes().makeAsyncIterator()
+    _ = await changes.next()
+
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: "refresh-a"))
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
+
+    #expect(store.currentSession == makeSession("b"))
+    #expect(await store.generation == generation)
+
+    try await store.commit(.invalidated(.sessionExpired, refreshToken: "refresh-b"))
+
+    let signedOut = AuthChange(event: .signedOut, status: .signedOut(.sessionExpired))
+    #expect(await changes.next() == signedOut)
+    #expect(try await storage.load(key: key) == nil)
+  }
+
+  @Test
+  func invalidationOfNoSessionAppliesWhileNoneIsHeld() async throws {
+    let store = try await loadedStore()
+
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
+
+    #expect(store.currentStatus == .signedOut(.sessionRevoked))
+  }
+
+  @Test
+  func invalidationWhileLoadingChangesNothing() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
+
+    #expect(store.currentStatus == .loading)
+  }
+
+  @Test(arguments: [
+    (ErrorCode.refreshTokenNotFound, SignOutReason.sessionExpired),
+    (.sessionExpired, .sessionExpired),
+    (.refreshTokenAlreadyUsed, .sessionRevoked),
+    (.sessionNotFound, .sessionRevoked),
+    (.userBanned, .sessionRevoked),
+  ])
+  func signOutReasonFollowsTheServerCode(code: ErrorCode, reason: SignOutReason) {
+    let error = AuthError(kind: .sessionInvalidated, message: "", errorCode: code)
+
+    #expect(SignOutReason(invalidatedBy: error) == reason)
+  }
+
+  @Test
+  func invalidGrantOnRefreshIsAnExpiredSession() {
+    let error = AuthError(kind: .sessionInvalidated, message: "", oauthError: "invalid_grant")
+
+    #expect(SignOutReason(invalidatedBy: error) == .sessionExpired)
+  }
+
+  @Test
+  func sharedStoreStartsWithItsInitialLoad() async throws {
+    let url = URL(string: "https://project.supabase.co/auth/v1")!
+    let storageKey = "sb-\(UUID())-auth-token"
+    let loads = LockIsolated(0)
+    let first = SessionStore.shared(
+      url: url,
+      storageKey: storageKey,
+      storage: InMemoryAuthStorage(),
+      initialLoad: {
+        loads.withValue { $0 += 1 }
+        return received("stored")
+      }
+    )
+    let second = SessionStore.shared(
+      url: url,
+      storageKey: storageKey,
+      storage: InMemoryAuthStorage(),
+      initialLoad: {
+        loads.withValue { $0 += 1 }
+        return nil
+      }
+    )
+
+    #expect(first.currentSession == makeSession("stored"))
+    #expect(second === first)
+    #expect(loads.value == 1)
+    var changes = first.changes().makeAsyncIterator()
+    let initial = AuthChange(event: .initialSession, status: .signedIn(makeSession("stored")))
+    #expect(await changes.next() == initial)
+  }
+
+  @Test
+  func sharedStoreWithNothingLoadedIsSignedOut() {
+    let store = SessionStore.shared(
+      url: URL(string: "https://project.supabase.co/auth/v1")!,
+      storageKey: "sb-\(UUID())-auth-token",
+      storage: InMemoryAuthStorage(),
+      initialLoad: { nil }
+    )
+
+    #expect(store.currentStatus == .signedOut(.sessionMissing))
+  }
+
+  @Test
+  func failedInitialLoadKeepsTheSharedStoreLoading() async throws {
+    let storage = InMemoryAuthStorage()
+    try await storage.save(PersistedSessionCodec.encode(received("stored")), key: key)
+    let store = SessionStore.shared(
+      url: URL(string: "https://project.supabase.co/auth/v1")!,
+      storageKey: key + "-\(UUID())",
+      storage: storage,
+      initialLoad: { throw AuthError(kind: .storageUnavailable, message: "locked") }
+    )
+
+    #expect(store.currentStatus == .loading)
+  }
+
+  @Test
   func releasingTheStoreFinishesItsStreams() async throws {
     var store: SessionStore? = try await loadedStore()
     var changes = try #require(store).changes().makeAsyncIterator()

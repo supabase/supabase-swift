@@ -14,6 +14,11 @@ enum AuthStatus: Hashable, Sendable {
   case loading
   case signedOut(SignOutReason)
   case signedIn(Session)
+
+  var session: Session? {
+    guard case .signedIn(let session) = self else { return nil }
+    return session
+  }
 }
 
 /// Why no user is signed in.
@@ -37,6 +42,17 @@ struct SignOutReason: RawRepresentable, Hashable, Sendable, ExpressibleByStringL
   static let sessionRevoked: SignOutReason = "sessionRevoked"
   /// Storage held no usable session.
   static let sessionMissing: SignOutReason = "sessionMissing"
+
+  /// The reason for an error whose ``AuthError/invalidatesSession`` is `true`.
+  init(invalidatedBy error: AuthError) {
+    switch error.errorCode {
+    case .refreshTokenAlreadyUsed, .sessionNotFound, .userBanned:
+      self = .sessionRevoked
+    default:
+      // refresh_token_not_found, session_expired, and an OAuth invalid_grant on refresh.
+      self = .sessionExpired
+    }
+  }
 }
 
 /// One change of the auth status, delivered in the order the store applied it.
@@ -58,6 +74,13 @@ actor SessionStore {
     /// Merged into the session that is current when the commit runs.
     case userUpdated(User, event: AuthChangeEvent)
     case signedOut(SignOutReason, event: AuthChangeEvent)
+    /// Signs out with ``AuthChangeEvent/signedOut``, but only while the store holds the session
+    /// whose refresh token is `refreshToken`, or holds none when `refreshToken` is `nil`.
+    ///
+    /// A request that failed because its session is gone must not sign out whoever signed in
+    /// after the request went out. When the store holds another session, the commit changes
+    /// nothing and does not throw.
+    case invalidated(SignOutReason, refreshToken: String?)
   }
 
   private enum State {
@@ -86,13 +109,29 @@ actor SessionStore {
   private let storage: any AuthStorage
   private let key: String
   private let now: @Sendable () -> Date
-  private let published = LockIsolated(Published())
+  private let published: LockIsolated<Published>
   private var lastOperation: Task<Void, any Error>?
 
   init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
     self.storage = storage
     self.key = key
     self.now = now
+    published = LockIsolated(Published())
+  }
+
+  /// Starts loaded with what a read of storage already returned: `loadedSession`, or no session
+  /// when it is `nil`.
+  init(
+    storage: any AuthStorage,
+    key: String,
+    loadedSession: ReceivedSession?,
+    now: @escaping @Sendable () -> Date = { Date() }
+  ) {
+    self.storage = storage
+    self.key = key
+    self.now = now
+    let state = loadedSession.map(State.signedIn) ?? .signedOut(.sessionMissing)
+    published = LockIsolated(Published(state: state))
   }
 
   deinit {
@@ -106,8 +145,7 @@ actor SessionStore {
   }
 
   nonisolated var currentSession: Session? {
-    guard case .signedIn(let session) = currentStatus else { return nil }
-    return session
+    currentStatus.session
   }
 
   /// A lossless stream of changes.
@@ -202,6 +240,13 @@ actor SessionStore {
     case .signedOut(let reason, let signOutEvent):
       next = .signedOut(reason)
       event = signOutEvent
+
+    case .invalidated(let reason, let refreshToken):
+      guard currentStatus != .loading, currentSession?.refreshToken == refreshToken else {
+        return
+      }
+      next = .signedOut(reason)
+      event = .signedOut
     }
 
     if case .signedIn(let received) = next {
@@ -236,18 +281,28 @@ extension SessionStore {
   /// redeem one refresh token twice. The registry holds stores weakly. The first caller's
   /// `storage` and `now` win: a later caller with the same `url` and `storageKey` gets the
   /// existing store, whatever storage it passes.
+  ///
+  /// - Parameter initialLoad: A synchronous read of storage, run only when this call creates the
+  ///   store, so that the store starts loaded. When it throws, the store starts
+  ///   ``AuthStatus/loading`` and ``load()`` reads storage again.
   static func shared(
     url: URL,
     storageKey: String,
     storage: any AuthStorage,
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date() },
+    initialLoad: (@Sendable () throws -> ReceivedSession?)? = nil
   ) -> SessionStore {
     registry.withValue { stores in
       let registryKey = RegistryKey(url: url, storageKey: storageKey)
       if let store = stores[registryKey]?.store {
         return store
       }
-      let store = SessionStore(storage: storage, key: storageKey, now: now)
+      let store: SessionStore
+      if let initialLoad, case .success(let loaded) = Result(catching: initialLoad) {
+        store = SessionStore(storage: storage, key: storageKey, loadedSession: loaded, now: now)
+      } else {
+        store = SessionStore(storage: storage, key: storageKey, now: now)
+      }
       stores = stores.filter { $0.value.store != nil }
       stores[registryKey] = WeakStore(store: store)
       return store

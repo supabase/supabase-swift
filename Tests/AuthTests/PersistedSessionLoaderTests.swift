@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Auth
@@ -64,6 +65,26 @@ struct PersistedSessionLoaderTests {
 
     #expect(loaded == nil)
     #expect(storage.saves.value.isEmpty)
+  }
+
+  @Test
+  func synchronousLoadMovesALegacySessionLikeTheAsynchronousOne() throws {
+    let storage = InMemoryLocalStorage()
+    try storage.store(
+      key: PersistedSessionLoader.legacyKey,
+      value: json(named: "persisted-session-v2-camel-case")
+    )
+
+    let loaded = try PersistedSessionLoader.load(from: storage, key: key)
+
+    expectNoDifference(loaded?.session, PersistedSessionFixtures.expectedSession)
+    #expect(try storage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
+    let stored = try #require(try storage.retrieve(key: key))
+    expectNoDifference(
+      String(decoding: stored, as: UTF8.self),
+      String(decoding: json(named: PersistedSessionFixtures.schema1), as: UTF8.self)
+    )
+    expectNoDifference(try PersistedSessionLoader.load(from: storage, key: key), loaded)
   }
 
   @Test
