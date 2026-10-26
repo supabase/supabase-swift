@@ -7,16 +7,16 @@ import Testing
 @Suite
 struct PersistedSessionCodecTests {
   @Test(arguments: PersistedSessionFixtures.v2Shapes)
-  func decodesV2ShapeAndReencodesAsSchema1(fixture: String) throws {
+  func decodesV2ShapeAndReEncodesAsSchema1(fixture: String) throws {
     let decoded = try PersistedSessionCodec.decode(json(named: fixture))
 
     #expect(!decoded.isCurrentSchema)
     expectNoDifference(decoded.session.session, PersistedSessionFixtures.expectedSession)
     #expect(decoded.session.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
 
-    let reencoded = try PersistedSessionCodec.encode(decoded.session)
+    let reEncoded = try PersistedSessionCodec.encode(decoded.session)
     expectNoDifference(
-      String(decoding: reencoded, as: UTF8.self),
+      String(decoding: reEncoded, as: UTF8.self),
       String(decoding: json(named: PersistedSessionFixtures.schema1), as: UTF8.self)
     )
   }

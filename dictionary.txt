@@ -334,3 +334,6 @@ hotfixes
 # Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
 synchronizable
 Synchronizable
+
+# Howard Hinnant, author of the civil-date algorithms in PersistedJSON.swift.
+Hinnant
