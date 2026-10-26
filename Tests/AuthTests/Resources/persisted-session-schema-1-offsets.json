@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "received_at": "2026-09-22T10:42:45.123456789Z",
+  "access_token": "access-token",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "expires_at": 1790077365,
+  "refresh_token": "refresh-token",
+  "user": {
+    "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+    "aud": "authenticated",
+    "app_metadata": {},
+    "user_metadata": {},
+    "is_anonymous": false,
+    "created_at": "2026-09-22T12:42:45.987654321+02:00",
+    "updated_at": "2026-09-22T05:12:45-05:30",
+    "last_sign_in_at": "2026-09-22T10:42:45.5Z"
+  }
+}
