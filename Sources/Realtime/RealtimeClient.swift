@@ -123,7 +123,9 @@ public final class RealtimeClient: Sendable {
 
   /// Connects and returns once the WebSocket is open. Does nothing when it already is.
   ///
-  /// Channels that want to be subscribed join on their own once the socket opens.
+  /// Channels that want to be subscribed join on their own once the socket opens. While the
+  /// server cannot be reached, the client keeps reconnecting and this keeps waiting; cancel the
+  /// calling task to stop waiting.
   ///
   /// - Throws: ``RealtimeError`` when the client stops reconnecting: kind `.transport` for a
   ///   handshake the server refused, such as HTTP 401 for a bad API key, or a close code of

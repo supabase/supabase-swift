@@ -130,13 +130,15 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s). The client stops after `maxRetryAttempts` failures in a row, on HTTP 401, 403, or 404, and on a close code of 4000 or above. Defaults to ``defaultReconnectDelay``.
+  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s). The client reconnects until the connection is back, and stops only on HTTP 401, 403, or 404, or on a close code of 4000 or above. Defaults to ``defaultReconnectDelay``.
   ///   - timeout: Maximum time to wait for a server reply. A join waits at least
   ///     ``defaultTimeout``, because the server can hold its answer to a rejected join for a few
   ///     seconds. Defaults to ``defaultTimeout``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
-  ///   - maxRetryAttempts: Maximum number of join attempts per subscribe, and of failed connection
-  ///     attempts in a row before the client stops reconnecting. Defaults to ``defaultMaxRetryAttempts``.
+  ///   - maxRetryAttempts: Maximum number of failed attempts per
+  ///     ``RealtimeChannel/subscribeWithError()``. A failed connection attempt and a join that
+  ///     timed out or failed each count. The client keeps reconnecting after a subscribe gives up.
+  ///     Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.

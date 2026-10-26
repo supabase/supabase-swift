@@ -198,6 +198,10 @@ public final class RealtimeChannel: Sendable {
   /// reply, even when `RealtimeClientOptions.timeout` is shorter, because the server can take that
   /// long to reject a private channel.
   ///
+  /// The client reconnects on its own for as long as it takes, but a subscribe gives up after
+  /// `RealtimeClientOptions.maxRetryAttempts` failed attempts. Each failed connection attempt
+  /// counts, and so does each join that timed out or failed on an open connection.
+  ///
   /// - Throws: ``RealtimeError`` with the server's reason when it rejected the join, kind
   ///   `.maxRetryAttemptsReached` after `maxRetryAttempts` failed attempts, kind
   ///   `.postgresChangesMismatch` when the server did not accept the `postgresChange` streams,
@@ -211,11 +215,7 @@ public final class RealtimeChannel: Sendable {
       case .subscribed:
         return
       case .attempt(let attempt, let generation):
-        try await withTaskCancellationHandler {
-          try await attempt.value
-        } onCancel: {
-          if releaseWaiter(generation) { attempt.cancel() }
-        }
+        try await wait(for: attempt, generation: generation)
         try Task.checkCancellation()
         return
       case .leave(let leaving, let generation):
@@ -240,6 +240,25 @@ public final class RealtimeChannel: Sendable {
     case rejoin(Phoenix.Channel)
   }
 
+  /// A cancelled caller returns at once while other callers still wait on the attempt. The last
+  /// one to go cancels the attempt and waits for its rollback, so a subscribe right after it
+  /// starts a new attempt.
+  private func wait(for attempt: Task<Void, any Error>, generation: UInt64) async throws {
+    let (outcomes, continuation) = AsyncStream<Result<Void, any Error>>.makeStream()
+    Task {
+      continuation.yield(await attempt.result)
+      continuation.finish()
+    }
+    for await outcome in outcomes {
+      return try outcome.get()
+    }
+    if releaseWaiter(generation) {
+      attempt.cancel()
+      _ = await attempt.result
+    }
+    throw CancellationError()
+  }
+
   /// Returns `true` when no caller waits on the attempt anymore.
   private func releaseWaiter(_ generation: UInt64) -> Bool {
     state.withValue { state in
@@ -252,26 +271,15 @@ public final class RealtimeChannel: Sendable {
     }
   }
 
-  /// Waits for Phoenix to join again, or for it to close the channel. Connects first, so a
-  /// stopped client does not leave the caller waiting.
+  /// Waits for Phoenix to join again, or for it to close the channel.
   private func awaitRejoin(_ inner: Phoenix.Channel) async throws {
-    if connection.options.connectOnSubscribe {
-      try await connection.connect()
-    }
-    let maxAttempts = connection.options.maxRetryAttempts
-    let didConnect = connection.options.connectOnSubscribe
-    let connection = connection
-    try await withThrowingTaskGroup(of: Void.self) { group in
-      group.addTask {
-        for await status in inner.statuses {
-          if status == .joined { return }
-          if case .closed = status { return }
-        }
+    try await boundedAttempt(inner) {
+      for await status in inner.statuses {
+        if status == .joined { return }
+        if case .closed = status { return }
       }
-      group.addTask { try await Self.failAfterAttempts(inner, maxAttempts: maxAttempts) }
-      group.addTask { try await connection.failWhenSocketStops(didConnect: didConnect) }
-      defer { group.cancelAll() }
-      try await group.next()
+      // `statuses` ends only after `.closed`, or when this task is cancelled.
+      throw CancellationError()
     }
   }
 
@@ -330,11 +338,11 @@ public final class RealtimeChannel: Sendable {
 
   private func runSubscribe(_ inner: Phoenix.Channel, generation: UInt64) async throws {
     do {
-      if connection.options.connectOnSubscribe {
-        try await connection.connect()
+      let connection = connection
+      let response = try await boundedAttempt(inner) {
+        await connection.refreshToken()
+        return try await inner.join()
       }
-      await connection.refreshToken()
-      let response = try await join(inner)
       if bindingsMismatch(in: response, generation: generation) {
         await unsubscribe(generation: generation)
         throw RealtimeError.postgresChangesMismatch
@@ -355,19 +363,32 @@ public final class RealtimeChannel: Sendable {
     }
   }
 
-  /// Leaving the group cancels the join, and Phoenix rolls it back.
-  private func join(_ inner: Phoenix.Channel) async throws -> Phoenix.Payload {
-    let maxAttempts = connection.options.maxRetryAttempts
-    let didConnect = connection.options.connectOnSubscribe
+  /// Connects first unless `connectOnSubscribe` is off, then runs `operation` until it returns,
+  /// `maxRetryAttempts` attempts failed, or the socket stopped. Leaving the group cancels a join,
+  /// and Phoenix rolls it back.
+  private func boundedAttempt<Value: Sendable>(
+    _ inner: Phoenix.Channel, _ operation: @escaping @Sendable () async throws -> Value
+  ) async throws -> Value {
+    let options = connection.options
     let connection = connection
-    return try await withThrowingTaskGroup(of: Phoenix.Payload?.self) { group in
-      group.addTask { try await inner.join() }
+    let socketStatuses = connection.socket.statuses
+    let stopStatuses = connection.socket.statuses
+    let channelStatuses = inner.statuses
+    return try await withThrowingTaskGroup(of: Value?.self) { group in
       group.addTask {
-        try await Self.failAfterAttempts(inner, maxAttempts: maxAttempts)
+        if options.connectOnSubscribe {
+          try await connection.connect()
+        }
+        return try await operation()
+      }
+      group.addTask {
+        try await Self.failAfterAttempts(
+          socket: socketStatuses, channel: channelStatuses, maxAttempts: options.maxRetryAttempts)
         return nil
       }
       group.addTask {
-        try await connection.failWhenSocketStops(didConnect: didConnect)
+        try await connection.failWhenSocketStops(
+          stopStatuses, isConnecting: options.connectOnSubscribe)
         return nil
       }
       defer { group.cancelAll() }
@@ -378,22 +399,43 @@ public final class RealtimeChannel: Sendable {
     }
   }
 
-  private static func failAfterAttempts(_ inner: Phoenix.Channel, maxAttempts: Int) async throws {
-    var failures = 0
-    var wasErrored = false
-    for await status in inner.statuses {
-      switch status {
-      case .errored:
-        if !wasErrored {
-          failures += 1
-          if failures >= maxAttempts { throw RealtimeError.maxRetryAttemptsReached }
-        }
-        wasErrored = true
-      case .closed:
-        return
-      default:
-        wasErrored = false
+  /// Counts each failed connection attempt of the socket, and each join that failed on an open
+  /// socket, after the first status of each stream. A dropped connection also errors the channel,
+  /// so the channel side skips `.connectionLost` to count that failure once. Returns when the
+  /// channel closes.
+  private static func failAfterAttempts(
+    socket: AsyncStream<SocketStatus>, channel: AsyncStream<ChannelStatus>, maxAttempts: Int
+  ) async throws {
+    let failures = LockIsolated(0)
+    let countFailure: @Sendable () throws -> Void = {
+      let count = failures.withValue { failures in
+        failures += 1
+        return failures
       }
+      if count >= maxAttempts { throw RealtimeError.maxRetryAttemptsReached }
+    }
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask {
+        for await status in socket.dropFirst() {
+          if case .waitingToReconnect = status { try countFailure() }
+        }
+      }
+      group.addTask {
+        var wasErrored: Bool?
+        for await status in channel {
+          switch status {
+          case .closed:
+            return
+          case .errored(let failure):
+            if wasErrored == false, failure != .connectionLost { try countFailure() }
+            wasErrored = true
+          default:
+            wasErrored = false
+          }
+        }
+      }
+      defer { group.cancelAll() }
+      try await group.next()
     }
   }
 
@@ -468,14 +510,13 @@ public final class RealtimeChannel: Sendable {
     }
   }
 
-  /// Decodes outside the lock, delivers under it. A stream opened or ended meanwhile makes the
-  /// route stale, so it is computed again under the lock.
+  /// Decodes outside the lock, delivers under it. A route does not depend on the bindings it was
+  /// computed from, so a stream opened or ended meanwhile gets the message or not by its own
+  /// binding.
   private func receive(_ message: Phoenix.Message, generation: UInt64) {
     guard
       let snapshot = state.withValue({ state in
-        state.attachment(generation).map { _ in
-          (state.streams.bindings, state.serverChanges, state.streams.version)
-        }
+        state.attachment(generation).map { _ in (state.streams.bindings, state.serverChanges) }
       })
     else { return }
     let routed: ChannelRoute?
@@ -486,7 +527,7 @@ public final class RealtimeChannel: Sendable {
       return
     }
     guard let routed else { return }
-    if routed.listeners.isEmpty {
+    if !routed.hasListeners {
       if case .binary = message.payload {
         logger.warning(
           "Received a binary broadcast on \(topic) but no Data stream is open. Open one with broadcastDataStream(event:) to receive Data."
@@ -496,13 +537,7 @@ public final class RealtimeChannel: Sendable {
     }
     state.withValue { state in
       guard state.attachment(generation) != nil else { return }
-      if state.streams.version == snapshot.2 {
-        state.streams.deliver(routed)
-      } else if let again = try? routeMessage(
-        message, bindings: state.streams.bindings, serverChanges: state.serverChanges)
-      {
-        state.streams.deliver(again)
-      }
+      state.streams.deliver(routed)
     }
   }
 

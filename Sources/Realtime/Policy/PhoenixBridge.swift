@@ -123,7 +123,9 @@ extension RealtimeError {
     case ChannelError.closed, ChannelError.joinNotCalled:
       self = .notSubscribed
     default:
-      self = .encoding("\(error)")
+      self = RealtimeError(
+        kind: .encoding, message: "The channel could not encode the message.",
+        isRetryable: false, underlyingError: error)
     }
   }
 

@@ -17,7 +17,7 @@ struct ReconnectDecisionTests {
   func stopsOnARefusedHandshake(status: Int) {
     #expect(
       reconnectDecision(
-        httpStatus: status, closeCode: nil, attempt: 1, maxAttempts: 5, base: .seconds(1))
+        httpStatus: status, closeCode: nil, attempt: 1, base: .seconds(1))
         == .stop)
   }
 
@@ -25,24 +25,23 @@ struct ReconnectDecisionTests {
   func stopsOnAnApplicationCloseCode(code: Int) {
     #expect(
       reconnectDecision(
-        httpStatus: nil, closeCode: code, attempt: 1, maxAttempts: 5, base: .seconds(1)) == .stop)
+        httpStatus: nil, closeCode: code, attempt: 1, base: .seconds(1)) == .stop)
   }
 
-  @Test
-  func stopsAtMaxAttempts() {
-    #expect(
-      reconnectDecision(
-        httpStatus: 500, closeCode: 1006, attempt: 5, maxAttempts: 5, base: .seconds(1)) == .stop)
-    #expect(
-      reconnectDecision(
-        httpStatus: 500, closeCode: 1006, attempt: 4, maxAttempts: 5, base: .seconds(1)) != .stop)
+  @Test(arguments: [1, 5, 6, 1_000])
+  func retriesEveryOtherFailureWithoutACap(attempt: Int) {
+    let decision = reconnectDecision(
+      httpStatus: 500, closeCode: 1006, attempt: attempt, base: .seconds(1),
+      random: { $0.upperBound })
+
+    #expect(decision == .retry(after: .seconds(min(30, 1 << min(attempt - 1, 30)))))
   }
 
   @Test(arguments: [(1, 2), (3, 8), (4, 16), (5, 30), (20, 30)])
   func waitsWithFullJitterThatDoublesUpToTheCap(attempt: Int, high: Int) {
     func wait(random: (ClosedRange<Double>) -> Double) -> ReconnectDecision {
       reconnectDecision(
-        httpStatus: nil, closeCode: 1006, attempt: attempt, maxAttempts: 100, base: .seconds(2),
+        httpStatus: nil, closeCode: 1006, attempt: attempt, base: .seconds(2),
         random: random)
     }
 
@@ -53,7 +52,7 @@ struct ReconnectDecisionTests {
   @Test
   func defaultReconnectDelayIsOneSecond() {
     let decision = reconnectDecision(
-      httpStatus: nil, closeCode: 1006, attempt: 1, maxAttempts: 5,
+      httpStatus: nil, closeCode: 1006, attempt: 1,
       base: RealtimeClientOptions.defaultReconnectDelay, random: { $0.upperBound })
 
     #expect(decision == .retry(after: .seconds(1)))
@@ -208,6 +207,21 @@ struct PhoenixBridgeTests {
         status: "error", response: .json(["error": "payload_size_exceeded"])))
 
     #expect(error.kind == .payloadTooLarge)
+  }
+
+  @Test
+  func anUnknownChannelErrorKeepsItsTextOutOfTheMessage() {
+    struct CodecRefusal: Error, CustomStringConvertible {
+      var description: String { "refused {\"secret\":\"row 42\"}" }
+    }
+
+    let error = RealtimeError(channelFailure: CodecRefusal())
+
+    #expect(error.kind == .encoding)
+    #expect(error.isRetryable == false)
+    #expect(!error.message.contains("secret"))
+    #expect(!error.description.contains("secret"))
+    #expect(error.underlyingError is CodecRefusal)
   }
 
   @Test

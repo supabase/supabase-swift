@@ -217,7 +217,6 @@ struct StreamRegistry: Sendable {
   private var sinks: [Sink] = []
   private var ids: [UInt64] = []
   private var nextID: UInt64 = 0
-  private(set) var version: UInt64 = 0
 
   mutating func add(_ binding: ChannelBinding, _ sink: Sink) -> UInt64 {
     let id = nextID
@@ -225,7 +224,6 @@ struct StreamRegistry: Sendable {
     bindings.append(binding)
     sinks.append(sink)
     ids.append(id)
-    version += 1
     return id
   }
 
@@ -234,12 +232,11 @@ struct StreamRegistry: Sendable {
     bindings.remove(at: index)
     sinks.remove(at: index)
     ids.remove(at: index)
-    version += 1
   }
 
   func deliver(_ route: ChannelRoute) {
-    for index in route.listeners {
-      sinks[index].yield(route.delivery)
+    for (binding, sink) in zip(bindings, sinks) where route.accepts(binding) {
+      sink.yield(route.delivery)
     }
   }
 
@@ -260,7 +257,6 @@ struct StreamRegistry: Sendable {
     bindings = []
     sinks = []
     ids = []
-    version += 1
     return removed
   }
 }

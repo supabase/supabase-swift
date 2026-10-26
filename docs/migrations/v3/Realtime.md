@@ -23,8 +23,10 @@ Changes that still compile but behave differently. Check each one by hand.
   must not.
 - **`connect()` during a reconnect tries at once.** It no longer waits out the backoff of the
   automatic reconnect. It returns when the socket opens, and throws only when the client stops
-  reconnecting (see "Reconnect stops" below) or `disconnect(code:reason:)` runs. A failed
-  attempt goes back to the backoff, and `connect()` keeps waiting.
+  reconnecting (see "Reconnect stops on a refused handshake" below) or
+  `disconnect(code:reason:)` runs. A failed attempt goes back to the backoff, and `connect()`
+  keeps waiting, for as long as the server cannot be reached. Cancel the calling task to stop
+  waiting.
 - **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
   reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
   `X(rawValue:) != nil` checks on the status types are now always `true`.
@@ -36,14 +38,23 @@ Changes that still compile but behave differently. Check each one by hand.
 - **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. If
   you need one (for example for certificate pinning), pass it as
   `SupabaseClientOptions(realtime: .init(session: mySession))`.
-- **Reconnect stops.** v2 tried to reconnect forever. v3 stops after `maxRetryAttempts` failed
-  attempts in a row. It stops at once when the WebSocket handshake gets HTTP 401, 403 or 404, or
-  when the server closes the socket with a code of 4000 or above. The client status then stays
-  `.disconnected`, `connect()` throws, and a pending `subscribeWithError()` throws. Search for
-  code that expects the client to recover on its own. Call `connect()` again, for example after
-  `setAuth(_:)`.
-- **`maxRetryAttempts` counts join attempts and reconnects.** In v2 it limited only the join
-  attempts of `subscribeWithError()`.
+- **Reconnect stops on a refused handshake.** v2 tried to reconnect forever, and v3 still does
+  after a dropped connection or a failed attempt. v3 stops at once when the WebSocket handshake
+  gets HTTP 401, 403 or 404, or when the server closes the socket with a code of 4000 or above.
+  The client status then stays `.disconnected`, `connect()` throws, and a pending
+  `subscribeWithError()` throws. Search for code that expects the client to recover on its own
+  from a bad API key or token. Call `connect()` again, for example after `setAuth(_:)`.
+- **A failed connection attempt counts against `maxRetryAttempts`.** As in v2,
+  `maxRetryAttempts` bounds the attempts of one `subscribeWithError()`, not the client, and the
+  client keeps reconnecting after the subscribe throws `kind == .maxRetryAttemptsReached`. Each
+  failed connection attempt counts, and so does each join that timed out or failed. The waits
+  between connection attempts are the reconnect waits above, so a subscribe while the server is
+  down can throw sooner than in v2.
+- **The token is not refreshed before it expires yet.** The client asks `accessToken` for a
+  token before each connection attempt and at each heartbeat, and sends a changed token to the
+  joined channels. It does not yet refresh the token before its `exp` or limit how often it calls
+  `accessToken`, and a `nil` from `accessToken` clears the token on the channels. A later v3
+  prerelease adds this. Until then, call `setAuth(_:)` when your session refreshes.
 - **A join waits at least 10 seconds.** Each join attempt waits at least
   `RealtimeClientOptions.defaultTimeout` (10 seconds) for the server's reply, even when
   `timeout` is shorter. The server can hold a rejected private-channel join for about 5 seconds.

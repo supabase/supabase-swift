@@ -422,7 +422,7 @@ struct RealtimeChannelTests {
   }
 
   @Test(.enabled(if: hasImmediateTasks))
-  func cancellingOneWaiterLeavesTheSharedJoinRunning() async throws {
+  func cancellingOneWaiterReturnsAtOnceAndLeavesTheSharedJoinRunning() async throws {
     let harness = RealtimeHarness(replies: .realtime(join: { _ in nil }))
     let connection = try await harness.connect()
     let channel = harness.client.channel("room")
@@ -431,11 +431,63 @@ struct RealtimeChannelTests {
     let waiting = Task.immediateIfAvailable { try await channel.subscribeWithError() }
     let join = await connection.nextSent("phx_join")
     cancelled.cancel()
-    await connection.reply(to: join)
 
-    try await waiting.value
     await #expect(throws: CancellationError.self) { try await cancelled.value }
+    #expect(channel.status == .subscribing)
+    await connection.reply(to: join)
+    try await waiting.value
     #expect(channel.status == .subscribed)
+  }
+
+  @Test
+  func subscribeStopsAtMaxRetryAttemptsWhileTheSocketKeepsReconnecting() async throws {
+    let harness = RealtimeHarness {
+      $0.reconnectDelay = .seconds(1)
+      $0.maxRetryAttempts = 3
+    }
+    let channel = harness.client.channel("room")
+
+    let subscribing = Task { try await channel.subscribeWithError() }
+    await harness.transport.nextConnection().fail()
+    for _ in 1...2 {
+      await harness.advance(by: .seconds(30))
+      let next = try #require(await harness.nextConnection())
+      await next.fail()
+    }
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscribing.value }
+    #expect(error?.kind == .maxRetryAttemptsReached)
+    #expect(channel.status == .unsubscribed)
+    await harness.advance(by: .seconds(30))
+    let next = try #require(await harness.nextConnection())
+    await next.open()
+    #expect(harness.client.status == .connected)
+    #expect(harness.transport.connectionCount == 4)
+  }
+
+  @Test
+  func subscribeDuringARejoinStopsAtMaxRetryAttempts() async throws {
+    let harness = RealtimeHarness {
+      $0.reconnectDelay = .seconds(1)
+      $0.maxRetryAttempts = 2
+    }
+    let connection = try await harness.connect()
+    let channel = harness.client.channel("room")
+    try await channel.subscribeWithError()
+    await connection.fail()
+    #expect(channel.status == .subscribing)
+
+    let subscribing = Task { try await channel.subscribeWithError() }
+    for _ in 1...2 {
+      await harness.advance(by: .seconds(30))
+      let next = try #require(await harness.nextConnection())
+      await next.fail()
+    }
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscribing.value }
+    #expect(error?.kind == .maxRetryAttemptsReached)
+    #expect(channel.status == .subscribing)
+    #expect(harness.client.status == .connecting)
   }
 
   @Test
@@ -459,16 +511,13 @@ struct RealtimeChannelTests {
 
   @Test
   func subscribeAfterTheReconnectPolicyStoppedThrowsTheConnectError() async throws {
-    let harness = RealtimeHarness {
-      $0.reconnectDelay = .seconds(1)
-      $0.maxRetryAttempts = 2
-    }
+    let harness = RealtimeHarness { $0.reconnectDelay = .seconds(1) }
     let connection = try await harness.connect()
     let channel = harness.client.channel("room")
     try await channel.subscribeWithError()
     await connection.fail()
     await harness.advance(by: .seconds(1))
-    await harness.transport.nextConnection().fail()
+    await harness.transport.nextConnection().fail(httpStatus: 403)
     #expect(harness.client.status == .disconnected)
 
     let subscribing = Task { try await channel.subscribeWithError() }

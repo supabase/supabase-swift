@@ -90,7 +90,7 @@ struct RealtimeClientTests {
   }
 
   @Test
-  func reconnectStopsAfterMaxRetryAttempts() async throws {
+  func manyFailedAttemptsKeepReconnecting() async throws {
     let harness = RealtimeHarness {
       $0.reconnectDelay = .seconds(1)
       $0.maxRetryAttempts = 2
@@ -98,11 +98,18 @@ struct RealtimeClientTests {
     let connection = try await harness.connect()
 
     await connection.fail()
-    await harness.advance(by: .seconds(1))
-    await harness.transport.nextConnection().fail()
+    for _ in 1...10 {
+      await harness.advance(by: .seconds(30))
+      let next = try #require(await harness.nextConnection())
+      await next.fail()
+      #expect(harness.client.status == .connecting)
+    }
+    await harness.advance(by: .seconds(30))
+    let last = try #require(await harness.nextConnection())
+    await last.open()
 
-    #expect(harness.client.status == .disconnected)
-    #expect(harness.transport.connectionCount == 2)
+    #expect(harness.client.status == .connected)
+    #expect(harness.transport.connectionCount == 12)
   }
 
   @Test

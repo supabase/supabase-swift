@@ -46,7 +46,6 @@ final class RealtimeConnection: Sendable {
     pushedToken = LockIsolated(initialToken)
     let accessToken = options.accessToken
 
-    let maxAttempts = options.maxRetryAttempts
     let reconnectDelay = options.reconnectDelay
     let logger = options.logger
     socket = Socket(
@@ -60,7 +59,7 @@ final class RealtimeConnection: Sendable {
         reconnect: { failure, attempt in
           reconnectDecision(
             httpStatus: failure.httpStatus, closeCode: failure.closeCode, attempt: attempt,
-            maxAttempts: maxAttempts, base: reconnectDelay)
+            base: reconnectDelay)
         },
         timeout: options.timeout,
         codec: SupabaseFrameCodec(),
@@ -100,11 +99,23 @@ final class RealtimeConnection: Sendable {
   /// Throws when the reconnect policy stops the socket, or when ``RealtimeClient/disconnect(code:reason:)``
   /// closes it.
   ///
-  /// - Parameter didConnect: `false` when the caller did not connect first, so a socket that
-  ///   was never connected is waited for.
-  func failWhenSocketStops(didConnect: Bool) async throws {
-    var wasActive = didConnect
-    for await status in socket.statuses {
+  /// A socket that is disconnected when this starts is waited for, because the caller may be
+  /// connecting it.
+  ///
+  /// - Parameters:
+  ///   - statuses: A `socket.statuses` stream taken before the caller started connecting.
+  ///   - isConnecting: `true` when the caller connects the socket meanwhile, so the stop that
+  ///     the socket showed before, if any, is not this attempt's.
+  func failWhenSocketStops(_ statuses: AsyncStream<SocketStatus>, isConnecting: Bool)
+    async throws
+  {
+    var wasActive = false
+    var isCurrent = true
+    for await status in statuses {
+      defer { isCurrent = false }
+      if isCurrent, isConnecting {
+        if case .disconnected = status { continue }
+      }
       switch status {
       case .disconnected(let failure?): throw RealtimeError(stoppedOn: failure)
       case .disconnected(nil): if wasActive { throw RealtimeError.notConnected }

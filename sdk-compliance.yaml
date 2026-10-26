@@ -1490,7 +1490,7 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (the internal reconnectDecision policy, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s and bounded by maxRetryAttempts) is hardcoded."
+    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (the internal reconnectDecision policy, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s, retrying until the connection is back and stopping only on HTTP 401, 403 or 404 or a close code of 4000 or above) is hardcoded. maxRetryAttempts bounds the attempts of one subscribeWithError(), not the socket."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
