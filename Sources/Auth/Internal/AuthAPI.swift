@@ -53,6 +53,13 @@ struct AuthRequest<Response>: Sendable {
   var body: Data?
   let decodeBody: @Sendable (HTTPResponse, Data) throws -> Response
 
+  /// Whether a retry waits for a failure where the request never reached GoTrue. Every method
+  /// but GET can change server state: `POST /token` rotates the refresh token, `/otp` sends a
+  /// message. Replaying one after a timeout or a 5xx can repeat that change.
+  var retriesOnlyConnectionFailures: Bool {
+    head.method != .get
+  }
+
   /// The model for a response to this request, or the ``AuthError`` from ``ErrorDecoder`` when
   /// the status is not 2xx.
   func decode(_ response: HTTPResponse, _ data: Data) throws -> Response {

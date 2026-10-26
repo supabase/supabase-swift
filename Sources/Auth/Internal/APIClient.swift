@@ -13,7 +13,6 @@ extension HTTPClient {
 
   init(http: HTTPClientConfiguration, clock: any Clock<Duration>, logger: Logging.Logger) {
     var policy = RetryPolicy.default
-    policy.retryableMethods.formUnion([.post, .put, .delete])
     policy.retryableStatuses.remove(429)
 
     self.init(
@@ -34,7 +33,11 @@ struct APIClient: Sendable {
     let response: HTTPResponse
     let data: Data
     do {
-      (response, data) = try await http.send(request.head, body: request.body)
+      (response, data) = try await RequestRetry.$connectionFailuresOnly.withValue(
+        request.retriesOnlyConnectionFailures
+      ) {
+        try await http.send(request.head, body: request.body)
+      }
     } catch let urlError as URLError {
       throw AuthError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
