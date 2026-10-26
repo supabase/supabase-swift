@@ -1070,6 +1070,7 @@ struct RequestsTests {
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       flowType: flowType,
+      storageKey: uniqueStorageKey(),
       localStorage: InMemoryLocalStorage(),
       http: .init(
         transport: ClosureTransport { request, body in

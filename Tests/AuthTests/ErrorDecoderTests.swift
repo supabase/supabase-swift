@@ -254,6 +254,7 @@ struct ErrorDecoderTests {
     let sut = AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in

@@ -26,6 +26,7 @@ struct AuthClientMultipleInstancesTests {
     let client1 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
+        storageKey: uniqueStorageKey(),
         localStorage: client1Storage
       )
     )
@@ -33,6 +34,7 @@ struct AuthClientMultipleInstancesTests {
     let client2 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
+        storageKey: uniqueStorageKey(),
         localStorage: client2Storage
       )
     )
@@ -58,6 +60,7 @@ struct AuthClientMultipleInstancesTests {
       let owner = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
+          storageKey: uniqueStorageKey(),
           localStorage: InMemoryLocalStorage()
         )
       )
@@ -79,6 +82,7 @@ struct AuthClientMultipleInstancesTests {
     let client = AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost:54321/auth")!,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(transport: transport)
       )
@@ -136,6 +140,7 @@ struct AuthClientMultipleInstancesTests {
       let client = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
+          storageKey: uniqueStorageKey(),
           localStorage: InMemoryLocalStorage()
         )
       )

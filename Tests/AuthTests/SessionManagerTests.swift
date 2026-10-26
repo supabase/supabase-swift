@@ -35,6 +35,7 @@ struct SessionManagerTests {
     .live(
       configuration: .init(
         url: clientURL,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         automaticallyRefreshesToken: false,
         clock: clock

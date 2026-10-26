@@ -42,6 +42,7 @@ extension AuthMockerTests {
         headers: [
           "apikey": "supabase.publishable.key"
         ],
+        storageKey: uniqueStorageKey(),
         localStorage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 
