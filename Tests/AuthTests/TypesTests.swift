@@ -175,6 +175,21 @@ struct TypesTests {
     #expect(user.phone == "15551234567")
   }
 
+  @Test
+  func userDecodesAbsentFactorsAsEmpty() throws {
+    let user = try decodeUser(#""is_anonymous": false"#)
+    #expect(user.factors == [])
+  }
+
+  @Test(arguments: [
+    (#""identities": []"#, [UserIdentity]?.some([])),
+    (#""identities": null"#, nil),
+  ])
+  func userDecodesEmptyOrNullIdentities(fields: String, expected: [UserIdentity]?) throws {
+    let user = try decodeUser(fields)
+    #expect(user.identities == expected)
+  }
+
   private func decodeUser(_ fields: String) throws -> User {
     let json = """
       {

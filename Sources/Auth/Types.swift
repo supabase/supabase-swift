@@ -352,7 +352,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     identities = try container.decodeIfPresent([UserIdentity].self, forKey: .identities)
     isAnonymous = try container.decodeIfPresent(Bool.self, forKey: .isAnonymous) ?? false
-    factors = try container.decodeIfPresent([Factor].self, forKey: .factors)
+    // GoTrue omits `factors` when the user has none.
+    factors = try container.decodeIfPresent([Factor].self, forKey: .factors) ?? []
   }
 }
 
