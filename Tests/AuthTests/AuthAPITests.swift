@@ -214,6 +214,7 @@ struct AuthAPITests {
       try request.decode(
         HTTPTypes.HTTPResponse(
           status: .unprocessableContent, headerFields: [.contentType: "application/json"]),
+        // cspell:ignore Signups
         Data(#"{"code":"otp_disabled","message":"Signups not allowed for otp"}"#.utf8)
       )
     }

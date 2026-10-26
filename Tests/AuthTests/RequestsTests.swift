@@ -722,6 +722,7 @@ struct RequestsTests {
         credentials: Web3Credentials(
           chain: .ethereum,
           message: "example.com wants you to sign in",
+          // cspell:ignore xsignature
           signature: "0xsignature",
           captchaToken: "captcha-token"
         )
