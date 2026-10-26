@@ -223,6 +223,34 @@ struct SessionStoreTests {
   }
 
   @Test
+  func twoClientsForOneProjectShareTheStore() async throws {
+    let url = URL(string: "https://project.supabase.co/auth/v1")!
+    let storageKey = "sb-\(UUID())-auth-token"
+    let firstStorage = InMemoryAuthStorage()
+    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: firstStorage)
+    let second = SessionStore.shared(
+      url: url, storageKey: storageKey, storage: InMemoryAuthStorage())
+    let otherProject = SessionStore.shared(
+      url: URL(string: "https://other.supabase.co/auth/v1")!,
+      storageKey: storageKey,
+      storage: InMemoryAuthStorage()
+    )
+    try await first.load()
+    var secondChanges = second.changes().makeAsyncIterator()
+    _ = await secondChanges.next()
+
+    try await first.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await second.commit(.signedOut(.userInitiated, event: .signedOut))
+
+    let signedIn = AuthChange(event: .signedIn, status: .signedIn(makeSession("a")))
+    let signedOut = AuthChange(event: .signedOut, status: .signedOut(.userInitiated))
+    #expect(await secondChanges.next() == signedIn)
+    #expect(await secondChanges.next() == signedOut)
+    #expect(first.currentStatus == .signedOut(.userInitiated))
+    #expect(otherProject.currentStatus == .loading)
+  }
+
+  @Test
   func releasingTheStoreFinishesItsStreams() async throws {
     var store: SessionStore? = try await loadedStore()
     var changes = try #require(store).changes().makeAsyncIterator()

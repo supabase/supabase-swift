@@ -228,3 +228,40 @@ actor SessionStore {
     }
   }
 }
+
+extension SessionStore {
+  /// Returns the live store for one project and storage key, creating it when none is alive.
+  ///
+  /// Two clients for one project share a store, so each sees the other's changes and they never
+  /// redeem one refresh token twice. The registry holds stores weakly. The first caller's
+  /// `storage` and `now` win: a later caller with the same `url` and `storageKey` gets the
+  /// existing store, whatever storage it passes.
+  static func shared(
+    url: URL,
+    storageKey: String,
+    storage: any AuthStorage,
+    now: @escaping @Sendable () -> Date = { Date() }
+  ) -> SessionStore {
+    registry.withValue { stores in
+      let registryKey = RegistryKey(url: url, storageKey: storageKey)
+      if let store = stores[registryKey]?.store {
+        return store
+      }
+      let store = SessionStore(storage: storage, key: storageKey, now: now)
+      stores = stores.filter { $0.value.store != nil }
+      stores[registryKey] = WeakStore(store: store)
+      return store
+    }
+  }
+
+  private struct RegistryKey: Hashable {
+    var url: URL
+    var storageKey: String
+  }
+
+  private struct WeakStore {
+    weak var store: SessionStore?
+  }
+
+  private static let registry = LockIsolated<[RegistryKey: WeakStore]>([:])
+}
