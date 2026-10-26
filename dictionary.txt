@@ -330,3 +330,13 @@ quicktime
 
 # Release process term from CONTRIBUTING.md.
 hotfixes
+
+# Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
+synchronizable
+Synchronizable
+
+# POSIX open(2) flags and errno names from FileAuthStorage.swift.
+CLOEXEC
+CREAT
+EINTR
+WRONLY
