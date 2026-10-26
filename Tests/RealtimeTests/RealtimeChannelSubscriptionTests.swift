@@ -467,18 +467,28 @@ struct RealtimeChannelSubscriptionTests {
   @Test(.timeLimit(.minutes(1)))
   func staleSubscribeFailureLeavesReplacementSubscribeUntouched() async throws {
     let gate = Gate()
-    let h = Harness(
-      onAccessToken: { call in
-        if call == 1 { await gate.park() }
-      })
+    let h = Harness()
+    // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
+    // fails only after the newer one has joined.
+    let joinSends = LockIsolated(0)
+    h.socket.onSend { frame in
+      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
+      let send = joinSends.withValue {
+        $0 += 1
+        return $0
+      }
+      if send == 1 { await gate.park() }
+    }
     let channel = await h.client.channel("room")
 
     let firstSubscribe = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
     #expect(await waitUntil { gate.isParked })
 
     await channel.resetForReconnect()
     let secondSubscribe = Task { try await channel.subscribe() }
     let secondJoin = try #require(await h.received(ChannelEvent.join))
+    #expect(secondJoin.ref != firstJoin.ref)
     #expect(await channel.joinRef == secondJoin.ref)
 
     gate.open()
@@ -486,12 +496,12 @@ struct RealtimeChannelSubscriptionTests {
 
     try #require(await channel.status == .subscribing)
     #expect(await channel.joinRef == secondJoin.ref)
-    #expect(h.sent(ChannelEvent.join).count == 1)
+    #expect(h.sent(ChannelEvent.join).count == 2)
 
     try h.confirm(secondJoin)
     try await secondSubscribe.value
     #expect(await channel.status == .subscribed)
-    #expect(h.sent(ChannelEvent.join).count == 1)
+    #expect(h.sent(ChannelEvent.join).count == 2)
   }
 
   /// A server close that cancels a subscribe still surfaces as `channelClosedByServer` to that
@@ -499,18 +509,28 @@ struct RealtimeChannelSubscriptionTests {
   @Test(.timeLimit(.minutes(1)))
   func serverCloseDuringStaleSubscribeStillSurfacesTypedError() async throws {
     let gate = Gate()
-    let h = Harness(
-      onAccessToken: { call in
-        if call == 1 { await gate.park() }
-      })
+    let h = Harness()
+    // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
+    // fails only after the newer one has joined.
+    let joinSends = LockIsolated(0)
+    h.socket.onSend { frame in
+      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
+      let send = joinSends.withValue {
+        $0 += 1
+        return $0
+      }
+      if send == 1 { await gate.park() }
+    }
     let channel = await h.client.channel("room")
 
     let firstSubscribe = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
     #expect(await waitUntil { gate.isParked })
     #expect(await channel.didReceiveClose())
 
     let secondSubscribe = Task { try await channel.subscribe() }
     let secondJoin = try #require(await h.received(ChannelEvent.join))
+    #expect(secondJoin.ref != firstJoin.ref)
 
     gate.open()
     let error = await #expect(throws: RealtimeError.self) { try await firstSubscribe.value }

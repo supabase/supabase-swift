@@ -292,6 +292,37 @@
     }
 
     @Test
+    func aNewTokenIsSentToSubscribedChannelsAndTheServerKeepsThem() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("access-token-test") {
+          $0.broadcast.receiveOwnBroadcasts = true
+        }
+        let messages = await channel.broadcasts(event: "after-token")
+        try await channel.subscribe()
+
+        let session = try await client.auth.signUp(
+          email: "realtime-\(UUID().uuidString.lowercased())@supabase.com",
+          password: "The.Pass.123"
+        ).session
+        let accessToken = try #require(session?.accessToken)
+        await client.realtime.setAuth(accessToken)
+        #expect(await client.realtime.accessToken == accessToken)
+
+        try await channel.broadcast(event: "after-token", message: ["value": 1] as JSONObject)
+        let received = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+
+        #expect(received?["payload"]?.objectValue?["value"]?.intValue == 1)
+        #expect(await channel.status == .subscribed)
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
     func broadcastMultipleEvents() async throws {
       let client = client
       try await withMainSerialExecutor {

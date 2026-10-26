@@ -257,10 +257,9 @@ extension RealtimeChannel {
       } catch let error as RealtimeError {
         switch error.joinRecovery {
         case .refreshToken where !hasRefreshedToken:
-          // Each attempt asks the `accessToken` callback for the token, so the next one joins
-          // with a fresh token.
           hasRefreshedToken = true
           logger.debug("Token expired for channel '\(topic)', rejoining with a fresh one")
+          await client?.refreshTokenForRejoin()
           continue
         case .fail, .refreshToken:
           logger.error("Failed to subscribe to channel '\(topic)': \(error.message)")
@@ -297,6 +296,7 @@ extension RealtimeChannel {
     // would treat as a duplicate.
     try Task.checkCancellation()
     joinRef = ref
+    joinAccessToken = accessToken
     joinFailure = nil
     await performJoin(ref: ref, accessToken: accessToken)
 
