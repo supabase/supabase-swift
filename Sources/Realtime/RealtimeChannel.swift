@@ -227,7 +227,7 @@ public final class RealtimeChannel: Sendable {
   ///   ``RealtimeClient/disconnect(code:reason:)`` runs first, and `CancellationError` when the
   ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back, and that
   ///   caller does not wait for the rollback. A subscribe during the rollback waits for it and
-  ///   then joins again.
+  ///   then joins again. A cancelled caller never waits for the rollback.
   public func subscribeWithError() async throws {
     while true {
       switch try nextSubscribeStep() {
@@ -238,7 +238,7 @@ public final class RealtimeChannel: Sendable {
         try Task.checkCancellation()
         return
       case .leave(let leaving):
-        await leaving.value
+        _ = await leaving.resultUnlessCancelled
         try Task.checkCancellation()
       case .rejoin(let inner):
         try await awaitRejoin(inner)
@@ -261,12 +261,7 @@ public final class RealtimeChannel: Sendable {
   /// A cancelled caller returns at once while other callers still wait on the attempt. The last
   /// one to go also cancels the attempt, and a leave rolls it back.
   private func wait(for attempt: Task<Void, any Error>, generation: UInt64) async throws {
-    let (outcomes, continuation) = AsyncStream<Result<Void, any Error>>.makeStream()
-    Task {
-      continuation.yield(await attempt.result)
-      continuation.finish()
-    }
-    for await outcome in outcomes {
+    if let outcome = await attempt.resultUnlessCancelled {
       return try outcome.get()
     }
     if releaseWaiter(generation) {
@@ -379,7 +374,7 @@ public final class RealtimeChannel: Sendable {
         state.publishStatus()
       }
     } catch {
-      if state.value.attachment(generation)?.leaving == nil {
+      if let attachment = state.value.attachment(generation), attachment.leaving == nil {
         await inner.leave()
         detach(generation)
       }
@@ -482,7 +477,8 @@ public final class RealtimeChannel: Sendable {
   /// Leaves the channel and returns once the server confirmed or the leave timed out.
   ///
   /// Streams stay open, and ``subscribeWithError()`` joins the channel again. The leave waits as
-  /// long as a join attempt, at least ``RealtimeClientOptions/defaultTimeout``.
+  /// long as a join attempt, at least ``RealtimeClientOptions/defaultTimeout``. Cancelling the
+  /// calling task does not shorten the wait.
   public func unsubscribe() async {
     await unsubscribe(generation: nil)
   }
@@ -782,6 +778,24 @@ public final class RealtimeChannel: Sendable {
       throw error
     } catch {
       throw RealtimeError(channelFailure: error)
+    }
+  }
+}
+
+extension Task {
+  /// The task's result, or `nil` once the calling task is cancelled. `Task.result` ignores
+  /// cancellation and waits for the task to end. Neither cancels the task.
+  fileprivate var resultUnlessCancelled: Result<Success, Failure>? {
+    get async {
+      let (outcomes, continuation) = AsyncStream<Result<Success, Failure>>.makeStream()
+      Task<Void, Never> {
+        continuation.yield(await result)
+        continuation.finish()
+      }
+      for await outcome in outcomes {
+        return outcome
+      }
+      return nil
     }
   }
 }

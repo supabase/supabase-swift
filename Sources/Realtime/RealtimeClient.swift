@@ -191,6 +191,9 @@ public final class RealtimeClient: Sendable {
 
   /// Unsubscribes `channel`, ends its streams, and removes it from this client.
   ///
+  /// Returns after the leave, as ``RealtimeChannel/unsubscribe()`` does. Cancelling the calling
+  /// task does not shorten the wait.
+  ///
   /// When no channel is left, the client disconnects after
   /// `RealtimeClientOptions.disconnectOnEmptyChannelsAfter`, unless a new channel comes first.
   public func removeChannel(_ channel: RealtimeChannel) async {
@@ -206,6 +209,9 @@ public final class RealtimeClient: Sendable {
   }
 
   /// Unsubscribes and removes every channel, then disconnects.
+  ///
+  /// Returns after every leave, as ``RealtimeChannel/unsubscribe()`` does. Cancelling the calling
+  /// task does not shorten the wait.
   public func removeAllChannels() async {
     let removed = state.withValue { state in
       defer { state.channels = [:] }
