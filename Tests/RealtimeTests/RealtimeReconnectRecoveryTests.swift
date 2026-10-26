@@ -503,7 +503,6 @@ struct RealtimeReconnectRecoveryTests {
   }
 }
 
-
 extension AsyncFakeWebSocket {
   /// A Phoenix-like server for one socket: it acks heartbeats and confirms joins, answers
   /// `phx_leave` (when `answersLeave`) with a reply and the channel's `phx_close`, and closes the
