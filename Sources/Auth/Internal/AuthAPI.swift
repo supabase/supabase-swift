@@ -110,7 +110,8 @@ extension AuthAPI {
     "Bearer \(accessToken)"
   }
 
-  /// `redirect_to` as a query item, where GoTrue reads it on every endpoint except `/sso`.
+  /// `redirect_to` as a query item, where GoTrue reads it on every endpoint except `/sso` and
+  /// `POST /verify`, which read it from the body.
   func redirectQuery(_ redirectTo: URL?) -> [URLQueryItem] {
     guard let redirectTo = redirectTo ?? defaultRedirectURL else { return [] }
     return [URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString)]
@@ -317,13 +318,14 @@ extension AuthAPI {
     captchaToken: String?
   ) throws -> AuthRequest<VerifyOTPResponse> {
     try request(
-      .post, "verify", query: redirectQuery(redirectTo),
+      .post, "verify",
       body: encoder.encode(
         VerifyOTPParams.email(
           VerifyEmailOTPParams(
             email: email,
             token: token,
             type: type,
+            redirectTo: redirectTo ?? defaultRedirectURL,
             gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
           )
         )

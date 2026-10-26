@@ -670,6 +670,7 @@ struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
   var email: String
   var token: String
   var type: EmailOTPType
+  var redirectTo: URL?
   var gotrueMetaSecurity: AuthMetaSecurity?
 }
 

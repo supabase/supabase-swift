@@ -1515,13 +1515,13 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 121" \
+        	--header "Content-Length: 160" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"token\":\"123456\",\"type\":\"magiclink\"}" \
-        	"http://localhost:54321/auth/v1/verify?redirect_to=https://supabase.com"
+        	--data "{\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"redirect_to\":\"https:\/\/supabase.com\",\"token\":\"123456\",\"type\":\"magiclink\"}" \
+        	"http://localhost:54321/auth/v1/verify"
         """#
       }
       .register()

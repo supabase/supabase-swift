@@ -185,6 +185,15 @@ struct AuthAPITests {
         "skip_http_redirect": true,
       ])
 
+    let verify = try api.verifyOTP(
+      email: "a@b.c", token: "1", type: .email, redirectTo: nil, captchaToken: nil)
+    #expect(query(verify).isEmpty)
+    #expect(
+      try body(verify) == [
+        "email": "a@b.c", "token": "1", "type": "email",
+        "redirect_to": "https://example.com/callback",
+      ])
+
     let link = try api.linkIdentityURL(
       provider: .github, scopes: nil, redirectTo: nil, queryParams: [], pkce: nil,
       accessToken: "token")
