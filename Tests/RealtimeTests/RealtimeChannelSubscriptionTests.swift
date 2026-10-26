@@ -65,6 +65,25 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func aCallerCancelledBeforeItJoinsTheSharedSubscribeThrowsAtOnce() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      try await channel.subscribe()
+    }
+
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await channel.sharedSubscribeWaiters.isEmpty)
+    try h.confirm(join)
+    try await first.value
+    #expect(await channel.status == .subscribed)
+  }
+
   @Test
   func concurrentSubscribesShareOneJoin() async throws {
     let h = Harness()
