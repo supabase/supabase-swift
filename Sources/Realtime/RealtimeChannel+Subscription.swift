@@ -57,7 +57,7 @@ extension RealtimeChannel {
 
     case .subscribing(let task):
       logger.debug("Subscribe already in progress for channel '\(topic)', awaiting…")
-      try await task.value
+      try await awaitSharedSubscribe(task)
 
     case .unsubscribing(let task):
       logger.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
@@ -194,6 +194,32 @@ extension RealtimeChannel {
   }
 
   // MARK: - Subscribe flow
+
+  /// Waits for a subscribe that another caller started. Cancelling this caller stops its wait
+  /// but not the attempt: with no attempt limit, `task.value` alone could wait forever.
+  private func awaitSharedSubscribe(_ task: Task<Void, any Error>) async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        guard !Task.isCancelled else {
+          continuation.resume(throwing: CancellationError())
+          return
+        }
+        sharedSubscribeWaiters[id] = continuation
+        Task {
+          let result = await task.result
+          self.resumeSharedSubscribeWaiter(id, with: result)
+        }
+      }
+    } onCancel: {
+      Task { await self.resumeSharedSubscribeWaiter(id, with: .failure(CancellationError())) }
+    }
+  }
+
+  private func resumeSharedSubscribeWaiter(_ id: UUID, with result: Result<Void, any Error>) {
+    sharedSubscribeWaiters.removeValue(forKey: id)?.resume(with: result)
+  }
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")

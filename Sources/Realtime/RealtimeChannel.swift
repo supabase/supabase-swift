@@ -165,6 +165,10 @@ public actor RealtimeChannel {
   /// parked its waiter. The attempt for `ref` picks it up.
   var joinFailure: (ref: String, error: RealtimeError)?
 
+  /// Callers that joined an in-flight subscribe. Each one is resumed by the shared attempt or by
+  /// its own cancellation, which leaves the attempt running.
+  var sharedSubscribeWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
+
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?
 
