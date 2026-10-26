@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.55.5](https://github.com/supabase/supabase-swift/compare/v2.55.4...v2.55.5) (2026-10-26)
+
+
+### Bug Fixes
+
+* **ci:** compute coverage from this run's profile and every test bundle ([#1615](https://github.com/supabase/supabase-swift/issues/1615)) ([#1621](https://github.com/supabase/supabase-swift/issues/1621)) ([dcd45fd](https://github.com/supabase/supabase-swift/commit/dcd45fd8632659b16a2411cd98de3d638ab7b856))
+* **realtime:** don't rejoin a channel the caller unsubscribed across a reconnect (v2 backport) ([#1602](https://github.com/supabase/supabase-swift/issues/1602)) ([bf3123c](https://github.com/supabase/supabase-swift/commit/bf3123ced6a96d7c90b2e42ecd11479635d96682))
+* **realtime:** stale subscribe no longer resets the rejoined channel ([#1606](https://github.com/supabase/supabase-swift/issues/1606)) ([d16ddc7](https://github.com/supabase/supabase-swift/commit/d16ddc762474aa149cc0f2710b6b3289802e7ac5))
+
 ## [2.55.4](https://github.com/supabase/supabase-swift/compare/v2.55.3...v2.55.4) (2026-10-13)
 
 
