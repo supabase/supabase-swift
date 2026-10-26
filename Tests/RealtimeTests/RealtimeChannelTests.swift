@@ -174,6 +174,7 @@ struct RealtimeChannelTests {
     let harness = RealtimeHarness(replies: .realtime(join: { _ in nil }))
     let connection = try await harness.connect()
     let channel = harness.client.channel("room")
+    let statuses = channel.statusChange
 
     let subscribe = Task { try await channel.subscribeWithError() }
     _ = await connection.nextSent("phx_join")
@@ -181,6 +182,8 @@ struct RealtimeChannelTests {
 
     await #expect(throws: CancellationError.self) { try await subscribe.value }
     _ = await connection.nextSent("phx_leave")
+    let seen = await collect(statuses) { $0.count == 4 }
+    #expect(seen == [.unsubscribed, .subscribing, .unsubscribing, .unsubscribed])
     #expect(channel.status == .unsubscribed)
   }
 
@@ -578,6 +581,58 @@ struct RealtimeChannelTests {
     let subscribing = Task.immediateIfAvailable { try await channel.subscribeWithError() }
     releaseSink.yield()
 
+    try await subscribing.value
+    await #expect(throws: CancellationError.self) { try await cancelled.value }
+    #expect(channel.status == .subscribed)
+  }
+
+  @Test
+  func cancelledSubscribeReturnsWhileTheServerHoldsTheLeaveReply() async throws {
+    let harness = RealtimeHarness(replies: .none)
+    let connection = try await harness.connect()
+    let channel = harness.client.channel("room")
+
+    let cancelled = Task { try await channel.subscribeWithError() }
+    let join = await connection.nextSent("phx_join")
+    cancelled.cancel()
+    let leave = await connection.nextSent("phx_leave")
+
+    let outcome = try #require(
+      await within(.seconds(5)) { await cancelled.result },
+      "the cancelled subscribe returns before the leave reply")
+    #expect(throws: CancellationError.self) { try outcome.get() }
+    #expect(channel.status == .unsubscribing)
+
+    let subscribing = Task.immediateIfAvailable { try await channel.subscribeWithError() }
+    await connection.reply(to: leave)
+    let rejoin = await connection.nextSent("phx_join")
+    #expect(rejoin.joinRef != join.joinRef)
+    await connection.reply(to: rejoin)
+    try await subscribing.value
+    #expect(channel.status == .subscribed)
+  }
+
+  @Test
+  func subscribeDuringTheRollbackJoinsOnlyAfterTheLeaveReply() async throws {
+    let harness = RealtimeHarness(replies: .none)
+    let connection = try await harness.connect()
+    let channel = harness.client.channel("room")
+
+    let cancelled = Task { try await channel.subscribeWithError() }
+    _ = await connection.nextSent("phx_join")
+    cancelled.cancel()
+    let leave = await connection.nextSent("phx_leave")
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(channel.status == .unsubscribing, "the rollback ends only with the leave reply")
+
+    let subscribing = Task.immediateIfAvailable { try await channel.subscribeWithError() }
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(
+      !connection.unreadSent.contains { $0.event == "phx_join" },
+      "no join goes out before the leave reply")
+
+    await connection.reply(to: leave)
+    await connection.reply(to: await connection.nextSent("phx_join"))
     try await subscribing.value
     await #expect(throws: CancellationError.self) { try await cancelled.value }
     #expect(channel.status == .subscribed)

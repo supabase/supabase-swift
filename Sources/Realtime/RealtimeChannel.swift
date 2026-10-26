@@ -162,11 +162,16 @@ public final class RealtimeChannel: Sendable {
     var waiters = 1
     var leaving: Task<Void, Never>?
 
-    /// Starts the leave unless one runs already, and returns it.
-    mutating func leave() -> Task<Void, Never> {
+    /// Starts the leave unless one runs already, and returns it. The leave ends the attachment
+    /// once the server replied or the leave timed out, so no caller has to wait for it.
+    mutating func leave(from channel: RealtimeChannel) -> Task<Void, Never> {
       if let leaving { return leaving }
       let inner = inner
-      let started = Task { await inner.leave() }
+      let generation = generation
+      let started = Task {
+        await inner.leave()
+        channel.detach(generation)
+      }
       leaving = started
       return started
     }
@@ -220,8 +225,9 @@ public final class RealtimeChannel: Sendable {
   ///   kind `.channelClosed` after the channel was removed, the error of
   ///   ``RealtimeClient/connect()`` when the client cannot connect, kind `.notConnected` when
   ///   ``RealtimeClient/disconnect(code:reason:)`` runs first, and `CancellationError` when the
-  ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back. A
-  ///   subscribe during the rollback waits for it and then joins again.
+  ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back, and that
+  ///   caller does not wait for the rollback. A subscribe during the rollback waits for it and
+  ///   then joins again.
   public func subscribeWithError() async throws {
     while true {
       switch try nextSubscribeStep() {
@@ -231,9 +237,8 @@ public final class RealtimeChannel: Sendable {
         try await wait(for: attempt, generation: generation)
         try Task.checkCancellation()
         return
-      case .leave(let leaving, let generation):
+      case .leave(let leaving):
         await leaving.value
-        detach(generation)
         try Task.checkCancellation()
       case .rejoin(let inner):
         try await awaitRejoin(inner)
@@ -248,13 +253,13 @@ public final class RealtimeChannel: Sendable {
   private enum SubscribeStep {
     case subscribed
     case attempt(Task<Void, any Error>, generation: UInt64)
-    case leave(Task<Void, Never>, generation: UInt64)
+    case leave(Task<Void, Never>)
     /// Phoenix is joining again on its own.
     case rejoin(Phoenix.Channel)
   }
 
   /// A cancelled caller returns at once while other callers still wait on the attempt. The last
-  /// one to go cancels the attempt and waits for the leave that rolls it back.
+  /// one to go also cancels the attempt, and a leave rolls it back.
   private func wait(for attempt: Task<Void, any Error>, generation: UInt64) async throws {
     let (outcomes, continuation) = AsyncStream<Result<Void, any Error>>.makeStream()
     Task {
@@ -264,31 +269,29 @@ public final class RealtimeChannel: Sendable {
     for await outcome in outcomes {
       return try outcome.get()
     }
-    if let leaving = releaseWaiter(generation) {
+    if releaseWaiter(generation) {
       attempt.cancel()
-      await leaving.value
-      detach(generation)
     }
     throw CancellationError()
   }
 
-  /// When no caller waits on the attempt anymore, turns it into a leave and returns the leave. A
+  /// When no caller waits on the attempt anymore, turns it into a leave and returns `true`. A
   /// subscribe meanwhile then waits for the leave and joins again, instead of joining the
   /// cancelled attempt.
-  private func releaseWaiter(_ generation: UInt64) -> Task<Void, Never>? {
+  private func releaseWaiter(_ generation: UInt64) -> Bool {
     state.withValue { state in
       guard var attachment = state.attachment(generation), attachment.subscribing != nil else {
-        return nil
+        return false
       }
       attachment.waiters -= 1
-      var leaving: Task<Void, Never>?
-      if attachment.waiters == 0 {
+      let isLast = attachment.waiters == 0
+      if isLast {
         attachment.subscribing = nil
-        leaving = attachment.leave()
+        _ = attachment.leave(from: self)
       }
       state.phase = .attached(attachment)
       state.publishStatus()
-      return leaving
+      return isLast
     }
   }
 
@@ -315,7 +318,7 @@ public final class RealtimeChannel: Sendable {
         return attach(&state)
       case .attached(var attachment):
         if let leaving = attachment.leaving {
-          return .leave(leaving, generation: attachment.generation)
+          return .leave(leaving)
         }
         if let subscribing = attachment.subscribing {
           attachment.waiters += 1
@@ -376,8 +379,10 @@ public final class RealtimeChannel: Sendable {
         state.publishStatus()
       }
     } catch {
-      await inner.leave()
-      detach(generation)
+      if state.value.attachment(generation)?.leaving == nil {
+        await inner.leave()
+        detach(generation)
+      }
       if error is CancellationError { throw error }
       if state.value.isRemoving { throw Self.removedError }
       throw RealtimeError(channelFailure: error)
@@ -484,17 +489,15 @@ public final class RealtimeChannel: Sendable {
 
   /// With a `generation`, does nothing when a newer subscribe replaced that attachment.
   private func unsubscribe(generation expected: UInt64?) async {
-    let pending: (Task<Void, Never>, UInt64)? = state.withValue { state in
+    let leaving: Task<Void, Never>? = state.withValue { state in
       guard case .attached(var attachment) = state.phase else { return nil }
       if let expected, attachment.generation != expected { return nil }
-      let leaving = attachment.leave()
+      let leaving = attachment.leave(from: self)
       state.phase = .attached(attachment)
       state.publishStatus()
-      return (leaving, attachment.generation)
+      return leaving
     }
-    guard let (leaving, generation) = pending else { return }
-    await leaving.value
-    detach(generation)
+    await leaving?.value
   }
 
   private func detach(_ generation: UInt64) {

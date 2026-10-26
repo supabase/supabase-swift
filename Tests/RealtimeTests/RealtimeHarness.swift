@@ -67,7 +67,9 @@ struct RealtimeHarness {
   }
 }
 
-private func within<Value: Sendable>(
+/// What `operation` returns, or `nil` when it does not return within `limit` of real time. Does
+/// not cancel `operation`.
+func within<Value: Sendable>(
   _ limit: Duration, _ operation: @escaping @Sendable () async -> Value
 ) async -> Value? {
   let waiter = LockIsolated<CheckedContinuation<Value?, Never>?>(nil)
