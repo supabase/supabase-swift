@@ -422,15 +422,14 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   /// Unsubscribes from and removes a channel.
   ///
-  /// If the channel is currently subscribed, it is unsubscribed first. After removal,
-  /// if no channels remain, the client disconnects (or schedules a deferred disconnect
-  /// based on ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
+  /// The channel is unsubscribed first, which also stops a join still in flight, and it never
+  /// joins again: get a new one from ``channel(_:options:)``. After removal, if no channels
+  /// remain, the client disconnects (or schedules a deferred disconnect based on
+  /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannelV2) async {
-    if channel.status == .subscribed {
-      await channel.unsubscribe()
-    }
+    await channel.unsubscribeForRemoval()
 
     // Atomically remove channel and check if we should disconnect
     let shouldDisconnect = mutableState.withValue { state -> Bool in
@@ -503,8 +502,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     await withTaskGroup(of: Void.self) { group in
       for channel in channels.values {
         group.addTask {
-          await channel.resetForReconnect()
-          try? await channel.subscribeWithError()
+          try? await channel.rejoinAfterReconnect()
         }
       }
     }
