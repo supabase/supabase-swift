@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux) && !os(Android)
+#if canImport(Security)
   import ConcurrencyExtras
   import Foundation
   import Testing

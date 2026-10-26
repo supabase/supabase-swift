@@ -194,7 +194,7 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  #if !os(Linux) && !os(Android)
+  #if canImport(Security)
     /// Creates a client with default options.
     /// - Parameters:
     ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.

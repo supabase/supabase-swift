@@ -216,7 +216,7 @@ struct SupabaseClientTests {
     #expect(client.storage.configuration.resumable.retryTimeout == .seconds(5))
   }
 
-  #if !os(Linux) && !os(Android)
+  #if canImport(Security)
     @Test
     func clientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
       _ = SupabaseClient(

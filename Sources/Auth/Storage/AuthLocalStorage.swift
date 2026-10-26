@@ -3,8 +3,8 @@ public import Foundation
 /// A type that can persist, retrieve, and remove Auth session data on the local device.
 ///
 /// Implement this protocol to provide a custom storage back-end for ``AuthClient``.
-/// The default implementation uses the Keychain on Apple platforms and Windows Credential
-/// Manager on Windows.
+/// The default implementation uses the Keychain on Apple platforms. Other platforms have no
+/// default; pass a storage explicitly.
 ///
 /// ## Topics
 ///
@@ -39,7 +39,7 @@ extension AuthClient.Configuration {
   /// The platform-appropriate default local storage implementation.
   ///
   /// On Apple platforms this is a ``KeychainLocalStorage`` instance.
-  #if !os(Linux) && !os(Windows) && !os(Android)
+  #if canImport(Security)
     public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
   #endif
 }
