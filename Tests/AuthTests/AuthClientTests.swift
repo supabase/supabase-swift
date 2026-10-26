@@ -3156,7 +3156,7 @@ extension AuthMockerTests {
             _ = try await sut.user()
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
           }
         },
         expectedEvents: [.initialSession, .signedOut]
@@ -3194,7 +3194,7 @@ extension AuthMockerTests {
             _ = try await sut.user(jwt: "foreign-access-token")
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
           }
         },
         expectedEvents: [.initialSession]
@@ -3232,7 +3232,7 @@ extension AuthMockerTests {
             _ = try await sut.user(jwt: Session.valid.accessToken)
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
           }
         },
         expectedEvents: [.initialSession, .signedOut]
@@ -3274,7 +3274,7 @@ extension AuthMockerTests {
               accessToken: accessToken, refreshToken: "dummy-refresh-token")
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
           }
         },
         expectedEvents: [.initialSession]
@@ -3318,7 +3318,7 @@ extension AuthMockerTests {
             _ = try await sut.session(from: url)
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
           }
         },
         expectedEvents: [.initialSession]
@@ -3360,7 +3360,10 @@ extension AuthMockerTests {
             _ = try await sut.session
             Issue.record("Expected failure")
           } catch {
-            #expect((error as? AuthError)?.kind == .sessionMissing)
+            // `.initialSession` starts a background refresh of the expired session. If it
+            // finishes first, nothing is stored when `session` runs.
+            let kind = (error as? AuthError)?.kind
+            #expect(kind == .sessionInvalidated || kind == .sessionMissing)
           }
         },
         expectedEvents: expectedEvents

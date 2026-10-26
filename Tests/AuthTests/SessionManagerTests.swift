@@ -261,7 +261,7 @@ struct SessionManagerTests {
     expectNoDifference(
       dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.signedOut))
-    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+    #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
   @Test
@@ -422,7 +422,7 @@ struct SessionManagerTests {
 
     expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.signedOut))
-    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+    #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
   @Test
@@ -443,7 +443,7 @@ struct SessionManagerTests {
 
     expectNoDifference(dependencies.sessionStorage.get()?.refreshToken, userB.refreshToken)
     #expect(!events.value.contains(.signedOut))
-    #expect((result.error as? AuthError)?.kind == .sessionMissing)
+    #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
   @Test

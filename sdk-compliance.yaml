@@ -204,16 +204,25 @@ supporting_symbols:
   - AuthError.Kind.jwtVerificationFailed
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
+  - AuthError.Kind.sessionInvalidated
+  - AuthError.Kind.idTokenMismatch
+  - AuthError.Kind.storageUnavailable
+  - AuthError.Kind.storageMisconfigured
+  - AuthError.Kind.excessiveRefresh
+  - AuthError.Kind.~=
   - AuthError.init
   - AuthError.kind
   - AuthError.message
   - AuthError.errorCode
   - AuthError.weakPasswordReasons
+  - AuthError.oauthError
+  - AuthError.isRetryable
   - AuthError.response
   - AuthError.underlyingError
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
+  - ErrorCode.~=
   # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
   - AuthAdmin.init

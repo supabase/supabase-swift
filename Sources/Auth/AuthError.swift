@@ -220,8 +220,10 @@ extension ErrorCode {
 /// ```swift
 /// do {
 ///   try await supabase.auth.signIn(email: email, password: password)
-/// } catch let error as AuthError where error.errorCode == .invalidCredentials {
+/// } catch ErrorCode.invalidCredentials {
 ///   showWrongPassword()
+/// } catch AuthError.Kind.sessionInvalidated {
+///   showSignIn()
 /// } catch let error as AuthError where error.errorCode == .weakPassword {
 ///   showReasons(error.weakPasswordReasons)
 /// }
@@ -234,6 +236,8 @@ extension ErrorCode {
 /// - ``errorCode``
 /// - ``message``
 /// - ``weakPasswordReasons``
+/// - ``oauthError``
+/// - ``isRetryable``
 /// - ``response``
 /// - ``underlyingError``
 ///
@@ -256,15 +260,34 @@ public struct AuthError: SupabaseError {
     /// GoTrue answered with a non-2xx status. Branch on ``AuthError/errorCode`` for why (it is
     /// ``ErrorCode/unexpectedFailure`` when the body was not a GoTrue error payload) and read
     /// ``AuthError/response`` for the status and body. For ``ErrorCode/weakPassword``, show
-    /// ``AuthError/weakPasswordReasons``.
+    /// ``AuthError/weakPasswordReasons``. OAuth-style responses, such as those from the ID token
+    /// grant, have no error code; read ``AuthError/oauthError`` instead.
     public static let server: Kind = "server"
-    /// A session is required but none is stored, or the server reported the session as gone.
-    /// Sign the user in again.
+    /// A session is required but none is stored locally. Sign the user in.
     public static let sessionMissing: Kind = "sessionMissing"
+    /// The server rejected the session or its refresh token: it expired, was revoked, was
+    /// already used, or the user is banned. The client removes that session from storage. Sign
+    /// the user in again. ``AuthError/errorCode`` and ``AuthError/message`` keep the server's
+    /// values.
+    public static let sessionInvalidated: Kind = "sessionInvalidated"
+    /// The claims of an ID token do not match the sign-in request, for example a nonce,
+    /// audience, or issuer mismatch.
+    public static let idTokenMismatch: Kind = "idTokenMismatch"
+    /// Session storage cannot be read or written right now, for example a Keychain item that
+    /// is not accessible while the device is locked. Try again later.
+    public static let storageUnavailable: Kind = "storageUnavailable"
+    /// Session storage is set up wrong, for example a missing Keychain entitlement. Fix the
+    /// app's configuration; retrying does not help.
+    public static let storageMisconfigured: Kind = "storageMisconfigured"
+    /// The client refreshed the session too many times in a short window and stopped, to avoid
+    /// a refresh loop.
+    public static let excessiveRefresh: Kind = "excessiveRefresh"
     /// A redirect-based sign-in (OAuth, magic link, PKCE or implicit flow) could not start or
-    /// finish on the client. Either no redirect URL with a scheme is configured, or the redirect
-    /// URL carried an error or no session. Start the sign-in again; ``AuthError/errorCode``
-    /// carries the URL's `error_code` when it had one.
+    /// finish. Either no redirect URL with a scheme is configured, the redirect URL carried an
+    /// error or no session, or the server rejected the flow state or code verifier
+    /// (``ErrorCode/flowStateNotFound``, ``ErrorCode/flowStateExpired``,
+    /// ``ErrorCode/badCodeVerifier``). Start the sign-in again; ``AuthError/errorCode`` carries
+    /// the URL's or the server's error code when there was one.
     public static let oauthFlowFailed: Kind = "oauthFlowFailed"
     /// Local JWT verification failed: malformed, expired or bad signature. Discard the token and
     /// refresh the session or sign in again.
@@ -290,6 +313,9 @@ public struct AuthError: SupabaseError {
   public var errorCode: ErrorCode
   /// Why the password was rejected. Empty unless ``errorCode`` is ``ErrorCode/weakPassword``.
   public var weakPasswordReasons: [String]
+  /// The raw `error` field of an OAuth-style response, such as `invalid_grant` or
+  /// `invalid nonce`. These responses carry no ``errorCode``. `nil` for every other response.
+  public var oauthError: String?
   public var response: HTTPErrorResponse?
   public var underlyingError: (any Error)?
 
@@ -298,6 +324,7 @@ public struct AuthError: SupabaseError {
     message: String,
     errorCode: ErrorCode = .unknown,
     weakPasswordReasons: [String] = [],
+    oauthError: String? = nil,
     response: HTTPErrorResponse? = nil,
     underlyingError: (any Error)? = nil
   ) {
@@ -305,6 +332,7 @@ public struct AuthError: SupabaseError {
     self.message = message
     self.errorCode = errorCode
     self.weakPasswordReasons = weakPasswordReasons
+    self.oauthError = oauthError
     self.response = response
     self.underlyingError = underlyingError
   }
@@ -313,8 +341,17 @@ public struct AuthError: SupabaseError {
     formattedDescription(kind: kind.rawValue)
   }
 
-  /// Thrown when a session is required to proceed but none was found, either locally or as
-  /// reported by the server.
+  /// Whether the same request can succeed if sent again later.
+  ///
+  /// `true` for ``Kind-swift.struct/transport`` errors and for HTTP 408, 409, 429 and 5xx
+  /// responses. GoTrue sends no `Retry-After` header, so back off with jitter before retrying.
+  public var isRetryable: Bool {
+    if kind == .transport { return true }
+    guard let statusCode = response?.statusCode else { return false }
+    return [408, 409, 429].contains(statusCode) || 500..<600 ~= statusCode
+  }
+
+  /// Thrown when a session is required to proceed but none is stored locally.
   public static let sessionMissing = AuthError(
     kind: .sessionMissing, message: "Auth session missing.", errorCode: .sessionNotFound)
 
@@ -325,11 +362,43 @@ public struct AuthError: SupabaseError {
     message: "Token refresh discarded: the session it started from is no longer stored.")
 }
 
+extension ErrorCode {
+  /// Matches an ``AuthError`` with this ``AuthError/errorCode``, so a `catch` clause can name the
+  /// code directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.auth.signIn(email: email, password: password)
+  /// } catch ErrorCode.invalidCredentials {
+  ///   showWrongPassword()
+  /// }
+  /// ```
+  public static func ~= (code: ErrorCode, error: any Error) -> Bool {
+    (error as? AuthError)?.errorCode == code
+  }
+}
+
+extension AuthError.Kind {
+  /// Matches an ``AuthError`` of this ``AuthError/kind``, so a `catch` clause can name the kind
+  /// directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.auth.refreshSession()
+  /// } catch AuthError.Kind.sessionInvalidated {
+  ///   showSignIn()
+  /// }
+  /// ```
+  public static func ~= (kind: AuthError.Kind, error: any Error) -> Bool {
+    (error as? AuthError)?.kind == kind
+  }
+}
+
 extension AuthError {
-  static func weakPassword(message: String, reasons: [String]) -> AuthError {
-    AuthError(
-      kind: .server, message: message, errorCode: .weakPassword,
-      weakPasswordReasons: reasons)
+  /// Whether the server rejected the session the request was issued for, so the stored session
+  /// must be removed.
+  var invalidatesSession: Bool {
+    kind == .sessionInvalidated
   }
 
   static func oauthFlowFailed(_ message: String, errorCode: ErrorCode = .unknown) -> AuthError {

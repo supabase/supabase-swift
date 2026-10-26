@@ -28,6 +28,12 @@ Changes that still compile but behave differently. Check each one by hand.
 - **String interpolation.** `"\(provider)"` on those structs prints
   `Provider(rawValue: "apple")`, not `apple`. `"\(error)"` on an `AuthError` prints
   `AuthError(server): …`, not the case name. Use `.rawValue` or `.message`.
+- **A rejected session has its own kind.** When the server rejects the session or its refresh
+  token (`refresh_token_not_found`, `refresh_token_already_used`, `session_expired`,
+  `session_not_found`, `user_banned`), the error kind is `.sessionInvalidated`, not
+  `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
+  means only that no session is stored. Search for `.sessionMissing` and also handle
+  `.sessionInvalidated` where you send the user back to sign-in.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
 
@@ -82,20 +88,21 @@ MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you sto
 
 ## `AuthError` is a struct
 
-`AuthError` is a struct with `kind`, `message`, `errorCode`, `weakPasswordReasons`, `response`
-and `underlyingError`. Match on `kind` and `errorCode` instead of enum cases. `AuthError` is no
-longer `Equatable`, and the `~=` operator is gone.
+`AuthError` is a struct with `kind`, `message`, `errorCode`, `weakPasswordReasons`,
+`oauthError`, `response` and `underlyingError`. Match on `kind` and `errorCode` instead of enum
+cases: `catch ErrorCode.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
+`isRetryable` says whether to send the request again. `AuthError` is no longer `Equatable`.
 
 | v2 | v3 |
 | --- | --- |
-| `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `error.kind == .sessionMissing` |
-| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.statusCode`, `error.response?.body` |
+| `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `catch AuthError.Kind.sessionMissing` (nothing stored) or `catch AuthError.Kind.sessionInvalidated` (the server rejected the session) |
+| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.statusCode`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
 | `.weakPassword(message, reasons)` | `error.errorCode == .weakPassword`; `error.weakPasswordReasons` |
 | `.pkceGrantCodeExchange(...)`, `.implicitGrantRedirect(message)`, `.pkce(_:)`, `.invalidImplicitGrantFlowURL`, `.invalidRedirectScheme` | `error.kind == .oauthFlowFailed` |
 | `.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` |
 | `.refreshDiscarded` | `error.kind == .refreshDiscarded` |
 | `.missingExpClaim`, `.malformedJWT`, `.missingURL` | removed |
-| `error == .sessionMissing`, `AuthError.sessionMissing ~= error` | `(error as? AuthError)?.kind == .sessionMissing` |
+| `error == .sessionMissing`, `AuthError.sessionMissing ~= error` | `AuthError.Kind.sessionMissing ~= error` |
 
 ```swift
 // v2
@@ -111,7 +118,7 @@ do {
   try await supabase.auth.signIn(email: email, password: password)
 } catch let error as AuthError where error.kind == .server {
   print(error.response?.statusCode ?? 0, error.errorCode, error.message)
-} catch let error as AuthError where error.kind == .sessionMissing {
+} catch AuthError.Kind.sessionMissing, AuthError.Kind.sessionInvalidated {
   showLogin()
 }
 ```

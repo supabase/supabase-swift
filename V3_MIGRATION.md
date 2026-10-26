@@ -258,7 +258,8 @@ Changes that still compile but behave differently. Check each one by hand.
   sees `Authorization` on these requests; read it in a `ClientTransport`.
 - **Access-token errors fail the request.** If the session refresh or your
   `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
-  request went out with the API key. Only a missing session still falls back to the key.
+  request went out with the API key. Only a missing session still falls back to the key. A
+  refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
 - **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
   `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
   yourself if you need a separate Realtime logger.
