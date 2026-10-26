@@ -6,7 +6,6 @@
 //
 
 public import Foundation
-import HTTPTypes
 
 /// Admin operations for managing a user's multi-factor authentication factors.
 ///
@@ -23,22 +22,15 @@ import HTTPTypes
 public struct AuthAdminMFA: Sendable {
   let admin: AuthAdmin
 
-  var url: URL { admin.url }
   var api: APIClient { admin.api }
-  var decoder: JSONDecoder { admin.decoder }
+  var authAPI: AuthAPI { admin.authAPI }
 
   /// Lists the MFA factors enrolled by a user.
   ///
   /// - Parameter userId: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func listFactors(forUser userId: UUID) async throws -> [Factor] {
-    try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: url.appendingPathComponent("admin/users/\(userId)/factors")
-      )
-    )
-    .decoded(decoder: decoder)
+    try await api.execute(authAPI.adminListFactors(userId: userId))
   }
 
   /// Deletes an MFA factor enrolled by a user, and downgrades that user's sessions to AAL1.
@@ -48,11 +40,6 @@ public struct AuthAdminMFA: Sendable {
   ///   - userId: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func deleteFactor(id: UUID, forUser userId: UUID) async throws {
-    _ = try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: url.appendingPathComponent("admin/users/\(userId)/factors/\(id)")
-      )
-    )
+    try await api.execute(authAPI.adminDeleteFactor(id: id, userId: userId))
   }
 }

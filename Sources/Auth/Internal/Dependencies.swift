@@ -9,6 +9,8 @@ import Logging
 struct Dependencies: Sendable {
   let configuration: AuthClient.Configuration
   let http: HTTPClient
+  /// Builds every request and decodes every response.
+  let authAPI: AuthAPI
   /// Session-free requests. What `AuthAdmin` runs on.
   let api: APIClient
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
@@ -38,10 +40,18 @@ extension Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
     let eventEmitter = AuthStateChangeEventEmitter(logger: logger)
-    let api = APIClient(headers: configuration.headers, http: http)
+    let authAPI = AuthAPI(
+      url: configuration.url,
+      headers: configuration.headers,
+      defaultRedirectURL: configuration.redirectToURL,
+      encoder: configuration.resolvedEncoder,
+      decoder: configuration.resolvedDecoder
+    )
+    let api = APIClient(http: http)
     let sessionStorage = SessionStorage.live(configuration: configuration)
     let sessionManager = SessionManager.live(
       configuration: configuration,
+      authAPI: authAPI,
       api: api,
       sessionStorage: sessionStorage,
       eventEmitter: eventEmitter,
@@ -51,6 +61,7 @@ extension Dependencies {
     return Dependencies(
       configuration: configuration,
       http: http,
+      authAPI: authAPI,
       api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, eventEmitter: eventEmitter),

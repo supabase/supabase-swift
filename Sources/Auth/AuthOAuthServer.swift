@@ -6,7 +6,6 @@
 //
 
 public import Foundation
-import HTTPTypes
 
 /// The OAuth 2.1 authorization-server consent and grant-management API.
 ///
@@ -35,10 +34,8 @@ public struct AuthOAuthServer: Sendable {
   /// value kept past its call site keeps the client alive instead of dangling.
   let client: AuthClient
 
-  var configuration: AuthClient.Configuration { client.configuration }
   var api: SessionAPIClient { client.dependencies.sessionAPI }
-  var encoder: JSONEncoder { configuration.resolvedEncoder }
-  var decoder: JSONDecoder { configuration.resolvedDecoder }
+  var authAPI: AuthAPI { client.dependencies.authAPI }
 
   /// Fetches details about a pending OAuth authorization request, to present
   /// a consent screen to the user.
@@ -61,15 +58,7 @@ public struct AuthOAuthServer: Sendable {
   public func authorizationDetails(
     id: String
   ) async throws -> OAuthAuthorizationDetailsResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .get,
-        url: configuration.url
-          .appendingPathComponent("oauth/authorizations")
-          .appendingPathComponent(id)
-      )
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.oauthAuthorizationDetails(id: id, accessToken: $0) }
   }
 
   /// Approves a pending OAuth authorization request.
@@ -104,29 +93,16 @@ public struct AuthOAuthServer: Sendable {
   }
 
   private func consent(authorizationId: String, action: String) async throws -> OAuthRedirect {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url
-          .appendingPathComponent("oauth/authorizations")
-          .appendingPathComponent(authorizationId)
-          .appendingPathComponent("consent")
-      ), body: encoder.encode(["action": action])
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute {
+      try authAPI.oauthConsent(authorizationId: authorizationId, action: action, accessToken: $0)
+    }
   }
 
   /// Lists the OAuth grants the user has given to third-party client apps.
   ///
   /// - Returns: The active grants.
   public func listGrants() async throws -> [OAuthGrant] {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .get,
-        url: configuration.url.appendingPathComponent("user/oauth/grants")
-      )
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.oauthGrants(accessToken: $0) }
   }
 
   /// Revokes a previously granted OAuth consent.
@@ -136,12 +112,6 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter id: The unique identifier of the OAuth client to revoke access for.
   public func revokeGrant(id: UUID) async throws {
-    _ = try await api.authorizedExecute(
-      HTTPRequest(
-        method: .delete,
-        url: configuration.url.appendingPathComponent("user/oauth/grants"),
-        query: [URLQueryItem(name: "client_id", value: id.uuidString)]
-      )
-    )
+    try await api.authorizedExecute { authAPI.revokeOAuthGrant(clientId: id, accessToken: $0) }
   }
 }
