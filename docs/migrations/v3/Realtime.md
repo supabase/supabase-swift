@@ -16,6 +16,15 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
+- **Reconnect waits are shorter and spread out.** `defaultReconnectDelay` is 1 s (was 7 s), and
+  the n-th wait is a random duration in `0...min(30s, reconnectDelay · 2^(n-1))` (was the upper
+  half of that range). Code that relied on a minimum wait before a reconnect must not.
+- **Reconnect stops on a refused upgrade.** A reconnect attempt that the server refuses with HTTP
+  401, 403 or 404 ends in `.disconnected` instead of retrying forever. Fix the key or token, then
+  call `connect()` again.
+- **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
+  reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
+  carries on.
 - **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
   reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
   `X(rawValue:) != nil` checks on the status types are now always `true`.
