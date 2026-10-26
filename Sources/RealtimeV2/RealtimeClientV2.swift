@@ -15,9 +15,14 @@ import Helpers
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport =
+///
+/// Realtime calls it with the WebSocket URL to connect to (query items included) and the headers
+/// to send with the upgrade request. It returns once the connection is open.
+public typealias RealtimeWebSocketTransport =
   @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
-  any WebSocket
+  any RealtimeWebSocket
+
+typealias WebSocketTransport = RealtimeWebSocketTransport
 
 protocol RealtimeClientProtocol: AnyObject, Sendable {
   var status: RealtimeClientStatus { get }
@@ -162,7 +167,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     self.init(
       url: url,
       options: options,
-      wsTransport: { url, headers in
+      wsTransport: options.transport ?? { url, headers in
         return try await URLSessionWebSocket.connect(
           to: url,
           headers: headers,

@@ -106,6 +106,13 @@ public struct RealtimeClientOptions: Sendable {
   /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
   package var session: URLSession?
 
+  /// A custom WebSocket transport, or `nil` (the default) to use `URLSessionWebSocketTask`.
+  ///
+  /// Set it where `URLSessionWebSocketTask` is unsuitable. On Android, for example, the
+  /// swift-corelibs-foundation implementation can deliver one text frame as two partial
+  /// messages. When set, the `session` option does not apply to the WebSocket connection.
+  public var transport: RealtimeWebSocketTransport? = nil
+
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
 
