@@ -368,20 +368,22 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .unsubscribed)
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
-    let h = Harness(connectOnSubscribe: false)
-    let channel = await h.client.channel("room")
+  // `reportIssue` crashes or records nothing under Swift Testing on Linux.
+  #if canImport(Darwin)
+    @Test(.timeLimit(.minutes(1)))
+    func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
+      let h = Harness(connectOnSubscribe: false)
+      let channel = await h.client.channel("room")
 
-    // `reportIssue` records no issue on Linux.
-    await withKnownIssue(isIntermittent: true) {
-      let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-      #expect(error?.kind == .notConnected)
-      #expect(error?.isRetryable == false)
+      await withKnownIssue {
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .notConnected)
+        #expect(error?.isRetryable == false)
+      }
+      #expect(h.connects.value == 0)
+      #expect(await channel.status == .unsubscribed)
     }
-    #expect(h.connects.value == 0)
-    #expect(await channel.status == .unsubscribed)
-  }
+  #endif
 
   /// A join error with no reason is not one the classifier knows, so the channel rejoins.
   @Test(.timeLimit(.minutes(1)))
