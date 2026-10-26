@@ -541,6 +541,92 @@ struct RealtimeChannelTests {
     #expect(error?.kind == .notConnected)
     #expect(channel.status == .unsubscribed)
   }
+
+  @Test
+  func subscribeDuringTheRollbackOfACancelledSubscribeJoinsAgain() async throws {
+    let holdNextRefresh = LockIsolated(false)
+    let (refreshing, refreshingSink) = AsyncStream<Void>.makeStream()
+    let (attemptCancelled, attemptCancelledSink) = AsyncStream<Void>.makeStream()
+    let (release, releaseSink) = AsyncStream<Void>.makeStream()
+    // The held refresh ignores cancellation, so the cancelled attempt stays alive until the
+    // second subscribe has started.
+    let harness = RealtimeHarness {
+      $0.accessToken = {
+        let hold = holdNextRefresh.withValue { hold in
+          defer { hold = false }
+          return hold
+        }
+        guard hold else { return nil }
+        await withTaskCancellationHandler {
+          refreshingSink.yield()
+          await Task { for await _ in release { return } }.value
+        } onCancel: {
+          attemptCancelledSink.yield()
+        }
+        return nil
+      }
+    }
+    try await harness.connect()
+    let channel = harness.client.channel("room")
+    holdNextRefresh.setValue(true)
+
+    let cancelled = Task { try await channel.subscribeWithError() }
+    _ = await first(1, of: refreshing)
+    cancelled.cancel()
+    _ = await first(1, of: attemptCancelled)
+
+    let subscribing = Task.immediateIfAvailable { try await channel.subscribeWithError() }
+    releaseSink.yield()
+
+    try await subscribing.value
+    await #expect(throws: CancellationError.self) { try await cancelled.value }
+    #expect(channel.status == .subscribed)
+  }
+
+  @Test(arguments: [false, true])
+  func subscribeAfterDisconnectWithoutConnectOnSubscribeStopsAtMaxRetryAttempts(
+    subscribedBefore: Bool
+  ) async throws {
+    let harness = RealtimeHarness { $0.connectOnSubscribe = false }
+    try await harness.connect()
+    let channel = harness.client.channel("room")
+    if subscribedBefore { try await channel.subscribeWithError() }
+    await harness.client.disconnect()
+
+    let outcome = LockIsolated<Result<Void, any Error>?>(nil)
+    let subscribing = Task {
+      do {
+        try await channel.subscribeWithError()
+        outcome.setValue(.success(()))
+      } catch {
+        outcome.setValue(.failure(error))
+      }
+    }
+    for _ in 1...120 where outcome.value == nil {
+      harness.clock.advance(by: .seconds(1))
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    subscribing.cancel()
+
+    let error = #expect(throws: RealtimeError.self) { try outcome.value?.get() }
+    #expect(error?.kind == .maxRetryAttemptsReached)
+    #expect(harness.clock.now.offset >= .seconds(15))
+    #expect(harness.transport.connectionCount == 1)
+  }
+
+  @Test
+  func subscribeWithoutConnectOnSubscribeJoinsOnceTheClientConnects() async throws {
+    let harness = RealtimeHarness { $0.connectOnSubscribe = false }
+    let channel = harness.client.channel("room")
+
+    let subscribing = Task { try await channel.subscribeWithError() }
+    try #require(await harness.sleeper())
+    harness.clock.advance(by: .seconds(1))
+    try await harness.connect()
+
+    try await subscribing.value
+    #expect(channel.status == .subscribed)
+  }
 }
 
 private var hasImmediateTasks: Bool {

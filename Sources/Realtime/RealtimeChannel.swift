@@ -161,6 +161,15 @@ public final class RealtimeChannel: Sendable {
     /// The callers waiting on `subscribing`. The last one to be cancelled cancels it.
     var waiters = 1
     var leaving: Task<Void, Never>?
+
+    /// Starts the leave unless one runs already, and returns it.
+    mutating func leave() -> Task<Void, Never> {
+      if let leaving { return leaving }
+      let inner = inner
+      let started = Task { await inner.leave() }
+      leaving = started
+      return started
+    }
   }
 
   init(topic: String, config: RealtimeChannelConfig, connection: RealtimeConnection) {
@@ -200,7 +209,10 @@ public final class RealtimeChannel: Sendable {
   ///
   /// The client reconnects on its own for as long as it takes, but a subscribe gives up after
   /// `RealtimeClientOptions.maxRetryAttempts` failed attempts. Each failed connection attempt
-  /// counts, and so does each join that timed out or failed on an open connection.
+  /// counts, and so does each join that timed out or failed on an open connection. With
+  /// `RealtimeClientOptions.connectOnSubscribe` off, each check that finds the client
+  /// disconnected counts too. The first check runs at once, and the next ones 1, 2, 4 seconds
+  /// apart and so on, up to 30 seconds.
   ///
   /// - Throws: ``RealtimeError`` with the server's reason when it rejected the join, kind
   ///   `.maxRetryAttemptsReached` after `maxRetryAttempts` failed attempts, kind
@@ -208,7 +220,8 @@ public final class RealtimeChannel: Sendable {
   ///   kind `.channelClosed` after the channel was removed, the error of
   ///   ``RealtimeClient/connect()`` when the client cannot connect, kind `.notConnected` when
   ///   ``RealtimeClient/disconnect(code:reason:)`` runs first, and `CancellationError` when the
-  ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back.
+  ///   calling task is cancelled. Cancelling the last waiting caller rolls the join back. A
+  ///   subscribe during the rollback waits for it and then joins again.
   public func subscribeWithError() async throws {
     while true {
       switch try nextSubscribeStep() {
@@ -241,8 +254,7 @@ public final class RealtimeChannel: Sendable {
   }
 
   /// A cancelled caller returns at once while other callers still wait on the attempt. The last
-  /// one to go cancels the attempt and waits for its rollback, so a subscribe right after it
-  /// starts a new attempt.
+  /// one to go cancels the attempt and waits for the leave that rolls it back.
   private func wait(for attempt: Task<Void, any Error>, generation: UInt64) async throws {
     let (outcomes, continuation) = AsyncStream<Result<Void, any Error>>.makeStream()
     Task {
@@ -252,22 +264,31 @@ public final class RealtimeChannel: Sendable {
     for await outcome in outcomes {
       return try outcome.get()
     }
-    if releaseWaiter(generation) {
+    if let leaving = releaseWaiter(generation) {
       attempt.cancel()
-      _ = await attempt.result
+      await leaving.value
+      detach(generation)
     }
     throw CancellationError()
   }
 
-  /// Returns `true` when no caller waits on the attempt anymore.
-  private func releaseWaiter(_ generation: UInt64) -> Bool {
+  /// When no caller waits on the attempt anymore, turns it into a leave and returns the leave. A
+  /// subscribe meanwhile then waits for the leave and joins again, instead of joining the
+  /// cancelled attempt.
+  private func releaseWaiter(_ generation: UInt64) -> Task<Void, Never>? {
     state.withValue { state in
       guard var attachment = state.attachment(generation), attachment.subscribing != nil else {
-        return false
+        return nil
       }
       attachment.waiters -= 1
+      var leaving: Task<Void, Never>?
+      if attachment.waiters == 0 {
+        attachment.subscribing = nil
+        leaving = attachment.leave()
+      }
       state.phase = .attached(attachment)
-      return attachment.waiters == 0
+      state.publishStatus()
+      return leaving
     }
   }
 
@@ -383,7 +404,8 @@ public final class RealtimeChannel: Sendable {
       }
       group.addTask {
         try await Self.failAfterAttempts(
-          socket: socketStatuses, channel: channelStatuses, maxAttempts: options.maxRetryAttempts)
+          socket: socketStatuses, channel: channelStatuses, maxAttempts: options.maxRetryAttempts,
+          idleChecks: options.connectOnSubscribe ? nil : connection)
         return nil
       }
       group.addTask {
@@ -403,8 +425,13 @@ public final class RealtimeChannel: Sendable {
   /// socket, after the first status of each stream. A dropped connection also errors the channel,
   /// so the channel side skips `.connectionLost` to count that failure once. Returns when the
   /// channel closes.
+  ///
+  /// With `idleChecks`, also counts each check that finds its socket disconnected with no
+  /// failure, because nothing connects that socket meanwhile. The first check runs at once, and
+  /// the next ones 1, 2, 4 seconds apart and so on up to 30, as release/v2's subscribe retries do.
   private static func failAfterAttempts(
-    socket: AsyncStream<SocketStatus>, channel: AsyncStream<ChannelStatus>, maxAttempts: Int
+    socket: AsyncStream<SocketStatus>, channel: AsyncStream<ChannelStatus>, maxAttempts: Int,
+    idleChecks: RealtimeConnection?
   ) async throws {
     let failures = LockIsolated(0)
     let countFailure: @Sendable () throws -> Void = {
@@ -418,6 +445,14 @@ public final class RealtimeChannel: Sendable {
       group.addTask {
         for await status in socket.dropFirst() {
           if case .waitingToReconnect = status { try countFailure() }
+        }
+      }
+      if let idleChecks {
+        group.addTask {
+          for check in 1... {
+            if case .disconnected(failure: nil) = idleChecks.socket.status { try countFailure() }
+            try await idleChecks.options.clock.sleep(for: .seconds(min(30, 1 << min(check - 1, 5))))
+          }
         }
       }
       group.addTask {
@@ -452,12 +487,7 @@ public final class RealtimeChannel: Sendable {
     let pending: (Task<Void, Never>, UInt64)? = state.withValue { state in
       guard case .attached(var attachment) = state.phase else { return nil }
       if let expected, attachment.generation != expected { return nil }
-      if let leaving = attachment.leaving {
-        return (leaving, attachment.generation)
-      }
-      let inner = attachment.inner
-      let leaving = Task { await inner.leave() }
-      attachment.leaving = leaving
+      let leaving = attachment.leave()
       state.phase = .attached(attachment)
       state.publishStatus()
       return (leaving, attachment.generation)

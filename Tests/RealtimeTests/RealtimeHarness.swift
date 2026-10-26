@@ -55,21 +55,34 @@ struct RealtimeHarness {
   /// `FakeTransport.nextConnection()` ignores cancellation, so a test that awaits it for a
   /// connection that never comes hangs past its time limit.
   func nextConnection(within limit: Duration = .seconds(5)) async -> FakeConnection? {
-    let waiter = LockIsolated<CheckedContinuation<FakeConnection?, Never>?>(nil)
-    let resume = { @Sendable (connection: FakeConnection?) in
-      waiter.withValue { continuation in
-        continuation?.resume(returning: connection)
-        continuation = nil
-      }
-    }
     let transport = transport
-    return await withCheckedContinuation { continuation in
-      waiter.setValue(continuation)
-      Task { resume(await transport.nextConnection()) }
-      Task {
-        try? await Task.sleep(for: limit)
-        resume(nil)
-      }
+    return await within(limit) { await transport.nextConnection() }
+  }
+
+  /// `true` once a sleep waits on the clock, `false` when none does within `limit` of real time.
+  /// `ManualClock.waitForSleepers()` ignores cancellation, as `nextConnection()` does.
+  func sleeper(within limit: Duration = .seconds(5)) async -> Bool {
+    let clock = clock
+    return await within(limit) { await clock.waitForSleepers() } != nil
+  }
+}
+
+private func within<Value: Sendable>(
+  _ limit: Duration, _ operation: @escaping @Sendable () async -> Value
+) async -> Value? {
+  let waiter = LockIsolated<CheckedContinuation<Value?, Never>?>(nil)
+  let resume = { @Sendable (value: Value?) in
+    waiter.withValue { continuation in
+      continuation?.resume(returning: value)
+      continuation = nil
+    }
+  }
+  return await withCheckedContinuation { continuation in
+    waiter.setValue(continuation)
+    Task { resume(await operation()) }
+    Task {
+      try? await Task.sleep(for: limit)
+      resume(nil)
     }
   }
 }

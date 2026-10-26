@@ -137,7 +137,8 @@ public struct RealtimeClientOptions: Sendable {
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of failed attempts per
   ///     ``RealtimeChannel/subscribeWithError()``. A failed connection attempt and a join that
-  ///     timed out or failed each count. The client keeps reconnecting after a subscribe gives up.
+  ///     timed out or failed each count. With `connectOnSubscribe` off, a check that finds the
+  ///     client disconnected also counts. The client keeps reconnecting after a subscribe gives up.
   ///     Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - logLevel: Optional log level for Realtime log output.
