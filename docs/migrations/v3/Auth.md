@@ -34,6 +34,11 @@ Changes that still compile but behave differently. Check each one by hand.
   `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
   means only that no session is stored. Search for `.sessionMissing` and also handle
   `.sessionInvalidated` where you send the user back to sign-in.
+- **The stored session has a new format.** The first read after the upgrade rewrites the stored
+  session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
+  stored under the old `supabase.session` key to the configured key. v2 cannot read the new
+  format, so going back to v2 signs users out. Code that reads the session JSON from your
+  `AuthLocalStorage` directly must read the new format.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.

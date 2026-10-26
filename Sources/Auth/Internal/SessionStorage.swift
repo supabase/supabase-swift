@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 24/10/23.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Logging
 
@@ -36,34 +37,42 @@ extension SessionStorage {
     configuration.storageKey ?? defaultStorageKey
   }
 
+  /// Reads and writes through ``PersistedSessionCodec``, so it writes schema 1.
+  ///
+  /// It mirrors ``PersistedSessionLoader`` over the synchronous ``AuthLocalStorage``: a v2 format
+  /// is rewritten the first time it is read, and the legacy key is checked once per instance.
   static func live(configuration: AuthClient.Configuration) -> SessionStorage {
     let storage = configuration.localStorage
     let logger = configuration.logger
-
-    let migrations: [StorageMigration] = [
-      .sessionNewKey(configuration: configuration),
-      .storeSessionDirectly(configuration: configuration),
-      .useDefaultEncoder(configuration: configuration),
-    ]
-
     let key = SessionStorage.key(configuration)
+    let legacyKeyPending = LockIsolated(true)
 
     return SessionStorage(
       get: {
-        for migration in migrations {
-          do {
-            try migration.run()
-          } catch {
-            logger.error(
-              "Storage migration '\(migration.name)' failed: \(error.localizedDescription)"
-            )
-          }
-        }
-
         do {
-          let storedData = try storage.retrieve(key: key)
-          return try storedData.flatMap {
-            try JSONDecoder().decode(Session.self, from: $0)
+          if let data = try storage.retrieve(key: key) {
+            let decoded = try PersistedSessionCodec.decode(data)
+            if !decoded.isCurrentSchema {
+              do {
+                try storage.store(key: key, value: PersistedSessionCodec.encode(decoded.session))
+              } catch {
+                logger.error("Failed to migrate stored session: \(error.localizedDescription)")
+              }
+            }
+            return decoded.session.session
+          }
+
+          return try legacyKeyPending.withValue { pending in
+            guard pending else { return nil }
+            var session: Session?
+            if let legacyData = try storage.retrieve(key: PersistedSessionLoader.legacyKey) {
+              let decoded = try PersistedSessionCodec.decode(legacyData)
+              try storage.store(key: key, value: PersistedSessionCodec.encode(decoded.session))
+              try storage.remove(key: PersistedSessionLoader.legacyKey)
+              session = decoded.session.session
+            }
+            pending = false
+            return session
           }
         } catch {
           logger.error("Failed to retrieve session: \(error.localizedDescription)")
@@ -71,10 +80,11 @@ extension SessionStorage {
         }
       },
       store: { session in
+        // Callers also store a session whose user changed, so "now" is not its receipt time.
         do {
           try storage.store(
             key: key,
-            value: JSONEncoder().encode(session)
+            value: PersistedSessionCodec.encode(ReceivedSession(session: session))
           )
         } catch {
           logger.error("Failed to store session: \(error.localizedDescription)")
@@ -88,77 +98,5 @@ extension SessionStorage {
         }
       }
     )
-  }
-}
-
-struct StorageMigration {
-  var name: String
-  var run: @Sendable () throws -> Void
-}
-
-extension StorageMigration {
-  /// Migrate stored session from `supabase.session` key to the custom provided storage key
-  /// or the default `supabase.auth.token` key.
-  static func sessionNewKey(configuration: AuthClient.Configuration) -> StorageMigration {
-    StorageMigration(name: "sessionNewKey") {
-      let storage = configuration.localStorage
-      let newKey = SessionStorage.key(configuration)
-
-      if let storedData = try? storage.retrieve(key: "supabase.session") {
-        try storage.store(key: newKey, value: storedData)
-        try? storage.remove(key: "supabase.session")
-      }
-    }
-  }
-
-  /// Migrate the stored session.
-  ///
-  /// Migrate the stored session which used to be stored as:
-  /// ```json
-  /// {
-  ///   "session": <Session>,
-  ///   "expiration_date": <Date>
-  /// }
-  /// ```
-  /// To directly store the `Session` object.
-  static func storeSessionDirectly(configuration: AuthClient.Configuration) -> StorageMigration {
-    struct StoredSession: Codable {
-      var session: Session
-      var expirationDate: Date
-    }
-
-    return StorageMigration(name: "storeSessionDirectly") {
-      let storage = configuration.localStorage
-      let key = SessionStorage.key(configuration)
-
-      if let data = try? storage.retrieve(key: key),
-        let storedSession = try? AuthClient.Configuration.jsonDecoder.decode(
-          StoredSession.self,
-          from: data
-        )
-      {
-        let session = try AuthClient.Configuration.jsonEncoder.encode(storedSession.session)
-        try storage.store(key: key, value: session)
-      }
-    }
-  }
-
-  static func useDefaultEncoder(configuration: AuthClient.Configuration) -> StorageMigration {
-    StorageMigration(name: "useDefaultEncoder") {
-      let storage = configuration.localStorage
-      let key = SessionStorage.key(configuration)
-
-      let storedData = try? storage.retrieve(key: key)
-      let sessionUsingOldDecoder = storedData.flatMap {
-        try? AuthClient.Configuration.jsonDecoder.decode(Session.self, from: $0)
-      }
-
-      if let sessionUsingOldDecoder {
-        try storage.store(
-          key: key,
-          value: JSONEncoder().encode(sessionUsingOldDecoder)
-        )
-      }
-    }
   }
 }
