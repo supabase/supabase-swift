@@ -4,14 +4,21 @@ import Foundation
 ///
 /// The first load after an upgrade moves a session from the legacy key `supabase.session` to
 /// `key` and rewrites any v2 format as schema 1. Every later load of a stored session is one
-/// read of `key`. Decoding and storage errors propagate.
+/// read of `key`. Decoding and storage errors propagate. Legacy data that does not decode is
+/// removed before its error propagates, since the caller only removes `key`.
 enum PersistedSessionLoader {
   static let legacyKey = "supabase.session"
 
   static func load(from storage: any AuthStorage, key: String) async throws -> ReceivedSession? {
     let stored = try await storage.load(key: key)
     let legacy = stored == nil ? try await storage.load(key: legacyKey) : nil
-    let migration = try migrate(stored: stored, legacy: legacy, key: key)
+    let migration: Migration
+    do {
+      migration = try migrate(stored: stored, legacy: legacy, key: key)
+    } catch let error as DecodingError where legacy != nil {
+      try await storage.remove(key: legacyKey)
+      throw error
+    }
     for write in migration.writes {
       switch write {
       case .save(let data, let key): try await storage.save(data, key: key)
@@ -25,7 +32,13 @@ enum PersistedSessionLoader {
   static func load(from storage: any AuthLocalStorage, key: String) throws -> ReceivedSession? {
     let stored = try storage.retrieve(key: key)
     let legacy = stored == nil ? try storage.retrieve(key: legacyKey) : nil
-    let migration = try migrate(stored: stored, legacy: legacy, key: key)
+    let migration: Migration
+    do {
+      migration = try migrate(stored: stored, legacy: legacy, key: key)
+    } catch let error as DecodingError where legacy != nil {
+      try storage.remove(key: legacyKey)
+      throw error
+    }
     for write in migration.writes {
       switch write {
       case .save(let data, let key): try storage.store(key: key, value: data)
@@ -40,12 +53,14 @@ enum PersistedSessionLoader {
     case remove(key: String)
   }
 
+  private typealias Migration = (session: ReceivedSession?, writes: [Write])
+
   /// `legacy` is what the legacy key holds, read only when `key` holds nothing.
   private static func migrate(
     stored: Data?,
     legacy: Data?,
     key: String
-  ) throws -> (session: ReceivedSession?, writes: [Write]) {
+  ) throws -> Migration {
     if let stored {
       let decoded = try PersistedSessionCodec.decode(stored)
       if decoded.isCurrentSchema {
