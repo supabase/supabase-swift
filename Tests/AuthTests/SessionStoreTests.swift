@@ -210,15 +210,16 @@ struct SessionStoreTests {
   }
 
   @Test
-  func commitWhileLoadingIsTheInitialSession() async throws {
+  func commitWhileLoadingIsTheInitialSessionFollowedByItsOwnEvent() async throws {
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
     var changes = store.changes().makeAsyncIterator()
 
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
     try await store.load()
 
-    let initial = AuthChange(event: .initialSession, status: .signedIn(makeSession("a")))
-    #expect(await changes.next() == initial)
+    let status = AuthStatus.signedIn(makeSession("a"))
+    #expect(await changes.next() == AuthChange(event: .initialSession, status: status))
+    #expect(await changes.next() == AuthChange(event: .signedIn, status: status))
     #expect(store.currentSession == makeSession("a"))
   }
 

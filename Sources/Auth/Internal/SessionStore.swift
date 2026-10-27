@@ -156,7 +156,8 @@ actor SessionStore {
   /// A lossless stream of changes.
   ///
   /// The first element is ``AuthChangeEvent/initialSession`` with the status once storage was
-  /// read. Every later element is one change, in the order the store applied it.
+  /// read, or once a commit ended loading, in which case that commit's change follows it. Every
+  /// later element is one change, in the order the store applied it.
   nonisolated func changes() -> AsyncStream<AuthChange> {
     let (stream, continuation) = AsyncStream<AuthChange>.makeStream(bufferingPolicy: .unbounded)
     let id = UUID()
@@ -265,15 +266,17 @@ actor SessionStore {
   private func update(to next: State, event: AuthChangeEvent) {
     generation += 1
     published.withValue { current in
-      // A subscriber that joined while loading has seen nothing, so its first element is the
-      // initial session even when a commit, not the load, ended loading.
-      let change = AuthChange(
-        event: current.state.status == .loading ? .initialSession : event,
-        status: next.status
-      )
+      var changes = [AuthChange(event: event, status: next.status)]
+      // A subscriber that joined while loading has seen nothing, so it first gets the initial
+      // session, even when a commit, not the load, ended loading. The commit's own event follows.
+      if current.state.status == .loading, event != .initialSession {
+        changes.insert(AuthChange(event: .initialSession, status: next.status), at: 0)
+      }
       current.state = next
       for continuation in current.subscribers.values {
-        continuation.yield(change)
+        for change in changes {
+          continuation.yield(change)
+        }
       }
     }
   }
