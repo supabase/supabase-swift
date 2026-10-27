@@ -160,4 +160,97 @@ struct TypesTests {
     let scope2: SignOutScope = "global"
     #expect(scope1 == scope2)
   }
+
+  @Test
+  func userDecodesEmptyEmailAndPhoneAsNil() throws {
+    let user = try decodeUser(#""email": "", "phone": """#)
+    #expect(user.email == nil)
+    #expect(user.phone == nil)
+  }
+
+  @Test
+  func userKeepsNonEmptyEmailAndPhone() throws {
+    let user = try decodeUser(#""email": "a@example.com", "phone": "15551234567""#)
+    #expect(user.email == "a@example.com")
+    #expect(user.phone == "15551234567")
+  }
+
+  @Test
+  func userDecodesAbsentFactorsAsEmpty() throws {
+    let user = try decodeUser(#""is_anonymous": false"#)
+    #expect(user.factors == [])
+  }
+
+  @Test(arguments: [
+    (#""identities": []"#, [UserIdentity]?.some([])),
+    (#""identities": null"#, nil),
+  ])
+  func userDecodesEmptyOrNullIdentities(fields: String, expected: [UserIdentity]?) throws {
+    let user = try decodeUser(fields)
+    #expect(user.identities == expected)
+  }
+
+  @Test
+  func identityWithoutIdentityIDFailsDecoding() {
+    let json = Data(
+      #"""
+      {
+        "id": "105012345678901234567",
+        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "provider": "google"
+      }
+      """#.utf8
+    )
+
+    #expect(throws: DecodingError.self) {
+      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    }
+  }
+
+  @Test
+  func identityDecodesIdentityID() throws {
+    let json = Data(
+      #"""
+      {
+        "id": "105012345678901234567",
+        "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "provider": "google"
+      }
+      """#.utf8
+    )
+
+    let identity = try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+
+    #expect(identity.identityId == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+  }
+
+  @Test
+  func amrEntryReadsObjectsAndStrings() {
+    let object: [String: Any] = ["method": "totp", "timestamp": 1_700_000_100.0]
+
+    #expect(
+      AMREntry(value: object, issuedAt: 1_700_000_000)
+        == AMREntry(method: "totp", timestamp: 1_700_000_100)
+    )
+    #expect(
+      AMREntry(value: "pwd", issuedAt: 1_700_000_000)
+        == AMREntry(method: "pwd", timestamp: 1_700_000_000)
+    )
+    #expect(AMREntry(value: "pwd", issuedAt: nil) == nil)
+    #expect(AMREntry(value: 42, issuedAt: 1_700_000_000) == nil)
+  }
+
+  private func decodeUser(_ fields: String) throws -> User {
+    let json = """
+      {
+        "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+        "aud": "authenticated",
+        "created_at": "2026-09-22T10:42:45Z",
+        "updated_at": "2026-09-22T10:42:45Z",
+        \(fields)
+      }
+      """
+    return try AuthClient.Configuration.jsonDecoder.decode(User.self, from: Data(json.utf8))
+  }
 }

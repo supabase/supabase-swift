@@ -149,7 +149,8 @@ public struct AuthMFA: Sendable {
       var currentAuthenticationMethods: [AMREntry] = []
 
       if let amr = payload?["amr"] as? [Any] {
-        currentAuthenticationMethods = amr.compactMap(AMREntry.init(value:))
+        let issuedAt = payload?["iat"] as? TimeInterval
+        currentAuthenticationMethods = amr.compactMap { AMREntry(value: $0, issuedAt: issuedAt) }
       }
 
       return AuthMFAGetAuthenticatorAssuranceLevelResponse(

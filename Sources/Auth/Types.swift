@@ -336,8 +336,13 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     newEmail = try container.decodeIfPresent(String.self, forKey: .newEmail)
     invitedAt = try container.decodeIfPresent(Date.self, forKey: .invitedAt)
     actionLink = try container.decodeIfPresent(String.self, forKey: .actionLink)
-    email = try container.decodeIfPresent(String.self, forKey: .email)
-    phone = try container.decodeIfPresent(String.self, forKey: .phone)
+    // GoTrue sends `""`, never `null`, for a user without an email or phone.
+    email = try container.decodeIfPresent(String.self, forKey: .email).flatMap {
+      $0.isEmpty ? nil : $0
+    }
+    phone = try container.decodeIfPresent(String.self, forKey: .phone).flatMap {
+      $0.isEmpty ? nil : $0
+    }
     createdAt = try container.decode(Date.self, forKey: .createdAt)
     confirmedAt = try container.decodeIfPresent(Date.self, forKey: .confirmedAt)
     emailConfirmedAt = try container.decodeIfPresent(Date.self, forKey: .emailConfirmedAt)
@@ -347,7 +352,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     identities = try container.decodeIfPresent([UserIdentity].self, forKey: .identities)
     isAnonymous = try container.decodeIfPresent(Bool.self, forKey: .isAnonymous) ?? false
-    factors = try container.decodeIfPresent([Factor].self, forKey: .factors)
+    // GoTrue omits `factors` when the user has none.
+    factors = try container.decodeIfPresent([Factor].self, forKey: .factors) ?? []
   }
 }
 
@@ -423,9 +429,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
     id = try container.decode(String.self, forKey: .id)
-    identityId =
-      try container.decodeIfPresent(UUID.self, forKey: .identityId)
-      ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    identityId = try container.decode(UUID.self, forKey: .identityId)
     userId = try container.decode(UUID.self, forKey: .userId)
     identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
@@ -1355,7 +1359,17 @@ public struct AMREntry: Decodable, Hashable, Sendable {
 }
 
 extension AMREntry {
-  init?(value: Any) {
+  /// Reads one `amr` claim entry: GoTrue's `{"method", "timestamp"}` object, or the bare method
+  /// string of RFC 8176 that a custom access token hook can emit. A bare string carries no time, so
+  /// it takes the token's `iat`.
+  init?(value: Any, issuedAt: TimeInterval?) {
+    if let method = value as? Method {
+      guard let issuedAt else { return nil }
+      self.method = method
+      self.timestamp = issuedAt
+      return
+    }
+
     guard let dict = value as? [String: Any],
       let method = dict["method"] as? Method,
       let timestamp = dict["timestamp"] as? TimeInterval

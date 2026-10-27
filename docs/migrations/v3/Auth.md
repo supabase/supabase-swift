@@ -34,6 +34,21 @@ Changes that still compile but behave differently. Check each one by hand.
   `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
   means only that no session is stored. Search for `.sessionMissing` and also handle
   `.sessionInvalidated` where you send the user back to sign-in.
+- **The stored session has a new format.** The first read after the upgrade rewrites the stored
+  session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
+  stored under the old `supabase.session` key to the configured key. v2 cannot read the new
+  format, so going back to v2 signs users out. Code that reads the session JSON from your
+  `AuthLocalStorage` directly must read the new format.
+- **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
+  user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
+- **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.
+  Search for `factors == nil` and `if let factors`.
+- **An identity needs `identity_id`.** A `UserIdentity` without `identity_id` now fails to decode,
+  and so does the `User` that holds it. v2 filled in the all-zero UUID, which
+  `unlinkIdentity(_:)` then sent to the server. Search for `00000000-0000-0000-0000-000000000000`.
+- **String `amr` entries are kept.** When a custom access token hook writes `amr` as strings,
+  `authenticatorAssuranceLevel()` now returns them in `currentAuthenticationMethods`, with the
+  token's `iat` as the `timestamp`. v2 dropped them.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
 
