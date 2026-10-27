@@ -47,6 +47,10 @@ struct APIClient: Sendable {
     .refreshTokenAlreadyUsed,
   ]
 
+  private func invalidatesSession(_ errorCode: ErrorCode, for session: Session?) -> Bool {
+    sessionCleanupErrorCodes.contains(errorCode) || errorCode == .userBanned && session != nil
+  }
+
   /// Sends `request` with the client's default headers and returns the response.
   ///
   /// `session` is the session the request is issued for, when the caller has one. It scopes the
@@ -126,7 +130,7 @@ struct APIClient: Sendable {
         message: error._getErrorMessage(),
         reasons: error.weakPassword?.reasons ?? []
       )
-    } else if let errorCode, sessionCleanupErrorCodes.contains(errorCode) {
+    } else if let errorCode, invalidatesSession(errorCode, for: session) {
       // The `session_id` inside the JWT does not correspond to a row in the
       // `sessions` table. This usually means the user has signed out, has been
       // deleted, or their session has somehow been terminated.
