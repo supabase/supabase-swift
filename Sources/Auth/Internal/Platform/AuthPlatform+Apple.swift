@@ -1,6 +1,7 @@
 #if canImport(Darwin)
   import ConcurrencyExtras
-  import Foundation
+  public import Foundation
+  import IssueReporting
 
   #if os(watchOS)
     import WatchKit
@@ -11,7 +12,7 @@
   #endif
 
   #if canImport(AuthenticationServices)
-    import AuthenticationServices
+    public import AuthenticationServices
   #endif
 
   extension AuthPlatform {
@@ -98,6 +99,106 @@
   }
 
   #if canImport(AuthenticationServices)
+    extension AuthClient {
+      /// Sign-in an existing user via a third-party provider using `ASWebAuthenticationSession`.
+      ///
+      /// - Parameters:
+      ///   - provider: The third-party provider.
+      ///   - redirectTo: A URL to send the user to after they are confirmed.
+      ///   - scopes: A space-separated list of scopes granted to the OAuth application.
+      ///   - queryParams: Additional query params.
+      ///   - configure: A configuration closure that you can use to customize the internal
+      /// `ASWebAuthenticationSession` object.
+      ///
+      /// - Note: This method support the PKCE flow.
+      /// - Warning: Do not call `start()` on the `ASWebAuthenticationSession` object inside the
+      /// `configure` closure, as the method implementation calls it already.
+      @discardableResult
+      public func signInWithOAuth(
+        provider: Provider,
+        redirectTo: URL? = nil,
+        scopes: String? = nil,
+        queryParams: [(name: String, value: String?)] = [],
+        configure: @Sendable (_ session: ASWebAuthenticationSession) -> Void = { _ in }
+      ) async throws -> Session {
+        try await signInWithOAuth(
+          provider: provider,
+          redirectTo: redirectTo,
+          scopes: scopes,
+          queryParams: queryParams
+        ) { @MainActor [configuration] url in
+          let callbackScheme = try Self.oauthCallbackScheme(
+            for: Self.oauthRedirectURL(
+              redirectTo: redirectTo,
+              configured: configuration.redirectToURL
+            )
+          )
+
+          return try await withCheckedThrowingContinuation { continuation in
+            var presentationAnchor: AnyObject?
+
+            let session = ASWebAuthenticationSession(
+              url: url,
+              callbackURLScheme: callbackScheme
+            ) { url, error in
+              if let result = Self.oauthCallbackResult(url: url, error: error) {
+                continuation.resume(with: result)
+              } else {
+                reportIssue(Self.oauthSessionContractViolation)
+                continuation.resume(
+                  throwing: AuthError.oauthFlowFailed(Self.oauthSessionContractViolation)
+                )
+              }
+
+              withExtendedLifetime(presentationAnchor) {}
+            }
+
+            configure(session)
+            presentationAnchor = AuthPlatform.installDefaultPresentationAnchor(on: session)
+
+            session.start()
+          }
+        }
+      }
+
+      /// The URL scheme `ASWebAuthenticationSession` listens on to capture the OAuth callback.
+      ///
+      /// Takes the already-resolved redirect — see ``oauthRedirectURL(redirectTo:configured:)`` —
+      /// rather than resolving it again, so this can only ever name the scheme of the URL the
+      /// provider was actually given.
+      ///
+      /// Pure so the scheme extraction and the guidance message can both be covered without
+      /// presenting a session.
+      static func oauthCallbackScheme(for redirectURL: URL?) throws -> String {
+        guard let scheme = redirectURL?.scheme else {
+          throw AuthError.oauthFlowFailed(
+            """
+            Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+            or globally through `AuthClient.Configuration.redirectToURL`.
+            """
+          )
+        }
+        return scheme
+      }
+
+      /// Reported when `ASWebAuthenticationSession` completes with neither a URL nor an error.
+      static let oauthSessionContractViolation =
+        "ASWebAuthenticationSession returned neither a URL nor an error."
+
+      /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
+      /// the error when it somehow reports both.
+      ///
+      /// Returns `nil` for the combination it documents as impossible — neither value present —
+      /// which the caller turns into ``oauthSessionContractViolation``. The reporting stays with
+      /// the caller because driving `reportIssue` from a `@Test` function segfaults under
+      /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
+      static func oauthCallbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
+        if let error { return .failure(error) }
+        if let url { return .success(url) }
+        return nil
+      }
+    }
+
     extension AuthPlatform {
       /// `ASWebAuthenticationSession.presentationContextProvider` is weak. Hold the returned
       /// provider until the session completes.
