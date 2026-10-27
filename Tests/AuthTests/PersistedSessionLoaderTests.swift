@@ -67,6 +67,30 @@ struct PersistedSessionLoaderTests {
   }
 
   @Test
+  func removesUndecodableLegacyDataAndThrows() async throws {
+    let storage = CountingAuthStorage()
+    try await storage.save(Data("not-json".utf8), key: PersistedSessionLoader.legacyKey)
+
+    await #expect(throws: DecodingError.self) {
+      try await PersistedSessionLoader.load(from: storage, key: key)
+    }
+    #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == nil)
+  }
+
+  @Test
+  func keepsTheLegacyKeyWhenTheConfiguredDataDoesNotDecode() async throws {
+    let storage = CountingAuthStorage()
+    try await storage.save(Data("not-json".utf8), key: key)
+    let legacyData = try json(named: "persisted-session-v2-camel-case")
+    try await storage.save(legacyData, key: PersistedSessionLoader.legacyKey)
+
+    await #expect(throws: DecodingError.self) {
+      try await PersistedSessionLoader.load(from: storage, key: key)
+    }
+    #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == legacyData)
+  }
+
+  @Test
   func throwsForUndecodableData() async throws {
     let storage = CountingAuthStorage()
     try await storage.save(Data("not-json".utf8), key: key)
