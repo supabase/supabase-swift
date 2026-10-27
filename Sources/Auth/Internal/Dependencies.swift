@@ -16,9 +16,9 @@ struct Dependencies: Sendable {
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
   let codeVerifierStorage: CodeVerifierStorage
-  let sessionStorage: SessionStorage
+  /// Owns the session. Shared with every other client for the same project and storage key.
+  let sessionStore: SessionStore
   let sessionManager: SessionManager
-  let eventEmitter: AuthStateChangeEventEmitter
   let date: @Sendable () -> Date
   let urlOpener: URLOpener
   let pkce: PKCE
@@ -39,7 +39,6 @@ extension Dependencies {
   ) -> Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
-    let eventEmitter = AuthStateChangeEventEmitter(logger: logger)
     let authAPI = AuthAPI(
       url: configuration.url,
       headers: configuration.headers,
@@ -48,13 +47,20 @@ extension Dependencies {
       decoder: configuration.resolvedDecoder
     )
     let api = APIClient(http: http)
-    let sessionStorage = SessionStorage.live(configuration: configuration)
+    let storageKey = configuration.storageKey ?? defaultStorageKey
+    let localStorage = configuration.localStorage
+    let sessionStore = SessionStore.shared(
+      url: configuration.url,
+      storageKey: storageKey,
+      storage: AuthLocalStorageAdapter(localStorage: localStorage),
+      now: date,
+      initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
+    )
     let sessionManager = SessionManager.live(
       configuration: configuration,
       authAPI: authAPI,
       api: api,
-      sessionStorage: sessionStorage,
-      eventEmitter: eventEmitter,
+      sessionStore: sessionStore,
       logger: logger
     )
 
@@ -64,11 +70,10 @@ extension Dependencies {
       authAPI: authAPI,
       api: api,
       sessionAPI: SessionAPIClient(
-        api: api, sessionManager: sessionManager, eventEmitter: eventEmitter),
+        api: api, sessionManager: sessionManager, sessionStore: sessionStore),
       codeVerifierStorage: .live(configuration: configuration),
-      sessionStorage: sessionStorage,
+      sessionStore: sessionStore,
       sessionManager: sessionManager,
-      eventEmitter: eventEmitter,
       date: date,
       urlOpener: urlOpener,
       pkce: pkce,

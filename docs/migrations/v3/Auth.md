@@ -39,6 +39,23 @@ Changes that still compile but behave differently. Check each one by hand.
   stored under the old `supabase.session` key to the configured key. v2 cannot read the new
   format, so going back to v2 signs users out. Code that reads the session JSON from your
   `AuthLocalStorage` directly must read the new format.
+- **Storage errors surface.** When `localStorage` throws while the client saves or removes the
+  session, the call that changed the session (a sign-in, `refreshSession`, `signOut`) throws that
+  error and the session stays as it was. v2 logged the error and went on. When the read at launch
+  throws, `currentSession` is `nil` and `session` throws the storage error, not `.sessionMissing`;
+  v2 read a failed read as signed out.
+- **The stored session is read once.** The client reads `localStorage` when it is created and
+  keeps the session in memory. `currentSession` no longer reads storage, so a session that other
+  code (an app extension, another process) writes to the same storage is not seen until the next
+  client is created.
+- **Clients for one project share the session.** Two `AuthClient`s, or two `SupabaseClient`s,
+  with the same URL and storage key now share one session: a sign-in, refresh, or sign-out on one
+  changes `currentSession` on the other and fires its auth events. The first client's
+  `localStorage` is the one used. Give each client its own `storageKey` to keep them apart.
+- **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
+  `authStateChanges` receive events in the order the session changed, but a listener can run after
+  the call that caused the event returns. `didChangeAuthStateNotification` posts
+  `.initialSession` once per client, not once per `onAuthStateChange` call.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.

@@ -45,8 +45,7 @@ public struct AuthMFARecoveryCodes: Sendable {
 
   var api: SessionAPIClient { client.dependencies.sessionAPI }
   var authAPI: AuthAPI { client.dependencies.authAPI }
-  var sessionManager: SessionManager { client.dependencies.sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
+  var sessionStore: SessionStore { client.dependencies.sessionStore }
 
   /// Returns how many recovery codes the user's current set holds and how many of them are still
   /// unused. Never returns the codes themselves.
@@ -97,9 +96,7 @@ public struct AuthMFARecoveryCodes: Sendable {
       try authAPI.verifyRecoveryCode(code, accessToken: $0)
     }
 
-    await sessionManager.update(response)
-
-    eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+    try await sessionStore.commit(.signedIn(response, event: .mfaChallengeVerified))
 
     return response
   }

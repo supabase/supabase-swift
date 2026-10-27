@@ -14,6 +14,26 @@ import IssueReporting
 
 let clientURL = URL(string: "http://localhost:54321/auth/v1")!
 
+extension Dependencies {
+  /// Signs `session` in through the session store, the only writer of the session.
+  func seedSession(_ session: Session) async throws {
+    try await sessionStore.commit(.signedIn(session, event: .signedIn))
+  }
+}
+
+extension AuthClient {
+  /// Signs `session` in through the session store, the only writer of the session.
+  func seedSession(_ session: Session) async throws {
+    try await dependencies.seedSession(session)
+  }
+}
+
+/// A storage key no other test uses, so that clients built by parallel tests never share a
+/// session store.
+func uniqueStorageKey() -> String {
+  "sb-test-\(UUID().uuidString)-auth-token"
+}
+
 extension Session {
   static let valid = Session(
     accessToken: "accesstoken",

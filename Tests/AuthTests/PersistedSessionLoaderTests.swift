@@ -1,6 +1,7 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Auth
@@ -67,6 +68,26 @@ struct PersistedSessionLoaderTests {
   }
 
   @Test
+  func synchronousLoadMovesALegacySessionLikeTheAsynchronousOne() throws {
+    let storage = InMemoryLocalStorage()
+    try storage.store(
+      key: PersistedSessionLoader.legacyKey,
+      value: json(named: "persisted-session-v2-camel-case")
+    )
+
+    let loaded = try PersistedSessionLoader.load(from: storage, key: key)
+
+    expectNoDifference(loaded?.session, PersistedSessionFixtures.expectedSession)
+    #expect(try storage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
+    let stored = try #require(try storage.retrieve(key: key))
+    expectNoDifference(
+      String(decoding: stored, as: UTF8.self),
+      String(decoding: json(named: PersistedSessionFixtures.schema1), as: UTF8.self)
+    )
+    expectNoDifference(try PersistedSessionLoader.load(from: storage, key: key), loaded)
+  }
+
+  @Test
   func removesUndecodableLegacyDataAndThrows() async throws {
     let storage = CountingAuthStorage()
     try await storage.save(Data("not-json".utf8), key: PersistedSessionLoader.legacyKey)
@@ -88,6 +109,17 @@ struct PersistedSessionLoaderTests {
       try await PersistedSessionLoader.load(from: storage, key: key)
     }
     #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == legacyData)
+  }
+
+  @Test
+  func synchronousLoadRemovesUndecodableLegacyDataAndThrows() throws {
+    let storage = InMemoryLocalStorage()
+    try storage.store(key: PersistedSessionLoader.legacyKey, value: Data("not-json".utf8))
+
+    #expect(throws: DecodingError.self) {
+      try PersistedSessionLoader.load(from: storage, key: key)
+    }
+    #expect(try storage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
   }
 
   @Test

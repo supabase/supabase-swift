@@ -42,6 +42,7 @@ extension AuthMockerTests {
         headers: [
           "apikey": "supabase.publishable.key"
         ],
+        storageKey: uniqueStorageKey(),
         localStorage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 
@@ -254,7 +255,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let response = try await sut.oauthServer.authorizationDetails(
         id: "abc123def456"
@@ -294,7 +295,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       do {
         _ = try await sut.oauthServer.authorizationDetails(id: "missing")
@@ -333,7 +334,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let redirect = try await sut.oauthServer.approveAuthorization(
         id: "abc123def456"
@@ -372,7 +373,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       // Denial must NOT throw — it's a successful API call, per RFC 6749 the
       // OAuth error is embedded in the redirect URL's query string.
@@ -416,7 +417,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let grants = try await sut.oauthServer.listGrants()
 
@@ -447,7 +448,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       try await sut.oauthServer.revokeGrant(id: clientId)
     }
@@ -467,7 +468,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       do {
         try await sut.oauthServer.revokeGrant(id: clientId)

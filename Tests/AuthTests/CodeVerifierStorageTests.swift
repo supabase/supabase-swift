@@ -14,6 +14,7 @@ struct CodeVerifierStorageTests {
     let client = AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "https://project-id.supabase.com")!,
+        storageKey: uniqueStorageKey(),
         localStorage: localStorage
       )
     )
