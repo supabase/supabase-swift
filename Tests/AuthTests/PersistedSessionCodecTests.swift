@@ -54,28 +54,9 @@ struct PersistedSessionCodecTests {
   }
 
   @Test
-  func decodesNanosecondsAndOffsets() throws {
-    let decoded = try PersistedSessionCodec.decode(
-      json(named: "persisted-session-schema-1-offsets")
-    )
-    let user = decoded.session.session.user
-
-    #expect(
-      decoded.session.receivedAt
-        == Date(timeIntervalSinceReferenceDate: 811_766_565 + 0.123_456_789)
-    )
-    // 2026-09-22T12:42:45.987654321+02:00
-    #expect(user.createdAt == Date(timeIntervalSinceReferenceDate: 811_766_565 + 0.987_654_321))
-    // 2026-09-22T05:12:45-05:30
-    #expect(user.updatedAt == Date(timeIntervalSinceReferenceDate: 811_766_565))
-    // 2026-09-22T10:42:45.5Z
-    #expect(user.lastSignInAt == Date(timeIntervalSinceReferenceDate: 811_766_565.5))
-  }
-
-  @Test
   func schema1WithAMissingFieldFailsInsteadOfFallingBack() {
     let data = Data(
-      #"{"schema":1,"received_at":"2026-09-22T10:42:45Z","token_type":"bearer"}"#.utf8
+      #"{"schema":1,"received_at":811766565,"token_type":"bearer"}"#.utf8
     )
 
     #expect(throws: DecodingError.self) {

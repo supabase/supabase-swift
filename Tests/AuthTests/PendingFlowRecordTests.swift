@@ -23,7 +23,7 @@ struct PendingFlowRecordTests {
 
     expectNoDifference(
       String(decoding: data, as: UTF8.self),
-      #"{"created_at":"2026-09-22T10:42:45Z","id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF","#
+      #"{"created_at":811766565,"id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF","#
         + #""purpose":"recovery","redirect_to":"myapp:\/\/reset-password","verifier":"verifier"}"#
     )
     #expect(try PendingFlowRecord.decode(data) == record)
@@ -46,7 +46,7 @@ struct PendingFlowRecordTests {
   func recordWithAnUnknownPurposeFailsDecoding() {
     let data = Data(
       #"""
-      {"created_at":"2026-09-22T10:42:45Z","id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF",
+      {"created_at":811766565,"id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF",
        "purpose":"teleport","verifier":"verifier"}
       """#.utf8
     )
@@ -110,7 +110,7 @@ struct PendingFlowRecordTests {
 
     expectNoDifference(
       String(decoding: data, as: UTF8.self),
-      #"{"flows":[{"created_at":"2026-09-22T10:42:45Z","id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF"}]}"#
+      #"{"flows":[{"created_at":811766565,"id":"6C69F399-BE1B-467A-9C53-D3753ABDD2DF"}]}"#
     )
     #expect(try PendingFlowIndex.decode(data) == index)
 
