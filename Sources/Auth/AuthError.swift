@@ -401,6 +401,10 @@ extension AuthError {
     kind == .sessionInvalidated
   }
 
+  static let excessiveRefresh = AuthError(
+    kind: .excessiveRefresh,
+    message: "Token refresh stopped: too many refreshes started in the last 30 seconds.")
+
   static func oauthFlowFailed(_ message: String, errorCode: ErrorCode = .unknown) -> AuthError {
     AuthError(kind: .oauthFlowFailed, message: message, errorCode: errorCode)
   }

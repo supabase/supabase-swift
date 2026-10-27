@@ -52,6 +52,14 @@ Changes that still compile but behave differently. Check each one by hand.
   with the same URL and storage key now share one session: a sign-in, refresh, or sign-out on one
   changes `currentSession` on the other and fires its auth events. The first client's
   `localStorage` is the one used. Give each client its own `storageKey` to keep them apart.
+- **Refreshes are deduplicated and throttled.** All clients for one project share one refresh of a
+  refresh token at a time. A cancelled caller of `session` or `refreshSession` throws
+  `CancellationError` at once, and the shared refresh still finishes. When a refresh fails, a
+  new refresh with that same token in the next 60 seconds throws the same error without a
+  request. After five refreshes in 30 seconds, the next one throws an `AuthError` with kind
+  `.excessiveRefresh`. `signOut` cancels a running refresh. Its callers get `CancellationError`,
+  or `.refreshDiscarded` when the response arrived first. Search for retry loops around
+  `refreshSession`.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts

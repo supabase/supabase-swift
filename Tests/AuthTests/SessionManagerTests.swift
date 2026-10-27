@@ -30,7 +30,9 @@ struct SessionManagerTests {
   }
 
   private static func makeDependencies(
-    http: RecordingTransport, clock: any Clock<Duration> = ContinuousClock()
+    http: RecordingTransport,
+    clock: any Clock<Duration> = ContinuousClock(),
+    date: @escaping @Sendable () -> Date = { Date() }
   ) -> Dependencies {
     .live(
       configuration: .init(
@@ -41,8 +43,13 @@ struct SessionManagerTests {
         clock: clock
       ),
       http: HTTPClient(transport: http),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth")
+      logger: supabaseDefaultLogger(label: "io.supabase.auth"),
+      date: date
     )
+  }
+
+  private var tokenRequestCount: Int {
+    http.requests.filter { $0.head.url?.path.contains("/token") == true }.count
   }
 
   @Test
@@ -234,7 +241,6 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
     try await dependencies.seedSession(userB)
 
     release()
@@ -242,8 +248,8 @@ struct SessionManagerTests {
 
     expectNoDifference(
       dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
-    let collected = await settled(events, count: 3)
-    expectNoDifference(collected, [.initialSession, .signedOut, .signedIn])
+    let collected = await settled(events, count: 2)
+    expectNoDifference(collected, [.initialSession, .signedIn])
     #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
   }
 
@@ -266,7 +272,6 @@ struct SessionManagerTests {
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
-    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
     try await dependencies.seedSession(userB)
 
     release()
@@ -274,8 +279,8 @@ struct SessionManagerTests {
 
     expectNoDifference(
       dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
-    let collected = await settled(events, count: 3)
-    expectNoDifference(collected, [.initialSession, .signedOut, .signedIn])
+    let collected = await settled(events, count: 2)
+    expectNoDifference(collected, [.initialSession, .signedIn])
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
   }
 
@@ -479,5 +484,230 @@ struct SessionManagerTests {
     expectNoDifference(result.refreshToken, refreshedA.refreshToken)
     expectNoDifference(
       dependencies.sessionStore.currentSession?.refreshToken, refreshedA.refreshToken)
+  }
+
+  private func resultIfFinished<Success: Sendable>(
+    of task: Task<Success, any Error>, within timeout: TimeInterval = 10
+  ) async -> Result<Success, any Error>? {
+    let result = LockIsolated<Result<Success, any Error>?>(nil)
+    Task {
+      let value = await task.result
+      result.setValue(value)
+    }
+    await waitUntil(timeout: timeout) { result.value != nil }
+    return result.value
+  }
+
+  private func rateLimitedTokenResponse() {
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (
+        HTTPResponse(status: .tooManyRequests, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"over_request_rate_limit","message":"Request rate limit reached"}"#.utf8)
+      )
+    }
+  }
+
+  @Test
+  func cancelledWaiterThrowsCancellationErrorWhileTheOthersGetTheRefreshedSession() async throws {
+    let refreshed = session("refreshed")
+    try await dependencies.seedSession(.expired)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
+    }
+
+    let waiters = (0..<3).map { _ in Task { try await sut.session() } }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    waiters[0].cancel()
+    let cancelled = await resultIfFinished(of: waiters[0])
+    #expect(cancelled?.error is CancellationError)
+
+    release()
+    for waiter in waiters.dropFirst() {
+      let session = try await waiter.value
+      expectNoDifference(session.refreshToken, refreshed.refreshToken)
+    }
+    expectNoDifference(
+      dependencies.sessionStore.currentSession?.refreshToken, refreshed.refreshToken)
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
+  func refreshCommitsAfterItsOnlyWaiterIsCancelled() async throws {
+    let userA = session("A")
+    let refreshed = session("A2")
+    try await dependencies.seedSession(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
+    }
+
+    let waiter = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    waiter.cancel()
+    let cancelled = await resultIfFinished(of: waiter)
+    #expect(cancelled?.error is CancellationError)
+
+    release()
+    let committed = await waitUntil {
+      dependencies.sessionStore.currentSession?.refreshToken == refreshed.refreshToken
+    }
+    #expect(committed)
+  }
+
+  @Test
+  func signOutCancelsTheInFlightRefresh() async throws {
+    let userA = session("A")
+    let refreshed = session("A2")
+    try await dependencies.seedSession(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    let outcome = await resultIfFinished(of: refresh)
+    release()
+
+    #expect(outcome?.error is CancellationError)
+    #expect(dependencies.sessionStore.currentSession == nil)
+    let collected = await settled(events, count: 2)
+    expectNoDifference(collected, [.initialSession, .signedOut])
+  }
+
+  @Test
+  func refreshOfATokenThatFailedLessThanAMinuteAgoThrowsTheSameErrorWithoutARequest()
+    async throws
+  {
+    let now = LockIsolated(Date())
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    rateLimitedTokenResponse()
+
+    let first = await Task { try await sut.refreshSession("limited") }.result
+    now.withValue { $0.addTimeInterval(59) }
+    let second = await Task { try await sut.refreshSession("limited") }.result
+
+    #expect((first.error as? AuthError)?.errorCode == .overRequestRateLimit)
+    #expect((second.error as? AuthError)?.errorCode == .overRequestRateLimit)
+    expectNoDifference(tokenRequestCount, 1)
+
+    now.withValue { $0.addTimeInterval(1) }
+    _ = await Task { try await sut.refreshSession("limited") }.result
+    expectNoDifference(tokenRequestCount, 2)
+  }
+
+  @Test
+  func refreshOfAnInvalidatedTokenThrowsTheSameErrorWithoutARequest() async throws {
+    let userA = session("A")
+    try await dependencies.seedSession(userA)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (
+        HTTPResponse(status: .badRequest, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+        Data(#"{"code":"refresh_token_not_found","message":"Refresh Token Not Found"}"#.utf8)
+      )
+    }
+
+    let first = await Task { try await sut.refreshSession(userA.refreshToken) }.result
+    let second = await Task { try await sut.refreshSession(userA.refreshToken) }.result
+
+    #expect(dependencies.sessionStore.currentSession == nil)
+    #expect((first.error as? AuthError)?.kind == .sessionInvalidated)
+    #expect((second.error as? AuthError)?.kind == .sessionInvalidated)
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
+  func commitClearsTheCachedRefreshFailure() async throws {
+    rateLimitedTokenResponse()
+
+    _ = await Task { try await sut.refreshSession("limited") }.result
+    try await dependencies.seedSession(session("B"))
+    _ = await Task { try await sut.refreshSession("limited") }.result
+
+    expectNoDifference(tokenRequestCount, 2)
+  }
+
+  @Test
+  func cachedRefreshFailureDoesNotBlockAnotherToken() async throws {
+    rateLimitedTokenResponse()
+
+    _ = await Task { try await sut.refreshSession("first") }.result
+    _ = await Task { try await sut.refreshSession("second") }.result
+
+    expectNoDifference(tokenRequestCount, 2)
+  }
+
+  @Test
+  func sixthRefreshWithinThirtySecondsThrowsExcessiveRefresh() async throws {
+    let now = LockIsolated(Date())
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+
+    for attempt in 0..<5 {
+      _ = try await sut.refreshSession("token-\(attempt)")
+    }
+    now.withValue { $0.addTimeInterval(29) }
+    let sixth = await Task { try await sut.refreshSession("token-5") }.result
+
+    #expect((sixth.error as? AuthError)?.kind == .excessiveRefresh)
+    expectNoDifference(tokenRequestCount, 5)
+
+    now.withValue { $0.addTimeInterval(1) }
+    _ = try await sut.refreshSession("token-6")
+    expectNoDifference(tokenRequestCount, 6)
+  }
+
+  @Test
+  func olderRefreshEndingDoesNotEndANewerRefreshOfTheSameToken() async throws {
+    let userA = session("A")
+    let refreshed = session("A2")
+    try await dependencies.seedSession(userA)
+
+    let requests = LockIsolated(0)
+    let gates = LockIsolated<[CheckedContinuation<Void, Never>]>([])
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      let request = requests.withValue {
+        $0 += 1
+        return $0
+      }
+      if request <= 2 {
+        await withCheckedContinuation { gate in gates.withValue { $0.append(gate) } }
+      }
+      return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
+    }
+
+    let older = Task { try await sut.refreshSession(userA.refreshToken) }
+    await waitUntil { gates.value.count == 1 }
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+
+    let newer = Task { try await sut.refreshSession(userA.refreshToken) }
+    let newerStarted = await waitUntil { gates.value.count == 2 }
+    #expect(newerStarted)
+
+    gates.value[0].resume()
+    let olderResult = await older.result
+    #expect(olderResult.error is CancellationError)
+
+    let joiner = Task { try await sut.refreshSession(userA.refreshToken) }
+    let joinerStartedARequest = await waitUntil(timeout: 0.5) { requests.value > 2 }
+    gates.value[1].resume()
+
+    let newerResult = await newer.result
+    let joinerResult = await joiner.result
+
+    #expect(!joinerStartedARequest)
+    expectNoDifference(try newerResult.get().refreshToken, refreshed.refreshToken)
+    expectNoDifference(try joinerResult.get().refreshToken, refreshed.refreshToken)
   }
 }

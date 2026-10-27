@@ -47,7 +47,6 @@ private actor LiveSessionManager {
 
   private var clock: any Clock<Duration> { configuration.clock }
 
-  private var inFlightRefreshes: [String: Task<Session, any Error>] = [:]
   private var startAutoRefreshTokenTask: Task<Void, Never>?
 
   init(
@@ -85,48 +84,10 @@ private actor LiveSessionManager {
   }
 
   func refreshSession(_ refreshToken: String) async throws -> Session {
-    let logger: Logging.Logger = {
-      var scopedLogger = self.logger
-      scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
-      return scopedLogger
-    }()
-
-    return try await trace(using: logger) {
-      if let inFlight = inFlightRefreshes[refreshToken] {
-        logger.debug("Refresh already in flight")
-        return try await inFlight.value
+    try await trace(using: logger) {
+      try await sessionStore.refresh(refreshToken) { [api, authAPI] refreshToken in
+        try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
       }
-
-      let refreshTask = Task {
-        logger.debug("Refresh task started")
-
-        defer {
-          inFlightRefreshes[refreshToken] = nil
-          logger.debug("Refresh task ended")
-        }
-
-        let fromGeneration = await sessionStore.generation
-        let refreshesHeldSession = sessionStore.currentSession?.refreshToken == refreshToken
-
-        let session: Session
-        do {
-          session = try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
-        } catch let error as AuthError where error.invalidatesSession {
-          try? await sessionStore.commit(
-            .invalidated(
-              SignOutReason(invalidatedBy: error),
-              refreshToken: refreshesHeldSession ? refreshToken : nil
-            )
-          )
-          throw error
-        }
-
-        try await sessionStore.commit(.refreshed(session, fromGeneration: fromGeneration))
-        return session
-      }
-      inFlightRefreshes[refreshToken] = refreshTask
-
-      return try await refreshTask.value
     }
   }
 
