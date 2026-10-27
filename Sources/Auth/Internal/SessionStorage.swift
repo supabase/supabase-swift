@@ -64,15 +64,20 @@ extension SessionStorage {
 
           return try legacyKeyPending.withValue { pending in
             guard pending else { return nil }
-            var session: Session?
-            if let legacyData = try storage.retrieve(key: PersistedSessionLoader.legacyKey) {
-              let decoded = try PersistedSessionCodec.decode(legacyData)
+            guard let legacyData = try storage.retrieve(key: PersistedSessionLoader.legacyKey)
+            else {
+              pending = false
+              return nil
+            }
+            let decoded = try PersistedSessionCodec.decode(legacyData)
+            do {
               try storage.store(key: key, value: PersistedSessionCodec.encode(decoded.session))
               try storage.remove(key: PersistedSessionLoader.legacyKey)
-              session = decoded.session.session
+              pending = false
+            } catch {
+              logger.error("Failed to migrate stored session: \(error.localizedDescription)")
             }
-            pending = false
-            return session
+            return decoded.session.session
           }
         } catch {
           logger.error("Failed to retrieve session: \(error.localizedDescription)")

@@ -1,3 +1,4 @@
+import ConcurrencyExtras
 import CustomDump
 import Foundation
 import TestHelpers
@@ -72,7 +73,26 @@ struct StoredSessionTests {
     #expect(sut.get() == nil)
   }
 
-  private func makeSUT(_ localStorage: InMemoryLocalStorage) -> SessionStorage {
+  @Test
+  func returnsTheLegacySessionAndRetriesWhenTheMoveFails() throws {
+    let localStorage = WriteFailingLocalStorage()
+    try localStorage.base.store(
+      key: PersistedSessionLoader.legacyKey,
+      value: json(named: "persisted-session-v2-camel-case")
+    )
+    let sut = makeSUT(localStorage)
+
+    localStorage.failsWrites.setValue(true)
+    expectNoDifference(sut.get(), PersistedSessionFixtures.expectedSession)
+    #expect(try localStorage.retrieve(key: key) == nil)
+
+    localStorage.failsWrites.setValue(false)
+    expectNoDifference(sut.get(), PersistedSessionFixtures.expectedSession)
+    #expect(try localStorage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
+    #expect(try localStorage.retrieve(key: key) != nil)
+  }
+
+  private func makeSUT(_ localStorage: some AuthLocalStorage) -> SessionStorage {
     SessionStorage.live(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost")!,
@@ -80,5 +100,26 @@ struct StoredSessionTests {
         localStorage: localStorage
       )
     )
+  }
+}
+
+private struct WriteFailingLocalStorage: AuthLocalStorage {
+  struct WriteFailure: Error {}
+
+  let base = InMemoryLocalStorage()
+  let failsWrites = LockIsolated(false)
+
+  func store(key: String, value: Data) throws {
+    if failsWrites.value { throw WriteFailure() }
+    try base.store(key: key, value: value)
+  }
+
+  func retrieve(key: String) throws -> Data? {
+    try base.retrieve(key: key)
+  }
+
+  func remove(key: String) throws {
+    if failsWrites.value { throw WriteFailure() }
+    try base.remove(key: key)
   }
 }
