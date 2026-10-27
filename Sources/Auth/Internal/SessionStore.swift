@@ -119,7 +119,7 @@ actor SessionStore {
     private var attempts: [Date] = []
 
     mutating func admit(at date: Date) -> Bool {
-      attempts.removeAll { date.timeIntervalSince($0) >= interval }
+      attempts.removeAll { !(0..<interval).contains(date.timeIntervalSince($0)) }
       guard attempts.count < maximumAttempts else { return false }
       attempts.append(date)
       return true
@@ -257,7 +257,7 @@ actor SessionStore {
   ) throws -> Task<Session, any Error> {
     let date = now()
     if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
-      date.timeIntervalSince(failure.date) < Self.refreshFailureCooldown
+      (0..<Self.refreshFailureCooldown).contains(date.timeIntervalSince(failure.date))
     {
       throw failure.error
     }
@@ -277,6 +277,9 @@ actor SessionStore {
       do {
         session = try await request(refreshToken)
       } catch {
+        // Only a sign-out cancels a flight. A transport can report that cancel as another error,
+        // such as `URLError.cancelled` from a response body.
+        if Task.isCancelled { throw CancellationError() }
         if let error = error as? AuthError, error.invalidatesSession {
           try? await commit(
             .invalidated(

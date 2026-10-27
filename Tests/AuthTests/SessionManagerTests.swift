@@ -30,7 +30,7 @@ struct SessionManagerTests {
   }
 
   private static func makeDependencies(
-    http: RecordingTransport,
+    http: any ClientTransport,
     clock: any Clock<Duration> = ContinuousClock(),
     date: @escaping @Sendable () -> Date = { Date() }
   ) -> Dependencies {
@@ -709,5 +709,85 @@ struct SessionManagerTests {
     #expect(!joinerStartedARequest)
     expectNoDifference(try newerResult.get().refreshToken, refreshed.refreshToken)
     expectNoDifference(try joinerResult.get().refreshToken, refreshed.refreshToken)
+  }
+
+  @Test
+  func cachedRefreshFailureEndsWhenTheClockMovesBackward() async throws {
+    let now = LockIsolated(Date())
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    rateLimitedTokenResponse()
+
+    _ = await Task { try await sut.refreshSession("limited") }.result
+    now.withValue { $0.addTimeInterval(-3600) }
+    _ = await Task { try await sut.refreshSession("limited") }.result
+    expectNoDifference(tokenRequestCount, 2)
+
+    now.withValue { $0.addTimeInterval(120) }
+    _ = await Task { try await sut.refreshSession("limited") }.result
+    expectNoDifference(tokenRequestCount, 3)
+  }
+
+  @Test
+  func refreshWindowForgetsRefreshesWhenTheClockMovesBackward() async throws {
+    let now = LockIsolated(Date())
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+
+    for attempt in 0..<5 {
+      _ = try await sut.refreshSession("token-\(attempt)")
+    }
+    now.withValue { $0.addTimeInterval(-3600) }
+    _ = try await sut.refreshSession("token-5")
+
+    expectNoDifference(tokenRequestCount, 6)
+  }
+
+  @Test
+  func refreshCancelledBySignOutWhileReadingTheBodyThrowsCancellationErrorAndCachesNothing()
+    async throws
+  {
+    let transport = URLErrorOnCancelTransport()
+    let dependencies = Self.makeDependencies(http: transport)
+    let sut = dependencies.sessionManager
+    let userA = session("A")
+    try await dependencies.seedSession(userA)
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let readingBody = await waitUntil { transport.bodyReads.value == 1 }
+    #expect(readingBody)
+
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    let outcome = await resultIfFinished(of: refresh)
+    #expect(outcome?.error is CancellationError)
+
+    _ = await Task { try await sut.refreshSession(userA.refreshToken) }.result
+    expectNoDifference(transport.requests.value, 2)
+  }
+}
+
+/// Answers the first request with a body that throws `URLError(.cancelled)` once its reader is
+/// cancelled, as a body from `URLSession.bytes(for:)` does, and fails every later request.
+private struct URLErrorOnCancelTransport: ClientTransport {
+  let requests = LockIsolated(0)
+  let bodyReads = LockIsolated(0)
+
+  func send(_ request: HTTPRequest, body: HTTPBody?) async throws -> (HTTPResponse, HTTPBody?) {
+    let request = requests.withValue {
+      $0 += 1
+      return $0
+    }
+    guard request == 1 else { throw URLError(.notConnectedToInternet) }
+    let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { [bodyReads] in
+      bodyReads.withValue { $0 += 1 }
+      try? await Task.sleep(for: .seconds(60))
+      throw URLError(.cancelled)
+    }
+    return (
+      HTTPResponse(status: .ok), HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+    )
   }
 }

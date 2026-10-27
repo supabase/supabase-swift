@@ -58,7 +58,8 @@ Changes that still compile but behave differently. Check each one by hand.
   new refresh with that same token in the next 60 seconds throws the same error without a
   request. After five refreshes in 30 seconds, the next one throws an `AuthError` with kind
   `.excessiveRefresh`. `signOut` cancels a running refresh. Its callers get `CancellationError`,
-  or `.refreshDiscarded` when the response arrived first. Search for retry loops around
+  whatever error the request then ends with, or `.refreshDiscarded` when a successful response
+  arrived first. Search for retry loops around
   `refreshSession`.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
