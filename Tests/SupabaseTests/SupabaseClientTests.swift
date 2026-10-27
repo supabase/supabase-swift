@@ -216,15 +216,13 @@ struct SupabaseClientTests {
     #expect(client.storage.configuration.resumable.retryTimeout == .seconds(5))
   }
 
-  #if canImport(Security)
-    @Test
-    func clientInitWithDefaultOptionsShouldBeAvailableInNonLinux() {
-      _ = SupabaseClient(
-        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-        supabaseKey: "PUBLISHABLE_KEY"
-      )
-    }
-  #endif
+  @Test
+  func clientInitWithDefaultOptions() {
+    _ = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY"
+    )
+  }
 
   @Test
   func defaultTransportPropagatedToRealtimeClient() {

@@ -194,19 +194,17 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  #if canImport(Security)
-    /// Creates a client with default options.
-    /// - Parameters:
-    ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
-    ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-    public convenience init(supabaseURL: URL, supabaseKey: String) {
-      self.init(
-        supabaseURL: supabaseURL,
-        supabaseKey: supabaseKey,
-        options: SupabaseClientOptions()
-      )
-    }
-  #endif
+  /// Creates a client with default options.
+  /// - Parameters:
+  ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
+  ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
+  public convenience init(supabaseURL: URL, supabaseKey: String) {
+    self.init(
+      supabaseURL: supabaseURL,
+      supabaseKey: supabaseKey,
+      options: SupabaseClientOptions()
+    )
+  }
 
   /// Creates a client with custom options.
   /// - Parameters:

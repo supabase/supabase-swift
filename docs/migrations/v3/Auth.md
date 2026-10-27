@@ -190,9 +190,10 @@ supabase.auth.startAutoRefresh()
 
 ## `WinCredLocalStorage` is removed
 
-`WinCredLocalStorage` and `WinCredLocalStorageError` are removed. Windows has no
-`AuthClient.Configuration.defaultLocalStorage`, the same as Linux and Android. The v2 type could not
-read back what it wrote, so no session data is lost. Pass your own `AuthLocalStorage`.
+`WinCredLocalStorage` and `WinCredLocalStorageError` are removed. On Windows, as on Linux and
+Android, `AuthClient.Configuration.defaultLocalStorage` keeps the session in memory, so the user
+must sign in again after the app exits. The v2 type could not read back what it wrote, so no stored
+session is lost. To persist the session, pass your own `AuthLocalStorage`.
 
 ```swift
 // v2 (Windows)
