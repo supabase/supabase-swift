@@ -495,7 +495,13 @@ features:
   realtime.presence.presence_state: not_implemented
   realtime.presence.presence_key: implemented
 
-  realtime.configuration.custom_websocket_transport: implemented
+  realtime.configuration.custom_websocket_transport:
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.transport
+      - RealtimeWebSocket
+      - RealtimeWebSocketEvent
+      - RealtimeWebSocketTransport
   realtime.configuration.reconnect_backoff: implemented
   realtime.configuration.heartbeat_interval: implemented
   realtime.configuration.access_token_callback: implemented
