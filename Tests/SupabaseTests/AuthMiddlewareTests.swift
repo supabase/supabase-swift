@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 import TestHelpers
 import Testing
 
@@ -10,6 +11,7 @@ import Testing
 @Suite
 struct AuthMiddlewareTests {
   let http = RecordingTransport()
+  let log = LogBarrier()
   let client: SupabaseClient
 
   init() async throws {
@@ -26,7 +28,12 @@ struct AuthMiddlewareTests {
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: autoRefresh
         ),
-        global: SupabaseClientOptions.GlobalOptions(http: .init(transport: http))
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: http),
+          logger: Logging.Logger(label: "auth-middleware") { [log] _ in
+            LogBarrier.Handler(barrier: log)
+          }
+        )
       )
     )
     http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, body in
@@ -61,6 +68,16 @@ struct AuthMiddlewareTests {
   func dataAuthorizations(_ prefix: String) -> [String?] {
     http.requests.filter { $0.head.path?.hasPrefix(prefix) == true }
       .map { $0.head.headerFields[.authorization] }
+  }
+
+  var redeemedRefreshTokens: [String] {
+    http.requests.filter { $0.head.path == "/auth/v1/token?grant_type=refresh_token" }
+      .compactMap { request in
+        request.body.flatMap {
+          (try? JSONSerialization.jsonObject(with: $0) as? [String: Any])?["refresh_token"]
+            as? String
+        }
+      }
   }
 
   @Test
@@ -311,6 +328,36 @@ struct AuthMiddlewareTests {
   }
 
   @Test
+  func refreshThatCommitsBeforeTheRetryRefreshesIsNotRedeemedAgain() async throws {
+    refreshHandler.setValue { _, body in
+      let redeemed = body.map { String(decoding: $0, as: UTF8.self) } ?? ""
+      return redeemed.contains("refresh-1")
+        ? (
+          HTTPResponse(status: .ok), sessionJSON(accessToken: "token-2", refreshToken: "refresh-2")
+        )
+        : (
+          HTTPResponse(status: .ok), sessionJSON(accessToken: "token-3", refreshToken: "refresh-3")
+        )
+    }
+    http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { [log] request, _ in
+      guard request.headerFields[.authorization] == "Bearer token-1" else {
+        return (HTTPResponse(status: .ok), Data("[]".utf8))
+      }
+      log.hold(on: "begin", in: "refreshSession(_:)")
+      return (HTTPResponse(status: .unauthorized), Data())
+    }
+
+    let request = Task { [client] in try await client.from("todos").select().execute() }
+    await log.arrival()
+    try await client.auth.refreshSession()
+    log.release()
+    try await request.value
+
+    #expect(redeemedRefreshTokens == ["refresh-1", "refresh-2"])
+    #expect(dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-3"])
+  }
+
+  @Test
   func unauthorizedWithTheCurrentTokenUnderDisabledAutoRefreshIsNotRefreshed() async throws {
     let suite = try await AuthMiddlewareTests(autoRefresh: .disabled)
     suite.http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { _, _ in
@@ -376,6 +423,77 @@ private func jwt(expiresIn seconds: TimeInterval) -> String {
     segment(#"{"sub":"f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8","exp":\#(exp)}"#),
     "signature",
   ].joined(separator: ".")
+}
+
+/// Holds the task that logs a chosen message from a chosen function until ``release()``, so a
+/// test can act between two steps of a call that offer no other point to stop at.
+final class LogBarrier: Sendable {
+  private struct State {
+    var target: (message: String, function: String)?
+    var hasArrived = false
+    var watcher: CheckedContinuation<Void, Never>?
+  }
+
+  struct Handler: LogHandler {
+    let barrier: LogBarrier
+    var metadata: Logging.Logger.Metadata = [:]
+    var logLevel: Logging.Logger.Level = .trace
+
+    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
+      get { metadata[key] }
+      set { metadata[key] = newValue }
+    }
+
+    func log(
+      level: Logging.Logger.Level,
+      message: Logging.Logger.Message,
+      metadata: Logging.Logger.Metadata?,
+      source: String,
+      file: String,
+      function: String,
+      line: UInt
+    ) {
+      barrier.logged(message.description, in: function)
+    }
+  }
+
+  private let state = LockIsolated(State())
+  private let released = DispatchSemaphore(value: 0)
+
+  /// Holds the next task that logs `message` from `function`.
+  func hold(on message: String, in function: String) {
+    state.withValue { $0.target = (message, function) }
+  }
+
+  /// Returns once a task is held.
+  func arrival() async {
+    await withCheckedContinuation { watcher in
+      let hasArrived = state.withValue { state in
+        if !state.hasArrived { state.watcher = watcher }
+        return state.hasArrived
+      }
+      if hasArrived { watcher.resume() }
+    }
+  }
+
+  func release() {
+    released.signal()
+  }
+
+  private func logged(_ message: String, in function: String) {
+    let (isHeld, watcher) = state.withValue {
+      state -> (Bool, CheckedContinuation<Void, Never>?) in
+      guard let target = state.target, target.message == message, target.function == function
+      else { return (false, nil) }
+      state.target = nil
+      state.hasArrived = true
+      defer { state.watcher = nil }
+      return (true, state.watcher)
+    }
+    guard isHeld else { return }
+    watcher?.resume()
+    released.wait()
+  }
 }
 
 private actor Barrier {
