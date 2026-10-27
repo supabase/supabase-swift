@@ -231,6 +231,64 @@ struct SessionManagerTests {
   }
 
   @Test
+  func userUpdateDuringAnAutoRefreshKeepsTheRotatedTokensAndRedeemsTheTokenOnce() async throws {
+    let held = expiredSession("A")
+    let rotated = {
+      var session = session("A2")
+      session.expiresIn = 3600
+      session.expiresAt = Date().addingTimeInterval(3600).timeIntervalSince1970
+      return session
+    }()
+
+    try await dependencies.seedSession(held)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(rotated))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    await sut.startAutoRefresh()
+    #expect(await waitUntil { requestSeen.value })
+
+    var updatedUser = held.user
+    updatedUser.email = "updated@example.com"
+    try await dependencies.sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
+    release()
+
+    let collected = await settled(events, count: 3)
+    _ = await waitUntil(timeout: 3) { tokenRequestCount > 1 }
+    await sut.stopAutoRefresh()
+
+    var expected = rotated
+    expected.user = updatedUser
+    expectNoDifference(dependencies.sessionStore.currentSession, expected)
+    expectNoDifference(collected, [.initialSession, .userUpdated, .tokenRefreshed])
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
+  func refreshIsDiscardedAfterASignOutAndASignInAsAnotherUser() async throws {
+    let userA = session("A")
+    let userB = session("B")
+
+    try await dependencies.seedSession(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session("A2")))
+    }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    #expect(await waitUntil { requestSeen.value })
+
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    try await dependencies.seedSession(userB)
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStore.currentSession, userB)
+    #expect(result.error != nil)
+  }
+
+  @Test
   func staleRefreshDoesNotDeleteANewerStoredSessionOnACleanupError() async throws {
     let userA = session("A")
     let userB = session("B")

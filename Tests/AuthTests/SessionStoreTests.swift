@@ -99,7 +99,10 @@ struct SessionStoreTests {
         }
       }
       group.addTask {
-        try? await store.commit(.refreshed(makeSession("refresh"), fromGeneration: fromGeneration))
+        try? await store.commit(
+          .refreshed(
+            makeSession("refresh"), redeemedRefreshToken: "refresh-other",
+            fromGeneration: fromGeneration))
       }
     }
 
@@ -123,7 +126,10 @@ struct SessionStoreTests {
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
 
-    try await store.commit(.refreshed(makeSession("b"), fromGeneration: await store.generation))
+    try await store.commit(
+      .refreshed(
+        makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: await store.generation)
+    )
 
     let refreshed = AuthChange(event: .tokenRefreshed, status: .signedIn(makeSession("b")))
     #expect(await changes.next() == refreshed)
@@ -141,7 +147,9 @@ struct SessionStoreTests {
 
     try await store.commit(.signedOut(.userInitiated, event: .signedOut))
     let discarded = await #expect(throws: AuthError.self) {
-      try await store.commit(.refreshed(makeSession("b"), fromGeneration: fromGeneration))
+      try await store.commit(
+        .refreshed(
+          makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
     }
     #expect(discarded?.kind == .refreshDiscarded)
 
@@ -152,6 +160,73 @@ struct SessionStoreTests {
     let signedIn = AuthChange(event: .signedIn, status: .signedIn(makeSession("c")))
     #expect(await changes.next() == signedOut)
     #expect(await changes.next() == signedIn)
+  }
+
+  @Test
+  func refreshAfterAUserUpdateKeepsTheRotatedTokensAndTheUpdatedUser() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage, now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let fromGeneration = await store.generation
+    var changes = store.changes().makeAsyncIterator()
+    _ = await changes.next()
+
+    let user = makeUser(email: "new@example.com")
+    try await store.commit(.userUpdated(user, event: .userUpdated))
+    try await store.commit(
+      .refreshed(
+        makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
+
+    var expected = received("b")
+    expected.session.user = user
+    var updated = makeSession("a")
+    updated.user = user
+    #expect(await changes.next() == AuthChange(event: .userUpdated, status: .signedIn(updated)))
+    #expect(
+      await changes.next()
+        == AuthChange(event: .tokenRefreshed, status: .signedIn(expected.session)))
+    #expect(try await storedSession(storage) == expected)
+  }
+
+  @Test
+  func refreshAfterASignInAsAnotherUserIsDiscarded() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage, now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let fromGeneration = await store.generation
+
+    try await store.commit(.signedOut(.userInitiated, event: .signedOut))
+    try await store.commit(.signedIn(makeSession("c"), event: .signedIn))
+    let discarded = await #expect(throws: AuthError.self) {
+      try await store.commit(
+        .refreshed(
+          makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
+    }
+
+    #expect(discarded?.kind == .refreshDiscarded)
+    #expect(store.currentSession == makeSession("c"))
+    #expect(try await storedSession(storage) == received("c"))
+  }
+
+  @Test
+  func secondRefreshOfTheSameTokenIsDiscarded() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage, now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let fromGeneration = await store.generation
+
+    try await store.commit(
+      .refreshed(
+        makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
+    let discarded = await #expect(throws: AuthError.self) {
+      try await store.commit(
+        .refreshed(
+          makeSession("c"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
+    }
+
+    #expect(discarded?.kind == .refreshDiscarded)
+    #expect(store.currentSession == makeSession("b"))
+    #expect(try await storedSession(storage) == received("b"))
   }
 
   @Test
@@ -187,7 +262,10 @@ struct SessionStoreTests {
     let storage = InMemoryAuthStorage()
     let store = try await loadedStore(storage: storage, now: { receivedAt })
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
-    try await store.commit(.refreshed(makeSession("b"), fromGeneration: await store.generation))
+    try await store.commit(
+      .refreshed(
+        makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: await store.generation)
+    )
 
     let user = makeUser(email: "new@example.com")
     try await store.commit(.userUpdated(user, event: .userUpdated))

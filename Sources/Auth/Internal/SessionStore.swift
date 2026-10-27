@@ -69,8 +69,13 @@ struct AuthChange: Hashable, Sendable {
 actor SessionStore {
   enum Transition: Sendable {
     case signedIn(Session, event: AuthChangeEvent)
-    /// Applied only while ``SessionStore/generation`` still equals `fromGeneration`.
-    case refreshed(Session, fromGeneration: UInt64)
+    /// Applied while ``SessionStore/generation`` still equals `fromGeneration`, or while the store
+    /// still holds the session whose refresh token is `redeemedRefreshToken`.
+    ///
+    /// The server has already rotated `redeemedRefreshToken`, so dropping the result would leave a
+    /// held session whose next refresh redeems a used token. A commit that kept the token, such as
+    /// a user update, keeps its user in the refreshed session.
+    case refreshed(Session, redeemedRefreshToken: String, fromGeneration: UInt64)
     /// Merged into the session that is current when the commit runs.
     case userUpdated(User, event: AuthChangeEvent)
     case signedOut(SignOutReason, event: AuthChangeEvent)
@@ -135,7 +140,8 @@ actor SessionStore {
   private static let refreshFailureCooldown: TimeInterval = 60
 
   /// Grows by one on every state change. A refresh records it when it starts, so that its result
-  /// applies only to the state it started from.
+  /// applies only to the state it started from, or to a later state that still holds the redeemed
+  /// refresh token.
   private(set) var generation: UInt64 = 0
 
   private let storage: any AuthStorage
@@ -238,7 +244,8 @@ actor SessionStore {
   /// When the storage write throws, the commit throws the same error and changes nothing.
   ///
   /// - Throws: ``AuthError/refreshDiscarded`` for a `.refreshed` transition whose generation is
-  ///   stale, and ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
+  ///   stale while the store no longer holds the redeemed refresh token, and
+  ///   ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
   ///   signed in.
   func commit(_ transition: Transition) async throws {
     try await serialized { try await self.apply(transition) }
@@ -309,7 +316,8 @@ actor SessionStore {
         throw error
       }
 
-      try await commit(.refreshed(session, fromGeneration: fromGeneration))
+      try await commit(
+        .refreshed(session, redeemedRefreshToken: refreshToken, fromGeneration: fromGeneration))
       return session
     }
     refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
@@ -433,8 +441,13 @@ actor SessionStore {
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = signInEvent
 
-    case .refreshed(let session, let fromGeneration):
-      guard fromGeneration == generation else { throw AuthError.refreshDiscarded }
+    case .refreshed(var session, let redeemedRefreshToken, let fromGeneration):
+      if fromGeneration != generation {
+        guard let held = currentSession, held.refreshToken == redeemedRefreshToken else {
+          throw AuthError.refreshDiscarded
+        }
+        session.user = held.user
+      }
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = .tokenRefreshed
 
