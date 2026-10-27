@@ -4,6 +4,10 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
+#if canImport(UIKit)
+  import UIKit
+#endif
+
 @testable import Auth
 
 @Suite
@@ -42,6 +46,29 @@ struct AutoRefreshTests {
       try await client.seedSession(world.issueSession())
 
       #expect(await waitUntil(timeout: 2) { await client.dependencies.autoRefresh.isRegistered })
+    }
+  #endif
+
+  #if canImport(UIKit) && !os(watchOS)
+    @Test
+    func becomingActiveIsAForegroundEvenWithoutEnteringTheForeground() async {
+      let events = await AuthPlatform.live.lifecycleEvents()
+      let received = LockIsolated<[AppLifecycleEvent]>([])
+      let collecting = Task {
+        for await event in events { received.withValue { $0.append(event) } }
+      }
+      defer { collecting.cancel() }
+      #expect(await waitUntil(timeout: 2) { received.value.count == 1 })
+
+      await MainActor.run {
+        NotificationCenter.default.post(
+          name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.post(
+          name: UIApplication.didBecomeActiveNotification, object: nil)
+      }
+
+      #expect(await waitUntil(timeout: 2) { received.value.count == 3 })
+      #expect(Array(received.value.dropFirst()) == [.background, .foreground])
     }
   #endif
 
