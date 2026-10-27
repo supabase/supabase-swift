@@ -3,8 +3,6 @@ public import Foundation
 import IssueReporting
 import Logging
 
-import struct HTTPTypes.HTTPFields
-
 #if canImport(AuthenticationServices)
   public import AuthenticationServices
 #endif
@@ -152,6 +150,7 @@ public final class AuthClient: Sendable {
   let dependencies: Dependencies
 
   private var api: SessionAPIClient { dependencies.sessionAPI }
+  private var authAPI: AuthAPI { dependencies.authAPI }
 
   var configuration: AuthClient.Configuration { dependencies.configuration }
 
@@ -209,13 +208,7 @@ public final class AuthClient: Sendable {
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
   /// key in the client.
   public var admin: AuthAdmin {
-    AuthAdmin(
-      url: configuration.url,
-      redirectToURL: configuration.redirectToURL,
-      api: dependencies.api,
-      encoder: configuration.resolvedEncoder,
-      decoder: configuration.resolvedDecoder
-    )
+    AuthAdmin(authAPI: dependencies.authAPI, api: dependencies.api)
   }
 
   /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
@@ -379,30 +372,14 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    return try await _signUp(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("signup"),
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: configuration.resolvedEncoder.encode(
-        SignUpRequest(
-          email: email,
-          password: password,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod
-        )
+    try await _signUp(
+      authAPI.signUp(
+        email: email,
+        password: password,
+        data: data,
+        redirectTo: redirectTo,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
   }
@@ -423,27 +400,18 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> AuthResponse {
     try await _signUp(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("signup")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        SignUpRequest(
-          password: password,
-          phone: phone,
-          channel: channel,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-        )
+      authAPI.signUp(
+        phone: phone,
+        password: password,
+        channel: channel,
+        data: data,
+        captchaToken: captchaToken
       )
     )
   }
 
-  private func _signUp(request: HTTPRequest, body: Data) async throws -> AuthResponse {
-    let response = try await api.execute(request, body: body).decoded(
-      as: AuthResponse.self,
-      decoder: configuration.resolvedDecoder
-    )
+  private func _signUp(_ request: AuthRequest<AuthResponse>) async throws -> AuthResponse {
+    let response = try await api.execute(request)
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -465,18 +433,7 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "password")]
-      ),
-      body: configuration.resolvedEncoder.encode(
-        UserCredentials(
-          email: email,
-          password: password,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-        )
-      )
+      authAPI.signInWithPassword(email: email, password: password, captchaToken: captchaToken)
     )
   }
 
@@ -492,18 +449,7 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> Session {
     try await _signIn(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "password")]
-      ),
-      body: configuration.resolvedEncoder.encode(
-        UserCredentials(
-          password: password,
-          phone: phone,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-        )
-      )
+      authAPI.signInWithPassword(phone: phone, password: password, captchaToken: captchaToken)
     )
   }
 
@@ -511,13 +457,7 @@ public final class AuthClient: Sendable {
   /// The ID token is verified for validity and a new session is established.
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
-    try await _signIn(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "id_token")]
-      ), body: configuration.resolvedEncoder.encode(credentials)
-    )
+    try await _signIn(authAPI.signInWithIdToken(credentials: credentials))
   }
 
   /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
@@ -536,13 +476,7 @@ public final class AuthClient: Sendable {
   /// ```
   @discardableResult
   public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
-    try await _signIn(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "web3")]
-      ), body: configuration.resolvedEncoder.encode(credentials)
-    )
+    try await _signIn(authAPI.signInWithWeb3(credentials: credentials))
   }
 
   /// Creates a new anonymous user.
@@ -556,25 +490,11 @@ public final class AuthClient: Sendable {
     data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws -> Session {
-    try await _signIn(
-      request: HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("signup")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        SignUpRequest(
-          data: data,
-          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) }
-        )
-      )
-    )
+    try await _signIn(authAPI.signInAnonymously(data: data, captchaToken: captchaToken))
   }
 
-  private func _signIn(request: HTTPRequest, body: Data) async throws -> Session {
-    let session = try await api.execute(request, body: body).decoded(
-      as: Session.self,
-      decoder: configuration.resolvedDecoder
-    )
+  private func _signIn(_ request: AuthRequest<Session>) async throws -> Session {
+    let session = try await api.execute(request)
 
     await sessionManager.update(session)
     eventEmitter.emit(.signedIn, session: session)
@@ -600,30 +520,14 @@ public final class AuthClient: Sendable {
     data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    _ = try await api.execute(
-      .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("otp"),
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: configuration.resolvedEncoder.encode(
-        OTPParams(
-          email: email,
-          createUser: shouldCreateUser,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod
-        )
+    try await api.execute(
+      authAPI.signInWithOTP(
+        email: email,
+        redirectTo: redirectTo,
+        shouldCreateUser: shouldCreateUser,
+        data: data,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
   }
@@ -645,19 +549,13 @@ public final class AuthClient: Sendable {
     data: [String: JSONValue]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    _ = try await api.execute(
-      .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("otp")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        OTPParams(
-          phone: phone,
-          createUser: shouldCreateUser,
-          channel: channel,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-        )
+    try await api.execute(
+      authAPI.signInWithOTP(
+        phone: phone,
+        channel: channel,
+        shouldCreateUser: shouldCreateUser,
+        data: data,
+        captchaToken: captchaToken
       )
     )
   }
@@ -673,26 +571,14 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("sso")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        SignInWithSSORequest(
-          providerId: nil,
-          domain: domain,
-          redirectTo: redirectTo ?? configuration.redirectToURL,
-          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod,
-          skipHttpRedirect: true
-        )
+    try await api.execute(
+      authAPI.signInWithSSO(
+        domain: domain,
+        redirectTo: redirectTo,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -707,26 +593,14 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    return try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("sso")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        SignInWithSSORequest(
-          providerId: providerId,
-          domain: nil,
-          redirectTo: redirectTo ?? configuration.redirectToURL,
-          gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod,
-          skipHttpRedirect: true
-        )
+    try await api.execute(
+      authAPI.signInWithSSO(
+        providerId: providerId,
+        redirectTo: redirectTo,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
   }
 
   /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
@@ -748,20 +622,9 @@ public final class AuthClient: Sendable {
       )
     }
 
-    let session: Session = try await api.execute(
-      .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "pkce")]
-      ),
-      body: configuration.resolvedEncoder.encode(
-        [
-          "auth_code": authCode,
-          "code_verifier": codeVerifier,
-        ]
-      )
+    let session = try await api.execute(
+      authAPI.exchangeCodeForSession(authCode: authCode, codeVerifier: codeVerifier)
     )
-    .decoded(decoder: configuration.resolvedDecoder)
 
     codeVerifierStorage.remove(flowId)
 
@@ -786,13 +649,13 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) throws -> URL {
-    try getURLForProvider(
-      url: configuration.url.appendingPathComponent("authorize"),
+    try authAPI.authorizeURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
-      queryParams: queryParams
-    ).url
+      queryParams: queryParams,
+      pkce: prepareForPKCE().challenge
+    )
   }
 
   /// Sign-in an existing user via a third-party provider.
@@ -814,15 +677,16 @@ public final class AuthClient: Sendable {
     queryParams: [(name: String, value: String?)] = [],
     launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
   ) async throws -> Session {
-    let (url, flowId) = try getURLForProvider(
-      url: configuration.url.appendingPathComponent("authorize"),
+    let (pkce, flowId) = prepareForPKCE()
+    let url = try authAPI.authorizeURL(
       provider: provider,
       scopes: scopes,
       redirectTo: Self.oauthRedirectURL(
         redirectTo: redirectTo,
         configured: configuration.redirectToURL
       ),
-      queryParams: queryParams
+      queryParams: queryParams,
+      pkce: pkce
     )
 
     let resultURL = try await launchFlow(url)
@@ -1082,13 +946,9 @@ public final class AuthClient: Sendable {
     let providerRefreshToken = params["provider_refresh_token"]
 
     let user = try await api.execute(
-      .init(
-        method: .get,
-        url: configuration.url.appendingPathComponent("user"),
-        headerFields: [.authorization: "\(tokenType) \(accessToken)"]
-      ),
+      authAPI.user(accessToken: accessToken, tokenType: tokenType),
       for: sessionOwnership(ofAccessToken: accessToken)
-    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
+    )
 
     let session = Session(
       providerToken: providerToken,
@@ -1188,13 +1048,8 @@ public final class AuthClient: Sendable {
     }
 
     do {
-      _ = try await api.execute(
-        .init(
-          method: .post,
-          url: configuration.url.appendingPathComponent("logout"),
-          query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-          headerFields: [.authorization: "Bearer \(session.accessToken)"]
-        ),
+      try await api.execute(
+        authAPI.signOut(accessToken: session.accessToken, scope: scope),
         for: .snapshot(session)
       )
     } catch let error as AuthError
@@ -1213,27 +1068,12 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("verify"),
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: configuration.resolvedEncoder.encode(
-        VerifyOTPParams.email(
-          VerifyEmailOTPParams(
-            email: email,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      authAPI.verifyOTP(
+        email: email,
+        token: token,
+        type: type,
+        redirectTo: redirectTo,
+        captchaToken: captchaToken
       )
     )
   }
@@ -1247,20 +1087,7 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("verify")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        VerifyOTPParams.mobile(
-          VerifyMobileOTPParams(
-            phone: phone,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
-      )
+      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken)
     )
   }
 
@@ -1270,24 +1097,13 @@ public final class AuthClient: Sendable {
     tokenHash: String,
     type: EmailOTPType
   ) async throws -> VerifyOTPResponse {
-    try await _verifyOTP(
-      request: .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("verify")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        VerifyOTPParams.tokenHash(
-          VerifyTokenHashParams(tokenHash: tokenHash, type: type)
-        )
-      )
-    )
+    try await _verifyOTP(authAPI.verifyOTP(tokenHash: tokenHash, type: type))
   }
 
-  private func _verifyOTP(request: HTTPRequest, body: Data) async throws -> VerifyOTPResponse {
-    let response = try await api.execute(request, body: body).decoded(
-      as: VerifyOTPResponse.self,
-      decoder: configuration.resolvedDecoder
-    )
+  private func _verifyOTP(
+    _ request: AuthRequest<VerifyOTPResponse>
+  ) async throws -> VerifyOTPResponse {
+    let response = try await api.execute(request)
 
     if let session = response.session {
       await sessionManager.update(session)
@@ -1307,29 +1123,13 @@ public final class AuthClient: Sendable {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    _ = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("resend"),
-        query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: configuration.resolvedEncoder.encode(
-        ResendEmailParams(
-          type: type,
-          email: email,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod
-        )
+    try await api.execute(
+      authAPI.resend(
+        email: email,
+        type: type,
+        redirectTo: emailRedirectTo,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
   }
@@ -1346,30 +1146,12 @@ public final class AuthClient: Sendable {
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
-    try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: configuration.url.appendingPathComponent("resend")
-      ),
-      body: configuration.resolvedEncoder.encode(
-        ResendMobileParams(
-          type: type,
-          phone: phone,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-        )
-      )
-    )
-    .decoded(decoder: configuration.resolvedDecoder)
+    try await api.execute(authAPI.resend(phone: phone, type: type, captchaToken: captchaToken))
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.
   public func reauthenticate() async throws {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .get,
-        url: configuration.url.appendingPathComponent("reauthenticate")
-      )
-    )
+    try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
 
   /// Gets the current user details if there is an existing session.
@@ -1378,15 +1160,12 @@ public final class AuthClient: Sendable {
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
   public func user(jwt: String? = nil) async throws -> User {
-    var request = HTTPRequest(method: .get, url: configuration.url.appendingPathComponent("user"))
-
     if let jwt {
-      request.headerFields[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request, for: sessionOwnership(ofAccessToken: jwt))
-        .decoded(decoder: configuration.resolvedDecoder)
+      return try await api.execute(
+        authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
     }
 
-    return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
+    return try await api.authorizedExecute { authAPI.user(accessToken: $0) }
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
@@ -1397,29 +1176,12 @@ public final class AuthClient: Sendable {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    var user = user
-
-    if user.email != nil {
-      let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-      user.codeChallenge = codeChallenge
-      user.codeChallengeMethod = codeChallengeMethod
-    }
+    let pkce = user.email != nil ? prepareForPKCE().challenge : nil
 
     var session = try await sessionManager.session()
-    let updatedUser = try await api.authorizedExecute(
-      .init(
-        method: .put,
-        url: configuration.url.appendingPathComponent("user"),
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ), body: configuration.resolvedEncoder.encode(user)
-    ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
+    let updatedUser = try await api.authorizedExecute {
+      try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+    }
     session.user = updatedUser
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1440,13 +1202,9 @@ public final class AuthClient: Sendable {
     credentials.linkIdentity = true
 
     let session = try await api.execute(
-      .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("token"),
-        query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headerFields: [.authorization: "Bearer \(session.accessToken)"]
-      ), body: configuration.resolvedEncoder.encode(credentials)
-    ).decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+      authAPI.signInWithIdToken(
+        credentials: credentials, linkingTo: session.accessToken)
+    )
 
     await sessionManager.update(session)
     eventEmitter.emit(.userUpdated, session: session)
@@ -1522,39 +1280,25 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) async throws -> OAuthResponse {
-    let (url, flowId) = try getURLForProvider(
-      url: configuration.url.appendingPathComponent("user/identities/authorize"),
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams,
-      skipBrowserRedirect: true
-    )
-
-    struct Response: Codable {
-      let url: URL
+    let (pkce, flowId) = prepareForPKCE()
+    let url = try await api.authorizedExecute {
+      try authAPI.linkIdentityURL(
+        provider: provider,
+        scopes: scopes,
+        redirectTo: redirectTo,
+        queryParams: queryParams,
+        pkce: pkce,
+        accessToken: $0
+      )
     }
 
-    let response = try await api.authorizedExecute(
-      HTTPRequest(
-        method: .get,
-        url: url
-      )
-    )
-    .decoded(as: Response.self, decoder: configuration.resolvedDecoder)
-
-    return OAuthResponse(provider: provider, url: response.url, flowId: flowId)
+    return OAuthResponse(provider: provider, url: url, flowId: flowId)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
-    try await api.authorizedExecute(
-      HTTPRequest(
-        method: .delete,
-        url: configuration.url.appendingPathComponent("user/identities/\(identity.identityId)")
-      )
-    )
+    try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
   }
 
   /// Sends a reset request to an email address.
@@ -1563,28 +1307,12 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    let (codeChallenge, codeChallengeMethod, _) = prepareForPKCE()
-
-    _ = try await api.execute(
-      .init(
-        method: .post,
-        url: configuration.url.appendingPathComponent("recover"),
-        query: [
-          (redirectTo ?? configuration.redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: configuration.resolvedEncoder.encode(
-        RecoverParams(
-          email: email,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
-          codeChallenge: codeChallenge,
-          codeChallengeMethod: codeChallengeMethod
-        )
+    try await api.execute(
+      authAPI.resetPasswordForEmail(
+        email,
+        redirectTo: redirectTo,
+        captchaToken: captchaToken,
+        pkce: prepareForPKCE().challenge
       )
     )
   }
@@ -1629,11 +1357,11 @@ public final class AuthClient: Sendable {
     }
   }
 
-  private func prepareForPKCE() -> (
-    codeChallenge: String?, codeChallengeMethod: String?, flowId: String?
-  ) {
+  /// Starts a PKCE flow when the client uses one: stores a new code verifier under a new flow id
+  /// and returns the challenge to send.
+  private func prepareForPKCE() -> (challenge: PKCEChallenge?, flowId: String?) {
     guard configuration.flowType == .pkce else {
-      return (nil, nil, nil)
+      return (nil, nil)
     }
 
     let flowId = UUID().uuidString
@@ -1643,7 +1371,10 @@ public final class AuthClient: Sendable {
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
 
-    return (codeChallenge, codeChallengeMethod, flowId)
+    return (
+      PKCEChallenge(codeChallenge: codeChallenge, codeChallengeMethod: codeChallengeMethod),
+      flowId
+    )
   }
 
   private func isImplicitGrantFlow(params: [String: String]) -> Bool {
@@ -1654,60 +1385,6 @@ public final class AuthClient: Sendable {
     let currentCodeVerifier = codeVerifierStorage.get(nil)
     return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
       || params["error_code"] != nil && currentCodeVerifier != nil
-  }
-
-  private func getURLForProvider(
-    url: URL,
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    skipBrowserRedirect: Bool? = nil
-  ) throws -> (url: URL, flowId: String?) {
-    guard
-      var components = URLComponents(
-        url: url,
-        resolvingAgainstBaseURL: false
-      )
-    else {
-      throw URLError(.badURL)
-    }
-
-    var queryItems: [URLQueryItem] = [
-      URLQueryItem(name: "provider", value: provider.rawValue)
-    ]
-
-    if let scopes {
-      queryItems.append(URLQueryItem(name: "scopes", value: scopes))
-    }
-
-    if let redirectTo = redirectTo ?? configuration.redirectToURL {
-      queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
-    }
-
-    let (codeChallenge, codeChallengeMethod, flowId) = prepareForPKCE()
-
-    if let codeChallenge {
-      queryItems.append(URLQueryItem(name: "code_challenge", value: codeChallenge))
-    }
-
-    if let codeChallengeMethod {
-      queryItems.append(URLQueryItem(name: "code_challenge_method", value: codeChallengeMethod))
-    }
-
-    if let skipBrowserRedirect {
-      queryItems.append(URLQueryItem(name: "skip_http_redirect", value: "\(skipBrowserRedirect)"))
-    }
-
-    queryItems.append(contentsOf: queryParams.map(URLQueryItem.init))
-
-    components.queryItems = queryItems
-
-    guard let url = components.url else {
-      throw URLError(.badURL)
-    }
-
-    return (url, flowId)
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching
@@ -1728,14 +1405,7 @@ public final class AuthClient: Sendable {
       }
     }
 
-    let response = try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: configuration.url.appendingPathComponent(".well-known/jwks.json")
-      )
-    )
-
-    let fetchedJWKS = try response.decoded(as: JWKS.self, decoder: configuration.resolvedDecoder)
+    let fetchedJWKS = try await api.execute(authAPI.jwks())
 
     guard !fetchedJWKS.keys.isEmpty else {
       return nil

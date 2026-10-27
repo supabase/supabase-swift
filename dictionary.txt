@@ -330,3 +330,7 @@ quicktime
 
 # Release process term from CONTRIBUTING.md.
 hotfixes
+
+# Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
+synchronizable
+Synchronizable

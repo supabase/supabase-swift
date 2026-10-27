@@ -1,0 +1,8 @@
+curl \
+	--request POST \
+	--header "Apikey: dummy.api.key" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--header "X-Supabase-Api-Version: 2024-01-01" \
+	--data "{\"email\":\"example@mail.com\",\"type\":\"magiclink\"}" \
+	"http://localhost:54321/auth/v1/admin/generate_link?redirect_to=https://supabase.com"

@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux) && !os(Android)
+#if canImport(Security)
   public import Foundation
 
   /// The Keychain service ``KeychainLocalStorage`` stores its items under by default.

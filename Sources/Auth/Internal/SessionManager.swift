@@ -1,6 +1,5 @@
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import Logging
 
 /// Which stored session a request may clear when the server says the session it was issued for
@@ -34,6 +33,7 @@ struct SessionManager: Sendable {
 extension SessionManager {
   static func live(
     configuration: AuthClient.Configuration,
+    authAPI: AuthAPI,
     api: APIClient,
     sessionStorage: SessionStorage,
     eventEmitter: AuthStateChangeEventEmitter,
@@ -41,6 +41,7 @@ extension SessionManager {
   ) -> Self {
     let instance = LiveSessionManager(
       configuration: configuration,
+      authAPI: authAPI,
       api: api,
       sessionStorage: sessionStorage,
       eventEmitter: eventEmitter,
@@ -61,6 +62,7 @@ extension SessionManager {
 
 private actor LiveSessionManager {
   private let configuration: AuthClient.Configuration
+  private let authAPI: AuthAPI
   private let api: APIClient
   private let sessionStorage: SessionStorage
   private let eventEmitter: AuthStateChangeEventEmitter
@@ -73,12 +75,14 @@ private actor LiveSessionManager {
 
   init(
     configuration: AuthClient.Configuration,
+    authAPI: AuthAPI,
     api: APIClient,
     sessionStorage: SessionStorage,
     eventEmitter: AuthStateChangeEventEmitter,
     logger: Logging.Logger
   ) {
     self.configuration = configuration
+    self.authAPI = authAPI
     self.api = api
     self.sessionStorage = sessionStorage
     self.eventEmitter = eventEmitter
@@ -126,19 +130,7 @@ private actor LiveSessionManager {
 
         let session: Session
         do {
-          session = try await api.execute(
-            HTTPRequest(
-              method: .post,
-              url: configuration.url.appendingPathComponent("token"),
-              query: [
-                URLQueryItem(name: "grant_type", value: "refresh_token")
-              ]
-            ),
-            body: configuration.resolvedEncoder.encode(
-              UserCredentials(refreshToken: refreshToken)
-            )
-          )
-          .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+          session = try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
         } catch let error as AuthError where error.invalidatesSession {
           let owned = storedAtStart?.refreshToken == refreshToken ? storedAtStart : nil
           if removeIfUnchanged(since: .snapshot(owned)) {

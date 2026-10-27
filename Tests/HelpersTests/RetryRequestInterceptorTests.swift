@@ -89,6 +89,60 @@ struct RetryRequestInterceptorTests {
   }
 
   @Test
+  func connectionFailuresOnlyRetriesAnyMethodAfterAConnectionFailure() async throws {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await RequestRetry.$connectionFailuresOnly.withValue(true) {
+      try await interceptor.intercept(makeRequest(method: .post), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        if callCount.value < 2 { throw URLError(.cannotConnectToHost) }
+        return self.makeResponse(statusCode: 200)
+      }
+    }
+    #expect(head.status.code == 200)
+    #expect(callCount.value == 2)
+  }
+
+  @Test(arguments: [URLError.Code.timedOut, .networkConnectionLost, .secureConnectionFailed])
+  func connectionFailuresOnlyDoesNotRetryAFailureAfterTheSend(code: URLError.Code) async {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    await #expect(throws: URLError.self) {
+      try await RequestRetry.$connectionFailuresOnly.withValue(true) {
+        try await interceptor.intercept(self.makeRequest(), body: nil) { _, _ in
+          callCount.withValue { $0 += 1 }
+          throw URLError(code)
+        }
+      }
+    }
+    #expect(callCount.value == 1)
+  }
+
+  @Test
+  func connectionFailuresOnlyDoesNotRetryAResponse() async throws {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await RequestRetry.$connectionFailuresOnly.withValue(true) {
+      try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+        callCount.withValue { $0 += 1 }
+        return self.makeResponse(statusCode: 503)
+      }
+    }
+    #expect(head.status.code == 503)
+    #expect(callCount.value == 1)
+  }
+
+  @Test
+  func connectionFailureCodesAreRetryableTransportErrors() {
+    #expect(
+      RetryRequestInterceptor.connectionFailureURLErrorCodes.isSubset(
+        of: RetryRequestInterceptor.retryableURLErrorCodes))
+  }
+
+  @Test
   func doesNotRetryErrorsThrownByUserCode() async {
     struct CustomTransportError: Error {}
     let interceptor = makeInterceptor()

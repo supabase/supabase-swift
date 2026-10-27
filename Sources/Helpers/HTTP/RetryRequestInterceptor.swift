@@ -38,6 +38,14 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     .serverCertificateNotYetValid, .timedOut,
   ]
 
+  /// The `URLError` codes that mean the request never reached the server: no route, no DNS
+  /// answer, or no TCP connection. `.timedOut`, `.networkConnectionLost`, and
+  /// `.secureConnectionFailed` are left out, since each can arrive after the bytes were sent.
+  static let connectionFailureURLErrorCodes: Set<URLError.Code> = [
+    .callIsActive, .cannotConnectToHost, .cannotFindHost, .dataNotAllowed, .dnsLookupFailed,
+    .internationalRoamingOff, .notConnectedToInternet,
+  ]
+
   package let policy: RetryPolicy
   package let clock: any Clock<Duration>
 
@@ -93,6 +101,11 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     _ request: HTTPTypes.HTTPRequest,
     result: Result<(HTTPTypes.HTTPResponse, HTTPBody?), any Error>
   ) -> Bool {
+    if RequestRetry.connectionFailuresOnly {
+      guard case .failure(let error as URLError) = result else { return false }
+      return Self.connectionFailureURLErrorCodes.contains(error.code)
+    }
+
     guard policy.retryableMethods.contains(request.method) else { return false }
 
     switch result {
@@ -104,4 +117,13 @@ package struct RetryRequestInterceptor: ClientMiddleware {
       return false
     }
   }
+}
+
+/// Narrows ``RetryRequestInterceptor`` for the requests sent inside it.
+///
+/// When `connectionFailuresOnly` is set, a request of any method is retried only after a failure
+/// in ``RetryRequestInterceptor/connectionFailureURLErrorCodes``, and never after a response.
+/// Replaying a non-idempotent request is safe only when the server never saw the first one.
+package enum RequestRetry {
+  @TaskLocal package static var connectionFailuresOnly = false
 }

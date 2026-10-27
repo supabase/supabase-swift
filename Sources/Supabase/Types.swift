@@ -231,42 +231,38 @@ public struct SupabaseClientOptions: Sendable {
 }
 
 extension SupabaseClientOptions {
-  #if !os(Linux) && !os(Android)
-    public init(
-      db: DatabaseOptions = .init(),
-      global: GlobalOptions = .init(),
-      functions: FunctionsOptions = .init(),
-      realtime: RealtimeClientOptions = .init(),
-      storage: StorageOptions = .init()
-    ) {
-      self.db = db
-      auth = .init()
-      self.global = global
-      self.functions = functions
-      self.realtime = realtime
-      self.storage = storage
-    }
-  #endif
+  public init(
+    db: DatabaseOptions = .init(),
+    global: GlobalOptions = .init(),
+    functions: FunctionsOptions = .init(),
+    realtime: RealtimeClientOptions = .init(),
+    storage: StorageOptions = .init()
+  ) {
+    self.db = db
+    auth = .init()
+    self.global = global
+    self.functions = functions
+    self.realtime = realtime
+    self.storage = storage
+  }
 }
 
 extension SupabaseClientOptions.AuthOptions {
-  #if !os(Linux) && !os(Android)
-    public init(
-      redirectToURL: URL? = nil,
-      storageKey: String? = nil,
-      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      automaticallyRefreshesToken: Bool = AuthClient.Configuration
-        .defaultAutomaticallyRefreshesToken,
-      accessToken: (@Sendable () async throws -> String?)? = nil
-    ) {
-      self.init(
-        storage: AuthClient.Configuration.defaultLocalStorage,
-        redirectToURL: redirectToURL,
-        storageKey: storageKey,
-        flowType: flowType,
-        automaticallyRefreshesToken: automaticallyRefreshesToken,
-        accessToken: accessToken
-      )
-    }
-  #endif
+  public init(
+    redirectToURL: URL? = nil,
+    storageKey: String? = nil,
+    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
+    automaticallyRefreshesToken: Bool = AuthClient.Configuration
+      .defaultAutomaticallyRefreshesToken,
+    accessToken: (@Sendable () async throws -> String?)? = nil
+  ) {
+    self.init(
+      storage: AuthClient.Configuration.defaultLocalStorage,
+      redirectToURL: redirectToURL,
+      storageKey: storageKey,
+      flowType: flowType,
+      automaticallyRefreshesToken: automaticallyRefreshesToken,
+      accessToken: accessToken
+    )
+  }
 }

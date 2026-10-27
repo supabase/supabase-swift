@@ -6,7 +6,6 @@
 //
 
 public import Foundation
-import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -41,12 +40,8 @@ public import Logging
 /// ### Multi-factor authentication
 /// - ``mfa``
 public struct AuthAdmin: Sendable {
-  let url: URL
-  /// Default redirect for the flows that take one, when the caller passes none.
-  let redirectToURL: URL?
+  let authAPI: AuthAPI
   let api: APIClient
-  let encoder: JSONEncoder
-  let decoder: JSONDecoder
 
   /// Contains all OAuth client administration methods.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
@@ -67,12 +62,7 @@ public struct AuthAdmin: Sendable {
   /// - Parameter id: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
   public func user(id: UUID) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: url.appendingPathComponent("admin/users/\(id)")
-      )
-    ).decoded(decoder: decoder)
+    try await api.execute(authAPI.adminUser(id: id))
   }
 
   /// Updates the user data.
@@ -81,12 +71,7 @@ public struct AuthAdmin: Sendable {
   ///   - attributes: The data you want to update.
   @discardableResult
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        method: .put,
-        url: url.appendingPathComponent("admin/users/\(uid)")
-      ), body: encoder.encode(attributes)
-    ).decoded(decoder: decoder)
+    try await api.execute(authAPI.adminUpdateUser(id: uid, attributes: attributes))
   }
 
   /// Creates a new user.
@@ -97,13 +82,7 @@ public struct AuthAdmin: Sendable {
   /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: url.appendingPathComponent("admin/users")
-      ), body: encoder.encode(attributes)
-    )
-    .decoded(decoder: decoder)
+    try await api.execute(authAPI.adminCreateUser(attributes: attributes))
   }
 
   /// Sends an invite link to an email address.
@@ -122,26 +101,7 @@ public struct AuthAdmin: Sendable {
     redirectTo: URL? = nil
   ) async throws -> User {
     try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: url.appendingPathComponent("invite"),
-        query: [
-          (redirectTo ?? redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ),
-      body: encoder.encode(
-        [
-          "email": .string(email),
-          "data": data.map({ JSONValue.object($0) }) ?? .null,
-        ]
-      )
-    )
-    .decoded(decoder: decoder)
+      authAPI.adminInviteUser(email: email, data: data, redirectTo: redirectTo))
   }
 
   /// Delete a user. Requires `secret` key.
@@ -152,15 +112,7 @@ public struct AuthAdmin: Sendable {
   ///
   /// - Warning: Never expose your `secret` key on the client.
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
-    _ = try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: url.appendingPathComponent("admin/users/\(id)")
-      ),
-      body: encoder.encode(
-        DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)
-      )
-    )
+    try await api.execute(authAPI.adminDeleteUser(id: id, shouldSoftDelete: shouldSoftDelete))
   }
 
   /// Signs out a user's session(s) using their access token.
@@ -174,14 +126,7 @@ public struct AuthAdmin: Sendable {
   ///   - scope: Specifies which sessions should be logged out.
   /// - Warning: Never expose your `secret` key on the client.
   public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
-    _ = try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: url.appendingPathComponent("logout"),
-        query: [URLQueryItem(name: "scope", value: scope.rawValue)],
-        headerFields: [.authorization: "Bearer \(jwt)"]
-      )
-    )
+    try await api.execute(authAPI.signOut(accessToken: jwt, scope: scope))
   }
 
   /// Get a list of users.
@@ -190,41 +135,7 @@ public struct AuthAdmin: Sendable {
   ///
   /// - Warning: Never expose your `secret` key in the client.
   public func listUsers(params: PageParams? = nil) async throws -> ListUsersPaginatedResponse {
-    struct Response: Decodable {
-      let users: [User]
-      let aud: String
-    }
-
-    let (httpResponse, data) = try await api.send(
-      HTTPRequest(
-        method: .get,
-        url: url.appendingPathComponent("admin/users"),
-        query: [
-          params?.page.map { URLQueryItem(name: "page", value: $0.description) },
-          params?.perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
-        ].compactMap { $0 }
-      )
-    )
-
-    let response = try data.decoded(
-      as: Response.self, decoder: decoder)
-
-    var pagination = ListUsersPaginatedResponse(
-      users: response.users,
-      audience: response.aud,
-      lastPage: 0,
-      total: httpResponse.headerFields[.xTotalCount].flatMap(Int.init) ?? 0
-    )
-
-    let pages = parsePaginationLinks(httpResponse.headerFields[.link])
-    if let lastPage = pages["last"] {
-      pagination.lastPage = lastPage
-    }
-    if let nextPage = pages["next"] {
-      pagination.nextPage = nextPage
-    }
-
-    return pagination
+    try await api.execute(authAPI.adminListUsers(params: params))
   }
 
   /// Generates email links and OTPs to be sent via a custom email provider.
@@ -233,26 +144,8 @@ public struct AuthAdmin: Sendable {
   /// - Throws: An error if the link generation fails.
   /// - Returns: The generated link.
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
-    try await api.execute(
-      HTTPRequest(
-        method: .post,
-        url: url.appendingPathComponent("admin/generate_link"),
-        query: [
-          (params.redirectTo ?? redirectToURL).map {
-            URLQueryItem(
-              name: "redirect_to",
-              value: $0.absoluteString
-            )
-          }
-        ].compactMap { $0 }
-      ), body: encoder.encode(params.body)
-    ).decoded(decoder: decoder)
+    try await api.execute(authAPI.adminGenerateLink(params: params))
   }
-}
-
-extension HTTPField.Name {
-  static let xTotalCount = Self("x-total-count")!
-  static let link = Self("link")!
 }
 
 extension AuthAdmin {
@@ -292,14 +185,14 @@ extension AuthAdmin {
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) {
     self.init(
-      url: url,
-      redirectToURL: redirectToURL,
-      api: APIClient(
+      authAPI: AuthAPI(
+        url: url,
         headers: headers,
-        http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger)
+        defaultRedirectURL: redirectToURL,
+        encoder: AuthClient.Configuration.jsonEncoder,
+        decoder: AuthClient.Configuration.jsonDecoder
       ),
-      encoder: AuthClient.Configuration.jsonEncoder,
-      decoder: AuthClient.Configuration.jsonDecoder
+      api: APIClient(http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger))
     )
   }
 }

@@ -6,7 +6,6 @@
 //
 
 public import Foundation
-import HTTPTypes
 
 extension AuthAdmin {
   /// Lists the passkeys registered for a user.
@@ -15,12 +14,7 @@ extension AuthAdmin {
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
   @_spi(Experimental)
   public func listPasskeys(forUser userId: UUID) async throws -> [PasskeyListItem] {
-    try await api.execute(
-      HTTPRequest(
-        method: .get,
-        url: url.appendingPathComponent("admin/users/\(userId)/passkeys")
-      )
-    ).decoded(decoder: decoder)
+    try await api.execute(authAPI.adminListPasskeys(userId: userId))
   }
 
   /// Deletes a passkey belonging to a user.
@@ -31,12 +25,6 @@ extension AuthAdmin {
   /// - Warning: Never expose your `secret` key on the client.
   @_spi(Experimental)
   public func deletePasskey(id passkeyId: UUID, forUser userId: UUID) async throws {
-    _ = try await api.execute(
-      HTTPRequest(
-        method: .delete,
-        url: url.appendingPathComponent(
-          "admin/users/\(userId)/passkeys/\(passkeyId)")
-      )
-    )
+    try await api.execute(authAPI.adminDeletePasskey(id: passkeyId, userId: userId))
   }
 }
