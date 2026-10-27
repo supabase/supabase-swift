@@ -45,7 +45,9 @@ extension AuthClient.Configuration {
   #if canImport(Security)
     public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
   #else
-    public static let defaultLocalStorage: any AuthLocalStorage = EphemeralLocalStorage()
+    public static var defaultLocalStorage: any AuthLocalStorage {
+      EphemeralLocalStorage()
+    }
   #endif
 }
 
