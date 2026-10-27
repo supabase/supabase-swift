@@ -249,60 +249,6 @@ struct SessionStoreTests {
   }
 
   @Test
-  func twoClientsForOneProjectShareTheStore() async throws {
-    let url = URL(string: "https://project.supabase.co/auth/v1")!
-    let storageKey = "sb-\(UUID())-auth-token"
-    let storage = InMemoryAuthStorage()
-    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
-    let second = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
-    let otherProject = SessionStore.shared(
-      url: URL(string: "https://other.supabase.co/auth/v1")!,
-      storageKey: storageKey,
-      storage: storage
-    )
-    try await first.load()
-    var secondChanges = second.changes().makeAsyncIterator()
-    _ = await secondChanges.next()
-
-    try await first.commit(.signedIn(makeSession("a"), event: .signedIn))
-    try await second.commit(.signedOut(.userInitiated, event: .signedOut))
-
-    let signedIn = AuthChange(event: .signedIn, status: .signedIn(makeSession("a")))
-    let signedOut = AuthChange(event: .signedOut, status: .signedOut(.userInitiated))
-    #expect(await secondChanges.next() == signedIn)
-    #expect(await secondChanges.next() == signedOut)
-    #expect(first.currentStatus == .signedOut(.userInitiated))
-    #expect(otherProject.currentStatus == .loading)
-  }
-
-  @Test
-  func clientsOverDifferentStoragesDoNotShareTheStore() async throws {
-    let url = URL(string: "https://project.supabase.co/auth/v1")!
-    let storageKey = "sb-\(UUID())-auth-token"
-    let first = SessionStore.shared(
-      url: url, storageKey: storageKey, storage: InMemoryAuthStorage(), initialLoad: { nil })
-    let second = SessionStore.shared(
-      url: url, storageKey: storageKey, storage: InMemoryAuthStorage(), initialLoad: { nil })
-
-    try await first.commit(.signedIn(makeSession("a"), event: .signedIn))
-
-    #expect(first !== second)
-    #expect(second.currentStatus == .signedOut(.sessionMissing))
-  }
-
-  @Test
-  func storageWithNoIdentityGetsAStoreOfItsOwn() {
-    let url = URL(string: "https://project.supabase.co/auth/v1")!
-    let storageKey = "sb-\(UUID())-auth-token"
-    let storage = ValueAuthStorage()
-
-    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
-    let second = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
-
-    #expect(first !== second)
-  }
-
-  @Test
   func invalidationSignsOutOnlyWhileTheStoreHoldsTheSession() async throws {
     let storage = InMemoryAuthStorage()
     let store = try await loadedStore(storage: storage)
@@ -363,58 +309,28 @@ struct SessionStoreTests {
   }
 
   @Test
-  func sharedStoreStartsWithItsInitialLoad() async throws {
-    let url = URL(string: "https://project.supabase.co/auth/v1")!
-    let storageKey = "sb-\(UUID())-auth-token"
-    let loads = LockIsolated(0)
-    let storage = InMemoryAuthStorage()
-    let first = SessionStore.shared(
-      url: url,
-      storageKey: storageKey,
-      storage: storage,
-      initialLoad: {
-        loads.withValue { $0 += 1 }
-        return received("stored")
-      }
-    )
-    let second = SessionStore.shared(
-      url: url,
-      storageKey: storageKey,
-      storage: storage,
-      initialLoad: {
-        loads.withValue { $0 += 1 }
-        return nil
-      }
-    )
+  func storeStartsWithItsInitialLoad() async throws {
+    let store = SessionStore(
+      storage: InMemoryAuthStorage(), key: key, initialLoad: { received("stored") })
 
-    #expect(first.currentSession == makeSession("stored"))
-    #expect(second === first)
-    #expect(loads.value == 1)
-    var changes = first.changes().makeAsyncIterator()
+    #expect(store.currentSession == makeSession("stored"))
+    var changes = store.changes().makeAsyncIterator()
     let initial = AuthChange(event: .initialSession, status: .signedIn(makeSession("stored")))
     #expect(await changes.next() == initial)
   }
 
   @Test
-  func sharedStoreWithNothingLoadedIsSignedOut() {
-    let store = SessionStore.shared(
-      url: URL(string: "https://project.supabase.co/auth/v1")!,
-      storageKey: "sb-\(UUID())-auth-token",
-      storage: InMemoryAuthStorage(),
-      initialLoad: { nil }
-    )
+  func storeWithNothingLoadedIsSignedOut() {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, initialLoad: { nil })
 
     #expect(store.currentStatus == .signedOut(.sessionMissing))
   }
 
   @Test
-  func failedInitialLoadKeepsTheSharedStoreLoading() async throws {
-    let storage = InMemoryAuthStorage()
-    try await storage.save(PersistedSessionCodec.encode(received("stored")), key: key)
-    let store = SessionStore.shared(
-      url: URL(string: "https://project.supabase.co/auth/v1")!,
-      storageKey: key + "-\(UUID())",
-      storage: storage,
+  func failedInitialLoadKeepsTheStoreLoading() {
+    let store = SessionStore(
+      storage: InMemoryAuthStorage(),
+      key: key,
       initialLoad: { throw AuthError(kind: .storageUnavailable, message: "locked") }
     )
 
@@ -506,11 +422,4 @@ private final class TestAuthStorage: AuthStorage {
   func savedAccessTokens() throws -> [String] {
     try saves.value.map { try PersistedSessionCodec.decode($0).session.session.accessToken }
   }
-}
-
-/// A custom storage that is a plain value, so the registry cannot tell two of them apart.
-private struct ValueAuthStorage: AuthStorage {
-  func load(key: String) async throws -> Data? { nil }
-  func save(_ data: Data, key: String) async throws {}
-  func remove(key: String) async throws {}
 }

@@ -123,18 +123,23 @@ actor SessionStore {
     published = LockIsolated(Published())
   }
 
-  /// Starts loaded with what a read of storage already returned: `loadedSession`, or no session
-  /// when it is `nil`.
+  /// Starts loaded with what `initialLoad`, a synchronous read of storage, returns. When it
+  /// throws, the store starts ``AuthStatus/loading`` and ``load()`` reads storage again.
   init(
     storage: any AuthStorage,
     key: String,
-    loadedSession: ReceivedSession?,
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date() },
+    initialLoad: () throws -> ReceivedSession?
   ) {
     self.storage = storage
     self.key = key
     self.now = now
-    let state = loadedSession.map(State.signedIn) ?? .signedOut(.sessionMissing)
+    let state: State
+    if case .success(let loaded) = Result(catching: initialLoad) {
+      state = loaded.map(State.signedIn) ?? .signedOut(.sessionMissing)
+    } else {
+      state = .loading
+    }
     published = LockIsolated(Published(state: state))
   }
 
@@ -286,62 +291,4 @@ actor SessionStore {
       }
     }
   }
-}
-
-extension SessionStore {
-  /// Returns the live store for one project, storage key, and storage, creating it when none is
-  /// alive.
-  ///
-  /// Two clients for one project over the same storage share a store, so each sees the other's
-  /// changes. Clients over different storages never share one, even for the same project and
-  /// key: a server that builds one client per request, each with its own storage, must not see
-  /// another request's session. A storage with no ``StorageIdentity`` always gets a store of its
-  /// own. The registry holds stores weakly. The first caller's `now` wins.
-  ///
-  /// - Parameter initialLoad: A synchronous read of storage, run only when this call creates the
-  ///   store, so that the store starts loaded. When it throws, the store starts
-  ///   ``AuthStatus/loading`` and ``load()`` reads storage again.
-  static func shared(
-    url: URL,
-    storageKey: String,
-    storage: any AuthStorage,
-    now: @escaping @Sendable () -> Date = { Date() },
-    initialLoad: (@Sendable () throws -> ReceivedSession?)? = nil
-  ) -> SessionStore {
-    @Sendable func makeStore() -> SessionStore {
-      if let initialLoad, case .success(let loaded) = Result(catching: initialLoad) {
-        return SessionStore(storage: storage, key: storageKey, loadedSession: loaded, now: now)
-      }
-      return SessionStore(storage: storage, key: storageKey, now: now)
-    }
-
-    guard let identity = StorageIdentity(of: storage) else {
-      return makeStore()
-    }
-
-    return registry.withValue { stores in
-      let registryKey = RegistryKey(url: url, storageKey: storageKey, storage: identity)
-      if let store = stores[registryKey]?.store {
-        return store
-      }
-      let store = makeStore()
-      stores = stores.filter { $0.value.store != nil }
-      stores[registryKey] = WeakStore(store: store)
-      return store
-    }
-  }
-
-  private struct RegistryKey: Hashable {
-    var url: URL
-    var storageKey: String
-    /// The store keeps its storage alive, so an `ObjectIdentifier` here stays unique for as long
-    /// as the entry's store does.
-    var storage: StorageIdentity
-  }
-
-  private struct WeakStore {
-    weak var store: SessionStore?
-  }
-
-  private static let registry = LockIsolated<[RegistryKey: WeakStore]>([:])
 }

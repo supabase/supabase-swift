@@ -48,10 +48,11 @@ Changes that still compile but behave differently. Check each one by hand.
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next
   client is created.
-- **Clients for one project share the session.** Two `AuthClient`s, or two `SupabaseClient`s,
-  with the same URL and storage key now share one session: a sign-in, refresh, or sign-out on one
-  changes `currentSession` on the other and fires its auth events. The first client's
-  `localStorage` is the one used. Give each client its own `storageKey` to keep them apart.
+- **Each client keeps its own session in memory.** Because the session is read once, two
+  clients with the same storage and storage key do not see each other's changes. When one
+  refreshes, the other still holds the old refresh token, and its next refresh fails with
+  `refresh_token_already_used` and signs it out. Create one client per project, or give each
+  client its own `storageKey`.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts
