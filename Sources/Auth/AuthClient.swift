@@ -11,14 +11,6 @@ import Logging
   import FoundationNetworking
 #endif
 
-#if canImport(WatchKit)
-  import WatchKit
-#endif
-
-#if canImport(ObjectiveC) && canImport(Combine)
-  import Combine
-#endif
-
 typealias AuthClientID = Int
 
 private let jwksTTL: TimeInterval = 10 * 60
@@ -98,6 +90,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``session(from:)``
 /// - ``setSession(accessToken:refreshToken:)``
 /// - ``refreshSession(refreshToken:)``
+/// - ``refreshSessionIfNeeded()``
 /// - ``startAutoRefresh()``
 /// - ``stopAutoRefresh()``
 ///
@@ -170,10 +163,7 @@ public final class AuthClient: Sendable {
   /// ``didChangeAuthStateNotification`` for each change, for as long as the client lives.
   private let notificationTask: Task<Void, Never>
 
-  #if canImport(ObjectiveC) && canImport(Combine)
-    @MainActor
-    private var appLifecycleCancellables = Set<AnyCancellable>()
-  #endif
+  private let lifecycleTask: Task<Void, Never>?
 
   /// Returns the session, refreshing it if necessary.
   ///
@@ -222,15 +212,15 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public convenience init(configuration: Configuration) {
-    self.init(configuration: configuration, date: { Date() }, pkce: .live, urlOpener: .live)
+    self.init(configuration: configuration, date: { Date() }, pkce: .live, platform: .live)
   }
 
-  /// Test seam: pins the clock, the PKCE material, and the URL opener at construction.
+  /// Test seam: pins the clock, the PKCE material, and the platform at construction.
   init(
     configuration: Configuration,
     date: @escaping @Sendable () -> Date,
     pkce: PKCE,
-    urlOpener: URLOpener
+    platform: AuthPlatform
   ) {
     let clientID = AuthClient.nextClientID()
     self.clientID = clientID
@@ -246,80 +236,45 @@ public final class AuthClient: Sendable {
       logger: logger,
       date: date,
       pkce: pkce,
-      urlOpener: urlOpener
+      platform: platform
     )
     self.dependencies = dependencies
     notificationTask = Self.postAuthStateChangeNotifications(
       sessionStore: dependencies.sessionStore, logger: logger)
 
-    Task { @MainActor in observeAppLifecycleChanges() }
+    let autoRefresh = dependencies.autoRefresh
+    lifecycleTask =
+      configuration.observesAppLifecycle
+      ? Self.observeAppLifecycle(platform: platform, autoRefresh: autoRefresh) : nil
+    Task { await autoRefresh.apply() }
   }
 
   deinit {
     notificationTask.cancel()
-    let sessionManager = dependencies.sessionManager
-    Task { await sessionManager.stopAutoRefresh() }
+    lifecycleTask?.cancel()
+    let autoRefresh = dependencies.autoRefresh
+    Task { await autoRefresh.stop() }
   }
 
-  #if canImport(ObjectiveC) && canImport(Combine)
-    @MainActor
-    private func observeAppLifecycleChanges() {
-      var didBecomeActiveNotification: NSNotification.Name?
-      var willResignActiveNotification: NSNotification.Name?
-
-      #if canImport(UIKit)
-        #if canImport(WatchKit)
-          didBecomeActiveNotification = WKExtension.applicationDidBecomeActiveNotification
-          willResignActiveNotification = WKExtension.applicationWillResignActiveNotification
-        #else
-          didBecomeActiveNotification = UIApplication.didBecomeActiveNotification
-          willResignActiveNotification = UIApplication.willResignActiveNotification
-        #endif
-      #elseif canImport(AppKit)
-        didBecomeActiveNotification = NSApplication.didBecomeActiveNotification
-        willResignActiveNotification = NSApplication.willResignActiveNotification
-      #endif
-
-      if let didBecomeActiveNotification, let willResignActiveNotification {
-        NotificationCenter.default
-          .publisher(for: didBecomeActiveNotification)
-          .sink { [weak self] _ in
-            self?.handleDidBecomeActive()
-          }
-          .store(in: &appLifecycleCancellables)
-
-        NotificationCenter.default
-          .publisher(for: willResignActiveNotification)
-          .sink { [weak self] _ in
-            self?.handleWillResignActive()
-          }
-          .store(in: &appLifecycleCancellables)
-      }
-
-    }
-
-    private func handleDidBecomeActive() {
-      if configuration.automaticallyRefreshesToken {
-        startAutoRefresh()
+  private static func observeAppLifecycle(
+    platform: AuthPlatform,
+    autoRefresh: AutoRefreshController
+  ) -> Task<Void, Never> {
+    Task {
+      for await event in await platform.lifecycleEvents() {
+        await autoRefresh.handle(event)
       }
     }
-
-    private func handleWillResignActive() {
-      if configuration.automaticallyRefreshesToken {
-        stopAutoRefresh()
-      }
-    }
-  #else
-    @MainActor
-    private func observeAppLifecycleChanges() {}
-  #endif
+  }
 
   /// Listen for auth state changes.
   /// - Parameter listener: Block that executes when a new event is emitted.
   /// - Returns: A handle that can be used to manually unsubscribe.
   ///
-  /// - Note: The session emitted in the  ``AuthChangeEvent/initialSession`` event may have been expired
-  /// since last launch, consider checking for ``Session/isExpired``. If this is the case, then expect a ``AuthChangeEvent/tokenRefreshed`` after.
+  /// - Note: The session emitted in the ``AuthChangeEvent/initialSession`` event may have expired
+  /// since the last launch, so check ``Session/isExpired``. With
+  /// ``Configuration/autoRefresh`` set to ``AutoRefreshPolicy/automatic``, expect a
+  /// ``AuthChangeEvent/tokenRefreshed`` after it.
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
@@ -328,7 +283,7 @@ public final class AuthClient: Sendable {
 
     let (initialSessionDelivered, delivered) = AsyncStream<Never>.makeStream()
     let task = Self.observeAuthStateChanges(
-      sessionStore: sessionStore, sessionManager: sessionManager
+      sessionStore: sessionStore
     ) { event, session in
       listener(event, session)
       delivered.finish()
@@ -360,7 +315,7 @@ public final class AuthClient: Sendable {
     >.makeStream(bufferingPolicy: .unbounded)
 
     let task = Self.observeAuthStateChanges(
-      sessionStore: sessionStore, sessionManager: sessionManager
+      sessionStore: sessionStore
     ) { event, session in
       continuation.yield((event, session))
     }
@@ -753,9 +708,7 @@ public final class AuthClient: Sendable {
         )
 
         return try await withCheckedThrowingContinuation { continuation in
-          #if !os(tvOS) && !os(watchOS)
-            var presentationContextProvider: DefaultPresentationContextProvider?
-          #endif
+          var presentationAnchor: AnyObject?
 
           let session = ASWebAuthenticationSession(
             url: url,
@@ -770,19 +723,11 @@ public final class AuthClient: Sendable {
               )
             }
 
-            #if !os(tvOS) && !os(watchOS)
-              // Keep a strong reference to presentationContextProvider until the flow completes.
-              _ = presentationContextProvider
-            #endif
+            withExtendedLifetime(presentationAnchor) {}
           }
 
           configure(session)
-
-          #if !os(tvOS) && !os(watchOS)
-            presentationContextProvider = Self.installDefaultPresentationContextIfNeeded(
-              on: session
-            )
-          #endif
+          presentationAnchor = AuthPlatform.installDefaultPresentationAnchor(on: session)
 
           session.start()
         }
@@ -826,24 +771,6 @@ public final class AuthClient: Sendable {
       return nil
     }
 
-    #if !os(tvOS) && !os(watchOS)
-      /// Installs a default presentation anchor unless `configure` already supplied one.
-      ///
-      /// Returns the provider it created, because
-      /// `ASWebAuthenticationSession.presentationContextProvider` is a weak reference — the
-      /// caller has to hold it until the flow completes, or the anchor is gone before the
-      /// session can present.
-      @MainActor
-      static func installDefaultPresentationContextIfNeeded(
-        on session: ASWebAuthenticationSession
-      ) -> DefaultPresentationContextProvider? {
-        guard session.presentationContextProvider == nil else { return nil }
-
-        let provider = DefaultPresentationContextProvider()
-        session.presentationContextProvider = provider
-        return provider
-      }
-    #endif
   #endif
 
   /// Handles an incoming URL received by the app.
@@ -1253,20 +1180,23 @@ public final class AuthClient: Sendable {
   ///   - redirectTo: A URL to send the user to after they are confirmed.
   ///   - queryParams: Additional query parameters to use.
   ///
-  /// - Note: This method opens the URL using the default URL opening mechanism for the platform, if you with to provide your own URL opening logic use ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``.
+  /// - Note: This method opens the URL with the platform's default handler. Where the platform
+  /// cannot open a URL, such as Linux, it throws an error of kind
+  /// ``AuthError/Kind-swift.struct/oauthFlowFailed``. To open the URL yourself, use
+  /// ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``.
   public func linkIdentity(
     provider: Provider,
     scopes: String? = nil,
     redirectTo: URL? = nil,
     queryParams: [(name: String, value: String?)] = []
   ) async throws {
-    try await linkIdentity(
+    let response = try await linkIdentityURL(
       provider: provider,
       scopes: scopes,
       redirectTo: redirectTo,
-      queryParams: queryParams,
-      launchURL: { dependencies.urlOpener.open($0) }
+      queryParams: queryParams
     )
+    try await dependencies.platform.openURL(response.url)
   }
 
   /// Returns the URL to link the user's identity with an OAuth provider.
@@ -1334,45 +1264,54 @@ public final class AuthClient: Sendable {
     return try await sessionManager.refreshSession(refreshToken)
   }
 
-  /// Starts refreshing the session in the background.
+  /// Refreshes the session when less than half of its lifetime is left, and returns it.
+  ///
+  /// Call it from a `BGAppRefreshTask` handler, so the stored session is fresh when the app or
+  /// one of its extensions next reads it. While enough lifetime is left, it returns the stored
+  /// session without a request. It refreshes under every
+  /// ``Configuration/autoRefresh`` policy.
+  ///
+  /// - Returns: The session, refreshed when needed, or `nil` when no user is signed in.
+  @discardableResult
+  public func refreshSessionIfNeeded() async throws -> Session? {
+    try await sessionManager.refreshSessionIfNeeded()
+  }
+
+  /// Resumes auto refresh after ``stopAutoRefresh()``.
   ///
   /// The client refreshes the session 90 seconds before its access token expires. A failed
   /// refresh is retried with a capped exponential backoff. The expiry is judged from the local
   /// time the client received the session, so a wrong device clock does not change when the
   /// refresh runs. A session that is already due refreshes at once.
   ///
-  /// If you set ``Configuration/automaticallyRefreshesToken`` you don't need to call this function, it will be called for you.
-  public func startAutoRefresh() {
-    Task { await sessionManager.startAutoRefresh() }
+  /// With ``Configuration/autoRefresh`` set to ``AutoRefreshPolicy/automatic``, auto refresh
+  /// starts when the client is created, so you call this only after ``stopAutoRefresh()``. Under
+  /// the other policies it has no effect. Calls to this method and to ``stopAutoRefresh()`` take
+  /// effect in the order you make them, and each returns once its call took effect.
+  public func startAutoRefresh() async {
+    await dependencies.autoRefresh.start()
   }
 
-  /// Stops an active auto refresh process running in the background (if any).
-  public func stopAutoRefresh() {
-    Task { await sessionManager.stopAutoRefresh() }
+  /// Stops auto refresh until the next ``startAutoRefresh()``.
+  ///
+  /// A return to the foreground does not resume it.
+  public func stopAutoRefresh() async {
+    await dependencies.autoRefresh.stop()
   }
 
   /// Calls `deliver` with every change of the session store, in the order the store applied
   /// them, starting with ``AuthChangeEvent/initialSession`` once storage was read.
   ///
-  /// An expired initial session is refreshed in the background, so expect a
-  /// ``AuthChangeEvent/tokenRefreshed`` after it. The task holds no reference to the client.
+  /// The task holds no reference to the client.
   private static func observeAuthStateChanges(
     sessionStore: SessionStore,
-    sessionManager: SessionManager,
     deliver: @escaping @Sendable (_ event: AuthChangeEvent, _ session: Session?) -> Void
   ) -> Task<Void, Never> {
     let changes = sessionStore.changes()
     return Task {
       try? await sessionStore.load()
       for await change in changes {
-        let session = change.status.session
-        deliver(change.event, session)
-
-        if change.event == .initialSession, let session,
-          sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil
-        {
-          Task { _ = try? await sessionManager.refreshSession(session.refreshToken) }
-        }
+        deliver(change.event, change.status.session)
       }
     }
   }
@@ -1567,14 +1506,3 @@ extension AuthClient {
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
   public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
-
-#if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
-  @MainActor
-  final class DefaultPresentationContextProvider: NSObject,
-    ASWebAuthenticationPresentationContextProviding
-  {
-    func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-      ASPresentationAnchor()
-    }
-  }
-#endif

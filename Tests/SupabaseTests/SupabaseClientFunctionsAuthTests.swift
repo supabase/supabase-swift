@@ -75,7 +75,7 @@ struct SupabaseClientFunctionsAuthTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
@@ -98,7 +98,7 @@ struct SupabaseClientFunctionsAuthTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))

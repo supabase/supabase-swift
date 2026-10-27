@@ -259,7 +259,8 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
+      autoRefresh: options.auth.autoRefresh,
+      observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
 

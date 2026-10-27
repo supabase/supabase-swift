@@ -41,7 +41,7 @@ struct SessionManagerTests {
         url: clientURL,
         storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
-        automaticallyRefreshesToken: false
+        autoRefresh: .manual
       ),
       http: HTTPClient(transport: http),
       logger: supabaseDefaultLogger(label: "io.supabase.auth"),
@@ -247,7 +247,17 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    await sut.startAutoRefresh()
+    let owner = UUID()
+    await dependencies.sessionStore.startAutoRefresh(
+      for: owner,
+      using: Refresher.Driver(
+        clock: ContinuousClock(), logger: dependencies.logger,
+        request: { [dependencies] refreshToken in
+          try await dependencies.api.execute(
+            dependencies.authAPI.refreshSession(refreshToken: refreshToken))
+        }
+      )
+    )
     #expect(await waitUntil { requestSeen.value })
 
     var updatedUser = held.user
@@ -257,7 +267,7 @@ struct SessionManagerTests {
 
     let collected = await settled(events, count: 3)
     _ = await waitUntil(timeout: 3) { tokenRequestCount > 1 }
-    await sut.stopAutoRefresh()
+    await dependencies.sessionStore.stopAutoRefresh(for: owner)
 
     var expected = rotated
     expected.user = updatedUser

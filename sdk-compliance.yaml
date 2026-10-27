@@ -209,6 +209,7 @@ supporting_symbols:
   - AuthError.Kind.storageUnavailable
   - AuthError.Kind.storageMisconfigured
   - AuthError.Kind.excessiveRefresh
+  - AuthError.Kind.refreshDisabled
   - AuthError.Kind.~=
   - AuthError.init
   - AuthError.kind
@@ -474,6 +475,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.refreshSession
+      - AuthClient.refreshSessionIfNeeded
   auth.session.set_session:
     status: implemented
     symbols:
@@ -506,6 +508,14 @@ features:
     symbols:
       - AuthClient.startAutoRefresh
       - AuthClient.stopAutoRefresh
+      - AuthClient.Configuration.autoRefresh
+      - AuthClient.Configuration.observesAppLifecycle
+      - AuthClient.AutoRefreshPolicy
+      - AuthClient.AutoRefreshPolicy.automatic
+      - AuthClient.AutoRefreshPolicy.manual
+      - AuthClient.AutoRefreshPolicy.disabled
+      - SupabaseClientOptions.AuthOptions.autoRefresh
+      - SupabaseClientOptions.AuthOptions.observesAppLifecycle
   auth.session.sign_out_reason: not_implemented
 
   auth.identities.link_identity:

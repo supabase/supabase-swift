@@ -627,10 +627,10 @@ extension AuthMockerTests {
         .register()
 
         let receivedURL = LockIsolated<URL?>(nil)
-        var urlOpener = URLOpener.live
-        urlOpener.open = { url in receivedURL.setValue(url) }
+        var platform = AuthPlatform.live
+        platform.openURL = { url in receivedURL.setValue(url) }
 
-        let sut = makeSUT(urlOpener: urlOpener)
+        let sut = makeSUT(platform: platform)
 
         try await sut.seedSession(.valid)
 
@@ -4032,7 +4032,7 @@ extension AuthMockerTests {
     private func makeSUT(
       flowType: AuthFlowType = .pkce,
       date: @escaping @Sendable () -> Date = { Date() },
-      urlOpener: URLOpener = .live
+      platform: AuthPlatform = .live
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
@@ -4057,7 +4057,7 @@ extension AuthMockerTests {
         "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
 
-      return AuthClient(configuration: configuration, date: date, pkce: pkce, urlOpener: urlOpener)
+      return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: platform)
     }
 
     private func assertAuthStateChanges<T>(

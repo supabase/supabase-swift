@@ -1,9 +1,9 @@
 import Foundation
 import Logging
 
-/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:urlOpener:)``.
+/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:platform:)``.
 ///
-/// Immutable on purpose. The test seams (`date`, `pkce`, `urlOpener`) are injected at
+/// Immutable on purpose. The test seams (`date`, `pkce`, `platform`) are injected at
 /// construction and never mutated afterwards, so plain `let` storage is enough and nothing needs a
 /// lock or a process-global registry.
 struct Dependencies: Sendable {
@@ -19,8 +19,9 @@ struct Dependencies: Sendable {
   /// Owns the session. Shared with every other client for the same project and storage key.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
+  let autoRefresh: AutoRefreshController
   let date: @Sendable () -> Date
-  let urlOpener: URLOpener
+  let platform: AuthPlatform
   let pkce: PKCE
   let logger: Logging.Logger
 
@@ -35,7 +36,7 @@ extension Dependencies {
     logger: Logging.Logger? = nil,
     date: @escaping @Sendable () -> Date = { Date() },
     pkce: PKCE = .live,
-    urlOpener: URLOpener = .live
+    platform: AuthPlatform = .live
   ) -> Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
@@ -56,12 +57,20 @@ extension Dependencies {
       now: date,
       initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
     )
+    let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
+      try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
+    }
     let sessionManager = SessionManager.live(
-      configuration: configuration,
-      authAPI: authAPI,
-      api: api,
+      policy: configuration.autoRefresh,
       sessionStore: sessionStore,
-      logger: logger
+      logger: logger,
+      request: refresh
+    )
+    let autoRefresh = AutoRefreshController(
+      policy: configuration.autoRefresh,
+      observesAppLifecycle: configuration.observesAppLifecycle,
+      store: sessionStore,
+      driver: Refresher.Driver(clock: configuration.clock, logger: logger, request: refresh)
     )
 
     return Dependencies(
@@ -74,8 +83,9 @@ extension Dependencies {
       codeVerifierStorage: .live(configuration: configuration),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
+      autoRefresh: autoRefresh,
       date: date,
-      urlOpener: urlOpener,
+      platform: platform,
       pkce: pkce,
       logger: logger
     )

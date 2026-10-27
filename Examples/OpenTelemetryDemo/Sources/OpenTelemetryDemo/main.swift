@@ -46,7 +46,7 @@ let supabase = SupabaseClient(
   supabaseURL: URL(string: "https://example.supabase.co")!,
   supabaseKey: "demo-anon-key",
   options: SupabaseClientOptions(
-    auth: .init(storage: NoOpAuthLocalStorage(), automaticallyRefreshesToken: false),
+    auth: .init(storage: NoOpAuthLocalStorage(), autoRefresh: .manual),
     global: .init(
       http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
     )

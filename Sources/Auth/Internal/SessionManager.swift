@@ -5,44 +5,34 @@ import Logging
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
   var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-
-  var startAutoRefresh: @Sendable () async -> Void
-  var stopAutoRefresh: @Sendable () async -> Void
-
-  var isAutoRefreshRunning: @Sendable () async -> Bool
+  var refreshSessionIfNeeded: @Sendable () async throws -> Session?
 }
 
 extension SessionManager {
   static func live(
-    configuration: AuthClient.Configuration,
-    authAPI: AuthAPI,
-    api: APIClient,
+    policy: AuthClient.AutoRefreshPolicy,
     sessionStore: SessionStore,
-    logger: Logging.Logger
+    logger: Logging.Logger,
+    request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
   ) -> Self {
     let instance = LiveSessionManager(
+      policy: policy,
       sessionStore: sessionStore,
       logger: logger,
-      clock: configuration.clock,
-      request: { refreshToken in
-        try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
-      }
+      request: request
     )
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
-      startAutoRefresh: { await instance.startAutoRefreshToken() },
-      stopAutoRefresh: { await instance.stopAutoRefreshToken() },
-      isAutoRefreshRunning: { await instance.isAutoRefreshTokenRunning() }
+      refreshSessionIfNeeded: { try await instance.refreshSessionIfNeeded() }
     )
   }
 }
 
 private struct LiveSessionManager: Sendable {
-  let owner = UUID()
+  let policy: AuthClient.AutoRefreshPolicy
   let sessionStore: SessionStore
   let logger: Logging.Logger
-  let clock: any Clock<Duration>
   let request: @Sendable (_ refreshToken: String) async throws -> Session
 
   func session() async throws -> Session {
@@ -60,6 +50,14 @@ private struct LiveSessionManager: Sendable {
         throw AuthError.sessionMissing
       }
 
+      guard policy != .disabled else {
+        if let session = sessionStore.validSession(minimumValidity: .zero) {
+          return session
+        }
+        logger.debug("session expired, auto refresh disabled")
+        throw AuthError.refreshDisabled
+      }
+
       logger.debug("session expired")
       return try await refreshSession(currentSession.refreshToken)
     }
@@ -71,18 +69,20 @@ private struct LiveSessionManager: Sendable {
     }
   }
 
-  func startAutoRefreshToken() async {
-    logger.debug("start auto refresh token")
-    await sessionStore.startAutoRefresh(
-      for: owner, using: Refresher.Driver(clock: clock, logger: logger, request: request))
-  }
+  func refreshSessionIfNeeded() async throws -> Session? {
+    try await trace(using: logger) {
+      if sessionStore.currentStatus == .loading {
+        try await sessionStore.load()
+      }
 
-  func stopAutoRefreshToken() async {
-    logger.debug("stop auto refresh token")
-    await sessionStore.stopAutoRefresh(for: owner)
-  }
+      guard let currentSession = sessionStore.currentSession else { return nil }
 
-  func isAutoRefreshTokenRunning() async -> Bool {
-    await sessionStore.isAutoRefreshStarted(by: owner)
+      let halfLifetime = Duration.seconds(currentSession.expiresIn / 2)
+      let minimumValidity = max(Refresher.refreshLeadTime, halfLifetime)
+      if let session = sessionStore.validSession(minimumValidity: minimumValidity) {
+        return session
+      }
+      return try await refreshSession(currentSession.refreshToken)
+    }
   }
 }
