@@ -218,8 +218,10 @@ struct SupabaseClientTests {
 
   @Test
   func clientInitWithDefaultOptions() {
+    // Its own project, so the Keychain-backed session store is not shared with the parallel tests
+    // that use mock storage: a test bundle on the iOS simulator cannot read the Keychain.
     _ = SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseURL: URL(string: "https://default-options.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY"
     )
   }
