@@ -29,6 +29,9 @@ struct AuthMiddleware: ClientMiddleware {
   let auth: AuthClient
   let fallbackToken: String?
   let staleTokenRejection: StaleTokenRejection
+  /// Under ``AuthClient/AutoRefreshPolicy/disabled`` another process owns the refresh, so a
+  /// rejection is retried only with a newer stored token, never after a refresh.
+  let autoRefresh: AuthClient.AutoRefreshPolicy
 
   func intercept(
     _ request: HTTPTypes.HTTPRequest,
@@ -76,6 +79,7 @@ struct AuthMiddleware: ClientMiddleware {
   }
 
   private func refreshedSession() async throws -> Session? {
+    guard autoRefresh != .disabled else { return nil }
     do {
       return try await auth.refreshSession()
     } catch {

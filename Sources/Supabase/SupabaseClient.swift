@@ -491,7 +491,8 @@ public final class SupabaseClient: Sendable {
     return AuthMiddleware(
       auth: _auth,
       fallbackToken: bearerToken(supabaseKey),
-      staleTokenRejection: staleTokenRejection
+      staleTokenRejection: staleTokenRejection,
+      autoRefresh: options.auth.autoRefresh
     )
   }
 
