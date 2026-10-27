@@ -117,7 +117,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: dataHeaders.dictionary,
       logger: options.global.logger,
-      http: authenticatedHTTP,
+      http: authenticatedHTTP(staleTokenRejection: .unauthorized),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,7 +129,7 @@ public final class SupabaseClient: Sendable {
     var configuration = StorageClientConfiguration(
       url: storageURL,
       headers: dataHeaders,
-      http: authenticatedHTTP,
+      http: authenticatedHTTP(staleTokenRejection: .badRequestWithExpiredToken),
       logger: options.global.logger,
       usesNewHostname: options.storage.usesNewHostname,
       retryEnabled: options.storage.retryEnabled
@@ -463,24 +463,36 @@ public final class SupabaseClient: Sendable {
   /// caller may hold any sub-client for that long too. Capturing `self` here would form a
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
   /// running.
-  private var authenticatedHTTP: HTTPClientConfiguration {
+  private func authenticatedHTTP(
+    staleTokenRejection: StaleTokenRejection
+  ) -> HTTPClientConfiguration {
     HTTPClientConfiguration(
       transport: transport,
       middlewares: options.global.http.middlewares + [
         TraceContextMiddleware(),
-        bearerMiddleware(fallbackToken: supabaseKey),
+        bearerMiddleware(staleTokenRejection: staleTokenRejection),
       ],
       timeout: options.global.http.timeout
     )
   }
 
-  private func bearerMiddleware(fallbackToken: String?) -> any ClientMiddleware {
+  /// - Parameter bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the
+  ///   key and a third-party provider's token, not a session token.
+  private func bearerMiddleware(
+    staleTokenRejection: StaleTokenRejection,
+    bearerToken: @escaping @Sendable (String) -> String? = { $0 }
+  ) -> any ClientMiddleware {
     guard options.auth.accessToken == nil else {
-      return AccessTokenMiddleware(getAccessToken: { [provider = accessTokenProvider] in
-        try await provider() ?? fallbackToken
+      return AccessTokenMiddleware(getAccessToken: {
+        [provider = accessTokenProvider, supabaseKey] in
+        bearerToken(try await provider() ?? supabaseKey)
       })
     }
-    return AuthMiddleware(auth: _auth, fallbackToken: fallbackToken)
+    return AuthMiddleware(
+      auth: _auth,
+      fallbackToken: bearerToken(supabaseKey),
+      staleTokenRejection: staleTokenRejection
+    )
   }
 
   /// Resolves the access token to send on outgoing requests, without capturing `self`.
@@ -560,9 +572,9 @@ public final class SupabaseClient: Sendable {
             + (options.functions.http?.middlewares ?? [])
             + [
               TraceContextMiddleware(),
-              bearerMiddleware(
-                fallbackToken: APIKeyFormat.functionsBearerToken(
-                  accessToken: supabaseKey, supabaseKey: supabaseKey)),
+              bearerMiddleware(staleTokenRejection: .unauthorized) { [supabaseKey] in
+                APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+              },
             ],
           timeout: http.timeout ?? options.global.http.timeout
         ),
