@@ -20,7 +20,7 @@
       lifecycleEvents: { await MainActor.run { observeInPostingOrder(lifecycleNotifications) } },
       openURL: { url in
         #if os(watchOS)
-          WKExtension.shared().openSystemURL(url)
+          WKApplication.shared().openSystemURL(url)
         #elseif canImport(UIKit)
           UIApplication.shared.open(url)
         #elseif canImport(AppKit)
@@ -36,16 +36,19 @@
       private static let hasBackgroundState = false
     #endif
 
+    /// A cold launch into the foreground posts `didBecomeActive` but not `willEnterForeground`.
     @MainActor
     private static var lifecycleNotifications: [(Notification.Name, AppLifecycleEvent)] {
       #if os(watchOS)
         [
-          (WKExtension.applicationWillEnterForegroundNotification, .foreground),
-          (WKExtension.applicationDidEnterBackgroundNotification, .background),
+          (WKApplication.willEnterForegroundNotification, .foreground),
+          (WKApplication.didBecomeActiveNotification, .foreground),
+          (WKApplication.didEnterBackgroundNotification, .background),
         ]
       #elseif canImport(UIKit)
         [
           (UIApplication.willEnterForegroundNotification, .foreground),
+          (UIApplication.didBecomeActiveNotification, .foreground),
           (UIApplication.didEnterBackgroundNotification, .background),
           (
             UIApplication.protectedDataDidBecomeAvailableNotification,
@@ -62,7 +65,7 @@
     @MainActor
     private static var currentLifecycleState: AppLifecycleEvent {
       #if os(watchOS)
-        WKExtension.shared().applicationState == .background ? .background : .foreground
+        WKApplication.shared().applicationState == .background ? .background : .foreground
       #elseif canImport(UIKit)
         // An app extension has no shared UIApplication.
         guard !Bundle.main.bundlePath.hasSuffix(".appex") else { return .foreground }
