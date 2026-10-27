@@ -14,6 +14,10 @@ import Logging
 import TestHelpers
 import Testing
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 @testable import Auth
 
 @Suite(.serialized, .mainSerialExecutorSerialized)
