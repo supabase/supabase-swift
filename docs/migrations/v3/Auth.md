@@ -53,13 +53,14 @@ Changes that still compile but behave differently. Check each one by hand.
   `.storageMisconfigured` when the app lacks the Keychain entitlement (`errSecMissingEntitlement`).
   v2 threw an internal Keychain error, and a launch into the background before the first unlock
   emitted `.initialSession` with no session. Now `.initialSession` waits until storage is read.
-  The client reads storage again when protected data becomes available and on each `session`
-  call, which throws `.storageUnavailable` until then. A sign-in that throws `.storageUnavailable`
-  did not sign in, so retry it after the device unlocks. The client also reports the first
-  `.storageMisconfigured` error from its storage as a runtime issue, whether a read at launch or a
-  later write, such as the save of a sign-in, throws it. On macOS with
-  `useDataProtectionKeychain: true` and no entitlement, a read finds no item, so the report comes
-  from the first sign-in.
+  The client reads storage again on each `session` call, which throws `.storageUnavailable` until
+  then. On iOS, iPadOS, tvOS, visionOS, and Mac Catalyst it also reads storage when protected data
+  becomes available. watchOS and macOS post no such notification, so there the client does not
+  read storage again on its own. A sign-in that throws `.storageUnavailable` did not sign in, so
+  retry it after the device unlocks. The client also reports the first `.storageMisconfigured`
+  error from its storage as a runtime issue, whether a read at launch or a later write, such as the
+  save of a sign-in, throws it. On macOS with `useDataProtectionKeychain: true` and no
+  entitlement, a read finds no item, so the report comes from the first sign-in.
 - **The stored session is read once.** The client reads `localStorage` when it is created and
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next
