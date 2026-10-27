@@ -112,6 +112,77 @@ struct LockedStorageTests {
       #expect(error?.message.contains("keychain-access-groups") == true)
       #expect(client.dependencies.sessionStore.currentStatus == .loading)
     }
+
+    @Test
+    func missingEntitlementOnlyOnWritesIsReportedOnceAtTheFirstSignIn() async throws {
+      let entitlementError = KeychainError(code: .init(rawValue: errSecMissingEntitlement))
+      let storage = KeychainLocalStorage(
+        keychain: FakeKeychain(writeError: entitlementError, deleteError: entitlementError),
+        legacyKeychains: []
+      )
+      let reporter = RecordingIssueReporter()
+      let client = withIssueReporters([reporter]) {
+        makeClient(World(), storage: storage)
+      }
+      let store = client.dependencies.sessionStore
+
+      try #require(await waitUntil { store.currentStatus != .loading })
+      #expect(store.currentStatus == .signedOut(.sessionMissing))
+      #expect(reporter.messages.value.isEmpty)
+
+      for _ in 0..<2 {
+        let error = await #expect(throws: AuthError.self) {
+          try await withIssueReporters([reporter]) {
+            try await client.signIn(email: "user@example.com", password: "secret")
+          }
+        }
+        #expect(error?.kind == .storageMisconfigured)
+      }
+      #expect(reporter.messages.value.count == 1)
+      #expect(reporter.messages.value.first?.contains("keychain-access-groups") == true)
+    }
+
+    @Test
+    func missingEntitlementOnTheRemoveOfASignOutIsReported() async throws {
+      let entitlementError = KeychainError(code: .init(rawValue: errSecMissingEntitlement))
+      let world = World()
+      let stored = ReceivedSession(session: world.issueSession(), receivedAt: world.now())
+      let storage = KeychainLocalStorage(
+        keychain: FakeKeychain(
+          items: [key: try PersistedSessionCodec.encode(stored)],
+          deleteError: entitlementError
+        ),
+        legacyKeychains: []
+      )
+      let reporter = RecordingIssueReporter()
+      let client = withIssueReporters([reporter]) { makeClient(world, storage: storage) }
+
+      let error = await #expect(throws: AuthError.self) {
+        try await withIssueReporters([reporter]) { try await client.signOut(scope: .local) }
+      }
+
+      #expect(error?.kind == .storageMisconfigured)
+      #expect(reporter.messages.value.count == 1)
+    }
+
+    @Test
+    func missingEntitlementOnACodeVerifierWriteIsReported() async throws {
+      let entitlementError = KeychainError(code: .init(rawValue: errSecMissingEntitlement))
+      let storage = KeychainLocalStorage(
+        keychain: FakeKeychain(writeError: entitlementError),
+        legacyKeychains: []
+      )
+      let reporter = RecordingIssueReporter()
+      let client = withIssueReporters([reporter]) { makeClient(World(), storage: storage) }
+
+      await #expect(throws: CancellationError.self) {
+        try await withIssueReporters([reporter]) {
+          try await client.signInWithOAuth(provider: .github) { _ in throw CancellationError() }
+        }
+      }
+
+      #expect(reporter.messages.value.count == 1)
+    }
   #endif
 
   private func makeClient(

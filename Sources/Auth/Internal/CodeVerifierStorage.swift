@@ -26,7 +26,10 @@ struct CodeVerifierStorage: Sendable {
 extension CodeVerifierStorage {
   static let maxConcurrentFlows = 5
 
-  static func live(configuration: AuthClient.Configuration) -> Self {
+  static func live(
+    configuration: AuthClient.Configuration,
+    localStorage: any AuthLocalStorage
+  ) -> Self {
     let lock = NSRecursiveLock()
 
     let baseStorageKey: @Sendable () -> String = {
@@ -40,7 +43,7 @@ extension CodeVerifierStorage {
 
     let readString: @Sendable (String) -> String? = { key in
       do {
-        guard let data = try configuration.localStorage.retrieve(key: key) else {
+        guard let data = try localStorage.retrieve(key: key) else {
           return nil
         }
         return String(decoding: data, as: UTF8.self)
@@ -53,7 +56,7 @@ extension CodeVerifierStorage {
 
     let writeString: @Sendable (String, String) -> Void = { value, key in
       do {
-        try configuration.localStorage.store(key: key, value: Data(value.utf8))
+        try localStorage.store(key: key, value: Data(value.utf8))
       } catch {
         configuration.logger.error(
           "Failure storing code verifier: \(error.localizedDescription)")
@@ -62,7 +65,7 @@ extension CodeVerifierStorage {
 
     let removeKey: @Sendable (String) -> Void = { key in
       do {
-        try configuration.localStorage.remove(key: key)
+        try localStorage.remove(key: key)
       } catch {
         configuration.logger.error(
           "Failure removing code verifier: \(error.localizedDescription)")

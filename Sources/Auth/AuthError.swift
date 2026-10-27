@@ -282,7 +282,8 @@ public struct AuthError: SupabaseError {
     /// the sign-in again after the device unlocks.
     public static let storageUnavailable: Kind = "storageUnavailable"
     /// Session storage is set up wrong, for example a missing Keychain entitlement. Fix the
-    /// app's configuration; retrying does not help.
+    /// app's configuration; retrying does not help. The client also reports the first such error
+    /// from its storage as a runtime issue.
     public static let storageMisconfigured: Kind = "storageMisconfigured"
     /// The client refreshed the session too many times in a short window and stopped, to avoid
     /// a refresh loop.

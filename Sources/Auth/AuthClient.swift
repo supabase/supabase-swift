@@ -1230,8 +1230,6 @@ public final class AuthClient: Sendable {
     return Task {
       do {
         try await sessionStore.load()
-      } catch let error as AuthError where error.kind == .storageMisconfigured {
-        reportIssue(error.message)
       } catch {
         logger.error("Failed to load the stored session: \(error)")
       }
