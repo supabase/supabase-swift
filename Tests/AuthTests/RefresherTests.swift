@@ -237,7 +237,7 @@ struct RefresherTests {
   ])
   func retryDelayIsAJitteredBackoffCappedAtAMinute(attempt: Int, bounds: ClosedRange<Double>) {
     let delays = retryDelays(attempt: attempt, after: retryable, expiresIn: 3000)
-    #expect(delays.allSatisfy(bounds.contains))
+    #expect(delays.allSatisfy { bounds.contains($0) })
   }
 
   @Test
@@ -255,7 +255,7 @@ struct RefresherTests {
   @Test
   func retryOfAnExpiredAccessTokenUsesTheBackoff() {
     let delays = retryDelays(attempt: 2, after: rejection, expiresIn: -10)
-    #expect(delays.allSatisfy((2.0...4.0).contains))
+    #expect(delays.allSatisfy { (2.0...4.0).contains($0) })
   }
 
   private func makeSession(expiresAt: Date) -> Session {
