@@ -145,7 +145,7 @@ struct StoredSessionTests {
         storageKey: key,
         localStorage: localStorage,
         http: http,
-        automaticallyRefreshesToken: false
+        autoRefresh: .manual
       )
     )
   }

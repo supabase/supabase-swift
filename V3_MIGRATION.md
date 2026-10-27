@@ -85,7 +85,7 @@ Naming rules applied across all modules (the module tables list each symbol):
 - A method that only reads a value drops its `get` prefix: `getPublicURL` is `publicURL`.
 - An argument that names an identifier is `id:`: `deleteClient(clientId:)` is
   `deleteClient(id:)`.
-- A Boolean property reads as an assertion: `autoRefreshToken` is `automaticallyRefreshesToken`.
+- A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
@@ -278,7 +278,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |
-| `AuthOptions.autoRefreshToken` | `AuthOptions.automaticallyRefreshesToken` |
+| `AuthOptions.autoRefreshToken: Bool` | `AuthOptions.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |

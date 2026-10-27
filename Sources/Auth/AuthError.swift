@@ -284,6 +284,10 @@ public struct AuthError: SupabaseError {
     /// The client refreshed the session too many times in a short window and stopped, to avoid
     /// a refresh loop.
     public static let excessiveRefresh: Kind = "excessiveRefresh"
+    /// The session is expired, and ``AuthClient/Configuration/autoRefresh`` is
+    /// ``AuthClient/AutoRefreshPolicy/disabled``, so the client did not refresh it. Let the app
+    /// that owns the session refresh it, or call ``AuthClient/refreshSession(refreshToken:)``.
+    public static let refreshDisabled: Kind = "refreshDisabled"
     /// A redirect-based sign-in (OAuth, magic link, PKCE or implicit flow) could not start or
     /// finish. Either no redirect URL with a scheme is configured, the redirect URL carried an
     /// error or no session, or the server rejected the flow state or code verifier
@@ -404,6 +408,10 @@ extension AuthError {
   static let excessiveRefresh = AuthError(
     kind: .excessiveRefresh,
     message: "Token refresh stopped: too many refreshes started in the last 30 seconds.")
+
+  static let refreshDisabled = AuthError(
+    kind: .refreshDisabled,
+    message: "The session is expired, and auto refresh is disabled, so it was not refreshed.")
 
   static func oauthFlowFailed(_ message: String, errorCode: ErrorCode = .unknown) -> AuthError {
     AuthError(kind: .oauthFlowFailed, message: message, errorCode: errorCode)

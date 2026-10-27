@@ -28,6 +28,10 @@ struct Refresher {
     entries.last?.driver
   }
 
+  var activeOwner: UUID? {
+    entries.last?.owner
+  }
+
   mutating func add(_ driver: Driver, for owner: UUID) {
     remove(owner)
     entries.append(Entry(owner: owner, driver: driver))
