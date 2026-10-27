@@ -1177,8 +1177,8 @@ public final class AuthClient: Sendable {
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
-    let stored = currentSession
-    return .snapshot(stored?.accessToken == accessToken ? stored : nil)
+    guard let stored = currentSession, stored.accessToken == accessToken else { return .unscoped }
+    return .snapshot(stored)
   }
 
   /// Updates user data, if there is a logged in user.

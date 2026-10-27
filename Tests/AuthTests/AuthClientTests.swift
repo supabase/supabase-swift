@@ -3246,6 +3246,42 @@ extension AuthMockerTests {
     }
 
     @Test
+    func userWithForeignJWTWhileSignedOutKeepsTheSignOutReason() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 403,
+        data: [
+          .get: Data(
+            """
+            {
+              "error_code": "session_not_found",
+              "message": "Session not found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.user(jwt: "foreign-access-token")
+            Issue.record("Expected failure")
+          } catch {
+            #expect((error as? AuthError)?.kind == .sessionInvalidated)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(sut.dependencies.sessionStore.currentStatus == .signedOut(.sessionMissing))
+    }
+
+    @Test
     func userWithStoredJWTRemovesSessionIfSessionNotFoundErrorReturned() async throws {
       let sut = makeSUT()
 

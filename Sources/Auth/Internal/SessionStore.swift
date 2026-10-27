@@ -75,12 +75,12 @@ actor SessionStore {
     case userUpdated(User, event: AuthChangeEvent)
     case signedOut(SignOutReason, event: AuthChangeEvent)
     /// Signs out with ``AuthChangeEvent/signedOut``, but only while the store holds the session
-    /// whose refresh token is `refreshToken`, or holds none when `refreshToken` is `nil`.
+    /// whose refresh token is `refreshToken`.
     ///
     /// A request that failed because its session is gone must not sign out whoever signed in
-    /// after the request went out. When the store holds another session, the commit changes
-    /// nothing and does not throw.
-    case invalidated(SignOutReason, refreshToken: String?)
+    /// after the request went out. When the store holds another session or none, the commit
+    /// changes nothing and does not throw.
+    case invalidated(SignOutReason, refreshToken: String)
   }
 
   private enum State {
@@ -243,7 +243,8 @@ actor SessionStore {
   /// - Parameter request: Sends the refresh request. Called only when no refresh of
   ///   `refreshToken` runs.
   /// - Throws: The error of the last failed refresh, without a new request, when that refresh
-  ///   redeemed `refreshToken` less than 60 seconds ago and no commit followed it.
+  ///   redeemed `refreshToken` less than 60 seconds ago and no commit other than a
+  ///   ``Transition/invalidated(_:refreshToken:)`` followed it.
   ///   ``AuthError/Kind-swift.struct/excessiveRefresh`` when five refreshes started in the last 30
   ///   seconds.
   func refresh(
@@ -256,9 +257,7 @@ actor SessionStore {
     if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
       (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince(failure.date))
     {
-      if currentSession?.refreshToken == refreshToken {
-        await signOutIfRejectedAndExpired(by: failure.error, refreshToken: refreshToken)
-      }
+      await signOutIfRejectedAndExpired(by: failure.error, refreshToken: refreshToken)
       throw failure.error
     }
     return try await Self.value(of: startRefresh(refreshToken, using: request))
@@ -287,8 +286,9 @@ actor SessionStore {
         // Only a sign-out cancels a flight. A transport can report that cancel as another error,
         // such as `URLError.cancelled` from a response body.
         if Task.isCancelled { throw CancellationError() }
-        await signOutIfRejectedAndExpired(
-          by: error, refreshToken: refreshesHeldSession ? refreshToken : nil)
+        if refreshesHeldSession {
+          await signOutIfRejectedAndExpired(by: error, refreshToken: refreshToken)
+        }
         if !(error is CancellationError) {
           lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
         }
@@ -302,7 +302,7 @@ actor SessionStore {
     return task
   }
 
-  private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String?) async {
+  private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String) async {
     guard let error = error as? AuthError, error.invalidatesSession else { return }
     if let session = currentSession, session.refreshToken == refreshToken,
       !session.isExpired(at: now())
@@ -395,9 +395,7 @@ actor SessionStore {
       event = signOutEvent
 
     case .invalidated(let reason, let refreshToken):
-      guard currentStatus != .loading, currentSession?.refreshToken == refreshToken else {
-        return
-      }
+      guard currentSession?.refreshToken == refreshToken else { return }
       next = .signedOut(reason)
       event = .signedOut
     }
@@ -408,7 +406,14 @@ actor SessionStore {
       try await storage.remove(key: key)
     }
     update(to: next, event: event)
-    lastRefreshFailure = nil
+    switch transition {
+    case .invalidated:
+      // The rejection that signed out stays cached, so a refresh of the dead token after the
+      // sign-out throws it without a request.
+      break
+    default:
+      lastRefreshFailure = nil
+    }
 
     if case .signedOut = transition {
       for flight in refreshFlights.values {

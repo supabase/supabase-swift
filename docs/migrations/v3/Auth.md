@@ -69,7 +69,9 @@ Changes that still compile but behave differently. Check each one by hand.
   at once on `refresh_token_not_found`, `refresh_token_already_used`, `session_expired`, and
   `session_not_found`. v3 also signs out on `user_banned` and on an OAuth `invalid_grant`. Do not
   read a `.sessionInvalidated` error from `refreshSession()` as a sign-out. Wait for the
-  `.signedOut` event.
+  `.signedOut` event. A rejected token that is not the current session's, as in
+  `refreshSession(refreshToken:)` or `user(jwt:)` with another token or while signed out, never
+  signs out and fires no event.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts
