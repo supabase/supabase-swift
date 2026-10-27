@@ -32,8 +32,8 @@ Changes that still compile but behave differently. Check each one by hand.
   token (`refresh_token_not_found`, `refresh_token_already_used`, `session_expired`,
   `session_not_found`, `user_banned`), the error kind is `.sessionInvalidated`, not
   `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
-  means only that no session is stored. Search for `.sessionMissing` and also handle
-  `.sessionInvalidated` where you send the user back to sign-in.
+  means only that no session is stored. Search for `.sessionMissing`. To send the user back to
+  sign-in, react to the `.signedOut` event (see the next entry on refresh failures).
 - **The stored session has a new format.** The first read after the upgrade rewrites the stored
   session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
   stored under the old `supabase.session` key to the configured key. v2 cannot read the new
@@ -61,6 +61,15 @@ Changes that still compile but behave differently. Check each one by hand.
   whatever error the request then ends with, or `.refreshDiscarded` when a successful response
   arrived first. Search for retry loops around
   `refreshSession`.
+- **A rejected refresh does not sign out while the access token is valid.** A refresh that fails
+  with a network error, a 5xx, a 408, a 409, or a 429 keeps the session. A refresh that the server
+  rejects (`.sessionInvalidated`) signs out only when `session.isExpired` is `true`. When it is
+  `false`, as for a refresh you start early with `refreshSession()`, the session stays and
+  `refreshSession()` throws. The first refresh after the session expires signs out. v2 signed out
+  at once on `refresh_token_not_found`, `refresh_token_already_used`, `session_expired`, and
+  `session_not_found`. v3 also signs out on `user_banned` and on an OAuth `invalid_grant`. Do not
+  read a `.sessionInvalidated` error from `refreshSession()` as a sign-out. Wait for the
+  `.signedOut` event.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts

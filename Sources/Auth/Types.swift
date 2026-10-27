@@ -151,8 +151,11 @@ public struct Session: Codable, Hashable, Sendable {
   ///
   /// The 30-second buffer accounts for network latency.
   public var isExpired: Bool {
-    let expiresAt = Date(timeIntervalSince1970: expiresAt)
-    return expiresAt.timeIntervalSinceNow < defaultExpiryMargin
+    isExpired(at: Date())
+  }
+
+  func isExpired(at date: Date) -> Bool {
+    expiresAt - date.timeIntervalSince1970 < defaultExpiryMargin
   }
 }
 

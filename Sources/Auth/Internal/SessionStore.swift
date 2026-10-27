@@ -237,6 +237,9 @@ actor SessionStore {
   /// whose task is cancelled throws `CancellationError` at once, and the refresh still commits.
   /// A ``Transition/signedOut(_:event:)`` commit cancels every running refresh.
   ///
+  /// A failed refresh keeps the session, unless the server rejected `refreshToken` and the held
+  /// session for it is expired. A fresh or a cached rejection then signs out before it throws.
+  ///
   /// - Parameter request: Sends the refresh request. Called only when no refresh of
   ///   `refreshToken` runs.
   /// - Throws: The error of the last failed refresh, without a new request, when that refresh
@@ -247,21 +250,25 @@ actor SessionStore {
     _ refreshToken: String,
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
   ) async throws -> Session {
-    let task = try refreshFlights[refreshToken]?.task ?? startRefresh(refreshToken, using: request)
-    return try await Self.value(of: task)
+    if let flight = refreshFlights[refreshToken] {
+      return try await Self.value(of: flight.task)
+    }
+    if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
+      (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince(failure.date))
+    {
+      if currentSession?.refreshToken == refreshToken {
+        await signOutIfRejectedAndExpired(by: failure.error, refreshToken: refreshToken)
+      }
+      throw failure.error
+    }
+    return try await Self.value(of: startRefresh(refreshToken, using: request))
   }
 
   private func startRefresh(
     _ refreshToken: String,
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
   ) throws -> Task<Session, any Error> {
-    let date = now()
-    if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
-      (0..<Self.refreshFailureCooldown).contains(date.timeIntervalSince(failure.date))
-    {
-      throw failure.error
-    }
-    guard refreshWindow.admit(at: date) else { throw AuthError.excessiveRefresh }
+    guard refreshWindow.admit(at: now()) else { throw AuthError.excessiveRefresh }
 
     let id = UUID()
     let fromGeneration = generation
@@ -280,14 +287,8 @@ actor SessionStore {
         // Only a sign-out cancels a flight. A transport can report that cancel as another error,
         // such as `URLError.cancelled` from a response body.
         if Task.isCancelled { throw CancellationError() }
-        if let error = error as? AuthError, error.invalidatesSession {
-          try? await commit(
-            .invalidated(
-              SignOutReason(invalidatedBy: error),
-              refreshToken: refreshesHeldSession ? refreshToken : nil
-            )
-          )
-        }
+        await signOutIfRejectedAndExpired(
+          by: error, refreshToken: refreshesHeldSession ? refreshToken : nil)
         if !(error is CancellationError) {
           lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
         }
@@ -299,6 +300,17 @@ actor SessionStore {
     }
     refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
     return task
+  }
+
+  private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String?) async {
+    guard let error = error as? AuthError, error.invalidatesSession else { return }
+    if let session = currentSession, session.refreshToken == refreshToken,
+      !session.isExpired(at: now())
+    {
+      return
+    }
+    try? await commit(
+      .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
   }
 
   private static func value(of task: Task<Session, any Error>) async throws -> Session {
