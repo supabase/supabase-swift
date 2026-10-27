@@ -3,14 +3,13 @@ public import Foundation
 /// A type that persists Auth data, such as the session and PKCE code verifiers, as raw bytes
 /// under string keys.
 ///
-/// The SDK ships three implementations:
+/// The SDK ships two implementations:
 ///
 /// - ``KeychainStorage`` on Apple platforms.
-/// - ``FileAuthStorage`` for platforms without a Keychain, such as Linux and Android.
 /// - ``InMemoryAuthStorage`` for tests and for apps that must not persist a session.
 ///
-/// Implement this protocol to store Auth data somewhere else, for example in the Android
-/// Keystore.
+/// Implement this protocol to store Auth data somewhere else, for example in a file on Linux
+/// or in the Android Keystore.
 ///
 /// ## Throwing versus returning `nil`
 ///
