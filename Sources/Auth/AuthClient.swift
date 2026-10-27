@@ -167,11 +167,13 @@ public final class AuthClient: Sendable {
   /// stored, and of kind ``AuthError/Kind-swift.struct/sessionInvalidated`` when the server
   /// rejects the refresh of an expired session.
   ///
-  /// When storage could not be read yet, each call reads it again. While the device is locked it
+  /// When storage could not be read yet, each call reads it again, as do
+  /// ``refreshSessionIfNeeded()``, requests that send the session's access token, and each new
+  /// ``onAuthStateChange(_:)`` or ``authStateChanges`` subscription. While the device is locked it
   /// throws an error of kind ``AuthError/Kind-swift.struct/storageUnavailable``. On iOS, iPadOS,
   /// tvOS, visionOS, and Mac Catalyst the client also reads storage when protected data becomes
-  /// available. On watchOS and macOS, the client does not read storage again on its own. A
-  /// missing Keychain entitlement throws an error of kind
+  /// available. On watchOS and macOS, only those calls read storage again. A missing Keychain
+  /// entitlement throws an error of kind
   /// ``AuthError/Kind-swift.struct/storageMisconfigured``.
   public var session: Session {
     get async throws {
