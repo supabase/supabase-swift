@@ -90,7 +90,6 @@ struct SessionStoreTests {
     let store = try await loadedStore(storage: storage)
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
-    let fromGeneration = await store.generation
 
     await withTaskGroup(of: Void.self) { group in
       for index in 0..<20 {
@@ -99,7 +98,7 @@ struct SessionStoreTests {
         }
       }
       group.addTask {
-        try? await store.commit(.refreshed(makeSession("refresh"), fromGeneration: fromGeneration))
+        try? await store.commit(.refreshed(makeSession("refresh"), replacing: nil))
       }
     }
 
@@ -116,14 +115,14 @@ struct SessionStoreTests {
   }
 
   @Test
-  func refreshFromTheCurrentGenerationApplies() async throws {
+  func refreshOfTheHeldSessionApplies() async throws {
     let storage = InMemoryAuthStorage()
     let store = try await loadedStore(storage: storage, now: { receivedAt })
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
 
-    try await store.commit(.refreshed(makeSession("b"), fromGeneration: await store.generation))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
 
     let refreshed = AuthChange(event: .tokenRefreshed, status: .signedIn(makeSession("b")))
     #expect(await changes.next() == refreshed)
@@ -135,13 +134,12 @@ struct SessionStoreTests {
     let storage = InMemoryAuthStorage()
     let store = try await loadedStore(storage: storage)
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
-    let fromGeneration = await store.generation
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
 
     try await store.commit(.signedOut(.userInitiated, event: .signedOut))
     let discarded = await #expect(throws: AuthError.self) {
-      try await store.commit(.refreshed(makeSession("b"), fromGeneration: fromGeneration))
+      try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
     }
     #expect(discarded?.kind == .refreshDiscarded)
 
@@ -152,6 +150,33 @@ struct SessionStoreTests {
     let signedIn = AuthChange(event: .signedIn, status: .signedIn(makeSession("c")))
     #expect(await changes.next() == signedOut)
     #expect(await changes.next() == signedIn)
+  }
+
+  @Test
+  func refreshAppliesAfterAUserUpdateOfTheSameSession() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage, now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+
+    try await store.commit(.userUpdated(makeUser(email: "new@example.com"), event: .userUpdated))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
+
+    #expect(store.currentSession == makeSession("b"))
+    #expect(try await storedSession(storage) == received("b"))
+  }
+
+  @Test
+  func refreshAfterAnotherSignInIsDiscarded() async throws {
+    let store = try await loadedStore()
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.signedIn(makeSession("c"), event: .signedIn))
+
+    let discarded = await #expect(throws: AuthError.self) {
+      try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
+    }
+
+    #expect(discarded?.kind == .refreshDiscarded)
+    #expect(store.currentSession == makeSession("c"))
   }
 
   @Test
@@ -187,7 +212,7 @@ struct SessionStoreTests {
     let storage = InMemoryAuthStorage()
     let store = try await loadedStore(storage: storage, now: { receivedAt })
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
-    try await store.commit(.refreshed(makeSession("b"), fromGeneration: await store.generation))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
 
     let user = makeUser(email: "new@example.com")
     try await store.commit(.userUpdated(user, event: .userUpdated))
@@ -227,14 +252,13 @@ struct SessionStoreTests {
   func twoClientsForOneProjectShareTheStore() async throws {
     let url = URL(string: "https://project.supabase.co/auth/v1")!
     let storageKey = "sb-\(UUID())-auth-token"
-    let firstStorage = InMemoryAuthStorage()
-    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: firstStorage)
-    let second = SessionStore.shared(
-      url: url, storageKey: storageKey, storage: InMemoryAuthStorage())
+    let storage = InMemoryAuthStorage()
+    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
+    let second = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
     let otherProject = SessionStore.shared(
       url: URL(string: "https://other.supabase.co/auth/v1")!,
       storageKey: storageKey,
-      storage: InMemoryAuthStorage()
+      storage: storage
     )
     try await first.load()
     var secondChanges = second.changes().makeAsyncIterator()
@@ -249,6 +273,33 @@ struct SessionStoreTests {
     #expect(await secondChanges.next() == signedOut)
     #expect(first.currentStatus == .signedOut(.userInitiated))
     #expect(otherProject.currentStatus == .loading)
+  }
+
+  @Test
+  func clientsOverDifferentStoragesDoNotShareTheStore() async throws {
+    let url = URL(string: "https://project.supabase.co/auth/v1")!
+    let storageKey = "sb-\(UUID())-auth-token"
+    let first = SessionStore.shared(
+      url: url, storageKey: storageKey, storage: InMemoryAuthStorage(), initialLoad: { nil })
+    let second = SessionStore.shared(
+      url: url, storageKey: storageKey, storage: InMemoryAuthStorage(), initialLoad: { nil })
+
+    try await first.commit(.signedIn(makeSession("a"), event: .signedIn))
+
+    #expect(first !== second)
+    #expect(second.currentStatus == .signedOut(.sessionMissing))
+  }
+
+  @Test
+  func storageWithNoIdentityGetsAStoreOfItsOwn() {
+    let url = URL(string: "https://project.supabase.co/auth/v1")!
+    let storageKey = "sb-\(UUID())-auth-token"
+    let storage = ValueAuthStorage()
+
+    let first = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
+    let second = SessionStore.shared(url: url, storageKey: storageKey, storage: storage)
+
+    #expect(first !== second)
   }
 
   @Test
@@ -316,10 +367,11 @@ struct SessionStoreTests {
     let url = URL(string: "https://project.supabase.co/auth/v1")!
     let storageKey = "sb-\(UUID())-auth-token"
     let loads = LockIsolated(0)
+    let storage = InMemoryAuthStorage()
     let first = SessionStore.shared(
       url: url,
       storageKey: storageKey,
-      storage: InMemoryAuthStorage(),
+      storage: storage,
       initialLoad: {
         loads.withValue { $0 += 1 }
         return received("stored")
@@ -328,7 +380,7 @@ struct SessionStoreTests {
     let second = SessionStore.shared(
       url: url,
       storageKey: storageKey,
-      storage: InMemoryAuthStorage(),
+      storage: storage,
       initialLoad: {
         loads.withValue { $0 += 1 }
         return nil
@@ -454,4 +506,11 @@ private final class TestAuthStorage: AuthStorage {
   func savedAccessTokens() throws -> [String] {
     try saves.value.map { try PersistedSessionCodec.decode($0).session.session.accessToken }
   }
+}
+
+/// A custom storage that is a plain value, so the registry cannot tell two of them apart.
+private struct ValueAuthStorage: AuthStorage {
+  func load(key: String) async throws -> Data? { nil }
+  func save(_ data: Data, key: String) async throws {}
+  func remove(key: String) async throws {}
 }

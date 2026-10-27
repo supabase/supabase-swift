@@ -69,8 +69,13 @@ struct AuthChange: Hashable, Sendable {
 actor SessionStore {
   enum Transition: Sendable {
     case signedIn(Session, event: AuthChangeEvent)
-    /// Applied only while ``SessionStore/generation`` still equals `fromGeneration`.
-    case refreshed(Session, fromGeneration: UInt64)
+    /// Applied only while the store holds the session whose refresh token is `refreshToken`, or
+    /// holds none when `refreshToken` is `nil`: what it held when the refresh started.
+    ///
+    /// A sign-in or sign-out while the request was out makes the result stale. A change that keeps
+    /// the session, such as a user update, does not: the server already rotated the refresh token,
+    /// so dropping the result would leave the store with a spent one.
+    case refreshed(Session, replacing: String?)
     /// Merged into the session that is current when the commit runs.
     case userUpdated(User, event: AuthChangeEvent)
     case signedOut(SignOutReason, event: AuthChangeEvent)
@@ -102,8 +107,7 @@ actor SessionStore {
     var subscribers: [UUID: AsyncStream<AuthChange>.Continuation] = [:]
   }
 
-  /// Grows by one on every state change. A refresh records it when it starts, so that its result
-  /// applies only to the state it started from.
+  /// Grows by one on every state change, so tests can tell that a commit changed nothing.
   private(set) var generation: UInt64 = 0
 
   private let storage: any AuthStorage
@@ -188,8 +192,8 @@ actor SessionStore {
   ///
   /// When the storage write throws, the commit throws the same error and changes nothing.
   ///
-  /// - Throws: ``AuthError/refreshDiscarded`` for a `.refreshed` transition whose generation is
-  ///   stale, and ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
+  /// - Throws: ``AuthError/refreshDiscarded`` for a `.refreshed` transition whose session is no
+  ///   longer held, and ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
   ///   signed in.
   func commit(_ transition: Transition) async throws {
     try await serialized { try await self.apply(transition) }
@@ -230,8 +234,10 @@ actor SessionStore {
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = signInEvent
 
-    case .refreshed(let session, let fromGeneration):
-      guard fromGeneration == generation else { throw AuthError.refreshDiscarded }
+    case .refreshed(let session, let replacedRefreshToken):
+      guard currentSession?.refreshToken == replacedRefreshToken else {
+        throw AuthError.refreshDiscarded
+      }
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = .tokenRefreshed
 
@@ -283,12 +289,14 @@ actor SessionStore {
 }
 
 extension SessionStore {
-  /// Returns the live store for one project and storage key, creating it when none is alive.
+  /// Returns the live store for one project, storage key, and storage, creating it when none is
+  /// alive.
   ///
-  /// Two clients for one project share a store, so each sees the other's changes and they never
-  /// redeem one refresh token twice. The registry holds stores weakly. The first caller's
-  /// `storage` and `now` win: a later caller with the same `url` and `storageKey` gets the
-  /// existing store, whatever storage it passes.
+  /// Two clients for one project over the same storage share a store, so each sees the other's
+  /// changes. Clients over different storages never share one, even for the same project and
+  /// key: a server that builds one client per request, each with its own storage, must not see
+  /// another request's session. A storage with no ``StorageIdentity`` always gets a store of its
+  /// own. The registry holds stores weakly. The first caller's `now` wins.
   ///
   /// - Parameter initialLoad: A synchronous read of storage, run only when this call creates the
   ///   store, so that the store starts loaded. When it throws, the store starts
@@ -300,17 +308,23 @@ extension SessionStore {
     now: @escaping @Sendable () -> Date = { Date() },
     initialLoad: (@Sendable () throws -> ReceivedSession?)? = nil
   ) -> SessionStore {
-    registry.withValue { stores in
-      let registryKey = RegistryKey(url: url, storageKey: storageKey)
+    @Sendable func makeStore() -> SessionStore {
+      if let initialLoad, case .success(let loaded) = Result(catching: initialLoad) {
+        return SessionStore(storage: storage, key: storageKey, loadedSession: loaded, now: now)
+      }
+      return SessionStore(storage: storage, key: storageKey, now: now)
+    }
+
+    guard let identity = StorageIdentity(of: storage) else {
+      return makeStore()
+    }
+
+    return registry.withValue { stores in
+      let registryKey = RegistryKey(url: url, storageKey: storageKey, storage: identity)
       if let store = stores[registryKey]?.store {
         return store
       }
-      let store: SessionStore
-      if let initialLoad, case .success(let loaded) = Result(catching: initialLoad) {
-        store = SessionStore(storage: storage, key: storageKey, loadedSession: loaded, now: now)
-      } else {
-        store = SessionStore(storage: storage, key: storageKey, now: now)
-      }
+      let store = makeStore()
       stores = stores.filter { $0.value.store != nil }
       stores[registryKey] = WeakStore(store: store)
       return store
@@ -320,6 +334,9 @@ extension SessionStore {
   private struct RegistryKey: Hashable {
     var url: URL
     var storageKey: String
+    /// The store keeps its storage alive, so an `ObjectIdentifier` here stays unique for as long
+    /// as the entry's store does.
+    var storage: StorageIdentity
   }
 
   private struct WeakStore {

@@ -53,7 +53,7 @@ extension AuthClient.Configuration {
 
 /// An ``AuthLocalStorage`` that keeps values in memory only.
 struct EphemeralLocalStorage: AuthLocalStorage {
-  private let values = LockIsolated<[String: Data]>([:])
+  let values = LockIsolated<[String: Data]>([:])
 
   func store(key: String, value: Data) throws {
     values.withValue { $0[key] = value }

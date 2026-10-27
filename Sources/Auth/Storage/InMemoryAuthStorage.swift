@@ -8,7 +8,7 @@ public import Foundation
 ///
 /// Copies of an instance share the same values.
 public struct InMemoryAuthStorage: AuthStorage {
-  private let values = LockIsolated<[String: Data]>([:])
+  let values = LockIsolated<[String: Data]>([:])
 
   /// Creates an empty in-memory storage.
   public init() {}

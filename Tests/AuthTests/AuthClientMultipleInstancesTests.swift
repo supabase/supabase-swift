@@ -52,7 +52,41 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
-  func clientsForOneProjectAndStorageKeyObserveOneSignIn() async throws {
+  func clientsForOneProjectAndStorageObserveOneSignIn() async throws {
+    let url = URL(string: "http://localhost:54321/auth")!
+    let storageKey = uniqueStorageKey()
+    let storage = InMemoryLocalStorage()
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+    let signingIn = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: storage,
+        http: .init(transport: transport)
+      )
+    )
+    let observing = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: storage
+      )
+    )
+    let changes = observing.authStateChanges
+    let observed = Task { await changes.prefix(2).collect() }
+
+    try await signingIn.signIn(email: "user@example.com", password: "secret")
+
+    let events = await observed.value
+    #expect(events.map(\.event) == [.initialSession, .signedIn])
+    #expect(events.last?.session?.accessToken == Session.valid.accessToken)
+    #expect(observing.currentSession?.accessToken == Session.valid.accessToken)
+  }
+
+  @Test
+  func clientsOverDifferentStoragesDoNotShareASession() async throws {
     let url = URL(string: "http://localhost:54321/auth")!
     let storageKey = uniqueStorageKey()
     let transport = RecordingTransport { _, _ in
@@ -66,22 +100,18 @@ struct AuthClientMultipleInstancesTests {
         http: .init(transport: transport)
       )
     )
-    let observing = AuthClient(
+    let otherRequest = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: storageKey,
         localStorage: InMemoryLocalStorage()
       )
     )
-    let changes = observing.authStateChanges
-    let observed = Task { await changes.prefix(2).collect() }
 
     try await signingIn.signIn(email: "user@example.com", password: "secret")
 
-    let events = await observed.value
-    #expect(events.map(\.event) == [.initialSession, .signedIn])
-    #expect(events.last?.session?.accessToken == Session.valid.accessToken)
-    #expect(observing.currentSession?.accessToken == Session.valid.accessToken)
+    #expect(signingIn.currentSession?.accessToken == Session.valid.accessToken)
+    #expect(otherRequest.currentSession == nil)
   }
 
   @Test
