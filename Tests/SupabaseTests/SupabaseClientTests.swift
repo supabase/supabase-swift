@@ -218,12 +218,17 @@ struct SupabaseClientTests {
 
   @Test
   func clientInitWithDefaultOptions() {
-    // Its own project, so the Keychain-backed session store is not shared with the parallel tests
-    // that use mock storage: a test bundle on the iOS simulator cannot read the Keychain.
-    _ = SupabaseClient(
-      supabaseURL: URL(string: "https://default-options.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY"
-    )
+    // A test bundle on a simulator has no Keychain entitlement, so creating the client reports
+    // it. macOS reads the file-based Keychain and reports nothing. Its own project, so the
+    // Keychain-backed session store is not shared with the parallel tests that use mock storage.
+    withKnownIssue(isIntermittent: true) {
+      _ = SupabaseClient(
+        supabaseURL: URL(string: "https://default-options.supabase.co")!,
+        supabaseKey: "PUBLISHABLE_KEY"
+      )
+    } matching: { issue in
+      issue.comments.contains { $0.rawValue.contains("errSecMissingEntitlement") }
+    }
   }
 
   @Test
