@@ -16,7 +16,8 @@
 
   extension AuthPlatform {
     static let live = AuthPlatform(
-      lifecycleEvents: { observeInPostingOrder(lifecycleNotifications) },
+      hasBackgroundState: hasBackgroundState,
+      lifecycleEvents: { await MainActor.run { observeInPostingOrder(lifecycleNotifications) } },
       openURL: { url in
         #if os(watchOS)
           WKExtension.shared().openSystemURL(url)
@@ -28,6 +29,12 @@
       },
       makeDefaultLocalStorage: { KeychainLocalStorage() }
     )
+
+    #if os(watchOS) || canImport(UIKit)
+      private static let hasBackgroundState = true
+    #else
+      private static let hasBackgroundState = false
+    #endif
 
     @MainActor
     private static var lifecycleNotifications: [(Notification.Name, AppLifecycleEvent)] {

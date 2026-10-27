@@ -25,6 +25,26 @@ struct AutoRefreshTests {
     #expect(await world.refreshCount(settledAt: 1) == 1)
   }
 
+  #if !canImport(UIKit) && !os(watchOS)
+    @Test
+    func autoRefreshStartsWhileTheMainThreadIsBlocked() async throws {
+      let world = World()
+      let mainIsBlocked = LockIsolated(false)
+      let unblockMain = DispatchSemaphore(value: 0)
+      DispatchQueue.main.async {
+        mainIsBlocked.setValue(true)
+        unblockMain.wait()
+      }
+      defer { unblockMain.signal() }
+      #expect(await waitUntil { mainIsBlocked.value })
+
+      let client = AuthClient(configuration: world.configuration(observesAppLifecycle: true))
+      try await client.seedSession(world.issueSession())
+
+      #expect(await waitUntil(timeout: 2) { await client.dependencies.autoRefresh.isRegistered })
+    }
+  #endif
+
   @Test
   func foregroundRefreshesAtOnceWhenTheSessionIsDue() async throws {
     let world = World()
@@ -217,6 +237,7 @@ struct AutoRefreshTests {
     }
   ) -> AuthClient {
     var platform = AuthPlatform.live
+    platform.hasBackgroundState = true
     platform.lifecycleEvents = { lifecycle }
     return AuthClient(
       configuration: world.configuration(autoRefresh: autoRefresh, observesAppLifecycle: true),

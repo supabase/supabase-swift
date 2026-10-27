@@ -67,7 +67,7 @@ extension Dependencies {
     )
     let autoRefresh = AutoRefreshController(
       policy: configuration.autoRefresh,
-      observesAppLifecycle: configuration.observesAppLifecycle,
+      startsInForeground: !(configuration.observesAppLifecycle && platform.hasBackgroundState),
       store: sessionStore,
       driver: Refresher.Driver(clock: configuration.clock, logger: logger, request: refresh)
     )

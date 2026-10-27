@@ -3,6 +3,7 @@
 
   extension AuthPlatform {
     static let live = AuthPlatform(
+      hasBackgroundState: false,
       lifecycleEvents: {
         let (events, continuation) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
         continuation.yield(.foreground)
