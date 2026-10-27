@@ -1167,11 +1167,7 @@ public final class AuthClient: Sendable {
   /// - Returns: A new session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
-      throw AuthError.sessionMissing
-    }
-
-    return try await sessionManager.refreshSession(refreshToken)
+    try await sessionManager.refreshSession(refreshToken)
   }
 
   /// Refreshes the session when less than half of its lifetime is left, and returns it.

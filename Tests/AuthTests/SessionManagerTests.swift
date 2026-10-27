@@ -202,6 +202,20 @@ struct SessionManagerTests {
   }
 
   @Test
+  func refreshWithAGivenTokenRedeemsItWhileAnotherSessionIsHeld() async throws {
+    let other = session("B")
+    try await dependencies.seedSession(session("A"))
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(other))
+    }
+
+    let refreshed = try await sut.refreshSession("foreign-refresh")
+
+    expectNoDifference(refreshed.refreshToken, other.refreshToken)
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
   func staleRefreshDoesNotOverwriteANewerStoredSession() async throws {
     let userA = session("A")
     let userB = session("B")

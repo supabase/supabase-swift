@@ -230,6 +230,43 @@ struct SessionStoreTests {
   }
 
   @Test
+  func refreshOfAHeldSessionThatARefreshReplacedReturnsItWithoutARequest() async throws {
+    let store = try await loadedStore(now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let fromGeneration = await store.generation
+    try await store.commit(
+      .refreshed(
+        makeSession("b"), redeemedRefreshToken: "refresh-a", fromGeneration: fromGeneration))
+    let requests = LockIsolated(0)
+
+    let session = try await store.refreshHeldSession(readWith: "refresh-a") { _ in
+      requests.withValue { $0 += 1 }
+      return makeSession("c")
+    }
+
+    #expect(session == makeSession("b"))
+    #expect(requests.value == 0)
+  }
+
+  @Test
+  func refreshOfAHeldSessionThatAnExpiredSessionReplacedSendsARequest() async throws {
+    let date = LockIsolated(receivedAt)
+    let store = try await loadedStore(now: { date.value })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.signedIn(makeSession("b"), event: .signedIn))
+    date.setValue(receivedAt.addingTimeInterval(3600))
+    let requests = LockIsolated(0)
+
+    let session = try await store.refreshHeldSession(readWith: "refresh-a") { _ in
+      requests.withValue { $0 += 1 }
+      return makeSession("c")
+    }
+
+    #expect(session == makeSession("c"))
+    #expect(requests.value == 1)
+  }
+
+  @Test
   func failedStorageWriteLeavesTheStateUnchangedAndRethrows() async throws {
     let storage = TestAuthStorage()
     let store = try await loadedStore(storage: storage)

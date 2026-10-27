@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 import TestHelpers
 import Testing
 
@@ -70,8 +71,15 @@ struct SessionLifecycleRaceTests {
     #expect(race.refreshRequestCount == 1)
   }
 
-  @Test
-  func twoClientsForOneProjectRedeemTheRefreshTokenOnce() async throws {
+  enum SecondCall: CaseIterable {
+    /// Reads the expired token and asks while the first refresh runs.
+    case duringTheRefresh
+    /// Reads the expired token while the first refresh runs, and asks once it has committed.
+    case afterTheCommit
+  }
+
+  @Test(arguments: SecondCall.allCases)
+  func twoClientsForOneProjectRedeemTheRefreshTokenOnce(second call: SecondCall) async throws {
     let race = Race()
     let gate = Gate()
     race.answerSignIn { _ in race.issue("signed-in", lifetime: 10) }
@@ -86,17 +94,23 @@ struct SessionLifecycleRaceTests {
 
     let firstSession = Task { try await first.session }
     await gate.arrivals(1)
+    if call == .afterTheCommit {
+      race.log.hold(on: "session expired")
+    }
     let secondSession = Task { try await second.session }
-    gate.open()
+    switch call {
+    case .duringTheRefresh:
+      gate.open()
+    case .afterTheCommit:
+      await race.log.arrival()
+      gate.open()
+      _ = try await firstSession.value
+      race.log.release()
+    }
 
     let sessions = try await [firstSession.value, secondSession.value]
     #expect(sessions.map(\.accessToken) == ["refreshed-access", "refreshed-access"])
-    withKnownIssue(
-      "A caller that read the token before the refresh committed sends it again once the flight ended",
-      isIntermittent: true
-    ) {
-      #expect(race.refreshRequestCount == 1)
-    }
+    #expect(race.refreshRequestCount == 1)
     for events in [firstEvents, secondEvents] {
       var events = events
       #expect(await events.next()?.event == .signedIn)
@@ -334,6 +348,7 @@ private struct Race: Sendable {
 
   let clock = SignalingTestClock()
   let transport = RecordingTransport()
+  let log = LogBarrier()
   let localStorage = InMemoryLocalStorage()
   let storageKey = uniqueStorageKey()
   private let start: SignalingTestClock.Instant
@@ -380,6 +395,7 @@ private struct Race: Sendable {
         url: url,
         storageKey: storageKey,
         localStorage: storage,
+        logger: Logging.Logger(label: "race") { [log] _ in LogBarrier.Handler(barrier: log) },
         http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
@@ -542,6 +558,76 @@ private final class Gate: Sendable {
       return state.held
     }
     for request in held { request.resume() }
+  }
+}
+
+/// Holds the task that logs a chosen message until ``release()``, so a test can act between two
+/// steps of a call that offer no other point to stop at.
+private final class LogBarrier: Sendable {
+  private struct State {
+    var message: String?
+    var hasArrived = false
+    var watcher: CheckedContinuation<Void, Never>?
+  }
+
+  struct Handler: LogHandler {
+    let barrier: LogBarrier
+    var metadata: Logging.Logger.Metadata = [:]
+    var logLevel: Logging.Logger.Level = .trace
+
+    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
+      get { metadata[key] }
+      set { metadata[key] = newValue }
+    }
+
+    func log(
+      level: Logging.Logger.Level,
+      message: Logging.Logger.Message,
+      metadata: Logging.Logger.Metadata?,
+      source: String,
+      file: String,
+      function: String,
+      line: UInt
+    ) {
+      barrier.logged(message.description)
+    }
+  }
+
+  private let state = LockIsolated(State())
+  private let released = DispatchSemaphore(value: 0)
+
+  /// Holds the next task that logs `message`.
+  func hold(on message: String) {
+    state.withValue { $0.message = message }
+  }
+
+  /// Returns once a task is held.
+  func arrival() async {
+    await withCheckedContinuation { watcher in
+      let hasArrived = state.withValue { state in
+        if !state.hasArrived { state.watcher = watcher }
+        return state.hasArrived
+      }
+      if hasArrived { watcher.resume() }
+    }
+  }
+
+  func release() {
+    released.signal()
+  }
+
+  private func logged(_ message: String) {
+    let (isHeld, watcher) = state.withValue {
+      state -> (Bool, CheckedContinuation<Void, Never>?) in
+      guard state.message == message else { return (false, nil) }
+      state.message = nil
+      state.hasArrived = true
+      defer { state.watcher = nil }
+      return (true, state.watcher)
+    }
+    guard isHeld else { return }
+    watcher?.resume()
+    released.wait()
   }
 }
 

@@ -285,6 +285,24 @@ actor SessionStore {
     return try await Self.value(of: startRefresh(refreshToken, using: request))
   }
 
+  /// Refreshes the held session, whose refresh token was `refreshToken` when the caller read it,
+  /// as ``refresh(_:using:)`` does.
+  ///
+  /// When the store no longer holds `refreshToken` and the session it holds now is valid, returns
+  /// that session without a request. A refresh that committed after the caller's read has already
+  /// redeemed `refreshToken`, so redeeming it again would reuse a rotated token.
+  func refreshHeldSession(
+    readWith refreshToken: String,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+  ) async throws -> Session {
+    if let held = validSession(minimumValidity: defaultExpiryMargin),
+      held.refreshToken != refreshToken
+    {
+      return held
+    }
+    return try await refresh(refreshToken, using: request)
+  }
+
   private func startRefresh(
     _ refreshToken: String,
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
