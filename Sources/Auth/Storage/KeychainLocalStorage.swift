@@ -78,9 +78,10 @@
     /// - Parameters:
     ///   - key: The Keychain item key.
     ///   - value: The raw bytes to store.
-    /// - Throws: A Keychain error if the write fails.
+    /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
+    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error.
     public func store(key: String, value: Data) throws {
-      try keychain.set(value, forKey: key)
+      try mappingKeychainErrors { try keychain.set(value, forKey: key) }
     }
 
     /// Returns the data stored in the Keychain for `key`, or `nil` if not present.
@@ -90,16 +91,19 @@
     ///
     /// - Parameter key: The Keychain item key.
     /// - Returns: The stored bytes, or `nil` if the item does not exist.
-    /// - Throws: A Keychain error if reading the current location fails, or if probing a legacy
-    ///   location fails. A failure to write the migrated value is not thrown — the value that was
-    ///   read is returned and the migration is retried on the next read.
+    /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
+    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error, if reading the
+    ///   current location or probing a legacy location fails. A failed write of the migrated value
+    ///   does not throw. The read value is returned, and the next read retries the migration.
     public func retrieve(key: String) throws -> Data? {
-      if let data = try keychain.data(forKey: key) {
+      if let data = try mappingKeychainErrors({ try keychain.data(forKey: key) }) {
         return data
       }
 
       for legacy in legacyKeychains {
-        guard let data = try legacy.data(forKey: key) else { continue }
+        guard let data = try mappingKeychainErrors({ try legacy.data(forKey: key) }) else {
+          continue
+        }
 
         do {
           try keychain.set(data, forKey: key)
@@ -115,12 +119,14 @@
     /// Removes the Keychain item for `key`, including any left in a legacy location.
     ///
     /// - Parameter key: The Keychain item key to delete.
-    /// - Throws: A Keychain error if deleting from the current location fails. Legacy-location
-    ///   delete failures are ignored, with every location attempted regardless.
+    /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
+    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error, if deleting
+    ///   from the current location fails. Legacy-location delete failures are ignored, with every
+    ///   location attempted regardless.
     public func remove(key: String) throws {
       var primaryError: (any Error)?
       do {
-        try keychain.deleteItem(forKey: key)
+        try mappingKeychainErrors { try keychain.deleteItem(forKey: key) }
       } catch {
         primaryError = error
       }

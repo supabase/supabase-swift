@@ -159,13 +159,18 @@ public final class AuthClient: Sendable {
   /// ``didChangeAuthStateNotification`` for each change, for as long as the client lives.
   private let notificationTask: Task<Void, Never>
 
-  private let lifecycleTask: Task<Void, Never>?
+  private let lifecycleTask: Task<Void, Never>
 
   /// Returns the session, refreshing it if necessary.
   ///
   /// Throws an error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no session is
   /// stored, and of kind ``AuthError/Kind-swift.struct/sessionInvalidated`` when the server
   /// rejects the refresh of an expired session.
+  ///
+  /// When storage could not be read yet, each call reads it again. While the device is locked it
+  /// throws an error of kind ``AuthError/Kind-swift.struct/storageUnavailable``, and the client
+  /// also reads storage when protected data becomes available. A missing Keychain entitlement
+  /// throws an error of kind ``AuthError/Kind-swift.struct/storageMisconfigured``.
   public var session: Session {
     get async throws {
       try await sessionManager.session()
@@ -239,26 +244,32 @@ public final class AuthClient: Sendable {
       sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
-    lifecycleTask =
-      configuration.observesAppLifecycle
-      ? Self.observeAppLifecycle(platform: platform, autoRefresh: autoRefresh) : nil
+    lifecycleTask = Self.observeAppLifecycle(
+      platform: platform,
+      sessionStore: dependencies.sessionStore,
+      autoRefresh: configuration.observesAppLifecycle ? autoRefresh : nil
+    )
     Task { await autoRefresh.apply() }
   }
 
   deinit {
     notificationTask.cancel()
-    lifecycleTask?.cancel()
+    lifecycleTask.cancel()
     let autoRefresh = dependencies.autoRefresh
     Task { await autoRefresh.stop() }
   }
 
   private static func observeAppLifecycle(
     platform: AuthPlatform,
-    autoRefresh: AutoRefreshController
+    sessionStore: SessionStore,
+    autoRefresh: AutoRefreshController?
   ) -> Task<Void, Never> {
     Task {
       for await event in await platform.lifecycleEvents() {
-        await autoRefresh.handle(event)
+        if event == .protectedDataDidBecomeAvailable {
+          try? await sessionStore.load()
+        }
+        await autoRefresh?.handle(event)
       }
     }
   }
@@ -1219,6 +1230,8 @@ public final class AuthClient: Sendable {
     return Task {
       do {
         try await sessionStore.load()
+      } catch let error as AuthError where error.kind == .storageMisconfigured {
+        reportIssue(error.message)
       } catch {
         logger.error("Failed to load the stored session: \(error)")
       }

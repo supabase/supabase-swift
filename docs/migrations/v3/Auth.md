@@ -48,6 +48,15 @@ Changes that still compile but behave differently. Check each one by hand.
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
   throws, `currentSession` is `nil` and `session` throws the storage error, not `.sessionMissing`;
   v2 read a failed read as signed out.
+- **A locked Keychain is not signed out.** `KeychainLocalStorage` throws an `AuthError` of kind
+  `.storageUnavailable` while the device is locked (`errSecInteractionNotAllowed`), and of kind
+  `.storageMisconfigured` when the app lacks the Keychain entitlement (`errSecMissingEntitlement`).
+  v2 threw an internal Keychain error, and a launch into the background before the first unlock
+  emitted `.initialSession` with no session. Now `.initialSession` waits until storage is read.
+  The client reads storage again when protected data becomes available and on each `session`
+  call, which throws `.storageUnavailable` until then. A sign-in that throws `.storageUnavailable`
+  did not sign in, so retry it after the device unlocks. A missing entitlement is also reported as
+  a runtime issue when the client is created.
 - **The stored session is read once.** The client reads `localStorage` when it is created and
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next

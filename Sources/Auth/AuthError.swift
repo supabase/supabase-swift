@@ -277,6 +277,9 @@ public struct AuthError: SupabaseError {
     public static let idTokenMismatch: Kind = "idTokenMismatch"
     /// Session storage cannot be read or written right now, for example a Keychain item that
     /// is not accessible while the device is locked. Try again later.
+    ///
+    /// A sign-in that throws this did not sign in, because the session could not be saved. Try
+    /// the sign-in again after the device unlocks.
     public static let storageUnavailable: Kind = "storageUnavailable"
     /// Session storage is set up wrong, for example a missing Keychain entitlement. Fix the
     /// app's configuration; retrying does not help.

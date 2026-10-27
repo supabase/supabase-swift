@@ -86,7 +86,9 @@ extension AuthClient {
     /// macOS it checks each time the app becomes active, and it does not pause. Other platforms have no
     /// app lifecycle, so this has no effect there. Set it to `false` to drive auto refresh with
     /// ``AuthClient/startAutoRefresh()`` and ``AuthClient/stopAutoRefresh()`` yourself, for
-    /// example from a SwiftUI `scenePhase` change.
+    /// example from a SwiftUI `scenePhase` change. Whatever its value, the client reads storage
+    /// again when protected data becomes available, so a session that a locked Keychain hid at
+    /// launch loads once the device unlocks.
     public let observesAppLifecycle: Bool
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.

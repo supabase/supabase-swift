@@ -289,4 +289,31 @@
   }
 
   extension Keychain: KeychainProtocol {}
+
+  func mappingKeychainErrors<T>(_ operation: () throws -> T) throws -> T {
+    do {
+      return try operation()
+    } catch let error as KeychainError {
+      switch error.status {
+      case errSecMissingEntitlement:
+        throw AuthError(
+          kind: .storageMisconfigured,
+          message:
+            "The app is missing the Keychain entitlement (errSecMissingEntitlement). Sign it with "
+            + "the keychain-access-groups entitlement, or pass useDataProtectionKeychain: false.",
+          underlyingError: error
+        )
+      case errSecInteractionNotAllowed:
+        throw AuthError(
+          kind: .storageUnavailable,
+          message:
+            "The Keychain item is not accessible yet (errSecInteractionNotAllowed), for example "
+            + "before the first unlock.",
+          underlyingError: error
+        )
+      default:
+        throw error
+      }
+    }
+  }
 #endif
