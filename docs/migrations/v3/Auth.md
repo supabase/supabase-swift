@@ -145,7 +145,8 @@ Changes that still compile but behave differently. Check each one by hand.
   token. For PostgREST and Functions that is any 401. Storage answers an expired token with 400,
   the same status it uses for an RLS denial, so a Storage 400 is retried only when the token sent
   is past its `exp` by the device clock. When a newer token for the same user is already stored,
-  the retry uses it. Otherwise the client refreshes the session first. If another user signed in
+  the retry uses it. Otherwise the client refreshes the session first, except under
+  `autoRefresh: .disabled`, where the rejection reaches your code. If another user signed in
   while the request ran, it is not retried. The rejection reaches your code when the refresh fails
   or the retry is rejected too. A request with a single-pass body, a request that sets its own
   `Authorization`, and a request sent without a session are not retried. This covers every HTTP

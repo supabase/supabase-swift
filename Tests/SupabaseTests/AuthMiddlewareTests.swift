@@ -13,6 +13,10 @@ struct AuthMiddlewareTests {
   let client: SupabaseClient
 
   init() async throws {
+    try await self.init(autoRefresh: .manual)
+  }
+
+  init(autoRefresh: AuthClient.AutoRefreshPolicy) async throws {
     client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
@@ -20,7 +24,7 @@ struct AuthMiddlewareTests {
         auth: SupabaseClientOptions.AuthOptions(
           storage: InMemoryLocalStorage(),
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
-          autoRefresh: .manual
+          autoRefresh: autoRefresh
         ),
         global: SupabaseClientOptions.GlobalOptions(http: .init(transport: http))
       )
@@ -304,6 +308,40 @@ struct AuthMiddlewareTests {
 
     #expect(dataAuthorizations("/storage/v1/object") == ["Bearer \(live)"])
     #expect(refreshCount == 1)
+  }
+
+  @Test
+  func unauthorizedWithTheCurrentTokenUnderDisabledAutoRefreshIsNotRefreshed() async throws {
+    let suite = try await AuthMiddlewareTests(autoRefresh: .disabled)
+    suite.http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { _, _ in
+      (HTTPResponse(status: .unauthorized), Data(#"{"message":"JWT expired"}"#.utf8))
+    }
+
+    let error = try await #require(throws: PostgrestError.self) {
+      try await suite.client.from("todos").select().execute()
+    }
+
+    #expect(error.serverError?.message == "JWT expired")
+    #expect(suite.dataAuthorizations("/rest/v1/todos") == ["Bearer token-1"])
+    #expect(suite.refreshCount == 0)
+  }
+
+  @Test
+  func unauthorizedWithAnOlderTokenUnderDisabledAutoRefreshRetriesWithTheCurrentOne() async throws {
+    let suite = try await AuthMiddlewareTests(autoRefresh: .disabled)
+    suite.http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) {
+      [client = suite.client] request, _ in
+      guard request.headerFields[.authorization] == "Bearer token-1" else {
+        return (HTTPResponse(status: .ok), Data("[]".utf8))
+      }
+      try await client.auth.refreshSession()
+      return (HTTPResponse(status: .unauthorized), Data())
+    }
+
+    try await suite.client.from("todos").select().execute()
+
+    #expect(suite.dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-2"])
+    #expect(suite.refreshCount == 1)
   }
 
   /// Replaces the session with one whose `expires_at` is an hour away, so the client sends
