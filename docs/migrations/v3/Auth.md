@@ -12,8 +12,12 @@ every module.
 Changes that still compile but behave differently. Check each one by hand.
 
 - **Initial session can be expired.** `.initialSession` now fires at once with the stored session.
-  With `autoRefresh: .automatic`, an expired session then refreshes in the background. Check
-  `session.isExpired` in handlers that switch on `.initialSession`.
+  With `autoRefresh: .automatic`, auto refresh then refreshes an expired session as soon as it
+  runs. On macOS, Linux, Android, and Windows, it runs when the client is created. On iOS, iPadOS,
+  tvOS, visionOS, Mac Catalyst, and watchOS, it runs only while the app is in the foreground. After
+  a launch into the background, the session stays expired until the app comes to the foreground or
+  a read of `session` refreshes it. Check `session.isExpired` in handlers that switch on
+  `.initialSession`.
 - **`KeychainLocalStorage` returns `nil` for a missing key.** `retrieve(key:)` no longer throws
   when no item exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that
   treated an error as "no session". A custom `AuthLocalStorage` must follow the same contract.
