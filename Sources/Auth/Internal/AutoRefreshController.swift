@@ -18,14 +18,14 @@ actor AutoRefreshController {
 
   init(
     policy: AuthClient.AutoRefreshPolicy,
-    observesAppLifecycle: Bool,
+    startsInForeground: Bool,
     store: SessionStore,
     driver: Refresher.Driver
   ) {
     self.policy = policy
     self.store = store
     self.driver = driver
-    state = State(isRequested: policy == .automatic, isInForeground: !observesAppLifecycle)
+    state = State(isRequested: policy == .automatic, isInForeground: startsInForeground)
   }
 
   var isRegistered: Bool {
