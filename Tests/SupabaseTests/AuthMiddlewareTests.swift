@@ -2,16 +2,15 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
-import Logging
 import TestHelpers
 import Testing
 
+@testable import Auth
 @testable import Supabase
 
-@Suite
+@Suite(.timeLimit(.minutes(1)))
 struct AuthMiddlewareTests {
   let http = RecordingTransport()
-  let log = LogBarrier()
   let client: SupabaseClient
 
   init() async throws {
@@ -28,12 +27,7 @@ struct AuthMiddlewareTests {
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: autoRefresh
         ),
-        global: SupabaseClientOptions.GlobalOptions(
-          http: .init(transport: http),
-          logger: Logging.Logger(label: "auth-middleware") { [log] _ in
-            LogBarrier.Handler(barrier: log)
-          }
-        )
+        global: SupabaseClientOptions.GlobalOptions(http: .init(transport: http))
       )
     )
     http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, body in
@@ -128,17 +122,19 @@ struct AuthMiddlewareTests {
 
   @Test
   func concurrentUnauthorizedResponsesShareOneRefresh() async throws {
-    let bothSent = Barrier(count: 2)
+    let bothSent = Gate()
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
       guard request.headerFields[.authorization] == "Bearer token-1" else {
         return (HTTPResponse(status: .ok), Data("[]".utf8))
       }
-      await bothSent.arrive()
+      await bothSent.pass()
       return (HTTPResponse(status: .unauthorized), Data())
     }
 
     async let first: Void = client.from("todos").select().execute().value
     async let second: Void = client.from("todos").select().execute().value
+    await bothSent.arrivals(2)
+    bothSent.open()
     _ = try await (first, second)
 
     #expect(refreshCount == 1)
@@ -220,12 +216,10 @@ struct AuthMiddlewareTests {
 
   @Test
   func cancellationDuringTheRefreshThrowsWithoutRetrying() async throws {
-    let refreshStarted = AsyncStream.makeStream(of: Void.self)
-    let releaseRefresh = AsyncStream.makeStream(of: Void.self)
-    defer { releaseRefresh.continuation.finish() }
+    let refresh = Gate()
+    defer { refresh.open() }
     refreshHandler.setValue { _, _ in
-      refreshStarted.continuation.yield()
-      for await _ in releaseRefresh.stream {}
+      await refresh.pass()
       return (
         HTTPResponse(status: .ok), sessionJSON(accessToken: "token-2", refreshToken: "refresh-2")
       )
@@ -235,7 +229,7 @@ struct AuthMiddlewareTests {
     }
 
     let request = Task { [client] in try await client.functions.invoke("hello") }
-    for await _ in refreshStarted.stream { break }
+    await refresh.arrivals(1)
     request.cancel()
 
     await #expect(throws: CancellationError.self) { try await request.value }
@@ -327,6 +321,8 @@ struct AuthMiddlewareTests {
     #expect(refreshCount == 1)
   }
 
+  /// Drives the middleware itself, with an `AuthClient` built through the `@testable` seam
+  /// initializer, so the retry can stop after it reads the held refresh token.
   @Test
   func refreshThatCommitsBeforeTheRetryRefreshesIsNotRedeemedAgain() async throws {
     refreshHandler.setValue { _, body in
@@ -339,22 +335,43 @@ struct AuthMiddlewareTests {
           HTTPResponse(status: .ok), sessionJSON(accessToken: "token-3", refreshToken: "refresh-3")
         )
     }
-    http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { [log] request, _ in
-      guard request.headerFields[.authorization] == "Bearer token-1" else {
-        return (HTTPResponse(status: .ok), Data("[]".utf8))
-      }
-      log.hold(on: "begin", in: "refreshSession(_:)")
-      return (HTTPResponse(status: .unauthorized), Data())
+    http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
+      request.headerFields[.authorization] == "Bearer token-1"
+        ? (HTTPResponse(status: .unauthorized), Data())
+        : (HTTPResponse(status: .ok), Data("[]".utf8))
     }
+    let retryReadTheToken = Gate()
+    let auth = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
+        storageKey: "sb-test-\(UUID().uuidString)-auth-token",
+        localStorage: InMemoryLocalStorage(),
+        http: HTTPClientConfiguration(transport: http),
+        autoRefresh: .manual,
+        observesAppLifecycle: false
+      ),
+      date: { Date() },
+      pkce: .live,
+      platform: .live,
+      beforeRefreshingHeldSession: { await retryReadTheToken.pass() }
+    )
+    _ = try await auth.signIn(email: "a@b.c", password: "x")
+    let middleware = AuthMiddleware(
+      auth: auth, fallbackToken: nil, staleTokenRejection: .unauthorized, autoRefresh: .manual)
 
-    let request = Task { [client] in try await client.from("todos").select().execute() }
-    await log.arrival()
-    try await client.auth.refreshSession()
-    log.release()
-    try await request.value
+    async let response = middleware.intercept(
+      HTTPRequest(
+        method: .get, scheme: "https", authority: "project-ref.supabase.co", path: "/rest/v1/todos"),
+      body: nil,
+      next: { [http] in try await http.send($0, body: $1) }
+    )
+    await retryReadTheToken.arrivals(1)
+    try await auth.refreshSession(refreshToken: "refresh-1")
+    retryReadTheToken.open()
+    #expect(try await response.0.status == .ok)
 
-    #expect(redeemedRefreshTokens == ["refresh-1", "refresh-2"])
-    #expect(dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-3"])
+    #expect(redeemedRefreshTokens == ["refresh-1"])
+    #expect(dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-2"])
   }
 
   @Test
@@ -423,95 +440,6 @@ private func jwt(expiresIn seconds: TimeInterval) -> String {
     segment(#"{"sub":"f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8","exp":\#(exp)}"#),
     "signature",
   ].joined(separator: ".")
-}
-
-/// Holds the task that logs a chosen message from a chosen function until ``release()``, so a
-/// test can act between two steps of a call that offer no other point to stop at.
-final class LogBarrier: Sendable {
-  private struct State {
-    var target: (message: String, function: String)?
-    var hasArrived = false
-    var watcher: CheckedContinuation<Void, Never>?
-  }
-
-  struct Handler: LogHandler {
-    let barrier: LogBarrier
-    var metadata: Logging.Logger.Metadata = [:]
-    var logLevel: Logging.Logger.Level = .trace
-
-    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
-      get { metadata[key] }
-      set { metadata[key] = newValue }
-    }
-
-    func log(
-      level: Logging.Logger.Level,
-      message: Logging.Logger.Message,
-      metadata: Logging.Logger.Metadata?,
-      source: String,
-      file: String,
-      function: String,
-      line: UInt
-    ) {
-      barrier.logged(message.description, in: function)
-    }
-  }
-
-  private let state = LockIsolated(State())
-  private let released = DispatchSemaphore(value: 0)
-
-  /// Holds the next task that logs `message` from `function`.
-  func hold(on message: String, in function: String) {
-    state.withValue { $0.target = (message, function) }
-  }
-
-  /// Returns once a task is held.
-  func arrival() async {
-    await withCheckedContinuation { watcher in
-      let hasArrived = state.withValue { state in
-        if !state.hasArrived { state.watcher = watcher }
-        return state.hasArrived
-      }
-      if hasArrived { watcher.resume() }
-    }
-  }
-
-  func release() {
-    released.signal()
-  }
-
-  private func logged(_ message: String, in function: String) {
-    let (isHeld, watcher) = state.withValue {
-      state -> (Bool, CheckedContinuation<Void, Never>?) in
-      guard let target = state.target, target.message == message, target.function == function
-      else { return (false, nil) }
-      state.target = nil
-      state.hasArrived = true
-      defer { state.watcher = nil }
-      return (true, state.watcher)
-    }
-    guard isHeld else { return }
-    watcher?.resume()
-    released.wait()
-  }
-}
-
-private actor Barrier {
-  let count: Int
-  var waiters: [CheckedContinuation<Void, Never>] = []
-
-  init(count: Int) {
-    self.count = count
-  }
-
-  func arrive() async {
-    guard waiters.count + 1 < count else {
-      waiters.forEach { $0.resume() }
-      waiters = []
-      return
-    }
-    await withCheckedContinuation { waiters.append($0) }
-  }
 }
 
 private func sessionJSON(
