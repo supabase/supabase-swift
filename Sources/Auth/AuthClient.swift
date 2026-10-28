@@ -1161,10 +1161,14 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Refresh and return a new session, regardless of expiry status.
+  /// Refresh and return a session, regardless of expiry status.
   /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
-  /// none is provided then this method tries to load the refresh token from the current session.
-  /// - Returns: A new session.
+  /// none is provided then this method refreshes the current session. When a concurrent refresh or
+  /// sign-in replaced the current session during this call, and the new session is still valid,
+  /// this method returns the new session without a request.
+  /// - Returns: A new session, or the valid session that replaced the current one.
+  /// - Throws: ``AuthError/sessionMissing`` when no `refreshToken` is given and there is no
+  ///   current session.
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
     try await sessionManager.refreshSession(refreshToken)

@@ -249,21 +249,40 @@ struct SessionStoreTests {
   }
 
   @Test
-  func refreshOfAHeldSessionThatAnExpiredSessionReplacedSendsARequest() async throws {
+  func refreshOfAHeldSessionThatAnExpiredSessionReplacedRedeemsTheHeldToken() async throws {
     let date = LockIsolated(receivedAt)
     let store = try await loadedStore(now: { date.value })
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
     try await store.commit(.signedIn(makeSession("b"), event: .signedIn))
     date.setValue(receivedAt.addingTimeInterval(3600))
-    let requests = LockIsolated(0)
+    let redeemed = LockIsolated<[String]>([])
 
-    let session = try await store.refreshHeldSession(readWith: "refresh-a") { _ in
-      requests.withValue { $0 += 1 }
+    let session = try await store.refreshHeldSession(readWith: "refresh-a") { refreshToken in
+      redeemed.withValue { $0.append(refreshToken) }
       return makeSession("c")
     }
 
     #expect(session == makeSession("c"))
-    #expect(requests.value == 1)
+    #expect(redeemed.value == ["refresh-b"])
+  }
+
+  @Test
+  func refreshOfAHeldSessionAfterASignOutThrowsWithoutARequest() async throws {
+    let store = try await loadedStore(now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.signedOut(.userInitiated, event: .signedOut))
+    let redeemed = LockIsolated<[String]>([])
+
+    let error = await #expect(throws: AuthError.self) {
+      try await store.refreshHeldSession(readWith: "refresh-a") { refreshToken in
+        redeemed.withValue { $0.append(refreshToken) }
+        return makeSession("c")
+      }
+    }
+
+    #expect(error?.kind == .sessionMissing)
+    #expect(redeemed.value.isEmpty)
+    #expect(store.currentStatus == .signedOut(.userInitiated))
   }
 
   @Test
