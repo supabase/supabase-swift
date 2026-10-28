@@ -153,7 +153,11 @@ actor SessionStore {
   private var refreshFlights: [String: RefreshFlight] = [:]
   private var lastRefreshFailure: RefreshFailure?
   private var refreshWindow = RefreshWindow()
-  private var refresher = Refresher()
+  /// The last entry drives auto refresh. When its owner stops, the one before it takes over.
+  private var autoRefreshDrivers: [(owner: UUID, driver: Refresher.Driver)] = []
+  private var autoRefreshTask: Task<Void, Never>? {
+    didSet { oldValue?.cancel() }
+  }
 
   init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
     self.storage = storage
@@ -178,7 +182,7 @@ actor SessionStore {
   }
 
   deinit {
-    refresher.task?.cancel()
+    autoRefreshTask?.cancel()
     for continuation in published.value.subscribers.values {
       continuation.finish()
     }
@@ -359,30 +363,31 @@ actor SessionStore {
   }
 
   func startAutoRefresh(for owner: UUID, using driver: Refresher.Driver) {
-    refresher.add(driver, for: owner)
+    autoRefreshDrivers.removeAll { $0.owner == owner }
+    autoRefreshDrivers.append((owner, driver))
     armRefresher()
   }
 
   func stopAutoRefresh(for owner: UUID) {
-    let wasDriving = refresher.activeOwner == owner
-    refresher.remove(owner)
+    let wasDriving = autoRefreshDrivers.last?.owner == owner
+    autoRefreshDrivers.removeAll { $0.owner == owner }
     if wasDriving {
       armRefresher()
     }
   }
 
   func isAutoRefreshStarted(by owner: UUID) -> Bool {
-    refresher.isDriven(by: owner)
+    autoRefreshDrivers.contains { $0.owner == owner }
   }
 
   private func armRefresher() {
-    guard let received = heldSession, let driver = refresher.activeDriver else {
-      refresher.task = nil
+    guard let received = heldSession, let driver = autoRefreshDrivers.last?.driver else {
+      autoRefreshTask = nil
       return
     }
     let armedGeneration = generation
     let now = now
-    refresher.task = Task { [weak self] in
+    autoRefreshTask = Task { [weak self] in
       await Refresher.run(for: received, driver: driver, now: now) {
         guard let self else { throw CancellationError() }
         try await self.refreshHeldSessionIgnoringCachedFailure(
