@@ -3,7 +3,6 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
-import Logging
 import TestHelpers
 import Testing
 
@@ -71,45 +70,44 @@ struct SessionLifecycleRaceTests {
     #expect(race.refreshRequestCount == 1)
   }
 
-  enum SecondCall: CaseIterable {
-    /// Reads the expired token and asks while the first refresh runs.
-    case duringTheRefresh
-    /// Reads the expired token while the first refresh runs, and asks once it has committed.
-    case afterTheCommit
+  /// A call that refreshes the held session when its access token has expired.
+  enum HeldSessionRefresh: CaseIterable {
+    case session
+    case refreshSessionIfNeeded
+    case refreshSession
+
+    func run(on client: AuthClient) async throws -> Session? {
+      switch self {
+      case .session: try await client.session
+      case .refreshSessionIfNeeded: try await client.refreshSessionIfNeeded()
+      case .refreshSession: try await client.refreshSession()
+      }
+    }
   }
 
-  @Test(arguments: SecondCall.allCases)
-  func twoClientsForOneProjectRedeemTheRefreshTokenOnce(second call: SecondCall) async throws {
+  @Test(arguments: HeldSessionRefresh.allCases)
+  func twoClientsForOneProjectRedeemTheRefreshTokenOnce(
+    second call: HeldSessionRefresh
+  ) async throws {
     let race = Race()
-    let gate = Gate()
+    let readTheExpiredToken = Gate()
     race.answerSignIn { _ in race.issue("signed-in", lifetime: 10) }
-    race.answerRefresh(through: gate) { try Race.ok(race.issue("refreshed")) }
+    race.answerRefresh { try Race.ok(race.issue("refreshed")) }
     let first = race.makeClient()
-    let second = race.makeClient()
+    let second = race.makeClient(beforeRefreshingHeldSession: { await readTheExpiredToken.pass() })
     var firstEvents = first.authStateChanges.makeAsyncIterator()
     var secondEvents = second.authStateChanges.makeAsyncIterator()
     #expect(await firstEvents.next()?.event == .initialSession)
     #expect(await secondEvents.next()?.event == .initialSession)
     try await first.signIn(email: "a@example.com", password: "secret")
 
-    let firstSession = Task { try await first.session }
-    await gate.arrivals(1)
-    if call == .afterTheCommit {
-      race.log.hold(on: "session expired")
-    }
-    let secondSession = race.log.task { try await second.session }
-    switch call {
-    case .duringTheRefresh:
-      gate.open()
-    case .afterTheCommit:
-      await race.log.arrival()
-      gate.open()
-      defer { race.log.release() }
-      _ = try await firstSession.value
-    }
+    async let secondSession = call.run(on: second)
+    await readTheExpiredToken.arrivals(1)
+    let firstSession = try await first.session
+    readTheExpiredToken.open()
 
-    let sessions = try await [firstSession.value, secondSession.value]
-    #expect(sessions.map(\.accessToken) == ["refreshed-access", "refreshed-access"])
+    #expect(firstSession.accessToken == "refreshed-access")
+    #expect(try await secondSession?.accessToken == "refreshed-access")
     #expect(race.refreshRequestCount == 1)
     for events in [firstEvents, secondEvents] {
       var events = events
@@ -348,7 +346,6 @@ private struct Race: Sendable {
 
   let clock = SignalingTestClock()
   let transport = RecordingTransport()
-  let log = LogBarrier()
   let localStorage = InMemoryLocalStorage()
   let storageKey = uniqueStorageKey()
   private let start: SignalingTestClock.Instant
@@ -372,9 +369,12 @@ private struct Race: Sendable {
 
   func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
-    storage: (any AuthLocalStorage)? = nil
+    storage: (any AuthLocalStorage)? = nil,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
-    makeClient(url: clientURL, autoRefresh: autoRefresh, storage: storage ?? localStorage)
+    makeClient(
+      url: clientURL, autoRefresh: autoRefresh, storage: storage ?? localStorage,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A client for another project URL on the same storage, so it gets its own store and reads
@@ -386,7 +386,10 @@ private struct Race: Sendable {
   }
 
   private func makeClient(
-    url: URL, autoRefresh: AuthClient.AutoRefreshPolicy, storage: any AuthLocalStorage
+    url: URL,
+    autoRefresh: AuthClient.AutoRefreshPolicy,
+    storage: any AuthLocalStorage,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     var platform = AuthPlatform.live
     platform.lifecycleEvents = { AsyncStream { $0.finish() } }
@@ -395,7 +398,6 @@ private struct Race: Sendable {
         url: url,
         storageKey: storageKey,
         localStorage: storage,
-        logger: Logging.Logger(label: "race") { [log] _ in LogBarrier.Handler(barrier: log) },
         http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
@@ -403,7 +405,8 @@ private struct Race: Sendable {
       ),
       date: now,
       pkce: .live,
-      platform: platform
+      platform: platform,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
   }
 

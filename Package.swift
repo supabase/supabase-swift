@@ -301,7 +301,6 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
-        .product(name: "Logging", package: "swift-log"),
         "Auth",
         "Helpers",
         "Mocker",
