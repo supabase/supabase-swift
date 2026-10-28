@@ -72,9 +72,9 @@ struct AuthMiddleware: ClientMiddleware {
   }
 
   private func retrySession(after used: Session) async throws -> Session? {
-    guard let current = auth.currentSession else { return nil }
+    let current = auth.currentSession
     let retry =
-      current.accessToken == used.accessToken ? try await refreshedSession() : current
+      current?.accessToken == used.accessToken ? try await refreshedSession() : current
     return retry?.user.id == used.user.id ? retry : nil
   }
 
