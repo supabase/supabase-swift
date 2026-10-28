@@ -97,6 +97,9 @@ private actor LiveSessionManager {
         return try await inFlight.value
       }
 
+      let heldRefreshToken = sessionStore.currentSession?.refreshToken
+      let refreshesHeldSession = heldRefreshToken == refreshToken
+
       let refreshTask = Task {
         logger.debug("Refresh task started")
 
@@ -104,9 +107,6 @@ private actor LiveSessionManager {
           inFlightRefreshes[refreshToken] = nil
           logger.debug("Refresh task ended")
         }
-
-        let fromGeneration = await sessionStore.generation
-        let refreshesHeldSession = sessionStore.currentSession?.refreshToken == refreshToken
 
         let session: Session
         do {
@@ -121,7 +121,7 @@ private actor LiveSessionManager {
           throw error
         }
 
-        try await sessionStore.commit(.refreshed(session, fromGeneration: fromGeneration))
+        try await sessionStore.commit(.refreshed(session, replacing: heldRefreshToken))
         return session
       }
       inFlightRefreshes[refreshToken] = refreshTask
