@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Auth
@@ -513,6 +514,51 @@ struct SessionStoreTests {
     store = nil
 
     #expect(await changes.next() == nil)
+  }
+
+  @Test
+  func cancellationErrorFromARequestNobodyCancelledIsNotCached() async throws {
+    let store = try await loadedStore(now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let requests = LockIsolated(0)
+    let request: @Sendable (String) async throws -> Session = { _ in
+      let count = requests.withValue {
+        $0 += 1
+        return $0
+      }
+      if count == 1 { throw CancellationError() }
+      return makeSession("b")
+    }
+
+    await #expect(throws: CancellationError.self) {
+      try await store.refresh("refresh-a", using: request)
+    }
+    let session = try await store.refresh("refresh-a", using: request)
+
+    #expect(session == makeSession("b"))
+    #expect(requests.value == 2)
+  }
+
+  @Test
+  func rejectedRefreshKeepsASessionThatTookItsTokenWhileTheRequestRan() async throws {
+    let date = LockIsolated(receivedAt)
+    let store = try await loadedStore(now: { date.value })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    let gate = Gate()
+    let refresh = Task {
+      try await store.refresh("refresh-x") { _ in
+        await gate.pass()
+        throw AuthError(kind: .sessionInvalidated, message: "", errorCode: .refreshTokenAlreadyUsed)
+      }
+    }
+    await gate.arrivals(1)
+    try await store.commit(.signedIn(makeSession("x"), event: .signedIn))
+    date.setValue(receivedAt.addingTimeInterval(3600))
+
+    gate.open()
+    _ = await refresh.result
+
+    #expect(store.currentSession == makeSession("x"))
   }
 
   private func loadedStore(
