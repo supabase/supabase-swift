@@ -221,11 +221,14 @@ public final class AuthClient: Sendable {
   }
 
   /// Test seam: pins the clock, the PKCE material, and the platform at construction.
+  /// `beforeRefreshingHeldSession` runs after a call reads the held refresh token and before it
+  /// asks the session store to refresh it, so a test can hold the call between the two.
   init(
     configuration: Configuration,
     date: @escaping @Sendable () -> Date,
     pkce: PKCE,
-    platform: AuthPlatform
+    platform: AuthPlatform,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) {
     let clientID = AuthClient.nextClientID()
     self.clientID = clientID
@@ -241,7 +244,8 @@ public final class AuthClient: Sendable {
       logger: logger,
       date: date,
       pkce: pkce,
-      platform: platform
+      platform: platform,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
     notificationTask = Self.postAuthStateChangeNotifications(

@@ -1,7 +1,7 @@
 import Foundation
 import Logging
 
-/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:platform:)``.
+/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:platform:beforeRefreshingHeldSession:)``.
 ///
 /// Immutable on purpose. The test seams (`date`, `pkce`, `platform`) are injected at
 /// construction and never mutated afterwards, so plain `let` storage is enough and nothing needs a
@@ -36,7 +36,8 @@ extension Dependencies {
     logger: Logging.Logger? = nil,
     date: @escaping @Sendable () -> Date = { Date() },
     pkce: PKCE = .live,
-    platform: AuthPlatform = .live
+    platform: AuthPlatform = .live,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
@@ -64,7 +65,8 @@ extension Dependencies {
       policy: configuration.autoRefresh,
       sessionStore: sessionStore,
       logger: logger,
-      request: refresh
+      request: refresh,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     let autoRefresh = AutoRefreshController(
       policy: configuration.autoRefresh,
