@@ -104,8 +104,8 @@ struct SessionLifecycleRaceTests {
     case .afterTheCommit:
       await race.log.arrival()
       gate.open()
+      defer { race.log.release() }
       _ = try await firstSession.value
-      race.log.release()
     }
 
     let sessions = try await [firstSession.value, secondSession.value]
@@ -503,131 +503,6 @@ private struct Race: Sendable {
       HTTPResponse(status: status, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
       Data(#"{"code":"\#(code)","message":"\#(message)"}"#.utf8)
     )
-  }
-}
-
-/// Holds every request that reaches it until ``open()``, and lets a test wait for arrivals.
-private final class Gate: Sendable {
-  private struct State {
-    var arrivals = 0
-    var isOpen: Bool
-    var held: [CheckedContinuation<Void, Never>] = []
-    var watchers: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
-  }
-
-  private let state: LockIsolated<State>
-
-  init(isOpen: Bool = false) {
-    state = LockIsolated(State(isOpen: isOpen))
-  }
-
-  func pass() async {
-    await withCheckedContinuation { request in
-      let resumed = state.withValue { state in
-        state.arrivals += 1
-        let arrived = state.arrivals
-        var resumed = state.watchers.filter { $0.count <= arrived }.map(\.continuation)
-        state.watchers.removeAll { $0.count <= arrived }
-        if state.isOpen {
-          resumed.append(request)
-        } else {
-          state.held.append(request)
-        }
-        return resumed
-      }
-      for continuation in resumed { continuation.resume() }
-    }
-  }
-
-  /// Returns once `count` requests in total reached the gate.
-  func arrivals(_ count: Int) async {
-    await withCheckedContinuation { watcher in
-      let reached = state.withValue { state in
-        guard state.arrivals < count else { return true }
-        state.watchers.append((count, watcher))
-        return false
-      }
-      if reached { watcher.resume() }
-    }
-  }
-
-  func open() {
-    let held = state.withValue { state in
-      state.isOpen = true
-      defer { state.held = [] }
-      return state.held
-    }
-    for request in held { request.resume() }
-  }
-}
-
-/// Holds the task that logs a chosen message until ``release()``, so a test can act between two
-/// steps of a call that offer no other point to stop at.
-private final class LogBarrier: Sendable {
-  private struct State {
-    var message: String?
-    var hasArrived = false
-    var watcher: CheckedContinuation<Void, Never>?
-  }
-
-  struct Handler: LogHandler {
-    let barrier: LogBarrier
-    var metadata: Logging.Logger.Metadata = [:]
-    var logLevel: Logging.Logger.Level = .trace
-
-    subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
-      get { metadata[key] }
-      set { metadata[key] = newValue }
-    }
-
-    func log(
-      level: Logging.Logger.Level,
-      message: Logging.Logger.Message,
-      metadata: Logging.Logger.Metadata?,
-      source: String,
-      file: String,
-      function: String,
-      line: UInt
-    ) {
-      barrier.logged(message.description)
-    }
-  }
-
-  private let state = LockIsolated(State())
-  private let released = DispatchSemaphore(value: 0)
-
-  /// Holds the next task that logs `message`.
-  func hold(on message: String) {
-    state.withValue { $0.message = message }
-  }
-
-  /// Returns once a task is held.
-  func arrival() async {
-    await withCheckedContinuation { watcher in
-      let hasArrived = state.withValue { state in
-        if !state.hasArrived { state.watcher = watcher }
-        return state.hasArrived
-      }
-      if hasArrived { watcher.resume() }
-    }
-  }
-
-  func release() {
-    released.signal()
-  }
-
-  private func logged(_ message: String) {
-    let (isHeld, watcher) = state.withValue {
-      state -> (Bool, CheckedContinuation<Void, Never>?) in
-      guard state.message == message else { return (false, nil) }
-      state.message = nil
-      state.hasArrived = true
-      defer { state.watcher = nil }
-      return (true, state.watcher)
-    }
-    guard isHeld else { return }
-    watcher?.resume()
-    released.wait()
   }
 }
 
