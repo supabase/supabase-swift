@@ -193,7 +193,7 @@ struct SessionLifecycleRaceTests {
     let race = Race()
     race.answerSignOut()
     let stored = race.issue("stored")
-    let storage = LockableLocalStorage()
+    let storage = LockedLocalStorage()
     try storage.store(
       key: race.storageKey,
       value: PersistedSessionCodec.encode(ReceivedSession(session: stored, receivedAt: race.now()))
@@ -506,26 +506,6 @@ private struct Race: Sendable {
       HTTPResponse(status: status, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
       Data(#"{"code":"\#(code)","message":"\#(message)"}"#.utf8)
     )
-  }
-}
-
-private final class LockableLocalStorage: AuthLocalStorage {
-  private let storage = InMemoryLocalStorage()
-  let isLocked = LockIsolated(false)
-
-  func store(key: String, value: Data) throws {
-    try storage.store(key: key, value: value)
-  }
-
-  func retrieve(key: String) throws -> Data? {
-    if isLocked.value {
-      throw AuthError(kind: .storageUnavailable, message: "The device is locked.")
-    }
-    return try storage.retrieve(key: key)
-  }
-
-  func remove(key: String) throws {
-    try storage.remove(key: key)
   }
 }
 
