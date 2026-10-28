@@ -55,6 +55,9 @@ public struct _PostgrestRequest: Sendable {
   /// cannot throw, so the failure waits here and `execute()` throws it before anything is sent.
   var invalidFilterReason: String?
 
+  /// The SDK features used to build this request, added to its `X-Client-Info` header.
+  var clientInfoFeatures: Set<ClientInfoFeature> = []
+
   init(
     method: HTTPTypes.HTTPRequest.Method = .get,
     relation: String,
@@ -179,6 +182,9 @@ public struct _PostgrestRequest: Sendable {
       }
     }
     fields[.contentType] = "application/json"
+    if let clientInfo = fields[.xClientInfo] {
+      fields[.xClientInfo] = ClientInfoFeature.clientInfo(clientInfo, adding: clientInfoFeatures)
+    }
     if let schema = configuration.schema {
       fields[method == .get || method == .head ? .acceptProfile : .contentProfile] = schema
     }
