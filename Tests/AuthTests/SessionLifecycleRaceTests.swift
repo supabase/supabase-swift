@@ -97,7 +97,7 @@ struct SessionLifecycleRaceTests {
     if call == .afterTheCommit {
       race.log.hold(on: "session expired")
     }
-    let secondSession = Task { try await second.session }
+    let secondSession = race.log.task { try await second.session }
     switch call {
     case .duringTheRefresh:
       gate.open()

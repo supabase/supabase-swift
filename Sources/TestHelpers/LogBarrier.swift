@@ -11,9 +11,10 @@ package import Logging
 /// Holds the task that logs a chosen message until ``release()``, so a test can act between two
 /// steps of a call that offer no other point to stop at.
 ///
-/// A log handler is synchronous, so the held task blocks the thread it runs on. A hold that lasts
-/// 10 seconds reports an issue and lets the task go, so a thread pool too small to run the test
-/// meanwhile fails the test instead of deadlocking it.
+/// A log handler is synchronous, so the held task blocks the thread it runs on. Start the task
+/// that may be held with ``task(_:)``, which runs it on a thread of its own, so the hold leaves the
+/// cooperative pool free to run the test. A hold that lasts 10 seconds reports an issue and lets
+/// the task go.
 package final class LogBarrier: Sendable {
   private struct State {
     var target: (message: String, function: String?, sourceLocation: SourceLocation)?
@@ -86,6 +87,17 @@ package final class LogBarrier: Sendable {
     released.signal()
   }
 
+  /// Starts `operation` in a task that runs on a dispatch queue of its own, outside the
+  /// cooperative pool, so a hold in it blocks only that queue.
+  package func task<Success: Sendable>(
+    _ operation: @escaping @Sendable @isolated(any) () async throws -> Success
+  ) -> Task<Success, any Error> {
+    if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
+      return Task(executorPreference: QueueExecutor(), operation: operation)
+    }
+    return Task(operation: operation)
+  }
+
   private func logged(_ message: String, in function: String) {
     let held = state.withValue {
       state -> (sourceLocation: SourceLocation, watcher: CheckedContinuation<Void, Never>?)? in
@@ -104,5 +116,16 @@ package final class LogBarrier: Sendable {
         "LogBarrier held the task that logged \"\(message)\" for 10 s with no release().",
         sourceLocation: held.sourceLocation)
     }
+  }
+}
+
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private final class QueueExecutor: TaskExecutor {
+  private let queue = DispatchQueue(label: "LogBarrier")
+
+  func enqueue(_ job: consuming ExecutorJob) {
+    let job = UnownedJob(job)
+    let executor = asUnownedTaskExecutor()
+    queue.async { job.runSynchronously(on: executor) }
   }
 }
