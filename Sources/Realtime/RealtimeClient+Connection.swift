@@ -388,13 +388,21 @@ extension RealtimeClient {
 // MARK: - Effects
 
 extension RealtimeClient {
-  /// Waits for the `connect()` attempt started by `.openSocket`.
+  /// Waits for the `connect()` attempt started by `.openSocket`. Cancelling the caller ends its
+  /// wait at once but not the attempt: `connectAttempt.value` alone ignores the caller's
+  /// cancellation, so it would wait out a socket that never opens.
   private func awaitConnectAttempt() async throws {
     guard let connectAttempt else {
       throw RealtimeError.transport("Connection failed")
     }
+    let (outcome, continuation) = AsyncThrowingStream<Void, any Error>.makeStream()
+    Task.detached {
+      continuation.yield(with: await connectAttempt.result)
+      continuation.finish()
+    }
     do {
-      try await connectAttempt.value
+      for try await _ in outcome { return }
+      throw CancellationError()
     } catch {
       throw Self.connectionError(error)
     }
