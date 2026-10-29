@@ -41,8 +41,11 @@ public struct RealtimeError: SupabaseError {
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
-    /// The socket went away while a reply was pending. The engine reconnects on its own; retry
-    /// the call once the status is back to connected.
+    /// The socket went away while a reply was pending: the client reconnects on its own, so retry
+    /// the call once the status is back to connected. Also thrown, with
+    /// ``RealtimeError/isRetryable`` `false`, when `subscribe()` found the client disconnected and
+    /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
+    /// `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
     /// `httpSend` needs an access token and none was available. Sign in, or pass an
     /// `accessToken` closure, before sending. No request was sent.
@@ -50,17 +53,14 @@ public struct RealtimeError: SupabaseError {
     /// The server rejected the token or the topic's RLS policy denied access. Retrying as-is
     /// will not help; ``RealtimeError/serverCode`` says which check failed.
     public static let unauthorized: Kind = "unauthorized"
-    /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one. The engine
-    /// backs off before trying again.
+    /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one. A channel
+    /// waits 30 s before it joins again.
     public static let rateLimited: Kind = "rateLimited"
     /// The server closed the channel (`phx_close`) with a `system` error. The message carries
     /// the server's reason.
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
-    /// Every subscribe attempt failed and the SDK gave up. Schedule a retry later, or raise
-    /// `RealtimeClientOptions.maxRetryAttempts`. Goes away with the v2 module (SDK-2109).
-    public static let maxRetryAttemptsReached: Kind = "maxRetryAttemptsReached"
     /// The server closed the channel while a subscribe was in flight. Goes away with the v2
     /// module (SDK-2109); v3 reports this as ``channelClosed``.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
@@ -193,10 +193,6 @@ public struct RealtimeError: SupabaseError {
 }
 
 extension RealtimeError {
-  /// Every subscribe attempt failed.
-  public static let maxRetryAttemptsReached = RealtimeError(
-    kind: .maxRetryAttemptsReached, message: "Maximum retry attempts reached.")
-
   /// The server closed the channel while a subscribe was in flight.
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
@@ -222,19 +218,23 @@ extension RealtimeError {
   /// The error for a `phx_reply` with `status: "error"` to a `phx_join`.
   ///
   /// `reason` is the server's `response.reason`, `"<Code>: <message>"` or one of the two
-  /// bare strings. An expired-token `InvalidJWTToken` is retryable because a fresh token can
-  /// fix it; every other fatal code is not.
+  /// bare strings. It is retryable unless ``JoinRecovery`` says the join fails for good: an
+  /// expired-token `InvalidJWTToken` is retryable because a fresh token can fix it.
   package static func joinError(reason: String) -> RealtimeError {
     let code = ServerCode.parse(reason)
+    let recovery = JoinRecovery(serverCode: code, reason: reason)
     let kind: Kind
-    switch code {
-    case .some(let code) where ServerCode.authentication.contains(code): kind = .unauthorized
-    case .some(let code) where ServerCode.rateLimit.contains(code): kind = .rateLimited
+    switch (code, recovery) {
+    case (.some(let code), _) where ServerCode.authentication.contains(code): kind = .unauthorized
+    case (.some(let code), _) where ServerCode.rateLimit.contains(code): kind = .rateLimited
+    // Without a code, the wording is all there is: an expired token or a revoked permission is
+    // an auth failure, a rate limit is a rate limit.
+    case (nil, .refreshToken), (nil, .fail): kind = .unauthorized
+    case (nil, .backOff): kind = .rateLimited
     default: kind = .server
     }
-    let isExpiredToken = code == .invalidJWTToken && reason.contains("expired")
-    let isRetryable = code.map { !ServerCode.fatal.contains($0) || isExpiredToken } ?? true
-    return RealtimeError(kind: kind, message: reason, serverCode: code, isRetryable: isRetryable)
+    return RealtimeError(
+      kind: kind, message: reason, serverCode: code, isRetryable: recovery != .fail)
   }
 
   /// The error for a `phx_reply` with `status: "error"` to a push sent with `ack`.
@@ -282,5 +282,50 @@ extension RealtimeError {
       isRetryable: ![401, 403, 404].contains(status),
       underlyingError: underlyingError
     )
+  }
+}
+
+extension RealtimeError {
+  /// What a channel does after a join fails with this error.
+  enum JoinRecovery: Hashable {
+    /// The caller must act: `subscribe()` throws.
+    case fail
+    /// A fresh token can fix it: rejoin at once, one time.
+    case refreshToken
+    /// The server applied a rate limit: wait the long interval, then rejoin.
+    case backOff
+    /// Rejoin after the next step of the rejoin backoff.
+    case retry
+
+    /// A server code decides when the reason has one. The server sends a few reasons without a
+    /// code; those fall back to their wording.
+    init(serverCode: ServerCode?, reason: String) {
+      if let code = serverCode {
+        if code == .invalidJWTToken, reason.contains("expired") {
+          self = .refreshToken
+        } else if ServerCode.fatal.contains(code) {
+          self = .fail
+        } else if ServerCode.rateLimit.contains(code) {
+          self = .backOff
+        } else {
+          self = .retry
+        }
+      } else if reason.contains("Token has expired") {
+        self = .refreshToken
+      } else if reason.contains("Too many") && reason.contains("per second")
+        || reason.contains("rate limit")
+      {
+        self = .backOff
+      } else if reason.contains("You no longer have permission") {
+        self = .fail
+      } else {
+        self = .retry
+      }
+    }
+  }
+
+  /// How a channel recovers from this error when a join attempt fails with it.
+  var joinRecovery: JoinRecovery {
+    isRetryable ? JoinRecovery(serverCode: serverCode, reason: message) : .fail
   }
 }
