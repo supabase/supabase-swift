@@ -14,19 +14,19 @@ struct PurgeCacheIntegrationTests {
   let storage = StorageIntegration.admin
 
   @Test(.enabled(if: StorageIntegration.hasTestFeatures), arguments: [false, true])
-  func storageForwardsEachScope(includingTransformations: Bool) async throws {
+  func storageForwardsEachScope(transformationsOnly: Bool) async throws {
     let name = try await StorageIntegration.newBucket("purge")
     defer { StorageIntegration.dropBucket(name) }
     try await StorageIntegration.clearForwardedPurges()
 
-    try await storage.purgeCache(bucket: nil, includingTransformations: includingTransformations)
-    try await storage.purgeCache(bucket: name, includingTransformations: includingTransformations)
+    try await storage.purgeCache(bucket: nil, transformationsOnly: transformationsOnly)
+    try await storage.purgeCache(bucket: name, transformationsOnly: transformationsOnly)
     try await storage.from(name).purgeCache(
-      path: "dir/a file.png", includingTransformations: includingTransformations)
+      path: "dir/a file.png", transformationsOnly: transformationsOnly)
 
     let purges = try await StorageIntegration.forwardedPurges()
       .filter { $0.body.bucketId == nil || $0.body.bucketId == name }
-    let suffix = includingTransformations ? "-transforms" : ""
+    let suffix = transformationsOnly ? "-transforms" : ""
     #expect(
       purges.map(\.body) == [
         .init(type: "tenant\(suffix)"),
@@ -36,22 +36,22 @@ struct PurgeCacheIntegrationTests {
   }
 
   @Test(.enabled(if: !StorageIntegration.hasTestFeatures), arguments: [false, true])
-  func everyScopeReachesThePurgeRoute(includingTransformations: Bool) async throws {
+  func everyScopeReachesThePurgeRoute(transformationsOnly: Bool) async throws {
     let name = try await StorageIntegration.newBucket("purge")
     defer { StorageIntegration.dropBucket(name) }
 
     let errors = [
       await StorageIntegration.storageError {
         try await storage.purgeCache(
-          bucket: nil, includingTransformations: includingTransformations)
+          bucket: nil, transformationsOnly: transformationsOnly)
       },
       await StorageIntegration.storageError {
         try await storage.purgeCache(
-          bucket: name, includingTransformations: includingTransformations)
+          bucket: name, transformationsOnly: transformationsOnly)
       },
       await StorageIntegration.storageError {
         try await storage.from(name).purgeCache(
-          path: "dir/a file.png", includingTransformations: includingTransformations)
+          path: "dir/a file.png", transformationsOnly: transformationsOnly)
       },
     ]
 

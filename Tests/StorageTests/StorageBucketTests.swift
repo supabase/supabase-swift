@@ -1630,7 +1630,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func purgeCacheIncludingTransformations() async throws {
+    func purgeCacheTransformationsOnly() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -1653,7 +1653,7 @@ extension StorageMockerTests {
       .register()
 
       try await storage.from("bucket").purgeCache(
-        path: "folder/file.txt", includingTransformations: true)
+        path: "folder/file.txt", transformationsOnly: true)
     }
 
     @Test

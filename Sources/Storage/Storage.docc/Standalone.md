@@ -36,7 +36,7 @@ The middleware sets the header only when the request has none. A static `Authori
 out and send the user's JWT through the closure.
 
 A new-format `sb_publishable_` or `sb_secret_` key is an `apikey`, never a bearer. Some calls,
-such as ``StorageBucket/purgeCache(path:includingTransformations:)``, need the `secret` key.
+such as ``StorageBucket/purgeCache(path:transformationsOnly:)``, need the `secret` key.
 
 ### Extra headers
 
