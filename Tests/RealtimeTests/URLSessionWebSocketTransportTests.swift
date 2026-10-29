@@ -13,6 +13,10 @@ import Testing
 
 @testable import Realtime
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 #if canImport(Network)
   import Network
 #endif
