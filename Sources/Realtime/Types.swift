@@ -342,11 +342,11 @@ public enum RealtimeChannelEvent: Sendable, Equatable {
 
   /// The Postgres replication connection behind the channel is ready ("Replication connection
   /// established"). The server sends it only when you opt in with
-  /// ``BroadcastJoinConfig/replicationReady``.
+  /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/waitForReplication``.
   case replicationReady
 
   /// The Postgres replication connection did not become ready in time. The server sends it only
-  /// when you opt in with ``BroadcastJoinConfig/replicationReady``. The value is the server's
+  /// when you opt in with ``RealtimeChannelConfiguration/Broadcast-swift.struct/waitForReplication``. The value is the server's
   /// message.
   case replicationFailed(String)
 }

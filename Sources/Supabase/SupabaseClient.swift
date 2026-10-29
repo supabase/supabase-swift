@@ -42,7 +42,7 @@ import Logging
 ///
 /// ### Realtime Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 ///
@@ -366,13 +366,14 @@ public final class SupabaseClient: Sendable {
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
+  ///     channel that already exists for `name` keeps its configuration.
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) async -> RealtimeChannel {
-    await realtime.channel(name, options: options)
+    await realtime.channel(name, configure: configure)
   }
 
   /// Unsubscribes from and removes a Realtime channel.

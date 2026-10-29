@@ -12,40 +12,15 @@ import Helpers
 import IssueReporting
 import Logging
 
-/// Configuration for a ``RealtimeChannel``.
-///
-/// Pass a builder closure to ``RealtimeClient/channel(_:options:)`` to customize
-/// broadcast, presence, and privacy settings before subscribing.
-///
-/// ## Topics
-/// ### Configuration Properties
-/// - ``broadcast``
-/// - ``presence``
-/// - ``isPrivate``
-public struct RealtimeChannelConfig: Sendable {
-  /// Configuration for the broadcast feature of the channel.
-  public var broadcast: BroadcastJoinConfig
-
-  /// Configuration for the presence feature of the channel.
-  public var presence: PresenceJoinConfig
-
-  /// Whether the channel is private.
-  ///
-  /// Private channels enforce access control via RLS policies defined in your database.
-  /// See the [Realtime authorization guide](https://supabase.com/docs/guides/realtime/authorization)
-  /// for details.
-  public var isPrivate: Bool
-}
-
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
-/// Obtain an instance from ``RealtimeClient/channel(_:options:)``, open the streams you want,
+/// Obtain an instance from ``RealtimeClient/channel(_:configure:)``, open the streams you want,
 /// then call ``subscribe()``. Postgres-change and presence streams shape the join request, so
 /// open them **before** subscribing; broadcast and system streams can be opened at any time.
 ///
 /// ```swift
 /// let channel = await client.channel("room:lobby") { config in
-///   config.broadcast.receiveOwnBroadcasts = true
+///   config.broadcast.receiveOwnMessages = true
 /// }
 ///
 /// let messages = await channel.broadcasts(event: "message")
@@ -63,7 +38,7 @@ public struct RealtimeChannelConfig: Sendable {
 /// ## Topics
 /// ### Identity
 /// - ``topic``
-/// - ``config``
+/// - ``configuration``
 /// ### Status
 /// - ``status``
 /// - ``statusChanges()``
@@ -98,8 +73,8 @@ public actor RealtimeChannel {
   /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
   nonisolated let subTopic: String
 
-  /// The channel's configuration, as passed to ``RealtimeClient/channel(_:options:)``.
-  public nonisolated let config: RealtimeChannelConfig
+  /// The channel's configuration, as set in ``RealtimeClient/channel(_:configure:)``.
+  public nonisolated let configuration: RealtimeChannelConfiguration
 
   nonisolated let logger: Logging.Logger
 
@@ -246,14 +221,14 @@ public actor RealtimeChannel {
 
   init(
     topic: String,
-    config: RealtimeChannelConfig,
+    configuration: RealtimeChannelConfiguration,
     client: RealtimeClient,
     logger: Logging.Logger
   ) {
     self.topic = topic
     self.subTopic =
       topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
-    self.config = config
+    self.configuration = configuration
     self.logger = logger
     self.client = client
     self.isolation = client.isolation
@@ -326,7 +301,7 @@ public actor RealtimeChannel {
   /// The channel must be subscribed. To broadcast without a subscription, use
   /// ``httpSend(event:message:timeout:)-(_,JSONObject,_)``.
   ///
-  /// Returns as soon as the frame is sent, unless ``BroadcastJoinConfig/acknowledgeBroadcasts``
+  /// Returns as soon as the frame is sent, unless ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge``
   /// is on: then it waits for the server's reply. Wrap the call in a `Task` to send without
   /// waiting; cancelling that task stops the wait, not the frame.
   ///
@@ -344,7 +319,7 @@ public actor RealtimeChannel {
       throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    try await push(ref: ref, awaitingReply: config.broadcast.acknowledgeBroadcasts) {
+    try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
         joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
       )
@@ -362,7 +337,7 @@ public actor RealtimeChannel {
       throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    try await push(ref: ref, awaitingReply: config.broadcast.acknowledgeBroadcasts) {
+    try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
         joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
       )

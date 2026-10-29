@@ -27,7 +27,7 @@ struct RealtimeTestHostTests {
   func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room") {
-      $0.broadcast.acknowledgeBroadcasts = true
+      $0.broadcast.acknowledge = true
     }
 
     async let subscribed: Void = channel.subscribe()

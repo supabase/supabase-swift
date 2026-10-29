@@ -258,7 +258,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-test") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
 
         struct Message: Codable, Sendable {
@@ -299,7 +299,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-binary") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
         let messages = await channel.broadcasts(event: "bytes")
         try await channel.subscribe()
@@ -323,7 +323,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("access-token-test") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
         let messages = await channel.broadcasts(event: "after-token")
         try await channel.subscribe()
@@ -354,7 +354,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-multi") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
 
         let event1Messages = await channel.broadcasts(event: "event-1")
@@ -389,7 +389,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-no-own") {
-          $0.broadcast.receiveOwnBroadcasts = false
+          $0.broadcast.receiveOwnMessages = false
         }
 
         let receivedCount = LockIsolated<Int>(0)
@@ -641,11 +641,11 @@
         try await client2.realtime.connect()
 
         let channel1 = await client.realtime.channel("app-room") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
 
         let channel2 = await client2.realtime.channel("app-room") {
-          $0.broadcast.receiveOwnBroadcasts = true
+          $0.broadcast.receiveOwnMessages = true
         }
 
         let user1Id = UUID().uuidString

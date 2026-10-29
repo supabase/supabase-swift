@@ -410,20 +410,13 @@ extension RealtimeChannel {
     joinWaiter = (ref, continuation)
   }
 
-  /// Builds the `phx_join` payload from the config and the open streams, and pushes it.
+  /// Builds the `phx_join` payload from the configuration and the open streams, and pushes it.
   private func performJoin(ref: String, accessToken: String?) async {
     guard let client else { return }
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
-    var presence = config.presence
-    presence.enabled = hasPresenceListener
-
     let joinConfig = RealtimeJoinConfig(
-      broadcast: config.broadcast,
-      presence: presence,
-      postgresChanges: clientChanges,
-      isPrivate: config.isPrivate
-    )
+      configuration, bindings: clientChanges, presenceEnabled: hasPresenceListener)
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,

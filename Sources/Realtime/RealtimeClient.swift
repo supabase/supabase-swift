@@ -9,6 +9,7 @@ import ConcurrencyExtras
 public import Foundation
 internal import HTTPTypes
 import Helpers
+import IssueReporting
 import Logging
 
 #if canImport(FoundationNetworking)
@@ -44,7 +45,7 @@ actor RealtimeExecutor {}
 /// ## Topics
 /// ### Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 /// ### Connection Status
@@ -204,7 +205,7 @@ public actor RealtimeClient {
   /// All managed channels indexed by their topics.
   ///
   /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
-  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
+  /// Channels are added by ``channel(_:configure:)`` and removed by ``removeChannel(_:)``
   /// or ``removeAllChannels()``.
   public private(set) var channels: [String: RealtimeChannel] = [:]
 
@@ -381,39 +382,45 @@ public actor RealtimeClient {
 
   /// Returns an existing channel for the given topic or creates a new one.
   ///
-  /// The fully-qualified topic sent to the server is `"realtime:<topic>"`. If a channel
-  /// with the same topic already exists, it is returned without modification.
+  /// The fully-qualified topic sent to the server is `"realtime:<topic>"`. The client keeps one
+  /// channel per topic: when a channel with the same topic already exists, it is returned
+  /// unchanged. Asking for it with a different configuration reports an issue, because the
+  /// configuration is fixed when the channel is created; remove the channel first to change it.
   ///
   /// > Note: This method does not subscribe to the channel. Call ``RealtimeChannel/subscribe()``
   /// > on the returned instance to join the topic.
   ///
   /// - Parameters:
   ///   - topic: The channel topic name (without the `realtime:` prefix).
-  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
-  ///     broadcast, presence, and privacy settings.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: privacy,
+  ///     broadcast, presence and Postgres changes options.
   /// - Returns: A ``RealtimeChannel`` bound to this client.
   public func channel(
     _ topic: String,
-    options configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannel {
     apply(.channelAdded)
 
     let realtimeTopic = "realtime:\(topic)"
 
+    var configuration = RealtimeChannelConfiguration()
+    configure(&configuration)
+
     if let channel = channels[realtimeTopic] {
+      if channel.configuration != configuration {
+        reportIssue(
+          """
+          Channel "\(topic)" already exists with a different configuration. The existing channel \
+          is returned unchanged; remove it first to change its configuration.
+          """
+        )
+      }
       return channel
     }
 
-    var config = RealtimeChannelConfig(
-      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-      presence: PresenceJoinConfig(key: ""),
-      isPrivate: false
-    )
-    configure(&config)
-
     let channel = RealtimeChannel(
       topic: realtimeTopic,
-      config: config,
+      configuration: configuration,
       client: self,
       logger: options.logger
     )

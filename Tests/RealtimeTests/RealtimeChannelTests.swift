@@ -21,11 +21,7 @@ import Testing
 struct RealtimeChannelTests {
   let sut = RealtimeChannel(
     topic: "topic",
-    config: RealtimeChannelConfig(
-      broadcast: BroadcastJoinConfig(),
-      presence: PresenceJoinConfig(),
-      isPrivate: false
-    ),
+    configuration: RealtimeChannelConfiguration(),
     client: RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"])
@@ -378,8 +374,6 @@ struct RealtimeChannelTests {
 
     // Create a channel without a presence stream initially
     let channel = await socket.channel("test-topic")
-
-    #expect(!channel.config.presence.enabled)
 
     try await socket.connect()
 

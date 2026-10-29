@@ -248,7 +248,18 @@ supporting_symbols:
   - RealtimeClient.unownedExecutor
   - RealtimeChannel
   - RealtimeChannel.topic
-  - RealtimeChannel.config
+  - RealtimeChannel.configuration
+  - RealtimeChannelConfiguration
+  - RealtimeChannelConfiguration.init
+  - RealtimeChannelConfiguration.broadcast
+  - RealtimeChannelConfiguration.presence
+  - RealtimeChannelConfiguration.postgresChanges
+  - RealtimeChannelConfiguration.Broadcast
+  - RealtimeChannelConfiguration.Broadcast.init
+  - RealtimeChannelConfiguration.Presence
+  - RealtimeChannelConfiguration.Presence.init
+  - RealtimeChannelConfiguration.PostgresChanges
+  - RealtimeChannelConfiguration.PostgresChanges.init
   - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
@@ -1387,6 +1398,7 @@ features:
     status: implemented
     symbols:
       - RealtimeClient.channel
+      - SupabaseClient.channel
 
   realtime.channel.subscribe:
     status: implemented
@@ -1401,6 +1413,8 @@ features:
       - RealtimeChannelStatus.failed
       - RealtimeChannelEvent
       - RealtimeChannelEvent.resubscribed
+      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
@@ -1421,7 +1435,7 @@ features:
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.replicationReady
+      - RealtimeChannelConfiguration.Broadcast.waitForReplication
       - RealtimeChannel.broadcasts
     supporting_symbols:
       - BroadcastMessage
@@ -1503,22 +1517,24 @@ features:
   realtime.subscriptions.private_channel:
     status: implemented
     symbols:
-      - RealtimeChannelConfig.isPrivate
+      - RealtimeChannelConfiguration.isPrivate
   realtime.subscriptions.broadcast_self:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.receiveOwnBroadcasts
+      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
   realtime.subscriptions.broadcast_ack:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.acknowledgeBroadcasts
+      - RealtimeChannelConfiguration.Broadcast.acknowledge
   realtime.subscriptions.broadcast_replay:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.replay
+      - RealtimeChannelConfiguration.Broadcast.replay
     supporting_symbols:
-      - ReplayOption
-      - ReplayOption.init
+      - RealtimeChannelConfiguration.Broadcast.Replay
+      - RealtimeChannelConfiguration.Broadcast.Replay.init
+      - RealtimeChannelConfiguration.Broadcast.Replay.since
+      - RealtimeChannelConfiguration.Broadcast.Replay.limit
   realtime.subscriptions.postgres_changes_multiple_filters: not_implemented
 
   realtime.presence.track:
@@ -1547,7 +1563,7 @@ features:
   realtime.presence.presence_key:
     status: implemented
     symbols:
-      - PresenceJoinConfig.key
+      - RealtimeChannelConfiguration.Presence.key
 
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that

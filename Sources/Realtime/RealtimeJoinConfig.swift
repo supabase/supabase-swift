@@ -19,22 +19,61 @@ struct RealtimeJoinPayload: Encodable {
   }
 }
 
+/// The `config` object of a `phx_join` payload.
 package struct RealtimeJoinConfig: Encodable, Hashable {
   package var broadcast: BroadcastJoinConfig = .init()
   package var presence: PresenceJoinConfig = .init()
   package var postgresChanges: [PostgresJoinConfig] = []
+  package var postgresChangesOptions: PostgresChangesOptions?
   package var isPrivate: Bool = false
 
   package init(
     broadcast: BroadcastJoinConfig = .init(),
     presence: PresenceJoinConfig = .init(),
     postgresChanges: [PostgresJoinConfig] = [],
+    postgresChangesOptions: PostgresChangesOptions? = nil,
     isPrivate: Bool = false
   ) {
     self.broadcast = broadcast
     self.presence = presence
     self.postgresChanges = postgresChanges
+    self.postgresChangesOptions = postgresChangesOptions
     self.isPrivate = isPrivate
+  }
+
+  /// The join config for a channel's configuration, its open `postgres_changes` bindings in
+  /// order, and whether presence is on.
+  package init(
+    _ configuration: RealtimeChannelConfiguration,
+    bindings: [PostgresJoinConfig],
+    presenceEnabled: Bool
+  ) {
+    let postgresChanges = configuration.postgresChanges
+    self.init(
+      broadcast: BroadcastJoinConfig(
+        acknowledgeBroadcasts: configuration.broadcast.acknowledge,
+        receiveOwnBroadcasts: configuration.broadcast.receiveOwnMessages,
+        replay: configuration.broadcast.replay.map {
+          ReplayOption(
+            since: Int(($0.since.timeIntervalSince1970 * 1000).rounded()), limit: $0.limit)
+        },
+        replicationReady: configuration.broadcast.waitForReplication
+      ),
+      presence: PresenceJoinConfig(key: configuration.presence.key ?? "", enabled: presenceEnabled),
+      postgresChanges: bindings,
+      postgresChangesOptions: postgresChanges.waitForSubscription
+        ? PostgresChangesOptions(wait: true, timeout: postgresChanges.subscriptionTimeout) : nil,
+      isPrivate: configuration.isPrivate
+    )
+  }
+
+  /// How much longer than the client's timeout the join reply may take: with
+  /// `postgres_changes_options.wait`, the server holds the reply until the bindings are set up.
+  package var extraJoinTimeout: Duration {
+    guard let options = postgresChangesOptions, options.wait, !postgresChanges.isEmpty else {
+      return .zero
+    }
+    return options.timeout
   }
 
   enum CodingKeys: String, CodingKey {
@@ -42,78 +81,54 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
     case presence
     case isPrivate = "private"
     case postgresChanges = "postgres_changes"
+    case postgresChangesOptions = "postgres_changes_options"
   }
 }
 
-/// Options for replaying previously broadcast messages when joining a channel.
-///
-/// Pass a `ReplayOption` to ``BroadcastJoinConfig/replay`` to receive messages
-/// that were broadcast before the client subscribed.
-///
-/// ## Topics
-/// ### Properties
-/// - ``since``
-/// - ``limit``
-/// ### Initialization
-/// - ``init(since:limit:)``
-public struct ReplayOption: Encodable, Hashable, Sendable {
-  /// Unix timestamp in milliseconds. Messages broadcast after this point will be replayed.
-  public var since: Int
+/// The `postgres_changes_options` object of a join config.
+package struct PostgresChangesOptions: Encodable, Hashable, Sendable {
+  /// The server replies to the join only once the bindings are set up.
+  package var wait: Bool
+  /// How long the server may hold the reply. Sent in milliseconds.
+  package var timeout: Duration
 
-  /// Optional maximum number of messages to replay. When `nil`, the server default limit applies.
-  public var limit: Int?
+  package init(wait: Bool, timeout: Duration) {
+    self.wait = wait
+    self.timeout = timeout
+  }
 
-  /// Creates a ``ReplayOption``.
-  ///
-  /// - Parameters:
-  ///   - since: Unix timestamp in milliseconds from which to start replaying messages.
-  ///   - limit: Maximum number of messages to replay, or `nil` for no limit.
-  public init(since: Int, limit: Int? = nil) {
+  enum CodingKeys: String, CodingKey {
+    case wait
+    case timeout
+  }
+
+  package func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(wait, forKey: .wait)
+    let (seconds, attoseconds) = timeout.components
+    try container.encode(seconds * 1000 + attoseconds / 1_000_000_000_000_000, forKey: .timeout)
+  }
+}
+
+/// The `broadcast.replay` object of a join config. `since` is in Unix milliseconds.
+package struct ReplayOption: Encodable, Hashable, Sendable {
+  package var since: Int
+  package var limit: Int?
+
+  package init(since: Int, limit: Int? = nil) {
     self.since = since
     self.limit = limit
   }
 }
 
-/// Configuration for the broadcast feature of a Realtime channel.
-///
-/// Pass an instance to ``RealtimeChannelConfig/broadcast`` when creating a channel.
-///
-/// ## Topics
-/// ### Properties
-/// - ``acknowledgeBroadcasts``
-/// - ``receiveOwnBroadcasts``
-/// - ``replay``
-/// ### Initialization
-/// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:replicationReady:)``
-public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
-  /// When `true`, the server acknowledges each broadcast message before delivering it.
-  ///
-  /// Useful in combination with ``RealtimeChannel/broadcast(event:message:)-(_,JSONObject)``
-  /// to ensure delivery before continuing.
-  public var acknowledgeBroadcasts: Bool = false
+/// The `broadcast` object of a join config.
+package struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
+  package var acknowledgeBroadcasts: Bool = false
+  package var receiveOwnBroadcasts: Bool = false
+  package var replay: ReplayOption?
+  package var replicationReady: Bool = false
 
-  /// When `true`, broadcast messages are echoed back to the sender in addition to all other subscribers.
-  ///
-  /// By default, broadcast messages are only sent to other clients.
-  public var receiveOwnBroadcasts: Bool = false
-
-  /// When set, the server replays broadcast messages starting from the given timestamp on join.
-  public var replay: ReplayOption?
-  /// Instructs the server to emit a `system` event once the Postgres replication
-  /// connection backing this channel is established and ready to stream changes.
-  ///
-  /// Listen for it with ``RealtimeChannel/events()``: it emits
-  /// ``RealtimeChannelEvent/replicationReady`` on success, or
-  /// ``RealtimeChannelEvent/replicationFailed(_:)`` if the connection is not ready in time.
-  public var replicationReady: Bool = false
-
-  /// Creates a ``BroadcastJoinConfig``.
-  ///
-  /// - Parameters:
-  ///   - acknowledgeBroadcasts: Whether the server should acknowledge each broadcast. Defaults to `false`.
-  ///   - receiveOwnBroadcasts: Whether to echo broadcasts back to the sender. Defaults to `false`.
-  ///   - replay: Optional replay configuration for receiving past broadcasts on join.
-  public init(
+  package init(
     acknowledgeBroadcasts: Bool = false,
     receiveOwnBroadcasts: Bool = false,
     replay: ReplayOption? = nil,
@@ -133,31 +148,14 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   }
 }
 
-/// Configuration for the presence feature of a Realtime channel.
-///
-/// Pass an instance to ``RealtimeChannelConfig/presence`` when creating a channel.
-///
-/// ## Topics
-/// ### Properties
-/// - ``key``
-/// ### Initialization
-/// - ``init(key:)``
-public struct PresenceJoinConfig: Encodable, Hashable, Sendable {
-  /// The client-defined key used to identify this client's presence entry in the presence map.
-  ///
-  /// All clients sharing the same key are grouped under it in ``PresenceState/entries``, one
-  /// ``PresenceEntry`` per device or tab. Defaults to an empty string, which lets the server
-  /// assign a random unique key.
-  public var key: String = ""
-  var enabled: Bool = false
-}
+/// The `presence` object of a join config. An empty `key` lets the server pick one.
+package struct PresenceJoinConfig: Encodable, Hashable, Sendable {
+  package var key: String = ""
+  package var enabled: Bool = false
 
-extension PresenceJoinConfig {
-  /// Creates a ``PresenceJoinConfig`` with the specified key.
-  ///
-  /// - Parameter key: The presence key for this client. Defaults to `""`.
-  public init(key: String = "") {
+  package init(key: String = "", enabled: Bool = false) {
     self.key = key
+    self.enabled = enabled
   }
 }
 

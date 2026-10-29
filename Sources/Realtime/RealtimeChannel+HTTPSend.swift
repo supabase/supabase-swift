@@ -103,7 +103,7 @@ extension RealtimeChannel {
 
     let request = HTTPRequest(
       method: .post,
-      url: client.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
+      url: client.broadcastURL(topic: subTopic, event: event, isPrivate: configuration.isPrivate),
       headerFields: headers
     )
 
