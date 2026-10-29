@@ -1444,6 +1444,7 @@ features:
       - RealtimeChannel.presenceStates
     supporting_symbols:
       - PresenceChange
+      - PresenceChange.init
       - PresenceChange.joins
       - PresenceChange.leaves
   realtime.subscriptions.postgres_changes_filter:
@@ -1497,9 +1498,11 @@ features:
       - RealtimeChannel.presenceState
     supporting_symbols:
       - PresenceState
+      - PresenceState.init
       - PresenceState.entries
       - PresenceState.decode
       - PresenceEntry
+      - PresenceEntry.init
       - PresenceEntry.ref
       - PresenceEntry.previousRef
       - PresenceEntry.payload
