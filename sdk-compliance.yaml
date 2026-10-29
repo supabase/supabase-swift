@@ -1499,7 +1499,13 @@ features:
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s) is hardcoded."
+    note: "BackoffPolicy.custom maps the attempt count to a delay. Until RealtimeClientOptions.reconnectBackoff lands (SDK-2103), the client still builds its own full-jitter policy from reconnectDelay."
+    symbols:
+      - BackoffPolicy
+      - BackoffPolicy.fullJitter
+      - BackoffPolicy.steps
+      - BackoffPolicy.custom
+      - BackoffPolicy.delay
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."

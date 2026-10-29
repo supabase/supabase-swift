@@ -41,4 +41,31 @@ struct BackoffPolicyTests {
     #expect(policy.delay(forAttempt: 0, random: { $0.upperBound }) == .seconds(1))
     #expect(policy.delay(forAttempt: -3, random: { $0.upperBound }) == .seconds(1))
   }
+
+  @Test
+  func customReceivesTheOneBasedAttempt() {
+    let policy = BackoffPolicy.custom { .seconds($0 * 3) }
+
+    #expect(policy.delay(forAttempt: 2) == .seconds(6))
+    #expect(policy.delay(forAttempt: 0) == .seconds(3))
+  }
+
+  @Test(arguments: [
+    BackoffPolicy.custom { _ in .seconds(-5) },
+    .steps([.seconds(-1)]),
+    .fullJitter(base: .seconds(-1), cap: .seconds(30)),
+    .fullJitter(base: .seconds(1), cap: .seconds(-1)),
+  ])
+  func negativeWaitsBecomeZero(policy: BackoffPolicy) {
+    #expect(policy.delay(forAttempt: 1, random: { $0.upperBound }) == .zero)
+  }
+
+  @Test
+  func publicDelayDrawsInRange() {
+    let policy = BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))
+
+    for _ in 0..<20 {
+      #expect((Duration.zero...Duration.seconds(4)).contains(policy.delay(forAttempt: 3)))
+    }
+  }
 }
