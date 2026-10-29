@@ -7,6 +7,7 @@
 
 import Clocks
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -127,7 +128,7 @@ struct RealtimeChannelPresenceTests {
     #expect(await statuses.next() == .subscribed)
 
     host.server?.close(code: 1006, reason: "network down")
-    await host.waitUntil { host.statuses.last == .connecting }
+    await host.waitUntil { host.statuses.last == .reconnecting }
     // The first reconnect waits at most the base delay. Going further would also time out the
     // rejoin, so the join confirmed below would no longer be the current one.
     await host.clock.advance(by: RealtimeClientOptions.defaultReconnectDelay)

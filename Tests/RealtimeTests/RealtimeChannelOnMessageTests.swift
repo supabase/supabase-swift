@@ -35,48 +35,87 @@ struct RealtimeChannelOnMessageTests {
   }
   @Test
   func unknownEventDispatchesNothing() async {
-    let systemMessages = await sut.systemMessages()
+    let events = await sut.events()
     let broadcasts = await sut.broadcasts(event: "*")
     await sut.onMessage(message(event: "not_a_channel_event"))
 
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages.isEmpty)
+    let receivedEvents = await collect(events)
+    #expect(receivedEvents.isEmpty)
     let receivedBroadcasts = await collect(broadcasts)
     #expect(receivedBroadcasts.isEmpty)
   }
 
   @Test
-  func systemOKTriggersSystemCallback() async {
-    let systemMessages = await sut.systemMessages()
-    let sent = message(event: ChannelEvent.system, payload: ["status": "ok"])
+  func systemOKForPostgresChangesEmitsReady() async {
+    let events = await sut.events()
 
-    await sut.onMessage(sent)
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: [
+          "status": "ok", "extension": "postgres_changes",
+          "message": "Subscribed to PostgreSQL",
+        ]
+      )
+    )
 
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages == [sent])
+    #expect(await collect(events) == [.postgresChangesReady])
     #expect(await sut.status == .unsubscribed)
   }
 
   @Test
-  func systemErrorStillTriggersSystemCallback() async {
-    let systemMessages = await sut.systemMessages()
-    let sent = message(event: ChannelEvent.system, payload: ["status": "error"])
+  func systemErrorForPostgresChangesEmitsFailedWithTheServerMessage() async {
+    let events = await sut.events()
 
-    await sut.onMessage(sent)
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: [
+          "status": "error", "extension": "postgres_changes",
+          "message": "Unable to subscribe to changes with given parameters.",
+        ]
+      )
+    )
 
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages == [sent])
+    #expect(
+      await collect(events)
+        == [.postgresChangesFailed("Unable to subscribe to changes with given parameters.")]
+    )
   }
 
   @Test
-  func systemWithoutStatusStillTriggersSystemCallback() async {
-    let systemMessages = await sut.systemMessages()
-    let sent = message(event: ChannelEvent.system)
+  func systemMessagesForReplicationEmitReadyOrFailed() async {
+    let events = await sut.events()
 
-    await sut.onMessage(sent)
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: [
+          "status": "ok", "extension": "system",
+          "message": "Replication connection established",
+        ]
+      )
+    )
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: ["status": "error", "extension": "system", "message": "Replication not ready"]
+      )
+    )
 
-    let receivedSystemMessages = await collect(systemMessages)
-    #expect(receivedSystemMessages == [sent])
+    #expect(
+      await collect(events) == [.replicationReady, .replicationFailed("Replication not ready")])
+  }
+
+  @Test
+  func systemMessageWithoutAKnownExtensionEmitsNothing() async {
+    let events = await sut.events()
+
+    await sut.onMessage(message(event: ChannelEvent.system, payload: ["status": "ok"]))
+    await sut.onMessage(message(event: ChannelEvent.system, payload: ["status": "error"]))
+    await sut.onMessage(message(event: ChannelEvent.system))
+
+    #expect(await collect(events).isEmpty)
   }
 
   @Test

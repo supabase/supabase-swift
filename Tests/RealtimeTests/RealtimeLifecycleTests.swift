@@ -84,14 +84,14 @@ struct RealtimeLifecycleTests {
     let channel = await sut.channel("public:messages")
     try await channel.subscribe()
 
-    let statusBefore = await sut.status
-    let channelStatusBefore = await channel.status
+    #expect(await sut.status == .connected)
+    #expect(await channel.status == .subscribed)
 
     await sut.handleAppBackground()
     await sut.handleAppForeground()
 
-    #expect(await sut.status == statusBefore)
-    #expect(await channel.status == channelStatusBefore)
+    #expect(await sut.status == .connected)
+    #expect(await channel.status == .subscribed)
   }
 
   @Test
@@ -123,9 +123,8 @@ struct RealtimeLifecycleTests {
     // Open the stream before the OS close so no transition is missed.
     let statusUpdates = await sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
-    // Status sequence: .connected → .connecting (reconnecting). `RealtimeClient` no longer
-    // publishes an intermediate `.disconnected` when it starts reconnecting.
-    _ = await statusUpdates.first { $0 == .connecting }
+    // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
+    _ = await statusUpdates.first { $0 == .reconnecting }
 
     // auto-reconnect task wakes and reconnects.
     await testClock.advance(by: .seconds(8))
@@ -149,9 +148,8 @@ struct RealtimeLifecycleTests {
     let statusUpdates = await sut.statusChanges()
     let channelUpdates = await channel.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
-    // `RealtimeClient` goes straight to `.connecting` while it reconnects; there is no
-    // intermediate `.disconnected` any more.
-    _ = await statusUpdates.first { $0 == .connecting }
+    // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
+    _ = await statusUpdates.first { $0 == .reconnecting }
 
     await testClock.advance(by: .seconds(8))
     _ = await statusUpdates.first { $0 == .connected }
@@ -235,8 +233,8 @@ struct RealtimeLifecycleTests {
 
     let statusUpdates = await sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
-    // No intermediate `.disconnected`: the client goes straight to `.connecting`.
-    _ = await statusUpdates.first { $0 == .connecting }
+    // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
+    _ = await statusUpdates.first { $0 == .reconnecting }
 
     await testClock.advance(by: .seconds(8))
     _ = await statusUpdates.first { $0 == .connected }

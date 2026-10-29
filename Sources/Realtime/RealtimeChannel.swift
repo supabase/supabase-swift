@@ -91,8 +91,8 @@ public struct RealtimeChannelConfig: Sendable {
 /// ### Broadcast Events
 /// - ``broadcasts(event:)``
 /// - ``broadcastData(event:)``
-/// ### System Events
-/// - ``systemMessages()``
+/// ### Channel Events
+/// - ``events()``
 public actor RealtimeChannel {
   /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
   public nonisolated let topic: String
@@ -123,32 +123,49 @@ public actor RealtimeChannel {
 
   // MARK: Subscription state
 
+  /// Where a subscribe in flight is: joining, or waiting before the next join.
+  enum SubscribeProgress {
+    case joining(attempt: Int)
+    case waiting(attempt: Int, retryIn: Duration, lastError: RealtimeError)
+  }
+
   enum SubscriptionState: CustomStringConvertible {
     case unsubscribed
-    case subscribing(Task<Void, any Error>)
+    case subscribing(Task<Void, any Error>, SubscribeProgress)
     case subscribed
     case unsubscribing(Task<Void, Never>)
+    case failed(RealtimeError)
 
     var description: String {
       switch self {
       case .unsubscribed: "unsubscribed"
-      case .subscribing: "subscribing"
+      case .subscribing(_, .joining(let attempt)): "subscribing(attempt: \(attempt))"
+      case .subscribing(_, .waiting(let attempt, let retryIn, _)):
+        "resubscribing(attempt: \(attempt), retryIn: \(retryIn))"
       case .subscribed: "subscribed"
       case .unsubscribing: "unsubscribing"
+      case .failed(let error): "failed(\(error.message))"
       }
     }
 
     var status: RealtimeChannelStatus {
       switch self {
       case .unsubscribed: .unsubscribed
-      case .subscribing: .subscribing
+      case .subscribing(_, .joining(let attempt)): .subscribing(attempt: attempt)
+      case .subscribing(_, .waiting(let attempt, let retryIn, let lastError)):
+        .resubscribing(attempt: attempt, retryIn: retryIn, lastError: lastError)
       case .subscribed: .subscribed
       case .unsubscribing: .unsubscribing
+      case .failed(let error): .failed(error)
       }
     }
   }
 
   var state: SubscriptionState = .unsubscribed
+
+  /// Whether the channel reached `.subscribed` since the last `unsubscribe()`. A later
+  /// confirmation is a rejoin, reported as ``RealtimeChannelEvent/resubscribed``.
+  var hasBeenSubscribed = false
 
   /// The `ref` of the current join, tagged on every push and compared against the `join_ref`
   /// of server closes so a close for a previous incarnation of the topic is ignored.
@@ -203,7 +220,7 @@ public actor RealtimeChannel {
     case postgres(PostgresJoinConfig, AsyncStream<AnyAction>.Continuation)
     case presence(AsyncStream<PresenceChange>.Continuation)
     case presenceState(AsyncStream<PresenceState>.Continuation)
-    case system(AsyncStream<RealtimeMessageV2>.Continuation)
+    case events(AsyncStream<RealtimeChannelEvent>.Continuation)
     case status(AsyncStream<RealtimeChannelStatus>.Continuation)
 
     func finish() {
@@ -213,7 +230,7 @@ public actor RealtimeChannel {
       case .postgres(_, let continuation): continuation.finish()
       case .presence(let continuation): continuation.finish()
       case .presenceState(let continuation): continuation.finish()
-      case .system(let continuation): continuation.finish()
+      case .events(let continuation): continuation.finish()
       case .status(let continuation): continuation.finish()
       }
     }
@@ -279,11 +296,11 @@ public actor RealtimeChannel {
 
   func setState(_ newState: SubscriptionState) {
     logger.debug("State transition for '\(topic)': \(state) → \(newState)")
-    let previous = status
+    let previous = state
     state = newState
-    guard newState.status != previous else { return }
+    guard !newState.status.isSame(as: previous.status) else { return }
     // A new join waits for its own first presence state.
-    if case .subscribing = newState {
+    if case .subscribing(_, .joining) = newState {
       presence.waitForNextState()
     }
     for case .status(let continuation) in listeners.map(\.listener) {
@@ -374,8 +391,8 @@ public actor RealtimeChannel {
   /// frequent updates in the app.
   ///
   /// The server forgets the payload when the channel leaves or the connection drops. The SDK
-  /// does not send it again after a rejoin: call `track` again when ``statusChanges()``
-  /// reports ``RealtimeChannelStatus/subscribed`` once more.
+  /// does not send it again after a rejoin: call `track` again when ``events()`` emits
+  /// ``RealtimeChannelEvent/resubscribed``.
   ///
   /// - Parameters:
   ///   - payload: The value to share. It must encode as a JSON object.
@@ -528,15 +545,15 @@ public actor RealtimeChannel {
 
   func onMessage(_ message: RealtimeMessageV2) async {
     do {
-      switch message.eventType {
-      case .system: handleSystem(message)
-      case .reply: try handleReply(message)
-      case .postgresChanges: try handlePostgresChanges(message)
-      case .broadcast: try handleBroadcast(message)
-      case .close: await handleClose(message)
-      case .error: handleError(message)
-      case .presenceDiff: handlePresenceDiff(message)
-      case .presenceState: handlePresenceState(message)
+      switch message.event {
+      case ChannelEvent.system: handleSystem(message)
+      case ChannelEvent.reply: try handleReply(message)
+      case ChannelEvent.postgresChanges: try handlePostgresChanges(message)
+      case ChannelEvent.broadcast: try handleBroadcast(message)
+      case ChannelEvent.close: await handleClose(message)
+      case ChannelEvent.error: handleError(message)
+      case ChannelEvent.presenceDiff: handlePresenceDiff(message)
+      case ChannelEvent.presenceState: handlePresenceState(message)
       default: logger.debug("Received message with unhandled event type: \(message)")
       }
     } catch {
@@ -545,21 +562,36 @@ public actor RealtimeChannel {
   }
 
   private func handleSystem(_ message: RealtimeMessageV2) {
+    let `extension` = message.payload["extension"]?.stringValue
+    let isPostgresChanges = `extension` == ChannelEvent.postgresChanges
+    let isReplication = `extension` == ChannelEvent.system
     switch message.status {
     case .ok where message.joinRef == nil || message.joinRef == joinRef:
       didReceiveSubscribedOK()
+      if isPostgresChanges {
+        yield(.postgresChangesReady)
+      } else if isReplication {
+        yield(.replicationReady)
+      }
     case .error:
       // The server reports a postgres-changes subscription it could not set up this way. The
       // join itself stands, so broadcast and presence keep working and the channel stays
       // subscribed.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic)' reported an error: \(reason)")
+      if isPostgresChanges {
+        yield(.postgresChangesFailed(reason))
+      } else if isReplication {
+        yield(.replicationFailed(reason))
+      }
     default:
       break
     }
+  }
 
-    for case .system(let continuation) in listeners.map(\.listener) {
-      continuation.yield(message)
+  func yield(_ event: RealtimeChannelEvent) {
+    for case .events(let continuation) in listeners.map(\.listener) {
+      continuation.yield(event)
     }
   }
 

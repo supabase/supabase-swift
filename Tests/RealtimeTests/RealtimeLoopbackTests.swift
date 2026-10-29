@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -63,16 +64,21 @@ import Testing
 
       var clientStatuses = await client.statusChanges().makeAsyncIterator()
       var channelStatuses = await channel.statusChanges().makeAsyncIterator()
+      var channelEvents = await channel.events().makeAsyncIterator()
       #expect(await clientStatuses.next() == .connected)
       #expect(await channelStatuses.next() == .subscribed)
 
       server.close(code: .protocolCode(.goingAway), reason: "restart")
 
+      let dropped = await clientStatuses.next()
+      #expect(dropped == .reconnecting)
+      #expect(dropped?.error?.closeCode == .goingAway)
       #expect(await clientStatuses.next() == .connecting)
       #expect(await clientStatuses.next() == .connected)
       #expect(await channelStatuses.next() == .unsubscribed)
       #expect(await channelStatuses.next() == .subscribing)
       #expect(await channelStatuses.next() == .subscribed)
+      #expect(await channelEvents.next() == .resubscribed)
       #expect(joins.value == 2)
 
       await client.disconnect()

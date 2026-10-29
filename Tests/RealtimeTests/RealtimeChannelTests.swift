@@ -294,7 +294,7 @@ struct RealtimeChannelTests {
       await sut.broadcasts(event: "cursor-pos"),
       await sut.presenceChanges(),
       await sut.presenceStates(),
-      await sut.systemMessages(),
+      await sut.events(),
     ]
 
     let kinds = await sut.listeners.map { entry -> String in
@@ -304,7 +304,7 @@ struct RealtimeChannelTests {
       case .broadcastData(let event, _): "broadcastData(\(event))"
       case .presence: "presence"
       case .presenceState: "presenceState"
-      case .system: "system"
+      case .events: "events"
       case .status: "status"
       }
     }
@@ -312,7 +312,7 @@ struct RealtimeChannelTests {
       kinds == [
         "postgres", "postgres", "postgres", "postgres",
         "broadcast(test)", "broadcast(cursor-pos)",
-        "presence", "presenceState", "system",
+        "presence", "presenceState", "events",
       ]
     )
     #expect(await sut.hasPresenceListener)
@@ -922,7 +922,7 @@ struct RealtimeChannelTests {
 
 extension RealtimeChannelTests {
   private func waitForChannelStatus(
-    _ status: RealtimeChannelStatus,
+    _ status: ChannelStatusCase,
     channel: RealtimeChannel,
     timeout: TimeInterval,
     pollInterval: UInt64 = 10_000_000

@@ -79,7 +79,7 @@ struct RealtimeClientAccessTokenTests {
     #expect(await hasRefreshTimer(host))
 
     host.server?.close(code: nil, reason: "dropped")
-    await host.waitUntil { host.statuses.last == .connecting }
+    await host.waitUntil { host.statuses.last == .reconnecting }
     #expect(await !hasRefreshTimer(host))
   }
 

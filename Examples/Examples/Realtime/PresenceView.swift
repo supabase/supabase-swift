@@ -76,7 +76,7 @@ struct PresenceView: View {
 
       Task {
         // The server forgets the tracked payload when the channel rejoins.
-        for await status in await channel.statusChanges() where status == .subscribed {
+        for await status in await channel.statusChanges() where status.isSubscribed {
           try await channel.track(user)
         }
       }
@@ -92,7 +92,7 @@ struct PresenceView: View {
   }
 }
 
-struct PresenceUser: Identifiable, Codable {
+nonisolated struct PresenceUser: Identifiable, Codable {
   let id: String
   let username: String
 }

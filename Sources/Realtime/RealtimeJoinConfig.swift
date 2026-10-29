@@ -102,9 +102,9 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
   /// Instructs the server to emit a `system` event once the Postgres replication
   /// connection backing this channel is established and ready to stream changes.
   ///
-  /// Listen for it with the ``RealtimeChannel/systemMessages()`` async stream: the message's `status` is
-  /// `.ok` (message `"Replication connection established"`) on success, or
-  /// `.error` if the connection is not ready in time.
+  /// Listen for it with ``RealtimeChannel/events()``: it emits
+  /// ``RealtimeChannelEvent/replicationReady`` on success, or
+  /// ``RealtimeChannelEvent/replicationFailed(_:)`` if the connection is not ready in time.
   public var replicationReady: Bool = false
 
   /// Creates a ``BroadcastJoinConfig``.
