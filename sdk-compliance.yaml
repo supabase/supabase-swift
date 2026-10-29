@@ -94,7 +94,6 @@ supporting_symbols:
   # `PostgrestMacros`, so a user opts in with an explicit import.
   - Table
   - SelectionOf
-  - Column
   - PrimaryKey
   - Default
   - Generated
