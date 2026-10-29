@@ -34,13 +34,15 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
   /// Creates a transport.
   ///
   /// - Parameters:
-  ///   - configuration: The configuration each connection's `URLSession` copies.
+  ///   - configuration: The configuration each connection's `URLSession` uses. The transport
+  ///     keeps a copy, so later changes to `configuration` do not reach it.
   ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
   public init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil
   ) {
-    self.configuration = configuration
+    // A copy, because `URLSessionConfiguration` is a mutable class and this type is `Sendable`.
+    self.configuration = configuration.copy() as! URLSessionConfiguration
     self.delegate = delegate
   }
 

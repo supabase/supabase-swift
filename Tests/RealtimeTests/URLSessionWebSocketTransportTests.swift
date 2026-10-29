@@ -22,6 +22,18 @@ struct URLSessionWebSocketTransportTests {
   let transport = URLSessionWebSocketTransport()
 
   @Test
+  func laterChangesToTheConfigurationDoNotReachTheTransport() {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 5
+    let transport = URLSessionWebSocketTransport(configuration: configuration)
+
+    configuration.timeoutIntervalForRequest = 99
+
+    #expect(transport.configuration.timeoutIntervalForRequest == 5)
+    #expect(transport.configuration !== configuration)
+  }
+
+  @Test
   func rejectsANonWebSocketSchemeWithANonRetryableTransportError() async {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await transport.connect(to: URL(string: "https://example.com")!, headerFields: [:])
