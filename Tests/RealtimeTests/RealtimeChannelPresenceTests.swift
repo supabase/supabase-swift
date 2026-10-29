@@ -14,59 +14,96 @@ import Testing
 @Suite
 struct RealtimeChannelPresenceTests {
   @Test
-  func stateThenDiffBuildsThePresenceSet() async throws {
+  func presenceChangesReportJoinsAndLeavesPerKey() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     var changes = await channel.presenceChanges().makeAsyncIterator()
     try await subscribe(channel, on: host)
 
     sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
-    _ = await changes.next()
-    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
-    _ = await changes.next()
+    let synced = try #require(await changes.next())
+    #expect(synced.joins["u1"]?.map(\.payload) == [["name": "ana"]])
+    #expect(synced.leaves.isEmpty)
 
-    let state = await channel.presence.state
-    #expect(Set(state.entries.keys) == ["u1", "u2"])
-    #expect(state.entries["u1"]?.first?.payload == ["name": "ana"])
+    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
+    #expect(await changes.next()?.joins["u2"]?.map(\.ref) == ["r2"])
 
     sendPresenceDiff(leaves: ["u1": metas([("r1", "ana")])], on: channel, host: host)
-    _ = await changes.next()
-    #expect(Set(await channel.presence.state.entries.keys) == ["u2"])
+    let left = try #require(await changes.next())
+    #expect(left.leaves["u1"]?.map(\.ref) == ["r1"])
+    #expect(left.joins.isEmpty)
+
+    let state = await channel.presenceState
+    #expect(Set(state.entries.keys) == ["u2"])
+    #expect(state.entries["u2"]?.first?.payload == ["name": "bo"])
+  }
+
+  @Test
+  func presenceStatesYieldTheCurrentStateThenEverySync() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var states = await channel.presenceStates().makeAsyncIterator()
+    #expect(await states.next() == PresenceState())
+    try await subscribe(channel, on: host)
+
+    sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1"])
+
+    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1", "u2"])
+  }
+
+  @Test
+  func presenceStatesAloneEnablePresenceOnJoin() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    let states = await channel.presenceStates()
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: ChannelEvent.join)
+    host.confirmJoin(join)
+    try await subscribed
+
+    let presence = join.payload["config"]?.objectValue?["presence"]?.objectValue
+    #expect(presence?["enabled"]?.boolValue == true)
+    withExtendedLifetime(states) {}
   }
 
   @Test
   func diffBeforeTheFirstStateWaitsForIt() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
-    var changes = await channel.presenceChanges().makeAsyncIterator()
+    var states = await channel.presenceStates().makeAsyncIterator()
+    _ = await states.next()
     try await subscribe(channel, on: host)
 
     sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
-    _ = await changes.next()
-    #expect(await channel.presence.state.entries.isEmpty)
-
     sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
-    _ = await changes.next()
-    #expect(Set(await channel.presence.state.entries.keys) == ["u1", "u2"])
+
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1", "u2"])
   }
 
   @Test
-  func aRejoinWaitsForItsOwnFirstState() async throws {
+  func aRejoinReportsOnlyRealJoinsAndLeaves() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     var changes = await channel.presenceChanges().makeAsyncIterator()
     let firstJoin = try await subscribe(channel, on: host)
-    sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
+    sendPresenceState(
+      ["u1": metas([("r1", "ana")]), "u2": metas([("r2", "bo")])], on: channel, host: host
+    )
     _ = await changes.next()
 
     try await dropSocketAndRejoin(channel, after: firstJoin, on: host)
-    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
-    _ = await changes.next()
-    #expect(await channel.presence.state.entries.isEmpty)
+    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u2"])
+    sendPresenceState(
+      ["u1": metas([("r1", "ana")]), "u3": metas([("r3", "cy")])], on: channel, host: host
+    )
 
-    sendPresenceState(["u3": metas([("r3", "cy")])], on: channel, host: host)
-    _ = await changes.next()
-    #expect(Set(await channel.presence.state.entries.keys) == ["u2", "u3"])
+    let change = try #require(await changes.next())
+    #expect(Set(change.joins.keys) == ["u3"])
+    #expect(Set(change.leaves.keys) == ["u2"])
+    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u3"])
   }
 
   // MARK: - Helpers

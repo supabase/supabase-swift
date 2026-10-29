@@ -22,7 +22,7 @@ final class UserStore {
       let channel = await supabase.channel("public:users")
       let changes = await channel.postgresChanges(AnyAction.self, table: "users")
 
-      let presences = await channel.presenceChanges()
+      let presences = await channel.presenceStates()
 
       try await channel.subscribe()
 
@@ -41,19 +41,11 @@ final class UserStore {
       }
 
       Task {
-        for await presence in presences {
-          let joins = try presence.decodeJoins(as: UserPresence.self)
-          let leaves = try presence.decodeLeaves(as: UserPresence.self)
-
-          for leave in leaves {
-            self.presences[leave.userId] = nil
-            Logger.main.debug("User \(leave.userId) leaved")
-          }
-
-          for join in joins {
-            self.presences[join.userId] = join
-            Logger.main.debug("User \(join.userId) joined")
-          }
+        for await state in presences {
+          let online = try state.decode(as: UserPresence.self).values.compactMap(\.first)
+          self.presences = Dictionary(
+            online.map { ($0.userId, $0) }, uniquingKeysWith: { _, latest in latest }
+          )
         }
       }
     }

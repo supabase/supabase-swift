@@ -10,19 +10,42 @@ public import Foundation
 import IssueReporting
 
 extension RealtimeChannel {
-  /// Returns an async stream that emits a ``PresenceAction`` whenever clients join or leave.
+  /// Returns an async stream of the entries that join and leave the channel's presence.
+  ///
+  /// Each element holds the joins and leaves of one sync, by presence key. The first sync after
+  /// ``subscribe()`` reports every present client as a join. After a rejoin, the stream reports
+  /// only the clients that joined or left while the channel was away.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
   /// channel, so open it before subscribing. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
-  /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
-  public func presenceChanges() -> AsyncStream<any PresenceAction> {
+  /// - Returns: An `AsyncStream` of ``PresenceChange`` values.
+  public func presenceChanges() -> AsyncStream<PresenceChange> {
     guard canChangeJoinConfig(for: "presence") else { return .finished }
-    let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream(
+    let (stream, continuation) = AsyncStream<PresenceChange>.makeStream(
       bufferingPolicy: .unbounded
     )
     register(.presence(continuation), terminating: continuation)
+    return stream
+  }
+
+  /// Returns an async stream of the channel's presence state.
+  ///
+  /// The stream emits ``presenceState`` at once, then the new state after every presence sync.
+  ///
+  /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
+  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// cancelled or the channel is removed.
+  ///
+  /// - Returns: An `AsyncStream` of ``PresenceState`` values.
+  public func presenceStates() -> AsyncStream<PresenceState> {
+    guard canChangeJoinConfig(for: "presence") else { return .finished }
+    let (stream, continuation) = AsyncStream<PresenceState>.makeStream(
+      bufferingPolicy: .unbounded
+    )
+    register(.presenceState(continuation), terminating: continuation)
+    continuation.yield(presenceState)
     return stream
   }
 

@@ -145,8 +145,8 @@ public struct BroadcastJoinConfig: Encodable, Hashable, Sendable {
 public struct PresenceJoinConfig: Encodable, Hashable, Sendable {
   /// The client-defined key used to identify this client's presence entry in the presence map.
   ///
-  /// All clients sharing the same key are grouped together in ``PresenceAction/joins``
-  /// and ``PresenceAction/leaves``. Defaults to an empty string, which lets the server
+  /// All clients sharing the same key are grouped under it in ``PresenceState/entries``, one
+  /// ``PresenceEntry`` per device or tab. Defaults to an empty string, which lets the server
   /// assign a random unique key.
   public var key: String = ""
   var enabled: Bool = false

@@ -95,17 +95,22 @@ struct PresenceTrackerTests {
   }
 
   @Test
-  func resetClearsStateAndQueueButKeepsTheTrackedPayload() {
+  func aNewJoinKeepsTheStateAndDiffsItsFirstStateAgainstIt() {
     var tracker = PresenceTracker()
-    tracker.trackedPayload = ["name": "ana"]
-    _ = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
+    _ = tracker.applyState(["u1": metas([("r1", nil, "ana")]), "u2": metas([("r2", nil, "bo")])])
 
-    tracker.reset()
+    tracker.waitForNextState()
 
-    #expect(tracker.state.entries.isEmpty)
-    #expect(tracker.trackedPayload == ["name": "ana"])
-    let afterReset = tracker.applyDiff(["joins": [:], "leaves": [:]])
-    #expect(afterReset == nil)
+    #expect(Set(tracker.state.entries.keys) == ["u1", "u2"])
+    let queued = tracker.applyDiff(["joins": ["u3": metas([("r3", nil, "cy")])], "leaves": [:]])
+    #expect(queued == nil)
+    #expect(Set(tracker.state.entries.keys) == ["u1", "u2"])
+
+    let change = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
+
+    #expect(Set(tracker.state.entries.keys) == ["u1", "u3"])
+    #expect(Set(change.joins.keys) == ["u3"])
+    #expect(Set(change.leaves.keys) == ["u2"])
   }
 
   @Test

@@ -33,7 +33,7 @@ struct RealtimeTestHostTests {
     host.confirmJoin(try await host.receive(event: "phx_join"))
     try await subscribed
 
-    async let push: Void = channel.track(state: ["name": "ana"])
+    async let push: Void = channel.track(["name": "ana"] as JSONObject)
     let frame = try await host.receive(event: "presence")
     #expect(await channel.pendingPushes.count == 1)
     host.reply(to: frame)

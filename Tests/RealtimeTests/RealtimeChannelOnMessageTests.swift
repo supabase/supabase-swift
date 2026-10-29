@@ -409,8 +409,31 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func presenceDiffTriggersPresenceCallbackWithJoinsAndLeaves() async throws {
-    let actions = await sut.presenceChanges()
+  func presenceStateYieldsItsEntriesAsJoins() async throws {
+    let changes = await sut.presenceChanges()
+
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.presenceState,
+        payload: ["user-1": ["metas": [["phx_ref": "ref-1", "name": "ana"]]]]
+      )
+    )
+
+    let change = try #require(await collect(changes).first)
+    #expect(change.joins["user-1"]?.map(\.ref) == ["ref-1"])
+    #expect(change.joins["user-1"]?.first?.payload == ["name": "ana"])
+    #expect(change.leaves.isEmpty)
+  }
+
+  @Test
+  func presenceDiffAfterAStateYieldsJoinsAndLeaves() async throws {
+    let changes = await sut.presenceChanges()
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.presenceState,
+        payload: ["user-2": ["metas": [["phx_ref": "ref-2"]]]]
+      )
+    )
 
     await sut.onMessage(
       message(
@@ -422,69 +445,33 @@ struct RealtimeChannelOnMessageTests {
       )
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    #expect(action.joins.keys.sorted() == ["user-1"])
-    #expect(action.joins["user-1"]?.ref == "ref-1")
-    #expect(action.joins["user-1"]?.state["name"]?.stringValue == "ana")
-    #expect(action.leaves.keys.sorted() == ["user-2"])
-    #expect(action.leaves["user-2"]?.ref == "ref-2")
+    let change = try #require(await collect(changes).last)
+    #expect(change.joins.keys.sorted() == ["user-1"])
+    #expect(change.leaves["user-2"]?.map(\.ref) == ["ref-2"])
   }
 
   @Test
-  func presenceDiffWithoutJoinsOrLeavesTriggersEmptyPresenceAction() async throws {
-    let actions = await sut.presenceChanges()
+  func presenceMessagesWithoutChangesYieldNothing() async {
+    let changes = await sut.presenceChanges()
 
+    await sut.onMessage(message(event: ChannelEvent.presenceState))
     await sut.onMessage(message(event: ChannelEvent.presenceDiff))
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    #expect(action.joins.isEmpty)
-    #expect(action.leaves.isEmpty)
+    #expect(await collect(changes).isEmpty)
   }
 
   @Test
-  func presenceDiffWithMalformedPresenceIsSwallowed() async {
-    let actions = await sut.presenceChanges()
-
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.presenceDiff,
-        payload: ["joins": ["user-1": ["metas": []]]]
-      )
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
-  }
-
-  @Test
-  func presenceStateTriggersPresenceCallbackWithJoinsOnly() async throws {
-    let actions = await sut.presenceChanges()
+  func malformedPresenceMetasAreSkipped() async {
+    let changes = await sut.presenceChanges()
 
     await sut.onMessage(
       message(
         event: ChannelEvent.presenceState,
-        payload: ["user-1": ["metas": [["phx_ref": "ref-1", "name": "ana"]]]]
+        payload: ["user-1": "not-a-presence", "user-2": ["metas": [["name": "no ref"]]]]
       )
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    #expect(action.joins["user-1"]?.ref == "ref-1")
-    #expect(action.leaves.isEmpty)
-  }
-
-  @Test
-  func presenceStateWithMalformedPresenceIsSwallowed() async {
-    let actions = await sut.presenceChanges()
-
-    await sut.onMessage(
-      message(event: ChannelEvent.presenceState, payload: ["user-1": "not-a-presence"])
-    )
-
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
+    #expect(await collect(changes).isEmpty)
   }
 
   private func message(

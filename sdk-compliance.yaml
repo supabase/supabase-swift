@@ -1431,6 +1431,11 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.presenceChanges
+      - RealtimeChannel.presenceStates
+    supporting_symbols:
+      - PresenceChange
+      - PresenceChange.joins
+      - PresenceChange.leaves
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1476,7 +1481,19 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.untrack
-  realtime.presence.presence_state: not_implemented
+  realtime.presence.presence_state:
+    status: implemented
+    symbols:
+      - RealtimeChannel.presenceState
+    supporting_symbols:
+      - PresenceState
+      - PresenceState.entries
+      - PresenceState.decode
+      - PresenceEntry
+      - PresenceEntry.ref
+      - PresenceEntry.previousRef
+      - PresenceEntry.payload
+      - PresenceEntry.decode
   realtime.presence.presence_key:
     status: implemented
     symbols:

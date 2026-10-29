@@ -7,54 +7,18 @@
 
 package import Helpers
 
-/// One tracked client under a presence key. A key holds one entry per device or tab.
-package struct PresenceEntry: Sendable, Hashable {
-  /// The server's `phx_ref`.
-  package var ref: String
-  /// The `phx_ref` this entry replaced, on an update.
-  package var previousRef: String?
-  /// The tracked payload, without the `phx_ref` fields.
-  package var payload: JSONObject
-
-  package init(ref: String, previousRef: String? = nil, payload: JSONObject) {
-    self.ref = ref
-    self.previousRef = previousRef
-    self.payload = payload
-  }
-}
-
-package struct PresenceState: Sendable, Hashable {
-  package var entries: [String: [PresenceEntry]]
-
-  package init(entries: [String: [PresenceEntry]] = [:]) {
-    self.entries = entries
-  }
-}
-
-package struct PresenceChange: Sendable, Hashable {
-  package var joins: [String: [PresenceEntry]]
-  package var leaves: [String: [PresenceEntry]]
-
-  package init(joins: [String: [PresenceEntry]] = [:], leaves: [String: [PresenceEntry]] = [:]) {
-    self.joins = joins
-    self.leaves = leaves
-  }
-}
-
 /// Phoenix presence sync for one channel: `presence_state` replaces, `presence_diff` merges by
 /// key and `phx_ref`, and diffs that arrive before the first state of a join wait for it.
 package struct PresenceTracker: Sendable {
   package private(set) var state = PresenceState()
-  /// The payload of the last `track`, re-sent after every rejoin until `untrack`.
-  package var trackedPayload: JSONObject?
   private var hasState = false
   private var pendingDiffs: [JSONObject] = []
 
   package init() {}
 
-  /// Forgets the server's view at a rejoin. The tracked payload survives so it can be re-sent.
-  package mutating func reset() {
-    state = PresenceState()
+  /// Starts a new join. The state stays until the join's first `presence_state`, which is
+  /// diffed against it, so a rejoin reports only real joins and leaves.
+  package mutating func waitForNextState() {
     hasState = false
     pendingDiffs = []
   }
