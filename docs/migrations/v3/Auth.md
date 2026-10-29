@@ -53,6 +53,14 @@ Changes that still compile but behave differently. Check each one by hand.
   refreshes, the other still holds the old refresh token, and its next refresh fails with
   `refresh_token_already_used` and signs it out. Create one client per project, or give each
   client its own `storageKey`.
+- **Refreshes are deduplicated and throttled.** A client runs one refresh of a refresh token at a
+  time. A cancelled caller of `session` or `refreshSession` throws `CancellationError` at once,
+  and the shared refresh still finishes. When a refresh fails, a new refresh with that same token
+  in the next 60 seconds throws the same error without a request. After five refreshes in 30
+  seconds, the next one throws an `AuthError` with kind `.excessiveRefresh`. `signOut` cancels a
+  running refresh. Its callers get `CancellationError`, whatever error the request then ends
+  with, or `.refreshDiscarded` when a successful response arrived first. Search for retry loops
+  around `refreshSession`.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts

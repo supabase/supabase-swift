@@ -107,6 +107,38 @@ actor SessionStore {
     var subscribers: [UUID: AsyncStream<AuthChange>.Continuation] = [:]
   }
 
+  private struct RefreshFlight {
+    let id: UUID
+    let task: Task<Session, any Error>
+  }
+
+  private struct RefreshFailure {
+    let refreshToken: String
+    let date: Date
+    let error: any Error
+  }
+
+  private struct RefreshWindow {
+    let interval: TimeInterval = 30
+    let maximumAttempts = 5
+    private var attempts: [Date] = []
+
+    mutating func admit(at date: Date) -> Bool {
+      attempts.removeAll { !(0..<interval).contains(date.timeIntervalSince($0)) }
+      guard attempts.count < maximumAttempts else { return false }
+      attempts.append(date)
+      return true
+    }
+  }
+
+  private enum Waiter {
+    case pending
+    case suspended(CheckedContinuation<Session, any Error>)
+    case finished
+  }
+
+  private static let refreshFailureCooldown: TimeInterval = 60
+
   /// Grows by one on every state change, so tests can tell that a commit changed nothing.
   private(set) var generation: UInt64 = 0
 
@@ -115,6 +147,9 @@ actor SessionStore {
   private let now: @Sendable () -> Date
   private let published: LockIsolated<Published>
   private var lastOperation: Task<Void, any Error>?
+  private var refreshFlights: [String: RefreshFlight] = [:]
+  private var lastRefreshFailure: RefreshFailure?
+  private var refreshWindow = RefreshWindow()
 
   init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
     self.storage = storage
@@ -204,6 +239,106 @@ actor SessionStore {
     try await serialized { try await self.apply(transition) }
   }
 
+  /// Redeems `refreshToken` once, however many callers ask at the same time, and commits the
+  /// refreshed session.
+  ///
+  /// A caller that asks while a refresh of the same token runs waits for that refresh. A waiter
+  /// whose task is cancelled throws `CancellationError` at once, and the refresh still commits.
+  /// A ``Transition/signedOut(_:event:)`` commit cancels every running refresh.
+  ///
+  /// - Parameter request: Sends the refresh request. Called only when no refresh of
+  ///   `refreshToken` runs.
+  /// - Throws: The error of the last failed refresh, without a new request, when that refresh
+  ///   redeemed `refreshToken` less than 60 seconds ago and no commit followed it.
+  ///   ``AuthError/Kind-swift.struct/excessiveRefresh`` when five refreshes started in the last 30
+  ///   seconds.
+  func refresh(
+    _ refreshToken: String,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+  ) async throws -> Session {
+    let task = try refreshFlights[refreshToken]?.task ?? startRefresh(refreshToken, using: request)
+    return try await Self.value(of: task)
+  }
+
+  private func startRefresh(
+    _ refreshToken: String,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+  ) throws -> Task<Session, any Error> {
+    let date = now()
+    if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
+      (0..<Self.refreshFailureCooldown).contains(date.timeIntervalSince(failure.date))
+    {
+      throw failure.error
+    }
+    guard refreshWindow.admit(at: date) else { throw AuthError.excessiveRefresh }
+
+    let id = UUID()
+    let heldRefreshToken = currentSession?.refreshToken
+    let refreshesHeldSession = heldRefreshToken == refreshToken
+    let task = Task {
+      defer {
+        if refreshFlights[refreshToken]?.id == id {
+          refreshFlights[refreshToken] = nil
+        }
+      }
+
+      let session: Session
+      do {
+        session = try await request(refreshToken)
+      } catch {
+        // Only a sign-out cancels a flight. A transport can report that cancel as another error,
+        // such as `URLError.cancelled` from a response body.
+        if Task.isCancelled { throw CancellationError() }
+        if let error = error as? AuthError, error.invalidatesSession {
+          try? await commit(
+            .invalidated(
+              SignOutReason(invalidatedBy: error),
+              refreshToken: refreshesHeldSession ? refreshToken : nil
+            )
+          )
+        }
+        if !(error is CancellationError) {
+          lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
+        }
+        throw error
+      }
+
+      try await commit(.refreshed(session, replacing: heldRefreshToken))
+      return session
+    }
+    refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
+    return task
+  }
+
+  private static func value(of task: Task<Session, any Error>) async throws -> Session {
+    let waiter = LockIsolated(Waiter.pending)
+    let resume = { @Sendable (result: Result<Session, any Error>) in
+      let continuation = waiter.withValue { state -> CheckedContinuation<Session, any Error>? in
+        defer { state = .finished }
+        guard case .suspended(let continuation) = state else { return nil }
+        return continuation
+      }
+      continuation?.resume(with: result)
+    }
+
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        let cancelled = waiter.withValue { state in
+          guard case .pending = state else { return true }
+          state = .suspended(continuation)
+          return false
+        }
+        if cancelled {
+          continuation.resume(throwing: CancellationError())
+          return
+        }
+        Task { resume(await task.result) }
+      }
+    } onCancel: {
+      resume(.failure(CancellationError()))
+    }
+  }
+
   // Each operation runs in its own task, so cancelling the caller never stops a write halfway.
   private func serialized(_ operation: @escaping @Sendable () async throws -> Void) async throws {
     let previous = lastOperation
@@ -272,6 +407,14 @@ actor SessionStore {
       try await storage.remove(key: key)
     }
     update(to: next, event: event)
+    lastRefreshFailure = nil
+
+    if case .signedOut = transition {
+      for flight in refreshFlights.values {
+        flight.task.cancel()
+      }
+      refreshFlights = [:]
+    }
   }
 
   private func update(to next: State, event: AuthChangeEvent) {
