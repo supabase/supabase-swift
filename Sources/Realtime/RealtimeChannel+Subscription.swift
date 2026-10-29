@@ -10,8 +10,8 @@ import Helpers
 import Logging
 import IssueReporting
 
-/// The subscribe/unsubscribe state machine: retries, timeouts, and deduplication of concurrent
-/// calls.
+/// The subscribe/unsubscribe state machine: join errors, retries, timeouts, and deduplication of
+/// concurrent calls.
 ///
 /// State transitions are:
 ///
@@ -22,7 +22,7 @@ import IssueReporting
 /// concurrent callers can await it or cancel it.
 extension RealtimeChannel {
   /// Typed failure for a single subscribe attempt. These are lifecycle failures — not task
-  /// cancellations — so the retry ladder treats them like timeouts and callers never see a
+  /// cancellations — so the retry loop treats them like timeouts and callers never see a
   /// spurious `CancellationError` (issue #1145, defect 2).
   enum SubscribeFailure: Error {
     /// The socket could not be connected (or reconnected) for this attempt.
@@ -39,8 +39,18 @@ extension RealtimeChannel {
   /// join request. Calling it on an already-subscribed channel is a no-op, and a second
   /// concurrent call waits for the first attempt instead of starting another.
   ///
-  /// - Throws: ``RealtimeError`` with kind `.timeout`, `.maxRetryAttemptsReached` or
-  ///   `.channelClosedByServer`.
+  /// There is no attempt limit. After a timeout, a lost connection, or a transient join error,
+  /// the channel joins again after 1, 2 and 5 s, then every 10 s; after a rate limit it waits
+  /// 30 s. An expired token gets one rejoin at once, with a token fetched again from the
+  /// `accessToken` callback. Cancel the calling task to stop waiting.
+  ///
+  /// - Throws: ``RealtimeError`` when a retry cannot help: the server refused the join for good
+  ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/ServerCode/unauthorized``
+  ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
+  ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off, or
+  ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join.
+  ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
+  ///   channel during the join, and `CancellationError` when the calling task is cancelled.
   public func subscribe() async throws {
     switch state {
     case .subscribed:
@@ -48,7 +58,7 @@ extension RealtimeChannel {
 
     case .subscribing(let task):
       logger.debug("Subscribe already in progress for channel '\(topic)', awaiting…")
-      try await task.value
+      try await awaitSharedSubscribe(task)
 
     case .unsubscribing(let task):
       logger.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
@@ -123,9 +133,13 @@ extension RealtimeChannel {
   }
 
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
-  /// be answered any more.
+  /// be answered any more, and a subscribe in flight stops instead of connecting again.
   func socketDidDisconnect() {
     failPendingPushes(with: RealtimeError.notConnected)
+    guard case .subscribing(let task) = state else { return }
+    abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
+    joinRef = nil
+    setState(.unsubscribed)
   }
 
   // MARK: - Server signals
@@ -138,6 +152,20 @@ extension RealtimeChannel {
     setState(.subscribed)
     joinWaiter?.continuation.resume()
     joinWaiter = nil
+  }
+
+  /// Called when the server answers the `phx_join` for `ref` with an error.
+  ///
+  /// Fails the waiting attempt with `error`. An error that lands while that attempt is still
+  /// sending its `phx_join` is kept until it parks. Errors for any other join are ignored.
+  func didReceiveJoinError(_ error: RealtimeError, for ref: String) {
+    guard case .subscribing = state, joinRef == ref else { return }
+    logger.debug("Server refused the join for channel '\(topic)' (ref: \(ref)): \(error.message)")
+    if joinWaiter?.ref == ref {
+      failJoinWaiter(error, for: ref)
+    } else {
+      joinFailure = (ref, error)
+    }
   }
 
   /// Called when the server closes the channel (`phx_close`, or a `phx_error` that drops it).
@@ -159,11 +187,7 @@ extension RealtimeChannel {
     joinRef = nil
     failPendingPushes(with: RealtimeError.channelClosedByServer)
     if case .subscribing(let task) = state {
-      // Record why the task is being cancelled so `beginSubscribe` can rethrow a typed error —
-      // the caller must be able to tell a server close apart from its own task cancellation.
-      subscribeTaskClosedByServer = task
-      task.cancel()
-      failJoinWaiter(SubscribeFailure.channelClosed)
+      abortSubscribe(task, with: RealtimeError.channelClosedByServer)
     }
     setState(.unsubscribed)
     resumeCloseWaiter()
@@ -171,6 +195,44 @@ extension RealtimeChannel {
   }
 
   // MARK: - Subscribe flow
+
+  /// Stops the subscribe in flight. Its callers get `error` rather than a bare
+  /// `CancellationError`, so they can tell the abort apart from their own cancellation.
+  private func abortSubscribe(_ task: Task<Void, any Error>, with error: RealtimeError) {
+    abortedSubscribe = (task, error)
+    task.cancel()
+    failJoinWaiter(SubscribeFailure.channelClosed)
+    for (id, waiter) in sharedSubscribeWaiters where waiter.task == task {
+      sharedSubscribeWaiters[id] = nil
+      waiter.continuation.resume(throwing: error)
+    }
+  }
+
+  /// Waits for a subscribe that another caller started. Cancelling this caller stops its wait
+  /// but not the attempt: with no attempt limit, `task.value` alone could wait forever.
+  private func awaitSharedSubscribe(_ task: Task<Void, any Error>) async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        guard !Task.isCancelled else {
+          continuation.resume(throwing: CancellationError())
+          return
+        }
+        sharedSubscribeWaiters[id] = (task, continuation)
+        Task {
+          let result = await task.result
+          self.resumeSharedSubscribeWaiter(id, with: result)
+        }
+      }
+    } onCancel: {
+      Task { await self.resumeSharedSubscribeWaiter(id, with: .failure(CancellationError())) }
+    }
+  }
+
+  private func resumeSharedSubscribeWaiter(_ id: UUID, with result: Result<Void, any Error>) {
+    sharedSubscribeWaiters.removeValue(forKey: id)?.continuation.resume(with: result)
+  }
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
@@ -188,9 +250,9 @@ extension RealtimeChannel {
         task.cancel()
       }
     } catch {
-      let closedByServer = subscribeTaskClosedByServer == task
-      if closedByServer {
-        subscribeTaskClosedByServer = nil
+      let abortError = abortedSubscribe?.task == task ? abortedSubscribe?.error : nil
+      if abortError != nil {
+        abortedSubscribe = nil
       }
 
       // If the attempt didn't reach `.subscribed`, make sure observers see `.unsubscribed`. Only
@@ -202,73 +264,79 @@ extension RealtimeChannel {
         setState(.unsubscribed)
       }
 
-      // The subscribe was aborted by `didReceiveClose()`, not by the caller. Depending on how
-      // the cancellation is observed, the task can exit with `CancellationError`,
-      // `SubscribeFailure.channelClosed`, or — when the close lands on the final retry attempt —
-      // `maxRetryAttemptsReached`. All of them are consequences of the server close, so
-      // translate unconditionally; a genuine caller-side cancellation never records its task
-      // here and still propagates as `CancellationError`.
-      if closedByServer {
-        throw RealtimeError.channelClosedByServer
+      // The subscribe was aborted by `didReceiveClose()` or `socketDidDisconnect()`, not by the
+      // caller. Depending on how the cancellation is observed, the task can exit with
+      // `CancellationError` or `SubscribeFailure.channelClosed`. Both are consequences of the
+      // abort, so translate unconditionally; a genuine caller-side cancellation never records its
+      // task here and still propagates as `CancellationError`.
+      if let abortError {
+        throw abortError
       }
       throw error
     }
   }
 
+  /// Runs join attempts until one succeeds, a join error says retrying cannot help, or the task
+  /// is cancelled.
   private func runSubscribeAttempts() async throws {
-    var attempts = 0
-    while attempts < maxRetryAttempts {
-      attempts += 1
+    var attempt = 0
+    var hasRefreshedToken = false
+    while true {
+      attempt += 1
+      try Task.checkCancellation()
+      // A late `ok` for a join that timed out confirms it while this loop waits out the backoff.
+      if case .subscribed = state { return }
+      logger.debug("Subscribe attempt \(attempt) for channel '\(topic)'")
 
+      let delay: Duration
       do {
-        try Task.checkCancellation()
-        logger.debug("Subscribe attempt \(attempts)/\(maxRetryAttempts) for channel '\(topic)'")
-
         try await withTimeout(timeout, clock: clock) {
           try await runOneSubscribeAttempt()
         }
-
         logger.debug("Subscribe succeeded for channel '\(topic)'")
         return
-      } catch let error where error is TimeoutError || error is SubscribeFailure {
-        logger.debug(
-          "Subscribe attempt failed for channel '\(topic)' (attempt \(attempts)/\(maxRetryAttempts)): \(error)"
-        )
-
-        guard attempts < maxRetryAttempts else {
-          logger.error(
-            "Failed to subscribe to channel '\(topic)' after \(maxRetryAttempts) attempts")
-          throw RealtimeError.maxRetryAttemptsReached
+      } catch let error as RealtimeError {
+        switch error.joinRecovery {
+        case .refreshToken where !hasRefreshedToken:
+          hasRefreshedToken = true
+          logger.debug("Token expired for channel '\(topic)', rejoining with a fresh one")
+          await client?.refreshTokenForRejoin()
+          continue
+        case .fail, .refreshToken:
+          logger.error("Failed to subscribe to channel '\(topic)': \(error.message)")
+          throw error
+        case .backOff:
+          delay = Self.rateLimitBackoff
+        case .retry:
+          delay = Self.rejoinBackoff.delay(forAttempt: attempt)
         }
-
-        let delay = retryDelay(attempts)
-        logger.debug("Retrying subscribe for '\(topic)' in \(delay)")
-
-        // A genuine cancellation of this task propagates out of `sleep` as `CancellationError`;
-        // the next attempt re-checks the socket itself.
-        try await clock.sleep(for: delay)
+      } catch let error where error is TimeoutError || error is SubscribeFailure {
+        logger.debug("Subscribe attempt \(attempt) failed for channel '\(topic)': \(error)")
+        delay = Self.rejoinBackoff.delay(forAttempt: attempt)
       }
-    }
+      // One fresh-token rejoin per run of expired-token errors: a token that expires again after
+      // other failures gets another one.
+      hasRefreshedToken = false
 
-    throw RealtimeError.maxRetryAttemptsReached
+      logger.debug("Retrying subscribe for '\(topic)' in \(delay)")
+      // A genuine cancellation of this task propagates out of `sleep` as `CancellationError`;
+      // the next attempt re-checks the socket itself.
+      try await clock.sleep(for: delay)
+    }
   }
 
   private func runOneSubscribeAttempt() async throws {
-    guard await ensureSocketConnected() else {
+    guard try await ensureSocketConnected() else {
       throw SubscribeFailure.socketNotConnected
     }
-    guard let client else {
-      throw SubscribeFailure.socketNotConnected
-    }
-
-    let ref = await client.makeRef()
-    let accessToken = await client.currentAccessToken()
+    let (ref, accessToken) = try await makeJoinRefAndToken()
     // A reset or close may have cancelled this attempt while it waited above. A stale attempt
     // must not write `joinRef` over the newer attempt's ref or send a `phx_join` the server
     // would treat as a duplicate.
     try Task.checkCancellation()
     joinRef = ref
     joinAccessToken = accessToken
+    joinFailure = nil
     await performJoin(ref: ref, accessToken: accessToken)
 
     // Wait for `didReceiveSubscribedOK`. A close, a reset or cancellation fails the waiter.
@@ -285,11 +353,16 @@ extension RealtimeChannel {
   }
 
   /// Parks `continuation` until the server confirms the join for `ref`. Resumes it at once when
-  /// the confirmation already arrived while `phx_join` was being sent, and fails it at once if
-  /// the join is already gone or the task is already cancelled.
+  /// the confirmation or a join error already arrived while `phx_join` was being sent, and fails
+  /// it at once if the join is already gone or the task is already cancelled.
   private func awaitJoinConfirmation(
     for ref: String, with continuation: CheckedContinuation<Void, any Error>
   ) {
+    if let failure = joinFailure, failure.ref == ref {
+      joinFailure = nil
+      continuation.resume(throwing: failure.error)
+      return
+    }
     if case .subscribed = state, joinRef == ref {
       continuation.resume()
       return
@@ -334,17 +407,33 @@ extension RealtimeChannel {
     await push(ChannelEvent.join, ref: ref, payload: encodedPayload)
   }
 
+  /// Holds the client only while it hands out the ref and the token, so an attempt that waits
+  /// for its reply does not keep a released client alive.
+  private func makeJoinRefAndToken() async throws -> (ref: String, accessToken: String?) {
+    guard let client else { throw RealtimeError.clientReleased }
+    return (await client.makeRef(), await client.currentAccessToken())
+  }
+
   /// Connects the socket when the client allows it, and reports whether it is connected.
-  private func ensureSocketConnected() async -> Bool {
-    guard let client else { return false }
-    if await client.status == .connected { return true }
+  ///
+  /// - Throws: ``RealtimeError`` when no retry can connect: the client is gone,
+  ///   `connectOnSubscribe` is off, or the server refused the upgrade for good.
+  private func ensureSocketConnected() async throws -> Bool {
+    guard let client else { throw RealtimeError.clientReleased }
+    let status = await client.status
+    if status == .connected { return true }
     guard connectOnSubscribe else {
-      reportIssue(
-        "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
-      )
-      return false
+      // The client is connecting, or reconnecting after a drop: wait for it.
+      if status == .connecting { return false }
+      throw RealtimeError.notConnectedToSubscribe
     }
-    try? await client.connect()
+    do {
+      try await client.connect()
+    } catch let error as RealtimeError where !error.isRetryable {
+      throw error
+    } catch {
+      logger.debug("Connect for channel '\(topic)' failed: \(error)")
+    }
     return await client.status == .connected
   }
 
@@ -415,6 +504,35 @@ extension RealtimeError {
   static let notSubscribed = RealtimeError(
     kind: .notSubscribed,
     message: "The channel is not subscribed. Call `subscribe()` first, or use `httpSend()`.",
+    isRetryable: false
+  )
+
+  /// The channel's client was released, so the channel can never connect again.
+  static let clientReleased = RealtimeError(
+    kind: .notConnected, message: "The realtime client was released.", isRetryable: false)
+
+  /// `subscribe()` found no connection and `connectOnSubscribe` is off.
+  static let notConnectedToSubscribe = RealtimeError(
+    kind: .notConnected,
+    message:
+      "The realtime client is not connected and `connectOnSubscribe` is off. Call `connect()` first.",
+    isRetryable: false
+  )
+
+  /// The server confirmed the join with `postgres_changes` the client cannot decode. A retry
+  /// gets the same reply.
+  static func unreadableJoinReply(_ error: any Error) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server's join reply has `postgres_changes` the client cannot read: \(error)",
+      isRetryable: false
+    )
+  }
+
+  /// ``RealtimeClient/disconnect(code:reason:)`` was called while the channel was subscribing.
+  static let disconnectedWhileSubscribing = RealtimeError(
+    kind: .notConnected,
+    message: "The realtime client was disconnected while the channel was subscribing.",
     isRetryable: false
   )
 

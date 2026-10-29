@@ -158,10 +158,11 @@ struct AutoRefreshTests {
   }
 
   @Test
-  func stoppingAClientThatDoesNotDriveKeepsTheRetryBackoff() async throws {
+  func stoppingAnotherClientKeepsTheRetryBackoff() async throws {
     let world = World(failures: [.serviceUnavailable])
     let first = world.makeClient()
     let second = world.makeClient()
+    #expect(first.sessionStore !== second.sessionStore)
     try await first.seedSession(world.issueSession())
     await first.autoRefresh.start()
     await second.autoRefresh.start()
@@ -170,12 +171,12 @@ struct AutoRefreshTests {
     #expect(await world.refreshCount(settledAt: 1) == 1)
     #expect(await world.waitForSleep())
 
-    await first.autoRefresh.stop()
+    await second.autoRefresh.stop()
     #expect(await world.refreshCount(settledAt: 1) == 1)
 
     await world.advance(to: Self.refreshAfter + 2)
     #expect(await world.refreshCount(settledAt: 2) == 2)
-    await second.autoRefresh.stop()
+    await first.autoRefresh.stop()
   }
 
   @Test

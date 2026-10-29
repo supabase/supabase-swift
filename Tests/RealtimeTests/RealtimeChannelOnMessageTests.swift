@@ -107,7 +107,29 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
+  func replyToAnotherRefLeavesServerChangesUntouched() async {
+    await sut.setJoinRef("2")
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.reply,
+        payload: [
+          "status": "ok",
+          "response": [
+            "postgres_changes": [
+              ["id": 7, "event": "INSERT", "schema": "public", "table": "messages"]
+            ]
+          ],
+        ],
+        ref: "1"
+      )
+    )
+
+    #expect(await sut.serverChanges.isEmpty)
+  }
+
+  @Test
   func replyWithPostgresChangesStoresServerChanges() async throws {
+    await sut.setJoinRef("1")
     await sut.onMessage(
       message(
         event: ChannelEvent.reply,
@@ -504,5 +526,11 @@ struct RealtimeChannelOnMessageTests {
 extension RealtimeChannel {
   fileprivate func setServerChanges(_ changes: [PostgresJoinConfig]) {
     serverChanges = changes
+  }
+}
+
+extension RealtimeChannel {
+  fileprivate func setJoinRef(_ ref: String?) {
+    joinRef = ref
   }
 }

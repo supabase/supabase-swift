@@ -23,8 +23,6 @@ struct RealtimeErrorTests {
 
   @Test
   func statics() {
-    #expect(RealtimeError.maxRetryAttemptsReached.kind == .maxRetryAttemptsReached)
-    #expect(RealtimeError.maxRetryAttemptsReached.message == "Maximum retry attempts reached.")
     #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
     #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
     #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
@@ -148,6 +146,13 @@ struct RealtimeErrorTests {
       reason: "Realtime was unable to connect to the project database",
       code: nil, kind: .server, isRetryable: true),
     .init(reason: "Unknown Error on Channel", code: nil, kind: .server, isRetryable: true),
+    .init(
+      reason: "Token has expired 3 seconds ago", code: nil, kind: .unauthorized, isRetryable: true),
+    .init(
+      reason: "Too many messages per second", code: nil, kind: .rateLimited, isRetryable: true),
+    .init(
+      reason: "You no longer have permission to read from this Channel topic: x",
+      code: nil, kind: .unauthorized, isRetryable: false),
   ]
 
   @Test(arguments: joinReasons)
@@ -166,6 +171,76 @@ struct RealtimeErrorTests {
 
     #expect(error.serverCode == nil)
     #expect(error.isRetryable)
+  }
+
+  struct RecoveryRow: CustomTestStringConvertible {
+    let reason: String
+    let expected: RealtimeError.JoinRecovery
+    var testDescription: String { reason }
+  }
+
+  static let joinRecoveries: [RecoveryRow] = [
+    .init(reason: "TopicNameRequired: x", expected: .fail),
+    .init(reason: "MalformedJWT: x", expected: .fail),
+    .init(reason: "JwtSignatureError: x", expected: .fail),
+    .init(reason: "JwtSignerError: x", expected: .fail),
+    .init(reason: "InvalidJWTToken: Fields `role` and `exp` are required in JWT", expected: .fail),
+    .init(reason: "Unauthorized: x", expected: .fail),
+    .init(reason: "PrivateOnly: x", expected: .fail),
+    .init(reason: "TenantNotFound: x", expected: .fail),
+    .init(reason: "RealtimeDisabledForTenant: x", expected: .fail),
+    .init(reason: "RealtimeDisabledForConfiguration: x", expected: .fail),
+    .init(reason: "UnableToReplayMessages: x", expected: .fail),
+    .init(reason: "InvalidJWTToken: Token has expired 10 seconds ago", expected: .refreshToken),
+    .init(reason: "ConnectionRateLimitReached: x", expected: .backOff),
+    .init(reason: "ClientJoinRateLimitReached: x", expected: .backOff),
+    .init(reason: "ChannelRateLimitReached: x", expected: .backOff),
+    .init(reason: "DatabaseConnectionRateLimitReached: x", expected: .backOff),
+    .init(reason: "RealtimeRestarting: x", expected: .retry),
+    .init(reason: "InitializingProjectConnection: x", expected: .retry),
+    .init(reason: "IncreaseConnectionPool: x", expected: .retry),
+    .init(reason: "DatabaseLackOfConnections: x", expected: .retry),
+    .init(reason: "UnableToConnectToProject: x", expected: .retry),
+    .init(reason: "QueryCanceled: x", expected: .retry),
+    .init(reason: "MissingPartition: x", expected: .retry),
+    .init(reason: "TimeoutOnRpcCall: x", expected: .retry),
+    .init(reason: "ErrorOnRpcCall: x", expected: .retry),
+    .init(reason: "PostgresChangesSubscribeTimeout: x", expected: .retry),
+    .init(reason: "UnknownErrorOnChannel: x", expected: .retry),
+    .init(reason: "BrandNewCode: x", expected: .retry),
+    .init(reason: "Realtime was unable to connect to the project database", expected: .retry),
+    .init(reason: "Unknown Error on Channel", expected: .retry),
+  ]
+
+  @Test(arguments: joinRecoveries)
+  func joinRecoveryFollowsTheServerCode(row: RecoveryRow) {
+    let error = RealtimeError.joinError(reason: row.reason)
+
+    #expect(error.joinRecovery == row.expected)
+    #expect(error.isRetryable == (row.expected != .fail))
+  }
+
+  /// Reasons the server sends without a code.
+  @Test(arguments: [
+    ("Token has expired 3 seconds ago", RealtimeError.JoinRecovery.refreshToken),
+    ("Too many messages per second", .backOff),
+    ("Too many presence messages per second", .backOff),
+    ("Client presence rate limit exceeded", .backOff),
+    ("You no longer have permission to read from this Channel topic: x", .fail),
+    ("Query was cancelled, please try again", .retry),
+    ("Realtime was unable to connect to the project database", .retry),
+  ])
+  func joinRecoveryFallsBackToTheWordingWithoutACode(
+    reason: String, expected: RealtimeError.JoinRecovery
+  ) {
+    #expect(RealtimeError.joinError(reason: reason).joinRecovery == expected)
+  }
+
+  @Test
+  func errorsThatAreNotRetryableFailTheJoin() {
+    #expect(RealtimeError.upgradeFailed(status: 401).joinRecovery == .fail)
+    #expect(RealtimeError.notConnectedToSubscribe.joinRecovery == .fail)
+    #expect(RealtimeError.upgradeFailed(status: 503).joinRecovery == .retry)
   }
 
   @Test

@@ -177,6 +177,22 @@ For macOS, the named yearly releases are treated as major versions for this poli
 > [!IMPORTANT]
 > Android, Linux and Windows work but aren't officially supported, and may stop working in future versions of the library.
 
+## Supabase Service Compatibility
+
+The Supabase Swift SDK only guarantees compatibility with the latest release of each Supabase service, unless a minimum supported version is explicitly listed below.
+
+Older service releases are supported on a best-effort basis, but compatibility is not guaranteed.
+
+If you self-host Supabase, we recommend upgrading your services to their latest releases when upgrading the SDK.
+
+| Service   | Library                          | Server releases                                                            | Lowest supported version |
+| --------- | -------------------------------- | -------------------------------------------------------------------------- | ------------------------ |
+| Auth      | [`Auth`](Sources/Auth)           | [supabase/auth](https://github.com/supabase/auth/releases)                 | Latest release           |
+| Storage   | [`Storage`](Sources/Storage)     | [supabase/storage](https://github.com/supabase/storage/releases)           | Latest release           |
+| Functions | [`Functions`](Sources/Functions) | [supabase/edge-runtime](https://github.com/supabase/edge-runtime/releases) | Latest release           |
+| PostgREST | [`PostgREST`](Sources/PostgREST) | [PostgREST/postgrest](https://github.com/PostgREST/postgrest/releases)     | Latest release           |
+| Realtime  | [`Realtime`](Sources/Realtime)   | [supabase/realtime](https://github.com/supabase/realtime/releases)         | Latest release           |
+
 ## Contributing
 
 We welcome contributions! Please see the steps below.
