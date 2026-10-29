@@ -67,18 +67,26 @@ cmd_up() {
   local id="${1:-$(date +%Y%m%d-%H%M%S)-$$}"
   check_name "run id" "$id"
   local run="$VERIFY_ROOT/runs/$id"
-  [[ -e "$run" ]] && die "run '$id' already exists"
 
+  # Parallel `up`s pick a block under a lock and reserve it in runs/<id>/port_base at once, so
+  # two runs never get the same block while their stacks are still starting.
+  mkdir -p "$VERIFY_ROOT/runs"
+  local lock="$VERIFY_ROOT/ports.lock"
+  until mkdir "$lock" 2>/dev/null; do sleep 1; done
+  trap 'rmdir "'"$lock"'" 2>/dev/null || true' EXIT
+  mkdir "$run" 2>/dev/null || die "run '$id' already exists"
   local base="" b
   for b in $(seq 56400 100 59900); do
-    grep -qsx "PORT_BASE=$b" "$VERIFY_ROOT"/runs/*/state.env && continue
+    grep -qsx "$b" "$VERIFY_ROOT"/runs/*/port_base && continue
     local free=1 p
     for p in 20 21 22 23 24 27 28 29; do port_busy $((b + p)) && { free=0; break; }; done
     ((free)) && { base=$b; break; }
   done
-  [[ -n "$base" ]] || die "no free port block between 56400 and 59999"
+  [[ -n "$base" ]] && echo "$base" >"$run/port_base"
+  rmdir "$lock"; trap - EXIT
+  [[ -n "$base" ]] || { rmdir "$run"; die "no free port block between 56400 and 59999"; }
 
-  mkdir -p "$run" "$VERIFY_ROOT/evidence/$id"
+  mkdir -p "$VERIFY_ROOT/evidence/$id"
   cp -R "$REPO/Tests/IntegrationTests/supabase" "$run/supabase"
   # Own project id and ports, so this stack never collides with the user's stack (54321-54329),
   # the integration tests, or another verification run.
@@ -294,7 +302,7 @@ cmd_down() {
     fi
   fi
   local base=""
-  [[ -f "$run/state.env" ]] && base="$(sed -n 's/^PORT_BASE=//p' "$run/state.env")"
+  [[ -f "$run/port_base" ]] && base="$(cat "$run/port_base")"
   rm -rf "$run"
   if [[ -n "$base" ]] && port_busy $((base + 21)); then
     echo "verify: port $((base + 21)) still listening after teardown" >&2

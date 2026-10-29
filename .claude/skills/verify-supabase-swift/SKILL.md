@@ -39,7 +39,8 @@ export VERIFY_RUN_ID=<the id it prints>
    `.verify/runs/<run-id>/supabase/`.
 2. Gives the copy its own `project_id` (`verify-<run-id>`) and a free block of ports
    (`56420-56429`, then `56520-56529`, and so on). The API port is base + 21. The user's own
-   stack (54321) and the integration tests are never touched.
+   stack (54321) and the integration tests are never touched. Parallel `up`s pick blocks under a
+   lock (`.verify/ports.lock`) and reserve them in `port_base`, so they never share a block.
 3. Runs `supabase start --runtime native --eager` with `SUPABASE_EXPERIMENTAL_STACK=1`. This
    applies every migration and `seed.sql` on an empty database. It takes about 20 s.
 4. Writes `.verify/runs/<run-id>/state.env` (URL, keys, port base, stack id, git SHA).
