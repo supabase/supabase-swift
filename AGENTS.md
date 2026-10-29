@@ -33,6 +33,9 @@ Read the matching file before you act:
   to check for stale entries before committing (see "Capability Compliance" in
   [CONTRIBUTING.md](CONTRIBUTING.md))
 - Ensure new public APIs have DocC documentation comments
+- Update the "Supabase Service Compatibility" section of the READMEs if the
+  supported version of a Supabase service changes. Any change that is not
+  "Latest release" requires integration tests for the minimum supported version
 - Add tests for all new functionality
 - Keep changes minimal and focused
 - Respect the existing architecture and patterns
