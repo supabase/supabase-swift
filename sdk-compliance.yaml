@@ -1545,12 +1545,17 @@ features:
       - RealtimeClientOptions.init
   realtime.configuration.custom_logger:
     status: implemented
-    note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
+    note: "Set via the logger parameter of RealtimeClientOptions.init (the stored property is package until SDK-2103 makes it public). RealtimeClientOptions.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.serverLogLevel
     supporting_symbols:
-      - LogLevel.init
-      - LogLevel.rawValue
+      - RealtimeServerLogLevel
+      - RealtimeServerLogLevel.init
+      - RealtimeServerLogLevel.rawValue
+      - RealtimeServerLogLevel.info
+      - RealtimeServerLogLevel.warning
+      - RealtimeServerLogLevel.error
   realtime.configuration.binary_protocol:
     status: implemented
     no_public_symbols: true

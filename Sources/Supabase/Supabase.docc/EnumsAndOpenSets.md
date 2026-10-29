@@ -42,7 +42,7 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `LogLevel`.
+  `FactorStatus`, `PushStatus`, `RealtimeServerLogLevel`.
 - Consumers `switch` over it and the SDK expects to add members in minor releases:
   `AuthChangeEvent`.
 
@@ -63,7 +63,7 @@ Equality, `contains`, and string literals work as you would expect:
 ```swift
 if event == .signedIn { ... }
 if [.signedIn, .tokenRefreshed].contains(event) { ... }
-let level: LogLevel = "debug"  // a value the SDK has no member for yet
+let level: RealtimeServerLogLevel = "debug"  // a value the SDK has no member for yet
 ```
 
 `init(rawValue:)` never fails. An unrecognized value round-trips through `rawValue` instead of

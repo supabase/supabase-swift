@@ -67,7 +67,7 @@ final class RealtimeTests: Sendable {
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
-          logLevel: .warn,
+          serverLogLevel: .warning,
           accessToken: {
             "custom.access.token"
           }

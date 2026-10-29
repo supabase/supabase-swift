@@ -36,6 +36,38 @@ struct RealtimeClientOptionsTests {
     #expect(options.session === customSession)
   }
 
+  @Test(arguments: [
+    (RealtimeServerLogLevel.info, "info"),
+    (.warning, "warn"),
+    (.error, "error"),
+  ])
+  func serverLogLevelAddsTheQueryItem(level: RealtimeServerLogLevel, expected: String) {
+    let client = RealtimeClient(
+      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+      options: RealtimeClientOptions(serverLogLevel: level, handleAppLifecycle: false)
+    )
+
+    let items = URLComponents(url: client.webSocketURL, resolvingAgainstBaseURL: false)?.queryItems
+    #expect(items?.first { $0.name == "log_level" }?.value == expected)
+  }
+
+  @Test
+  func noServerLogLevelAddsNoQueryItem() {
+    let client = RealtimeClient(
+      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+      options: RealtimeClientOptions(handleAppLifecycle: false)
+    )
+
+    let items = URLComponents(url: client.webSocketURL, resolvingAgainstBaseURL: false)?.queryItems
+    #expect(items?.contains { $0.name == "log_level" } == false)
+  }
+
+  @Test
+  func serverLogLevelAcceptsAStringLiteral() {
+    let level: RealtimeServerLogLevel = "debug"
+    #expect(level.rawValue == "debug")
+  }
+
   @Test
   func loggerIsTaggedWithSystemMetadata() {
     let options = RealtimeClientOptions(

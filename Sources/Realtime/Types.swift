@@ -39,7 +39,7 @@ public import Logging
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: Duration
@@ -64,8 +64,9 @@ public struct RealtimeClientOptions: Sendable {
   /// (including watchOS and Linux), where lifecycle observation is not supported.
   public var handleAppLifecycle: Bool
 
-  /// Sets the log level for Realtime
-  var logLevel: LogLevel?
+  /// How much the Realtime server logs for this connection. `nil`, the default, keeps the
+  /// server's own level.
+  public var serverLogLevel: RealtimeServerLogLevel?
   package var http: HTTPClientConfiguration
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: Logging.Logger
@@ -133,7 +134,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-  ///   - logLevel: Optional log level for Realtime log output.
+  ///   - serverLogLevel: How much the Realtime server logs for this connection. Defaults to `nil`.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
@@ -150,7 +151,7 @@ public struct RealtimeClientOptions: Sendable {
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
-    logLevel: LogLevel? = nil,
+    serverLogLevel: RealtimeServerLogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
@@ -166,7 +167,7 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.handleAppLifecycle = handleAppLifecycle
-    self.logLevel = logLevel
+    self.serverLogLevel = serverLogLevel
     self.http = http
     self.accessToken = accessToken
     var logger = logger
@@ -378,35 +379,45 @@ extension HTTPField.Name {
   static let apiKey = Self("apiKey")!
 }
 
-/// Verbosity of log output emitted by the Realtime client.
+/// How much the Realtime server logs for one connection.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
-/// to control how much detail the Realtime server logs.
+/// Set it on ``RealtimeClientOptions/serverLogLevel``. The client sends it as the `log_level`
+/// query item of the WebSocket URL. It does not change what the client's own `logger` prints.
+///
+/// The type is open: a level this SDK has no member for still works.
+///
+/// ```swift
+/// var options = RealtimeClientOptions()
+/// options.serverLogLevel = .warning
+/// ```
 ///
 /// ## Topics
 /// ### Levels
 /// - ``info``
-/// - ``warn``
+/// - ``warning``
 /// - ``error``
-public struct LogLevel: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct RealtimeServerLogLevel: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value sent as the `log_level` query item.
   public let rawValue: String
 
-  /// Creates a ``LogLevel`` from a raw string value.
+  /// Creates a level from its raw value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``LogLevel`` from a string literal.
+  /// Creates a level from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
-  /// Informational messages.
-  public static let info: LogLevel = "info"
+  /// Informational messages and above.
+  public static let info: RealtimeServerLogLevel = "info"
 
-  /// Warning messages.
-  public static let warn: LogLevel = "warn"
+  /// Warnings and errors. Sent as `warn`.
+  public static let warning: RealtimeServerLogLevel = "warn"
 
-  /// Error messages only.
-  public static let error: LogLevel = "error"
+  /// Errors only.
+  public static let error: RealtimeServerLogLevel = "error"
 }

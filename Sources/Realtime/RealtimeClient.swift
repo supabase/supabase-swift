@@ -262,7 +262,7 @@ public actor RealtimeClient {
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
       apikey: options.apikey,
-      logLevel: options.logLevel
+      serverLogLevel: options.serverLogLevel
     )
 
     if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
@@ -864,7 +864,7 @@ public actor RealtimeClient {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, serverLogLevel: RealtimeServerLogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
@@ -879,8 +879,8 @@ public actor RealtimeClient {
 
     queryItems.append(URLQueryItem(name: "vsn", value: "2.0.0"))
 
-    if let logLevel {
-      queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
+    if let serverLogLevel {
+      queryItems.append(URLQueryItem(name: "log_level", value: serverLogLevel.rawValue))
     }
 
     components.queryItems = queryItems
