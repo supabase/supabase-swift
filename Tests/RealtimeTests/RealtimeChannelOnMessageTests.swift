@@ -307,6 +307,19 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
+  func postgresChangesDataThatIsNotAnObjectThrowsADecodingError() {
+    let error = #expect(throws: RealtimeError.self) {
+      try RealtimeChannel.postgresChangeData(in: ["ids": [1], "data": "not-an-object"])
+    }
+    #expect(error?.kind == .decoding)
+  }
+
+  @Test
+  func postgresChangesWithoutDataHasNoChangeData() throws {
+    #expect(try RealtimeChannel.postgresChangeData(in: ["ids": [1]]) == nil)
+  }
+
+  @Test
   func postgresChangesWithMalformedDataIsSwallowed() async {
     let changes = await recordPostgresChanges()
 

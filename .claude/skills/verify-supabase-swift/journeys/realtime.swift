@@ -48,11 +48,18 @@ let inserts = await changes.postgresChanges(
 let events = await changes.events()
 _ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribe() }
 // The server confirms the Postgres listener after the subscribe reply. A write before that
-// confirmation is never delivered.
-_ = await Verify.attempt("rt-postgres-subscribe") {
+// confirmation is never delivered. Stop on a failure too, so its reason is not lost to a timeout.
+if let setup = await Verify.attempt("rt-postgres-subscribe", {
   try await Verify.within(seconds: 10) {
-    _ = await events.first { $0 == .postgresChangesReady }
+    await events.first { event in
+      switch event {
+      case .postgresChangesReady, .postgresChangesFailed: true
+      default: false
+      }
+    }
   }
+}), case .postgresChangesFailed(let reason) = setup {
+  Verify.check("rt-postgres-subscribe", false, "server could not set up postgres changes: \(reason)")
 }
 _ = await Verify.attempt("rt-postgres-insert") {
   try await sender.from("key_value_storage")

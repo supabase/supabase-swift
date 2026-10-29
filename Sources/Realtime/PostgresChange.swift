@@ -137,9 +137,9 @@ public struct TypedPostgresChange<Row>: Sendable {
   // that made this change.
   let decoder: UncheckedSendable<JSONDecoder>
 
-  init(raw: PostgresChange, decoder: JSONDecoder) {
+  init(raw: PostgresChange, decoder: UncheckedSendable<JSONDecoder>) {
     self.raw = raw
-    self.decoder = UncheckedSendable(decoder)
+    self.decoder = decoder
   }
 
   /// The statement that made the change.

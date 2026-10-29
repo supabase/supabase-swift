@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 29/10/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import InlineSnapshotTesting
 import SnapshotTestingCustomDump
@@ -200,7 +201,7 @@ struct PostgresChangeTests {
   // MARK: - TypedPostgresChange
 
   private func typed(_ change: PostgresChange) -> TypedPostgresChange<Todo> {
-    TypedPostgresChange(raw: change, decoder: .supabase())
+    TypedPostgresChange(raw: change, decoder: UncheckedSendable(.supabase()))
   }
 
   @Test

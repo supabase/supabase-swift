@@ -620,7 +620,7 @@ public actor RealtimeChannel {
   }
 
   private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
-    guard let data = message.payload["data"]?.objectValue else {
+    guard let data = try Self.postgresChangeData(in: message.payload) else {
       logger.debug("Expected \"data\" key in message payload.")
       return
     }
@@ -695,6 +695,15 @@ public actor RealtimeChannel {
     for case .presence(let continuation) in listeners.map(\.listener) {
       continuation.yield(PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage))
     }
+  }
+
+  /// The `data` object of a `postgres_changes` payload, or `nil` when the payload has none.
+  static func postgresChangeData(in payload: JSONObject) throws(RealtimeError) -> JSONObject? {
+    guard let data = payload["data"] else { return nil }
+    guard let object = data.objectValue else {
+      throw RealtimeError.decoding("Expected \"data\" to be an object, got \(data).")
+    }
+    return object
   }
 
   private static func eventMatches(_ listening: String, _ event: String) -> Bool {

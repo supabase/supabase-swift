@@ -102,7 +102,7 @@ extension RealtimeChannel {
     let changes = await postgresChanges(
       event: event, schema: schema, table: table, filter: filter?.value, select: select
     )
-    return AsyncStream(changes.map { TypedPostgresChange(raw: $0, decoder: decoder.value) })
+    return AsyncStream(changes.map { TypedPostgresChange(raw: $0, decoder: decoder) })
   }
 
   func postgresChanges(
