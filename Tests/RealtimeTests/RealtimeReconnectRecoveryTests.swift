@@ -14,7 +14,6 @@ struct RealtimeReconnectRecoveryTests {
     RealtimeClientOptions(
       headers: ["apikey": apiKey],
       heartbeatInterval: .seconds(10),
-      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30)),
       requestTimeout: timeout,
       accessToken: { "token" }
     )
@@ -43,7 +42,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-1")
@@ -80,7 +80,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-close")
@@ -134,7 +135,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-error")
@@ -184,7 +186,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-leave")

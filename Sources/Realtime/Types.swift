@@ -20,7 +20,7 @@ public import Logging
 ///
 /// ```swift
 /// var options = RealtimeClientOptions(accessToken: { try await currentToken() })
-/// options.reconnectBackoff = .steps([.seconds(1), .seconds(5), .seconds(15)])
+/// options.heartbeatInterval = .seconds(15)
 /// options.serverLogLevel = .warning
 /// let client = RealtimeClient(url: realtimeURL, options: options)
 /// ```
@@ -34,8 +34,6 @@ public import Logging
 /// ### Timing
 /// - ``heartbeatInterval``
 /// - ``requestTimeout``
-/// - ``reconnectBackoff``
-/// - ``BackoffPolicy``
 /// - ``disconnectOnEmptyChannelsAfter``
 /// ### Behavior
 /// - ``connectOnSubscribe``
@@ -47,13 +45,12 @@ public import Logging
 /// - ``clock``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
-/// - ``defaultReconnectBackoff``
 /// - ``defaultRequestTimeout``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectBackoff:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   /// Headers sent with the WebSocket upgrade request.
   ///
@@ -68,12 +65,6 @@ public struct RealtimeClientOptions: Sendable {
   /// closes it, and reconnects. So a dead socket is found within two intervals. Lower this
   /// value to find one sooner, at the cost of more traffic.
   public var heartbeatInterval: Duration
-
-  /// How long the client waits before each reconnect attempt after the connection drops.
-  ///
-  /// Attempts never stop while the client wants a connection. The attempt count starts again
-  /// after a successful connect.
-  public var reconnectBackoff: BackoffPolicy
 
   /// How long the client waits for the server to answer a request.
   ///
@@ -153,10 +144,6 @@ public struct RealtimeClientOptions: Sendable {
   /// Default interval between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
-  /// Default for ``reconnectBackoff``: a full-jitter wait with a 1 s base and a 30 s cap.
-  public static let defaultReconnectBackoff: BackoffPolicy = .fullJitter(
-    base: .seconds(1), cap: .seconds(30))
-
   /// Default for ``requestTimeout``: 10 seconds.
   public static let defaultRequestTimeout: Duration = .seconds(10)
 
@@ -186,7 +173,6 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectBackoff: The wait before each reconnect attempt. Defaults to ``defaultReconnectBackoff``.
   ///   - requestTimeout: How long to wait for the server to answer a request. Defaults to ``defaultRequestTimeout``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
@@ -202,7 +188,6 @@ public struct RealtimeClientOptions: Sendable {
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
-    reconnectBackoff: BackoffPolicy = Self.defaultReconnectBackoff,
     requestTimeout: Duration = Self.defaultRequestTimeout,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
@@ -216,7 +201,6 @@ public struct RealtimeClientOptions: Sendable {
   ) {
     self.headers = headers
     self.heartbeatInterval = heartbeatInterval
-    self.reconnectBackoff = reconnectBackoff
     self.requestTimeout = requestTimeout
     self.connectOnSubscribe = connectOnSubscribe
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter

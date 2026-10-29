@@ -87,14 +87,18 @@ import Testing
     // MARK: - Helpers
 
     private func makeClient(port: UInt16) -> RealtimeClient {
-      RealtimeClient(
+      let options = RealtimeClientOptions(
+        heartbeatInterval: .seconds(30),
+        requestTimeout: .seconds(10),
+        handleAppLifecycle: false
+      )
+      return RealtimeClient(
         url: URL(string: "http://127.0.0.1:\(port)")!,
-        options: RealtimeClientOptions(
-          heartbeatInterval: .seconds(30),
-          reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30)),
-          requestTimeout: .seconds(10),
-          handleAppLifecycle: false
-        )
+        options: options,
+        transport: URLSessionWebSocketTransport(),
+        http: HTTPClient(configuration: options.http, appending: []),
+        clock: options.clock,
+        reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))
       )
     }
 

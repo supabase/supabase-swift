@@ -366,8 +366,8 @@ struct RealtimeClientConnectionTests {
   }
 
   @Test
-  func customReconnectBackoffSetsTheRetryDelay() async throws {
-    let h = Harness(reconnectBackoff: .custom { .seconds($0 * 7) })
+  func reconnectBackoffSetsTheRetryDelay() async throws {
+    let h = Harness(reconnectBackoff: .steps([.seconds(7)]))
     try await h.client.connect()
     var statuses = await h.client.statusChanges().makeAsyncIterator()
 
@@ -527,8 +527,6 @@ struct RealtimeClientConnectionTests {
         options: RealtimeClientOptions(
           headers: headers,
           heartbeatInterval: heartbeatInterval,
-          reconnectBackoff: reconnectBackoff
-            ?? .fullJitter(base: reconnectDelay, cap: .seconds(30)),
           handleAppLifecycle: false
         ),
         wsTransport: { url, headers in
@@ -544,6 +542,8 @@ struct RealtimeClientConnectionTests {
         },
         http: HTTPClient(transport: RecordingTransport()),
         clock: clock,
+        reconnectBackoff: reconnectBackoff
+          ?? .fullJitter(base: reconnectDelay, cap: .seconds(30)),
         jitter: jitter
       )
     }

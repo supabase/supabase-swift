@@ -300,7 +300,6 @@
             "apikey": DotEnv.supabasePublishableKey,
             "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
           ],
-          reconnectBackoff: .custom { _ in .seconds(1) },
           requestTimeout: .seconds(10),
           serverLogLevel: .warning,
           webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral),

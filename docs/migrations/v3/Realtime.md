@@ -16,9 +16,9 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
-- **Reconnect waits are shorter and spread out.** The default `reconnectBackoff` makes the n-th
-  wait a random duration in `0...min(30 s, 1 s · 2^(n-1))`. v2 started from 7 s and waited in the
-  upper half of that range. Code that relied on a minimum wait before a reconnect must not.
+- **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
+  in `0...min(30 s, 1 s · 2^(n-1))`, and you cannot change it. v2 started from 7 s and waited in
+  the upper half of that range. Code that relied on a minimum wait before a reconnect must not.
 - **Reconnect stops on a refused upgrade.** A reconnect attempt that the server refuses with HTTP
   401, 403 or 404 ends in `.disconnected` instead of retrying forever. Fix the key or token, then
   call `connect()` again.
@@ -97,13 +97,12 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
 | `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
 | `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
-| `RealtimeClientOptions(reconnectDelay:)` | `reconnectBackoff: BackoffPolicy` (see below) |
+| `RealtimeClientOptions(reconnectDelay:)`, `defaultReconnectDelay` | removed; the reconnect wait is internal (see [Silent changes](#silent-changes)) |
 | `RealtimeClientOptions(disconnectOnSessionLoss:)`, `defaultDisconnectOnSessionLoss` | removed; nothing read them |
 | `RealtimeClientOptions(logLevel:)`, `LogLevel`, `.warn` | `serverLogLevel:`, `RealtimeServerLogLevel`, `.warning` |
 | `RealtimeClientOptions(session:)` | `webSocketTransport:` (see below) |
 | `RealtimeClientOptions(maxRetryAttempts:)`, `defaultMaxRetryAttempts` | removed; `subscribe()` has no attempt limit |
 | `defaultTimeoutInterval` | `defaultRequestTimeout` |
-| `defaultReconnectDelay` | `defaultReconnectBackoff` |
 | `defaultHeartbeatInterval`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
 | `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `[String: JSONValue]` |
@@ -243,21 +242,6 @@ let options = RealtimeClientOptions(
   heartbeatInterval: .seconds(30), requestTimeout: .seconds(15)
 )
 try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
-```
-
-## `reconnectDelay:` is replaced by `reconnectBackoff:`
-
-`reconnectBackoff` takes a `BackoffPolicy`: `.fullJitter(base:cap:)` (the default, with a 1 s
-base and a 30 s cap), `.steps(_:)`, or `.custom { attempt in ... }`. Reconnects never stop while
-the client wants a connection.
-
-```swift
-// v2
-let options = RealtimeClientOptions(reconnectDelay: 5)
-// v3
-let options = RealtimeClientOptions(
-  reconnectBackoff: .fullJitter(base: .seconds(5), cap: .seconds(30))
-)
 ```
 
 ## `session:` is replaced by `webSocketTransport:`

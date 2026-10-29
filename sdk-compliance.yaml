@@ -1356,6 +1356,7 @@ features:
 
   realtime.client.connect:
     status: implemented
+    note: "Reconnects wait a full-jitter delay (1 s base, 30 s cap) with unlimited attempts. The curve is internal and not configurable."
     symbols:
       - RealtimeClient.connect
   realtime.client.disconnect:
@@ -1531,17 +1532,6 @@ features:
       - WebSocketTransport
       - WebSocketTransport.connect
       - RealtimeError.upgradeFailed
-  realtime.configuration.reconnect_backoff:
-    status: implemented
-    note: "RealtimeClientOptions.reconnectBackoff takes a BackoffPolicy; BackoffPolicy.custom maps the attempt count to a delay. The default is full jitter, 1 s base, 30 s cap, with unlimited attempts."
-    symbols:
-      - RealtimeClientOptions.reconnectBackoff
-      - RealtimeClientOptions.defaultReconnectBackoff
-      - BackoffPolicy
-      - BackoffPolicy.fullJitter
-      - BackoffPolicy.steps
-      - BackoffPolicy.custom
-      - BackoffPolicy.delay
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."

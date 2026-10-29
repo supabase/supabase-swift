@@ -66,7 +66,12 @@ public actor RealtimeClient {
   nonisolated let serializer = RealtimeSerializer()
   nonisolated let clock: any Clock<Duration>
   nonisolated let webSocketURL: URL
+  /// The wait before each reconnect attempt. Internal, like the channel rejoin backoff; tests
+  /// pass their own through the designated initializer.
   nonisolated let reconnectBackoff: BackoffPolicy
+  /// A random wait in `0...min(30 s, 1 s · 2^(attempt-1))`.
+  static let defaultReconnectBackoff = BackoffPolicy.fullJitter(
+    base: .seconds(1), cap: .seconds(30))
   /// The random source for the backoff jitter. Tests pin it to make the waits exact.
   nonisolated let jitter: @Sendable (ClosedRange<Double>) -> Double
 
@@ -240,6 +245,7 @@ public actor RealtimeClient {
     transport: any WebSocketTransport,
     http: HTTPClient,
     clock: any Clock<Duration>,
+    reconnectBackoff: BackoffPolicy = defaultReconnectBackoff,
     jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) {
     var headers = HTTPFields(options.headers)
@@ -257,7 +263,7 @@ public actor RealtimeClient {
     let start = Date()
     self.elapsed = elapsed
     self.now = { start.addingTimeInterval(elapsed().timeInterval) }
-    self.reconnectBackoff = options.reconnectBackoff
+    self.reconnectBackoff = reconnectBackoff
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
