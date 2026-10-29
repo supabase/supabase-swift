@@ -28,8 +28,8 @@ extension AuthClient {
   }
 }
 
-/// A storage key no other test uses, so that clients built by parallel tests never share a
-/// session store.
+/// A storage key no other test uses, so that clients built by parallel tests never read each
+/// other's stored session.
 func uniqueStorageKey() -> String {
   "sb-test-\(UUID().uuidString)-auth-token"
 }

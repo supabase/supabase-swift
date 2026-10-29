@@ -388,13 +388,21 @@ extension RealtimeClient {
 // MARK: - Effects
 
 extension RealtimeClient {
-  /// Waits for the `connect()` attempt started by `.openSocket`.
+  /// Waits for the `connect()` attempt started by `.openSocket`. Cancelling the caller ends its
+  /// wait at once but not the attempt: `connectAttempt.value` alone ignores the caller's
+  /// cancellation, so it would wait out a socket that never opens.
   private func awaitConnectAttempt() async throws {
     guard let connectAttempt else {
       throw RealtimeError.transport("Connection failed")
     }
+    let (outcome, continuation) = AsyncThrowingStream<Void, any Error>.makeStream()
+    Task.detached {
+      continuation.yield(with: await connectAttempt.result)
+      continuation.finish()
+    }
     do {
-      try await connectAttempt.value
+      for try await _ in outcome { return }
+      throw CancellationError()
     } catch {
       throw Self.connectionError(error)
     }
@@ -437,13 +445,11 @@ extension RealtimeClient {
   }
 
   func rejoinChannels() async {
-    await withTaskGroup(of: Void.self) { group in
-      for channel in channels.values {
-        group.addTask {
-          await channel.resetForReconnect()
-          try? await channel.subscribe()
-        }
-      }
+    for channel in channels.values {
+      await channel.resetForReconnect()
+      // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
+      // and a task that waited for it would keep a released client alive.
+      Task.detached { try? await channel.subscribe() }
     }
   }
 
