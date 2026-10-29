@@ -14,7 +14,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room")
     _ = try await h.subscribe(channel)
 
-    try await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
+    try await channel.broadcast(event: "cursor", payload: ["x": 1] as JSONObject)
 
     #expect(h.socket.sentEvents.contains { if case .frame(.binary) = $0 { true } else { false } })
   }
@@ -25,7 +25,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room")
 
     let error = await #expect(throws: RealtimeError.self) {
-      try await channel.broadcast(event: "cursor", message: ["x": 1] as JSONObject)
+      try await channel.broadcast(event: "cursor", payload: ["x": 1] as JSONObject)
     }
     #expect(error?.kind == .notSubscribed)
   }

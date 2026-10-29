@@ -91,7 +91,7 @@ struct BroadcastView: View {
 
     Task {
       let message = ChatMessage(text: messageText, timestamp: Date())
-      try await channel?.broadcast(event: "message", message: message)
+      try await channel?.broadcast(event: "message", payload: message)
 
       await MainActor.run {
         messageText = ""

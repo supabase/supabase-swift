@@ -46,11 +46,9 @@ import Logging
 /// - ``subscribe()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:message:encoder:)``
-/// - ``broadcast(event:message:)``
+/// - ``broadcast(event:payload:encoder:)``
 /// - ``broadcast(event:data:)``
-/// - ``httpSend(event:message:timeout:)-(_,Codable,_)``
-/// - ``httpSend(event:message:timeout:)-(_,JSONObject,_)``
+/// - ``httpSend(event:payload:encoder:timeout:)``
 /// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``presenceState``
@@ -280,41 +278,35 @@ public actor RealtimeChannel {
 
   // MARK: - Broadcast
 
-  /// Sends a broadcast message with a `Codable` payload over the WebSocket.
+  /// Sends a broadcast message to every client on the channel, over the WebSocket.
+  ///
+  /// The channel must be subscribed. There is no fallback to the REST API; to broadcast without
+  /// a subscription, use ``httpSend(event:payload:encoder:timeout:)``.
+  ///
+  /// Returns as soon as the frame is sent, unless
+  /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` is on: then it waits for
+  /// the server's reply. Wrap the call in a `Task` to send without waiting; cancelling that task
+  /// stops the wait, not the frame.
+  ///
+  /// > Important: On a private channel the server sends no reply when row level security denies
+  /// > the write or the database fails. With `acknowledge` on, such a broadcast fails with
+  /// > ``RealtimeError/Kind-swift.struct/timeout``.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
-  ///   - message: A `Codable` value to send as the message payload.
-  ///   - encoder: The `JSONEncoder` used to serialize `message`. Defaults to the fixed internal
-  ///     encoder (``JSONValue/encoder``) when `nil`.
-  /// - Throws: An error if `message` cannot be encoded, or the errors of
-  ///   ``broadcast(event:message:)``.
-  public func broadcast(
-    event: String, message: some Codable, encoder: JSONEncoder? = nil
-  ) async throws {
-    try await broadcast(
-      event: event, message: try JSONObject(message, encoder: encoder ?? JSONValue.encoder))
-  }
-
-  /// Sends a broadcast message with a raw `JSONObject` payload over the WebSocket.
-  ///
-  /// The channel must be subscribed. To broadcast without a subscription, use
-  /// ``httpSend(event:message:timeout:)-(_,JSONObject,_)``.
-  ///
-  /// Returns as soon as the frame is sent, unless ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge``
-  /// is on: then it waits for the server's reply. Wrap the call in a `Task` to send without
-  /// waiting; cancelling that task stops the wait, not the frame.
-  ///
-  /// - Parameters:
-  ///   - event: The broadcast event name.
-  ///   - message: A raw ``JSONObject`` payload.
-  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed``
-  ///   when the channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no
-  ///   reply arrived within the client's configured timeout, the server's reason as
+  ///   - payload: The value to send. It must encode as a JSON object.
+  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
+  /// - Throws: An `EncodingError` when `payload` does not encode as a JSON object.
+  ///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
+  ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
+  ///   arrived within the client's configured timeout, the server's reason as
   ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
   ///   ``RealtimeError/Kind-swift.struct/server`` when it rejected the message, and
   ///   `CancellationError` when the awaiting task is cancelled.
-  public func broadcast(event: String, message: JSONObject) async throws {
+  public func broadcast(
+    event: String, payload: some Encodable, encoder: JSONEncoder = .supabase()
+  ) async throws {
+    let message = try JSONObject(payload, encoder: encoder)
     guard case .subscribed = state, let client else {
       throw RealtimeError.notSubscribed
     }
@@ -331,7 +323,7 @@ public actor RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Throws: The errors of ``broadcast(event:message:)``.
+  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``, except the encoding error.
   public func broadcast(event: String, data: Data) async throws {
     guard case .subscribed = state, let client else {
       throw RealtimeError.notSubscribed
@@ -703,8 +695,10 @@ public actor RealtimeChannel {
     return object
   }
 
+  /// Event names match exactly, case included, as the server sends them. `"*"` matches every
+  /// event.
   private static func eventMatches(_ listening: String, _ event: String) -> Bool {
-    listening == "*" || listening.lowercased() == event.lowercased()
+    listening == "*" || listening == event
   }
 
   // MARK: - Listeners

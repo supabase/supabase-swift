@@ -270,11 +270,11 @@
 
         try await channel.subscribe()
 
-        try await channel.broadcast(event: "test-event", message: Message(value: 1, text: "first"))
+        try await channel.broadcast(event: "test-event", payload: Message(value: 1, text: "first"))
         try await channel.broadcast(
-          event: "test-event", message: Message(value: 2, text: "second"))
+          event: "test-event", payload: Message(value: 2, text: "second"))
         try await channel.broadcast(
-          event: "test-event", message: ["value": 3, "text": "third"] as JSONObject)
+          event: "test-event", payload: ["value": 3, "text": "third"] as JSONObject)
 
         let receivedMessages = try await withTimeout(.seconds(5)) {
           await receivedMessagesStream.prefix(3).collect()
@@ -336,7 +336,7 @@
         await client.realtime.setAuth(accessToken)
         #expect(await client.realtime.accessToken == accessToken)
 
-        try await channel.broadcast(event: "after-token", message: ["value": 1] as JSONObject)
+        try await channel.broadcast(event: "after-token", payload: ["value": 1] as JSONObject)
         let received = try await withTimeout(.seconds(5)) {
           await messages.first(where: { _ in true })
         }
@@ -362,10 +362,10 @@
 
         try await channel.subscribe()
 
-        try await channel.broadcast(event: "event-1", message: ["data": "1"])
-        try await channel.broadcast(event: "event-2", message: ["data": "2"])
-        try await channel.broadcast(event: "event-1", message: ["data": "3"])
-        try await channel.broadcast(event: "event-2", message: ["data": "4"])
+        try await channel.broadcast(event: "event-1", payload: ["data": "1"])
+        try await channel.broadcast(event: "event-2", payload: ["data": "2"])
+        try await channel.broadcast(event: "event-1", payload: ["data": "3"])
+        try await channel.broadcast(event: "event-2", payload: ["data": "4"])
 
         let event1 = try await withTimeout(.seconds(5)) {
           await event1Messages.prefix(2).collect()
@@ -402,7 +402,7 @@
 
         try await channel.subscribe()
 
-        try await channel.broadcast(event: "test", message: ["data": "test"])
+        try await channel.broadcast(event: "test", payload: ["data": "test"])
 
         try await Task.sleep(nanoseconds: 500_000_000)
 
@@ -689,7 +689,7 @@
           text: "Hello, Bob! How are you?",
           timestamp: Date()
         )
-        try await channel1.broadcast(event: "chat-message", message: message1)
+        try await channel1.broadcast(event: "chat-message", payload: message1)
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let user2Typing = UserPresence(
@@ -708,7 +708,7 @@
           text: "Hi Alice! I'm doing great, thanks!",
           timestamp: Date()
         )
-        try await channel2.broadcast(event: "chat-message", message: message2)
+        try await channel2.broadcast(event: "chat-message", payload: message2)
         try await Task.sleep(nanoseconds: 500_000_000)
 
         let user2Online = UserPresence(
@@ -727,7 +727,7 @@
           text: "Great to hear! Let's work on the project together.",
           timestamp: Date()
         )
-        try await channel1.broadcast(event: "chat-message", message: message3)
+        try await channel1.broadcast(event: "chat-message", payload: message3)
         try await Task.sleep(nanoseconds: 500_000_000)
 
         try await channel1.untrack()

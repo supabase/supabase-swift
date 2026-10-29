@@ -419,6 +419,38 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
+  func broadcastMatchingIsCaseSensitive() async {
+    let broadcasts = await sut.broadcasts(event: "Typing")
+
+    for event in ["typing", "Typing", "TYPING"] {
+      await sut.onMessage(
+        message(
+          event: ChannelEvent.broadcast,
+          payload: ["type": "broadcast", "event": .string(event), "payload": [:]]
+        )
+      )
+    }
+
+    #expect(await collect(broadcasts).map(\.event) == ["Typing"])
+  }
+
+  @Test
+  func wildcardReceivesEveryEvent() async {
+    let broadcasts = await sut.broadcasts(event: "*")
+
+    for event in ["a", "B"] {
+      await sut.onMessage(
+        message(
+          event: ChannelEvent.broadcast,
+          payload: ["type": "broadcast", "event": .string(event), "payload": [:]]
+        )
+      )
+    }
+
+    #expect(await collect(broadcasts).map(\.event) == ["a", "B"])
+  }
+
+  @Test
   func broadcastWithoutEventIsSwallowed() async {
     let broadcasts = await sut.broadcasts(event: "*")
 

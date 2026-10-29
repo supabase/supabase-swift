@@ -641,12 +641,12 @@ final class RealtimeTests: Sendable {
       // endpoint: it throws `.notSubscribed` and no request goes out. REST delivery is the
       // explicit `httpSend`, which expects a 202.
       let error = await #expect(throws: RealtimeError.self) {
-        try await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+        try await channel.broadcast(event: "test", payload: ["value": 42] as JSONObject)
       }
       #expect(error?.kind == .notSubscribed)
       #expect(http.requests.isEmpty)
 
-      try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)
+      try await channel.httpSend(event: "test", payload: ["value": 42] as JSONObject)
 
       let request = try #require(http.requests.last)
       var urlRequest = try #require(URLRequest(httpRequest: request.head))

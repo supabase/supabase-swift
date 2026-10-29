@@ -427,7 +427,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error when access token is missing")
     } catch {
       #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
@@ -457,7 +457,7 @@ struct RealtimeChannelTests {
     )
     let channel = await socket.channel("test-topic")
 
-    let task = Task { try await channel.httpSend(event: "test", message: ["data": "test"]) }
+    let task = Task { try await channel.httpSend(event: "test", payload: ["data": "test"]) }
     for await _ in requestStarted { break }
     task.cancel()
 
@@ -521,7 +521,7 @@ struct RealtimeChannelTests {
       config.isPrivate = true
     }
 
-    try await channel.httpSend(event: "test-event", message: ["data": "explicit"])
+    try await channel.httpSend(event: "test-event", payload: ["data": "explicit"])
 
     let requests = httpClient.requests
     #expect(requests.count == 1)
@@ -561,7 +561,7 @@ struct RealtimeChannelTests {
 
     let channel = await socket.channel("room/one")
 
-    try await channel.httpSend(event: "cursor move", message: ["x": 1])
+    try await channel.httpSend(event: "cursor move", payload: ["x": 1])
 
     let requests = httpClient.requests
     #expect(
@@ -653,7 +653,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on non-202 status")
     } catch let error as RealtimeError {
       #expect(error.kind == .server)
@@ -680,7 +680,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected failure")
     } catch let error as RealtimeError {
       #expect(error.kind == .transport)
@@ -706,7 +706,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     await #expect(throws: CancellationError.self) {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
   }
 
@@ -728,7 +728,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     await #expect(throws: FetchError.self) {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
   }
 
@@ -754,7 +754,7 @@ struct RealtimeChannelTests {
 
     let channel = await socket.channel("test-topic")
 
-    try await channel.httpSend(event: "test", message: ["data": "test"], timeout: .seconds(3))
+    try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: .seconds(3))
 
     let requests = httpClient.requests
     #expect(requests.count == 1)
@@ -782,7 +782,7 @@ struct RealtimeChannelTests {
 
     let channel = await socket.channel("test-topic")
 
-    try await channel.httpSend(event: "test", message: ["data": "test"])
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
 
     let requests = httpClient.requests
     #expect(requests.count == 1)
@@ -811,7 +811,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 400 status")
     } catch {
       #expect(error.localizedDescription == "Invalid request")
@@ -840,7 +840,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 503 status")
     } catch {
       let description = error.localizedDescription.lowercased()
