@@ -191,17 +191,183 @@ struct RealtimeChannelSubscriptionTests {
     let changes = join.payload["config"]?.objectValue?["postgres_changes"]?.arrayValue
     #expect(changes?.count == 1)
     #expect(changes?.first?.objectValue?["table"]?.stringValue == "users")
-    // The `system` confirmation path.
+    // The `system` confirmation path: "Subscribed to PostgreSQL" confirms the join on its own.
     await channel.onMessage(
       RealtimeMessageV2(
         joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.system,
-        payload: ["status": "ok"]
+        payload: ["status": "ok", "extension": "postgres_changes"]
       )
     )
 
     try await subscription.value
     #expect(await channel.status == .subscribed)
     withExtendedLifetime(inserts) {}
+  }
+
+  // MARK: - Postgres changes readiness
+
+  @Test
+  func subscribeWaitsForPostgresChangesReady() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    #expect(await !channel.status.isSubscribed)
+
+    try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func postgresChangesFailureThrowsAndLeaves() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    try h.send(
+      Self.system(join, status: "error", extension: "postgres_changes", message: "boom"))
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .server)
+    #expect(error?.message.contains("boom") == true)
+    #expect(error?.isRetryable == false)
+    let leave = try #require(await h.received(ChannelEvent.leave))
+    #expect(leave.joinRef == join.ref)
+    #expect(await channel.status.error != nil)
+    #expect(await channel.joinRef == nil)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func postgresChangesTimeoutThrowsAndLeaves() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room") {
+      $0.postgresChanges.subscriptionTimeout = .seconds(5)
+    }
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    await h.clock.advance(by: .seconds(5))
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .timeout)
+    #expect(error?.isRetryable == false)
+    #expect(try #require(await h.received(ChannelEvent.leave)).joinRef == join.ref)
+    #expect(await channel.status.error != nil)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func replicationReadyDoesNotConfirmThePostgresChangesWait() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    try h.send(Self.system(join, status: "ok", extension: "system"))
+    try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func postgresChangesReadyBeforeTheWaitParksStillSubscribes() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func subscribeWithoutPostgresChangesIgnoresTheReadyWait() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+
+    _ = try await h.subscribe(channel)
+
+    #expect(await channel.status == .subscribed)
+  }
+
+  @Test
+  func waitForSubscriptionSendsOptionsAndSubscribesOnTheReply() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room") {
+      $0.postgresChanges.waitForSubscription = true
+      $0.postgresChanges.subscriptionTimeout = .seconds(15)
+    }
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let options = join.payload["config"]?.objectValue?["postgres_changes_options"]
+    #expect(options == ["wait": true, "timeout": 15000])
+    // The server holds the reply while it sets up the bindings: past the 10 s client timeout,
+    // the join is still waiting.
+    await h.clock.advance(by: .seconds(11))
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    try h.confirm(join)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    withExtendedLifetime(changes) {}
+  }
+
+  @Test
+  func serverSideSubscribeTimeoutFailsWithoutRetry() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room") {
+      $0.postgresChanges.waitForSubscription = true
+    }
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: "PostgresChangesSubscribeTimeout: Timed out after 15000ms")
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.serverCode == .postgresChangesSubscribeTimeout)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    #expect(await channel.status.error != nil)
+    withExtendedLifetime(changes) {}
+  }
+
+  private static func system(
+    _ join: RealtimeMessageV2, status: String, extension: String, message: String = ""
+  ) -> RealtimeMessageV2 {
+    RealtimeMessageV2(
+      joinRef: join.ref, ref: nil, topic: join.topic, event: ChannelEvent.system,
+      payload: [
+        "status": .string(status), "extension": .string(`extension`),
+        "message": .string(message),
+      ]
+    )
   }
 
   @Test

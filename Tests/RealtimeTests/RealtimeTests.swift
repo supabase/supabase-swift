@@ -115,6 +115,7 @@ final class RealtimeTests: Sendable {
             )
           } else if msg.event == "phx_join" {
             server.send(.messagesSubscribed(to: msg))
+            server.send(.postgresChangesReady(for: msg))
           }
         }
       }
@@ -219,6 +220,7 @@ final class RealtimeTests: Sendable {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == 2 {
               server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -332,6 +334,7 @@ final class RealtimeTests: Sendable {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == successAttempt {
               server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -1011,6 +1014,20 @@ extension RealtimeMessageV2 {
           ]
         ],
         "status": "ok",
+      ]
+    )
+  }
+
+  /// The server's "Subscribed to PostgreSQL" message, sent once the join's Postgres changes
+  /// bindings are live.
+  static func postgresChangesReady(for join: RealtimeMessageV2) -> Self {
+    Self(
+      joinRef: join.ref,
+      ref: nil,
+      topic: "realtime:public:messages",
+      event: "system",
+      payload: [
+        "extension": "postgres_changes", "message": "Subscribed to PostgreSQL", "status": "ok",
       ]
     )
   }

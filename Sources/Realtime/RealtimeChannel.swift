@@ -147,8 +147,18 @@ public actor RealtimeChannel {
   var joinAccessToken: String?
 
   /// Resumed by the server's join confirmation; failed by a join error, a close, a reset, or
-  /// cancellation.
-  var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
+  /// cancellation. `stage` is the confirmation the current attempt waits for.
+  var joinWaiter:
+    (ref: String, stage: JoinStage, continuation: CheckedContinuation<Void, any Error>)?
+
+  /// Whether the current join has Postgres changes bindings the server has not confirmed yet
+  /// with "Subscribed to PostgreSQL". While it is set, the join reply alone does not subscribe
+  /// the channel.
+  var awaitingPostgresChanges = false
+
+  /// The `ref` of the join whose `phx_reply` arrived while ``awaitingPostgresChanges`` was set,
+  /// so an attempt that parks after the reply still sees it.
+  var joinReplyRef: String?
 
   /// A join error that arrived while its `phx_join` was still being sent, before the attempt
   /// parked its waiter. The attempt for `ref` picks it up.
@@ -529,18 +539,30 @@ public actor RealtimeChannel {
     let isReplication = `extension` == ChannelEvent.system
     switch message.status {
     case .ok where message.joinRef == nil || message.joinRef == joinRef:
-      didReceiveSubscribedOK()
+      // While the join waits for its Postgres changes, only "Subscribed to PostgreSQL" confirms
+      // it: a replication `system` message says nothing about the bindings.
+      if isPostgresChanges {
+        awaitingPostgresChanges = false
+        didReceiveSubscribedOK()
+      } else if !awaitingPostgresChanges {
+        didReceiveSubscribedOK()
+      }
       if isPostgresChanges {
         yield(.postgresChangesReady)
       } else if isReplication {
         yield(.replicationReady)
       }
     case .error:
-      // The server reports a postgres-changes subscription it could not set up this way. The
-      // join itself stands, so broadcast and presence keep working and the channel stays
-      // subscribed.
+      // The server reports a postgres-changes subscription it could not set up this way. A
+      // subscribe that waits for those changes fails; on a channel that is already subscribed
+      // the join stands, so broadcast and presence keep working.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic)' reported an error: \(reason)")
+      if isPostgresChanges, awaitingPostgresChanges, let joinRef,
+        message.joinRef == nil || message.joinRef == joinRef
+      {
+        didReceiveJoinError(.postgresChangesFailed(reason: reason), for: joinRef)
+      }
       if isPostgresChanges {
         yield(.postgresChangesFailed(reason))
       } else if isReplication {
@@ -594,7 +616,15 @@ public actor RealtimeChannel {
         return
       }
     }
-    didReceiveSubscribedOK()
+    guard awaitingPostgresChanges else {
+      didReceiveSubscribedOK()
+      return
+    }
+    joinReplyRef = ref
+    if let waiter = joinWaiter, waiter.ref == ref, waiter.stage == .reply {
+      joinWaiter = nil
+      waiter.continuation.resume()
+    }
   }
 
   private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {

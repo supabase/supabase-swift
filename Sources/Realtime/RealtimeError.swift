@@ -136,6 +136,7 @@ public struct RealtimeError: SupabaseError {
       .topicNameRequired, .malformedJWT, .jwtSignatureError, .jwtSignerError, .invalidJWTToken,
       .unauthorized, .privateOnly, .tenantNotFound, .realtimeDisabledForTenant,
       .realtimeDisabledForConfiguration, .unableToReplayMessages,
+      .postgresChangesSubscribeTimeout,
     ]
 
     static let authentication: Set<ServerCode> = [
