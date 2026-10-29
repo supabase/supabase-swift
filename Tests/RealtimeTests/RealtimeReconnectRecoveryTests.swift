@@ -96,7 +96,7 @@ struct RealtimeReconnectRecoveryTests {
       RealtimeMessageV2(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
@@ -110,7 +110,7 @@ struct RealtimeReconnectRecoveryTests {
       RealtimeMessageV2(
         joinRef: joinRef,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
@@ -148,7 +148,7 @@ struct RealtimeReconnectRecoveryTests {
       RealtimeMessageV2(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )
@@ -161,7 +161,7 @@ struct RealtimeReconnectRecoveryTests {
       RealtimeMessageV2(
         joinRef: nil,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )

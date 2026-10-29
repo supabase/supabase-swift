@@ -82,7 +82,7 @@ struct BinaryBroadcastView: View {
 
   func subscribe() async {
     let channel = await supabase.channel("binary-broadcast-example") {
-      $0.broadcast.receiveOwnBroadcasts = true
+      $0.broadcast.receiveOwnMessages = true
     }
 
     let messages = await channel.broadcasts(event: "binary_message")

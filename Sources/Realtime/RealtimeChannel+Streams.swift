@@ -54,7 +54,8 @@ extension RealtimeChannel {
 
   /// Returns an async stream of the row changes in a table.
   ///
-  /// Open this stream before calling ``subscribe()``; it shapes the join request.
+  /// The stream shapes the join request. Open it before you call ``subscribe()``: a stream
+  /// opened on a joined channel makes the channel leave and join again with the new binding.
   ///
   /// ```swift
   /// let changes = await channel.postgresChanges(table: "messages")
@@ -92,7 +93,8 @@ extension RealtimeChannel {
   /// decode its record as `Row`. A row that does not decode never drops the change or ends the
   /// stream; `row()` throws instead.
   ///
-  /// Open this stream before calling ``subscribe()``; it shapes the join request.
+  /// The stream shapes the join request. Open it before you call ``subscribe()``: a stream
+  /// opened on a joined channel makes the channel leave and join again with the new binding.
   ///
   /// The method runs on the caller's actor, so `Row` can have a `Decodable` conformance isolated
   /// to the main actor.
@@ -138,8 +140,6 @@ extension RealtimeChannel {
     filter: String?,
     select: [String]?
   ) -> AsyncStream<PostgresChange> {
-    guard canChangeJoinConfig(for: "postgres_changes") else { return .finished }
-
     let config = PostgresJoinConfig(
       event: event,
       schema: schema,
@@ -152,6 +152,7 @@ extension RealtimeChannel {
       bufferingPolicy: .unbounded
     )
     register(.postgres(config, continuation), terminating: continuation)
+    rejoinIfBindingsChanged()
     return stream
   }
 
@@ -194,7 +195,7 @@ extension RealtimeChannel {
     return stream
   }
 
-  /// Streams that shape the join payload can only be opened before the join is sent.
+  /// Presence streams shape the join payload, so they can only be opened before the join is sent.
   private func canChangeJoinConfig(for feature: String) -> Bool {
     switch state {
     case .unsubscribed, .unsubscribing, .failed:

@@ -25,7 +25,7 @@ _ = await Verify.attempt("rt-subscribe") {
 Verify.check("rt-subscribe", await inbox.status.isSubscribed, "receiver status \(await inbox.status)")
 
 _ = await Verify.attempt("rt-broadcast") {
-  try await outbox.broadcast(event: "ping", message: ["n": 1, "from": "sender"] as JSONObject)
+  try await outbox.broadcast(event: "ping", payload: ["n": 1, "from": "sender"] as JSONObject)
 }
 if let message = await Verify.attempt("rt-broadcast", {
   try await Verify.within(seconds: 5) {

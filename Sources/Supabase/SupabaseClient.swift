@@ -367,12 +367,12 @@ public final class SupabaseClient: Sendable {
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - configure: Sets broadcast, presence, and privacy options. It runs only when the channel
-  ///     is new.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
+  ///     channel that already exists for `name` keeps its configuration.
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) async -> RealtimeChannel {
     await realtime.channel(name, configure: configure)
   }

@@ -27,7 +27,7 @@ struct RealtimeTestHostTests {
   func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room") {
-      $0.broadcast.acknowledgeBroadcasts = true
+      $0.broadcast.acknowledge = true
     }
 
     async let subscribed: Void = channel.subscribe()
@@ -59,5 +59,36 @@ struct RealtimeTestHostTests {
 
     await host.waitUntil { host.statuses.last == .disconnected }
     #expect(host.sockets.first?.isClosed == true)
+  }
+
+  @Test
+  func topicIsTheUserNameAndTheWireTopicIsPrefixed() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+
+    #expect(channel.topic == "room")
+    #expect(await host.client.channelsByTopic["room"] === channel)
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: "phx_join")
+    #expect(join.topic == "realtime:room")
+    host.confirmJoin(join)
+    try await subscribed
+    #expect(await channel.status == .subscribed)
+  }
+
+  @Test
+  func aTopicThatStartsWithRealtimeIsStillPrefixedOnTheWire() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("realtime:room")
+
+    #expect(channel.topic == "realtime:room")
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: "phx_join")
+    #expect(join.topic == "realtime:realtime:room")
+    host.confirmJoin(join)
+    try await subscribed
+    #expect(await channel.status == .subscribed)
   }
 }

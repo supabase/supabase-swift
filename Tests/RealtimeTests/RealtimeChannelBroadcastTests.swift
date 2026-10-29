@@ -82,7 +82,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     try await channel.subscribe()
 
     try await channel.broadcast(
-      event: "my_event", message: ["hello": .string("world")] as JSONObject
+      event: "my_event", payload: ["hello": .string("world")] as JSONObject
     )
 
     let binaryEvents = client.sentEvents.compactMap { event -> Data? in
@@ -216,7 +216,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
 
     try await channel.broadcast(
-      event: "my_event", message: Message(userName: "abc"), encoder: snakeCaseEncoder
+      event: "my_event", payload: Message(userName: "abc"), encoder: snakeCaseEncoder
     )
 
     let frame = try #require(
@@ -227,6 +227,47 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
     #expect(frame.range(of: Data(#""user_name":"abc""#.utf8)) != nil)
     #expect(frame.range(of: Data("userName".utf8)) == nil)
+  }
+
+  @Test
+  func broadcast_defaultEncoderIsTheSupabaseEncoder() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+
+    try await channel.broadcast(
+      event: "my_event", payload: ["at": Date(timeIntervalSince1970: 0)])
+
+    let frame = try #require(
+      client.sentEvents.compactMap { event -> Data? in
+        if case .frame(.binary(let data)) = event { return data }
+        return nil
+      }.last
+    )
+    #expect(frame.range(of: Data(#""at":"1970-01-01T00:00:00"#.utf8)) != nil)
+  }
+
+  @Test
+  func httpSend_encodesPayloadWithTheGivenEncoder() async throws {
+    http.respond { _, _ in
+      (HTTPResponse(status: .init(code: 202)), Data())
+    }
+
+    struct Message: Encodable {
+      let userName: String
+    }
+    let snakeCaseEncoder = JSONEncoder()
+    snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
+
+    let channel = await sut.channel("test")
+    try await channel.httpSend(
+      event: "my_event", payload: Message(userName: "abc"), encoder: snakeCaseEncoder)
+
+    let body = try #require(http.requests.last?.body)
+    #expect(String(decoding: body, as: UTF8.self) == #"{"user_name":"abc"}"#)
+    #expect(http.requests.last?.head.headerFields[.contentType] == "application/json")
   }
 
   // MARK: - Broadcast on an unsubscribed channel
@@ -240,12 +281,12 @@ final class RealtimeChannelBroadcastTests: Sendable {
     }
 
     let channel = await sut.channel("test") { config in
-      config.broadcast.acknowledgeBroadcasts = true
+      config.broadcast.acknowledge = true
     }
 
     let error = await #expect(throws: RealtimeError.self) {
       try await channel.broadcast(
-        event: "my_event", message: ["hello": .string("world")] as JSONObject
+        event: "my_event", payload: ["hello": .string("world")] as JSONObject
       )
     }
     #expect(error?.kind == .notSubscribed)
@@ -253,16 +294,16 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
-  func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
+  func httpSend_urlUsesTheUserTopic() async throws {
     http.respond { _, _ in
       (HTTPResponse(status: .init(code: 202)), Data())
     }
 
     let channel = await sut.channel("test")
-    #expect(await channel.topic == "realtime:test")
+    #expect(channel.topic == "test")
 
     try await channel.httpSend(
-      event: "my_event", message: ["hello": .string("world")] as JSONObject
+      event: "my_event", payload: ["hello": .string("world")] as JSONObject
     )
 
     let request = http.requests.last

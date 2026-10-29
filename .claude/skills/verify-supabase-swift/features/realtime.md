@@ -14,7 +14,7 @@ messages, and listens to row changes in Postgres tables.
 
 - `client.realtime.connect()`
 - `client.realtime.channel(_:)`, then `channel.subscribe()` and `channel.unsubscribe()`
-- `channel.broadcast(event:message:)` and `channel.broadcasts(event:)`
+- `channel.broadcast(event:payload:)` and `channel.broadcasts(event:)`
 - `channel.postgresChanges(event: .insert, schema:table:)` and `channel.events()`
 
 ## Driving it with verify.sh
@@ -44,7 +44,7 @@ Preconditions:
 - Register `postgresChanges(...)` and `broadcasts(event:)` before `subscribe()`, as the journey
   and the integration tests do. The join message carries the Postgres listener config.
 - A client does not get its own broadcasts by default. Use two clients, or set
-  `$0.broadcast.receiveOwnBroadcasts = true` in the channel config.
+  `$0.broadcast.receiveOwnMessages = true` in the channel config.
 - Every wait needs a deadline (`Verify.within`). A missing event otherwise hangs the journey
   forever.
 - Presence and private channels (RLS on `realtime.messages`) are not in the bundled journey.

@@ -32,14 +32,14 @@ import Testing
       #expect(await client.status == .connected)
 
       let channel = await client.channel("room") {
-        $0.broadcast.receiveOwnBroadcasts = true
+        $0.broadcast.receiveOwnMessages = true
       }
       let pings = await channel.broadcasts(event: "ping")
       try await channel.subscribe()
       #expect(await channel.status == .subscribed)
       #expect(joins.value == 1)
 
-      try await channel.broadcast(event: "ping", message: ["n": 1] as JSONObject)
+      try await channel.broadcast(event: "ping", payload: ["n": 1] as JSONObject)
       let received = try await withTimeout(.seconds(10)) {
         await pings.first { _ in true }
       }

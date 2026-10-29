@@ -28,7 +28,7 @@ struct RealtimeClientChannelsTests {
 
     let topics = await client.channels.map(\.topic)
     #expect(topics.count == 2)
-    #expect(Set(topics) == ["realtime:a", "realtime:b"])
+    #expect(Set(topics) == ["a", "b"])
   }
 
   @Test
@@ -38,7 +38,7 @@ struct RealtimeClientChannelsTests {
 
     await client.removeChannel(first)
 
-    #expect(await client.channels.map(\.topic) == ["realtime:b"])
+    #expect(await client.channels.map(\.topic) == ["b"])
   }
 
   @Test
@@ -90,6 +90,6 @@ struct RealtimeClientChannelsTests {
   func configureAppliesTheConfiguration() async {
     let channel = await client.channel("private-room", configure: { $0.isPrivate = true })
 
-    #expect(channel.config.isPrivate)
+    #expect(channel.configuration.isPrivate)
   }
 }

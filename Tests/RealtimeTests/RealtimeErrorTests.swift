@@ -135,7 +135,7 @@ struct RealtimeErrorTests {
       code: .errorOnRpcCall, kind: .server, isRetryable: true),
     .init(
       reason: "PostgresChangesSubscribeTimeout: Timed out after 15000ms",
-      code: .postgresChangesSubscribeTimeout, kind: .server, isRetryable: true),
+      code: .postgresChangesSubscribeTimeout, kind: .server, isRetryable: false),
     .init(
       reason: "UnknownErrorOnChannel: %RuntimeError{}",
       code: .unknownErrorOnChannel, kind: .server, isRetryable: true),
@@ -205,7 +205,9 @@ struct RealtimeErrorTests {
     .init(reason: "MissingPartition: x", expected: .retry),
     .init(reason: "TimeoutOnRpcCall: x", expected: .retry),
     .init(reason: "ErrorOnRpcCall: x", expected: .retry),
-    .init(reason: "PostgresChangesSubscribeTimeout: x", expected: .retry),
+    // `subscribe()` returns only once changes are live, so a server-side wait that runs out
+    // fails it instead of joining again.
+    .init(reason: "PostgresChangesSubscribeTimeout: x", expected: .fail),
     .init(reason: "UnknownErrorOnChannel: x", expected: .retry),
     .init(reason: "BrandNewCode: x", expected: .retry),
     .init(reason: "Realtime was unable to connect to the project database", expected: .retry),

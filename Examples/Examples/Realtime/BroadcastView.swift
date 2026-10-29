@@ -69,7 +69,7 @@ struct BroadcastView: View {
 
   func subscribe() async {
     let channel = await supabase.channel("broadcast-example") {
-      $0.broadcast.receiveOwnBroadcasts = true
+      $0.broadcast.receiveOwnMessages = true
     }
 
     do {
@@ -91,7 +91,7 @@ struct BroadcastView: View {
 
     Task {
       let message = ChatMessage(text: messageText, timestamp: Date())
-      try await channel?.broadcast(event: "message", message: message)
+      try await channel?.broadcast(event: "message", payload: message)
 
       await MainActor.run {
         messageText = ""

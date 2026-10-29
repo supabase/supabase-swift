@@ -541,7 +541,7 @@ extension RealtimeClient {
         options.logger.debug(
           "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
         )
-        await channelsByTopic[broadcast.topic]?.handleBinaryBroadcast(broadcast)
+        await channel(forWireTopic: broadcast.topic)?.handleBinaryBroadcast(broadcast)
       } catch {
         options.logger.error("Failed to decode binary frame: \(error)")
       }
@@ -575,7 +575,11 @@ extension RealtimeClient {
       options.logger.debug("Received event \(message.event) for channel \(message.topic)")
     }
 
-    await channelsByTopic[message.topic]?.onMessage(message)
+    await channel(forWireTopic: message.topic)?.onMessage(message)
+  }
+
+  private func channel(forWireTopic wireTopic: String) -> RealtimeChannel? {
+    RealtimeChannel.topic(forWireTopic: wireTopic).flatMap { channelsByTopic[$0] }
   }
 
   // MARK: Reconnect

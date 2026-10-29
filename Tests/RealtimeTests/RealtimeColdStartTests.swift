@@ -269,6 +269,19 @@ final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
             ]
           )
         )
+        // A real server follows the reply with "Subscribed to PostgreSQL".
+        socket.reply(
+          RealtimeMessageV2(
+            joinRef: message.ref,
+            ref: nil,
+            topic: message.topic,
+            event: "system",
+            payload: [
+              "extension": "postgres_changes", "message": "Subscribed to PostgreSQL",
+              "status": "ok",
+            ]
+          )
+        )
       default:
         break
       }

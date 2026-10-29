@@ -12,40 +12,16 @@ import Helpers
 import IssueReporting
 import Logging
 
-/// Configuration for a ``RealtimeChannel``.
-///
-/// Pass a builder closure to ``RealtimeClient/channel(_:configure:)`` to customize
-/// broadcast, presence, and privacy settings before subscribing.
-///
-/// ## Topics
-/// ### Configuration Properties
-/// - ``broadcast``
-/// - ``presence``
-/// - ``isPrivate``
-public struct RealtimeChannelConfig: Sendable {
-  /// Configuration for the broadcast feature of the channel.
-  public var broadcast: BroadcastJoinConfig
-
-  /// Configuration for the presence feature of the channel.
-  public var presence: PresenceJoinConfig
-
-  /// Whether the channel is private.
-  ///
-  /// Private channels enforce access control via RLS policies defined in your database.
-  /// See the [Realtime authorization guide](https://supabase.com/docs/guides/realtime/authorization)
-  /// for details.
-  public var isPrivate: Bool
-}
-
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
 /// Obtain an instance from ``RealtimeClient/channel(_:configure:)``, open the streams you want,
-/// then call ``subscribe()``. Postgres-change and presence streams shape the join request, so
-/// open them **before** subscribing; broadcast and system streams can be opened at any time.
+/// then call ``subscribe()``. Presence streams shape the join request, so open them **before**
+/// subscribing. A Postgres changes stream opened after the join makes the channel rejoin with
+/// the new binding. Broadcast and system streams can be opened at any time.
 ///
 /// ```swift
 /// let channel = await client.channel("room:lobby") { config in
-///   config.broadcast.receiveOwnBroadcasts = true
+///   config.broadcast.receiveOwnMessages = true
 /// }
 ///
 /// let messages = await channel.broadcasts(event: "message")
@@ -63,7 +39,7 @@ public struct RealtimeChannelConfig: Sendable {
 /// ## Topics
 /// ### Identity
 /// - ``topic``
-/// - ``config``
+/// - ``configuration``
 /// ### Status
 /// - ``status``
 /// - ``statusChanges()``
@@ -71,11 +47,9 @@ public struct RealtimeChannelConfig: Sendable {
 /// - ``subscribe()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:message:encoder:)``
-/// - ``broadcast(event:message:)``
+/// - ``broadcast(event:payload:encoder:)``
 /// - ``broadcast(event:data:)``
-/// - ``httpSend(event:message:timeout:)-(_,Codable,_)``
-/// - ``httpSend(event:message:timeout:)-(_,JSONObject,_)``
+/// - ``httpSend(event:payload:encoder:timeout:)``
 /// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``presenceState``
@@ -91,15 +65,16 @@ public struct RealtimeChannelConfig: Sendable {
 /// ### Channel Events
 /// - ``events()``
 public actor RealtimeChannel {
-  /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
+  /// The topic name passed to ``RealtimeClient/channel(_:configure:)``, such as `"room:lobby"`.
+  ///
+  /// The SDK adds the `realtime:` prefix the server expects on the WebSocket only.
   public nonisolated let topic: String
 
-  /// The channel's topic without the `realtime:` prefix, as expected by the
-  /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
-  nonisolated let subTopic: String
+  /// The topic on the WebSocket: ``topic`` with the `realtime:` prefix.
+  nonisolated let wireTopic: String
 
-  /// The channel's configuration, as passed to ``RealtimeClient/channel(_:configure:)``.
-  public nonisolated let config: RealtimeChannelConfig
+  /// The channel's configuration, as set in ``RealtimeClient/channel(_:configure:)``.
+  public nonisolated let configuration: RealtimeChannelConfiguration
 
   nonisolated let logger: Logging.Logger
 
@@ -173,8 +148,24 @@ public actor RealtimeChannel {
   var joinAccessToken: String?
 
   /// Resumed by the server's join confirmation; failed by a join error, a close, a reset, or
-  /// cancellation.
-  var joinWaiter: (ref: String, continuation: CheckedContinuation<Void, any Error>)?
+  /// cancellation. `stage` is the confirmation the current attempt waits for.
+  var joinWaiter:
+    (ref: String, stage: JoinStage, continuation: CheckedContinuation<Void, any Error>)?
+
+  /// Whether the current join has Postgres changes bindings the server has not confirmed yet
+  /// with "Subscribed to PostgreSQL". While it is set, the join reply alone does not subscribe
+  /// the channel.
+  var awaitingPostgresChanges = false
+
+  /// The `ref` of the last join the server confirmed.
+  var confirmedJoinRef: String?
+
+  /// The Postgres changes bindings the current join carries.
+  var joinedBindings: [PostgresJoinConfig] = []
+
+  /// The `ref` of the join whose `phx_reply` arrived while ``awaitingPostgresChanges`` was set,
+  /// so an attempt that parks after the reply still sees it.
+  var joinReplyRef: String?
 
   /// A join error that arrived while its `phx_join` was still being sent, before the attempt
   /// parked its waiter. The attempt for `ref` picks it up.
@@ -246,14 +237,13 @@ public actor RealtimeChannel {
 
   init(
     topic: String,
-    config: RealtimeChannelConfig,
+    configuration: RealtimeChannelConfiguration,
     client: RealtimeClient,
     logger: Logging.Logger
   ) {
     self.topic = topic
-    self.subTopic =
-      topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
-    self.config = config
+    self.wireTopic = Self.wireTopic(for: topic)
+    self.configuration = configuration
     self.logger = logger
     self.client = client
     self.isolation = client.isolation
@@ -305,48 +295,42 @@ public actor RealtimeChannel {
 
   // MARK: - Broadcast
 
-  /// Sends a broadcast message with a `Codable` payload over the WebSocket.
+  /// Sends a broadcast message to every client on the channel, over the WebSocket.
+  ///
+  /// The channel must be subscribed. There is no fallback to the REST API; to broadcast without
+  /// a subscription, use ``httpSend(event:payload:encoder:timeout:)``.
+  ///
+  /// Returns as soon as the frame is sent, unless
+  /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` is on: then it waits for
+  /// the server's reply. Wrap the call in a `Task` to send without waiting; cancelling that task
+  /// stops the wait, not the frame.
+  ///
+  /// > Important: On a private channel the server sends no reply when row level security denies
+  /// > the write or the database fails. With `acknowledge` on, such a broadcast fails with
+  /// > ``RealtimeError/Kind-swift.struct/timeout``.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
-  ///   - message: A `Codable` value to send as the message payload.
-  ///   - encoder: The `JSONEncoder` used to serialize `message`. Defaults to the fixed internal
-  ///     encoder (``JSONValue/encoder``) when `nil`.
-  /// - Throws: An error if `message` cannot be encoded, or the errors of
-  ///   ``broadcast(event:message:)``.
-  public func broadcast(
-    event: String, message: some Codable, encoder: JSONEncoder? = nil
-  ) async throws {
-    try await broadcast(
-      event: event, message: try JSONObject(message, encoder: encoder ?? JSONValue.encoder))
-  }
-
-  /// Sends a broadcast message with a raw `JSONObject` payload over the WebSocket.
-  ///
-  /// The channel must be subscribed. To broadcast without a subscription, use
-  /// ``httpSend(event:message:timeout:)-(_,JSONObject,_)``.
-  ///
-  /// Returns as soon as the frame is sent, unless ``BroadcastJoinConfig/acknowledgeBroadcasts``
-  /// is on: then it waits for the server's reply. Wrap the call in a `Task` to send without
-  /// waiting; cancelling that task stops the wait, not the frame.
-  ///
-  /// - Parameters:
-  ///   - event: The broadcast event name.
-  ///   - message: A raw ``JSONObject`` payload.
-  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed``
-  ///   when the channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no
-  ///   reply arrived within the client's configured timeout, the server's reason as
+  ///   - payload: The value to send. It must encode as a JSON object.
+  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
+  /// - Throws: An `EncodingError` when `payload` does not encode as a JSON object.
+  ///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
+  ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
+  ///   arrived within the client's configured timeout, the server's reason as
   ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
   ///   ``RealtimeError/Kind-swift.struct/server`` when it rejected the message, and
   ///   `CancellationError` when the awaiting task is cancelled.
-  public func broadcast(event: String, message: JSONObject) async throws {
+  public func broadcast(
+    event: String, payload: some Encodable, encoder: JSONEncoder = .supabase()
+  ) async throws {
+    let message = try JSONObject(payload, encoder: encoder)
     guard case .subscribed = state, let client else {
       throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    try await push(ref: ref, awaitingReply: config.broadcast.acknowledgeBroadcasts) {
+    try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
+        joinRef: joinRef, ref: ref, topic: wireTopic, event: event, jsonPayload: message
       )
     }
   }
@@ -356,15 +340,15 @@ public actor RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Throws: The errors of ``broadcast(event:message:)``.
+  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``, except the encoding error.
   public func broadcast(event: String, data: Data) async throws {
     guard case .subscribed = state, let client else {
       throw RealtimeError.notSubscribed
     }
     let ref = await client.makeRef()
-    try await push(ref: ref, awaitingReply: config.broadcast.acknowledgeBroadcasts) {
+    try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
+        joinRef: joinRef, ref: ref, topic: wireTopic, event: event, binaryPayload: data
       )
     }
   }
@@ -451,8 +435,19 @@ public actor RealtimeChannel {
     try await push(ref: ref, awaitingReply: true) { await client.push(message) }
   }
 
+  /// Sends `phx_leave` for the join `leftJoinRef`, which may no longer be the current join.
+  func pushLeave(joinRef leftJoinRef: String) async {
+    guard let client else { return }
+    let ref = await client.makeRef()
+    await client.push(
+      RealtimeMessageV2(
+        joinRef: leftJoinRef, ref: ref, topic: wireTopic, event: ChannelEvent.leave, payload: [:]
+      )
+    )
+  }
+
   private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
-    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
+    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: wireTopic, event: event, payload: payload)
   }
 
   /// Sends the frame `send` produces and, when `awaitingReply` is set, waits for the server's
@@ -562,18 +557,30 @@ public actor RealtimeChannel {
     let isReplication = `extension` == ChannelEvent.system
     switch message.status {
     case .ok where message.joinRef == nil || message.joinRef == joinRef:
-      didReceiveSubscribedOK()
+      // While the join waits for its Postgres changes, only "Subscribed to PostgreSQL" confirms
+      // it: a replication `system` message says nothing about the bindings.
+      if isPostgresChanges {
+        awaitingPostgresChanges = false
+        didReceiveSubscribedOK()
+      } else if !awaitingPostgresChanges {
+        didReceiveSubscribedOK()
+      }
       if isPostgresChanges {
         yield(.postgresChangesReady)
       } else if isReplication {
         yield(.replicationReady)
       }
     case .error:
-      // The server reports a postgres-changes subscription it could not set up this way. The
-      // join itself stands, so broadcast and presence keep working and the channel stays
-      // subscribed.
+      // The server reports a postgres-changes subscription it could not set up this way. A
+      // subscribe that waits for those changes fails; on a channel that is already subscribed
+      // the join stands, so broadcast and presence keep working.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic)' reported an error: \(reason)")
+      if isPostgresChanges, awaitingPostgresChanges, let joinRef,
+        message.joinRef == nil || message.joinRef == joinRef
+      {
+        didReceiveJoinError(.postgresChangesFailed(reason: reason), for: joinRef)
+      }
       if isPostgresChanges {
         yield(.postgresChangesFailed(reason))
       } else if isReplication {
@@ -627,7 +634,15 @@ public actor RealtimeChannel {
         return
       }
     }
-    didReceiveSubscribedOK()
+    guard awaitingPostgresChanges else {
+      didReceiveSubscribedOK()
+      return
+    }
+    joinReplyRef = ref
+    if let waiter = joinWaiter, waiter.ref == ref, waiter.stage == .reply {
+      joinWaiter = nil
+      waiter.continuation.resume()
+    }
   }
 
   private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
@@ -728,8 +743,10 @@ public actor RealtimeChannel {
     return object
   }
 
+  /// Event names match exactly, case included, as the server sends them. `"*"` matches every
+  /// event.
   private static func eventMatches(_ listening: String, _ event: String) -> Bool {
-    listening == "*" || listening.lowercased() == event.lowercased()
+    listening == "*" || listening == event
   }
 
   // MARK: - Listeners
@@ -774,6 +791,17 @@ public actor RealtimeChannel {
   /// The `postgres_changes` bindings of the open streams, in registration order.
   var clientChanges: [PostgresJoinConfig] {
     listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
+  }
+
+  /// The topic on the WebSocket for the topic name `topic`.
+  static func wireTopic(for topic: String) -> String {
+    "realtime:\(topic)"
+  }
+
+  /// The topic name for a topic on the WebSocket, or `nil` when it is not a channel topic.
+  static func topic(forWireTopic wireTopic: String) -> String? {
+    guard wireTopic.hasPrefix("realtime:") else { return nil }
+    return String(wireTopic.dropFirst("realtime:".count))
   }
 
   /// The waits between join attempts after a timeout, a lost connection, or a transient join

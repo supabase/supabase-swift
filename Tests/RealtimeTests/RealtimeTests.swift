@@ -116,6 +116,7 @@ final class RealtimeTests: Sendable {
             )
           } else if msg.event == "phx_join" {
             server.send(.messagesSubscribed(to: msg))
+            server.send(.postgresChangesReady(for: msg))
           }
         }
       }
@@ -220,6 +221,7 @@ final class RealtimeTests: Sendable {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == 2 {
               server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -333,6 +335,7 @@ final class RealtimeTests: Sendable {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == successAttempt {
               server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -635,19 +638,19 @@ final class RealtimeTests: Sendable {
       }
 
       let channel = await sut.channel("public:messages") {
-        $0.broadcast.acknowledgeBroadcasts = true
+        $0.broadcast.acknowledge = true
       }
 
       // `broadcast` on a channel that is not subscribed no longer falls back to the REST
       // endpoint: it throws `.notSubscribed` and no request goes out. REST delivery is the
       // explicit `httpSend`, which expects a 202.
       let error = await #expect(throws: RealtimeError.self) {
-        try await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+        try await channel.broadcast(event: "test", payload: ["value": 42] as JSONObject)
       }
       #expect(error?.kind == .notSubscribed)
       #expect(http.requests.isEmpty)
 
-      try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)
+      try await channel.httpSend(event: "test", payload: ["value": 42] as JSONObject)
 
       let request = try #require(http.requests.last)
       var urlRequest = try #require(URLRequest(httpRequest: request.head))
@@ -1012,6 +1015,20 @@ extension RealtimeMessageV2 {
           ]
         ],
         "status": "ok",
+      ]
+    )
+  }
+
+  /// The server's "Subscribed to PostgreSQL" message, sent once the join's Postgres changes
+  /// bindings are live.
+  static func postgresChangesReady(for join: RealtimeMessageV2) -> Self {
+    Self(
+      joinRef: join.ref,
+      ref: nil,
+      topic: "realtime:public:messages",
+      event: "system",
+      payload: [
+        "extension": "postgres_changes", "message": "Subscribed to PostgreSQL", "status": "ok",
       ]
     )
   }
