@@ -89,7 +89,7 @@ public final class SupabaseClient: Sendable {
   let functionsURL: URL
   let clock: any Clock<Duration>
 
-  private let _auth: AuthClient
+  let _auth: AuthClient
 
   /// The Auth client for managing user sessions and authentication.
   ///
