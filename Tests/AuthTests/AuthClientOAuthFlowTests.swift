@@ -133,7 +133,7 @@ import Testing
       func installsADefaultPresentationContextWhenConfigureLeftItUnset() throws {
         let session = makeSession()
 
-        let installed = AuthClient.installDefaultPresentationContextIfNeeded(on: session)
+        let installed = AuthPlatform.installDefaultPresentationAnchor(on: session)
 
         #expect(installed != nil)
         // Returned so the caller can hold it: the session's own reference is weak, and an
@@ -148,7 +148,7 @@ import Testing
         let supplied = DefaultPresentationContextProvider()
         session.presentationContextProvider = supplied
 
-        let installed = AuthClient.installDefaultPresentationContextIfNeeded(on: session)
+        let installed = AuthPlatform.installDefaultPresentationAnchor(on: session)
 
         #expect(installed == nil)
         #expect(session.presentationContextProvider === supplied)

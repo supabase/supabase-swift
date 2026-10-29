@@ -89,7 +89,7 @@ public final class SupabaseClient: Sendable {
   let functionsURL: URL
   let clock: any Clock<Duration>
 
-  private let _auth: AuthClient
+  let _auth: AuthClient
 
   /// The Auth client for managing user sessions and authentication.
   ///
@@ -259,7 +259,8 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
+      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
+      observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
 

@@ -163,7 +163,7 @@ struct AuthClientMultipleInstancesTests {
   func deinitStopsAutoRefreshTask() async {
     let url = URL(string: "http://localhost:54321/auth")!
 
-    let sessionManager: SessionManager
+    let autoRefresh: AutoRefreshController
 
     do {
       let client = AuthClient(
@@ -173,24 +173,11 @@ struct AuthClientMultipleInstancesTests {
           localStorage: InMemoryLocalStorage()
         )
       )
-      sessionManager = client.dependencies.sessionManager
+      autoRefresh = client.dependencies.autoRefresh
 
-      client.startAutoRefresh()
-
-      var didStart = await sessionManager.isAutoRefreshRunning()
-      for _ in 0..<100 where !didStart {
-        try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
-        didStart = await sessionManager.isAutoRefreshRunning()
-      }
-      #expect(didStart)
+      #expect(await waitUntil { await autoRefresh.isRegistered })
     }
 
-    var isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
-    for _ in 0..<100 where isAutoRefreshRunning {
-      try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
-      isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
-    }
-
-    #expect(isAutoRefreshRunning == false)
+    #expect(await waitUntil { await !autoRefresh.isRegistered })
   }
 }

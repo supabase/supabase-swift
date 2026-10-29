@@ -42,13 +42,9 @@ extension AuthClient.Configuration {
   /// On Apple platforms this is a ``KeychainLocalStorage`` instance. Other platforms have no
   /// Keychain, so the default keeps values in memory and loses the session when the process ends.
   /// Pass your own ``AuthLocalStorage`` to persist the session.
-  #if canImport(Security)
-    public static let defaultLocalStorage: any AuthLocalStorage = KeychainLocalStorage()
-  #else
-    public static var defaultLocalStorage: any AuthLocalStorage {
-      EphemeralLocalStorage()
-    }
-  #endif
+  public static var defaultLocalStorage: any AuthLocalStorage {
+    AuthPlatform.live.makeDefaultLocalStorage()
+  }
 }
 
 /// An ``AuthLocalStorage`` that keeps values in memory only.

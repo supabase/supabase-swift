@@ -91,7 +91,7 @@ struct SupabaseClientTests {
         db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           headers: customHeaders,
@@ -145,7 +145,7 @@ struct SupabaseClientTests {
     expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
     #expect(realtimeOptions.logger.label == logger.label)
 
-    #expect(!client.auth.configuration.automaticallyRefreshesToken)
+    #expect(client.auth.configuration.autoRefresh == .manual)
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
 
     #expect(
@@ -166,7 +166,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(logger: logger)
       )
@@ -235,7 +235,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         )
       )
     )
@@ -259,7 +259,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         realtime: RealtimeClientOptions(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
@@ -287,7 +287,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: httpSession))
@@ -307,7 +307,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: httpSession))
@@ -380,6 +380,65 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func customAccessTokenClientDoesNotRefreshTheStoredSession() async throws {
+    final class StoredSessionStorage: AuthLocalStorage {
+      let data: Data
+      init(data: Data) { self.data = data }
+      func store(key _: String, value _: Data) throws {}
+      func retrieve(key _: String) throws -> Data? { data }
+      func remove(key _: String) throws {}
+    }
+
+    let now = Date()
+    let stored = Auth.Session(
+      accessToken: "stored-access-token",
+      tokenType: "bearer",
+      expiresIn: 30,
+      expiresAt: now.addingTimeInterval(30).timeIntervalSince1970,
+      refreshToken: "stored-refresh-token",
+      user: Auth.User(
+        id: UUID(),
+        appMetadata: [:],
+        userMetadata: [:],
+        audience: "authenticated",
+        createdAt: now,
+        updatedAt: now
+      )
+    )
+    let storage = StoredSessionStorage(
+      data: try PersistedSessionCodec.encode(ReceivedSession(session: stored, receivedAt: now))
+    )
+
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (
+        HTTPTypes.HTTPResponse(
+          status: .badRequest, headerFields: [.contentType: "application/json"]
+        ),
+        HTTPBody(Data("{}".utf8))
+      )
+    }
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: .init(
+        auth: .init(storage: storage, accessToken: { "third-party-jwt" }),
+        global: .init(http: .init(transport: transport))
+      )
+    )
+
+    let session = try await client._auth.session
+
+    #expect(session.accessToken == "stored-access-token")
+    #expect(
+      !seen.value.contains { $0.path?.hasPrefix("/auth/v1/token") == true },
+      "a client with a third-party access token must not redeem the stored refresh token"
+    )
+  }
+
+  @Test
   func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
     final class CapturingProtocol: URLProtocol {
       private static let storage = LockIsolated<URLRequest?>(nil)
@@ -411,7 +470,7 @@ struct SupabaseClientTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: .init(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
         global: .init(
           http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
         )
@@ -438,7 +497,7 @@ struct SupabaseClientTests {
         options: SupabaseClientOptions(
           auth: SupabaseClientOptions.AuthOptions(
             storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
+            autoRefresh: .manual
           )
         )
       )
@@ -473,7 +532,7 @@ struct SupabaseClientTests {
         options: SupabaseClientOptions(
           auth: SupabaseClientOptions.AuthOptions(
             storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
+            autoRefresh: .manual
           )
         )
       )
@@ -549,7 +608,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false,
+          autoRefresh: .manual,
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -599,7 +658,7 @@ struct SupabaseClientTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
         global: .init(http: .init(transport: transport)),
         functions: .init(region: .usEast1)
       )
@@ -620,7 +679,7 @@ struct SupabaseClientTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
         global: .init(
           http: .init(
             transport: ClosureTransport { request, _ in
@@ -675,7 +734,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: transport, timeout: .seconds(7)))
@@ -714,7 +773,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: transport, middlewares: [TagMiddleware()]))
@@ -735,7 +794,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         realtime: RealtimeClientOptions(http: .init(middlewares: [TagMiddleware()]))
       )

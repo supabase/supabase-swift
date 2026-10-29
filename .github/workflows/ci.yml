@@ -243,6 +243,9 @@ jobs:
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
+    # Tests read this to skip what the nightly toolchain cannot run yet (SDK-2597).
+    env:
+      SWIFT_NIGHTLY: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     strategy:
       fail-fast: false
       matrix:

@@ -70,7 +70,7 @@ struct SupabaseClientTypedSchemaTests {
         db: SupabaseClientOptions.DatabaseOptions(schema: schema),
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(

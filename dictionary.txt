@@ -6,6 +6,7 @@ Alamofire
 alamofire
 apikey
 Apikey
+appex
 AQAB
 Ascii
 autocapitalization

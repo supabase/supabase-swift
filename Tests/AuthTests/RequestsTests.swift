@@ -1092,9 +1092,11 @@ struct RequestsTests {
           }
 
           throw UnimplementedError()
-        }))
+        }),
+      autoRefresh: .manual
+    )
 
-    return AuthClient(configuration: configuration, date: date, pkce: .live, urlOpener: .live)
+    return AuthClient(configuration: configuration, date: date, pkce: .live, platform: .live)
   }
 }
 
