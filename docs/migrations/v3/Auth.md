@@ -93,8 +93,10 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Each client keeps its own session in memory.** Because the session is read once, two
   clients with the same storage and storage key do not see each other's changes. When one
   refreshes, the other still holds the old refresh token, and its next refresh fails with
-  `refresh_token_already_used`. It signs out on the first such refresh after its session
-  expires. Create one client per project, or give each client its own `storageKey`.
+  `refresh_token_already_used`. On the first such refresh after its session expires, it reads
+  storage again: when storage holds the newer session, it takes that session and emits
+  `tokenRefreshed` (`signedIn` for another user); otherwise it signs out. Create one client per
+  project, or give each client its own `storageKey`.
 - **Refreshes are deduplicated and throttled.** A client runs one refresh of a refresh token at a
   time. A cancelled caller of `session` or `refreshSession` throws `CancellationError` at once,
   and the shared refresh still finishes. When a refresh fails, a new refresh with that same token
