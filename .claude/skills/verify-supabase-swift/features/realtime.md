@@ -13,9 +13,10 @@ messages, and listens to row changes in Postgres tables.
 ## How to get to it (user POV)
 
 - `client.realtime.connect()`
-- `client.realtime.channel(_:)`, then `channel.subscribe()` and `channel.unsubscribe()`
-- `channel.broadcast(event:message:)` and `channel.broadcasts(event:)`
-- `channel.postgresChanges(InsertAction.self, schema:table:)` and `channel.systemMessages()`
+- `client.realtime.channel(_:options:)`, then `channel.subscribeWithError()` and
+  `channel.unsubscribe()`
+- `channel.broadcast(event:message:)` and `channel.broadcastStream(event:)`
+- `channel.postgresChange(InsertAction.self, schema:table:)` and `channel.system()`
 
 ## Driving it with verify.sh
 
@@ -38,11 +39,12 @@ Preconditions:
 
 ## Gotchas
 
-- After `subscribe()` returns, the server still has to start the Postgres listener. It sends a
-  system message when it is ready. A write before that message is never delivered. Wait for
-  `systemMessages()` first, as the journey does.
-- Register `postgresChanges(...)` and `broadcasts(event:)` before `subscribe()`, as the journey
-  and the integration tests do. The join message carries the Postgres listener config.
+- After `subscribeWithError()` returns, the server still has to start the Postgres listener. It
+  sends a system message when it is ready. A write before that message is never delivered. Wait
+  for `system()` first, as the journey does.
+- Open `postgresChange(...)` before `subscribeWithError()`, as the journey and the integration
+  tests do. The join message carries the Postgres listener config. A stream opened after the
+  join gets no rows.
 - A client does not get its own broadcasts by default. Use two clients, or set
   `$0.broadcast.receiveOwnBroadcasts = true` in the channel config.
 - Every wait needs a deadline (`Verify.within`). A missing event otherwise hangs the journey
