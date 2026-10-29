@@ -309,7 +309,7 @@
         ).session
         let accessToken = try #require(session?.accessToken)
         await client.realtime.setAuth(accessToken)
-        #expect(client.realtime.connection.token.value == accessToken)
+        #expect(client.realtime.connection.tokens.token == accessToken)
 
         try await channel.broadcast(event: "after-token", message: ["value": 1] as JSONObject)
         let received = try await withTimeout(.seconds(5)) {

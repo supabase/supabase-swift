@@ -50,11 +50,15 @@ Changes that still compile but behave differently. Check each one by hand.
   failed connection attempt counts, and so does each join that timed out or failed. The waits
   between connection attempts are the reconnect waits above, so a subscribe while the server is
   down can throw sooner than in v2.
-- **The token is not refreshed before it expires yet.** The client asks `accessToken` for a
-  token before each connection attempt and at each heartbeat, and sends a changed token to the
-  joined channels. It does not yet refresh the token before its `exp` or limit how often it calls
-  `accessToken`, and a `nil` from `accessToken` clears the token on the channels. A later v3
-  prerelease adds this. Until then, call `setAuth(_:)` when your session refreshes.
+- **The `accessToken` callback is called less often, and before the token expires.** The client
+  calls it at most once every 10 seconds from `setAuth()`, the heartbeat, a reconnect, and
+  `httpSend`. Inside that window `setAuth()` keeps the current token. A subscribe still calls it,
+  so a channel that subscribes right after sign-in joins with the new token. While connected, the
+  client also calls it one minute before a JWT's `exp`. A `nil` result keeps the current token
+  instead of sending a `null` token to the channels. The callback runs in a task of its own, so
+  cancelling `subscribeWithError()` or `setAuth()` no longer cancels it. After half of `timeout`
+  it counts as failed and is cancelled, so a callback that hangs no longer stops a reconnect.
+  Search for `setAuth()` calls that expect the callback to run every time.
 - **A join waits at least 10 seconds.** Each join attempt waits at least
   `RealtimeClientOptions.defaultTimeout` (10 seconds) for the server's reply, even when
   `timeout` is shorter. The server can hold a rejected private-channel join for about 5 seconds.

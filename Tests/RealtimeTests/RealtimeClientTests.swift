@@ -311,24 +311,116 @@ struct RealtimeClientTests {
   }
 
   @Test
-  func setAuthPushesATokenThatAJoinAlreadyFetched() async throws {
+  func aTokenThatAJoinFetchedReachesTheOtherChannels() async throws {
     let provided = LockIsolated("t1")
     let harness = RealtimeHarness { $0.accessToken = { provided.value } }
     let connection = try await harness.connect()
     let a = harness.client.channel("a")
     try await a.subscribeWithError()
     provided.setValue("t2")
+
     let b = harness.client.channel("b")
     try await b.subscribeWithError()
-    _ = await connection.nextSent("phx_join")
-    let secondJoin = await connection.nextSent("phx_join")
-    #expect(secondJoin.payload.jsonObject["access_token"]?.stringValue == "t2")
 
+    let frames = await collect(connection) { frames in
+      frames.filter { $0.event == "phx_join" }.count == 2
+        && frames.contains { $0.event == "access_token" }
+    }
+    #expect(frames.last { $0.event == "phx_join" }?.accessToken == "t2")
+    let pushes = frames.filter { $0.event == "access_token" }
+    #expect(pushes.map(\.topic) == ["realtime:a"])
+    #expect(pushes.first?.accessToken == "t2")
     await harness.client.setAuth("t2")
+    await harness.socket.settle()
+    #expect(connection.unreadSent.allSatisfy { $0.event != "access_token" })
+  }
 
-    let first = await connection.nextSent("access_token")
-    let second = await connection.nextSent("access_token")
-    #expect(Set([first.topic, second.topic]) == ["realtime:a", "realtime:b"])
+  @Test
+  func aTokenSentDuringAJoinThatFailsDoesNotOutliveTheRejoin() async throws {
+    let harness = RealtimeHarness(replies: .realtime(join: { _ in nil })) {
+      $0.headers[.authorization] = "Bearer user-1"
+      $0.reconnectDelay = .seconds(1)
+    }
+    let connection = try await harness.connect()
+    let channel = harness.client.channel("room")
+    let subscribing = Task { try await channel.subscribeWithError() }
+    _ = await connection.nextSent("phx_join")
+
+    await harness.client.setAuth("user-2")
+    await connection.fail()
+    await harness.client.setAuth("anon")
+    await harness.advance(by: .seconds(1))
+    let next = try #require(await harness.nextConnection())
+    await next.open()
+    let rejoin = await next.nextSent("phx_join")
+    await next.reply(to: rejoin)
+    try await subscribing.value
+    await harness.client.setAuth("anon")
+    await harness.socket.settle()
+
+    #expect(rejoin.accessToken == "anon")
+    let tokens = next.unreadSent.filter { $0.event == "access_token" }.map(\.accessToken)
+    #expect(!tokens.contains("user-2"))
+    #expect(tokens.last ?? "anon" == "anon")
+  }
+
+  @Test
+  func aCallbackThatIgnoresItsTimeoutIsNotCalledAgainUntilItReturns() async throws {
+    let callback = TokenCallback("t1")
+    let harness = RealtimeHarness { $0.accessToken = callback.closure }
+    try await harness.connect()
+    await harness.advance(by: .seconds(10))
+    callback.hold()
+    let refreshing = Task { await harness.client.setAuth() }
+    await callback.nextHeldCall()
+    await harness.advance(by: RealtimeClientOptions.defaultTimeout / 2)
+    await refreshing.value
+    let calls = callback.calls
+
+    await harness.advance(by: .seconds(10))
+    await harness.client.setAuth()
+    #expect(callback.calls == calls)
+
+    callback.set("t2")
+    callback.release(returning: "late")
+    await harness.advance(by: .seconds(10))
+    let client = harness.client
+    let calledAgain = await within(.seconds(5)) {
+      while callback.calls == calls {
+        await client.setAuth()
+        try? await Task.sleep(for: .milliseconds(1))
+      }
+    }
+    #expect(calledAgain != nil)
+    #expect(callback.calls == calls + 1)
+    #expect(harness.client.connection.tokens.token == "t2")
+  }
+
+  @Test
+  func aSubscribeRightAfterSignInAsksTheCallbackInsideTheThrottleWindow() async throws {
+    let callback = TokenCallback("anon")
+    let harness = RealtimeHarness { $0.accessToken = callback.closure }
+    let connection = try await harness.connect()
+    callback.set("user")
+
+    try await harness.client.channel("room").subscribeWithError()
+
+    let join = await connection.nextSent("phx_join")
+    #expect(join.accessToken == "user")
+  }
+
+  @Test
+  func theFirstSubscribeOnANewSocketAsksTheCallbackOnce() async throws {
+    let callback = TokenCallback("t1")
+    let harness = RealtimeHarness { $0.accessToken = callback.closure }
+    let channel = harness.client.channel("room")
+
+    async let subscribed: Void = channel.subscribeWithError()
+    let connection = await harness.transport.nextConnection()
+    await connection.open()
+    try await subscribed
+
+    #expect(callback.calls == 1)
   }
 
   @Test
@@ -336,14 +428,14 @@ struct RealtimeClientTests {
     let provided = LockIsolated("t1")
     let harness = RealtimeHarness {
       $0.accessToken = { provided.value }
-      $0.heartbeatInterval = .seconds(5)
+      $0.heartbeatInterval = .seconds(10)
     }
     let connection = try await harness.connect()
     let channel = harness.client.channel("room")
     try await channel.subscribeWithError()
     provided.setValue("t2")
 
-    await harness.advance(by: .seconds(5))
+    await harness.advance(by: .seconds(10))
 
     let pushed = await connection.nextSent("access_token")
     #expect(pushed.payload.jsonObject["access_token"]?.stringValue == "t2")
@@ -360,6 +452,7 @@ struct RealtimeClientTests {
     let channel = harness.client.channel("room")
     try await channel.subscribeWithError()
     provided.setValue("t2")
+    await harness.advance(by: TokenBox.refreshInterval)
 
     await connection.fail()
     await harness.advance(by: .seconds(1))

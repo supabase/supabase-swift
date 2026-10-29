@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 23/10/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
@@ -22,10 +21,7 @@ final class RealtimeConnection: Sendable {
   let options: RealtimeClientOptions
   let url: URL
   let http: HTTPClient
-  /// The newest token from any source. Joins send it.
-  let token: LockIsolated<String?>
-  /// The token ``RealtimeClient/setAuth(_:)`` last sent to the subscribed channels.
-  let pushedToken: LockIsolated<String?>
+  let tokens: TokenBox
 
   init(url: URL, options: RealtimeClientOptions, transport: any Transport) {
     var withClientInfo = options
@@ -40,11 +36,16 @@ final class RealtimeConnection: Sendable {
     self.options = options
     http = HTTPClient(
       configuration: options.http, appending: [LoggerInterceptor(logger: options.logger)])
-    let initialToken = options.headers[.authorization]?.split(separator: " ").last.map(String.init)
-    let token = LockIsolated(initialToken)
-    self.token = token
-    pushedToken = LockIsolated(initialToken)
-    let accessToken = options.accessToken
+    // The socket's `timeout` bounds the token wait and the handshake together, so the wait takes
+    // only half of it.
+    let tokens = TokenBox(
+      token: options.headers[.authorization]?.split(separator: " ").last.map(String.init),
+      provider: options.accessToken,
+      callTimeout: options.timeout / 2,
+      clock: options.clock,
+      logger: options.logger
+    )
+    self.tokens = tokens
 
     let reconnectDelay = options.reconnectDelay
     let logger = options.logger
@@ -52,7 +53,7 @@ final class RealtimeConnection: Sendable {
       endpoint: url,
       options: SocketOptions(
         params: {
-          await Self.refresh(token, from: accessToken)
+          await tokens.refreshUnlessRecent()
           return params
         },
         heartbeatInterval: options.heartbeatInterval,
@@ -123,24 +124,6 @@ final class RealtimeConnection: Sendable {
       }
     }
     throw CancellationError()
-  }
-
-  /// Asks `RealtimeClientOptions.accessToken` for a new token. The socket also does this before
-  /// each connection attempt, so the joins that follow a reconnect send a current token.
-  @discardableResult
-  func refreshToken() async -> String? {
-    await Self.refresh(token, from: options.accessToken)
-  }
-
-  @discardableResult
-  private static func refresh(
-    _ token: LockIsolated<String?>, from accessToken: (@Sendable () async throws -> String?)?
-  ) async -> String? {
-    if let fresh = try? await accessToken?() {
-      token.setValue(fresh)
-      return fresh
-    }
-    return token.value
   }
 
   func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {

@@ -46,9 +46,10 @@ public final class RealtimeClient: Sendable {
   var options: RealtimeClientOptions { connection.options }
   var url: URL { connection.url }
   private let state = LockIsolated(State())
-  /// Asks `RealtimeClientOptions.accessToken` at every heartbeat, as supabase-js does, so a
-  /// third-party token reaches the channels before it expires.
-  private let tokenRefresh = LockIsolated<Task<Void, Never>?>(nil)
+  private let tokenTasks = LockIsolated<[Task<Void, Never>]>([])
+  /// Each push pass waits for this one, because sends from separate tasks can reach the socket
+  /// out of order and leave the server with the older token.
+  private let lastPush = LockIsolated<Task<Void, Never>?>(nil)
   #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
     private let lifecycle = LockIsolated<RealtimeLifecycleManager?>(nil)
   #endif
@@ -82,15 +83,31 @@ public final class RealtimeClient: Sendable {
 
   init(url: URL, options: RealtimeClientOptions, transport: any Transport) {
     connection = RealtimeConnection(url: url, options: options, transport: transport)
+    let pushRequests = connection.tokens.pushRequests
+    let refreshesDue = connection.tokens.refreshesDue
+    var tasks = [
+      Task { [weak self] in
+        for await _ in pushRequests {
+          await self?.pushAccessToken()
+        }
+      },
+      Task { [weak self] in
+        for await _ in refreshesDue {
+          guard let self, self.status == .connected else { continue }
+          await self.setAuth()
+        }
+      },
+    ]
     if options.accessToken != nil {
       let heartbeats = connection.socket.heartbeats
-      tokenRefresh.setValue(
+      tasks.append(
         Task { [weak self] in
           for await heartbeat in heartbeats where heartbeat == .sent {
             await self?.setAuth()
           }
         })
     }
+    tokenTasks.withValue { [tasks] in $0 = tasks }
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
       if options.handleAppLifecycle {
         lifecycle.setValue(RealtimeLifecycleManager(client: self))
@@ -99,7 +116,9 @@ public final class RealtimeClient: Sendable {
   }
 
   deinit {
-    tokenRefresh.value?.cancel()
+    for task in tokenTasks.value {
+      task.cancel()
+    }
   }
 
   /// The connection status.
@@ -256,31 +275,41 @@ public final class RealtimeClient: Sendable {
   /// Sets the access token that channels send to authorize Realtime and its RLS checks.
   ///
   /// Every subscribed channel gets the new token at once. A channel that joins later sends it in
-  /// its join. With no `token`, the client asks `RealtimeClientOptions.accessToken`.
+  /// its join.
+  ///
+  /// With no `token`, the client asks `RealtimeClientOptions.accessToken`, at most once every
+  /// 10 seconds; inside that window it keeps the current token. A callback that throws, returns
+  /// `nil`, or does not return within half of `RealtimeClientOptions.timeout` also keeps the
+  /// current token; the client cancels a callback that does not return in time. A callback result
+  /// that arrives after a newer token was set with this method is dropped. Cancelling the calling
+  /// task returns at once and does not cancel the callback.
+  ///
+  /// With the callback set, the client also asks it at every heartbeat, and one minute before the
+  /// token's `exp` while connected, so the server does not close the channels when the token
+  /// expires.
   public func setAuth(_ token: String? = nil) async {
-    let newToken: String?
-    do {
-      if let token {
-        newToken = token
-      } else {
-        newToken = try await connection.options.accessToken?()
+    if let token {
+      connection.tokens.store(token)
+    } else {
+      await connection.tokens.refreshUnlessRecent()
+    }
+    await pushAccessToken()
+  }
+
+  private func pushAccessToken() async {
+    let pass = lastPush.withValue { last in
+      let previous = last
+      let next = Task { [weak self] in
+        await previous?.value
+        guard let self, let token = self.connection.tokens.token else { return }
+        for channel in self.channels.values {
+          await channel.sendAccessToken(token)
+        }
       }
-    } catch {
-      connection.options.logger.error("Failed to fetch access token: \(error)")
-      return
+      last = next
+      return next
     }
-    connection.token.setValue(newToken)
-    let isChanged = connection.pushedToken.withValue { pushed in
-      defer { pushed = newToken }
-      return pushed != newToken
-    }
-    guard isChanged else { return }
-    let channels = state.withValue { Array($0.channels.values) }
-    await withTaskGroup(of: Void.self) { group in
-      for channel in channels {
-        group.addTask { await channel.sendAccessToken(newToken) }
-      }
-    }
+    _ = await pass.resultUnlessCancelled
   }
 
   func handleAppBackground() {
