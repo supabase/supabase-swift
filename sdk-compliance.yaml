@@ -1463,6 +1463,9 @@ features:
       - RealtimePostgresIsValue.true
       - RealtimePostgresIsValue.false
       - RealtimePostgresIsValue.unknown
+    supporting_symbols:
+      - RealtimePostgresFilterValue
+      - RealtimePostgresFilterValue.realtimeFilterValue
   realtime.subscriptions.private_channel:
     status: implemented
     symbols:
