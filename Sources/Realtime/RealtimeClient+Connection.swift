@@ -439,7 +439,7 @@ extension RealtimeClient {
   /// Asks the transport for a connection. One that opens after the calling task was cancelled
   /// is closed here, since nothing else will ever see it.
   private func openConnection() async throws -> any WebSocketConnection {
-    let conn = try await transport.connect(to: webSocketURL, headerFields: options.headers)
+    let conn = try await transport.connect(to: webSocketURL, headerFields: headers)
     if Task.isCancelled {
       conn.close(code: .normalClosure, reason: "Connection cancelled")
       throw CancellationError()

@@ -311,6 +311,10 @@ supporting_symbols:
   # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
   - RealtimeClientOptions.requestTimeout
+  # Connection plumbing every realtime.* capability uses: the upgrade headers and the
+  # HTTP client REST broadcasts go through.
+  - RealtimeClientOptions.headers
+  - RealtimeClientOptions.http
   - RealtimeClientOptions.defaultRequestTimeout
   - RealtimeClientOptions.connectOnSubscribe
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
@@ -1495,9 +1499,10 @@ features:
       - PresenceJoinConfig.key
 
   realtime.configuration.custom_websocket_transport:
-    status: partially_implemented
-    note: "Apps conform to WebSocketTransport (or configure URLSessionWebSocketTransport, e.g. for certificate pinning). The RealtimeClientOptions.webSocketTransport option that injects it lands with SDK-2103."
+    status: implemented
+    note: "RealtimeClientOptions.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
     symbols:
+      - RealtimeClientOptions.webSocketTransport
       - URLSessionWebSocketTransport
       - URLSessionWebSocketTransport.connect
       - URLSessionWebSocketTransport.init
@@ -1541,9 +1546,9 @@ features:
       - RealtimeClientOptions.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
-    note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.accessToken
   realtime.configuration.deferred_disconnect:
     status: implemented
     symbols:
@@ -1552,9 +1557,10 @@ features:
       - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "Set via the logger parameter of RealtimeClientOptions.init (the stored property is package until SDK-2103 makes it public). RealtimeClientOptions.serverLogLevel sets the server-side log level."
+    note: "RealtimeClientOptions.logger takes a swift-log Logger, which carries its own level. RealtimeClientOptions.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.logger
       - RealtimeClientOptions.serverLogLevel
     supporting_symbols:
       - RealtimeServerLogLevel

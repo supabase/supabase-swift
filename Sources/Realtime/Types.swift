@@ -38,9 +38,14 @@ public import Logging
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectBackoff:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectBackoff:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
-  package var headers: HTTPFields
+  /// Headers sent with the WebSocket upgrade request.
+  ///
+  /// Header names compare without regard to case. `SupabaseClient` adds its own headers, such
+  /// as `apikey`, and those win over a header set here. The client adds
+  /// `X-Client-Info: realtime-swift/<version>` unless you set that header yourself.
+  public var headers: [String: String]
 
   /// How often the client sends a heartbeat to keep the connection alive.
   ///
@@ -94,9 +99,33 @@ public struct RealtimeClientOptions: Sendable {
   /// How much the Realtime server logs for this connection. `nil`, the default, keeps the
   /// server's own level.
   public var serverLogLevel: RealtimeServerLogLevel?
-  package var http: HTTPClientConfiguration
-  package var accessToken: (@Sendable () async throws -> String?)?
-  package var logger: Logging.Logger
+
+  /// The transport and middleware chain that `RealtimeChannel.httpSend` calls go through.
+  ///
+  /// The WebSocket does not use it; see ``webSocketTransport``.
+  public var http: HTTPClientConfiguration
+
+  /// Returns the access token channels join with.
+  ///
+  /// The client calls it before a join, when a heartbeat goes out, and one minute before the
+  /// token's `exp`, at most once every 10 seconds. A call that throws, returns `nil`, or does not
+  /// return within ``requestTimeout`` keeps the current token. `SupabaseClient` sets it to the
+  /// signed-in user's token.
+  public var accessToken: (@Sendable () async throws -> String?)?
+
+  /// The logger for the client's own diagnostics.
+  ///
+  /// The initializer tags it with the `system` metadata key set to `realtime`.
+  /// `SupabaseClient` replaces it with its global logger.
+  public var logger: Logging.Logger
+
+  /// The WebSocket stack the client connects with.
+  ///
+  /// `nil`, the default, uses ``URLSessionWebSocketTransport``. Set a configured
+  /// `URLSessionWebSocketTransport` to pin certificates, or your own ``WebSocketTransport``
+  /// to use another stack. A custom transport must follow the error contract that
+  /// ``WebSocketTransport`` describes.
+  public var webSocketTransport: (any WebSocketTransport)?
 
   /// The clock the heartbeat timer and reconnect backoff sleep on.
   ///
@@ -105,16 +134,6 @@ public struct RealtimeClientOptions: Sendable {
   /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
   /// yourself, as this package does not export it.
   public var clock: any Clock<Duration>
-
-  /// A template `URLSession` used to configure the Realtime WebSocket connection.
-  ///
-  /// Realtime never uses this session object directly — it always creates its own dedicated
-  /// internal session, copying this session's `configuration` and forwarding its `delegate`'s
-  /// auth-challenge callback (if any). Pass the same preconfigured `URLSession` used
-  /// elsewhere in your app (e.g. one with a `URLSessionDelegate` implementing certificate
-  /// pinning) to apply the same trust evaluation to Realtime's WebSocket connection.
-  /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
-  package var session: URLSession?
 
   /// Default interval between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: Duration = .seconds(25)
@@ -160,7 +179,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
-  ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
+  ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
   ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
@@ -176,11 +195,11 @@ public struct RealtimeClientOptions: Sendable {
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
-    session: URLSession? = nil,
+    webSocketTransport: (any WebSocketTransport)? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.heartbeatInterval = heartbeatInterval
     self.reconnectBackoff = reconnectBackoff
     self.requestTimeout = requestTimeout
@@ -193,12 +212,8 @@ public struct RealtimeClientOptions: Sendable {
     var logger = logger
     logger[metadataKey: "system"] = "realtime"
     self.logger = logger
-    self.session = session
+    self.webSocketTransport = webSocketTransport
     self.clock = clock
-  }
-
-  var apikey: String? {
-    headers[.apiKey]
   }
 }
 

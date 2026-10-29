@@ -96,7 +96,7 @@ extension RealtimeChannel {
     }
 
     var headers: HTTPFields = [.contentType: contentType]
-    if let apiKey = client.options.apikey {
+    if let apiKey = client.headers[.apiKey] {
       headers[.apiKey] = apiKey
     }
     headers[.authorization] = "Bearer \(accessToken)"

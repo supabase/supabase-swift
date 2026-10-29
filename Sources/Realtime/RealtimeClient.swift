@@ -61,6 +61,8 @@ actor RealtimeExecutor {}
 public actor RealtimeClient {
   nonisolated let url: URL
   nonisolated let options: RealtimeClientOptions
+  /// `options.headers` with `X-Client-Info` added when the app did not set it.
+  nonisolated let headers: HTTPFields
   nonisolated let transport: any WebSocketTransport
   nonisolated let http: HTTPClient
   nonisolated let serializer = RealtimeSerializer()
@@ -221,10 +223,7 @@ public actor RealtimeClient {
     self.init(
       url: url,
       options: options,
-      transport: URLSessionWebSocketTransport(
-        configuration: options.session?.configuration ?? .default,
-        delegate: options.session?.delegate
-      ),
+      transport: options.webSocketTransport ?? URLSessionWebSocketTransport(),
       http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: options.clock
     )
@@ -243,13 +242,14 @@ public actor RealtimeClient {
     clock: any Clock<Duration>,
     jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) {
-    var options = options
-    if options.headers[.xClientInfo] == nil {
-      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    var headers = HTTPFields(options.headers)
+    if headers[.xClientInfo] == nil {
+      headers[.xClientInfo] = "realtime-swift/\(version)"
     }
 
     self.url = url
     self.options = options
+    self.headers = headers
     self.transport = transport
     self.http = http
     self.clock = clock
@@ -261,11 +261,11 @@ public actor RealtimeClient {
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
-      apikey: options.apikey,
+      apikey: headers[.apiKey],
       serverLogLevel: options.serverLogLevel
     )
 
-    if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+    if let accessToken = headers[.authorization]?.split(separator: " ").last {
       _ = tokens.apply(String(accessToken), generation: tokens.beginRefresh())
     }
 

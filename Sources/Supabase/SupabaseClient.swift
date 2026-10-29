@@ -568,7 +568,8 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClient {
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    // Through `HTTPFields`, so names compare without regard to case and the global headers win.
+    realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
 
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"

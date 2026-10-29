@@ -142,7 +142,7 @@ struct SupabaseClientTests {
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
     )
-    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
+    expectNoDifference(client.realtime.headers, expectedRealtimeHeader)
     #expect(realtimeOptions.logger.label == logger.label)
 
     #expect(!client.auth.configuration.automaticallyRefreshesToken)
@@ -152,6 +152,23 @@ struct SupabaseClientTests {
       client.mutableState.listenForAuthEventsTask != nil,
       "should listen for internal auth events"
     )
+  }
+
+  @Test
+  func realtimeHeadersMergeCaseInsensitively() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
+        realtime: RealtimeClientOptions(headers: ["Apikey": "other", "X-Custom": "1"])
+      )
+    )
+
+    let headers = client.realtime.headers
+    #expect(headers[values: .apiKey] == ["PUBLISHABLE_KEY"])
+    #expect(headers[HTTPField.Name("x-custom")!] == "1")
+    #expect(client.realtime.options.headers["X-Custom"] == "1")
   }
 
   @Test
@@ -277,10 +294,10 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeWebSocketSessionComesOnlyFromRealtimeOptions() {
+  func realtimeWebSocketTransportComesOnlyFromRealtimeOptions() {
     let localStorage = AuthLocalStorageMock()
     let httpSession = URLSession(configuration: .ephemeral)
-    let realtimeSpecificSession = URLSession(configuration: .default)
+    let realtimeTransport = MarkerWebSocketTransport()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
@@ -292,16 +309,16 @@ struct SupabaseClientTests {
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: httpSession))
         ),
-        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
+        realtime: RealtimeClientOptions(webSocketTransport: realtimeTransport)
       )
     )
 
     #expect(
-      client.realtime.options.session === realtimeSpecificSession,
-      "user-provided realtime session should be preserved"
+      client.realtime.transport as AnyObject === realtimeTransport,
+      "user-provided realtime transport should be used"
     )
 
-    let clientWithoutRealtimeSession = SupabaseClient(
+    let clientWithoutRealtimeTransport = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
@@ -316,7 +333,7 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      clientWithoutRealtimeSession.realtime.options.session == nil,
+      clientWithoutRealtimeTransport.realtime.transport is URLSessionWebSocketTransport,
       "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
   }
@@ -778,4 +795,10 @@ private func authorization(
 
 extension HTTPField.Name {
   fileprivate static let tag = HTTPField.Name("X-Tag")!
+}
+
+private final class MarkerWebSocketTransport: WebSocketTransport {
+  func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+    throw URLError(.cancelled)
+  }
 }
