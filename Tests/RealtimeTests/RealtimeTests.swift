@@ -506,7 +506,11 @@ final class RealtimeTests: Sendable {
       }
       #expect(sawTwoHeartbeats)
 
-      expectNoDifference(heartbeatStatuses.values.value, [.sent, .ok, .sent, .ok])
+      // The server replies before the test clock moves, so the latency reads as zero.
+      expectNoDifference(
+        heartbeatStatuses.values.value,
+        [.sent, .acknowledged(latency: .zero), .sent, .acknowledged(latency: .zero)]
+      )
     }
   }
 
@@ -540,59 +544,24 @@ final class RealtimeTests: Sendable {
 
       await testClock.advance(by: reconnectDelay)
 
-      await waitUntil(timeout: 5) { statuses.values.value.count >= 5 }
-      // A heartbeat timeout moves the client straight to `.connecting` while it reconnects:
-      // `RealtimeClient` no longer publishes an intermediate `.disconnected`.
+      await waitUntil(timeout: 5) { statuses.values.value.count >= 6 }
+      // A heartbeat timeout moves the client to `.reconnecting`, not `.disconnected`.
       #expect(
         statuses.values.value
           == [
             .disconnected,
             .connecting,
             .connected,
+            .reconnecting,
             .connecting,
             .connected,
           ]
       )
-    }
-  }
-
-  /// `heartbeats` consumers — it's an internal bookkeeping signal, not a
-  /// heartbeat outcome.
-  @Test
-  func heartbeat_doesNotLeakDisconnectedStatus() async throws {
-    try await withMainSerialExecutor {
-      let (client, server) = FakeWebSocket.fakes()
-      let sut = RealtimeClient(
-        url: url,
-        options: RealtimeClientOptions(
-          headers: ["apikey": apiKey],
-          heartbeatInterval: .seconds(1),
-          reconnectDelay: .seconds(10),
-          accessToken: { "custom.access.token" }
-        ),
-        wsTransport: { _, _ in client },
-        http: HTTPClient(transport: http),
-        clock: testClock
-      )
-
-      let heartbeatStatuses = collect(await sut.heartbeats())
-      defer { heartbeatStatuses.task.cancel() }
-
-      try await sut.connect()
-
-      server.close(code: nil, reason: "boom")
-      try await withTimeout(.seconds(5)) {
-        for await status in await sut.statusChanges() where status == .connecting { break }
+      guard case .reconnecting(1, _, let lastError) = statuses.values.value[3] else {
+        Issue.record("Expected .reconnecting(attempt: 1), got \(statuses.values.value[3])")
+        return
       }
-
-      await testClock.advance(by: .seconds(1))
-
-      #expect(
-        !heartbeatStatuses.values.value.contains(.disconnected),
-        "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.values.value)"
-      )
-
-      await sut.disconnect()
+      #expect(lastError.isSameFailure(as: .heartbeatTimeout))
     }
   }
 
@@ -613,7 +582,7 @@ final class RealtimeTests: Sendable {
       await testClock.advance(by: heartbeatInterval)
 
       await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
-      #expect(heartbeatStatuses.values.value == [.sent, .timeout])
+      #expect(heartbeatStatuses.values.value == [.sent, .timedOut])
     }
   }
 
@@ -653,7 +622,7 @@ final class RealtimeTests: Sendable {
       await testClock.advance(by: heartbeatInterval)
 
       await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
-      #expect(heartbeatStatuses.values.value == [.sent, .ok])
+      #expect(heartbeatStatuses.values.value == [.sent, .acknowledged(latency: .zero)])
     }
   }
 

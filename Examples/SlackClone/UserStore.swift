@@ -28,7 +28,7 @@ final class UserStore {
 
       Task {
         let statusChange = await channel.statusChanges()
-        for await _ in statusChange.filter({ $0 == .subscribed }) {
+        for await _ in statusChange.filter(\.isSubscribed) {
           let userId = try await supabase.auth.session.user.id
           try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
         }

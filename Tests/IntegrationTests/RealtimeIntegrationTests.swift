@@ -430,7 +430,8 @@
         #expect(error?.kind == .unauthorized)
         #expect(error?.serverCode == .unauthorized)
         #expect(error?.isRetryable == false)
-        #expect(await channel.status == .unsubscribed)
+        #expect(await channel.status == .failed)
+        #expect(await channel.status.error?.serverCode == .unauthorized)
       }
     }
 
@@ -449,12 +450,12 @@
 
         let allChanges = await channel.postgresChanges(
           of: Entry.self, schema: "public", table: "key_value_storage")
-        let system = await channel.systemMessages()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
         _ = try await withTimeout(.seconds(10)) {
-          await system.first(where: { _ in true })
+          await events.first(where: { $0 == .postgresChangesReady })
         }
 
         let testKey = UUID().uuidString
@@ -514,12 +515,12 @@
           table: "key_value_storage",
           filter: .eq("key", value: testKey1)
         )
-        let system = await channel.systemMessages()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
         _ = try await withTimeout(.seconds(10)) {
-          await system.first(where: { _ in true })
+          await events.first(where: { $0 == .postgresChangesReady })
         }
 
         _ = try await client.from("key_value_storage")
@@ -563,12 +564,12 @@
           event: .update, schema: "public", table: "key_value_storage")
         let deletions = await channel.postgresChanges(
           event: .delete, schema: "public", table: "key_value_storage")
-        let system = await channel.systemMessages()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
         _ = try await withTimeout(.seconds(10)) {
-          await system.first(where: { _ in true })
+          await events.first(where: { $0 == .postgresChangesReady })
         }
 
         let testKey = UUID().uuidString

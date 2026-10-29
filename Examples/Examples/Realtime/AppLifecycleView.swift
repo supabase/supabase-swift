@@ -15,7 +15,7 @@ import SwiftUI
 #endif
 
 struct AppLifecycleView: View {
-  @State private var socketStatus: RealtimeClientStatus = .disconnected
+  @State private var socketStatus: RealtimeClientStatus = .disconnected(nil)
   @State private var channelStatus: RealtimeChannelStatus = .unsubscribed
   @State private var events: [LifecycleEvent] = []
   @State private var channel: RealtimeChannel?
@@ -127,20 +127,24 @@ struct AppLifecycleView: View {
 
   private func description(of status: RealtimeClientStatus) -> String {
     switch status {
-    case .disconnected: "Disconnected"
-    case .connecting: "Connecting"
+    case .disconnected(nil): "Disconnected"
+    case .disconnected(let error?): "Disconnected: \(error.message)"
+    case .connecting(let attempt): "Connecting (attempt \(attempt))"
     case .connected: "Connected"
-    default: status.rawValue
+    case .reconnecting(let attempt, let retryIn, _):
+      "Reconnecting (attempt \(attempt + 1) in \(retryIn))"
     }
   }
 
   private func description(of status: RealtimeChannelStatus) -> String {
     switch status {
     case .unsubscribed: "Unsubscribed"
-    case .subscribing: "Subscribing"
+    case .subscribing(let attempt): "Subscribing (attempt \(attempt))"
     case .subscribed: "Subscribed"
+    case .resubscribing(let attempt, let retryIn, _):
+      "Resubscribing (attempt \(attempt + 1) in \(retryIn))"
     case .unsubscribing: "Unsubscribing"
-    default: status.rawValue
+    case .failed(let error): "Failed: \(error.message)"
     }
   }
 }

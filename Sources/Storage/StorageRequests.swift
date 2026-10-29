@@ -136,7 +136,7 @@ struct StorageRequests: Sendable {
 
   /// `DELETE cdn/` purges the whole tenant, `cdn/{bucket}` one bucket, `cdn/{bucket}/{key}` one
   /// object.
-  func purgeCache(bucket: String?, key: ObjectKey? = nil, includingTransformations: Bool)
+  func purgeCache(bucket: String?, key: ObjectKey? = nil, transformationsOnly: Bool)
     -> StorageRequest
   {
     let path =
@@ -146,7 +146,7 @@ struct StorageRequests: Sendable {
         method: .delete,
         url: url(
           "cdn/\(path)",
-          query: includingTransformations
+          query: transformationsOnly
             ? [URLQueryItem(name: "transformations", value: "true")] : [])
       ))
   }

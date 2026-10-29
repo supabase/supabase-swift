@@ -22,7 +22,7 @@ _ = await Verify.attempt("rt-subscribe") {
   try await inbox.subscribe()
   try await outbox.subscribe()
 }
-Verify.check("rt-subscribe", await inbox.status == .subscribed, "receiver status \(await inbox.status)")
+Verify.check("rt-subscribe", await inbox.status.isSubscribed, "receiver status \(await inbox.status)")
 
 _ = await Verify.attempt("rt-broadcast") {
   try await outbox.broadcast(event: "ping", message: ["n": 1, "from": "sender"] as JSONObject)
@@ -45,14 +45,13 @@ Verify.step("rt-postgres-insert", "listen for INSERT on key_value_storage, then 
 let changes = await receiver.realtime.channel(Verify.unique("db"))
 let inserts = await changes.postgresChanges(
   event: .insert, schema: "public", table: "key_value_storage")
-let system = await changes.systemMessages()
+let events = await changes.events()
 _ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribe() }
-// The server confirms the Postgres listener with a system message after the subscribe reply.
-// A write before that message is never delivered.
+// The server confirms the Postgres listener after the subscribe reply. A write before that
+// confirmation is never delivered.
 _ = await Verify.attempt("rt-postgres-subscribe") {
   try await Verify.within(seconds: 10) {
-    var iterator = system.makeAsyncIterator()
-    _ = await iterator.next()
+    _ = await events.first { $0 == .postgresChangesReady }
   }
 }
 _ = await Verify.attempt("rt-postgres-insert") {

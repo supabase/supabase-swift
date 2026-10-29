@@ -146,23 +146,32 @@ extension RealtimeChannel {
     return stream
   }
 
-  /// Returns an async stream that emits the ``RealtimeMessageV2`` for every `system` event.
+  /// Returns an async stream of server events about this channel.
   ///
-  /// System events convey channel-level status information from the server.
+  /// The stream emits ``RealtimeChannelEvent/resubscribed`` when the channel joins again after
+  /// a reconnect or a rejoin, and reports whether the server set up the channel's Postgres
+  /// changes subscriptions. Cancelling the iterating task ends the stream; so does removing the
+  /// channel from its client.
   ///
-  /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
-  public func systemMessages() -> AsyncStream<RealtimeMessageV2> {
-    let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream(
+  /// ```swift
+  /// for await event in await channel.events() {
+  ///   if event == .resubscribed {
+  ///     await reloadMessages()
+  ///   }
+  /// }
+  /// ```
+  public func events() -> AsyncStream<RealtimeChannelEvent> {
+    let (stream, continuation) = AsyncStream<RealtimeChannelEvent>.makeStream(
       bufferingPolicy: .unbounded
     )
-    register(.system(continuation), terminating: continuation)
+    register(.events(continuation), terminating: continuation)
     return stream
   }
 
   /// Streams that shape the join payload can only be opened before the join is sent.
   private func canChangeJoinConfig(for feature: String) -> Bool {
     switch state {
-    case .unsubscribed, .unsubscribing:
+    case .unsubscribed, .unsubscribing, .failed:
       return true
     case .subscribing, .subscribed:
       reportIssue(

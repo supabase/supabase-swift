@@ -14,9 +14,6 @@ import Foundation
 /// ### Payload
 /// - ``payload``
 /// - ``status``
-/// ### Event Classification
-/// - ``eventType``
-/// - ``EventType``
 /// ### Initialization
 /// - ``init(joinRef:ref:topic:event:payload:)``
 public struct RealtimeMessageV2: Hashable, Sendable {
@@ -63,64 +60,6 @@ public struct RealtimeMessageV2: Hashable, Sendable {
     payload["status"]
       .flatMap(\.stringValue)
       .map(PushStatus.init(rawValue:))
-  }
-
-  /// The ``event`` name as an ``EventType``.
-  public var eventType: EventType {
-    EventType(rawValue: event)
-  }
-
-  /// A channel event name, with static members for the events this SDK handles.
-  ///
-  /// The server can introduce new event names, so a `switch` over this value needs a `default:`
-  /// case.
-  ///
-  /// ## Topics
-  /// ### Events
-  /// - ``system``
-  /// - ``postgresChanges``
-  /// - ``broadcast``
-  /// - ``close``
-  /// - ``error``
-  /// - ``presenceDiff``
-  /// - ``presenceState``
-  /// - ``reply``
-  public struct EventType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-    public let rawValue: String
-
-    /// Creates a ``EventType`` from a raw string value.
-    public init(rawValue: String) {
-      self.rawValue = rawValue
-    }
-
-    /// Creates a ``EventType`` from a string literal.
-    public init(stringLiteral value: String) {
-      self.init(rawValue: value)
-    }
-
-    /// A channel-level system message (e.g. subscribe confirmation).
-    public static let system = EventType(rawValue: ChannelEvent.system)
-
-    /// A Postgres row change event.
-    public static let postgresChanges = EventType(rawValue: ChannelEvent.postgresChanges)
-
-    /// A broadcast message from another client.
-    public static let broadcast = EventType(rawValue: ChannelEvent.broadcast)
-
-    /// The channel was closed by the server.
-    public static let close = EventType(rawValue: ChannelEvent.close)
-
-    /// The server reported an error on this channel.
-    public static let error = EventType(rawValue: ChannelEvent.error)
-
-    /// A presence diff event describing joins and leaves.
-    public static let presenceDiff = EventType(rawValue: ChannelEvent.presenceDiff)
-
-    /// A full presence state snapshot.
-    public static let presenceState = EventType(rawValue: ChannelEvent.presenceState)
-
-    /// A reply to a client-originated push.
-    public static let reply = EventType(rawValue: ChannelEvent.reply)
   }
 }
 

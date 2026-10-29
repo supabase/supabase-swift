@@ -16,7 +16,12 @@ A value stays an `enum` when the set of cases is fixed by design:
 
 - The cases carry associated values, so a struct cannot express them: `AuthResponse`,
   `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
-  `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`.
+  `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
+  `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,
+  because their cases carry errors: match a case, or use `isConnected`, `isSubscribed` and
+  `error`.
+- The client produces the value and never reads it from the server, so only an SDK release can
+  add a case: `RealtimeChannelEvent`, `HeartbeatEvent`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
   `AuthFlowType`, `RealtimePostgresIsValue`, `_PostgrestFilterOperator`,
   `_PostgrestAggregateFunction`, `PostgresChangeEvent` (the SDK sends each event in the join
@@ -37,20 +42,19 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType`, `PostgresChange.Kind`.
+  `FactorStatus`, `PushStatus`, `LogLevel`, `PostgresChange.Kind`.
 - Consumers `switch` over it and the SDK expects to add members in minor releases:
-  `AuthChangeEvent`, `RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`.
+  `AuthChangeEvent`.
 
 These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`.
 The known values are `static let` members, so call sites read the same as they did with an
 `enum`, but a `switch` needs a `default:` case:
 
 ```swift
-switch await client.status {
-case .connected: showOnline()
-case .connecting: showSpinner()
-case .disconnected: showOffline()
-default: showOffline()  // a status added in a later SDK release
+switch event {
+case .signedIn: showHome()
+case .signedOut: showSignIn()
+default: break  // includes events added in a later SDK release
 }
 ```
 
