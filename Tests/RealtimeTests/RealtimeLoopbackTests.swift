@@ -42,8 +42,8 @@ import Testing
       let received = try await withTimeout(.seconds(10)) {
         await pings.first { _ in true }
       }
-      #expect(received?["event"] == "ping")
-      #expect(received?["payload"]?.objectValue?["n"] == 1)
+      #expect(received?.event == "ping")
+      #expect(received?.payload == .json(["n": 1]))
 
       await client.disconnect()
       #expect(await client.status == .disconnected)

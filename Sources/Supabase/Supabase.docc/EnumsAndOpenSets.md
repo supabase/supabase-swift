@@ -16,11 +16,11 @@ A value stays an `enum` when the set of cases is fixed by design:
 
 - The cases carry associated values, so a struct cannot express them: `AuthResponse`,
   `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
-  `DownloadBehavior`, `AnyAction`, `RealtimePostgresFilter`, `JSONValue`.
+  `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
   `AuthFlowType`, `RealtimePostgresIsValue`, `_PostgrestFilterOperator`,
-  `_PostgrestAggregateFunction`, `PostgresChangeEvent` (each event maps to its own
-  `PostgresAction` type).
+  `_PostgrestAggregateFunction`, `PostgresChangeEvent` (the SDK sends each event in the join
+  request).
 
 Switch over these exhaustively. Adding a case to one of them is a breaking change and only ships
 in a major release, so the compiler tells you exactly where to look when you upgrade.
@@ -37,7 +37,7 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType`.
+  `FactorStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType`, `PostgresChange.Kind`.
 - Consumers `switch` over it and the SDK expects to add members in minor releases:
   `AuthChangeEvent`, `RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`.
 

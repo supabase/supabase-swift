@@ -171,157 +171,105 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func postgresChangesWithoutDataIsIgnored() async {
-    let actions = await recordPostgresActions()
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(message(event: ChannelEvent.postgresChanges, payload: ["ids": [1]]))
 
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
+    let received = await collect(changes)
+    #expect(received.isEmpty)
   }
 
   @Test
-  func postgresChangesInsertDispatchesInsertAction() async throws {
-    let actions = await recordPostgresActions()
+  func postgresChangesInsertDispatchesAnInsert() async throws {
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "INSERT",
-            "record": ["id": 1, "body": "hello"],
-            "columns": [["name": "id", "type": "int4"], ["name": "body", "type": "text"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
+      postgresChange([
+        "type": "INSERT",
+        "record": ["id": 1, "body": "hello"],
+        "columns": [["name": "id", "type": "int4"], ["name": "body", "type": "text"]],
+      ])
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    #expect(receivedActions.count == 1)
-    guard case .insert(let insert) = action else {
-      Issue.record("Expected .insert, got \(action)")
-      return
-    }
-    #expect(insert.record == ["id": 1, "body": "hello"])
-    #expect(insert.commitTimestamp == commitTimestamp)
+    let received = await collect(changes)
+    let change = try #require(received.first)
+    #expect(received.count == 1)
+    #expect(change.kind == .insert)
+    #expect(change.schema == "public")
+    #expect(change.table == "messages")
+    #expect(change.record == PostgresRow(values: ["id": 1, "body": "hello"]))
+    #expect(change.oldRecord == nil)
+    #expect(change.commitTimestamp == commitTimestamp)
     #expect(
-      insert.columns == [Column(name: "id", type: "int4"), Column(name: "body", type: "text")])
+      change.columns == [
+        PostgresColumn(name: "id", type: "int4"), PostgresColumn(name: "body", type: "text"),
+      ])
   }
 
   @Test
-  func postgresChangesUpdateDispatchesUpdateActionWithBothRecords() async throws {
-    let actions = await recordPostgresActions()
+  func postgresChangesUpdateDispatchesAnUpdateWithBothRecords() async throws {
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "UPDATE",
-            "record": ["id": 1, "body": "new"],
-            "old_record": ["id": 1, "body": "old"],
-            "columns": [["name": "body", "type": "text"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
+      postgresChange([
+        "type": "UPDATE",
+        "record": ["id": 1, "body": "new"],
+        "old_record": ["id": 1, "body": "old"],
+        "columns": [["name": "body", "type": "text"]],
+      ])
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .update(let update) = action else {
-      Issue.record("Expected .update, got \(action)")
-      return
-    }
-    #expect(update.record == ["id": 1, "body": "new"])
-    #expect(update.oldRecord == ["id": 1, "body": "old"])
+    let change = try #require(await collect(changes).first)
+    #expect(change.kind == .update)
+    #expect(change.record == PostgresRow(values: ["id": 1, "body": "new"]))
+    #expect(change.oldRecord == PostgresRow(values: ["id": 1, "body": "old"]))
   }
 
   @Test
-  func postgresChangesUpdateWithoutRecordsFallsBackToEmptyObjects() async throws {
-    let actions = await recordPostgresActions()
+  func postgresChangesUpdateWithoutRecordsHasNilRecords() async throws {
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "UPDATE",
-            "columns": [["name": "body", "type": "text"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
+      postgresChange(["type": "UPDATE", "columns": [["name": "body", "type": "text"]]])
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .update(let update) = action else {
-      Issue.record("Expected .update, got \(action)")
-      return
-    }
-    #expect(update.record.isEmpty)
-    #expect(update.oldRecord.isEmpty)
+    let change = try #require(await collect(changes).first)
+    #expect(change.kind == .update)
+    #expect(change.record == nil)
+    #expect(change.oldRecord == nil)
   }
 
   @Test
-  func postgresChangesDeleteDispatchesDeleteAction() async throws {
-    let actions = await recordPostgresActions()
+  func postgresChangesDeleteDispatchesADelete() async throws {
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "DELETE",
-            "old_record": ["id": 1],
-            "columns": [["name": "id", "type": "int4"]],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
+      postgresChange([
+        "type": "DELETE",
+        "old_record": ["id": 1],
+        "columns": [["name": "id", "type": "int4"]],
+      ])
     )
 
-    let receivedActions = await collect(actions)
-    let action = try #require(receivedActions.first)
-    guard case .delete(let delete) = action else {
-      Issue.record("Expected .delete, got \(action)")
-      return
-    }
-    #expect(delete.oldRecord == ["id": 1])
+    let change = try #require(await collect(changes).first)
+    #expect(change.kind == .delete)
+    #expect(change.record == nil)
+    #expect(change.oldRecord == PostgresRow(values: ["id": 1]))
   }
 
   @Test
-  func postgresChangesWithUnknownTypeIsSwallowed() async {
-    let actions = await recordPostgresActions()
+  func postgresChangesWithUnknownTypeIsDelivered() async throws {
+    let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "TRUNCATE",
-            "columns": [],
-            "commit_timestamp": commitTimestampJSON,
-          ],
-        ]
-      )
-    )
+    await sut.onMessage(postgresChange(["type": "TRUNCATE", "columns": []]))
 
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
+    let change = try #require(await collect(changes).first)
+    #expect(change.kind == PostgresChange.Kind(rawValue: "TRUNCATE"))
   }
 
   @Test
   func postgresChangesWithMalformedDataIsSwallowed() async {
-    let actions = await recordPostgresActions()
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
       message(
@@ -330,13 +278,13 @@ struct RealtimeChannelOnMessageTests {
       )
     )
 
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
+    let received = await collect(changes)
+    #expect(received.isEmpty)
   }
 
   @Test
   func postgresChangesWithoutIdsMatchesNoCallback() async {
-    let actions = await recordPostgresActions()
+    let changes = await recordPostgresChanges()
 
     await sut.onMessage(
       message(
@@ -344,6 +292,8 @@ struct RealtimeChannelOnMessageTests {
         payload: [
           "data": [
             "type": "INSERT",
+            "schema": "public",
+            "table": "messages",
             "record": ["id": 1],
             "columns": [["name": "id", "type": "int4"]],
             "commit_timestamp": commitTimestampJSON,
@@ -352,8 +302,47 @@ struct RealtimeChannelOnMessageTests {
       )
     )
 
-    let receivedActions = await collect(actions)
-    #expect(receivedActions.isEmpty)
+    let received = await collect(changes)
+    #expect(received.isEmpty)
+  }
+
+  @Test
+  func typedPostgresChangesDeliverEveryChangeWhenARowDoesNotDecode() async throws {
+    struct Message: Decodable, Equatable {
+      let id: Int
+      let body: String
+    }
+    let changes = await sut.postgresChanges(of: Message.self, table: "messages")
+    await sut.setServerChanges([
+      PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
+    ])
+
+    await sut.onMessage(postgresChange(["type": "INSERT", "record": ["id": "not-a-number"]]))
+    await sut.onMessage(postgresChange(["type": "INSERT", "record": ["id": 2, "body": "hi"]]))
+    await sut.onMessage(postgresChange(["type": "DELETE", "old_record": ["id": 2]]))
+
+    let received = await collect(changes)
+    #expect(received.map(\.kind) == [.insert, .insert, .delete])
+    #expect(throws: RealtimeError.self) { try received[0].row() }
+    #expect(try received[1].row() == Message(id: 2, body: "hi"))
+    #expect(received[2].oldRecord == PostgresRow(values: ["id": 2]))
+  }
+
+  @Test
+  func typedPostgresChangesShapeTheJoinLikeTheUntypedStream() async {
+    struct Message: Decodable {}
+    _ = await sut.postgresChanges(
+      of: Message.self, event: .insert, schema: "chat", table: "messages",
+      filter: .eq("room", value: 1), select: ["id"])
+
+    let changes = await sut.clientChanges
+    #expect(
+      changes == [
+        PostgresJoinConfig(
+          event: .insert, schema: "chat", table: "messages",
+          filter: RealtimePostgresFilter.eq("room", value: 1).value)
+      ])
+    #expect(changes.first?.select == ["id"])
   }
 
   @Test
@@ -363,15 +352,17 @@ struct RealtimeChannelOnMessageTests {
     await sut.onMessage(
       message(
         event: ChannelEvent.broadcast,
-        payload: ["event": "message", "payload": ["body": "hi"]]
+        payload: ["type": "broadcast", "event": "message", "payload": ["body": "hi"]]
       )
     )
 
-    let receivedBroadcasts = await collect(broadcasts)
-    let received = try #require(receivedBroadcasts.first)
-    #expect(receivedBroadcasts.count == 1)
-    #expect(received["event"]?.stringValue == "message")
-    #expect(received["payload"]?.objectValue?["body"]?.stringValue == "hi")
+    let received = await collect(broadcasts)
+    let broadcast = try #require(received.first)
+    #expect(received.count == 1)
+    #expect(broadcast.event == "message")
+    #expect(broadcast.payload == .json(["body": "hi"]))
+    #expect(broadcast.id == nil)
+    #expect(broadcast.isReplayed == false)
   }
 
   @Test
@@ -514,12 +505,24 @@ struct RealtimeChannelOnMessageTests {
   }
 
   /// Opens a postgres stream and records server-change id `1` for it, matching the
-  private func recordPostgresActions() async -> AsyncStream<AnyAction> {
-    let actions = await sut.postgresChanges(AnyAction.self, schema: "public", table: "messages")
+  private func recordPostgresChanges() async -> AsyncStream<PostgresChange> {
+    let changes = await sut.postgresChanges(schema: "public", table: "messages")
     await sut.setServerChanges([
       PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
     ])
-    return actions
+    return changes
+  }
+
+  /// A `postgres_changes` message for server-change id `1` on `public.messages`. `data` adds to
+  /// or overrides the defaults.
+  private func postgresChange(_ data: JSONObject) -> RealtimeMessageV2 {
+    let defaults: JSONObject = [
+      "schema": "public", "table": "messages", "commit_timestamp": commitTimestampJSON,
+    ]
+    return message(
+      event: ChannelEvent.postgresChanges,
+      payload: ["ids": [1], "data": .object(defaults.merging(data) { $1 })]
+    )
   }
 }
 

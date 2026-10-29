@@ -15,7 +15,7 @@ messages, and listens to row changes in Postgres tables.
 - `client.realtime.connect()`
 - `client.realtime.channel(_:)`, then `channel.subscribe()` and `channel.unsubscribe()`
 - `channel.broadcast(event:message:)` and `channel.broadcasts(event:)`
-- `channel.postgresChanges(InsertAction.self, schema:table:)` and `channel.systemMessages()`
+- `channel.postgresChanges(event: .insert, schema:table:)` and `channel.systemMessages()`
 
 ## Driving it with verify.sh
 

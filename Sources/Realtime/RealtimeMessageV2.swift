@@ -124,6 +124,12 @@ public struct RealtimeMessageV2: Hashable, Sendable {
   }
 }
 
+/// A value that exposes the raw ``RealtimeMessageV2`` received from the server.
+public protocol HasRawMessage {
+  /// The underlying Realtime message that delivered this value.
+  var rawMessage: RealtimeMessageV2 { get }
+}
+
 extension RealtimeMessageV2: HasRawMessage {
   public var rawMessage: RealtimeMessageV2 { self }
 }

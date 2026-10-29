@@ -177,7 +177,7 @@ struct RealtimeChannelSubscriptionTests {
   func joinCarriesThePostgresChangesOfOpenStreams() async throws {
     let h = Harness()
     let channel = await h.client.channel("public:users")
-    let inserts = await channel.postgresChanges(InsertAction.self, table: "users")
+    let inserts = await channel.postgresChanges(event: .insert, table: "users")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))

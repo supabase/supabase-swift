@@ -39,9 +39,9 @@ struct RealtimeColdStartTests {
       let sut = makeClient(socket: socket)
 
       let channel = await sut.channel("library-realtime")
-      let libros = await channel.postgresChanges(AnyAction.self, schema: "library", table: "libros")
+      let libros = await channel.postgresChanges(schema: "library", table: "libros")
       let files = await channel.postgresChanges(
-        AnyAction.self, schema: "library", table: "libro_files")
+        schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
       let t2 = Task { for await _ in files {} }

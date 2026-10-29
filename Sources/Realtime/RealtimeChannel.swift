@@ -51,8 +51,8 @@ public struct RealtimeChannelConfig: Sendable {
 /// let messages = await channel.broadcasts(event: "message")
 /// try await channel.subscribe()
 ///
-/// for await payload in messages {
-///   print(payload)
+/// for await message in messages {
+///   print(try message.decode(as: ChatMessage.self))
 /// }
 /// ```
 ///
@@ -83,13 +83,10 @@ public struct RealtimeChannelConfig: Sendable {
 /// - ``untrack()``
 /// - ``presenceChanges()``
 /// ### Postgres Changes
-/// - ``postgresChanges(_:schema:table:filter:select:)-(AnyAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(InsertAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(UpdateAction.Type,_,_,_,_)``
-/// - ``postgresChanges(_:schema:table:filter:select:)-(DeleteAction.Type,_,_,_,_)``
+/// - ``postgresChanges(event:schema:table:filter:select:)``
+/// - ``postgresChanges(of:event:schema:table:filter:select:decoder:)``
 /// ### Broadcast Events
 /// - ``broadcasts(event:)``
-/// - ``broadcastData(event:)``
 /// ### System Events
 /// - ``systemMessages()``
 public actor RealtimeChannel {
@@ -197,9 +194,8 @@ public actor RealtimeChannel {
   // MARK: Listeners
 
   enum Listener {
-    case broadcast(event: String, AsyncStream<JSONObject>.Continuation)
-    case broadcastData(event: String, AsyncStream<Data>.Continuation)
-    case postgres(PostgresJoinConfig, AsyncStream<AnyAction>.Continuation)
+    case broadcast(event: String, AsyncStream<BroadcastMessage>.Continuation)
+    case postgres(PostgresJoinConfig, AsyncStream<PostgresChange>.Continuation)
     case presence(AsyncStream<any PresenceAction>.Continuation)
     case system(AsyncStream<RealtimeMessageV2>.Continuation)
     case status(AsyncStream<RealtimeChannelStatus>.Continuation)
@@ -207,7 +203,6 @@ public actor RealtimeChannel {
     func finish() {
       switch self {
       case .broadcast(_, let continuation): continuation.finish()
-      case .broadcastData(_, let continuation): continuation.finish()
       case .postgres(_, let continuation): continuation.finish()
       case .presence(let continuation): continuation.finish()
       case .system(let continuation): continuation.finish()
@@ -593,73 +588,26 @@ public actor RealtimeChannel {
   }
 
   private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
-    guard let data = message.payload["data"] else {
+    guard let data = message.payload["data"]?.objectValue else {
       logger.debug("Expected \"data\" key in message payload.")
       return
     }
 
     let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
-    let action = try Self.makeAction(
-      from: data.decode(as: PostgresActionData.self),
-      rawMessage: message
-    )
+    let change = try PostgresChange(payload: data)
 
     let matched = serverChanges.filter { ids.contains($0.id) }
     for case .postgres(let filter, let continuation) in listeners.map(\.listener)
     where matched.contains(where: { $0 == filter }) {
-      continuation.yield(action)
-    }
-  }
-
-  private static func makeAction(
-    from data: PostgresActionData,
-    rawMessage: RealtimeMessageV2
-  ) throws -> AnyAction {
-    switch data.type {
-    case "UPDATE":
-      return .update(
-        UpdateAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          record: data.record ?? [:],
-          oldRecord: data.oldRecord ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    case "DELETE":
-      return .delete(
-        DeleteAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          oldRecord: data.oldRecord ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    case "INSERT":
-      return .insert(
-        InsertAction(
-          columns: data.columns,
-          commitTimestamp: data.commitTimestamp,
-          record: data.record ?? [:],
-          rawMessage: rawMessage
-        )
-      )
-
-    default:
-      throw RealtimeError.decoding("Unknown event type: \(data.type)")
+      continuation.yield(change)
     }
   }
 
   private func handleBroadcast(_ message: RealtimeMessageV2) throws {
-    let payload = message.payload
-
-    guard let event = payload["event"]?.stringValue else {
+    guard let broadcast = BroadcastMessage(message) else {
       throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
     }
-
-    deliverBroadcast(event: event, json: payload)
+    deliverBroadcast(broadcast)
   }
 
   private func handleClose(_ message: RealtimeMessageV2) async {
@@ -699,37 +647,13 @@ public actor RealtimeChannel {
 
   /// Called by the client when a binary broadcast frame (type 0x04) is received.
   func handleBinaryBroadcast(_ broadcast: DecodedBroadcast) {
-    let event = broadcast.event
-
-    switch broadcast.payload {
-    case .json(let json):
-      var message: JSONObject = [
-        "event": .string(event),
-        "payload": .object(json),
-        "type": "broadcast",
-      ]
-      message["meta"] = broadcast.meta.map(JSONValue.object)
-      deliverBroadcast(event: event, json: message)
-
-    case .binary(let data):
-      var delivered = false
-      for case .broadcastData(let listening, let continuation) in listeners.map(\.listener)
-      where Self.eventMatches(listening, event) {
-        continuation.yield(data)
-        delivered = true
-      }
-      if !delivered {
-        logger.warning(
-          "Received binary broadcast for event '\(event)' but no Data stream is open. Open one with broadcastData(event:) to receive Data."
-        )
-      }
-    }
+    deliverBroadcast(BroadcastMessage(broadcast))
   }
 
-  private func deliverBroadcast(event: String, json: JSONObject) {
+  private func deliverBroadcast(_ message: BroadcastMessage) {
     for case .broadcast(let listening, let continuation) in listeners.map(\.listener)
-    where Self.eventMatches(listening, event) {
-      continuation.yield(json)
+    where Self.eventMatches(listening, message.event) {
+      continuation.yield(message)
     }
   }
 

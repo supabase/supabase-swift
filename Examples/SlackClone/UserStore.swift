@@ -20,7 +20,7 @@ final class UserStore {
   private init() {
     Task {
       let channel = await supabase.channel("public:users")
-      let changes = await channel.postgresChanges(AnyAction.self, table: "users")
+      let changes = await channel.postgresChanges(of: User.self, table: "users", decoder: decoder)
 
       let presences = await channel.presenceChanges()
 
@@ -76,18 +76,18 @@ final class UserStore {
     return user
   }
 
-  private func handleChangedUser(_ action: AnyAction) {
+  private func handleChangedUser(_ change: TypedPostgresChange<User>) {
     do {
-      switch action {
-      case .insert(let action):
-        let user = try action.decodeRecord(decoder: decoder) as User
+      switch change.kind {
+      case .insert, .update:
+        let user = try change.row()
         users[user.id] = user
-      case .update(let action):
-        let user = try action.decodeRecord(decoder: decoder) as User
-        users[user.id] = user
-      case .delete(let action):
-        guard let id = action.oldRecord["id"]?.stringValue else { return }
-        users[UUID(uuidString: id)!] = nil
+      case .delete:
+        guard let id = change.oldRecord?["id"]?.stringValue.flatMap(UUID.init(uuidString:))
+        else { return }
+        users[id] = nil
+      default:
+        break
       }
     } catch {
       dump(error)

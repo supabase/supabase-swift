@@ -283,10 +283,35 @@
         #expect(receivedMessages.count == 3)
 
         let firstMessage = receivedMessages[0]
-        #expect(firstMessage["event"]?.stringValue == "test-event")
-        #expect(firstMessage["payload"]?.objectValue?["value"]?.intValue == 1)
-        #expect(firstMessage["payload"]?.objectValue?["text"]?.stringValue == "first")
+        #expect(firstMessage.event == "test-event")
+        let decoded = try firstMessage.decode(as: Message.self)
+        #expect(decoded.value == 1)
+        #expect(decoded.text == "first")
 
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
+    func binaryBroadcastArrivesAsBinaryPayload() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("broadcast-binary") {
+          $0.broadcast.receiveOwnBroadcasts = true
+        }
+        let messages = await channel.broadcasts(event: "bytes")
+        try await channel.subscribe()
+
+        let bytes = Data([0x00, 0xCA, 0xFE, 0xFF])
+        try await channel.broadcast(event: "bytes", data: bytes)
+        let received = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+
+        #expect(received?.event == "bytes")
+        #expect(received?.payload == .binary(bytes))
         await channel.unsubscribe()
       }
     }
@@ -316,7 +341,7 @@
           await messages.first(where: { _ in true })
         }
 
-        #expect(received?["payload"]?.objectValue?["value"]?.intValue == 1)
+        #expect(received?.payload == .json(["value": 1]))
         #expect(await channel.status == .subscribed)
         await channel.unsubscribe()
       }
@@ -423,7 +448,7 @@
         }
 
         let allChanges = await channel.postgresChanges(
-          AnyAction.self, schema: "public", table: "key_value_storage")
+          of: Entry.self, schema: "public", table: "key_value_storage")
         let system = await channel.systemMessages()
 
         try await channel.subscribe()
@@ -455,26 +480,13 @@
 
         #expect(received.count == 3)
 
-        if case .insert(let action) = received[0] {
-          let record = try action.decodeRecord(as: Entry.self, decoder: .supabase())
-          #expect(record.key == testKey)
-        } else {
-          Issue.record("Expected insert action")
-        }
-
-        if case .update(let action) = received[1] {
-          let record = try action.decodeRecord(as: Entry.self, decoder: .supabase())
-          #expect(record.value.stringValue == "value2")
-        } else {
-          Issue.record("Expected update action")
-        }
-
-        if case .delete(let action) = received[2] {
-          let oldRecordKey = action.oldRecord["key"]?.stringValue
-          #expect(oldRecordKey == testKey)
-        } else {
-          Issue.record("Expected delete action")
-        }
+        #expect(received.map(\.kind) == [.insert, .update, .delete])
+        #expect(try received[0].row().key == testKey)
+        #expect(try received[1].row().value.stringValue == "value2")
+        #expect(received[2].oldRecord?["key"]?.stringValue == testKey)
+        #expect(throws: RealtimeError.self) { try received[2].row() }
+        #expect(
+          received.allSatisfy { $0.raw.table == "key_value_storage" && $0.raw.errors.isEmpty })
 
         await channel.unsubscribe()
       }
@@ -497,7 +509,7 @@
         let testKey2 = UUID().uuidString
 
         let filtered = await channel.postgresChanges(
-          InsertAction.self,
+          event: .insert,
           schema: "public",
           table: "key_value_storage",
           filter: .eq("key", value: testKey1)
@@ -523,7 +535,8 @@
         }
 
         #expect(received.count == 1)
-        let record = try received[0].decodeRecord(as: Entry.self, decoder: .supabase())
+        #expect(received[0].kind == .insert)
+        let record = try #require(try received[0].record?.decode(as: Entry.self))
         #expect(record.key == testKey1)
         #expect(record.key != testKey2)
 
@@ -545,11 +558,11 @@
         }
 
         let insertions = await channel.postgresChanges(
-          InsertAction.self, schema: "public", table: "key_value_storage")
+          event: .insert, schema: "public", table: "key_value_storage")
         let updates = await channel.postgresChanges(
-          UpdateAction.self, schema: "public", table: "key_value_storage")
+          event: .update, schema: "public", table: "key_value_storage")
         let deletions = await channel.postgresChanges(
-          DeleteAction.self, schema: "public", table: "key_value_storage")
+          event: .delete, schema: "public", table: "key_value_storage")
         let system = await channel.systemMessages()
 
         try await channel.subscribe()
@@ -587,9 +600,9 @@
           await deletions.prefix(1).collect()
         }
 
-        #expect(inserted.count == 1)
-        #expect(updated.count == 1)
-        #expect(deleted.count == 1)
+        #expect(inserted.map(\.kind) == [.insert])
+        #expect(updated.map(\.kind) == [.update])
+        #expect(deleted.map(\.kind) == [.delete])
 
         await channel.unsubscribe()
       }
@@ -744,26 +757,17 @@
         #expect(messages1.count == 3, "Client 1 should receive all 3 messages")
         #expect(messages2.count == 3, "Client 2 should receive all 3 messages")
 
-        let receivedMessage1 = try messages1[0]["payload"]?.objectValue?.decode(
-          as: ChatMessage.self,
-          decoder: .supabase()
-        )
-        #expect(receivedMessage1?.text == "Hello, Bob! How are you?")
-        #expect(receivedMessage1?.username == "Alice")
+        let receivedMessage1 = try messages1[0].decode(as: ChatMessage.self)
+        #expect(receivedMessage1.text == "Hello, Bob! How are you?")
+        #expect(receivedMessage1.username == "Alice")
 
-        let receivedMessage2 = try messages2[0]["payload"]?.objectValue?.decode(
-          as: ChatMessage.self,
-          decoder: .supabase()
-        )
-        #expect(receivedMessage2?.text == "Hello, Bob! How are you?")
-        #expect(receivedMessage2?.username == "Alice")
+        let receivedMessage2 = try messages2[0].decode(as: ChatMessage.self)
+        #expect(receivedMessage2.text == "Hello, Bob! How are you?")
+        #expect(receivedMessage2.username == "Alice")
 
-        let receivedMessage3 = try messages1[2]["payload"]?.objectValue?.decode(
-          as: ChatMessage.self,
-          decoder: .supabase()
-        )
-        #expect(receivedMessage3?.text == "Great to hear! Let's work on the project together.")
-        #expect(receivedMessage3?.username == "Alice")
+        let receivedMessage3 = try messages1[2].decode(as: ChatMessage.self)
+        #expect(receivedMessage3.text == "Great to hear! Let's work on the project together.")
+        #expect(receivedMessage3.username == "Alice")
 
         #expect(presenceChanges2.count > 0, "Client 2 should receive presence changes")
 

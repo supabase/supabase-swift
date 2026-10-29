@@ -33,8 +33,9 @@ if let message = await Verify.attempt("rt-broadcast", {
     return await iterator.next()
   }
 }), let message {
-  Verify.save("rt-broadcast.json", message)
-  let payload = message["payload"]?.objectValue
+  let payload: JSONObject? =
+    if case .json(let json) = message.payload { json.objectValue } else { nil }
+  Verify.save("rt-broadcast.json", payload ?? [:])
   Verify.check(
     "rt-broadcast", payload?["n"]?.intValue == 1 && payload?["from"]?.stringValue == "sender",
     "payload \(payload.map { "\($0)" } ?? "nil")")
@@ -43,7 +44,7 @@ if let message = await Verify.attempt("rt-broadcast", {
 Verify.step("rt-postgres-insert", "listen for INSERT on key_value_storage, then insert key \(key)")
 let changes = await receiver.realtime.channel(Verify.unique("db"))
 let inserts = await changes.postgresChanges(
-  InsertAction.self, schema: "public", table: "key_value_storage")
+  event: .insert, schema: "public", table: "key_value_storage")
 let system = await changes.systemMessages()
 _ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribe() }
 // The server confirms the Postgres listener with a system message after the subscribe reply.
@@ -61,8 +62,8 @@ _ = await Verify.attempt("rt-postgres-insert") {
 }
 if let action = await Verify.attempt("rt-postgres-insert", {
   try await Verify.within(seconds: 10) {
-    for await action in inserts where action.record["key"]?.stringValue == key {
-      return action.record
+    for await change in inserts where change.record?["key"]?.stringValue == key {
+      return change.record?.values ?? [:]
     }
     return [:]
   }
