@@ -215,7 +215,10 @@ public actor RealtimeClient {
   /// The channels by their topic on the wire (`realtime:<topic>`), which incoming messages carry.
   private(set) var channelsByTopic: [String: RealtimeChannel] = [:]
 
-  /// Creates a new ``RealtimeClient`` using the default URLSession WebSocket transport.
+  /// Creates a new ``RealtimeClient``.
+  ///
+  /// The client connects through ``RealtimeClientOptions/webSocketTransport``, or through
+  /// ``URLSessionWebSocketTransport`` when that option is `nil`.
   ///
   /// - Parameters:
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
@@ -503,8 +506,8 @@ public actor RealtimeClient {
   /// When the token changes, it is sent to all currently-subscribed channels. If `token` is
   /// `nil`, the value is fetched from the `accessToken` callback configured on
   /// ``RealtimeClientOptions``. The callback is called at most once every 10 seconds; inside
-  /// that window the stored token is kept. A callback that does not return within the client's
-  /// `timeout` option is treated as failed.
+  /// that window the stored token is kept. A callback that does not return within
+  /// ``RealtimeClientOptions/requestTimeout`` is treated as failed.
   ///
   /// While the client is connected, the callback is set, and the token is a JWT, the client also
   /// calls the callback one minute before the token's `exp`, so channels are not closed when it

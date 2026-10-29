@@ -17,9 +17,12 @@ public import HTTPTypes
 /// A transport must report failures in a way the client can act on:
 /// - When the server answers the upgrade with an HTTP status, throw
 ///   ``RealtimeError/upgradeFailed(status:underlyingError:)``. A 401, 403 or 404 stops the
-///   client; any other status lets it retry.
+///   client; during an automatic reconnect, any other status lets it try again.
 /// - For any other failure, such as a lost network, throw a ``RealtimeError`` with kind
-///   ``RealtimeError/Kind/transport``. The client retries it.
+///   ``RealtimeError/Kind/transport``. During an automatic reconnect, the client tries again.
+///
+/// A failure in ``RealtimeClient/connect()`` itself is never retried: `connect()` throws it to
+/// the caller.
 /// - When the calling task is cancelled during the handshake, throw `CancellationError`.
 public protocol WebSocketTransport: Sendable {
   /// Performs the HTTP upgrade and returns the open connection.
@@ -39,7 +42,7 @@ public protocol WebSocketConnection: AnyObject, Sendable {
   var events: AsyncStream<WebSocketEvent> { get }
 
   /// Sends one frame and returns once the transport has accepted it. Frames go out in call
-  /// order, so the engine can rely on `phx_join` reaching the wire before anything sent after.
+  /// order, so the client can rely on `phx_join` reaching the wire before anything sent after.
   func send(_ frame: WebSocketFrame) async throws
 
   /// Starts a graceful close and returns without waiting for it. The `.closed` event on
