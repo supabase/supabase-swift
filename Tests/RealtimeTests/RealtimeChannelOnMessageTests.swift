@@ -383,11 +383,12 @@ struct RealtimeChannelOnMessageTests {
   @Test
   func typedPostgresChangesShapeTheJoinLikeTheUntypedStream() async {
     struct Message: Decodable {}
-    _ = await sut.postgresChanges(
+    let stream = await sut.postgresChanges(
       of: Message.self, event: .insert, schema: "chat", table: "messages",
       filter: .eq("room", value: 1), select: ["id"])
 
     let changes = await sut.clientChanges
+    withExtendedLifetime(stream) {}
     #expect(
       changes == [
         PostgresJoinConfig(
