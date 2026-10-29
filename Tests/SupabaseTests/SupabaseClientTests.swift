@@ -219,8 +219,7 @@ struct SupabaseClientTests {
   @Test
   func clientInitWithDefaultOptions() {
     // A test bundle on a simulator has no Keychain entitlement, so creating the client reports
-    // it. macOS reads the file-based Keychain and reports nothing. Its own project, so the
-    // Keychain-backed session store is not shared with the parallel tests that use mock storage.
+    // it. macOS reads the file-based Keychain and reports nothing.
     withKnownIssue(isIntermittent: true) {
       _ = SupabaseClient(
         supabaseURL: URL(string: "https://default-options.supabase.co")!,

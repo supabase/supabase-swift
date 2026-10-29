@@ -114,7 +114,7 @@ final class RealtimeTests: Sendable {
               )
             )
           } else if msg.event == "phx_join" {
-            server.send(.messagesSubscribed)
+            server.send(.messagesSubscribed(to: msg))
           }
         }
       }
@@ -218,7 +218,7 @@ final class RealtimeTests: Sendable {
           } else if msg.event == "phx_join" {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == 2 {
-              server.send(.messagesSubscribed)
+              server.send(.messagesSubscribed(to: msg))
             }
           }
         }
@@ -331,7 +331,7 @@ final class RealtimeTests: Sendable {
           } else if msg.event == "phx_join" {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == successAttempt {
-              server.send(.messagesSubscribed)
+              server.send(.messagesSubscribed(to: msg))
             }
           }
         }
@@ -363,7 +363,7 @@ final class RealtimeTests: Sendable {
   }
 
   @Test(.requiresMainSerialExecutor)
-  func subscribeTimeout_failsAfterMaxRetries() async throws {
+  func subscribeTimeout_keepsRetryingUntilCancelled() async throws {
     try await withMainSerialExecutor {
       let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
@@ -395,25 +395,20 @@ final class RealtimeTests: Sendable {
         try await channel.subscribe()
       }
 
-      for attempt in 1...5 {
+      // No attempt limit: each timed-out join is followed by another after the next step.
+      for step in [1, 2, 5, 10, 10] {
         await testClock.advance(by: timeout)
-        if attempt < 5 {
-          let retryDelay = 2.5 * Double(attempt)
-          await testClock.advance(by: .seconds(retryDelay))
-        }
-      }
-
-      do {
-        try await subscribeTask.value
-        Issue.record("Expected error but got success")
-      } catch {
-        #expect(error is RealtimeError)
+        await testClock.advance(by: .seconds(step))
       }
 
       let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
         $0.event == "phx_join"
       }
-      #expect(events.count == 5)
+      #expect(events.count == 6)
+      #expect(await channel.status == .subscribing)
+
+      subscribeTask.cancel()
+      await #expect(throws: CancellationError.self) { try await subscribeTask.value }
       #expect(await channel.status == .unsubscribed)
     }
   }
@@ -1031,22 +1026,25 @@ extension RealtimeClient {
 }
 
 extension RealtimeMessageV2 {
-  static let messagesSubscribed = Self(
-    joinRef: nil,
-    ref: "2",
-    topic: "realtime:public:messages",
-    event: "phx_reply",
-    payload: [
-      "response": [
-        "postgres_changes": [
-          ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
-          ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
-          ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
-        ]
-      ],
-      "status": "ok",
-    ]
-  )
+  /// The server's confirmation of `join`.
+  static func messagesSubscribed(to join: RealtimeMessageV2) -> Self {
+    Self(
+      joinRef: join.ref,
+      ref: join.ref,
+      topic: "realtime:public:messages",
+      event: "phx_reply",
+      payload: [
+        "response": [
+          "postgres_changes": [
+            ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
+            ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
+            ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
+          ]
+        ],
+        "status": "ok",
+      ]
+    )
+  }
 }
 
 extension FakeWebSocket {

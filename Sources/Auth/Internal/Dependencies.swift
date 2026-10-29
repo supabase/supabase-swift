@@ -16,7 +16,7 @@ struct Dependencies: Sendable {
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
   let codeVerifierStorage: CodeVerifierStorage
-  /// Owns the session. Shared with every other client for the same project and storage key.
+  /// Owns the session.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
   let autoRefresh: AutoRefreshController
@@ -51,10 +51,9 @@ extension Dependencies {
     let api = APIClient(http: http)
     let storageKey = configuration.storageKey ?? defaultStorageKey
     let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
-    let sessionStore = SessionStore.shared(
-      url: configuration.url,
-      storageKey: storageKey,
+    let sessionStore = SessionStore(
       storage: AuthLocalStorageAdapter(localStorage: localStorage),
+      key: storageKey,
       now: date,
       initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
     )

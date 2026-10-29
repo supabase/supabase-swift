@@ -86,37 +86,37 @@ struct SessionLifecycleRaceTests {
   }
 
   @Test(arguments: HeldSessionRefresh.allCases)
-  func twoClientsForOneProjectRedeemTheRefreshTokenOnce(
-    second call: HeldSessionRefresh
-  ) async throws {
+  func twoCallsThatReadOneExpiredTokenRedeemItOnce(held call: HeldSessionRefresh) async throws {
     let race = Race()
     let readTheExpiredToken = Gate()
+    let isFirstRead = LockIsolated(true)
     race.answerSignIn { _ in race.issue("signed-in", lifetime: 10) }
     race.answerRefresh { try Race.ok(race.issue("refreshed")) }
-    let first = race.makeClient()
-    let second = race.makeClient(beforeRefreshingHeldSession: { await readTheExpiredToken.pass() })
-    var firstEvents = first.authStateChanges.makeAsyncIterator()
-    var secondEvents = second.authStateChanges.makeAsyncIterator()
-    #expect(await firstEvents.next()?.event == .initialSession)
-    #expect(await secondEvents.next()?.event == .initialSession)
-    try await first.signIn(email: "a@example.com", password: "secret")
+    // Holds only the call that reads first, so the racing `session` call refreshes.
+    let client = race.makeClient(beforeRefreshingHeldSession: {
+      let isFirst = isFirstRead.withValue { isFirst in
+        defer { isFirst = false }
+        return isFirst
+      }
+      if isFirst { await readTheExpiredToken.pass() }
+    })
+    var events = client.authStateChanges.makeAsyncIterator()
+    #expect(await events.next()?.event == .initialSession)
+    try await client.signIn(email: "a@example.com", password: "secret")
+    #expect(await events.next()?.event == .signedIn)
 
-    async let secondSession = call.run(on: second)
+    async let heldSession = call.run(on: client)
     await readTheExpiredToken.arrivals(1)
-    let firstSession = try await first.session
+    let racingSession = try await client.session
     readTheExpiredToken.open()
 
-    #expect(firstSession.accessToken == "refreshed-access")
-    #expect(try await secondSession?.accessToken == "refreshed-access")
+    #expect(racingSession.accessToken == "refreshed-access")
+    #expect(try await heldSession?.accessToken == "refreshed-access")
     #expect(race.refreshRequestCount == 1)
-    for events in [firstEvents, secondEvents] {
-      var events = events
-      #expect(await events.next()?.event == .signedIn)
-      let change = await events.next()
-      #expect(change?.event == .tokenRefreshed)
-      #expect(change?.session?.accessToken == "refreshed-access")
-    }
-    #expect(second.currentSession?.accessToken == "refreshed-access")
+    let change = await events.next()
+    #expect(change?.event == .tokenRefreshed)
+    #expect(change?.session?.accessToken == "refreshed-access")
+    #expect(race.relaunch().currentSession?.refreshToken == "refreshed-refresh")
   }
 
   @Test
@@ -377,12 +377,10 @@ private struct Race: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
-  /// A client for another project URL on the same storage, so it gets its own store and reads
-  /// what the race left on disk, as the next launch would.
+  /// A new client on the same storage, so it reads what the race left on disk, as the next launch
+  /// would.
   func relaunch() -> AuthClient {
-    makeClient(
-      url: URL(string: "http://127.0.0.1:54321/auth/v1")!, autoRefresh: .manual,
-      storage: localStorage)
+    makeClient(url: clientURL, autoRefresh: .manual, storage: localStorage)
   }
 
   private func makeClient(

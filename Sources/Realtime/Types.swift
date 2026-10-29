@@ -36,11 +36,10 @@ public import Logging
 /// - ``defaultTimeout``
 /// - ``defaultDisconnectOnSessionLoss``
 /// - ``defaultConnectOnSubscribe``
-/// - ``defaultMaxRetryAttempts``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
   var heartbeatInterval: Duration
@@ -48,7 +47,6 @@ public struct RealtimeClientOptions: Sendable {
   var timeout: Duration
   var disconnectOnSessionLoss: Bool
   var connectOnSubscribe: Bool
-  var maxRetryAttempts: Int
   var disconnectOnEmptyChannelsAfter: Duration
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
@@ -107,9 +105,6 @@ public struct RealtimeClientOptions: Sendable {
   /// Default for whether to automatically connect the socket when subscribing to a channel.
   public static let defaultConnectOnSubscribe: Bool = true
 
-  /// Default maximum number of subscribe retry attempts before giving up.
-  public static let defaultMaxRetryAttempts: Int = 5
-
   /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
   /// the existing connection when switching channels without a reconnect penalty. Defaults to
   /// `2 × defaultHeartbeatInterval`. Set to `.zero` for immediate disconnect. If a new channel is
@@ -137,7 +132,6 @@ public struct RealtimeClientOptions: Sendable {
   ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
-  ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - logLevel: Optional log level for Realtime log output.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
@@ -155,7 +149,6 @@ public struct RealtimeClientOptions: Sendable {
     timeout: Duration = Self.defaultTimeout,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
-    maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
     logLevel: LogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
@@ -171,7 +164,6 @@ public struct RealtimeClientOptions: Sendable {
     self.timeout = timeout
     self.disconnectOnSessionLoss = disconnectOnSessionLoss
     self.connectOnSubscribe = connectOnSubscribe
-    self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.handleAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
@@ -307,7 +299,7 @@ extension HTTPField.Name {
 
 /// Verbosity of log output emitted by the Realtime client.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 /// to control how much detail the Realtime server logs.
 ///
 /// ## Topics
