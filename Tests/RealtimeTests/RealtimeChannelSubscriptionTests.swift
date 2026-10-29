@@ -43,6 +43,47 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
+  /// Cancelling a caller that joined an in-flight subscribe ends its wait at once and leaves the
+  /// first caller's attempt running.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingASecondCallerLeavesTheSharedSubscribeRunning() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    let second = Task { try await channel.subscribe() }
+    #expect(await waitUntil { await !channel.sharedSubscribeWaiters.isEmpty })
+    second.cancel()
+
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await channel.sharedSubscribeWaiters.isEmpty)
+    #expect(await channel.status == .subscribing)
+    try h.confirm(firstJoin)
+    try await first.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func aCallerCancelledBeforeItJoinsTheSharedSubscribeThrowsAtOnce() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      try await channel.subscribe()
+    }
+
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await channel.sharedSubscribeWaiters.isEmpty)
+    try h.confirm(join)
+    try await first.value
+    #expect(await channel.status == .subscribed)
+  }
+
   @Test
   func concurrentSubscribesShareOneJoin() async throws {
     let h = Harness()
@@ -61,13 +102,13 @@ struct RealtimeChannelSubscriptionTests {
 
   @Test
   func subscribeRetriesAfterTimeoutThenSucceeds() async throws {
-    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 3)
+    let h = Harness(timeout: .seconds(10))
     let channel = await h.client.channel("room")
 
     let subscription = Task { try await channel.subscribe() }
     let firstJoin = try #require(await h.received(ChannelEvent.join))
-    // The attempt times out at 10s; the first retry waits at most 1.25s.
-    await h.clock.advance(by: .seconds(12))
+    // The attempt times out at 10s; the first retry waits 1s.
+    await h.clock.advance(by: .seconds(11))
     let secondJoin = try #require(await h.received(ChannelEvent.join))
     try h.confirm(secondJoin)
 
@@ -77,29 +118,11 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.joinRef == secondJoin.ref)
   }
 
-  @Test
-  func subscribeThrowsMaxRetryAttemptsReachedWhenNoAttemptIsConfirmed() async throws {
-    let h = Harness(timeout: .seconds(10), maxRetryAttempts: 2)
-    let channel = await h.client.channel("room")
-
-    let subscription = Task { try await channel.subscribe() }
-    _ = try #require(await h.received(ChannelEvent.join))
-    await h.clock.advance(by: .seconds(12))
-    _ = try #require(await h.received(ChannelEvent.join))
-    await h.clock.advance(by: .seconds(10))
-
-    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
-    #expect(error?.kind == .maxRetryAttemptsReached)
-    #expect(await channel.status == .unsubscribed)
-    #expect(await channel.joinRef == nil)
-    #expect(h.sent(ChannelEvent.join).count == 2)
-  }
-
   /// Issue #1145 (defect 2): a transient socket connect failure must enter the retry ladder
   /// like a timeout instead of aborting the subscribe.
   @Test
   func subscribeRetriesWhenSocketConnectFailsTransiently() async throws {
-    let h = Harness(maxRetryAttempts: 3, failedConnects: 1)
+    let h = Harness(failedConnects: 1)
     let channel = await h.client.channel("room")
     var statuses = await h.client.statusChanges().makeAsyncIterator()
 
@@ -115,22 +138,23 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.connects.value == 2)
   }
 
-  /// Issue #1145 (defect 2): connect failures must not surface as `CancellationError`, which
-  /// callers attribute to their own task.
-  @Test
-  func persistentConnectFailureThrowsMaxRetryAttemptsReached() async throws {
-    let h = Harness(maxRetryAttempts: 2, failedConnects: .max)
+  /// Connect failures keep the subscribe retrying on the rejoin steps; only the caller's own
+  /// cancellation ends it.
+  @Test(.timeLimit(.minutes(1)))
+  func persistentConnectFailureKeepsRetryingUntilCancelled() async throws {
+    let h = Harness(failedConnects: .max)
     let channel = await h.client.channel("room")
-    var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     let subscription = Task { try await channel.subscribe() }
-    #expect(await statuses.next() == .disconnected)
-    #expect(await statuses.next() == .connecting)
-    #expect(await statuses.next() == .disconnected)
-    await h.clock.advance(by: .seconds(2))
+    #expect(await waitUntil { h.connects.value == 1 })
+    for (step, connects) in [(1, 2), (2, 3), (5, 4), (10, 5), (10, 6)] {
+      await h.clock.advance(by: .seconds(step))
+      #expect(await waitUntil { h.connects.value == connects })
+    }
+    #expect(await channel.status == .subscribing)
+    subscription.cancel()
 
-    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
-    #expect(error?.kind == .maxRetryAttemptsReached)
+    await #expect(throws: CancellationError.self) { try await subscription.value }
     #expect(await channel.status == .unsubscribed)
   }
 
@@ -168,6 +192,448 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .unsubscribed)
   }
 
+  // MARK: - Join errors
+
+  @Test(.timeLimit(.minutes(1)))
+  func fatalJoinErrorThrowsAtOnce() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let start = h.clock.now
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(
+      join,
+      reason: "Unauthorized: You do not have permissions to read from this Channel topic: room")
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .unauthorized)
+    #expect(error?.serverCode == .unauthorized)
+    #expect(error?.isRetryable == false)
+    #expect(h.clock.now == start)
+    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.joinRef == nil)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func transientJoinErrorRejoinsAfterThePolicyDelay() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    try h.fail(firstJoin, reason: "RealtimeRestarting: Realtime is restarting, please standby")
+    await h.clock.advance(by: .milliseconds(999))
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    await h.clock.advance(by: .milliseconds(1))
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(secondJoin)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(await channel.joinRef == secondJoin.ref)
+  }
+
+  /// There is no attempt limit: transient errors keep the channel rejoining on the 1/2/5/10 s
+  /// steps, and the last step repeats.
+  @Test(.timeLimit(.minutes(1)))
+  func transientJoinErrorsKeepRejoiningOnTheSteps() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    var join = try #require(await h.received(ChannelEvent.join))
+    for step in [1, 2, 5, 10, 10] {
+      try h.fail(join, reason: "UnknownErrorOnChannel: boom")
+      await h.clock.advance(by: .seconds(step))
+      join = try #require(await h.received(ChannelEvent.join))
+    }
+    try h.confirm(join)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 6)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func expiredTokenRejoinsOnceAtOnceWithAFreshToken() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let start = h.clock.now
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    try h.fail(firstJoin, reason: "InvalidJWTToken: Token has expired 3 seconds ago")
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    #expect(secondJoin.payload["access_token"] != firstJoin.payload["access_token"])
+    try h.fail(secondJoin, reason: "InvalidJWTToken: Token has expired 3 seconds ago")
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .unauthorized)
+    #expect(error?.serverCode == .invalidJWTToken)
+    #expect(h.clock.now == start)
+    #expect(h.sent(ChannelEvent.join).count == 2)
+  }
+
+  /// The one fresh-token rejoin is per run of expired-token errors: a token that expires again
+  /// after other failures gets another one.
+  @Test(.timeLimit(.minutes(1)))
+  func aTokenThatExpiresAgainAfterOtherFailuresGetsAnotherRefresh() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let expired = "InvalidJWTToken: Token has expired 3 seconds ago"
+
+    let subscription = Task { try await channel.subscribe() }
+    var join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: expired)
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: "UnknownErrorOnChannel: boom")
+    await h.clock.advance(by: .seconds(2))
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: expired)
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 4)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func rateLimitedJoinBacksOffForTheLongInterval() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    try h.fail(firstJoin, reason: "ClientJoinRateLimitReached: Too many joins per second")
+    await h.clock.advance(by: .seconds(29))
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    await h.clock.advance(by: .seconds(1))
+    try h.confirm(try #require(await h.received(ChannelEvent.join)))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+  }
+
+  /// Issue #1378: once a join timed out and the channel rejoined, a late success for the old
+  /// join must not settle the new one.
+  @Test(.timeLimit(.minutes(1)))
+  func lateSuccessForAnEarlierJoinDoesNotSettleTheCurrentOne() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    await h.clock.advance(by: .seconds(11))
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(firstJoin)
+    try h.fail(secondJoin, reason: "Unauthorized: denied")
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .unauthorized)
+    #expect(await channel.status == .unsubscribed)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func lateErrorForAnEarlierJoinDoesNotFailTheCurrentOne() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    await h.clock.advance(by: .seconds(11))
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    try h.fail(firstJoin, reason: "Unauthorized: denied")
+    try h.confirm(secondJoin)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(await channel.joinRef == secondJoin.ref)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func joinErrorWhileThePhxJoinIsStillSendingFailsTheSubscribe() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let server = h.server
+    // The join's send stays in flight until the channel has taken the error reply.
+    h.socket.onSend { frame in
+      guard case .text(let text) = frame,
+        let join = try? RealtimeSerializer().decodeText(text), join.event == ChannelEvent.join,
+        let reply = try? RealtimeSerializer().encodeText(
+          RealtimeMessageV2(
+            joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+            payload: ["status": "error", "response": ["reason": "Unauthorized: denied"]]
+          )
+        )
+      else { return }
+      server.send(reply)
+      await waitUntil { await channel.joinFailure != nil }
+    }
+
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+    #expect(error?.kind == .unauthorized)
+    #expect(await channel.joinFailure == nil)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func refusedUpgradeThrowsAtOnce() async throws {
+    let h = Harness(
+      failedConnects: .max, connectError: RealtimeError.upgradeFailed(status: 401))
+    let channel = await h.client.channel("room")
+
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+    #expect(error?.kind == .transport)
+    #expect(error?.isRetryable == false)
+    #expect(h.connects.value == 1)
+    #expect(await channel.status == .unsubscribed)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
+    let h = Harness(connectOnSubscribe: false)
+    let channel = await h.client.channel("room")
+
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+    #expect(error?.kind == .notConnected)
+    #expect(error?.isRetryable == false)
+    #expect(h.connects.value == 0)
+    #expect(await channel.status == .unsubscribed)
+  }
+
+  /// A join error with no reason is not one the classifier knows, so the channel rejoins.
+  @Test(.timeLimit(.minutes(1)))
+  func joinErrorWithoutAReasonRejoinsAfterThePolicyDelay() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let firstJoin = try #require(await h.received(ChannelEvent.join))
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: firstJoin.ref, ref: firstJoin.ref, topic: firstJoin.topic,
+        event: ChannelEvent.reply, payload: ["status": "error", "response": [:]]
+      )
+    )
+    await h.clock.advance(by: .seconds(1))
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(secondJoin)
+
+    try await subscription.value
+    #expect(await channel.joinRef == secondJoin.ref)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func okJoinReplyWithoutPostgresChangesConfirmsTheJoin() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+        payload: ["status": "ok", "response": [:]]
+      )
+    )
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// A late `ok` for a join that timed out confirms it, so the backoff must not send another join.
+  @Test(.timeLimit(.minutes(1)))
+  func lateOkDuringTheBackoffSettlesTheSubscribeWithoutAnotherJoin() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    await h.clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.status == .subscribed })
+    await h.clock.advance(by: .seconds(1))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func disconnectStopsASubscribeThatIsRetrying() async throws {
+    let h = Harness(failedConnects: .max)
+    let channel = await h.client.channel("room")
+    let finished = LockIsolated(false)
+
+    let subscription = Task {
+      defer { finished.setValue(true) }
+      try await channel.subscribe()
+    }
+    #expect(await waitUntil { h.connects.value == 1 })
+    await h.client.disconnect()
+
+    try #require(await waitUntil(timeout: 2) { finished.value })
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .notConnected)
+    #expect(await channel.status == .unsubscribed)
+    await h.clock.advance(by: .seconds(10))
+    #expect(h.connects.value == 1)
+  }
+
+  /// With `connectOnSubscribe` off, a socket that drops while the join retries is the client's to
+  /// restore: the subscribe keeps retrying instead of failing.
+  @Test(.timeLimit(.minutes(1)))
+  func aDropWhileRetryingKeepsTheSubscribeGoingWhenConnectOnSubscribeIsOff() async throws {
+    let h = Harness(
+      connectOnSubscribe: false,
+      onConnect: { attempt in
+        if attempt > 1 { try? await Task.sleep(for: .seconds(3600)) }
+      }
+    )
+    try await h.client.connect()
+    let channel = await h.client.channel("room")
+    let finished = LockIsolated(false)
+
+    let subscription = Task {
+      defer { finished.setValue(true) }
+      try await channel.subscribe()
+    }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: "UnknownErrorOnChannel: boom")
+    h.server.close(code: nil, reason: "dropped")
+    #expect(await waitUntil { await h.client.status == .connecting })
+    await h.clock.advance(by: .seconds(1))
+    await h.clock.advance(by: .seconds(2))
+
+    #expect(!finished.value)
+    #expect(await channel.status == .subscribing)
+    subscription.cancel()
+    await h.client.disconnect()
+  }
+
+  /// Retrying cannot fix a join reply the client cannot read, so the subscribe fails at once.
+  @Test(.timeLimit(.minutes(1)))
+  func unreadableOkJoinReplyFailsTheSubscribeAtOnce() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let start = h.clock.now
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+        payload: ["status": "ok", "response": ["postgres_changes": "not-an-array"]]
+      )
+    )
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.isRetryable == false)
+    #expect(await channel.status == .unsubscribed)
+    #expect(h.clock.now == start)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// Every caller of a shared subscribe gets the same error when the server closes the channel.
+  @Test(.timeLimit(.minutes(1)))
+  func aServerCloseFailsEveryCallerWithChannelClosedByServer() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task { try await channel.subscribe() }
+    #expect(await waitUntil { await !channel.sharedSubscribeWaiters.isEmpty })
+    try h.close(join)
+
+    for caller in [first, second] {
+      let error = await #expect(throws: RealtimeError.self) { try await caller.value }
+      #expect(error?.kind == .channelClosedByServer)
+    }
+  }
+
+  /// A rejoin that keeps failing must not keep a released client alive.
+  @Test(.timeLimit(.minutes(1)))
+  func aRejoinThatNeverSucceedsDoesNotRetainTheClient() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+    }
+    let box = WeakBox()
+    let (socket, server) = FakeWebSocket.fakes()
+
+    func scope() async throws {
+      let client = RealtimeClient(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          heartbeatInterval: .seconds(3600),
+          accessToken: { "token" },
+          handleAppLifecycle: false
+        ),
+        wsTransport: { _, _ in socket },
+        http: HTTPClient(transport: RecordingTransport()),
+        clock: SignalingTestClock()
+      )
+      box.client = client
+      try await client.connect()
+      _ = await client.channel("room")
+      Task { await client.rejoinChannels() }
+      for await frame in server.events {
+        if case .frame(.text(let text)) = frame, text.contains(ChannelEvent.join) { break }
+      }
+    }
+    try await scope()
+
+    #expect(await waitUntil(timeout: 5) { box.client == nil })
+  }
+
+  /// Without an attempt limit, a channel that outlives its client must not retry forever.
+  @Test(.timeLimit(.minutes(1)))
+  func subscribeAfterTheClientIsReleasedThrowsAtOnce() async throws {
+    func makeChannel() async -> RealtimeChannel {
+      let client = RealtimeClient(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(handleAppLifecycle: false)
+      )
+      return await client.channel("room")
+    }
+    let channel = await makeChannel()
+    try #require(await waitUntil { await channel.client == nil })
+
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+    #expect(error?.kind == .notConnected)
+    #expect(error?.isRetryable == false)
+    #expect(await channel.status == .unsubscribed)
+  }
+
+  /// A failed postgres-changes subscription arrives as a `system` error after the join. The
+  /// join itself stands, so the channel stays subscribed and the system stream carries it.
+  @Test
+  func systemErrorLeavesTheChannelSubscribed() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    var systemMessages = await channel.systemMessages().makeAsyncIterator()
+    let join = try await h.subscribe(channel)
+
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: nil, topic: join.topic, event: ChannelEvent.system,
+        payload: [
+          "status": "error", "extension": "postgres_changes", "channel": "room",
+          "message": "Unable to subscribe to changes with given parameters.",
+        ]
+      )
+    )
+
+    let message = try #require(await systemMessages.next())
+    #expect(message.status == .error)
+    #expect(await channel.status == .subscribed)
+    #expect(await channel.joinRef == join.ref)
+  }
+
   // MARK: - Cancellation and server close
 
   @Test
@@ -185,10 +651,10 @@ struct RealtimeChannelSubscriptionTests {
   }
 
   /// A server close that aborts an in-flight subscribe surfaces as `channelClosedByServer`:
-  /// never as `CancellationError` (the caller's own task) nor `maxRetryAttemptsReached`.
+  /// never as `CancellationError`, which callers attribute to their own task.
   @Test
   func serverCloseDuringSubscribeThrowsChannelClosedByServer() async throws {
-    let h = Harness(maxRetryAttempts: 1)
+    let h = Harness()
     let channel = await h.client.channel("room")
 
     let subscription = Task { try await channel.subscribe() }
@@ -264,7 +730,7 @@ struct RealtimeChannelSubscriptionTests {
   @Test(.timeLimit(.minutes(1)))
   func staleSubscribeFailureLeavesReplacementSubscribeUntouched() async throws {
     let gate = Gate()
-    let h = Harness(maxRetryAttempts: 1)
+    let h = Harness()
     // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
     // fails only after the newer one has joined.
     let joinSends = LockIsolated(0)
@@ -306,7 +772,7 @@ struct RealtimeChannelSubscriptionTests {
   @Test(.timeLimit(.minutes(1)))
   func serverCloseDuringStaleSubscribeStillSurfacesTypedError() async throws {
     let gate = Gate()
-    let h = Harness(maxRetryAttempts: 1)
+    let h = Harness()
     // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
     // fails only after the newer one has joined.
     let joinSends = LockIsolated(0)
@@ -347,7 +813,6 @@ struct RealtimeChannelSubscriptionTests {
   func cancelledStaleSubscribeNeverJoinsAfterReconnect() async throws {
     let gate = Gate()
     let h = Harness(
-      maxRetryAttempts: 1,
       onConnect: { attempt in
         if attempt == 1 { await gate.park() }
       })
@@ -563,6 +1028,10 @@ struct RealtimeChannelSubscriptionTests {
     }
   }
 
+  /// A join timeout no step of these tests reaches. With the default 10 s, a step of 10 s or
+  /// more can fire the timeout before the channel handles the error reply the test sent.
+  private static let noJoinTimeout: Duration = .seconds(3600)
+
   /// A client on a `TestClock`, connected to an in-memory server socket the test drives.
   private struct Harness {
     let clock: SignalingTestClock
@@ -575,8 +1044,9 @@ struct RealtimeChannelSubscriptionTests {
     /// lookup, both numbered from 1, so a test can park one attempt at that point.
     init(
       timeout: Duration = RealtimeClientOptions.defaultTimeout,
-      maxRetryAttempts: Int = 3,
       failedConnects: Int = 0,
+      connectError: any Error = URLError(.notConnectedToInternet),
+      connectOnSubscribe: Bool = true,
       onConnect: @escaping @Sendable (_ attempt: Int) async -> Void = { _ in },
       onAccessToken: @escaping @Sendable (_ call: Int) async -> Void = { _ in }
     ) {
@@ -593,14 +1063,14 @@ struct RealtimeChannelSubscriptionTests {
         options: RealtimeClientOptions(
           heartbeatInterval: .seconds(3600),
           timeout: timeout,
-          maxRetryAttempts: maxRetryAttempts,
+          connectOnSubscribe: connectOnSubscribe,
           accessToken: {
             let call = accessTokenCalls.withValue {
               $0 += 1
               return $0
             }
             await onAccessToken(call)
-            return nil
+            return "token-\(call)"
           },
           handleAppLifecycle: false
         ),
@@ -611,7 +1081,7 @@ struct RealtimeChannelSubscriptionTests {
           }
           await onConnect(attempt)
           if attempt <= failedConnects {
-            throw URLError(.notConnectedToInternet)
+            throw connectError
           }
           return socket
         },
@@ -645,6 +1115,16 @@ struct RealtimeChannelSubscriptionTests {
       )
     }
 
+    /// Refuses `join` with `reason`, as the server does.
+    func fail(_ join: RealtimeMessageV2, reason: String) throws {
+      try reply(
+        RealtimeMessageV2(
+          joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+          payload: ["status": "error", "response": ["reason": .string(reason)]]
+        )
+      )
+    }
+
     /// Closes the channel `join` opened, as the server does.
     func close(_ join: RealtimeMessageV2) throws {
       try reply(
@@ -664,8 +1144,13 @@ struct RealtimeChannelSubscriptionTests {
       return join
     }
 
-    private func reply(_ message: RealtimeMessageV2) throws {
+    /// Sends `message` from the server.
+    func send(_ message: RealtimeMessageV2) throws {
       server.send(try RealtimeSerializer().encodeText(message))
+    }
+
+    private func reply(_ message: RealtimeMessageV2) throws {
+      try send(message)
     }
 
     private static func decode(_ frame: WebSocketEvent) -> RealtimeMessageV2? {
