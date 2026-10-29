@@ -162,7 +162,9 @@ for await event in await channel.events() where event == .postgresChangesReady {
 ```
 
 `events()` also emits `.resubscribed` when a channel joins again after a reconnect. Events sent
-while it was away are missed, so reload any state built from them.
+while it was away are missed, so reload any state built from them. With
+`BroadcastJoinConfig(replicationReady: true)`, it emits `.replicationReady` or
+`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
 
 ## Streams replace callbacks
 

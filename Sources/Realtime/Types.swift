@@ -324,6 +324,8 @@ public enum RealtimeClientStatus: Sendable {
 /// - ``resubscribed``
 /// - ``postgresChangesReady``
 /// - ``postgresChangesFailed(_:)``
+/// - ``replicationReady``
+/// - ``replicationFailed(_:)``
 public enum RealtimeChannelEvent: Sendable, Equatable {
   /// The channel joined again after it was subscribed, for example after a reconnect. Events
   /// sent while it was away were missed; reload any state built from them.
@@ -337,6 +339,16 @@ public enum RealtimeChannelEvent: Sendable, Equatable {
   /// stays subscribed, so broadcast and presence keep working. The value is the server's
   /// message.
   case postgresChangesFailed(String)
+
+  /// The Postgres replication connection behind the channel is ready ("Replication connection
+  /// established"). The server sends it only when you opt in with
+  /// ``BroadcastJoinConfig/replicationReady``.
+  case replicationReady
+
+  /// The Postgres replication connection did not become ready in time. The server sends it only
+  /// when you opt in with ``BroadcastJoinConfig/replicationReady``. The value is the server's
+  /// message.
+  case replicationFailed(String)
 }
 
 /// One step of the heartbeat cycle, emitted by ``RealtimeClient/heartbeats()``.

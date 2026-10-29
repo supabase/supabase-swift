@@ -551,13 +551,16 @@ public actor RealtimeChannel {
   }
 
   private func handleSystem(_ message: RealtimeMessageV2) {
-    let isPostgresChanges =
-      message.payload["extension"]?.stringValue == ChannelEvent.postgresChanges
+    let `extension` = message.payload["extension"]?.stringValue
+    let isPostgresChanges = `extension` == ChannelEvent.postgresChanges
+    let isReplication = `extension` == ChannelEvent.system
     switch message.status {
     case .ok where message.joinRef == nil || message.joinRef == joinRef:
       didReceiveSubscribedOK()
       if isPostgresChanges {
         yield(.postgresChangesReady)
+      } else if isReplication {
+        yield(.replicationReady)
       }
     case .error:
       // The server reports a postgres-changes subscription it could not set up this way. The
@@ -567,6 +570,8 @@ public actor RealtimeChannel {
       logger.error("Channel '\(topic)' reported an error: \(reason)")
       if isPostgresChanges {
         yield(.postgresChangesFailed(reason))
+      } else if isReplication {
+        yield(.replicationFailed(reason))
       }
     default:
       break

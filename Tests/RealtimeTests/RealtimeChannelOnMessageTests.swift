@@ -84,7 +84,31 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func systemMessageWithoutPostgresExtensionEmitsNothing() async {
+  func systemMessagesForReplicationEmitReadyOrFailed() async {
+    let events = await sut.events()
+
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: [
+          "status": "ok", "extension": "system",
+          "message": "Replication connection established",
+        ]
+      )
+    )
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.system,
+        payload: ["status": "error", "extension": "system", "message": "Replication not ready"]
+      )
+    )
+
+    #expect(
+      await collect(events) == [.replicationReady, .replicationFailed("Replication not ready")])
+  }
+
+  @Test
+  func systemMessageWithoutAKnownExtensionEmitsNothing() async {
     let events = await sut.events()
 
     await sut.onMessage(message(event: ChannelEvent.system, payload: ["status": "ok"]))

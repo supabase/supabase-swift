@@ -1417,6 +1417,8 @@ features:
       - BroadcastJoinConfig.replicationReady
       - RealtimeChannel.broadcasts
       - RealtimeChannel.broadcastData
+    supporting_symbols:
+      - RealtimeChannel.events
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:

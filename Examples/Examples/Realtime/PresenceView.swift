@@ -90,7 +90,7 @@ struct PresenceView: View {
   }
 }
 
-struct PresenceUser: Identifiable, Codable {
+nonisolated struct PresenceUser: Identifiable, Codable {
   let id: String
   let username: String
 }
