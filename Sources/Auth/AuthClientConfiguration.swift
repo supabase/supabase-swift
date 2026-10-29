@@ -77,7 +77,7 @@ extension AuthClient {
     /// Set to `true` if you want to automatically refresh the token before expiring.
     public let automaticallyRefreshesToken: Bool
 
-    /// The clock the auto-refresh loop sleeps on between ticks.
+    /// The clock auto refresh sleeps on until the refresh is due, and between retries.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
@@ -97,7 +97,7 @@ extension AuthClient {
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
     ///   - http: The transport and middleware chain every request goes through.
     ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
-    ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
+    ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -177,7 +177,7 @@ extension AuthClient {
   ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
   ///   - http: The transport and middleware chain every request goes through.
   ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
-  ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
+  ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
   public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],

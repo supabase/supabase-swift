@@ -1,4 +1,5 @@
 public import Foundation
+import Helpers
 
 /// An event emitted when the authentication state of the current user changes.
 ///
@@ -149,13 +150,12 @@ public struct Session: Codable, Hashable, Sendable {
 
   /// Returns `true` if the access token is expired or will expire within the next 30 seconds.
   ///
-  /// The 30-second buffer accounts for network latency.
+  /// The 30-second buffer accounts for network latency. This compares the server's
+  /// ``expiresAt`` with the device clock, so a device clock that is wrong gives a wrong answer.
+  /// The client itself does not use it: it judges expiry from the local time it received the
+  /// session, plus ``expiresIn``.
   public var isExpired: Bool {
-    isExpired(at: Date())
-  }
-
-  func isExpired(at date: Date) -> Bool {
-    expiresAt - date.timeIntervalSince1970 < defaultExpiryMargin
+    expiresAt - Date().timeIntervalSince1970 < defaultExpiryMargin.timeInterval
   }
 }
 

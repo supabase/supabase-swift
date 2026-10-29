@@ -139,7 +139,8 @@ actor SessionStore {
 
   private static let refreshFailureCooldown: TimeInterval = 60
 
-  /// Grows by one on every state change, so tests can tell that a commit changed nothing.
+  /// Grows by one on every state change, so tests can tell that a commit changed nothing, and the
+  /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
 
   private let storage: any AuthStorage
@@ -150,6 +151,7 @@ actor SessionStore {
   private var refreshFlights: [String: RefreshFlight] = [:]
   private var lastRefreshFailure: RefreshFailure?
   private var refreshWindow = RefreshWindow()
+  private var refresher = Refresher()
 
   init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
     self.storage = storage
@@ -179,6 +181,7 @@ actor SessionStore {
   }
 
   deinit {
+    refresher.task?.cancel()
     for continuation in published.value.subscribers.values {
       continuation.finish()
     }
@@ -190,6 +193,18 @@ actor SessionStore {
 
   nonisolated var currentSession: Session? {
     currentStatus.session
+  }
+
+  nonisolated func validSession(minimumValidity: Duration) -> Session? {
+    guard let held = heldSession, !held.isExpired(at: now(), leeway: minimumValidity) else {
+      return nil
+    }
+    return held.session
+  }
+
+  private nonisolated var heldSession: ReceivedSession? {
+    guard case .signedIn(let received) = published.value.state else { return nil }
+    return received
   }
 
   /// The number of live ``changes()`` streams, so tests can tell a released stream from a leak.
@@ -281,6 +296,7 @@ actor SessionStore {
     let id = UUID()
     let heldRefreshToken = currentSession?.refreshToken
     let refreshesHeldSession = heldRefreshToken == refreshToken
+    let heldUserAtStart = refreshesHeldSession ? currentSession?.user : nil
     let task = Task {
       defer {
         if refreshFlights[refreshToken]?.id == id {
@@ -304,22 +320,81 @@ actor SessionStore {
         throw error
       }
 
-      try await commit(.refreshed(session, replacing: heldRefreshToken))
+      try await serialized {
+        try await self.applyRefreshed(
+          session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+      }
       return session
     }
     refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
     return task
   }
 
+  /// Applies a refresh of the held session. A user update that committed while the request was out
+  /// keeps its user: the server may have read the user before the update.
+  private func applyRefreshed(
+    _ session: Session, replacing heldRefreshToken: String?, heldUserAtStart: User?
+  ) async throws {
+    var session = session
+    if let heldUserAtStart, let held = currentSession, held.refreshToken == heldRefreshToken,
+      held.user != heldUserAtStart
+    {
+      session.user = held.user
+    }
+    try await apply(.refreshed(session, replacing: heldRefreshToken))
+  }
+
   private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String) async {
     guard let error = error as? AuthError, error.invalidatesSession else { return }
-    if let session = currentSession, session.refreshToken == refreshToken,
-      !session.isExpired(at: now())
+    if let held = heldSession, held.session.refreshToken == refreshToken,
+      !held.isExpired(at: now(), leeway: defaultExpiryMargin)
     {
       return
     }
     try? await commit(
       .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
+  }
+
+  func startAutoRefresh(for owner: UUID, using driver: Refresher.Driver) {
+    refresher.add(driver, for: owner)
+    armRefresher()
+  }
+
+  func stopAutoRefresh(for owner: UUID) {
+    refresher.remove(owner)
+    armRefresher()
+  }
+
+  func isAutoRefreshStarted(by owner: UUID) -> Bool {
+    refresher.isDriven(by: owner)
+  }
+
+  private func armRefresher() {
+    guard let received = heldSession, let driver = refresher.activeDriver else {
+      refresher.task = nil
+      return
+    }
+    let armedGeneration = generation
+    let now = now
+    refresher.task = Task { [weak self] in
+      await Refresher.run(for: received, driver: driver, now: now) {
+        guard let self else { throw CancellationError() }
+        try await self.refreshHeldSessionIgnoringCachedFailure(
+          armedAt: armedGeneration, using: driver.request)
+      }
+    }
+  }
+
+  private func refreshHeldSessionIgnoringCachedFailure(
+    armedAt armedGeneration: UInt64,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+  ) async throws {
+    guard generation == armedGeneration, let refreshToken = currentSession?.refreshToken else {
+      throw CancellationError()
+    }
+    let flight =
+      try refreshFlights[refreshToken]?.task ?? startRefresh(refreshToken, using: request)
+    _ = try await Self.value(of: flight)
   }
 
   private static func value(of task: Task<Session, any Error>) async throws -> Session {
@@ -450,5 +525,6 @@ actor SessionStore {
         }
       }
     }
+    armRefresher()
   }
 }

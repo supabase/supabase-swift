@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 23/10/23.
 //
 
-import Clocks
 import ConcurrencyExtras
 import CustomDump
 import Foundation
@@ -35,7 +34,6 @@ struct SessionManagerTests {
 
   private static func makeDependencies(
     http: any ClientTransport,
-    clock: any Clock<Duration> = ContinuousClock(),
     date: @escaping @Sendable () -> Date = { Date() }
   ) -> Dependencies {
     .live(
@@ -43,8 +41,7 @@ struct SessionManagerTests {
         url: clientURL,
         storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
-        automaticallyRefreshesToken: false,
-        clock: clock
+        automaticallyRefreshesToken: false
       ),
       http: HTTPClient(transport: http),
       logger: supabaseDefaultLogger(label: "io.supabase.auth"),
@@ -143,39 +140,6 @@ struct SessionManagerTests {
     }
   }
 
-  @Test
-  func autoRefreshTicksOnTheInjectedClock() async throws {
-    let clock = TestClock()
-    let dependencies = Self.makeDependencies(http: http, clock: clock)
-    let sut = dependencies.sessionManager
-
-    try await dependencies.seedSession(.expired)
-
-    let refreshCount = LockIsolated(0)
-    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
-      refreshCount.withValue { $0 += 1 }
-      return (
-        HTTPResponse(status: .ok),
-        try AuthClient.Configuration.jsonEncoder.encode(Session.expired)
-      )
-    }
-
-    await sut.startAutoRefresh()
-
-    let sawFirstTick = await waitUntil { refreshCount.value >= 1 }
-
-    for _ in 0..<50 where refreshCount.value < 2 {
-      await clock.advance(by: .seconds(autoRefreshTickDuration))
-      try? await Task.sleep(nanoseconds: 10_000_000)
-    }
-    let tickCount = refreshCount.value
-
-    await sut.stopAutoRefresh()
-
-    #expect(sawFirstTick)
-    #expect(tickCount >= 2)
-  }
-
   private func session(_ name: String) -> Session {
     Session(
       accessToken: "\(name)-access",
@@ -189,7 +153,8 @@ struct SessionManagerTests {
 
   private func expiredSession(_ name: String) -> Session {
     var session = session(name)
-    session.expiresAt = Date().addingTimeInterval(-60).timeIntervalSince1970
+    session.expiresIn = defaultExpiryMargin.timeInterval / 3
+    session.expiresAt = Date().addingTimeInterval(session.expiresIn).timeIntervalSince1970
     return session
   }
 
@@ -263,6 +228,64 @@ struct SessionManagerTests {
     let collected = await settled(events, count: 2)
     expectNoDifference(collected, [.initialSession, .signedIn])
     #expect((result.error as? AuthError)?.kind == .refreshDiscarded)
+  }
+
+  @Test
+  func userUpdateDuringAnAutoRefreshKeepsTheRotatedTokensAndRedeemsTheTokenOnce() async throws {
+    let held = expiredSession("A")
+    let rotated = {
+      var session = session("A2")
+      session.expiresIn = 3600
+      session.expiresAt = Date().addingTimeInterval(3600).timeIntervalSince1970
+      return session
+    }()
+
+    try await dependencies.seedSession(held)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(rotated))
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    await sut.startAutoRefresh()
+    #expect(await waitUntil { requestSeen.value })
+
+    var updatedUser = held.user
+    updatedUser.email = "updated@example.com"
+    try await dependencies.sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
+    release()
+
+    let collected = await settled(events, count: 3)
+    _ = await waitUntil(timeout: 3) { tokenRequestCount > 1 }
+    await sut.stopAutoRefresh()
+
+    var expected = rotated
+    expected.user = updatedUser
+    expectNoDifference(dependencies.sessionStore.currentSession, expected)
+    expectNoDifference(collected, [.initialSession, .userUpdated, .tokenRefreshed])
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
+  func refreshIsDiscardedAfterASignOutAndASignInAsAnotherUser() async throws {
+    let userA = session("A")
+    let userB = session("B")
+
+    try await dependencies.seedSession(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session("A2")))
+    }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    #expect(await waitUntil { requestSeen.value })
+
+    try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    try await dependencies.seedSession(userB)
+    release()
+    let result = await refresh.result
+
+    expectNoDifference(dependencies.sessionStore.currentSession, userB)
+    #expect(result.error != nil)
   }
 
   @Test
@@ -854,9 +877,10 @@ struct SessionManagerTests {
   @Test
   func accessTokenValidityIsJudgedByTheInjectedDate() async throws {
     let held = session("A")
-    let dependencies = Self.makeDependencies(
-      http: http, date: { Date().addingTimeInterval(held.expiresIn) })
+    let now = LockIsolated(Date())
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
     try await dependencies.seedSession(held)
+    now.withValue { $0.addTimeInterval(held.expiresIn) }
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
     }
@@ -872,6 +896,7 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
+      session.expiresIn = 60
       session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
       return session
     }()
@@ -916,6 +941,7 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
+      session.expiresIn = 60
       session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
       return session
     }()
@@ -946,6 +972,7 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
+      session.expiresIn = 60
       session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
       return session
     }()
