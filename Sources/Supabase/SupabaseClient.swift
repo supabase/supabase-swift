@@ -259,7 +259,7 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      autoRefresh: options.auth.autoRefresh,
+      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
