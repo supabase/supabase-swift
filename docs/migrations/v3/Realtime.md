@@ -198,9 +198,10 @@ let task = Task {
 defer { task.cancel() }
 ```
 
-Open `postgresChanges`, `presenceChanges` and `presenceStates` streams before `subscribe()`.
-They shape the join request. Opening one after the join reports an issue and returns an empty
-stream. Presence is sent to the server only when a `presenceChanges()` or `presenceStates()`
+Open `presenceChanges` and `presenceStates` streams before `subscribe()`. They shape the join
+request. Opening one after the join reports an issue and returns an empty stream. A
+`postgresChanges` stream opened after the join makes the channel leave and join again with the new
+binding; the channel emits `.resubscribed` when the new join is confirmed. Presence is sent to the server only when a `presenceChanges()` or `presenceStates()`
 stream is open.
 
 ## Broadcast and Postgres change payloads

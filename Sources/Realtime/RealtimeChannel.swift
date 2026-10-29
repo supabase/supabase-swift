@@ -15,8 +15,9 @@ import Logging
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
 /// Obtain an instance from ``RealtimeClient/channel(_:configure:)``, open the streams you want,
-/// then call ``subscribe()``. Postgres-change and presence streams shape the join request, so
-/// open them **before** subscribing; broadcast and system streams can be opened at any time.
+/// then call ``subscribe()``. Presence streams shape the join request, so open them **before**
+/// subscribing. A Postgres changes stream opened after the join makes the channel rejoin with
+/// the new binding. Broadcast and system streams can be opened at any time.
 ///
 /// ```swift
 /// let channel = await client.channel("room:lobby") { config in
@@ -155,6 +156,9 @@ public actor RealtimeChannel {
   /// with "Subscribed to PostgreSQL". While it is set, the join reply alone does not subscribe
   /// the channel.
   var awaitingPostgresChanges = false
+
+  /// The Postgres changes bindings the current join carries.
+  var joinedBindings: [PostgresJoinConfig] = []
 
   /// The `ref` of the join whose `phx_reply` arrived while ``awaitingPostgresChanges`` was set,
   /// so an attempt that parks after the reply still sees it.
@@ -426,6 +430,17 @@ public actor RealtimeChannel {
     let ref = await client.makeRef()
     let message = message(ref: ref, event: event, payload: payload)
     try await push(ref: ref, awaitingReply: true) { await client.push(message) }
+  }
+
+  /// Sends `phx_leave` for the join `leftJoinRef`, which may no longer be the current join.
+  func pushLeave(joinRef leftJoinRef: String) async {
+    guard let client else { return }
+    let ref = await client.makeRef()
+    await client.push(
+      RealtimeMessageV2(
+        joinRef: leftJoinRef, ref: ref, topic: wireTopic, event: ChannelEvent.leave, payload: [:]
+      )
+    )
   }
 
   private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
