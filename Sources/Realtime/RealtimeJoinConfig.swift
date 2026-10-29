@@ -5,45 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-package import Foundation
-
-struct RealtimeJoinPayload: Encodable {
-  var config: RealtimeJoinConfig
-  var accessToken: String?
-  var version: String?
-
-  enum CodingKeys: String, CodingKey {
-    case config
-    case accessToken = "access_token"
-    case version
-  }
-}
-
-package struct RealtimeJoinConfig: Encodable, Hashable {
-  package var broadcast: BroadcastJoinConfig = .init()
-  package var presence: PresenceJoinConfig = .init()
-  package var postgresChanges: [PostgresJoinConfig] = []
-  package var isPrivate: Bool = false
-
-  package init(
-    broadcast: BroadcastJoinConfig = .init(),
-    presence: PresenceJoinConfig = .init(),
-    postgresChanges: [PostgresJoinConfig] = [],
-    isPrivate: Bool = false
-  ) {
-    self.broadcast = broadcast
-    self.presence = presence
-    self.postgresChanges = postgresChanges
-    self.isPrivate = isPrivate
-  }
-
-  enum CodingKeys: String, CodingKey {
-    case broadcast
-    case presence
-    case isPrivate = "private"
-    case postgresChanges = "postgres_changes"
-  }
-}
+import Foundation
 
 /// Options for replaying previously broadcast messages when joining a channel.
 ///
