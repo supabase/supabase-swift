@@ -158,6 +158,21 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .unsubscribed)
   }
 
+  /// A subscribe waiting on a socket that never opens ends at once when its caller is cancelled.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingASubscribeWhileTheSocketNeverOpensThrowsAtOnce() async throws {
+    let h = Harness(onConnect: { _ in try? await Task<Never, Never>.never() })
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    #expect(await waitUntil { h.connects.value == 1 })
+    subscription.cancel()
+
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(await channel.status == .unsubscribed)
+    #expect(await h.client.status == .connecting)
+  }
+
   @Test
   func joinCarriesThePostgresChangesOfOpenStreams() async throws {
     let h = Harness()
