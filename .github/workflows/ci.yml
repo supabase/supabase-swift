@@ -92,7 +92,7 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
@@ -156,7 +156,7 @@ jobs:
             ~/.derivedData
             !~/.derivedData/**/ModuleCache.noindex
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
@@ -198,8 +198,9 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
@@ -225,9 +226,10 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ matrix.config }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-spm-${{ matrix.config }}-${{ hashFiles('**/Package.resolved') }}-
+            ${{ runner.os }}-spm-${{ matrix.config }}-
       - run: swift build -c ${{ matrix.config }}
       - name: Check compile-failure fixtures
         if: matrix.config == 'debug'
@@ -261,7 +263,9 @@ jobs:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.container }}-typegen-
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
@@ -320,9 +324,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-integration-${{ matrix.name }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-integration-${{ matrix.name }}-${{ hashFiles('**/Package.resolved') }}-
+            ${{ runner.os }}-integration-${{ matrix.name }}-
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
@@ -391,8 +396,9 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}-
             deriveddata-examples-${{ matrix.scheme }}-
             deriveddata-examples-
       - name: Select Xcode 26.4
@@ -419,7 +425,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Examples/${{ matrix.example }}/.build
-          key: ${{ runner.os }}-spm-${{ matrix.example }}-${{ hashFiles('Examples/${{ matrix.example }}/Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ matrix.example }}-${{ hashFiles(format('Examples/{0}/Package.resolved', matrix.example)) }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-spm-${{ matrix.example }}-
       - name: Build example ${{ matrix.example }}
@@ -452,8 +458,9 @@ jobs:
         with:
           path: .build
           key: |
-            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-
             docs-${{ runner.os }}-
       - name: Test docs
         run: ./scripts/test-docs.sh

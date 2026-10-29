@@ -48,19 +48,19 @@ Changes that still compile but behave differently. Check each one by hand.
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next
   client is created.
-- **Clients for one project share the session.** Two `AuthClient`s, or two `SupabaseClient`s,
-  with the same URL and storage key now share one session: a sign-in, refresh, or sign-out on one
-  changes `currentSession` on the other and fires its auth events. The first client's
-  `localStorage` is the one used. Give each client its own `storageKey` to keep them apart.
-- **Refreshes are deduplicated and throttled.** All clients for one project share one refresh of a
-  refresh token at a time. A cancelled caller of `session` or `refreshSession` throws
-  `CancellationError` at once, and the shared refresh still finishes. When a refresh fails, a
-  new refresh with that same token in the next 60 seconds throws the same error without a
-  request. After five refreshes in 30 seconds, the next one throws an `AuthError` with kind
-  `.excessiveRefresh`. `signOut` cancels a running refresh. Its callers get `CancellationError`,
-  whatever error the request then ends with, or `.refreshDiscarded` when a successful response
-  arrived first. Search for retry loops around
-  `refreshSession`.
+- **Each client keeps its own session in memory.** Because the session is read once, two
+  clients with the same storage and storage key do not see each other's changes. When one
+  refreshes, the other still holds the old refresh token, and its next refresh fails with
+  `refresh_token_already_used`. It signs out on the first such refresh after its session
+  expires. Create one client per project, or give each client its own `storageKey`.
+- **Refreshes are deduplicated and throttled.** A client runs one refresh of a refresh token at a
+  time. A cancelled caller of `session` or `refreshSession` throws `CancellationError` at once,
+  and the shared refresh still finishes. When a refresh fails, a new refresh with that same token
+  in the next 60 seconds throws the same error without a request. After five refreshes in 30
+  seconds, the next one throws an `AuthError` with kind `.excessiveRefresh`. `signOut` cancels a
+  running refresh. Its callers get `CancellationError`, whatever error the request then ends
+  with, or `.refreshDiscarded` when a successful response arrived first. Search for retry loops
+  around `refreshSession`.
 - **A rejected refresh does not sign out while the access token is valid.** A refresh that fails
   with a network error, a 5xx, a 408, a 409, or a 429 keeps the session. A refresh that the server
   rejects (`.sessionInvalidated`) signs out only when `session.isExpired` is `true`. When it is

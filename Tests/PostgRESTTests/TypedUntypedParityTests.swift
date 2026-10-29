@@ -83,8 +83,10 @@ struct TypedUntypedParityTests {
     let untypedCapture = QueryCapture(body: body, responseHeaders: responseHeaders)
     try await typed(typedCapture.client)
     try await untyped(untypedCapture.client)
+    var expected = Wire(untypedCapture)
+    expected.headers["x-client-info"]? += "; features=typed-api"
     expectNoDifference(
-      Wire(typedCapture), Wire(untypedCapture),
+      Wire(typedCapture), expected,
       fileID: fileID, filePath: filePath, line: line, column: column)
   }
 
