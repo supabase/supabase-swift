@@ -127,6 +127,16 @@ extension FakeConnection {
   }
 }
 
+func collect(
+  _ connection: FakeConnection, until isDone: ([OutboundFrame]) -> Bool
+) async -> [OutboundFrame] {
+  var frames: [OutboundFrame] = []
+  while !isDone(frames) {
+    frames.append(await connection.nextSent())
+  }
+  return frames
+}
+
 func first<Element>(_ count: Int, of stream: AsyncStream<Element>) async -> [Element] {
   var elements: [Element] = []
   guard count > 0 else { return elements }

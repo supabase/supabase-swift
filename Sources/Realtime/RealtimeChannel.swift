@@ -161,6 +161,18 @@ public final class RealtimeChannel: Sendable {
     /// The callers waiting on `subscribing`. The last one to be cancelled cancels it.
     var waiters = 1
     var leaving: Task<Void, Never>?
+    var joins = 0
+    var joinToken: String?
+    var sentToken: String?
+    var joinsAtSend = 0
+    var serverToken: String?
+
+    /// Phoenix flushes the messages it held while the connection was down after the next join
+    /// reply, so a token sent before that join can reach the server after the join's token.
+    mutating func joined() {
+      guard sentToken == nil || joinsAtSend < joins else { return }
+      serverToken = sentToken == nil || sentToken == joinToken ? joinToken : nil
+    }
 
     /// Starts the leave unless one runs already, and returns it. The leave ends the attachment
     /// once the server replied or the leave timed out, so no caller has to wait for it.
@@ -207,6 +219,10 @@ public final class RealtimeChannel: Sendable {
   /// it while a subscribe runs waits for that one. After the first join, the channel joins again
   /// on its own after a dropped connection, and ``status`` shows ``RealtimeChannelStatus/subscribing``
   /// meanwhile.
+  ///
+  /// With `RealtimeClientOptions.accessToken` set, the join first waits for a new token from the
+  /// callback, at most `RealtimeClientOptions.timeout`, so a channel that subscribes right after
+  /// sign-in joins with the new session.
   ///
   /// Each join attempt waits at least ``RealtimeClientOptions/defaultTimeout`` for the server's
   /// reply, even when `RealtimeClientOptions.timeout` is shorter, because the server can take that
@@ -342,7 +358,7 @@ public final class RealtimeChannel: Sendable {
     let inner = connection.socket.channel(
       Topic(topic),
       options: ChannelOptions(
-        params: { [weak self] in self?.joinParams() ?? [:] },
+        params: { [weak self] in self?.joinParams(generation: generation) ?? [:] },
         timeout: connection.joinTimeout,
         onRejectedJoin: .close
       )
@@ -357,9 +373,10 @@ public final class RealtimeChannel: Sendable {
 
   private func runSubscribe(_ inner: Phoenix.Channel, generation: UInt64) async throws {
     do {
-      let connection = connection
+      let tokens = connection.tokens
+      let mark = tokens.mark()
       let response = try await boundedAttempt(inner) {
-        await connection.refreshToken()
+        await tokens.refresh(startedAfter: mark)
         return try await inner.join()
       }
       if bindingsMismatch(in: response, generation: generation) {
@@ -603,7 +620,15 @@ public final class RealtimeChannel: Sendable {
   }
 
   private func rejoined(_ response: Phoenix.Payload, generation: UInt64) {
-    let isRejoin = state.withValue { $0.attachment(generation)?.subscribing == nil }
+    let tokens = connection.tokens
+    let isRejoin = state.withValue { state in
+      guard case .attached(var attachment) = state.phase, attachment.generation == generation
+      else { return false }
+      attachment.joined()
+      state.phase = .attached(attachment)
+      if attachment.serverToken != tokens.token { tokens.requestPush() }
+      return attachment.subscribing == nil
+    }
     guard isRejoin, bindingsMismatch(in: response, generation: generation) else { return }
     logger.error(
       "The server did not accept the postgres_changes bindings of \(topic) on rejoin. Unsubscribing."
@@ -630,10 +655,16 @@ public final class RealtimeChannel: Sendable {
   }
 
   /// Phoenix calls it at every join attempt, when it encodes the frame.
-  private func joinParams() -> Phoenix.JSONObject {
-    let accessToken = connection.token.value
+  private func joinParams(generation: UInt64) -> Phoenix.JSONObject {
+    let tokens = connection.tokens
     let version = connection.options.headers[.xClientInfo]
     return state.withValue { state in
+      let accessToken = tokens.token
+      if case .attached(var attachment) = state.phase, attachment.generation == generation {
+        attachment.joins += 1
+        attachment.joinToken = accessToken
+        state.phase = .attached(attachment)
+      }
       state.sentChanges = state.streams.postgresChanges
       do {
         return try joinPayload(
@@ -755,11 +786,21 @@ public final class RealtimeChannel: Sendable {
   }
 
   /// The server replies only to an invalid token, with a `phx_close`.
-  func sendAccessToken(_ token: String?) async {
-    guard let inner = try? subscribedInner() else { return }
+  func sendAccessToken(_ token: String) async {
+    let inner: Phoenix.Channel? = state.withValue { state in
+      guard case .attached(var attachment) = state.phase, attachment.leaving == nil,
+        attachment.inner.status == .joined, attachment.serverToken != token
+      else { return nil }
+      attachment.sentToken = token
+      attachment.joinsAtSend = attachment.joins
+      attachment.serverToken = token
+      state.phase = .attached(attachment)
+      return attachment.inner
+    }
+    guard let inner else { return }
     logger.debug("Updating auth token for channel \(topic)")
-    let value: Phoenix.JSONValue = token.map { .string($0) } ?? .null
-    try? await inner.send(ChannelEvent.accessToken, .json(.object(["access_token": value])))
+    try? await inner.send(
+      ChannelEvent.accessToken, .json(.object(["access_token": .string(token)])))
   }
 
   private func subscribedInner() throws -> Phoenix.Channel {
@@ -785,7 +826,7 @@ public final class RealtimeChannel: Sendable {
 extension Task {
   /// The task's result, or `nil` once the calling task is cancelled. `Task.result` ignores
   /// cancellation and waits for the task to end. Neither cancels the task.
-  fileprivate var resultUnlessCancelled: Result<Success, Failure>? {
+  var resultUnlessCancelled: Result<Success, Failure>? {
     get async {
       let (outcomes, continuation) = AsyncStream<Result<Success, Failure>>.makeStream()
       Task<Void, Never> {

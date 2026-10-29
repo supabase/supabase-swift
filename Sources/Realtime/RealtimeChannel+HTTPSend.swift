@@ -88,7 +88,8 @@ extension RealtimeChannel {
     contentType: String,
     timeout: Duration?
   ) async throws {
-    guard let accessToken = await connection.refreshToken() else {
+    await connection.tokens.refreshUnlessRecent()
+    guard let accessToken = connection.tokens.token else {
       throw RealtimeError.accessTokenMissing
     }
 
