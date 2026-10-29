@@ -37,7 +37,7 @@ public struct RealtimeError: SupabaseError {
     }
 
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout. Retry, or raise `RealtimeClientOptions.timeoutInterval` if it happens often.
+    /// timeout. Retry, or raise ``RealtimeClientOptions/requestTimeout`` if it happens often.
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
@@ -136,6 +136,7 @@ public struct RealtimeError: SupabaseError {
       .topicNameRequired, .malformedJWT, .jwtSignatureError, .jwtSignerError, .invalidJWTToken,
       .unauthorized, .privateOnly, .tenantNotFound, .realtimeDisabledForTenant,
       .realtimeDisabledForConfiguration, .unableToReplayMessages,
+      .postgresChangesSubscribeTimeout,
     ]
 
     static let authentication: Set<ServerCode> = [
@@ -272,8 +273,13 @@ extension RealtimeError {
   /// The error for an HTTP upgrade the server refused.
   ///
   /// 401, 403 and 404 mean the key, tenant or project is wrong and a retry cannot help. Every
-  /// other status (429 and 5xx in practice) is transient.
-  package static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
+  /// other status (429 and 5xx in practice) is transient. A custom ``WebSocketTransport`` throws
+  /// this error so the client knows whether to retry.
+  ///
+  /// - Parameters:
+  ///   - status: The HTTP status the server answered the upgrade with.
+  ///   - underlyingError: The transport's own error, if any.
+  public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
     RealtimeError(

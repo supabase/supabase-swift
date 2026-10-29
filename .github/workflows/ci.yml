@@ -243,6 +243,9 @@ jobs:
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
+    # Tests read this to skip what the nightly toolchain cannot run yet (SDK-2597).
+    env:
+      SWIFT_NIGHTLY: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     strategy:
       fail-fast: false
       matrix:
@@ -271,13 +274,20 @@ jobs:
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
       # worker threads and every in-flight test parked on a timer that never fires. The other
       # targets keep the parallel runner.
+      # On nightly, each test step has its own time limit, about twice its usual run time. A
+      # stalled test process then fails the step, which continue-on-error tolerates, instead of
+      # reaching the job limit, where the job is cancelled and CI Success fails (SDK-2597).
       - name: "Test Swift Package"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --skip IntegrationTests --skip RealtimeTests
       - name: "Test RealtimeTests (serial)"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 5 || 30 }}
         run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
         run: swift test --package-path tools/supabase-typegen
 
   integration-tests:

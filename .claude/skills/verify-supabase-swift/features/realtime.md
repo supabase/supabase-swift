@@ -14,8 +14,8 @@ messages, and listens to row changes in Postgres tables.
 
 - `client.realtime.connect()`
 - `client.realtime.channel(_:)`, then `channel.subscribe()` and `channel.unsubscribe()`
-- `channel.broadcast(event:message:)` and `channel.broadcasts(event:)`
-- `channel.postgresChanges(InsertAction.self, schema:table:)` and `channel.systemMessages()`
+- `channel.broadcast(event:payload:)` and `channel.broadcasts(event:)`
+- `channel.postgresChanges(event: .insert, schema:table:)` and `channel.events()`
 
 ## Driving it with verify.sh
 
@@ -28,8 +28,8 @@ Preconditions:
 - **Connect and join.** Run `$V drive realtime`. Step `rt-subscribe` shows status `subscribed`.
 - **Broadcast.** The sender broadcasts `ping` with `{"n": 1, "from": "sender"}`. Step
   `rt-broadcast` passes when the receiver gets it within 5 s, and saves `rt-broadcast.json`.
-- **Postgres change.** The receiver listens for INSERT on `key_value_storage`, waits for the
-  server's system message, then the sender inserts key `kv-<run-id>-<hex>` over PostgREST.
+- **Postgres change.** The receiver listens for INSERT on `key_value_storage`, waits for
+  `.postgresChangesReady` from `events()`, then the sender inserts key `kv-<run-id>-<hex>` over PostgREST.
   Step `rt-postgres-insert` passes when the record arrives within 10 s, and saves
   `rt-postgres-insert.json`. The transcript prints `KEY <key>`.
 - **Outside view.** Run
@@ -38,13 +38,13 @@ Preconditions:
 
 ## Gotchas
 
-- After `subscribe()` returns, the server still has to start the Postgres listener. It sends a
-  system message when it is ready. A write before that message is never delivered. Wait for
-  `systemMessages()` first, as the journey does.
+- After `subscribe()` returns, the server still has to start the Postgres listener. It reports
+  `.postgresChangesReady` on `events()` when it is ready. A write before that is never
+  delivered. Wait for it first, as the journey does.
 - Register `postgresChanges(...)` and `broadcasts(event:)` before `subscribe()`, as the journey
   and the integration tests do. The join message carries the Postgres listener config.
 - A client does not get its own broadcasts by default. Use two clients, or set
-  `$0.broadcast.receiveOwnBroadcasts = true` in the channel config.
+  `$0.broadcast.receiveOwnMessages = true` in the channel config.
 - Every wait needs a deadline (`Verify.within`). A missing event otherwise hangs the journey
   forever.
 - Presence and private channels (RLS on `realtime.messages`) are not in the bundled journey.

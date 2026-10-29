@@ -16,9 +16,9 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
-- **Reconnect waits are shorter and spread out.** `defaultReconnectDelay` is 1 s (was 7 s), and
-  the n-th wait is a random duration in `0...min(30s, reconnectDelay · 2^(n-1))` (was the upper
-  half of that range). Code that relied on a minimum wait before a reconnect must not.
+- **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
+  in `0...min(30 s, 1 s · 2^(n-1))`, and you cannot change it. v2 started from 7 s and waited in
+  the upper half of that range. Code that relied on a minimum wait before a reconnect must not.
 - **Reconnect stops on a refused upgrade.** A reconnect attempt that the server refuses with HTTP
   401, 403 or 404 ends in `.disconnected` instead of retrying forever. Fix the key or token, then
   call `connect()` again.
@@ -40,71 +40,114 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
   reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
   `X(rawValue:) != nil` checks on the status types are now always `true`.
-- **Status text changed.** `"\(status)"` on `RealtimeClientStatus` now prints `connected`, not
-  `Connected`. On the other status types it prints the struct description. Use `.rawValue`.
+- **The client reports `.reconnecting` while it waits to reconnect.** v2 reported
+  `.connecting` for the whole reconnect. Code that waits for `.connecting` after a drop must
+  also accept `.reconnecting`.
+- **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
+  `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
+  `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
 - **`SupabaseClient` sets the Realtime logger.** A `logger:` you pass in
-  `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create `RealtimeClientV2`
+  `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create a `RealtimeClient`
   yourself if Realtime needs its own logger.
-- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. If
-  you need one (for example for certificate pinning), pass it as
-  `SupabaseClientOptions(realtime: .init(session: mySession))`.
-- **Reconnect delays have jitter.** Each reconnect waits a random time between half the delay
-  and the full delay, capped at 30 seconds. It never waits longer than before.
+- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
+  certificate pinning, pass a transport (see [`session:` is replaced by
+  `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
   token. Channel joins and `httpSend` no longer call it every time. While connected, it also calls it one
   minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
   `null` token to channels, and `setAuth()` without a callback no longer clears the stored
-  token. The callback runs in a task of its own with the client's `timeout`, so cancelling a
+  token. The callback runs in a task of its own with the client's `requestTimeout`, so cancelling a
   `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
   run every time.
+- **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`.
+  Search for `"realtime:"` in code that reads or compares topics.
+- **Broadcast events match exactly.** v2 matched event names without regard to case;
+  `broadcasts(event: "ping")` no longer receives `"Ping"`. `"*"` still receives every event.
+  Search for `broadcasts(event:` and check the case of each name.
+- **`subscribe()` waits for Postgres changes.** On a channel with `postgresChanges` streams,
+  `subscribe()` returns only after the server reports that the changes are live, so a write right
+  after it is delivered. When the server reports a failure, or does not report within
+  `postgresChanges.subscriptionTimeout` (15 s), `subscribe()` throws, the channel leaves the topic
+  and becomes `.failed`. v2 returned and only reported the failure as a `system` message. A
+  `PostgresChangesSubscribeTimeout` join error is no longer retried. The automatic rejoin after a
+  reconnect fails the same way, so watch `statusChanges()` for `.failed` and call `subscribe()`
+  again.
+- **A `postgresChanges` stream opened after `subscribe()` works.** The channel leaves and joins
+  again with the new binding: it reports `.subscribing` until the server confirms, then
+  `events()` emits `.resubscribed`. v2 reported an issue and dropped the callback.
+- **`channel(_:configure:)` keeps the first configuration.** A second call for a topic with a
+  different configuration reports an issue and returns the existing channel unchanged. Remove
+  the channel first to change its configuration.
+- **Payload decode errors are `RealtimeError`.** `BroadcastMessage.decode(as:)`,
+  `PostgresRow.decode(as:)` and `TypedPostgresChange.row()` throw `RealtimeError` with
+  `kind == .decoding`; the `DecodingError` is in `underlyingError`. A `catch let error as
+  DecodingError` around payload decoding stops matching. Search for it and match on `kind`.
 
 ## Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
 | `import RealtimeV2` | `import Realtime` |
-| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceV2` |
+| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceEntry` |
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
-| `RealtimeClientV2.subscriptions` | `RealtimeClient.channels` |
+| `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
+| `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
 | `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
-| `RealtimeClientV2.Status` | `RealtimeClientStatus` |
+| `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
 | `RealtimeClientV2.disconnect()` | `disconnect() async` |
 | `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
-| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)` | `await heartbeats()` |
-| `RealtimeChannelV2.Status` | `RealtimeChannelStatus` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `await heartbeats()`, `HeartbeatEvent` |
+| `RealtimeChannelV2.Status` | `RealtimeChannelStatus`, with values (see below) |
 | `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
 | `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
 | `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
 | `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
-| `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)` |
-| `broadcastDataStream(event:)` | `broadcastData(event:)` |
-| `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
-| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()` |
-| `onSystem(callback:)`, `system()` | `systemMessages()` |
-| `broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)`, `untrack()` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
+| `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)`, which yields `BroadcastMessage` (see below) |
+| `broadcastDataStream(event:)` | `broadcasts(event:)`; the bytes are in `payload` as `.binary(Data)` |
+| `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(event:schema:table:filter:select:)` or `postgresChanges(of:event:schema:table:filter:select:decoder:)` (see below) |
+| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()`, `presenceStates()` (see [Presence](#presence)) |
+| `PresenceV2`, `PresenceV2.state`, `decodeState(as:decoder:)` | `PresenceEntry`, `payload`, `decode(as:decoder:)` |
+| `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
+| `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
+| `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
+| `channel(_:options:)` (`RealtimeClientV2`, `SupabaseClient`), `RealtimeChannelConfig` | `channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
+| `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledge`, `.receiveOwnMessages`, `.waitForReplication` |
+| `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
+| `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
+| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:encoder:) async throws`; waits for the server reply when `broadcast.acknowledge` is on |
+| `broadcast(event:data:)` (`async`) | `async throws` |
+| `httpSend(event:message:timeout:)` | `httpSend(event:payload:encoder:timeout:)` |
+| `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
+| `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
-| `RealtimeMessageV2.eventType: EventType?` | `eventType: EventType` (not optional) |
-| `RealtimeMessageV2.EventType.tokenExpired` | `.system`; check the payload |
+| `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
-| `RealtimeClientOptions(timeoutInterval:)` | `timeout:` |
-| `heartbeatInterval:`, `reconnectDelay:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
+| `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
+| `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
+| `RealtimeClientOptions(reconnectDelay:)`, `defaultReconnectDelay` | removed; the reconnect wait is internal (see [Silent changes](#silent-changes)) |
+| `RealtimeClientOptions(disconnectOnSessionLoss:)`, `defaultDisconnectOnSessionLoss` | removed; nothing read them |
+| `RealtimeClientOptions(logLevel:)`, `LogLevel`, `.warn` | `serverLogLevel:`, `RealtimeServerLogLevel`, `.warning` |
+| `RealtimeClientOptions(session:)` | `webSocketTransport:` (see below) |
 | `RealtimeClientOptions(maxRetryAttempts:)`, `defaultMaxRetryAttempts` | removed; `subscribe()` has no attempt limit |
-| `defaultTimeoutInterval` | `defaultTimeout` |
-| `defaultHeartbeatInterval`, `defaultReconnectDelay`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
+| `defaultTimeoutInterval` | `defaultRequestTimeout` |
+| `defaultHeartbeatInterval`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
-| `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `[String: JSONValue]` |
-| `RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType` (`enum`) | `struct`, same member names |
-| `Column`, `PresenceV2` (`Codable`) | `Decodable` |
-| `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` (`Codable`) | `Encodable` |
+| `InsertAction`, `UpdateAction`, `DeleteAction`, `AnyAction`, `PostgresAction` | `PostgresChange`; check `kind` |
+| `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `PostgresChange.record`, `.oldRecord` (`PostgresRow?`); read a column with `row["id"]` or all with `.values` |
+| `HasRecord.decodeRecord(as:decoder:)`, `HasOldRecord.decodeOldRecord(as:decoder:)` | `PostgresRow.decode(as:decoder:)`, or `TypedPostgresChange.row()` |
+| `PostgresAction.rawMessage`, `HasRawMessage` | removed |
+| `Column` | `PostgresColumn` |
+| `PushStatus` (`enum`) | `struct`, same member names |
+| `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` | removed; set the options on `RealtimeChannelConfiguration` |
 | `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
-A `switch` over one of the status structs needs a `default:` case. `init(rawValue:)` is no
+A `switch` over `PushStatus` or `RealtimeServerLogLevel` needs a `default:` case. `init(rawValue:)` is no
 longer failable, so drop `if let` around it.
 
 Remove `vsn:`. The client always uses protocol 2.0.0, so the server must be Realtime v2.63.0 or
@@ -116,7 +159,7 @@ to move from v1 to the v2 API first, then apply this guide.
 ## `RealtimeClient` and `RealtimeChannel` are actors
 
 Both types are now actors that share one executor. Every call needs `await`, including
-`channel(_:options:)` on the client and on `SupabaseClient`, the stream methods on a channel,
+`channel(_:configure:)` on the client and on `SupabaseClient`, the stream methods on a channel,
 and `status`, `statusChanges()` and `heartbeats()`. There is no synchronous status read; a view
 that needs the current status keeps the last value it got from `statusChanges()`.
 
@@ -133,6 +176,57 @@ try await channel.subscribe()
 
 `connect()` now throws when the socket cannot be opened, and `disconnect()` is `async`.
 
+## Channel options are `RealtimeChannelConfiguration`
+
+Set the options in the `configure:` closure. The broadcast flags drop the `Broadcasts` suffix,
+a replay window takes a `Date`, and `postgresChanges` holds the new `waitForSubscription` and
+`subscriptionTimeout` options. `channel.configuration` reads the options back.
+
+```swift
+// v2
+let channel = supabase.channel("room") {
+  $0.isPrivate = true
+  $0.broadcast.receiveOwnBroadcasts = true
+  $0.broadcast.replay = ReplayOption(since: 1_700_000_000_000, limit: 10)
+}
+// v3
+let channel = await supabase.channel("room") {
+  $0.isPrivate = true
+  $0.broadcast.receiveOwnMessages = true
+  $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
+}
+```
+
+## Status enums carry the reason
+
+`RealtimeClientStatus` and `RealtimeChannelStatus` are still enums, but their cases carry the
+attempt number, the wait before the next attempt, and the error. They are not `Equatable`: use
+`isConnected`, `isSubscribed` and `error`, or match a case. `heartbeats()` emits
+`HeartbeatEvent`: `.sent`, `.acknowledged(latency:)` and `.timedOut`. Any reply acknowledges a
+heartbeat, so there is no `.error` event.
+
+```swift
+// v2
+for await status in client.statusChange where status == .connected {
+  break
+}
+for await message in channel.system() where message.payload["extension"] == "postgres_changes" {
+  break
+}
+// v3
+for await status in await client.statusChanges() where status.isConnected {
+  break
+}
+for await event in await channel.events() where event == .postgresChangesReady {
+  break
+}
+```
+
+`events()` also emits `.resubscribed` when a channel joins again after a reconnect or to add a
+Postgres changes binding. Events sent while it was away are missed, so reload any state built
+from them. With `broadcast.waitForReplication` on, it emits `.replicationReady` or
+`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
+
 ## Streams replace callbacks
 
 The `on*` callback methods and `RealtimeSubscription` tokens are removed. Read the matching
@@ -147,25 +241,64 @@ let subscription = channel.onBroadcast(event: "message") { payload in
 defer { subscription.cancel() }
 // v3
 let task = Task {
-  for await payload in await channel.broadcasts(event: "message") {
-    print(payload)
+  for await message in await channel.broadcasts(event: "message") {
+    print(message.payload)
   }
 }
 defer { task.cancel() }
 ```
 
-Open `postgresChanges` and `presenceChanges` streams before `subscribe()`. They shape the join
-request. Opening one after the join reports an issue and returns an empty stream. Presence is
-sent to the server only when a `presenceChanges()` stream is open.
+Open `presenceChanges` and `presenceStates` streams before `subscribe()`. They shape the join
+request. Opening one after the join reports an issue and returns an empty stream. A
+`postgresChanges` stream opened after the join makes the channel leave and join again with the new
+binding; the channel emits `.resubscribed` when the new join is confirmed. Presence is sent to the server only when a `presenceChanges()` or `presenceStates()`
+stream is open.
+
+## Broadcast and Postgres change payloads
+
+A broadcast is a `BroadcastMessage` with the `event`, the `payload` the sender sent (`.json` or
+`.binary`), and the server's `id` and `isReplayed` for database broadcasts. It no longer holds the
+whole `{event, payload, type, meta}` envelope. A Postgres change is one `PostgresChange` with a
+`kind`. `postgresChanges(of:)` binds the change to a row type: `row()` decodes the record when you
+call it, so a row that does not decode never ends the stream. `oldRecord` stays untyped, because
+without `REPLICA IDENTITY FULL` it holds only the primary key. `kind` keeps change types the SDK
+has no member for, so a `switch` needs a `default:` case.
+
+```swift
+// v2
+for await message in channel.broadcastStream(event: "cursor") {
+  let cursor = try message["payload"]?.decode(as: Cursor.self)
+}
+for await action in channel.postgresChange(AnyAction.self, table: "todos") {
+  switch action {
+  case .insert(let insert): todos.append(try insert.decodeRecord(as: Todo.self, decoder: decoder))
+  case .update(let update): todos.replace(try update.decodeRecord(as: Todo.self, decoder: decoder))
+  case .delete(let delete): todos.remove(id: delete.oldRecord["id"]?.intValue)
+  }
+}
+// v3
+for await message in await channel.broadcasts(event: "cursor") {
+  let cursor = try message.decode(as: Cursor.self)
+}
+for await change in await channel.postgresChanges(of: Todo.self, table: "todos") {
+  switch change.kind {
+  case .insert: todos.append(try change.row())
+  case .update: todos.replace(try change.row())
+  case .delete: todos.remove(id: change.oldRecord?["id"]?.intValue)
+  default: break
+  }
+}
+```
 
 ## Pushes throw instead of returning a status
 
-`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)` and `untrack()` are
-`async throws`. They return once the frame is sent. When `acknowledgeBroadcasts` is on they wait
-for the server reply first, and the reply becomes the result of the call:
+`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
+`async throws`. The broadcasts return once the frame is sent; when `broadcast.acknowledge` is on
+they wait for the server reply first. `track` and `untrack` always wait for the reply. The reply
+becomes the result of the call:
 
 - The server acknowledged the push: the call returns.
-- No reply came within the client's `timeout`: the call throws `RealtimeError` with
+- No reply came within the client's `requestTimeout`: the call throws `RealtimeError` with
   `kind == .timeout`.
 - The server rejected the push: the call throws `RealtimeError` with the server's reason in
   `message`, `kind == .payloadTooLarge` for an oversized payload and `.server` otherwise, and
@@ -182,7 +315,7 @@ throws `CancellationError`; the frame itself is not recalled.
 try await channel.broadcast(event: "ping", message: ["n": 1])
 // v3
 do {
-  try await channel.broadcast(event: "ping", message: ["n": 1])
+  try await channel.broadcast(event: "ping", payload: ["n": 1])
 } catch let error as RealtimeError where error.kind == .timeout {
   // no acknowledgement in time
 }
@@ -192,19 +325,65 @@ A WebSocket `broadcast` on a channel that is not subscribed no longer falls back
 endpoint. It throws `kind == .notSubscribed`. Use `httpSend` to broadcast without a
 subscription.
 
+## Presence
+
+`presenceChanges()` yields a `PresenceChange` per sync: the entries that joined and left, as
+lists by presence key, so a user on two devices has two entries. `presenceStates()` yields the
+whole state after every sync that changes it, and `presenceState` reads it. To show who is online, decode the
+state instead of applying joins and leaves yourself.
+
+```swift
+// v2
+let presence = channel.presenceChange()
+try await channel.subscribeWithError()
+try await channel.track(UserStatus(name: "ana"))
+for await action in presence {
+  let joined = try action.decodeJoins(as: UserStatus.self)
+  let left = try action.decodeLeaves(as: UserStatus.self)
+}
+// v3
+let states = await channel.presenceStates()
+try await channel.subscribe()
+try await channel.track(UserStatus(name: "ana"))
+for await state in states {
+  let online: [String: [UserStatus]] = try state.decode()
+}
+```
+
+The SDK does not track again after a rejoin. Call `track` again when `events()` emits
+`.resubscribed`.
+
 ## Intervals are `Duration`
 
 Pass `Duration` values. Convert a `TimeInterval` with `.seconds(value)`.
 
 ```swift
 // v2
-let options = RealtimeClientOptions(heartbeatInterval: 30, reconnectDelay: 5, timeoutInterval: 15)
+let options = RealtimeClientOptions(heartbeatInterval: 30, timeoutInterval: 15)
 try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
 // v3
 let options = RealtimeClientOptions(
-  heartbeatInterval: .seconds(30), reconnectDelay: .seconds(5), timeout: .seconds(15)
+  heartbeatInterval: .seconds(30), requestTimeout: .seconds(15)
 )
-try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
+try await channel.httpSend(event: "ping", payload: ["n": 1], timeout: .seconds(3))
+```
+
+## `session:` is replaced by `webSocketTransport:`
+
+Pass a `URLSessionWebSocketTransport` built from your session, or your own `WebSocketTransport`.
+A custom transport throws `RealtimeError.upgradeFailed(status:underlyingError:)` when the server
+refuses the upgrade, so the client knows whether to retry.
+
+```swift
+// v2
+let options = RealtimeClientOptions(session: pinnedSession)
+// v3
+let options = RealtimeClientOptions(
+  webSocketTransport: URLSessionWebSocketTransport(
+    configuration: pinnedSession.configuration,
+    delegate: pinnedSession.delegate
+  )
+)
 ```
 
 ## `fetch:` is replaced by `http:`

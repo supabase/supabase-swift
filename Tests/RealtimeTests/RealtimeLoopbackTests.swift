@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import Helpers
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -31,19 +32,19 @@ import Testing
       #expect(await client.status == .connected)
 
       let channel = await client.channel("room") {
-        $0.broadcast.receiveOwnBroadcasts = true
+        $0.broadcast.receiveOwnMessages = true
       }
       let pings = await channel.broadcasts(event: "ping")
       try await channel.subscribe()
       #expect(await channel.status == .subscribed)
       #expect(joins.value == 1)
 
-      try await channel.broadcast(event: "ping", message: ["n": 1] as JSONObject)
+      try await channel.broadcast(event: "ping", payload: ["n": 1] as JSONObject)
       let received = try await withTimeout(.seconds(10)) {
         await pings.first { _ in true }
       }
-      #expect(received?["event"] == "ping")
-      #expect(received?["payload"]?.objectValue?["n"] == 1)
+      #expect(received?.event == "ping")
+      #expect(received?.payload == .json(["n": 1]))
 
       await client.disconnect()
       #expect(await client.status == .disconnected)
@@ -63,16 +64,21 @@ import Testing
 
       var clientStatuses = await client.statusChanges().makeAsyncIterator()
       var channelStatuses = await channel.statusChanges().makeAsyncIterator()
+      var channelEvents = await channel.events().makeAsyncIterator()
       #expect(await clientStatuses.next() == .connected)
       #expect(await channelStatuses.next() == .subscribed)
 
       server.close(code: .protocolCode(.goingAway), reason: "restart")
 
+      let dropped = await clientStatuses.next()
+      #expect(dropped == .reconnecting)
+      #expect(dropped?.error?.closeCode == .goingAway)
       #expect(await clientStatuses.next() == .connecting)
       #expect(await clientStatuses.next() == .connected)
       #expect(await channelStatuses.next() == .unsubscribed)
       #expect(await channelStatuses.next() == .subscribing)
       #expect(await channelStatuses.next() == .subscribed)
+      #expect(await channelEvents.next() == .resubscribed)
       #expect(joins.value == 2)
 
       await client.disconnect()
@@ -81,14 +87,18 @@ import Testing
     // MARK: - Helpers
 
     private func makeClient(port: UInt16) -> RealtimeClient {
-      RealtimeClient(
+      let options = RealtimeClientOptions(
+        heartbeatInterval: .seconds(30),
+        requestTimeout: .seconds(10),
+        handleAppLifecycle: false
+      )
+      return RealtimeClient(
         url: URL(string: "http://127.0.0.1:\(port)")!,
-        options: RealtimeClientOptions(
-          heartbeatInterval: .seconds(30),
-          reconnectDelay: .milliseconds(100),
-          timeout: .seconds(10),
-          handleAppLifecycle: false
-        )
+        options: options,
+        transport: URLSessionWebSocketTransport(),
+        http: HTTPClient(configuration: options.http, appending: []),
+        clock: options.clock,
+        reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))
       )
     }
 

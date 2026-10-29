@@ -94,7 +94,6 @@ supporting_symbols:
   # `PostgrestMacros`, so a user opts in with an explicit import.
   - Table
   - SelectionOf
-  - Column
   - PrimaryKey
   - Default
   - Generated
@@ -250,7 +249,18 @@ supporting_symbols:
   - RealtimeClient.unownedExecutor
   - RealtimeChannel
   - RealtimeChannel.topic
-  - RealtimeChannel.config
+  - RealtimeChannel.configuration
+  - RealtimeChannelConfiguration
+  - RealtimeChannelConfiguration.init
+  - RealtimeChannelConfiguration.broadcast
+  - RealtimeChannelConfiguration.presence
+  - RealtimeChannelConfiguration.postgresChanges
+  - RealtimeChannelConfiguration.Broadcast
+  - RealtimeChannelConfiguration.Broadcast.init
+  - RealtimeChannelConfiguration.Presence
+  - RealtimeChannelConfiguration.Presence.init
+  - RealtimeChannelConfiguration.PostgresChanges
+  - RealtimeChannelConfiguration.PostgresChanges.init
   - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
@@ -309,9 +319,21 @@ supporting_symbols:
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
   - RealtimeError.ServerCode.unknownErrorOnChannel
-  # The default server-reply timeout governs subscribe, unsubscribe,
+  # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.defaultTimeout
+  - RealtimeClientOptions.requestTimeout
+  # Connection plumbing every realtime.* capability uses: the upgrade headers and the
+  # HTTP client REST broadcasts go through.
+  - RealtimeClientOptions.headers
+  - RealtimeClientOptions.http
+  - RealtimeClientOptions.defaultRequestTimeout
+  - RealtimeClientOptions.connectOnSubscribe
+  - RealtimeClientOptions.defaultConnectOnSubscribe
+  # The options type itself and app-lifecycle handling (an Apple-platform behavior with no
+  # supabase-js counterpart in the capability matrix).
+  - RealtimeClientOptions
+  - RealtimeClientOptions.handleAppLifecycle
+  - RealtimeClientOptions.defaultHandleAppLifecycle
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
   # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
   - Trait.requiresMainSerialExecutor
@@ -1354,6 +1376,7 @@ features:
 
   realtime.client.connect:
     status: implemented
+    note: "Reconnects wait a full-jitter delay (1 s base, 30 s cap) with unlimited attempts. The curve is internal and not configurable."
     symbols:
       - RealtimeClient.connect
   realtime.client.disconnect:
@@ -1378,15 +1401,18 @@ features:
       - RealtimeClient.status
     supporting_symbols:
       - RealtimeClient.statusChanges
-      - RealtimeClientStatus.init
-      - RealtimeClientStatus.rawValue
+      - RealtimeClientStatus.isConnected
+      - RealtimeClientStatus.error
+      - RealtimeClientStatus.reconnecting
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
       - RealtimeClient.heartbeats
     supporting_symbols:
-      - HeartbeatStatus.init
-      - HeartbeatStatus.rawValue
+      - HeartbeatEvent
+      - HeartbeatEvent.sent
+      - HeartbeatEvent.acknowledged
+      - HeartbeatEvent.timedOut
   realtime.client.set_auth_token:
     status: implemented
     symbols:
@@ -1395,6 +1421,7 @@ features:
     status: implemented
     symbols:
       - RealtimeClient.channel
+      - SupabaseClient.channel
 
   realtime.channel.subscribe:
     status: implemented
@@ -1403,8 +1430,14 @@ features:
     supporting_symbols:
       - RealtimeChannel.status
       - RealtimeChannel.statusChanges
-      - RealtimeChannelStatus.init
-      - RealtimeChannelStatus.rawValue
+      - RealtimeChannelStatus.isSubscribed
+      - RealtimeChannelStatus.error
+      - RealtimeChannelStatus.resubscribing
+      - RealtimeChannelStatus.failed
+      - RealtimeChannelEvent
+      - RealtimeChannelEvent.resubscribed
+      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
@@ -1414,7 +1447,6 @@ features:
     symbols:
       - RealtimeChannel.broadcast
     supporting_symbols:
-      - RealtimeClient.push
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
@@ -1425,22 +1457,66 @@ features:
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.replicationReady
+      - RealtimeChannelConfiguration.Broadcast.waitForReplication
       - RealtimeChannel.broadcasts
-      - RealtimeChannel.broadcastData
     supporting_symbols:
-      - RealtimeChannel.systemMessages
-      - RealtimeMessageV2.eventType
-      - RealtimeMessageV2.EventType.init
-      - RealtimeMessageV2.EventType.rawValue
+      - BroadcastMessage
+      - BroadcastMessage.event
+      - BroadcastMessage.payload
+      - BroadcastMessage.id
+      - BroadcastMessage.isReplayed
+      - BroadcastMessage.decode
+      - BroadcastPayload
+      - BroadcastPayload.json
+      - BroadcastPayload.binary
+      - RealtimeChannel.events
+      - RealtimeChannelEvent.replicationReady
+      - RealtimeChannelEvent.replicationFailed
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
       - RealtimeChannel.postgresChanges
+    supporting_symbols:
+      - PostgresChange
+      - PostgresChange.kind
+      - PostgresChange.schema
+      - PostgresChange.table
+      - PostgresChange.commitTimestamp
+      - PostgresChange.columns
+      - PostgresChange.record
+      - PostgresChange.oldRecord
+      - PostgresChange.errors
+      - PostgresChange.Kind
+      - PostgresChange.Kind.init
+      - PostgresChange.Kind.rawValue
+      - PostgresChange.Kind.insert
+      - PostgresChange.Kind.update
+      - PostgresChange.Kind.delete
+      - PostgresColumn
+      - PostgresColumn.name
+      - PostgresColumn.type
+      - PostgresRow
+      - PostgresRow.values
+      - PostgresRow.subscript
+      - PostgresRow.decode
+      - TypedPostgresChange
+      - TypedPostgresChange.raw
+      - TypedPostgresChange.kind
+      - TypedPostgresChange.oldRecord
+      - TypedPostgresChange.row
+      - RealtimeChannel.events
+      - RealtimeChannelEvent.postgresChangesReady
+      - RealtimeChannelEvent.postgresChangesFailed
   realtime.subscriptions.subscribe_presence:
     status: implemented
     symbols:
       - RealtimeChannel.presenceChanges
+      - RealtimeChannel.presenceStates
+    supporting_symbols:
+      - PresenceChange
+      - PresenceChange.init
+      - PresenceChange.joins
+      - PresenceChange.leaves
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1457,25 +1533,36 @@ features:
       - RealtimePostgresIsValue.true
       - RealtimePostgresIsValue.false
       - RealtimePostgresIsValue.unknown
+    supporting_symbols:
+      - RealtimePostgresFilterValue
+      - RealtimePostgresFilterValue.realtimeFilterValue
+      - String.realtimeFilterValue
+      - Int.realtimeFilterValue
+      - Double.realtimeFilterValue
+      - Bool.realtimeFilterValue
+      - UUID.realtimeFilterValue
+      - Date.realtimeFilterValue
   realtime.subscriptions.private_channel:
     status: implemented
     symbols:
-      - RealtimeChannelConfig.isPrivate
+      - RealtimeChannelConfiguration.isPrivate
   realtime.subscriptions.broadcast_self:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.receiveOwnBroadcasts
+      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
   realtime.subscriptions.broadcast_ack:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.acknowledgeBroadcasts
+      - RealtimeChannelConfiguration.Broadcast.acknowledge
   realtime.subscriptions.broadcast_replay:
     status: implemented
     symbols:
-      - BroadcastJoinConfig.replay
+      - RealtimeChannelConfiguration.Broadcast.replay
     supporting_symbols:
-      - ReplayOption
-      - ReplayOption.init
+      - RealtimeChannelConfiguration.Broadcast.Replay
+      - RealtimeChannelConfiguration.Broadcast.Replay.init
+      - RealtimeChannelConfiguration.Broadcast.Replay.since
+      - RealtimeChannelConfiguration.Broadcast.Replay.limit
   realtime.subscriptions.postgres_changes_multiple_filters: not_implemented
 
   realtime.presence.track:
@@ -1486,43 +1573,86 @@ features:
     status: implemented
     symbols:
       - RealtimeChannel.untrack
-  realtime.presence.presence_state: not_implemented
+  realtime.presence.presence_state:
+    status: implemented
+    symbols:
+      - RealtimeChannel.presenceState
+    supporting_symbols:
+      - PresenceState
+      - PresenceState.init
+      - PresenceState.entries
+      - PresenceState.decode
+      - PresenceEntry
+      - PresenceEntry.init
+      - PresenceEntry.ref
+      - PresenceEntry.previousRef
+      - PresenceEntry.payload
+      - PresenceEntry.decode
   realtime.presence.presence_key:
     status: implemented
     symbols:
-      - PresenceJoinConfig.key
+      - RealtimeChannelConfiguration.Presence.key
 
-  # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
-  # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
-  # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocketTransport.
-  realtime.configuration.custom_websocket_transport: not_applicable
-  realtime.configuration.reconnect_backoff:
-    status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s) is hardcoded."
+  realtime.configuration.custom_websocket_transport:
+    status: implemented
+    note: "RealtimeClientOptions.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
+    symbols:
+      - RealtimeClientOptions.webSocketTransport
+      - URLSessionWebSocketTransport
+      - URLSessionWebSocketTransport.connect
+      - URLSessionWebSocketTransport.init
+      - WebSocketCloseCode
+      - WebSocketCloseCode.abnormalClosure
+      - WebSocketCloseCode.goingAway
+      - WebSocketCloseCode.init
+      - WebSocketCloseCode.normalClosure
+      - WebSocketCloseCode.protocolError
+      - WebSocketCloseCode.rawValue
+      - WebSocketConnection
+      - WebSocketConnection.close
+      - WebSocketConnection.events
+      - WebSocketConnection.send
+      - WebSocketEvent
+      - WebSocketEvent.closed
+      - WebSocketEvent.frame
+      - WebSocketFrame
+      - WebSocketFrame.binary
+      - WebSocketFrame.text
+      - WebSocketTransport
+      - WebSocketTransport.connect
+      - RealtimeError.upgradeFailed
   realtime.configuration.heartbeat_interval:
     status: implemented
-    note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
+    note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.heartbeatInterval
+      - RealtimeClientOptions.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
-    note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.accessToken
   realtime.configuration.deferred_disconnect:
     status: implemented
-    note: "Set via the disconnectOnEmptyChannelsAfter parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
+      - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
+    note: "RealtimeClientOptions.logger takes a swift-log Logger, which carries its own level. RealtimeClientOptions.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.logger
+      - RealtimeClientOptions.serverLogLevel
     supporting_symbols:
-      - LogLevel.init
-      - LogLevel.rawValue
+      - RealtimeServerLogLevel
+      - RealtimeServerLogLevel.init
+      - RealtimeServerLogLevel.rawValue
+      - RealtimeServerLogLevel.info
+      - RealtimeServerLogLevel.warning
+      - RealtimeServerLogLevel.error
   realtime.configuration.binary_protocol:
     status: implemented
     no_public_symbols: true

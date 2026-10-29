@@ -105,9 +105,12 @@ final class MessageStore {
     Task {
       let channel = await supabase.channel("public:messages")
 
-      let insertions = await channel.postgresChanges(InsertAction.self, table: "messages")
-      let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
-      let deletions = await channel.postgresChanges(DeleteAction.self, table: "messages")
+      let insertions = await channel.postgresChanges(
+        of: MessagePayload.self, event: .insert, table: "messages", decoder: decoder)
+      let updates = await channel.postgresChanges(
+        of: MessagePayload.self, event: .update, table: "messages", decoder: decoder)
+      let deletions = await channel.postgresChanges(
+        of: MessagePayload.self, event: .delete, table: "messages", decoder: decoder)
 
       try await channel.subscribe()
 
@@ -144,9 +147,9 @@ final class MessageStore {
     messages[channel] = nil
   }
 
-  private func handleInsertedOrUpdatedMessage(_ action: HasRecord) async {
+  private func handleInsertedOrUpdatedMessage(_ change: TypedPostgresChange<MessagePayload>) async {
     do {
-      let decodedMessage = try action.decodeRecord(decoder: decoder) as MessagePayload
+      let decodedMessage = try change.row()
       let message = try await Message(
         id: decodedMessage.id,
         insertedAt: decodedMessage.insertedAt,
@@ -163,8 +166,8 @@ final class MessageStore {
     }
   }
 
-  private func handleDeletedMessage(_ action: DeleteAction) {
-    guard let id = action.oldRecord["id"]?.intValue else {
+  private func handleDeletedMessage(_ change: TypedPostgresChange<MessagePayload>) {
+    guard let id = change.oldRecord?["id"]?.intValue else {
       return
     }
 
