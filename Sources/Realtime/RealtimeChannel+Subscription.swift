@@ -137,9 +137,7 @@ extension RealtimeChannel {
   func socketDidDisconnect() {
     failPendingPushes(with: RealtimeError.notConnected)
     guard case .subscribing(let task) = state else { return }
-    abortedSubscribe = (task, RealtimeError.disconnectedWhileSubscribing)
-    task.cancel()
-    failJoinWaiter(SubscribeFailure.channelClosed)
+    abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
     joinRef = nil
     setState(.unsubscribed)
   }
@@ -189,11 +187,7 @@ extension RealtimeChannel {
     joinRef = nil
     failPendingPushes(with: RealtimeError.channelClosedByServer)
     if case .subscribing(let task) = state {
-      // Record why the task is being cancelled so `beginSubscribe` can rethrow a typed error —
-      // the caller must be able to tell a server close apart from its own task cancellation.
-      abortedSubscribe = (task, RealtimeError.channelClosedByServer)
-      task.cancel()
-      failJoinWaiter(SubscribeFailure.channelClosed)
+      abortSubscribe(task, with: RealtimeError.channelClosedByServer)
     }
     setState(.unsubscribed)
     resumeCloseWaiter()
@@ -201,6 +195,18 @@ extension RealtimeChannel {
   }
 
   // MARK: - Subscribe flow
+
+  /// Stops the subscribe in flight. Its callers get `error` rather than a bare
+  /// `CancellationError`, so they can tell the abort apart from their own cancellation.
+  private func abortSubscribe(_ task: Task<Void, any Error>, with error: RealtimeError) {
+    abortedSubscribe = (task, error)
+    task.cancel()
+    failJoinWaiter(SubscribeFailure.channelClosed)
+    for (id, waiter) in sharedSubscribeWaiters where waiter.task == task {
+      sharedSubscribeWaiters[id] = nil
+      waiter.continuation.resume(throwing: error)
+    }
+  }
 
   /// Waits for a subscribe that another caller started. Cancelling this caller stops its wait
   /// but not the attempt: with no attempt limit, `task.value` alone could wait forever.
@@ -213,7 +219,7 @@ extension RealtimeChannel {
           continuation.resume(throwing: CancellationError())
           return
         }
-        sharedSubscribeWaiters[id] = continuation
+        sharedSubscribeWaiters[id] = (task, continuation)
         Task {
           let result = await task.result
           self.resumeSharedSubscribeWaiter(id, with: result)
@@ -225,7 +231,7 @@ extension RealtimeChannel {
   }
 
   private func resumeSharedSubscribeWaiter(_ id: UUID, with result: Result<Void, any Error>) {
-    sharedSubscribeWaiters.removeValue(forKey: id)?.resume(with: result)
+    sharedSubscribeWaiters.removeValue(forKey: id)?.continuation.resume(with: result)
   }
 
   private func beginSubscribe() async throws {
@@ -308,6 +314,9 @@ extension RealtimeChannel {
         logger.debug("Subscribe attempt \(attempt) failed for channel '\(topic)': \(error)")
         delay = Self.rejoinBackoff.delay(forAttempt: attempt)
       }
+      // One fresh-token rejoin per run of expired-token errors: a token that expires again after
+      // other failures gets another one.
+      hasRefreshedToken = false
 
       logger.debug("Retrying subscribe for '\(topic)' in \(delay)")
       // A genuine cancellation of this task propagates out of `sleep` as `CancellationError`;
@@ -416,9 +425,6 @@ extension RealtimeChannel {
     guard connectOnSubscribe else {
       // The client is connecting, or reconnecting after a drop: wait for it.
       if status == .connecting { return false }
-      reportIssue(
-        "You can't subscribe to a channel while the realtime client is not connected. Did you forget to call `realtime.connect()`?"
-      )
       throw RealtimeError.notConnectedToSubscribe
     }
     do {
@@ -512,6 +518,16 @@ extension RealtimeError {
       "The realtime client is not connected and `connectOnSubscribe` is off. Call `connect()` first.",
     isRetryable: false
   )
+
+  /// The server confirmed the join with `postgres_changes` the client cannot decode. A retry
+  /// gets the same reply.
+  static func unreadableJoinReply(_ error: any Error) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server's join reply has `postgres_changes` the client cannot read: \(error)",
+      isRetryable: false
+    )
+  }
 
   /// ``RealtimeClient/disconnect(code:reason:)`` was called while the channel was subscribing.
   static let disconnectedWhileSubscribing = RealtimeError(

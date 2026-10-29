@@ -167,7 +167,8 @@ public actor RealtimeChannel {
 
   /// Callers that joined an in-flight subscribe. Each one is resumed by the shared attempt or by
   /// its own cancellation, which leaves the attempt running.
-  var sharedSubscribeWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
+  var sharedSubscribeWaiters:
+    [UUID: (task: Task<Void, any Error>, continuation: CheckedContinuation<Void, any Error>)] = [:]
 
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?
@@ -562,14 +563,13 @@ public actor RealtimeChannel {
     // A reply to `phx_join` carries the join's ref. A late reply to an earlier join of this
     // topic matches neither the current join nor a push, so it is dropped.
     if ref == joinRef {
-      try didReceiveJoinReply(
-        ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
+      didReceiveJoinReply(ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
     } else {
       didReceiveReply(ref: ref, status: PushStatus(rawValue: status), payload: message.payload)
     }
   }
 
-  private func didReceiveJoinReply(ref: String, status: PushStatus, payload: JSONObject) throws {
+  private func didReceiveJoinReply(ref: String, status: PushStatus, payload: JSONObject) {
     let response = payload["response"]
     guard status != .error else {
       let reason =
@@ -582,7 +582,12 @@ public actor RealtimeChannel {
 
     guard status == .ok else { return }
     if let changes = response?.objectValue?[ChannelEvent.postgresChanges] {
-      serverChanges = try changes.decode(as: [PostgresJoinConfig].self)
+      do {
+        serverChanges = try changes.decode(as: [PostgresJoinConfig].self)
+      } catch {
+        didReceiveJoinError(.unreadableJoinReply(error), for: ref)
+        return
+      }
     }
     didReceiveSubscribedOK()
   }

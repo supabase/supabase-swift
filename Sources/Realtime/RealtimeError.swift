@@ -222,13 +222,17 @@ extension RealtimeError {
   /// expired-token `InvalidJWTToken` is retryable because a fresh token can fix it.
   package static func joinError(reason: String) -> RealtimeError {
     let code = ServerCode.parse(reason)
+    let recovery = JoinRecovery(serverCode: code, reason: reason)
     let kind: Kind
-    switch code {
-    case .some(let code) where ServerCode.authentication.contains(code): kind = .unauthorized
-    case .some(let code) where ServerCode.rateLimit.contains(code): kind = .rateLimited
+    switch (code, recovery) {
+    case (.some(let code), _) where ServerCode.authentication.contains(code): kind = .unauthorized
+    case (.some(let code), _) where ServerCode.rateLimit.contains(code): kind = .rateLimited
+    // Without a code, the wording is all there is: an expired token or a revoked permission is
+    // an auth failure, a rate limit is a rate limit.
+    case (nil, .refreshToken), (nil, .fail): kind = .unauthorized
+    case (nil, .backOff): kind = .rateLimited
     default: kind = .server
     }
-    let recovery = JoinRecovery(serverCode: code, reason: reason)
     return RealtimeError(
       kind: kind, message: reason, serverCode: code, isRetryable: recovery != .fail)
   }

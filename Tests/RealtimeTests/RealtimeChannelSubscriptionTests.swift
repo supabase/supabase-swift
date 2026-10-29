@@ -276,6 +276,30 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 2)
   }
 
+  /// The one fresh-token rejoin is per run of expired-token errors: a token that expires again
+  /// after other failures gets another one.
+  @Test(.timeLimit(.minutes(1)))
+  func aTokenThatExpiresAgainAfterOtherFailuresGetsAnotherRefresh() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let expired = "InvalidJWTToken: Token has expired 3 seconds ago"
+
+    let subscription = Task { try await channel.subscribe() }
+    var join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: expired)
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: "UnknownErrorOnChannel: boom")
+    await h.clock.advance(by: .seconds(2))
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: expired)
+    join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 4)
+  }
+
   @Test(.timeLimit(.minutes(1)))
   func rateLimitedJoinBacksOffForTheLongInterval() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
@@ -368,22 +392,17 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .unsubscribed)
   }
 
-  // `reportIssue` crashes or records nothing under Swift Testing on Linux.
-  #if canImport(Darwin)
-    @Test(.timeLimit(.minutes(1)))
-    func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
-      let h = Harness(connectOnSubscribe: false)
-      let channel = await h.client.channel("room")
+  @Test(.timeLimit(.minutes(1)))
+  func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
+    let h = Harness(connectOnSubscribe: false)
+    let channel = await h.client.channel("room")
 
-      await withKnownIssue {
-        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-        #expect(error?.kind == .notConnected)
-        #expect(error?.isRetryable == false)
-      }
-      #expect(h.connects.value == 0)
-      #expect(await channel.status == .unsubscribed)
-    }
-  #endif
+    let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+    #expect(error?.kind == .notConnected)
+    #expect(error?.isRetryable == false)
+    #expect(h.connects.value == 0)
+    #expect(await channel.status == .unsubscribed)
+  }
 
   /// A join error with no reason is not one the classifier knows, so the channel rejoins.
   @Test(.timeLimit(.minutes(1)))
@@ -494,6 +513,47 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .subscribing)
     subscription.cancel()
     await h.client.disconnect()
+  }
+
+  /// Retrying cannot fix a join reply the client cannot read, so the subscribe fails at once.
+  @Test(.timeLimit(.minutes(1)))
+  func unreadableOkJoinReplyFailsTheSubscribeAtOnce() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let start = h.clock.now
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.send(
+      RealtimeMessageV2(
+        joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
+        payload: ["status": "ok", "response": ["postgres_changes": "not-an-array"]]
+      )
+    )
+
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.isRetryable == false)
+    #expect(await channel.status == .unsubscribed)
+    #expect(h.clock.now == start)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  /// Every caller of a shared subscribe gets the same error when the server closes the channel.
+  @Test(.timeLimit(.minutes(1)))
+  func aServerCloseFailsEveryCallerWithChannelClosedByServer() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task { try await channel.subscribe() }
+    #expect(await waitUntil { await !channel.sharedSubscribeWaiters.isEmpty })
+    try h.close(join)
+
+    for caller in [first, second] {
+      let error = await #expect(throws: RealtimeError.self) { try await caller.value }
+      #expect(error?.kind == .channelClosedByServer)
+    }
   }
 
   /// A rejoin that keeps failing must not keep a released client alive.

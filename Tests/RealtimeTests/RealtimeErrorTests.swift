@@ -146,6 +146,13 @@ struct RealtimeErrorTests {
       reason: "Realtime was unable to connect to the project database",
       code: nil, kind: .server, isRetryable: true),
     .init(reason: "Unknown Error on Channel", code: nil, kind: .server, isRetryable: true),
+    .init(
+      reason: "Token has expired 3 seconds ago", code: nil, kind: .unauthorized, isRetryable: true),
+    .init(
+      reason: "Too many messages per second", code: nil, kind: .rateLimited, isRetryable: true),
+    .init(
+      reason: "You no longer have permission to read from this Channel topic: x",
+      code: nil, kind: .unauthorized, isRetryable: false),
   ]
 
   @Test(arguments: joinReasons)
