@@ -317,6 +317,12 @@ supporting_symbols:
   - RealtimeClientOptions.http
   - RealtimeClientOptions.defaultRequestTimeout
   - RealtimeClientOptions.connectOnSubscribe
+  - RealtimeClientOptions.defaultConnectOnSubscribe
+  # The options type itself and app-lifecycle handling (an Apple-platform behavior with no
+  # supabase-js counterpart in the capability matrix).
+  - RealtimeClientOptions
+  - RealtimeClientOptions.handleAppLifecycle
+  - RealtimeClientOptions.defaultHandleAppLifecycle
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
   # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
   - Trait.requiresMainSerialExecutor

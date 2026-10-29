@@ -291,7 +291,7 @@ extension RealtimeClient {
   /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
   /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
   /// automatic reconnect carries on. If
-  /// ``RealtimeClientOptions/defaultConnectOnSubscribe`` is `true` (the default), this is called
+  /// ``RealtimeClientOptions/connectOnSubscribe`` is `true` (the default), this is called
   /// automatically when a channel is subscribed to.
   ///
   /// ```swift

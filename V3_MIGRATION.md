@@ -263,9 +263,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
   `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
   yourself if you need a separate Realtime logger.
-- **Realtime does not get the global `URLSession`.** Pass the session to
-  `RealtimeClientOptions(session:)` if the WebSocket needs it (for example for certificate
-  pinning).
+- **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
+  for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
+  `URLSessionWebSocketTransport` built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
   `FunctionsOptions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 
@@ -274,7 +274,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
-| `supabase.channel(_:options:)`, `supabase.channels` | same names, `async` |
+| `supabase.channel(_:options:)` | `await supabase.channel(_:configure:)` |
+| `supabase.channels` | same name, `async` |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |
@@ -295,7 +296,12 @@ options: .init(global: .init(session: mySession))
 // v3
 options: .init(
   global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
-  realtime: .init(session: mySession)  // only if the WebSocket needs the session
+  // Only if the WebSocket needs the session:
+  realtime: .init(
+    webSocketTransport: URLSessionWebSocketTransport(
+      configuration: mySession.configuration, delegate: mySession.delegate
+    )
+  )
 )
 ```
 

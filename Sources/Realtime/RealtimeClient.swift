@@ -326,7 +326,7 @@ public actor RealtimeClient {
 
   /// An async stream that emits each step of the heartbeat cycle.
   ///
-  /// The client sends a heartbeat at each ``RealtimeClientOptions/defaultHeartbeatInterval``
+  /// The client sends a heartbeat at each ``RealtimeClientOptions/heartbeatInterval``
   /// interval to keep the connection alive. The stream replays the latest event, if any, and
   /// then emits every later one. Cancelling the iterating task ends the stream; so does
   /// releasing the client.
@@ -427,7 +427,7 @@ public actor RealtimeClient {
   ///
   /// If the channel is currently subscribed, it is unsubscribed first. After removal,
   /// if no channels remain, the client disconnects (or schedules a deferred disconnect
-  /// based on ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
+  /// based on ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
@@ -456,7 +456,7 @@ public actor RealtimeClient {
   /// Unsubscribes from and removes all channels, then disconnects immediately.
   ///
   /// Unlike ``removeChannel(_:)``, this method ignores
-  /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter`` and
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` and
   /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
     // Keep the channels routable until they have unsubscribed: each one waits for the server's

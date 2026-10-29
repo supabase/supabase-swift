@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
-public import Foundation
-package import HTTPTypes
+import Foundation
+import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -16,20 +16,35 @@ public import Logging
 
 /// Options for initializing ``RealtimeClient``.
 ///
-/// Use this struct to customize the behavior of the Realtime client, including connection
-/// timing, authentication, and app lifecycle handling.
+/// Every option has a default and can be read and changed after creation.
 ///
 /// ```swift
-/// let options = RealtimeClientOptions(
-///   heartbeatInterval: .seconds(30),
-///   handleAppLifecycle: true
-/// )
+/// var options = RealtimeClientOptions(accessToken: { try await currentToken() })
+/// options.reconnectBackoff = .steps([.seconds(1), .seconds(5), .seconds(15)])
+/// options.serverLogLevel = .warning
 /// let client = RealtimeClient(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics
-/// ### Lifecycle
+/// ### Connection
+/// - ``headers``
+/// - ``accessToken``
+/// - ``webSocketTransport``
+/// - ``http``
+/// ### Timing
+/// - ``heartbeatInterval``
+/// - ``requestTimeout``
+/// - ``reconnectBackoff``
+/// - ``BackoffPolicy``
+/// - ``disconnectOnEmptyChannelsAfter``
+/// ### Behavior
+/// - ``connectOnSubscribe``
 /// - ``handleAppLifecycle``
+/// ### Logging
+/// - ``logger``
+/// - ``serverLogLevel``
+/// ### Testing
+/// - ``clock``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
 /// - ``defaultReconnectBackoff``
