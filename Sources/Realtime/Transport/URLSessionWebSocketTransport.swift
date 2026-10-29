@@ -6,24 +6,37 @@
 //
 
 import ConcurrencyExtras
-package import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
 import IssueReporting
 
 #if canImport(FoundationNetworking)
-  package import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The default ``WebSocketTransport``, built on `URLSessionWebSocketTask`.
 ///
 /// Every connection gets its own `URLSession` copied from `configuration`, so process-wide
 /// `URLSession` state never reaches the socket and the session can be invalidated on close.
-/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates.
-package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
+/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates:
+///
+/// ```swift
+/// var options = RealtimeClientOptions()
+/// options.webSocketTransport = URLSessionWebSocketTransport(
+///   configuration: pinnedSession.configuration,
+///   delegate: pinnedSession.delegate
+/// )
+/// ```
+public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
 
-  package init(
+  /// Creates a transport.
+  ///
+  /// - Parameters:
+  ///   - configuration: The configuration each connection's `URLSession` copies.
+  ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
+  public init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil
   ) {
@@ -31,7 +44,8 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     self.delegate = delegate
   }
 
-  package func connect(to url: URL, headerFields: HTTPFields) async throws
+  /// Opens a `URLSessionWebSocketTask` and waits for the upgrade to finish.
+  public func connect(to url: URL, headerFields: HTTPFields) async throws
     -> any WebSocketConnection
   {
     guard url.scheme == "ws" || url.scheme == "wss" else {

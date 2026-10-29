@@ -1492,11 +1492,33 @@ features:
     symbols:
       - PresenceJoinConfig.key
 
-  # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
-  # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
-  # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocketTransport.
-  realtime.configuration.custom_websocket_transport: not_applicable
+  realtime.configuration.custom_websocket_transport:
+    status: partially_implemented
+    note: "Apps conform to WebSocketTransport (or configure URLSessionWebSocketTransport, e.g. for certificate pinning). The RealtimeClientOptions.webSocketTransport option that injects it lands with SDK-2103."
+    symbols:
+      - URLSessionWebSocketTransport
+      - URLSessionWebSocketTransport.connect
+      - URLSessionWebSocketTransport.init
+      - WebSocketCloseCode
+      - WebSocketCloseCode.abnormalClosure
+      - WebSocketCloseCode.goingAway
+      - WebSocketCloseCode.init
+      - WebSocketCloseCode.normalClosure
+      - WebSocketCloseCode.protocolError
+      - WebSocketCloseCode.rawValue
+      - WebSocketConnection
+      - WebSocketConnection.close
+      - WebSocketConnection.events
+      - WebSocketConnection.send
+      - WebSocketEvent
+      - WebSocketEvent.closed
+      - WebSocketEvent.frame
+      - WebSocketFrame
+      - WebSocketFrame.binary
+      - WebSocketFrame.text
+      - WebSocketTransport
+      - WebSocketTransport.connect
+      - RealtimeError.upgradeFailed
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
     note: "BackoffPolicy.custom maps the attempt count to a delay. Until RealtimeClientOptions.reconnectBackoff lands (SDK-2103), the client still builds its own full-jitter policy from reconnectDelay."

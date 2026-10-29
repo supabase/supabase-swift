@@ -420,6 +420,39 @@ struct RealtimeClientConnectionTests {
     #expect(h.connects.value.count == 2)
   }
 
+  @Test(arguments: [401, 403, 404])
+  func connectThrowsAndStopsWhenTheTransportReportsAFatalUpgrade(status: Int) async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { _ in throw RealtimeError.upgradeFailed(status: status) }
+    )
+
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    let stopped = await h.client.status
+    #expect(stopped == .disconnected)
+    #expect(stopped.error?.isRetryable == false)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 1)
+  }
+
+  @Test
+  func connectThrowsARetryableErrorForATransientUpgradeFailure() async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 1 { throw RealtimeError.upgradeFailed(status: 503) }
+      }
+    )
+
+    // The caller's own `connect()` reports the failure and leaves the retry to the caller.
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    #expect(await h.client.status.error?.isRetryable == true)
+    try await h.client.connect()
+    #expect(await h.client.status == .connected)
+  }
+
   @Test
   func connectWhileWaitingToRetryTriesAtOnce() async throws {
     let h = Harness(reconnectDelay: .seconds(30))

@@ -272,8 +272,13 @@ extension RealtimeError {
   /// The error for an HTTP upgrade the server refused.
   ///
   /// 401, 403 and 404 mean the key, tenant or project is wrong and a retry cannot help. Every
-  /// other status (429 and 5xx in practice) is transient.
-  package static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
+  /// other status (429 and 5xx in practice) is transient. A custom ``WebSocketTransport`` throws
+  /// this error so the client knows whether to retry.
+  ///
+  /// - Parameters:
+  ///   - status: The HTTP status the server answered the upgrade with.
+  ///   - underlyingError: The transport's own error, if any.
+  public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
     RealtimeError(
