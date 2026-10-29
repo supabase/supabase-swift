@@ -426,6 +426,110 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
+  /// A late `ok` for a join that timed out confirms it, so the backoff must not send another join.
+  @Test(.timeLimit(.minutes(1)))
+  func lateOkDuringTheBackoffSettlesTheSubscribeWithoutAnotherJoin() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    await h.clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.status == .subscribed })
+    await h.clock.advance(by: .seconds(1))
+
+    try await subscription.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func disconnectStopsASubscribeThatIsRetrying() async throws {
+    let h = Harness(failedConnects: .max)
+    let channel = await h.client.channel("room")
+    let finished = LockIsolated(false)
+
+    let subscription = Task {
+      defer { finished.setValue(true) }
+      try await channel.subscribe()
+    }
+    #expect(await waitUntil { h.connects.value == 1 })
+    await h.client.disconnect()
+
+    try #require(await waitUntil(timeout: 2) { finished.value })
+    let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
+    #expect(error?.kind == .notConnected)
+    #expect(await channel.status == .unsubscribed)
+    await h.clock.advance(by: .seconds(10))
+    #expect(h.connects.value == 1)
+  }
+
+  /// With `connectOnSubscribe` off, a socket that drops while the join retries is the client's to
+  /// restore: the subscribe keeps retrying instead of failing.
+  @Test(.timeLimit(.minutes(1)))
+  func aDropWhileRetryingKeepsTheSubscribeGoingWhenConnectOnSubscribeIsOff() async throws {
+    let h = Harness(
+      connectOnSubscribe: false,
+      onConnect: { attempt in
+        if attempt > 1 { try? await Task.sleep(for: .seconds(3600)) }
+      }
+    )
+    try await h.client.connect()
+    let channel = await h.client.channel("room")
+    let finished = LockIsolated(false)
+
+    let subscription = Task {
+      defer { finished.setValue(true) }
+      try await channel.subscribe()
+    }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.fail(join, reason: "UnknownErrorOnChannel: boom")
+    h.server.close(code: nil, reason: "dropped")
+    #expect(await waitUntil { await h.client.status == .connecting })
+    await h.clock.advance(by: .seconds(1))
+    await h.clock.advance(by: .seconds(2))
+
+    #expect(!finished.value)
+    #expect(await channel.status == .subscribing)
+    subscription.cancel()
+    await h.client.disconnect()
+  }
+
+  /// A rejoin that keeps failing must not keep a released client alive.
+  @Test(.timeLimit(.minutes(1)))
+  func aRejoinThatNeverSucceedsDoesNotRetainTheClient() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+    }
+    let box = WeakBox()
+    let (socket, server) = FakeWebSocket.fakes()
+
+    func scope() async throws {
+      let client = RealtimeClient(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        options: RealtimeClientOptions(
+          heartbeatInterval: .seconds(3600),
+          accessToken: { "token" },
+          handleAppLifecycle: false
+        ),
+        wsTransport: { _, _ in socket },
+        http: HTTPClient(transport: RecordingTransport()),
+        clock: SignalingTestClock()
+      )
+      box.client = client
+      try await client.connect()
+      _ = await client.channel("room")
+      Task { await client.rejoinChannels() }
+      for await frame in server.events {
+        if case .frame(.text(let text)) = frame, text.contains(ChannelEvent.join) { break }
+      }
+    }
+    try await scope()
+
+    #expect(await waitUntil(timeout: 5) { box.client == nil })
+  }
+
   /// Without an attempt limit, a channel that outlives its client must not retry forever.
   @Test(.timeLimit(.minutes(1)))
   func subscribeAfterTheClientIsReleasedThrowsAtOnce() async throws {

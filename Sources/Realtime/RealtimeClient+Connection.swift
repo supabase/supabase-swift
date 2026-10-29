@@ -437,13 +437,11 @@ extension RealtimeClient {
   }
 
   func rejoinChannels() async {
-    await withTaskGroup(of: Void.self) { group in
-      for channel in channels.values {
-        group.addTask {
-          await channel.resetForReconnect()
-          try? await channel.subscribe()
-        }
-      }
+    for channel in channels.values {
+      await channel.resetForReconnect()
+      // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
+      // and a task that waited for it would keep a released client alive.
+      Task.detached { try? await channel.subscribe() }
     }
   }
 

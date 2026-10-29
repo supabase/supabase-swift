@@ -172,10 +172,11 @@ public actor RealtimeChannel {
   /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
   var closeWaiter: CheckedContinuation<Void, Never>?
 
-  /// The subscribe task a server close cancelled while it was in flight. That attempt compares
-  /// it against its own task so `subscribe()` throws `channelClosedByServer` instead of the bare
-  /// `CancellationError`, then clears it. A newer attempt never consumes it.
-  var subscribeTaskClosedByServer: Task<Void, any Error>?
+  /// The subscribe task a server close or ``RealtimeClient/disconnect(code:reason:)`` cancelled
+  /// while it was in flight, and the error its caller gets. That attempt compares the task against
+  /// its own so `subscribe()` throws `error` instead of the bare `CancellationError`, then clears
+  /// it. A newer attempt never consumes it.
+  var abortedSubscribe: (task: Task<Void, any Error>, error: RealtimeError)?
 
   // MARK: Pushes
 

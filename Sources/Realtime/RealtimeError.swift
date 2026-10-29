@@ -41,9 +41,11 @@ public struct RealtimeError: SupabaseError {
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
-    /// The socket went away while a reply was pending, or `subscribe()` found no connection and
-    /// `connectOnSubscribe` is off. The client reconnects on its own; retry the call once the
-    /// status is back to connected.
+    /// The socket went away while a reply was pending: the client reconnects on its own, so retry
+    /// the call once the status is back to connected. Also thrown, with
+    /// ``RealtimeError/isRetryable`` `false`, when `subscribe()` found the client disconnected and
+    /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
+    /// `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
     /// `httpSend` needs an access token and none was available. Sign in, or pass an
     /// `accessToken` closure, before sending. No request was sent.

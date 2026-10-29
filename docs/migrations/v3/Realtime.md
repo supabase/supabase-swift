@@ -31,6 +31,9 @@ Changes that still compile but behave differently. Check each one by hand.
   `maxRetryAttempts` and `maxRetryAttemptsReached`.
 - **`subscribe()` without a connection throws when `connectOnSubscribe` is off.** It throws
   `RealtimeError` with `kind == .notConnected` at once instead of retrying. Call `connect()` first.
+  While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
+- **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
+  `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.
