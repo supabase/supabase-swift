@@ -102,7 +102,7 @@ struct BroadcastView: View {
   }
 }
 
-struct BroadcastMessage: Codable, Identifiable {
+nonisolated struct BroadcastMessage: Codable, Identifiable {
   var id: UUID = UUID()
   let text: String
   var timestamp: Date = Date()

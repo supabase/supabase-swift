@@ -185,11 +185,14 @@ extension RealtimeClient {
 
     while !pendingEvents.isEmpty {
       let next = pendingEvents.removeFirst()
+      let previous = connection
       let effects = Self.transition(&connection, next) { [reconnectBackoff, jitter] attempt in
         reconnectBackoff.delay(forAttempt: attempt, random: jitter)
       }
       options.logger.debug("Connection → \(connection) on \(next)")
-      setStatus(connection.status)
+      if connection != previous {
+        connectionDidChange()
+      }
       for effect in effects {
         run(effect)
       }
@@ -319,7 +322,7 @@ extension RealtimeClient {
   /// Closes the WebSocket connection.
   ///
   /// Cancels pending tasks, clears the send buffer, fails every push still waiting for a reply
-  /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected``.
+  /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
   /// Channels stay registered; subscribe to them again after the next ``connect()``.
   ///
   /// - Parameters:
@@ -348,7 +351,7 @@ extension RealtimeClient {
   /// Invoked automatically by ``RealtimeLifecycleManager`` when
   /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
-    wasConnectedBeforeBackground = status == .connected
+    wasConnectedBeforeBackground = status.isConnected
   }
 
   /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
@@ -379,7 +382,7 @@ extension RealtimeClient {
     let hadChannels = !channels.isEmpty
     try? await connect()
 
-    if hadChannels, status == .connected {
+    if hadChannels, status.isConnected {
       await rejoinChannels()
     }
   }
@@ -493,14 +496,16 @@ extension RealtimeClient {
     if pendingHeartbeatRef != nil {
       // Previous heartbeat was never acknowledged.
       options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      recordHeartbeat(.timeout)
+      recordHeartbeat(.timedOut)
       pendingHeartbeatRef = nil
+      pendingHeartbeatSentAt = nil
       apply(.socketFailed(.heartbeatTimeout))
       return
     }
 
     let heartbeatRef = makeRef()
     pendingHeartbeatRef = heartbeatRef
+    pendingHeartbeatSentAt = elapsed()
     recordHeartbeat(.sent)
     // Not awaited: a write stalled on a half-open socket must not hold up the loop, or the
     // next tick never reports the missing acknowledgement.
@@ -557,13 +562,15 @@ extension RealtimeClient {
   }
 
   private func onMessage(_ message: RealtimeMessageV2) async {
-    if message.topic == "phoenix", message.event == "phx_reply" {
-      recordHeartbeat(message.status == .ok ? .ok : .error)
-    }
-
     if let ref = message.ref, ref == pendingHeartbeatRef {
       pendingHeartbeatRef = nil
-      options.logger.debug("heartbeat received")
+      let sentAt = pendingHeartbeatSentAt
+      pendingHeartbeatSentAt = nil
+      // Any reply proves the socket is alive, which is all a heartbeat checks.
+      if message.status != .ok {
+        options.logger.warning("The server answered the heartbeat with: \(message.payload)")
+      }
+      recordHeartbeat(.acknowledged(latency: sentAt.map { elapsed() - $0 } ?? .zero))
     } else {
       options.logger.debug("Received event \(message.event) for channel \(message.topic)")
     }

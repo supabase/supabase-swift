@@ -40,8 +40,12 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
   reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
   `X(rawValue:) != nil` checks on the status types are now always `true`.
-- **Status text changed.** `"\(status)"` on `RealtimeClientStatus` now prints `connected`, not
-  `Connected`. On the other status types it prints the struct description. Use `.rawValue`.
+- **The client reports `.reconnecting` while it waits to reconnect.** v2 reported
+  `.connecting` for the whole reconnect. Code that waits for `.connecting` after a drop must
+  also accept `.reconnecting`.
+- **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
+  `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
+  `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
 - **`SupabaseClient` sets the Realtime logger.** A `logger:` you pass in
   `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create `RealtimeClientV2`
   yourself if Realtime needs its own logger.
@@ -70,12 +74,12 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
 | `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
-| `RealtimeClientV2.Status` | `RealtimeClientStatus` |
+| `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
 | `RealtimeClientV2.disconnect()` | `disconnect() async` |
 | `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
-| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)` | `await heartbeats()` |
-| `RealtimeChannelV2.Status` | `RealtimeChannelStatus` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `await heartbeats()`, `HeartbeatEvent` |
+| `RealtimeChannelV2.Status` | `RealtimeChannelStatus`, with values (see below) |
 | `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
 | `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
 | `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
@@ -84,11 +88,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `broadcastDataStream(event:)` | `broadcastData(event:)` |
 | `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
 | `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()` |
-| `onSystem(callback:)`, `system()` | `systemMessages()` |
+| `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
 | `broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)`, `untrack()` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
 | `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
-| `RealtimeMessageV2.eventType: EventType?` | `eventType: EventType` (not optional) |
-| `RealtimeMessageV2.EventType.tokenExpired` | `.system`; check the payload |
+| `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
@@ -99,12 +102,12 @@ Changes that still compile but behave differently. Check each one by hand.
 | `defaultHeartbeatInterval`, `defaultReconnectDelay`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
 | `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `[String: JSONValue]` |
-| `RealtimeClientStatus`, `RealtimeChannelStatus`, `HeartbeatStatus`, `PushStatus`, `LogLevel`, `RealtimeMessageV2.EventType` (`enum`) | `struct`, same member names |
+| `PushStatus`, `LogLevel` (`enum`) | `struct`, same member names |
 | `Column`, `PresenceV2` (`Codable`) | `Decodable` |
 | `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` (`Codable`) | `Encodable` |
 | `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
-A `switch` over one of the status structs needs a `default:` case. `init(rawValue:)` is no
+A `switch` over `PushStatus` or `LogLevel` needs a `default:` case. `init(rawValue:)` is no
 longer failable, so drop `if let` around it.
 
 Remove `vsn:`. The client always uses protocol 2.0.0, so the server must be Realtime v2.63.0 or
@@ -132,6 +135,36 @@ try await channel.subscribe()
 ```
 
 `connect()` now throws when the socket cannot be opened, and `disconnect()` is `async`.
+
+## Status enums carry the reason
+
+`RealtimeClientStatus` and `RealtimeChannelStatus` are still enums, but their cases carry the
+attempt number, the wait before the next attempt, and the error. They are not `Equatable`: use
+`isConnected`, `isSubscribed` and `error`, or match a case. `heartbeats()` emits
+`HeartbeatEvent`: `.sent`, `.acknowledged(latency:)` and `.timedOut`. Any reply acknowledges a
+heartbeat, so there is no `.error` event.
+
+```swift
+// v2
+for await status in client.statusChange where status == .connected {
+  break
+}
+for await message in channel.system() where message.payload["extension"] == "postgres_changes" {
+  break
+}
+// v3
+for await status in await client.statusChanges() where status.isConnected {
+  break
+}
+for await event in await channel.events() where event == .postgresChangesReady {
+  break
+}
+```
+
+`events()` also emits `.resubscribed` when a channel joins again after a reconnect. Events sent
+while it was away are missed, so reload any state built from them. With
+`BroadcastJoinConfig(replicationReady: true)`, it emits `.replicationReady` or
+`.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
 
 ## Streams replace callbacks
 
