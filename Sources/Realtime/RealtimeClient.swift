@@ -44,7 +44,7 @@ actor RealtimeExecutor {}
 /// ## Topics
 /// ### Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 /// ### Connection Status
@@ -56,8 +56,6 @@ actor RealtimeExecutor {}
 /// - ``heartbeats()``
 /// ### Authentication
 /// - ``setAuth(_:)``
-/// ### Sending Messages
-/// - ``push(_:)``
 public actor RealtimeClient {
   nonisolated let url: URL
   nonisolated let options: RealtimeClientOptions
@@ -203,12 +201,14 @@ public actor RealtimeClient {
   private var lastHeartbeat: HeartbeatEvent?
   private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
 
-  /// All managed channels indexed by their topics.
+  /// Every channel this client created and has not removed.
   ///
-  /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
-  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
-  /// or ``removeAllChannels()``.
-  public private(set) var channels: [String: RealtimeChannel] = [:]
+  /// ``channel(_:configure:)`` adds a channel. ``removeChannel(_:)``, ``removeAllChannels()``,
+  /// and a server that closes the channel remove it. The order is not specified.
+  public var channels: [RealtimeChannel] { Array(channelsByTopic.values) }
+
+  /// The channels by their topic on the wire (`realtime:<topic>`), which incoming messages carry.
+  private(set) var channelsByTopic: [String: RealtimeChannel] = [:]
 
   /// Creates a new ``RealtimeClient`` using the default URLSession WebSocket transport.
   ///
@@ -389,18 +389,18 @@ public actor RealtimeClient {
   ///
   /// - Parameters:
   ///   - topic: The channel topic name (without the `realtime:` prefix).
-  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
-  ///     broadcast, presence, and privacy settings.
+  ///   - configure: Sets ``RealtimeChannelConfig`` options such as broadcast, presence, and
+  ///     privacy settings. It runs only when the channel is new.
   /// - Returns: A ``RealtimeChannel`` bound to this client.
   public func channel(
     _ topic: String,
-    options configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
   ) -> RealtimeChannel {
     apply(.channelAdded)
 
     let realtimeTopic = "realtime:\(topic)"
 
-    if let channel = channels[realtimeTopic] {
+    if let channel = channelsByTopic[realtimeTopic] {
       return channel
     }
 
@@ -418,7 +418,7 @@ public actor RealtimeClient {
       logger: options.logger
     )
 
-    channels[realtimeTopic] = channel
+    channelsByTopic[realtimeTopic] = channel
 
     return channel
   }
@@ -435,10 +435,10 @@ public actor RealtimeClient {
       await channel.unsubscribe()
     }
 
-    channels[channel.topic] = nil
+    channelsByTopic[channel.topic] = nil
     await channel.finishStreams()
 
-    if channels.isEmpty {
+    if channelsByTopic.isEmpty {
       options.logger.debug("No more subscribed channel in socket")
       if options.disconnectOnEmptyChannelsAfter <= .zero {
         await disconnect()
@@ -450,7 +450,7 @@ public actor RealtimeClient {
 
   /// Forgets a channel the server closed. The channel ends its own streams.
   func remove(_ channel: RealtimeChannel) {
-    channels[channel.topic] = nil
+    channelsByTopic[channel.topic] = nil
   }
 
   /// Unsubscribes from and removes all channels, then disconnects immediately.
@@ -461,7 +461,7 @@ public actor RealtimeClient {
   public func removeAllChannels() async {
     // Keep the channels routable until they have unsubscribed: each one waits for the server's
     // `phx_close`, which `onMessage` can only deliver to a channel still in `channels`.
-    let removed = Array(channels.values)
+    let removed = Array(channelsByTopic.values)
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
@@ -474,7 +474,7 @@ public actor RealtimeClient {
       await group.waitForAll()
     }
     for channel in removed {
-      channels[channel.topic] = nil
+      channelsByTopic[channel.topic] = nil
     }
 
     // `disconnect()` also cancels a pending idle disconnect.
@@ -662,7 +662,7 @@ public actor RealtimeClient {
   /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
   /// went out with another token. A channel still waiting for a token joins with this one.
   private func pushAccessToken(_ token: String) async {
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       // A newer token was stored while this loop was suspended; its own loop sends it.
       guard tokens.token == token else { break }
       switch await channel.status {
@@ -733,14 +733,8 @@ public actor RealtimeClient {
 
   // MARK: - Sending
 
-  /// Sends a message over the WebSocket, buffering it if the socket is not yet connected.
-  ///
-  /// If the socket is connected, the message is serialized and sent immediately.
-  /// If the socket is not connected, the message is enqueued and flushed once the
-  /// connection is established.
-  ///
-  /// - Parameter message: The ``RealtimeMessageV2`` to send.
-  public func push(_ message: RealtimeMessageV2) async {
+  /// Sends a message over the WebSocket, or buffers it until the socket connects.
+  func push(_ message: RealtimeMessageV2) async {
     do {
       await send(.text(try serializer.encodeText(message)))
     } catch {

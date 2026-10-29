@@ -103,7 +103,7 @@ struct RealtimeReconnectRecoveryTests {
 
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(await sut.channels[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(await sut.channelsByTopic[channel.topic] != nil, "Stale phx_close removed the channel")
 
     socket.reply(
       RealtimeMessageV2(

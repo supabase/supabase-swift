@@ -220,7 +220,7 @@
         await client.realtime.removeChannel(channel)
 
         #expect(await channel.status == .unsubscribed)
-        let topics = await client.realtime.channels.keys
+        let topics = await client.realtime.channels.map(\.topic)
         #expect(!topics.contains(channel.topic))
       }
     }

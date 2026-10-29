@@ -337,7 +337,7 @@ extension RealtimeClient {
 
     apply(.disconnectRequested(code: code, reason: reason))
 
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       await channel.socketDidDisconnect()
     }
   }
@@ -379,7 +379,7 @@ extension RealtimeClient {
       break
     }
 
-    let hadChannels = !channels.isEmpty
+    let hadChannels = !channelsByTopic.isEmpty
     try? await connect()
 
     if hadChannels, status.isConnected {
@@ -448,7 +448,7 @@ extension RealtimeClient {
   }
 
   func rejoinChannels() async {
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       await channel.resetForReconnect()
       // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
       // and a task that waited for it would keep a released client alive.
@@ -541,7 +541,7 @@ extension RealtimeClient {
         options.logger.debug(
           "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
         )
-        await channels[broadcast.topic]?.handleBinaryBroadcast(broadcast)
+        await channelsByTopic[broadcast.topic]?.handleBinaryBroadcast(broadcast)
       } catch {
         options.logger.error("Failed to decode binary frame: \(error)")
       }
@@ -575,7 +575,7 @@ extension RealtimeClient {
       options.logger.debug("Received event \(message.event) for channel \(message.topic)")
     }
 
-    await channels[message.topic]?.onMessage(message)
+    await channelsByTopic[message.topic]?.onMessage(message)
   }
 
   // MARK: Reconnect

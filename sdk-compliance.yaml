@@ -1417,7 +1417,6 @@ features:
     symbols:
       - RealtimeChannel.broadcast
     supporting_symbols:
-      - RealtimeClient.push
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
