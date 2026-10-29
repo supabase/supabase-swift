@@ -187,6 +187,12 @@ struct SessionManagerTests {
     )
   }
 
+  private func expiredSession(_ name: String) -> Session {
+    var session = session(name)
+    session.expiresAt = Date().addingTimeInterval(-60).timeIntervalSince1970
+    return session
+  }
+
   private func heldTokenResponse(
     _ response: @escaping @Sendable () throws -> (HTTPResponse, Data)
   ) -> (requestSeen: LockIsolated<Bool>, release: @Sendable () -> Void) {
@@ -208,9 +214,11 @@ struct SessionManagerTests {
     )
   }
 
-  private func collectAuthEvents() -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
+  private func collectAuthEvents(
+    from store: SessionStore? = nil
+  ) -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
     let events = LockIsolated<[AuthChangeEvent]>([])
-    let changes = dependencies.sessionStore.changes()
+    let changes = (store ?? dependencies.sessionStore).changes()
     let task = Task {
       for await change in changes {
         events.withValue { $0.append(change.event) }
@@ -636,7 +644,7 @@ struct SessionManagerTests {
 
   @Test
   func refreshOfAnInvalidatedTokenThrowsTheSameErrorWithoutARequest() async throws {
-    let userA = session("A")
+    let userA = expiredSession("A")
     try await dependencies.seedSession(userA)
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       (
@@ -797,6 +805,284 @@ struct SessionManagerTests {
     _ = await Task { try await sut.refreshSession(userA.refreshToken) }.result
     expectNoDifference(transport.requests.value, 2)
   }
+
+  @Test(arguments: RefreshFailure.all)
+  func refreshFailureOfAnExpiredSession(_ failure: RefreshFailure) async throws {
+    let held = expiredSession("A")
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try failure.response()
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let result = await Task { try await sut.refreshSession(held.refreshToken) }.result
+
+    let error = try #require(result.error as? AuthError)
+    #expect(error.kind == failure.kind)
+    #expect(error.isRetryable == failure.isRetryable)
+    let (expectedStatus, expectedEvents): (AuthStatus, [AuthChangeEvent]) =
+      switch failure.outcome {
+      case .keepsSession: (.signedIn(held), [.initialSession])
+      case .signsOut(let reason): (.signedOut(reason), [.initialSession, .signedOut])
+      }
+    let collected = await settled(events, count: expectedEvents.count)
+    #expect(dependencies.sessionStore.currentStatus == expectedStatus)
+    expectNoDifference(collected, expectedEvents)
+  }
+
+  @Test(arguments: RefreshFailure.all.filter { $0.outcome != .keepsSession })
+  func rejectedRefreshKeepsASessionWhoseAccessTokenIsStillValid(_ failure: RefreshFailure)
+    async throws
+  {
+    let held = session("A")
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try failure.response()
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let result = await Task { try await sut.refreshSession(held.refreshToken) }.result
+
+    let collected = await settled(events, count: 1)
+    #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
+    #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
+    expectNoDifference(collected, [.initialSession])
+  }
+
+  @Test
+  func accessTokenValidityIsJudgedByTheInjectedDate() async throws {
+    let held = session("A")
+    let dependencies = Self.makeDependencies(
+      http: http, date: { Date().addingTimeInterval(held.expiresIn) })
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
+    }
+
+    _ = await Task { try await dependencies.sessionManager.refreshSession(held.refreshToken) }
+      .result
+
+    #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
+  }
+
+  @Test
+  func cachedRejectionSignsOutOnceTheKeptSessionExpires() async throws {
+    let now = LockIsolated(Date())
+    let held = {
+      var session = session("A")
+      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      return session
+    }()
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
+    }
+
+    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
+
+    now.withValue { $0.addTimeInterval(40) }
+    let cached = await Task { try await sut.refreshSession(held.refreshToken) }.result
+
+    #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+    #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
+    expectNoDifference(tokenRequestCount, 1)
+  }
+
+  @Test
+  func offlineRefreshOfAnExpiredSessionKeepsTheUserSignedIn() async throws {
+    let held = expiredSession("A")
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      throw URLError(.notConnectedToInternet)
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let result = await Task { try await sut.session() }.result
+
+    let collected = await settled(events, count: 1)
+    #expect((result.error as? AuthError)?.kind == .transport)
+    #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
+    expectNoDifference(collected, [.initialSession])
+  }
+
+  @Test
+  func refreshAfterACachedRejectionSignedOutSendsNoRequest() async throws {
+    let now = LockIsolated(Date())
+    let held = {
+      var session = session("A")
+      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      return session
+    }()
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
+    }
+    let (events, stopCollecting) = collectAuthEvents(from: dependencies.sessionStore)
+    defer { stopCollecting() }
+
+    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    now.withValue { $0.addTimeInterval(40) }
+    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+
+    let afterSignOut = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    #expect((afterSignOut.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+
+    let collected = await settled(events, count: 2)
+    expectNoDifference(tokenRequestCount, 1)
+    expectNoDifference(collected, [.initialSession, .signedOut])
+    #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
+  }
+
+  @Test
+  func concurrentCachedRejectionsSignOutOnce() async throws {
+    let now = LockIsolated(Date())
+    let held = {
+      var session = session("A")
+      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      return session
+    }()
+    let dependencies = Self.makeDependencies(http: http, date: { now.value })
+    let sut = dependencies.sessionManager
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
+    }
+    let (events, stopCollecting) = collectAuthEvents(from: dependencies.sessionStore)
+    defer { stopCollecting() }
+
+    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    now.withValue { $0.addTimeInterval(40) }
+    let refreshes = (0..<20).map { _ in
+      Task { try await sut.refreshSession(held.refreshToken) }
+    }
+    for refresh in refreshes {
+      _ = await refresh.result
+    }
+
+    let collected = await settled(events, count: 2)
+    expectNoDifference(tokenRequestCount, 1)
+    expectNoDifference(collected, [.initialSession, .signedOut])
+  }
+
+  @Test
+  func rejectedRefreshWithoutASessionKeepsTheSignOutReason() async throws {
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_not_found", status: .badRequest).response()
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    let result = await Task { try await sut.refreshSession("foreign") }.result
+
+    let collected = await settled(events, count: 1)
+    #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
+    #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionMissing))
+    expectNoDifference(collected, [.initialSession])
+  }
+
+  @Test
+  func cachedRejectionOfAnotherTokenKeepsTheHeldSession() async throws {
+    let held = expiredSession("A")
+    try await dependencies.seedSession(held)
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
+    }
+    let (events, stopCollecting) = collectAuthEvents()
+    defer { stopCollecting() }
+
+    _ = await Task { try await sut.refreshSession("foreign") }.result
+    let cached = await Task { try await sut.refreshSession("foreign") }.result
+
+    let collected = await settled(events, count: 1)
+    #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+    #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
+    expectNoDifference(tokenRequestCount, 1)
+    expectNoDifference(collected, [.initialSession])
+  }
+}
+
+struct RefreshFailure: Sendable, CustomTestStringConvertible {
+  var testDescription: String
+  var response: @Sendable () throws -> (HTTPResponse, Data)
+  var kind: AuthError.Kind
+  var isRetryable: Bool
+  var outcome = Outcome.keepsSession
+
+  enum Outcome: Equatable {
+    case keepsSession
+    case signsOut(SignOutReason)
+  }
+
+  static func coded(
+    _ code: String,
+    status: HTTPResponse.Status,
+    kind: AuthError.Kind = .sessionInvalidated,
+    isRetryable: Bool = false,
+    outcome: Outcome = .keepsSession
+  ) -> Self {
+    Self(
+      testDescription: code,
+      response: {
+        (
+          HTTPResponse(status: status, headerFields: [.apiVersionHeaderName: "2024-01-01"]),
+          Data(#"{"code":"\#(code)","message":"m"}"#.utf8)
+        )
+      },
+      kind: kind,
+      isRetryable: isRetryable,
+      outcome: outcome
+    )
+  }
+
+  static func status(_ status: HTTPResponse.Status) -> Self {
+    Self(
+      testDescription: "HTTP \(status.code)",
+      response: { (HTTPResponse(status: status), Data("<html></html>".utf8)) },
+      kind: .server,
+      isRetryable: true
+    )
+  }
+
+  static let all: [Self] = [
+    .coded("refresh_token_not_found", status: .badRequest, outcome: .signsOut(.sessionExpired)),
+    .coded("session_expired", status: .badRequest, outcome: .signsOut(.sessionExpired)),
+    .coded("refresh_token_already_used", status: .badRequest, outcome: .signsOut(.sessionRevoked)),
+    .coded("session_not_found", status: .forbidden, outcome: .signsOut(.sessionRevoked)),
+    .coded("user_banned", status: .forbidden, outcome: .signsOut(.sessionRevoked)),
+    Self(
+      testDescription: "invalid_grant",
+      response: {
+        (
+          HTTPResponse(status: .badRequest),
+          Data(#"{"error":"invalid_grant","error_description":"m"}"#.utf8)
+        )
+      },
+      kind: .sessionInvalidated,
+      isRetryable: false,
+      outcome: .signsOut(.sessionExpired)
+    ),
+    .coded("conflict", status: .conflict, kind: .server, isRetryable: true),
+    .coded("over_request_rate_limit", status: .tooManyRequests, kind: .server, isRetryable: true),
+    .status(.requestTimeout),
+    .status(.internalServerError),
+    .status(.badGateway),
+    .status(HTTPResponse.Status(code: 520)),
+    Self(
+      testDescription: "transport",
+      response: { throw URLError(.notConnectedToInternet) },
+      kind: .transport,
+      isRetryable: true
+    ),
+    .coded("validation_failed", status: .badRequest, kind: .server),
+  ]
 }
 
 /// Answers the first request with a body that throws `URLError(.cancelled)` once its reader is

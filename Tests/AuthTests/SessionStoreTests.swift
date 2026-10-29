@@ -258,7 +258,6 @@ struct SessionStoreTests {
     _ = await changes.next()
 
     try await store.commit(.invalidated(.sessionRevoked, refreshToken: "refresh-a"))
-    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
 
     #expect(store.currentSession == makeSession("b"))
     #expect(await store.generation == generation)
@@ -271,19 +270,21 @@ struct SessionStoreTests {
   }
 
   @Test
-  func invalidationOfNoSessionAppliesWhileNoneIsHeld() async throws {
+  func invalidationWhileSignedOutChangesNothing() async throws {
     let store = try await loadedStore()
+    let generation = await store.generation
 
-    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: "refresh-a"))
 
-    #expect(store.currentStatus == .signedOut(.sessionRevoked))
+    #expect(store.currentStatus == .signedOut(.sessionMissing))
+    #expect(await store.generation == generation)
   }
 
   @Test
   func invalidationWhileLoadingChangesNothing() async throws {
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
 
-    try await store.commit(.invalidated(.sessionRevoked, refreshToken: nil))
+    try await store.commit(.invalidated(.sessionRevoked, refreshToken: "refresh-a"))
 
     #expect(store.currentStatus == .loading)
   }

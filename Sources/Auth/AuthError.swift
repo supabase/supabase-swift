@@ -266,9 +266,11 @@ public struct AuthError: SupabaseError {
     /// A session is required but none is stored locally. Sign the user in.
     public static let sessionMissing: Kind = "sessionMissing"
     /// The server rejected the session or its refresh token: it expired, was revoked, was
-    /// already used, or the user is banned. The client removes that session from storage. Sign
-    /// the user in again. ``AuthError/errorCode`` and ``AuthError/message`` keep the server's
-    /// values.
+    /// already used, or the user is banned. When the rejected session is the current one, the
+    /// client signs out and removes it from storage, and you get ``AuthChangeEvent/signedOut``.
+    /// A rejected refresh while ``Session/isExpired`` is still `false` keeps the session until
+    /// it expires, so react to ``AuthChangeEvent/signedOut``, not to this error, to show
+    /// sign-in. ``AuthError/errorCode`` and ``AuthError/message`` keep the server's values.
     public static let sessionInvalidated: Kind = "sessionInvalidated"
     /// The claims of an ID token do not match the sign-in request, for example a nonce,
     /// audience, or issuer mismatch.
@@ -384,9 +386,9 @@ extension AuthError.Kind {
   ///
   /// ```swift
   /// do {
-  ///   try await supabase.auth.refreshSession()
-  /// } catch AuthError.Kind.sessionInvalidated {
-  ///   showSignIn()
+  ///   try await supabase.auth.signIn(email: email, password: password)
+  /// } catch AuthError.Kind.transport {
+  ///   showOfflineBanner()
   /// }
   /// ```
   public static func ~= (kind: AuthError.Kind, error: any Error) -> Bool {
@@ -395,8 +397,6 @@ extension AuthError.Kind {
 }
 
 extension AuthError {
-  /// Whether the server rejected the session the request was issued for, so the stored session
-  /// must be removed.
   var invalidatesSession: Bool {
     kind == .sessionInvalidated
   }
