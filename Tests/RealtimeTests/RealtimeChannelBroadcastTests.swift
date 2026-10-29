@@ -135,17 +135,16 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
     await channel.handleBinaryBroadcast(broadcast)
 
-    let payload = await firstBuffered(stream, on: channel)
-    #expect(payload != nil, "Expected to receive broadcast payload")
-    #expect(payload?["event"]?.stringValue == "my_event")
-    #expect(payload?["payload"]?.objectValue?["count"]?.intValue == 99)
+    let message = await firstBuffered(stream, on: channel)
+    #expect(message?.event == "my_event")
+    #expect(message?.payload == .json(["count": 99]))
   }
 
   @Test
   func receive_binaryBroadcastFromBinaryFrame() async throws {
     let channel = await sut.channel("test")
 
-    let stream = await channel.broadcastData(event: "bin_event")
+    let stream = await channel.broadcasts(event: "bin_event")
 
     let binaryPayload = Data([0xCA, 0xFE, 0xBA, 0xBE])
     let broadcast = DecodedBroadcast(
@@ -155,7 +154,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
     await channel.handleBinaryBroadcast(broadcast)
 
-    #expect(await firstBuffered(stream, on: channel) == binaryPayload)
+    let message = await firstBuffered(stream, on: channel)
+    #expect(message?.event == "bin_event")
+    #expect(message?.payload == .binary(binaryPayload))
   }
 
   @Test
@@ -171,12 +172,11 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
     await channel.handleBinaryBroadcast(broadcast)
 
-    let payload = await firstBuffered(stream, on: channel)
-    #expect(payload != nil)
-    #expect(payload?["type"]?.stringValue == "broadcast")
-    #expect(payload?["event"]?.stringValue == "evt")
-    #expect(payload?["payload"]?.objectValue?["key"]?.stringValue == "value")
-    #expect(payload?["meta"] == nil)
+    let message = await firstBuffered(stream, on: channel)
+    #expect(message?.event == "evt")
+    #expect(message?.payload == .json(["key": "value"]))
+    #expect(message?.id == nil)
+    #expect(message?.isReplayed == false)
   }
 
   @Test
@@ -193,9 +193,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
     await channel.handleBinaryBroadcast(broadcast)
 
-    let meta = await firstBuffered(stream, on: channel)?["meta"]?.objectValue
-    #expect(meta?["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
-    #expect(meta?["replayed"]?.boolValue == true)
+    let message = await firstBuffered(stream, on: channel)
+    #expect(message?.id == UUID(uuidString: "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d"))
+    #expect(message?.isReplayed == true)
   }
 
   // The REST fallback for unsubscribed channels is gone, so the encoded payload is now read
@@ -282,10 +282,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
 
     let stream = await channel.broadcasts(event: "my_event")
-    let receivedPayload = LockIsolated<JSONObject?>(nil)
+    let receivedPayload = LockIsolated<BroadcastMessage?>(nil)
     let listenTask = Task {
-      for await json in stream {
-        receivedPayload.setValue(json)
+      for await message in stream {
+        receivedPayload.setValue(message)
       }
     }
     defer { listenTask.cancel() }
@@ -321,8 +321,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
       print("Client received events: \(client.receivedEvents)")
     }
     if let payload {
-      #expect(payload["event"]?.stringValue == "my_event")
-      #expect(payload["payload"]?.objectValue?["count"]?.intValue == 99)
+      #expect(payload.event == "my_event")
+      #expect(payload.payload == .json(["count": 99]))
     }
   }
 
@@ -334,10 +334,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
 
     let stream = await channel.broadcasts(event: "INSERT")
-    let receivedPayload = LockIsolated<JSONObject?>(nil)
+    let receivedPayload = LockIsolated<BroadcastMessage?>(nil)
     let listenTask = Task {
-      for await json in stream {
-        receivedPayload.setValue(json)
+      for await message in stream {
+        receivedPayload.setValue(message)
       }
     }
     defer { listenTask.cancel() }
@@ -365,11 +365,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let received = await waitUntil(timeout: 2) { receivedPayload.value != nil }
     #expect(received, "Expected the broadcasts stream to receive the kind-4 frame")
 
-    let json = try #require(receivedPayload.value)
-    #expect(json["payload"]?.objectValue?["record"]?.objectValue?["id"]?.intValue == 1)
-    let meta = try #require(json["meta"]?.objectValue)
-    #expect(meta["id"]?.stringValue == "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d")
-    #expect(meta["replayed"]?.boolValue == true)
+    let message = try #require(receivedPayload.value)
+    #expect(message.payload == .json(["record": ["id": 1]]))
+    #expect(message.id == UUID(uuidString: "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d"))
+    #expect(message.isReplayed == true)
   }
 
   /// Ends the channel's streams, then returns the first element `stream` had buffered, so a

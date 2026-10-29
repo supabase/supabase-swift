@@ -47,8 +47,9 @@ extension Session {
   static let expired = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
-    expiresIn: 30,
-    expiresAt: Date().addingTimeInterval(30).timeIntervalSince1970,
+    expiresIn: defaultExpiryMargin.timeInterval / 3,
+    expiresAt: Date().addingTimeInterval(defaultExpiryMargin.timeInterval / 3)
+      .timeIntervalSince1970,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )

@@ -82,6 +82,7 @@ extension RealtimeChannel {
     let socketConnected = await isSocketConnected()
     // A later subscribe is a new subscription, not a rejoin.
     hasBeenSubscribed = false
+    deliverPresence(presence.clear())
     switch state {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")

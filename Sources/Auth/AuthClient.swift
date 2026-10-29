@@ -1177,8 +1177,8 @@ public final class AuthClient: Sendable {
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
-    let stored = currentSession
-    return .snapshot(stored?.accessToken == accessToken ? stored : nil)
+    guard let stored = currentSession, stored.accessToken == accessToken else { return .unscoped }
+    return .snapshot(stored)
   }
 
   /// Updates user data, if there is a logged in user.
@@ -1334,7 +1334,12 @@ public final class AuthClient: Sendable {
     return try await sessionManager.refreshSession(refreshToken)
   }
 
-  /// Starts an auto-refresh process in the background. The session is checked every few seconds. Close to the time of expiration a process is started to refresh the session. If refreshing fails it will be retried for as long as necessary.
+  /// Starts refreshing the session in the background.
+  ///
+  /// The client refreshes the session 90 seconds before its access token expires. A failed
+  /// refresh is retried with a capped exponential backoff. The expiry is judged from the local
+  /// time the client received the session, so a wrong device clock does not change when the
+  /// refresh runs. A session that is already due refreshes at once.
   ///
   /// If you set ``Configuration/automaticallyRefreshesToken`` you don't need to call this function, it will be called for you.
   public func startAutoRefresh() {
@@ -1363,7 +1368,9 @@ public final class AuthClient: Sendable {
         let session = change.status.session
         deliver(change.event, session)
 
-        if change.event == .initialSession, let session, session.isExpired {
+        if change.event == .initialSession, let session,
+          sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil
+        {
           Task { _ = try? await sessionManager.refreshSession(session.refreshToken) }
         }
       }

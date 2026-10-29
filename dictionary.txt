@@ -30,6 +30,7 @@ Cloudflare
 cloudflare
 conformances
 confirmer
+cooldown
 corelibs
 CREDENTIALW
 dapp

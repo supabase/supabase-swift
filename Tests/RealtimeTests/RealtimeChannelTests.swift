@@ -36,7 +36,7 @@ struct RealtimeChannelTests {
   @Test
   func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() async {
     let stream = await sut.postgresChanges(
-      UpdateAction.self,
+      event: .update,
       table: "orders",
       filter: .and([
         .gt("amount", value: 100),
@@ -213,7 +213,7 @@ struct RealtimeChannelTests {
       let listenerCountBefore = await channel.listeners.count
 
       await withKnownIssue {
-        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
+        _ = await channel.postgresChanges(schema: "public")
       }
 
       #expect(await channel.listeners.count == listenerCountBefore)
@@ -269,7 +269,7 @@ struct RealtimeChannelTests {
       let listenerCountBefore = await channel.listeners.count
 
       await withKnownIssue {
-        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
+        _ = await channel.postgresChanges(schema: "public")
       }
 
       #expect(await channel.listeners.count == listenerCountBefore)
@@ -282,17 +282,17 @@ struct RealtimeChannelTests {
   func attachCallbacks() async {
     let streams: [any Sendable] = [
       await sut.postgresChanges(
-        AnyAction.self,
         schema: "public",
         table: "users",
         filter: .eq("id", value: 1)
       ),
-      await sut.postgresChanges(InsertAction.self, schema: "private"),
-      await sut.postgresChanges(UpdateAction.self, table: "messages"),
-      await sut.postgresChanges(DeleteAction.self),
+      await sut.postgresChanges(event: .insert, schema: "private"),
+      await sut.postgresChanges(event: .update, table: "messages"),
+      await sut.postgresChanges(event: .delete),
       await sut.broadcasts(event: "test"),
       await sut.broadcasts(event: "cursor-pos"),
       await sut.presenceChanges(),
+      await sut.presenceStates(),
       await sut.events(),
     ]
 
@@ -300,8 +300,8 @@ struct RealtimeChannelTests {
       switch entry.listener {
       case .postgres: "postgres"
       case .broadcast(let event, _): "broadcast(\(event))"
-      case .broadcastData(let event, _): "broadcastData(\(event))"
       case .presence: "presence"
+      case .presenceState: "presenceState"
       case .events: "events"
       case .status: "status"
       }
@@ -310,7 +310,7 @@ struct RealtimeChannelTests {
       kinds == [
         "postgres", "postgres", "postgres", "postgres",
         "broadcast(test)", "broadcast(cursor-pos)",
-        "presence", "events",
+        "presence", "presenceState", "events",
       ]
     )
     #expect(await sut.hasPresenceListener)

@@ -29,6 +29,8 @@ package final class SignalingTestClock: Clock, @unchecked Sendable {
   package var now: Instant { inner.now }
   package var minimumResolution: Duration { inner.minimumResolution }
 
+  package var pendingSleepCount: Int { lock.withLock { pending.count } }
+
   package func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
     let id = UUID()
     lock.withLock { pending[id] = deadline }

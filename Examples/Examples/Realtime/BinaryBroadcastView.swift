@@ -85,13 +85,14 @@ struct BinaryBroadcastView: View {
       $0.broadcast.receiveOwnBroadcasts = true
     }
 
-    let dataStream = await channel.broadcastData(event: "binary_message")
+    let messages = await channel.broadcasts(event: "binary_message")
 
     do {
       try await channel.subscribe()
       self.channel = channel
 
-      for await data in dataStream {
+      for await message in messages {
+        guard case .binary(let data) = message.payload else { continue }
         let frame = BinaryFrame(
           data: data,
           decodedText: String(data: data, encoding: .utf8) ?? "<non-UTF-8 data>",

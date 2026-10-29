@@ -20,17 +20,21 @@ final class UserStore {
   private init() {
     Task {
       let channel = await supabase.channel("public:users")
-      let changes = await channel.postgresChanges(AnyAction.self, table: "users")
+      let changes = await channel.postgresChanges(of: User.self, table: "users", decoder: decoder)
 
-      let presences = await channel.presenceChanges()
+      let presences = await channel.presenceStates()
 
       try await channel.subscribe()
 
       Task {
         let statusChange = await channel.statusChanges()
         for await _ in statusChange.filter(\.isSubscribed) {
-          let userId = try await supabase.auth.session.user.id
-          try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+          do {
+            let userId = try await supabase.auth.session.user.id
+            try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
+          } catch {
+            Logger.main.error("Failed to track presence: \(error.localizedDescription)")
+          }
         }
       }
 
@@ -41,19 +45,11 @@ final class UserStore {
       }
 
       Task {
-        for await presence in presences {
-          let joins = try presence.decodeJoins(as: UserPresence.self)
-          let leaves = try presence.decodeLeaves(as: UserPresence.self)
-
-          for leave in leaves {
-            self.presences[leave.userId] = nil
-            Logger.main.debug("User \(leave.userId) leaved")
-          }
-
-          for join in joins {
-            self.presences[join.userId] = join
-            Logger.main.debug("User \(join.userId) joined")
-          }
+        for await state in presences {
+          let online = try state.decode(as: UserPresence.self).values.compactMap(\.first)
+          self.presences = Dictionary(
+            online.map { ($0.userId, $0) }, uniquingKeysWith: { _, latest in latest }
+          )
         }
       }
     }
@@ -76,18 +72,18 @@ final class UserStore {
     return user
   }
 
-  private func handleChangedUser(_ action: AnyAction) {
+  private func handleChangedUser(_ change: TypedPostgresChange<User>) {
     do {
-      switch action {
-      case .insert(let action):
-        let user = try action.decodeRecord(decoder: decoder) as User
+      switch change.kind {
+      case .insert, .update:
+        let user = try change.row()
         users[user.id] = user
-      case .update(let action):
-        let user = try action.decodeRecord(decoder: decoder) as User
-        users[user.id] = user
-      case .delete(let action):
-        guard let id = action.oldRecord["id"]?.stringValue else { return }
-        users[UUID(uuidString: id)!] = nil
+      case .delete:
+        guard let id = change.oldRecord?["id"]?.stringValue.flatMap(UUID.init(uuidString:))
+        else { return }
+        users[id] = nil
+      default:
+        break
       }
     } catch {
       dump(error)

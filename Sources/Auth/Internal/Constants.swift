@@ -9,10 +9,7 @@ import Foundation
 import HTTPTypes
 
 let defaultAuthURL = URL(string: "http://localhost:9999")!
-let defaultExpiryMargin: TimeInterval = 30
-
-let autoRefreshTickDuration: TimeInterval = 30
-let autoRefreshTickThreshold = 3
+let defaultExpiryMargin: Duration = .seconds(30)
 
 let defaultStorageKey = "supabase.auth.token"
 
