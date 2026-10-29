@@ -9,7 +9,7 @@ import Supabase
 import SwiftUI
 
 struct BroadcastView: View {
-  @State var messages: [BroadcastMessage] = []
+  @State var messages: [ChatMessage] = []
   @State var messageText: String = ""
   @State var channel: RealtimeChannel?
   @State var error: Error?
@@ -79,9 +79,7 @@ struct BroadcastView: View {
       self.channel = channel
 
       for await message in broadcast {
-        if let payload = try message["payload"]?.decode(as: BroadcastMessage.self) {
-          messages.append(payload)
-        }
+        messages.append(try message.decode(as: ChatMessage.self))
       }
     } catch {
       print(error)
@@ -92,7 +90,7 @@ struct BroadcastView: View {
     guard !messageText.isEmpty else { return }
 
     Task {
-      let message = BroadcastMessage(text: messageText, timestamp: Date())
+      let message = ChatMessage(text: messageText, timestamp: Date())
       try await channel?.broadcast(event: "message", message: message)
 
       await MainActor.run {
@@ -102,7 +100,7 @@ struct BroadcastView: View {
   }
 }
 
-nonisolated struct BroadcastMessage: Codable, Identifiable {
+nonisolated struct ChatMessage: Codable, Identifiable {
   var id: UUID = UUID()
   let text: String
   var timestamp: Date = Date()
