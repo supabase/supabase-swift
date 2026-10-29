@@ -841,6 +841,131 @@
     }
 
     /// Polls the channel's presence state until `condition` holds, for at most five seconds.
+    /// `subscribe()` returns only once the server's Postgres changes are live, so a row
+    /// inserted right after it arrives. With `waitForSubscription`, the server holds the join
+    /// reply instead of the SDK waiting for "Subscribed to PostgreSQL".
+    @Test(arguments: [false, true])
+    func subscribeReturnsWhenPostgresChangesAreLive(waitForSubscription: Bool) async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-live-\(waitForSubscription)") {
+          $0.postgresChanges.waitForSubscription = waitForSubscription
+        }
+        let testKey = UUID().uuidString
+        let inserts = await channel.postgresChanges(
+          of: KeyValueEntry.self, event: .insert, table: "key_value_storage",
+          filter: .eq("key", value: testKey))
+
+        try await channel.subscribe()
+        try await client.from("key_value_storage").insert(["key": testKey, "value": "v"]).execute()
+
+        let change = try await withTimeout(.seconds(5)) {
+          await inserts.first(where: { _ in true })
+        }
+        #expect(try change?.row().key == testKey)
+
+        await channel.unsubscribe()
+      }
+    }
+
+    /// A `postgresChanges` stream opened on a joined channel makes it rejoin with the binding.
+    @Test
+    func lateBindingRejoinsAndDelivers() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("late-binding")
+        let pings = await channel.broadcasts(event: "ping")
+        let events = await channel.events()
+        try await channel.subscribe()
+
+        let testKey = UUID().uuidString
+        let inserts = await channel.postgresChanges(
+          of: KeyValueEntry.self, event: .insert, table: "key_value_storage",
+          filter: .eq("key", value: testKey))
+        _ = try await withTimeout(.seconds(10)) {
+          await events.first(where: { $0 == .resubscribed })
+        }
+        #expect(await channel.status == .subscribed)
+
+        try await client.from("key_value_storage").insert(["key": testKey, "value": "v"]).execute()
+        let change = try await withTimeout(.seconds(5)) {
+          await inserts.first(where: { _ in true })
+        }
+        #expect(try change?.row().key == testKey)
+
+        withExtendedLifetime(pings) {}
+        await channel.unsubscribe()
+      }
+    }
+
+    /// Broadcast events match exactly and by case; `"*"` matches every event.
+    @Test
+    func broadcastMatchingIsExact() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("broadcast-exact") {
+          $0.broadcast.receiveOwnMessages = true
+        }
+        let lowercase = await channel.broadcasts(event: "ping")
+        let exact = await channel.broadcasts(event: "Ping")
+        let wildcard = await channel.broadcasts(event: "*")
+        try await channel.subscribe()
+
+        try await channel.broadcast(event: "Ping", payload: ["n": 1])
+        try await channel.broadcast(event: "ping", payload: ["n": 2])
+
+        let (exactMessage, wildcardMessages, lowercaseMessage) = try await withTimeout(
+          .seconds(5)
+        ) {
+          (
+            await exact.first(where: { _ in true }),
+            await wildcard.prefix(2).collect(),
+            await lowercase.first(where: { _ in true })
+          )
+        }
+        #expect(try exactMessage?.decode(as: [String: Int].self) == ["n": 1])
+        #expect(wildcardMessages.map(\.event) == ["Ping", "ping"])
+        // "Ping" did not reach the "ping" stream: its first message is the second broadcast.
+        #expect(try lowercaseMessage?.decode(as: [String: Int].self) == ["n": 2])
+
+        await channel.unsubscribe()
+      }
+    }
+
+    /// `topic` is the name passed to `channel(_:)`, and `httpSend` reaches a subscriber on it.
+    @Test
+    func channelTopicIsTheUserName() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("topic-name")
+        #expect(channel.topic == "topic-name")
+        let messages = await channel.broadcasts(event: "rest")
+        try await channel.subscribe()
+
+        try await channel.httpSend(event: "rest", payload: ["n": 1])
+
+        let message = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+        #expect(message?.event == "rest")
+        #expect(try message?.decode(as: [String: Int].self) == ["n": 1])
+
+        await channel.unsubscribe()
+      }
+    }
+
+    private struct KeyValueEntry: Decodable {
+      let key: String
+    }
+
     private func waitForPresence(
       on channel: RealtimeChannel,
       until condition: @escaping @Sendable (PresenceState) throws -> Bool

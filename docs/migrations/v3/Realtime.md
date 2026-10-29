@@ -62,6 +62,24 @@ Changes that still compile but behave differently. Check each one by hand.
   token. The callback runs in a task of its own with the client's `timeout`, so cancelling a
   `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
   run every time.
+- **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`,
+  and `RealtimeClient.channels` is keyed by that name. Search for `"realtime:"` and for
+  `channels[` lookups.
+- **Broadcast events match exactly.** v2 matched event names without regard to case;
+  `broadcasts(event: "ping")` no longer receives `"Ping"`. `"*"` still receives every event.
+  Search for `broadcasts(event:` and check the case of each name.
+- **`subscribe()` waits for Postgres changes.** On a channel with `postgresChanges` streams,
+  `subscribe()` returns only after the server reports that the changes are live, so a write right
+  after it is delivered. When the server reports a failure, or does not report within
+  `postgresChanges.subscriptionTimeout` (15 s), `subscribe()` throws, the channel leaves the topic
+  and becomes `.failed`. v2 returned and only reported the failure as a `system` message. A
+  `PostgresChangesSubscribeTimeout` join error is no longer retried.
+- **A `postgresChanges` stream opened after `subscribe()` works.** The channel leaves and joins
+  again with the new binding: it reports `.subscribing` until the server confirms, then
+  `events()` emits `.resubscribed`. v2 reported an issue and dropped the callback.
+- **`channel(_:configure:)` keeps the first configuration.** A second call for a topic with a
+  different configuration reports an issue and returns the existing channel unchanged. Remove
+  the channel first to change its configuration.
 - **Payload decode errors are `RealtimeError`.** `BroadcastMessage.decode(as:)`,
   `PostgresRow.decode(as:)` and `TypedPostgresChange.row()` throw `RealtimeError` with
   `kind == .decoding`; the `DecodingError` is in `underlyingError`. A `catch let error as
@@ -96,7 +114,14 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
 | `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
 | `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
-| `broadcast(event:message:)`, `broadcast(event:data:)` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
+| `channel(_:options:)`, `RealtimeChannelConfig` | `channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
+| `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledge`, `.receiveOwnMessages`, `.waitForReplication` |
+| `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
+| `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
+| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:encoder:) async throws`; waits for the server reply when `broadcast.acknowledge` is on |
+| `broadcast(event:data:)` (`async`) | `async throws` |
+| `httpSend(event:message:timeout:)` | `httpSend(event:payload:encoder:timeout:)` |
+| `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
 | `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
@@ -115,7 +140,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgresAction.rawMessage`, `HasRawMessage` | removed |
 | `Column` | `PostgresColumn` |
 | `PushStatus`, `LogLevel` (`enum`) | `struct`, same member names |
-| `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` (`Codable`) | `Encodable` |
+| `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` | removed; set the options on `RealtimeChannelConfiguration` |
 | `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
 A `switch` over `PushStatus` or `LogLevel` needs a `default:` case. `init(rawValue:)` is no
@@ -130,7 +155,7 @@ to move from v1 to the v2 API first, then apply this guide.
 ## `RealtimeClient` and `RealtimeChannel` are actors
 
 Both types are now actors that share one executor. Every call needs `await`, including
-`channel(_:options:)` on the client and on `SupabaseClient`, the stream methods on a channel,
+`channel(_:configure:)` on the client and on `SupabaseClient`, the stream methods on a channel,
 and `status`, `statusChanges()` and `heartbeats()`. There is no synchronous status read; a view
 that needs the current status keeps the last value it got from `statusChanges()`.
 
@@ -146,6 +171,27 @@ try await channel.subscribe()
 ```
 
 `connect()` now throws when the socket cannot be opened, and `disconnect()` is `async`.
+
+## Channel options are `RealtimeChannelConfiguration`
+
+Set the options in the `configure:` closure. The broadcast flags drop the `Broadcasts` suffix,
+a replay window takes a `Date`, and `postgresChanges` holds the new `waitForSubscription` and
+`subscriptionTimeout` options. `channel.configuration` reads the options back.
+
+```swift
+// v2
+let channel = supabase.channel("room") {
+  $0.isPrivate = true
+  $0.broadcast.receiveOwnBroadcasts = true
+  $0.broadcast.replay = ReplayOption(since: 1_700_000_000_000, limit: 10)
+}
+// v3
+let channel = await supabase.channel("room") {
+  $0.isPrivate = true
+  $0.broadcast.receiveOwnMessages = true
+  $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
+}
+```
 
 ## Status enums carry the reason
 
@@ -172,9 +218,9 @@ for await event in await channel.events() where event == .postgresChangesReady {
 }
 ```
 
-`events()` also emits `.resubscribed` when a channel joins again after a reconnect. Events sent
-while it was away are missed, so reload any state built from them. With
-`BroadcastJoinConfig(replicationReady: true)`, it emits `.replicationReady` or
+`events()` also emits `.resubscribed` when a channel joins again after a reconnect or to add a
+Postgres changes binding. Events sent while it was away are missed, so reload any state built
+from them. With `broadcast.waitForReplication` on, it emits `.replicationReady` or
 `.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
 
 ## Streams replace callbacks
@@ -243,7 +289,7 @@ for await change in await channel.postgresChanges(of: Todo.self, table: "todos")
 ## Pushes throw instead of returning a status
 
 `broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
-`async throws`. The broadcasts return once the frame is sent; when `acknowledgeBroadcasts` is on
+`async throws`. The broadcasts return once the frame is sent; when `broadcast.acknowledge` is on
 they wait for the server reply first. `track` and `untrack` always wait for the reply. The reply
 becomes the result of the call:
 
@@ -265,7 +311,7 @@ throws `CancellationError`; the frame itself is not recalled.
 try await channel.broadcast(event: "ping", message: ["n": 1])
 // v3
 do {
-  try await channel.broadcast(event: "ping", message: ["n": 1])
+  try await channel.broadcast(event: "ping", payload: ["n": 1])
 } catch let error as RealtimeError where error.kind == .timeout {
   // no acknowledgement in time
 }
@@ -315,7 +361,7 @@ try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
 let options = RealtimeClientOptions(
   heartbeatInterval: .seconds(30), reconnectDelay: .seconds(5), timeout: .seconds(15)
 )
-try await channel.httpSend(event: "ping", message: ["n": 1], timeout: .seconds(3))
+try await channel.httpSend(event: "ping", payload: ["n": 1], timeout: .seconds(3))
 ```
 
 ## `fetch:` is replaced by `http:`
