@@ -42,7 +42,7 @@ import Logging
 ///
 /// ### Realtime Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 ///
@@ -89,7 +89,7 @@ public final class SupabaseClient: Sendable {
   let functionsURL: URL
   let clock: any Clock<Duration>
 
-  private let _auth: AuthClient
+  let _auth: AuthClient
 
   /// The Auth client for managing user sessions and authentication.
   ///
@@ -259,7 +259,7 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      autoRefresh: options.auth.autoRefresh,
+      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
@@ -361,19 +361,20 @@ public final class SupabaseClient: Sendable {
 
   /// All active Realtime channels.
   public var channels: [RealtimeChannel] {
-    get async { Array(await realtime.channels.values) }
+    get async { await realtime.channels }
   }
 
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
+  ///     channel that already exists for `name` keeps its configuration.
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) async -> RealtimeChannel {
-    await realtime.channel(name, options: options)
+    await realtime.channel(name, configure: configure)
   }
 
   /// Unsubscribes from and removes a Realtime channel.
@@ -569,7 +570,8 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClient {
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    // Through `HTTPFields`, so names compare without regard to case and the global headers win.
+    realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
 
     realtimeOptions.logger = options.global.logger
     realtimeOptions.logger[metadataKey: "system"] = "realtime"

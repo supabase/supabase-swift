@@ -143,6 +143,7 @@ extension RealtimeClient {
     wsTransport: @escaping @Sendable (URL, HTTPFields) async throws -> any WebSocketConnection,
     http: HTTPClient,
     clock: any Clock<Duration>,
+    reconnectBackoff: BackoffPolicy = RealtimeClient.defaultReconnectBackoff,
     jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound }
   ) {
     self.init(
@@ -151,6 +152,7 @@ extension RealtimeClient {
       transport: ClosureWebSocketTransport(open: wsTransport),
       http: http,
       clock: clock,
+      reconnectBackoff: reconnectBackoff,
       jitter: jitter
     )
   }

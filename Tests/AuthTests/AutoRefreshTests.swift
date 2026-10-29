@@ -179,7 +179,12 @@ struct AutoRefreshTests {
     await first.autoRefresh.stop()
   }
 
-  @Test
+  @Test(
+    .disabled(
+      if: ProcessInfo.processInfo.environment["SWIFT_NIGHTLY"] == "true",
+      "SDK-2597: reportIssue crashes swift-issue-reporting on the nightly toolchain"
+    )
+  )
   func manualPolicyNeverStartsTheScheduler() async throws {
     let world = World()
     let client = makeClient(world, autoRefresh: .manual)

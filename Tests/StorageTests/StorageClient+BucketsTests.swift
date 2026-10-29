@@ -406,7 +406,7 @@ extension StorageMockerTests {
     }
 
     @Test
-    func purgeCacheForBucketIncludingTransformations() async throws {
+    func purgeCacheForBucketTransformationsOnly() async throws {
       let storage = makeSUT()
 
       Mock(
@@ -428,7 +428,7 @@ extension StorageMockerTests {
       }
       .register()
 
-      try await storage.purgeCache(bucket: "bucket123", includingTransformations: true)
+      try await storage.purgeCache(bucket: "bucket123", transformationsOnly: true)
     }
 
     @Test

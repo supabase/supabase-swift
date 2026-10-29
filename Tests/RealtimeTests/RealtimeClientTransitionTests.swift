@@ -1,3 +1,4 @@
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -203,10 +204,17 @@ struct RealtimeClientTransitionTests {
   @Test
   func statusMirrorsThePhase() {
     #expect(State.disconnected(nil).status == .disconnected)
-    #expect(State.disconnected(Self.refused).status == .disconnected)
+    #expect(State.disconnected(nil).status.error == nil)
+    #expect(State.disconnected(Self.refused).status.error?.isSameFailure(as: Self.refused) == true)
     #expect(State.connecting(attempt: 1).status == .connecting)
-    #expect(waiting.status == .connecting)
-    #expect(State.connected(socket).status == .connected)
+    #expect(State.connected(socket).status.isConnected)
+    guard case .reconnecting(let attempt, let retryIn, let lastError) = waiting.status else {
+      Issue.record("Expected .reconnecting, got \(waiting.status)")
+      return
+    }
+    #expect(attempt == 2)
+    #expect(retryIn == .seconds(2))
+    #expect(lastError.isSameFailure(as: Self.dropped))
   }
 
   @Test

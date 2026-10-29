@@ -9,6 +9,7 @@ import ConcurrencyExtras
 public import Foundation
 internal import HTTPTypes
 import Helpers
+import IssueReporting
 import Logging
 
 #if canImport(FoundationNetworking)
@@ -44,7 +45,7 @@ actor RealtimeExecutor {}
 /// ## Topics
 /// ### Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 /// ### Connection Status
@@ -56,17 +57,22 @@ actor RealtimeExecutor {}
 /// - ``heartbeats()``
 /// ### Authentication
 /// - ``setAuth(_:)``
-/// ### Sending Messages
-/// - ``push(_:)``
 public actor RealtimeClient {
   nonisolated let url: URL
   nonisolated let options: RealtimeClientOptions
+  /// `options.headers` with `X-Client-Info` added when the app did not set it.
+  nonisolated let headers: HTTPFields
   nonisolated let transport: any WebSocketTransport
   nonisolated let http: HTTPClient
   nonisolated let serializer = RealtimeSerializer()
   nonisolated let clock: any Clock<Duration>
   nonisolated let webSocketURL: URL
+  /// The wait before each reconnect attempt. Internal, like the channel rejoin backoff; tests
+  /// pass their own through the designated initializer.
   nonisolated let reconnectBackoff: BackoffPolicy
+  /// A random wait in `0...min(30 s, 1 s · 2^(attempt-1))`.
+  static let defaultReconnectBackoff = BackoffPolicy.fullJitter(
+    base: .seconds(1), cap: .seconds(30))
   /// The random source for the backoff jitter. Tests pin it to make the waits exact.
   nonisolated let jitter: @Sendable (ClosedRange<Double>) -> Double
 
@@ -101,6 +107,8 @@ public actor RealtimeClient {
   var accessToken: String? { tokens.token }
   var ref = 0
   var pendingHeartbeatRef: String?
+  /// When the pending heartbeat was sent, as read from `elapsed`.
+  var pendingHeartbeatSentAt: Duration?
 
   enum ConnectionState: Equatable {
     /// Idle or stopped. Carries the error when a failure, not the user, stopped the client.
@@ -114,9 +122,11 @@ public actor RealtimeClient {
 
     var status: RealtimeClientStatus {
       switch self {
-      case .disconnected: .disconnected
-      case .connecting, .reconnecting: .connecting
+      case .disconnected(let error): .disconnected(error)
+      case .connecting(let attempt): .connecting(attempt: attempt)
       case .connected: .connected
+      case .reconnecting(let attempt, let retryIn, let lastError):
+        .reconnecting(attempt: attempt, retryIn: retryIn, lastError: lastError)
       }
     }
 
@@ -191,20 +201,26 @@ public actor RealtimeClient {
   var wasConnectedBeforeBackground = false
 
   /// The current WebSocket connection status.
-  public private(set) var status: RealtimeClientStatus = .disconnected
+  public var status: RealtimeClientStatus { connection.status }
   private var statusContinuations: [UUID: AsyncStream<RealtimeClientStatus>.Continuation] = [:]
 
-  private var lastHeartbeat: HeartbeatStatus?
-  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatStatus>.Continuation] = [:]
+  private var lastHeartbeat: HeartbeatEvent?
+  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
 
-  /// All managed channels indexed by their topics.
+  /// Every channel this client created and has not removed.
   ///
-  /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
-  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
-  /// or ``removeAllChannels()``.
-  public private(set) var channels: [String: RealtimeChannel] = [:]
+  /// ``channel(_:configure:)`` adds a channel. ``removeChannel(_:)``, ``removeAllChannels()``,
+  /// and a server that closes the channel remove it. The order is not specified.
+  public var channels: [RealtimeChannel] { Array(channelsByTopic.values) }
 
-  /// Creates a new ``RealtimeClient`` using the default URLSession WebSocket transport.
+  /// The channels by their ``RealtimeChannel/topic``. Incoming messages carry the wire topic; see
+  /// ``RealtimeChannel/topic(forWireTopic:)``.
+  private(set) var channelsByTopic: [String: RealtimeChannel] = [:]
+
+  /// Creates a new ``RealtimeClient``.
+  ///
+  /// The client connects through ``RealtimeClientOptions/webSocketTransport``, or through
+  /// ``URLSessionWebSocketTransport`` when that option is `nil`.
   ///
   /// - Parameters:
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
@@ -217,10 +233,7 @@ public actor RealtimeClient {
     self.init(
       url: url,
       options: options,
-      transport: URLSessionWebSocketTransport(
-        configuration: options.session?.configuration ?? .default,
-        delegate: options.session?.delegate
-      ),
+      transport: options.webSocketTransport ?? URLSessionWebSocketTransport(),
       http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: options.clock
     )
@@ -237,15 +250,17 @@ public actor RealtimeClient {
     transport: any WebSocketTransport,
     http: HTTPClient,
     clock: any Clock<Duration>,
+    reconnectBackoff: BackoffPolicy = defaultReconnectBackoff,
     jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) {
-    var options = options
-    if options.headers[.xClientInfo] == nil {
-      options.headers[.xClientInfo] = "realtime-swift/\(version)"
+    var headers = HTTPFields(options.headers)
+    if headers[.xClientInfo] == nil {
+      headers[.xClientInfo] = "realtime-swift/\(version)"
     }
 
     self.url = url
     self.options = options
+    self.headers = headers
     self.transport = transport
     self.http = http
     self.clock = clock
@@ -253,15 +268,15 @@ public actor RealtimeClient {
     let start = Date()
     self.elapsed = elapsed
     self.now = { start.addingTimeInterval(elapsed().timeInterval) }
-    self.reconnectBackoff = Self.reconnectBackoff(baseDelay: options.reconnectDelay)
+    self.reconnectBackoff = reconnectBackoff
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
-      apikey: options.apikey,
-      logLevel: options.logLevel
+      apikey: headers[.apiKey],
+      serverLogLevel: options.serverLogLevel
     )
 
-    if let accessToken = options.headers[.authorization]?.split(separator: " ").last {
+    if let accessToken = headers[.authorization]?.split(separator: " ").last {
       _ = tokens.apply(String(accessToken), generation: tokens.beginRefresh())
     }
 
@@ -320,20 +335,22 @@ public actor RealtimeClient {
     return stream
   }
 
-  /// An async stream that emits heartbeat status updates.
+  /// An async stream that emits each step of the heartbeat cycle.
   ///
-  /// The client sends a heartbeat at each ``RealtimeClientOptions/defaultHeartbeatInterval``
-  /// interval to keep the connection alive. The stream replays the latest status, if any, and
+  /// The client sends a heartbeat at each ``RealtimeClientOptions/heartbeatInterval``
+  /// interval to keep the connection alive. The stream replays the latest event, if any, and
   /// then emits every later one. Cancelling the iterating task ends the stream; so does
   /// releasing the client.
   ///
   /// ```swift
-  /// for await beat in await client.heartbeats() {
-  ///   print("Heartbeat: \(beat)")
+  /// for await event in await client.heartbeats() {
+  ///   if case .acknowledged(let latency) = event {
+  ///     print("Round trip: \(latency)")
+  ///   }
   /// }
   /// ```
-  public func heartbeats() -> AsyncStream<HeartbeatStatus> {
-    let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream(
+  public func heartbeats() -> AsyncStream<HeartbeatEvent> {
+    let (stream, continuation) = AsyncStream<HeartbeatEvent>.makeStream(
       bufferingPolicy: .unbounded
     )
     let id = UUID()
@@ -353,21 +370,21 @@ public actor RealtimeClient {
     heartbeatContinuations[id] = nil
   }
 
-  func setStatus(_ status: RealtimeClientStatus) {
-    guard self.status != status else { return }
-    self.status = status
+  /// Called by `apply(_:)` after `connection` changed.
+  func connectionDidChange() {
     // The refresh timer runs only while connected: it stops here on a disconnect and starts
     // again on every connect and reconnect.
     scheduleAccessTokenRefresh()
+    let status = status
     for continuation in statusContinuations.values {
       continuation.yield(status)
     }
   }
 
-  func recordHeartbeat(_ status: HeartbeatStatus) {
-    lastHeartbeat = status
+  func recordHeartbeat(_ event: HeartbeatEvent) {
+    lastHeartbeat = event
     for continuation in heartbeatContinuations.values {
-      continuation.yield(status)
+      continuation.yield(event)
     }
   }
 
@@ -375,44 +392,49 @@ public actor RealtimeClient {
 
   /// Returns an existing channel for the given topic or creates a new one.
   ///
-  /// The fully-qualified topic sent to the server is `"realtime:<topic>"`. If a channel
-  /// with the same topic already exists, it is returned without modification.
+  /// The returned channel's ``RealtimeChannel/topic`` is `topic`; the SDK adds the `realtime:`
+  /// prefix the server expects on the WebSocket only. The client keeps one
+  /// channel per topic: when a channel with the same topic already exists, it is returned
+  /// unchanged. Asking for it with a different configuration reports an issue, because the
+  /// configuration is fixed when the channel is created; remove the channel first to change it.
   ///
   /// > Note: This method does not subscribe to the channel. Call ``RealtimeChannel/subscribe()``
   /// > on the returned instance to join the topic.
   ///
   /// - Parameters:
-  ///   - topic: The channel topic name (without the `realtime:` prefix).
-  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
-  ///     broadcast, presence, and privacy settings.
+  ///   - topic: The channel topic name, such as `"room:lobby"`.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: privacy,
+  ///     broadcast, presence and Postgres changes options.
   /// - Returns: A ``RealtimeChannel`` bound to this client.
   public func channel(
     _ topic: String,
-    options configure: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannel {
     apply(.channelAdded)
 
-    let realtimeTopic = "realtime:\(topic)"
+    var configuration = RealtimeChannelConfiguration()
+    configure(&configuration)
 
-    if let channel = channels[realtimeTopic] {
+    if let channel = channelsByTopic[topic] {
+      if channel.configuration != configuration {
+        reportIssue(
+          """
+          Channel "\(topic)" already exists with a different configuration. The existing channel \
+          is returned unchanged; remove it first to change its configuration.
+          """
+        )
+      }
       return channel
     }
 
-    var config = RealtimeChannelConfig(
-      broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-      presence: PresenceJoinConfig(key: ""),
-      isPrivate: false
-    )
-    configure(&config)
-
     let channel = RealtimeChannel(
-      topic: realtimeTopic,
-      config: config,
+      topic: topic,
+      configuration: configuration,
       client: self,
       logger: options.logger
     )
 
-    channels[realtimeTopic] = channel
+    channelsByTopic[topic] = channel
 
     return channel
   }
@@ -421,18 +443,18 @@ public actor RealtimeClient {
   ///
   /// If the channel is currently subscribed, it is unsubscribed first. After removal,
   /// if no channels remain, the client disconnects (or schedules a deferred disconnect
-  /// based on ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
+  /// based on ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if await channel.status == .subscribed {
+    if await channel.status.isSubscribed {
       await channel.unsubscribe()
     }
 
-    channels[channel.topic] = nil
+    forget(channel)
     await channel.finishStreams()
 
-    if channels.isEmpty {
+    if channelsByTopic.isEmpty {
       options.logger.debug("No more subscribed channel in socket")
       if options.disconnectOnEmptyChannelsAfter <= .zero {
         await disconnect()
@@ -444,22 +466,30 @@ public actor RealtimeClient {
 
   /// Forgets a channel the server closed. The channel ends its own streams.
   func remove(_ channel: RealtimeChannel) {
-    channels[channel.topic] = nil
+    forget(channel)
+  }
+
+  /// Clears `channel`'s topic only while it still holds `channel`: a newer channel created for
+  /// the same topic after `channel` was removed stays registered.
+  private func forget(_ channel: RealtimeChannel) {
+    if channelsByTopic[channel.topic] === channel {
+      channelsByTopic[channel.topic] = nil
+    }
   }
 
   /// Unsubscribes from and removes all channels, then disconnects immediately.
   ///
   /// Unlike ``removeChannel(_:)``, this method ignores
-  /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter`` and
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` and
   /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
     // Keep the channels routable until they have unsubscribed: each one waits for the server's
     // `phx_close`, which `onMessage` can only deliver to a channel still in `channels`.
-    let removed = Array(channels.values)
+    let removed = Array(channelsByTopic.values)
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
-          if await channel.status == .subscribed {
+          if await channel.status.isSubscribed {
             await channel.unsubscribe()
           }
           await channel.finishStreams()
@@ -468,7 +498,7 @@ public actor RealtimeClient {
       await group.waitForAll()
     }
     for channel in removed {
-      channels[channel.topic] = nil
+      forget(channel)
     }
 
     // `disconnect()` also cancels a pending idle disconnect.
@@ -491,8 +521,8 @@ public actor RealtimeClient {
   /// When the token changes, it is sent to all currently-subscribed channels. If `token` is
   /// `nil`, the value is fetched from the `accessToken` callback configured on
   /// ``RealtimeClientOptions``. The callback is called at most once every 10 seconds; inside
-  /// that window the stored token is kept. A callback that does not return within the client's
-  /// `timeout` option is treated as failed.
+  /// that window the stored token is kept. A callback that does not return within
+  /// ``RealtimeClientOptions/requestTimeout`` is treated as failed.
   ///
   /// While the client is connected, the callback is set, and the token is a JWT, the client also
   /// calls the callback one minute before the token's `exp`, so channels are not closed when it
@@ -551,7 +581,7 @@ public actor RealtimeClient {
     accessTokenFetchCount += 1
 
     let generation = tokens.beginRefresh()
-    let timeout = options.timeout
+    let timeout = options.requestTimeout
     let logger = options.logger
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = self.clock
@@ -656,13 +686,13 @@ public actor RealtimeClient {
   /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
   /// went out with another token. A channel still waiting for a token joins with this one.
   private func pushAccessToken(_ token: String) async {
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       // A newer token was stored while this loop was suspended; its own loop sends it.
       guard tokens.token == token else { break }
       switch await channel.status {
       case .subscribed:
         break
-      case .subscribing:
+      case .subscribing, .resubscribing:
         guard await channel.joinRef != nil, await channel.joinAccessToken != token else {
           continue
         }
@@ -679,7 +709,7 @@ public actor RealtimeClient {
   /// token replaces the timer. Without a connection, a callback, or a token with an `exp`, there
   /// is nothing to schedule: the next join or heartbeat refreshes the token instead.
   private func scheduleAccessTokenRefresh() {
-    guard options.accessToken != nil, status == .connected,
+    guard options.accessToken != nil, status.isConnected,
       let due = tokens.refreshDelay(now: now(), leeway: Self.accessTokenRefreshLeeway)
     else {
       tasks.cancel(at: .accessTokenRefresh)
@@ -695,7 +725,7 @@ public actor RealtimeClient {
   /// The refresh timer's entry point. A client that disconnected since the timer was set has no
   /// channel to keep alive, so it does not call the callback.
   func refreshAccessTokenIfConnected() async {
-    guard status == .connected else { return }
+    guard status.isConnected else { return }
     await refreshAccessToken()
   }
 
@@ -727,14 +757,8 @@ public actor RealtimeClient {
 
   // MARK: - Sending
 
-  /// Sends a message over the WebSocket, buffering it if the socket is not yet connected.
-  ///
-  /// If the socket is connected, the message is serialized and sent immediately.
-  /// If the socket is not connected, the message is enqueued and flushed once the
-  /// connection is established.
-  ///
-  /// - Parameter message: The ``RealtimeMessageV2`` to send.
-  public func push(_ message: RealtimeMessageV2) async {
+  /// Sends a message over the WebSocket, or buffers it until the socket connects.
+  func push(_ message: RealtimeMessageV2) async {
     do {
       await send(.text(try serializer.encodeText(message)))
     } catch {
@@ -858,7 +882,7 @@ public actor RealtimeClient {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, serverLogLevel: RealtimeServerLogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
@@ -873,8 +897,8 @@ public actor RealtimeClient {
 
     queryItems.append(URLQueryItem(name: "vsn", value: "2.0.0"))
 
-    if let logLevel {
-      queryItems.append(URLQueryItem(name: "log_level", value: logLevel.rawValue))
+    if let serverLogLevel {
+      queryItems.append(URLQueryItem(name: "log_level", value: serverLogLevel.rawValue))
     }
 
     components.queryItems = queryItems
