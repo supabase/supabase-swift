@@ -155,12 +155,13 @@ struct RefresherTests {
   }
 
   @Test
-  func stoppingOneClientKeepsAutoRefreshOfAnotherClientOnTheSameStore() async throws {
+  func stoppingOneClientKeepsAutoRefreshOfAnotherClient() async throws {
     let world = World()
     let first = world.makeClient()
     let second = world.makeClient()
-    #expect(first.sessionStore === second.sessionStore)
+    #expect(first.sessionStore !== second.sessionStore)
     try await first.seedSession(world.issueSession())
+    try await second.seedSession(world.issueSession())
 
     await first.sessionManager.startAutoRefresh()
     await second.sessionManager.startAutoRefresh()

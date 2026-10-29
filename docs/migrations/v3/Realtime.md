@@ -22,6 +22,18 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Reconnect stops on a refused upgrade.** A reconnect attempt that the server refuses with HTTP
   401, 403 or 404 ends in `.disconnected` instead of retrying forever. Fix the key or token, then
   call `connect()` again.
+- **`subscribe()` has no attempt limit.** It retries until the join succeeds, fails for good, or
+  its task is cancelled. After a timeout or a transient server error it rejoins after 1, 2 and
+  5 s, then every 10 s. After a rate limit it waits 30 s. An expired token gets one rejoin at once
+  with a fresh token from the `accessToken` callback. A join the server refuses for good (for
+  example `Unauthorized` from an RLS policy) or a refused upgrade (HTTP 401, 403 or 404) throws at
+  once instead of after about a minute. To bound the wait, cancel the task. Search for
+  `maxRetryAttempts` and `maxRetryAttemptsReached`.
+- **`subscribe()` without a connection throws when `connectOnSubscribe` is off.** It throws
+  `RealtimeError` with `kind == .notConnected` at once instead of retrying. Call `connect()` first.
+  While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
+- **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
+  `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.
@@ -82,6 +94,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
 | `RealtimeClientOptions(timeoutInterval:)` | `timeout:` |
 | `heartbeatInterval:`, `reconnectDelay:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
+| `RealtimeClientOptions(maxRetryAttempts:)`, `defaultMaxRetryAttempts` | removed; `subscribe()` has no attempt limit |
 | `defaultTimeoutInterval` | `defaultTimeout` |
 | `defaultHeartbeatInterval`, `defaultReconnectDelay`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
@@ -230,17 +243,21 @@ Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.serve
 `response` set. A network or WebSocket failure is `.transport` with the cause in
 `underlyingError`.
 
+`subscribe()` no longer gives up after a number of attempts, so there is no
+`maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or
+`kind` is `.unauthorized` after the one rejoin with a fresh token.
+
 ```swift
 // v2
 do {
   try await channel.subscribeWithError()
 } catch {
-  if error.localizedDescription == "Maximum retry attempts reached." { scheduleRetry() }
+  if error.localizedDescription == "Maximum retry attempts reached." { showError(error) }
 }
 // v3
 do {
-  try await channel.subscribeWithError()
-} catch let error as RealtimeError where error.kind == .maxRetryAttemptsReached {
-  scheduleRetry()
+  try await channel.subscribe()
+} catch let error as RealtimeError where error.kind == .unauthorized {
+  showError(error)
 }
 ```
