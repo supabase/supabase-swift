@@ -122,10 +122,11 @@ struct RealtimeChannelSubscriptionTests {
   func requestTimeoutBoundsAJoinAttempt() async throws {
     let h = Harness(timeout: .seconds(3))
     let channel = await h.client.channel("room")
-    var statuses = await channel.statusChanges().makeAsyncIterator()
+    let statuses = await channel.statusChanges()
 
     let subscription = Task { try await channel.subscribe() }
-    _ = try #require(await h.received(ChannelEvent.join))
+    defer { subscription.cancel() }
+    _ = try #require(await withTimeout(.seconds(5)) { await h.received(ChannelEvent.join) })
     await h.clock.advance(by: .milliseconds(2900))
     guard case .subscribing = await channel.status else {
       Issue.record("The join timed out before requestTimeout")
@@ -133,13 +134,13 @@ struct RealtimeChannelSubscriptionTests {
     }
     await h.clock.advance(by: .milliseconds(100))
 
-    while let status = await statuses.next() {
-      if case .resubscribing(_, _, let lastError) = status {
-        #expect(lastError.kind == .timeout)
-        break
+    let lastError = try await withTimeout(.seconds(5)) { () -> RealtimeError? in
+      for await status in statuses {
+        if case .resubscribing(_, _, let lastError) = status { return lastError }
       }
+      return nil
     }
-    subscription.cancel()
+    #expect(lastError?.kind == .timeout)
   }
 
   /// Issue #1145 (defect 2): a transient socket connect failure must enter the retry ladder
