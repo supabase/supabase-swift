@@ -93,9 +93,9 @@ final class RealtimeTests: Sendable {
     try await withMainSerialExecutor {
       let channel = await sut.channel("public:messages")
 
-      let inserts = await channel.postgresChanges(InsertAction.self, table: "messages")
-      let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
-      let deletes = await channel.postgresChanges(DeleteAction.self, table: "messages")
+      let inserts = await channel.postgresChanges(event: .insert, table: "messages")
+      let updates = await channel.postgresChanges(event: .update, table: "messages")
+      let deletes = await channel.postgresChanges(event: .delete, table: "messages")
 
       let socketStatuses = collect(await sut.statusChanges())
       defer { socketStatuses.task.cancel() }

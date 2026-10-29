@@ -77,21 +77,27 @@ struct TodoRealtimeView: View {
     let channel = await supabase.channel("live-todos")
 
     let insertions = await channel.postgresChanges(
-      InsertAction.self,
+      of: Todo.self,
+      event: .insert,
       schema: "public",
-      table: "todos"
+      table: "todos",
+      decoder: PostgrestClient.Configuration.jsonDecoder
     )
 
     let updates = await channel.postgresChanges(
-      UpdateAction.self,
+      of: Todo.self,
+      event: .update,
       schema: "public",
-      table: "todos"
+      table: "todos",
+      decoder: PostgrestClient.Configuration.jsonDecoder
     )
 
     let deletes = await channel.postgresChanges(
-      DeleteAction.self,
+      of: Todo.self,
+      event: .delete,
       schema: "public",
-      table: "todos"
+      table: "todos",
+      decoder: PostgrestClient.Configuration.jsonDecoder
     )
 
     do {
@@ -104,15 +110,13 @@ struct TodoRealtimeView: View {
 
     async let insertionObservation: () = { @MainActor in
       for await insertion in insertions {
-        try todos.insert(
-          insertion.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder), at: 0)
+        try todos.insert(insertion.row(), at: 0)
       }
     }()
 
     async let updatesObservation: () = { @MainActor in
       for await update in updates {
-        let record =
-          try update.decodeRecord(decoder: PostgrestClient.Configuration.jsonDecoder) as Todo
+        let record = try update.row()
         todos[id: record.id] = record
       }
     }()
@@ -120,7 +124,7 @@ struct TodoRealtimeView: View {
     async let deletesObservation: () = { @MainActor in
       for await delete in deletes {
         guard
-          let id = delete.oldRecord["id"].flatMap(\.stringValue).flatMap(UUID.init(uuidString:))
+          let id = delete.oldRecord?["id"]?.stringValue.flatMap(UUID.init(uuidString:))
         else { return }
         todos.remove(id: id)
       }

@@ -94,7 +94,6 @@ supporting_symbols:
   # `PostgrestMacros`, so a user opts in with an explicit import.
   - Table
   - SelectionOf
-  - Column
   - PrimaryKey
   - Default
   - Generated
@@ -1424,8 +1423,16 @@ features:
     symbols:
       - BroadcastJoinConfig.replicationReady
       - RealtimeChannel.broadcasts
-      - RealtimeChannel.broadcastData
     supporting_symbols:
+      - BroadcastMessage
+      - BroadcastMessage.event
+      - BroadcastMessage.payload
+      - BroadcastMessage.id
+      - BroadcastMessage.isReplayed
+      - BroadcastMessage.decode
+      - BroadcastPayload
+      - BroadcastPayload.json
+      - BroadcastPayload.binary
       - RealtimeChannel.events
       - RealtimeChannelEvent.replicationReady
       - RealtimeChannelEvent.replicationFailed
@@ -1434,6 +1441,33 @@ features:
     symbols:
       - RealtimeChannel.postgresChanges
     supporting_symbols:
+      - PostgresChange
+      - PostgresChange.kind
+      - PostgresChange.schema
+      - PostgresChange.table
+      - PostgresChange.commitTimestamp
+      - PostgresChange.columns
+      - PostgresChange.record
+      - PostgresChange.oldRecord
+      - PostgresChange.errors
+      - PostgresChange.Kind
+      - PostgresChange.Kind.init
+      - PostgresChange.Kind.rawValue
+      - PostgresChange.Kind.insert
+      - PostgresChange.Kind.update
+      - PostgresChange.Kind.delete
+      - PostgresColumn
+      - PostgresColumn.name
+      - PostgresColumn.type
+      - PostgresRow
+      - PostgresRow.values
+      - PostgresRow.subscript
+      - PostgresRow.decode
+      - TypedPostgresChange
+      - TypedPostgresChange.raw
+      - TypedPostgresChange.kind
+      - TypedPostgresChange.oldRecord
+      - TypedPostgresChange.row
       - RealtimeChannel.events
       - RealtimeChannelEvent.postgresChangesReady
       - RealtimeChannelEvent.postgresChangesFailed
