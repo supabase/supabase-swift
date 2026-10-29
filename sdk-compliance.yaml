@@ -1616,7 +1616,7 @@ features:
       - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "RealtimeClientOptions.logger takes a swift-log Logger, which carries its own level. RealtimeClientOptions.serverLogLevel sets the server-side log level."
+    note: "RealtimeClientOptions.logger takes an optional swift-log Logger, which carries its own level; nil uses the default logger, or the global logger in SupabaseClient. RealtimeClientOptions.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClientOptions.init
       - RealtimeClientOptions.logger

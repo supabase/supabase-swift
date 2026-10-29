@@ -46,9 +46,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A `subscribe()` that gives up leaves the channel `.failed`.** v2 moved it back to
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
-- **`SupabaseClient` sets the Realtime logger.** A `logger:` you pass in
-  `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create a `RealtimeClient`
-  yourself if Realtime needs its own logger.
+- **`SupabaseClient` uses the global logger for Realtime when you pass none.** A `logger:` you
+  pass in `SupabaseClientOptions(realtime:)` is kept. With `nil`, the default, Realtime uses
+  `GlobalOptions.logger`.
 - **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
   certificate pinning, pass a transport (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
@@ -101,7 +101,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
 | `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
-| `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger` |
+| `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger?` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
 | `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
 | `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |

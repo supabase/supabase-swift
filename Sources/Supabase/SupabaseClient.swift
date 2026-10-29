@@ -519,7 +519,10 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  /// Pushes the new token to the Realtime client only when it already exists. Building it here
+  /// would install its observers in apps that never use Realtime; a client built later pulls
+  /// the current token itself.
+  func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
       if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
         $0.changedAccessToken != session?.accessToken
@@ -536,7 +539,7 @@ public final class SupabaseClient: Sendable {
       return nil
     }
 
-    if let accessToken {
+    if let accessToken, let realtime = mutableState.realtime {
       await realtime.setAuth(accessToken)
     }
   }
@@ -573,8 +576,9 @@ public final class SupabaseClient: Sendable {
     // Through `HTTPFields`, so names compare without regard to case and the global headers win.
     realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
 
-    realtimeOptions.logger = options.global.logger
-    realtimeOptions.logger[metadataKey: "system"] = "realtime"
+    if realtimeOptions.logger == nil {
+      realtimeOptions.logger = options.global.logger
+    }
 
     if realtimeOptions.http.transport == nil {
       realtimeOptions.http = HTTPClientConfiguration(

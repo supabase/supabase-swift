@@ -143,7 +143,7 @@ struct SupabaseClientTests {
     ]
     )
     expectNoDifference(client.realtime.headers, expectedRealtimeHeader)
-    #expect(realtimeOptions.logger.label == logger.label)
+    #expect(client.realtime.logger.label == logger.label)
 
     #expect(client.auth.configuration.autoRefresh == .manual)
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
@@ -172,7 +172,7 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeLoggerIsTaggedWithSystemMetadataEvenThoughGlobalLoggerOverridesIt() {
+  func realtimeFallsBackToTheGlobalLoggerTaggedWithSystemMetadata() {
     // Uses a plain Logger (not SwiftLogNoOpLogHandler) because a no-op handler's metadata
     // subscript always reads back nil, which would make this assertion untestable.
     let logger = Logging.Logger(label: "test")
@@ -189,8 +189,8 @@ struct SupabaseClientTests {
       )
     )
 
-    let realtimeOptions = client.realtime.options
-    #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
+    #expect(client.realtime.logger.label == "test")
+    #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
   }
 
   @Test
@@ -820,6 +820,77 @@ struct SupabaseClientTests {
     let middlewares = client.realtime.options.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
+  }
+
+  @Test
+  func authEventsDoNotBuildRealtime() async {
+    let client = makeRealtimeAuthClient()
+
+    await client.handleTokenChanged(event: .initialSession, session: nil)
+    await client.handleTokenChanged(event: .signedIn, session: .stub(accessToken: "user-token"))
+    await client.handleTokenChanged(event: .signedOut, session: nil)
+
+    #expect(client.mutableState.realtime == nil)
+  }
+
+  @Test
+  func authEventsReachAnExistingRealtimeClient() async {
+    let client = makeRealtimeAuthClient()
+    let realtime = client.realtime
+
+    await client.handleTokenChanged(
+      event: .tokenRefreshed, session: .stub(accessToken: "refreshed-token"))
+    #expect(await realtime.accessToken == "refreshed-token")
+
+    await client.handleTokenChanged(event: .signedOut, session: nil)
+    #expect(await realtime.accessToken == "PUBLISHABLE_KEY")
+  }
+
+  @Test
+  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() {
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
+        global: .init(logger: Logging.Logger(label: "global")),
+        realtime: RealtimeClientOptions(logger: Logging.Logger(label: "realtime"))
+      )
+    )
+
+    #expect(client.realtime.logger.label == "realtime")
+    #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
+  }
+
+  private func makeRealtimeAuthClient() -> SupabaseClient {
+    SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      options: SupabaseClientOptions(
+        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
+        realtime: RealtimeClientOptions(handleAppLifecycle: false)
+      )
+    )
+  }
+}
+
+extension Session {
+  fileprivate static func stub(accessToken: String) -> Session {
+    Session(
+      accessToken: accessToken,
+      tokenType: "bearer",
+      expiresIn: 3600,
+      expiresAt: 4_102_444_800,
+      refreshToken: "refresh-token",
+      user: User(
+        id: UUID(),
+        appMetadata: [:],
+        userMetadata: [:],
+        audience: "authenticated",
+        createdAt: Date(),
+        updatedAt: Date()
+      )
+    )
   }
 }
 

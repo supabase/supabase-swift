@@ -59,6 +59,9 @@ actor RealtimeExecutor {}
 public actor RealtimeClient {
   nonisolated let url: URL
   nonisolated let options: RealtimeClientOptions
+  /// ``RealtimeClientOptions/logger``, or the default logger when it is `nil`, tagged with the
+  /// `system` metadata key set to `realtime`.
+  nonisolated let logger: Logger
   /// `options.headers` with `X-Client-Info` added when the app did not set it.
   nonisolated let headers: HTTPFields
   nonisolated let transport: any WebSocketTransport
@@ -225,7 +228,7 @@ public actor RealtimeClient {
   ///   - options: Configuration options for the client.
   public init(url: URL, options: RealtimeClientOptions) {
     let interceptors: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: options.logger)
+      LoggerInterceptor(logger: Self.logger(for: options))
     ]
 
     self.init(
@@ -235,6 +238,12 @@ public actor RealtimeClient {
       http: HTTPClient(configuration: options.http, appending: interceptors),
       clock: options.clock
     )
+  }
+
+  private static func logger(for options: RealtimeClientOptions) -> Logger {
+    var logger = options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime")
+    logger[metadataKey: "system"] = "realtime"
+    return logger
   }
 
   /// Designated initializer.
@@ -258,6 +267,7 @@ public actor RealtimeClient {
 
     self.url = url
     self.options = options
+    self.logger = Self.logger(for: options)
     self.headers = headers
     self.transport = transport
     self.http = http
@@ -424,7 +434,7 @@ public actor RealtimeClient {
       topic: realtimeTopic,
       config: config,
       client: self,
-      logger: options.logger
+      logger: logger
     )
 
     channelsByTopic[realtimeTopic] = channel
@@ -448,7 +458,7 @@ public actor RealtimeClient {
     await channel.finishStreams()
 
     if channelsByTopic.isEmpty {
-      options.logger.debug("No more subscribed channel in socket")
+      logger.debug("No more subscribed channel in socket")
       if options.disconnectOnEmptyChannelsAfter <= .zero {
         await disconnect()
       } else {
@@ -575,7 +585,7 @@ public actor RealtimeClient {
 
     let generation = tokens.beginRefresh()
     let timeout = options.requestTimeout
-    let logger = options.logger
+    let logger = self.logger
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = self.clock
     // A task of its own, so a cancelled caller does not cancel the call the others wait for.
@@ -692,7 +702,7 @@ public actor RealtimeClient {
       default:
         continue
       }
-      options.logger.debug("Updating auth token for channel \(channel.topic)")
+      logger.debug("Updating auth token for channel \(channel.topic)")
       await channel.push(ChannelEvent.accessToken, payload: ["access_token": .string(token)])
     }
   }
@@ -755,7 +765,7 @@ public actor RealtimeClient {
     do {
       await send(.text(try serializer.encodeText(message)))
     } catch {
-      options.logger.error(
+      logger.error(
         """
         Failed to send message:
         \(message)
@@ -810,7 +820,7 @@ public actor RealtimeClient {
   }
 
   private func logBroadcastEncodingFailure(topic: String, event: String, error: any Error) {
-    options.logger.error(
+    logger.error(
       """
       Failed to send binary broadcast:
       topic=\(topic), event=\(event)
@@ -845,7 +855,7 @@ public actor RealtimeClient {
     do {
       try await conn.send(frame)
     } catch {
-      options.logger.error("Failed to send frame: \(error)")
+      logger.error("Failed to send frame: \(error)")
     }
   }
 

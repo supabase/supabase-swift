@@ -121,9 +121,10 @@ public struct RealtimeClientOptions: Sendable {
 
   /// The logger for the client's own diagnostics.
   ///
-  /// The initializer tags it with the `system` metadata key set to `realtime`.
-  /// `SupabaseClient` replaces it with its global logger.
-  public var logger: Logging.Logger
+  /// `nil`, the default, uses a logger labeled `"io.supabase.realtime"`. `SupabaseClient` uses
+  /// its global logger instead. The client tags the logger it uses with the `system` metadata
+  /// key set to `realtime`.
+  public var logger: Logging.Logger?
 
   /// The WebSocket stack the client connects with.
   ///
@@ -179,7 +180,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - serverLogLevel: How much the Realtime server logs for this connection. Defaults to `nil`.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
-  ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
+  ///   - logger: The logger used for Realtime client diagnostics. Defaults to `nil`, which uses a logger labeled `"io.supabase.realtime"`.
   ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
@@ -194,7 +195,7 @@ public struct RealtimeClientOptions: Sendable {
     serverLogLevel: RealtimeServerLogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
+    logger: Logging.Logger? = nil,
     webSocketTransport: (any WebSocketTransport)? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
     clock: any Clock<Duration> = ContinuousClock()
@@ -208,8 +209,6 @@ public struct RealtimeClientOptions: Sendable {
     self.serverLogLevel = serverLogLevel
     self.http = http
     self.accessToken = accessToken
-    var logger = logger
-    logger[metadataKey: "system"] = "realtime"
     self.logger = logger
     self.webSocketTransport = webSocketTransport
     self.clock = clock
