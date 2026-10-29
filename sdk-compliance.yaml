@@ -1370,12 +1370,16 @@ features:
       - RealtimeClient.statusChanges
       - RealtimeClientStatus.isConnected
       - RealtimeClientStatus.error
+      - RealtimeClientStatus.reconnecting
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
       - RealtimeClient.heartbeats
     supporting_symbols:
       - HeartbeatEvent
+      - HeartbeatEvent.sent
+      - HeartbeatEvent.acknowledged
+      - HeartbeatEvent.timedOut
   realtime.client.set_auth_token:
     status: implemented
     symbols:
@@ -1394,6 +1398,10 @@ features:
       - RealtimeChannel.statusChanges
       - RealtimeChannelStatus.isSubscribed
       - RealtimeChannelStatus.error
+      - RealtimeChannelStatus.resubscribing
+      - RealtimeChannelStatus.failed
+      - RealtimeChannelEvent
+      - RealtimeChannelEvent.resubscribed
   realtime.channel.unsubscribe:
     status: implemented
     symbols:
@@ -1419,12 +1427,16 @@ features:
       - RealtimeChannel.broadcastData
     supporting_symbols:
       - RealtimeChannel.events
+      - RealtimeChannelEvent.replicationReady
+      - RealtimeChannelEvent.replicationFailed
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
       - RealtimeChannel.postgresChanges
     supporting_symbols:
       - RealtimeChannel.events
+      - RealtimeChannelEvent.postgresChangesReady
+      - RealtimeChannelEvent.postgresChangesFailed
   realtime.subscriptions.subscribe_presence:
     status: implemented
     symbols:
