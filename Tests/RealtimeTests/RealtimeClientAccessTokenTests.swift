@@ -282,7 +282,7 @@ struct RealtimeClientAccessTokenTests {
 
     async let token = client.currentAccessToken()
     await gate.waitForCall()
-    await clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    await clock.advance(by: RealtimeClientOptions.defaultRequestTimeout)
     #expect(await token == nil)
 
     await client.setAuth()

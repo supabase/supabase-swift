@@ -308,9 +308,21 @@ supporting_symbols:
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
   - RealtimeError.ServerCode.unknownErrorOnChannel
-  # The default server-reply timeout governs subscribe, unsubscribe,
+  # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.defaultTimeout
+  - RealtimeClientOptions.requestTimeout
+  # Connection plumbing every realtime.* capability uses: the upgrade headers and the
+  # HTTP client REST broadcasts go through.
+  - RealtimeClientOptions.headers
+  - RealtimeClientOptions.http
+  - RealtimeClientOptions.defaultRequestTimeout
+  - RealtimeClientOptions.connectOnSubscribe
+  - RealtimeClientOptions.defaultConnectOnSubscribe
+  # The options type itself and app-lifecycle handling (an Apple-platform behavior with no
+  # supabase-js counterpart in the capability matrix).
+  - RealtimeClientOptions
+  - RealtimeClientOptions.handleAppLifecycle
+  - RealtimeClientOptions.defaultHandleAppLifecycle
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
   # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
   - Trait.requiresMainSerialExecutor
@@ -1353,6 +1365,7 @@ features:
 
   realtime.client.connect:
     status: implemented
+    note: "Reconnects wait a full-jitter delay (1 s base, 30 s cap) with unlimited attempts. The curve is internal and not configurable."
     symbols:
       - RealtimeClient.connect
   realtime.client.disconnect:
@@ -1420,7 +1433,6 @@ features:
     symbols:
       - RealtimeChannel.broadcast
     supporting_symbols:
-      - RealtimeClient.push
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
@@ -1556,37 +1568,66 @@ features:
     symbols:
       - PresenceJoinConfig.key
 
-  # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
-  # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
-  # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocketTransport.
-  realtime.configuration.custom_websocket_transport: not_applicable
-  realtime.configuration.reconnect_backoff:
-    status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s) is hardcoded."
+  realtime.configuration.custom_websocket_transport:
+    status: implemented
+    note: "RealtimeClientOptions.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
+    symbols:
+      - RealtimeClientOptions.webSocketTransport
+      - URLSessionWebSocketTransport
+      - URLSessionWebSocketTransport.connect
+      - URLSessionWebSocketTransport.init
+      - WebSocketCloseCode
+      - WebSocketCloseCode.abnormalClosure
+      - WebSocketCloseCode.goingAway
+      - WebSocketCloseCode.init
+      - WebSocketCloseCode.normalClosure
+      - WebSocketCloseCode.protocolError
+      - WebSocketCloseCode.rawValue
+      - WebSocketConnection
+      - WebSocketConnection.close
+      - WebSocketConnection.events
+      - WebSocketConnection.send
+      - WebSocketEvent
+      - WebSocketEvent.closed
+      - WebSocketEvent.frame
+      - WebSocketFrame
+      - WebSocketFrame.binary
+      - WebSocketFrame.text
+      - WebSocketTransport
+      - WebSocketTransport.connect
+      - RealtimeError.upgradeFailed
   realtime.configuration.heartbeat_interval:
     status: implemented
-    note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
+    note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.heartbeatInterval
+      - RealtimeClientOptions.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
-    note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.accessToken
   realtime.configuration.deferred_disconnect:
     status: implemented
-    note: "Set via the disconnectOnEmptyChannelsAfter parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
+      - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "Set via the logger/logLevel parameters of RealtimeClientOptions.init; the backing stored properties are internal/package, not public."
+    note: "RealtimeClientOptions.logger takes a swift-log Logger, which carries its own level. RealtimeClientOptions.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.logger
+      - RealtimeClientOptions.serverLogLevel
     supporting_symbols:
-      - LogLevel.init
-      - LogLevel.rawValue
+      - RealtimeServerLogLevel
+      - RealtimeServerLogLevel.init
+      - RealtimeServerLogLevel.rawValue
+      - RealtimeServerLogLevel.info
+      - RealtimeServerLogLevel.warning
+      - RealtimeServerLogLevel.error
   realtime.configuration.binary_protocol:
     status: implemented
     no_public_symbols: true

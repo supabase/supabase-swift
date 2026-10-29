@@ -14,7 +14,7 @@ import Logging
 
 /// Configuration for a ``RealtimeChannel``.
 ///
-/// Pass a builder closure to ``RealtimeClient/channel(_:options:)`` to customize
+/// Pass a builder closure to ``RealtimeClient/channel(_:configure:)`` to customize
 /// broadcast, presence, and privacy settings before subscribing.
 ///
 /// ## Topics
@@ -39,7 +39,7 @@ public struct RealtimeChannelConfig: Sendable {
 
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
-/// Obtain an instance from ``RealtimeClient/channel(_:options:)``, open the streams you want,
+/// Obtain an instance from ``RealtimeClient/channel(_:configure:)``, open the streams you want,
 /// then call ``subscribe()``. Postgres-change and presence streams shape the join request, so
 /// open them **before** subscribing; broadcast and system streams can be opened at any time.
 ///
@@ -98,7 +98,7 @@ public actor RealtimeChannel {
   /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
   nonisolated let subTopic: String
 
-  /// The channel's configuration, as passed to ``RealtimeClient/channel(_:options:)``.
+  /// The channel's configuration, as passed to ``RealtimeClient/channel(_:configure:)``.
   public nonisolated let config: RealtimeChannelConfig
 
   nonisolated let logger: Logging.Logger
@@ -257,7 +257,7 @@ public actor RealtimeChannel {
     self.logger = logger
     self.client = client
     self.isolation = client.isolation
-    self.timeout = client.options.timeout
+    self.timeout = client.options.requestTimeout
     self.clock = client.clock
     self.connectOnSubscribe = client.options.connectOnSubscribe
   }

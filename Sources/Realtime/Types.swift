@@ -5,8 +5,8 @@
 //  Created by Guilherme Souza on 13/05/24.
 //
 
-public import Foundation
-package import HTTPTypes
+import Foundation
+import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -16,38 +16,76 @@ public import Logging
 
 /// Options for initializing ``RealtimeClient``.
 ///
-/// Use this struct to customize the behavior of the Realtime client, including connection
-/// timing, authentication, and app lifecycle handling.
+/// Every option has a default and can be read and changed after creation.
 ///
 /// ```swift
-/// let options = RealtimeClientOptions(
-///   heartbeatInterval: .seconds(30),
-///   handleAppLifecycle: true
-/// )
+/// var options = RealtimeClientOptions(accessToken: { try await currentToken() })
+/// options.heartbeatInterval = .seconds(15)
+/// options.serverLogLevel = .warning
 /// let client = RealtimeClient(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics
-/// ### Lifecycle
+/// ### Connection
+/// - ``headers``
+/// - ``accessToken``
+/// - ``webSocketTransport``
+/// - ``http``
+/// ### Timing
+/// - ``heartbeatInterval``
+/// - ``requestTimeout``
+/// - ``disconnectOnEmptyChannelsAfter``
+/// ### Behavior
+/// - ``connectOnSubscribe``
 /// - ``handleAppLifecycle``
+/// ### Logging
+/// - ``logger``
+/// - ``serverLogLevel``
+/// ### Testing
+/// - ``clock``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
-/// - ``defaultReconnectDelay``
-/// - ``defaultTimeout``
-/// - ``defaultDisconnectOnSessionLoss``
+/// - ``defaultRequestTimeout``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
-  package var headers: HTTPFields
-  var heartbeatInterval: Duration
-  var reconnectDelay: Duration
-  var timeout: Duration
-  var disconnectOnSessionLoss: Bool
-  var connectOnSubscribe: Bool
-  var disconnectOnEmptyChannelsAfter: Duration
+  /// Headers sent with the WebSocket upgrade request.
+  ///
+  /// Header names compare without regard to case. `SupabaseClient` adds its own headers, such
+  /// as `apikey`, and those win over a header set here. The client adds
+  /// `X-Client-Info: realtime-swift/<version>` unless you set that header yourself.
+  public var headers: [String: String]
+
+  /// How often the client sends a heartbeat to keep the connection alive.
+  ///
+  /// When a heartbeat has no reply by the next one, the client treats the socket as dead,
+  /// closes it, and reconnects. So a dead socket is found within two intervals. Lower this
+  /// value to find one sooner, at the cost of more traffic.
+  public var heartbeatInterval: Duration
+
+  /// How long the client waits for the server to answer a request.
+  ///
+  /// This bounds:
+  /// - each attempt to join a channel; a timed-out join is retried,
+  /// - a push that expects a reply, such as a broadcast with acknowledgement, `track` or
+  ///   `untrack`,
+  /// - the leave in ``RealtimeChannel/unsubscribe()``,
+  /// - a `RealtimeChannel.httpSend` call without its own `timeout`,
+  /// - each call to the ``accessToken`` callback.
+  public var requestTimeout: Duration
+
+  /// Whether ``RealtimeChannel/subscribe()`` calls ``RealtimeClient/connect()`` when the client
+  /// is not connected.
+  public var connectOnSubscribe: Bool
+
+  /// How long the client keeps the socket open after the last channel is removed.
+  ///
+  /// A channel created within this time reuses the socket and cancels the disconnect. `.zero`
+  /// disconnects at once.
+  public var disconnectOnEmptyChannelsAfter: Duration
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
@@ -64,11 +102,36 @@ public struct RealtimeClientOptions: Sendable {
   /// (including watchOS and Linux), where lifecycle observation is not supported.
   public var handleAppLifecycle: Bool
 
-  /// Sets the log level for Realtime
-  var logLevel: LogLevel?
-  package var http: HTTPClientConfiguration
-  package var accessToken: (@Sendable () async throws -> String?)?
-  package var logger: Logging.Logger
+  /// How much the Realtime server logs for this connection. `nil`, the default, keeps the
+  /// server's own level.
+  public var serverLogLevel: RealtimeServerLogLevel?
+
+  /// The transport and middleware chain that `RealtimeChannel.httpSend` calls go through.
+  ///
+  /// The WebSocket does not use it; see ``webSocketTransport``.
+  public var http: HTTPClientConfiguration
+
+  /// Returns the access token channels join with.
+  ///
+  /// The client calls it before a join, when a heartbeat goes out, and one minute before the
+  /// token's `exp`, at most once every 10 seconds. A call that throws, returns `nil`, or does not
+  /// return within ``requestTimeout`` keeps the current token. `SupabaseClient` sets it to the
+  /// signed-in user's token.
+  public var accessToken: (@Sendable () async throws -> String?)?
+
+  /// The logger for the client's own diagnostics.
+  ///
+  /// The initializer tags it with the `system` metadata key set to `realtime`.
+  /// `SupabaseClient` replaces it with its global logger.
+  public var logger: Logging.Logger
+
+  /// The WebSocket stack the client connects with.
+  ///
+  /// `nil`, the default, uses ``URLSessionWebSocketTransport``. Set a configured
+  /// `URLSessionWebSocketTransport` to pin certificates, or your own ``WebSocketTransport``
+  /// to use another stack. A custom transport must follow the error contract that
+  /// ``WebSocketTransport`` describes.
+  public var webSocketTransport: (any WebSocketTransport)?
 
   /// The clock the heartbeat timer and reconnect backoff sleep on.
   ///
@@ -78,29 +141,11 @@ public struct RealtimeClientOptions: Sendable {
   /// yourself, as this package does not export it.
   public var clock: any Clock<Duration>
 
-  /// A template `URLSession` used to configure the Realtime WebSocket connection.
-  ///
-  /// Realtime never uses this session object directly — it always creates its own dedicated
-  /// internal session, copying this session's `configuration` and forwarding its `delegate`'s
-  /// auth-challenge callback (if any). Pass the same preconfigured `URLSession` used
-  /// elsewhere in your app (e.g. one with a `URLSessionDelegate` implementing certificate
-  /// pinning) to apply the same trust evaluation to Realtime's WebSocket connection.
-  /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
-  package var session: URLSession?
-
   /// Default interval between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
-  /// Default base delay for reconnecting after a connection drop. The first attempt waits a
-  /// random duration between zero and this; each later attempt doubles the upper bound (capped
-  /// at 30s) until the connection is reestablished.
-  public static let defaultReconnectDelay: Duration = .seconds(1)
-
-  /// Default maximum time to wait for a server reply before treating a request as timed out.
-  public static let defaultTimeout: Duration = .seconds(10)
-
-  /// Default for whether to disconnect the channel when the session is lost.
-  public static let defaultDisconnectOnSessionLoss = true
+  /// Default for ``requestTimeout``: 10 seconds.
+  public static let defaultRequestTimeout: Duration = .seconds(10)
 
   /// Default for whether to automatically connect the socket when subscribing to a channel.
   public static let defaultConnectOnSubscribe: Bool = true
@@ -128,16 +173,14 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
-  ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
-  ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
+  ///   - requestTimeout: How long to wait for the server to answer a request. Defaults to ``defaultRequestTimeout``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-  ///   - logLevel: Optional log level for Realtime log output.
+  ///   - serverLogLevel: How much the Realtime server logs for this connection. Defaults to `nil`.
   ///   - http: The transport and middleware chain REST broadcast calls go through.
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
-  ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
+  ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
   ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
@@ -145,39 +188,31 @@ public struct RealtimeClientOptions: Sendable {
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
-    reconnectDelay: Duration = Self.defaultReconnectDelay,
-    timeout: Duration = Self.defaultTimeout,
-    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
+    requestTimeout: Duration = Self.defaultRequestTimeout,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
-    logLevel: LogLevel? = nil,
+    serverLogLevel: RealtimeServerLogLevel? = nil,
     http: HTTPClientConfiguration = .init(),
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
-    session: URLSession? = nil,
+    webSocketTransport: (any WebSocketTransport)? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
-    self.headers = HTTPFields(headers)
+    self.headers = headers
     self.heartbeatInterval = heartbeatInterval
-    self.reconnectDelay = reconnectDelay
-    self.timeout = timeout
-    self.disconnectOnSessionLoss = disconnectOnSessionLoss
+    self.requestTimeout = requestTimeout
     self.connectOnSubscribe = connectOnSubscribe
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.handleAppLifecycle = handleAppLifecycle
-    self.logLevel = logLevel
+    self.serverLogLevel = serverLogLevel
     self.http = http
     self.accessToken = accessToken
     var logger = logger
     logger[metadataKey: "system"] = "realtime"
     self.logger = logger
-    self.session = session
+    self.webSocketTransport = webSocketTransport
     self.clock = clock
-  }
-
-  var apikey: String? {
-    headers[.apiKey]
   }
 }
 
@@ -378,35 +413,45 @@ extension HTTPField.Name {
   static let apiKey = Self("apiKey")!
 }
 
-/// Verbosity of log output emitted by the Realtime client.
+/// How much the Realtime server logs for one connection.
 ///
-/// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:logLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
-/// to control how much detail the Realtime server logs.
+/// Set it on ``RealtimeClientOptions/serverLogLevel``. The client sends it as the `log_level`
+/// query item of the WebSocket URL. It does not change what the client's own `logger` prints.
+///
+/// The type is open: a level this SDK has no member for still works.
+///
+/// ```swift
+/// var options = RealtimeClientOptions()
+/// options.serverLogLevel = .warning
+/// ```
 ///
 /// ## Topics
 /// ### Levels
 /// - ``info``
-/// - ``warn``
+/// - ``warning``
 /// - ``error``
-public struct LogLevel: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct RealtimeServerLogLevel: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The value sent as the `log_level` query item.
   public let rawValue: String
 
-  /// Creates a ``LogLevel`` from a raw string value.
+  /// Creates a level from its raw value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``LogLevel`` from a string literal.
+  /// Creates a level from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
-  /// Informational messages.
-  public static let info: LogLevel = "info"
+  /// Informational messages and above.
+  public static let info: RealtimeServerLogLevel = "info"
 
-  /// Warning messages.
-  public static let warn: LogLevel = "warn"
+  /// Warnings and errors. Sent as `warn`.
+  public static let warning: RealtimeServerLogLevel = "warn"
 
-  /// Error messages only.
-  public static let error: LogLevel = "error"
+  /// Errors only.
+  public static let error: RealtimeServerLogLevel = "error"
 }

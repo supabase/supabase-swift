@@ -36,8 +36,9 @@ final class RealtimeTests: Sendable {
   let testClock: SignalingTestClock
 
   let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
-  let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
-  let timeout = RealtimeClientOptions.defaultTimeout
+  /// The upper bound of the first reconnect wait under the default full-jitter backoff.
+  let reconnectDelay: Duration = .seconds(1)
+  let timeout = RealtimeClientOptions.defaultRequestTimeout
 
   init() {
     let (client, server) = FakeWebSocket.fakes()
@@ -67,7 +68,7 @@ final class RealtimeTests: Sendable {
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
-          logLevel: .warn,
+          serverLogLevel: .warning,
           accessToken: {
             "custom.access.token"
           }

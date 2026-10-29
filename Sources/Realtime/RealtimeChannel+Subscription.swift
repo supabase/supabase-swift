@@ -428,7 +428,7 @@ extension RealtimeChannel {
     let payload = RealtimeJoinPayload(
       config: joinConfig,
       accessToken: accessToken,
-      version: client.options.headers[.xClientInfo]
+      version: client.headers[.xClientInfo]
     )
 
     guard let encodedPayload = try? JSONObject(payload) else {

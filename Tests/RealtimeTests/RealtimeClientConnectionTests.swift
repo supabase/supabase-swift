@@ -9,16 +9,6 @@ import Testing
 
 @Suite
 struct RealtimeClientConnectionTests {
-  @Test
-  func reconnectBackoffClampsAnUnusableBaseDelay() {
-    // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
-    for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
-      let delay = RealtimeClient.reconnectBackoff(baseDelay: base)
-        .delay(forAttempt: 1, random: { $0.upperBound })
-      #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
-    }
-  }
-
   // MARK: - Connect
 
   @Test
@@ -376,6 +366,22 @@ struct RealtimeClientConnectionTests {
   }
 
   @Test
+  func reconnectBackoffSetsTheRetryDelay() async throws {
+    let h = Harness(reconnectBackoff: .steps([.seconds(7)]))
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    guard case .reconnecting(1, let retryIn, _) = await statuses.next() else {
+      Issue.record("Expected .reconnecting(attempt: 1)")
+      return
+    }
+    #expect(retryIn == .seconds(7))
+  }
+
+  @Test
   func reconnectWaitIsDrawnFromTheJitterRange() async throws {
     // Full jitter: the first wait is anywhere in `0...reconnectDelay`, here its midpoint.
     let h = Harness(reconnectDelay: .seconds(2), jitter: { _ in 0.5 })
@@ -418,6 +424,39 @@ struct RealtimeClientConnectionTests {
     #expect(await h.client.connection.error?.isRetryable == false)
     await h.clock.advance(by: .seconds(60))
     #expect(h.connects.value.count == 2)
+  }
+
+  @Test(arguments: [401, 403, 404])
+  func connectThrowsAndStopsWhenTheTransportReportsAFatalUpgrade(status: Int) async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { _ in throw RealtimeError.upgradeFailed(status: status) }
+    )
+
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    let stopped = await h.client.status
+    #expect(stopped == .disconnected)
+    #expect(stopped.error?.isRetryable == false)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 1)
+  }
+
+  @Test
+  func connectThrowsARetryableErrorForATransientUpgradeFailure() async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 1 { throw RealtimeError.upgradeFailed(status: 503) }
+      }
+    )
+
+    // The caller's own `connect()` reports the failure and leaves the retry to the caller.
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    #expect(await h.client.status.error?.isRetryable == true)
+    try await h.client.connect()
+    #expect(await h.client.status == .connected)
   }
 
   @Test
@@ -471,6 +510,7 @@ struct RealtimeClientConnectionTests {
       headers: [String: String] = [:],
       heartbeatInterval: Duration = .seconds(3600),
       reconnectDelay: Duration = .seconds(1),
+      reconnectBackoff: BackoffPolicy? = nil,
       jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound },
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
@@ -487,7 +527,6 @@ struct RealtimeClientConnectionTests {
         options: RealtimeClientOptions(
           headers: headers,
           heartbeatInterval: heartbeatInterval,
-          reconnectDelay: reconnectDelay,
           handleAppLifecycle: false
         ),
         wsTransport: { url, headers in
@@ -503,6 +542,8 @@ struct RealtimeClientConnectionTests {
         },
         http: HTTPClient(transport: RecordingTransport()),
         clock: clock,
+        reconnectBackoff: reconnectBackoff
+          ?? .fullJitter(base: reconnectDelay, cap: .seconds(30)),
         jitter: jitter
       )
     }

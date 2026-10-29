@@ -434,21 +434,21 @@ struct RealtimeChannelOnMessageTests {
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.close))
 
-    #expect(await client.channels[topic] == nil)
+    #expect(await client.channelsByTopic[topic] == nil)
   }
 
   @Test
   func closeForStaleJoinRefDoesNotRemoveChannel() async {
     await sut.onMessage(message(event: ChannelEvent.close, joinRef: "stale-ref"))
 
-    #expect(await client.channels[topic] != nil)
+    #expect(await client.channelsByTopic[topic] != nil)
   }
 
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.error))
 
-    #expect(await client.channels[topic] != nil)
+    #expect(await client.channelsByTopic[topic] != nil)
     #expect(await sut.status == .unsubscribed)
   }
 

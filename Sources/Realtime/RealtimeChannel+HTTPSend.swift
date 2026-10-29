@@ -22,7 +22,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
@@ -44,7 +44,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
@@ -71,7 +71,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
@@ -96,7 +96,7 @@ extension RealtimeChannel {
     }
 
     var headers: HTTPFields = [.contentType: contentType]
-    if let apiKey = client.options.apikey {
+    if let apiKey = client.headers[.apiKey] {
       headers[.apiKey] = apiKey
     }
     headers[.authorization] = "Bearer \(accessToken)"
@@ -111,7 +111,7 @@ extension RealtimeChannel {
     let data: Data
     do {
       (response, data) = try await withTimeout(
-        timeout ?? client.options.timeout, clock: client.clock
+        timeout ?? client.options.requestTimeout, clock: client.clock
       ) {
         try await client.http.send(request, body: body)
       }

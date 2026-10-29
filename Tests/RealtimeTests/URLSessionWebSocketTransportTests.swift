@@ -13,6 +13,10 @@ import Testing
 
 @testable import Realtime
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 #if canImport(Network)
   import Network
 #endif
@@ -20,6 +24,18 @@ import Testing
 @Suite(.serialized)
 struct URLSessionWebSocketTransportTests {
   let transport = URLSessionWebSocketTransport()
+
+  @Test
+  func laterChangesToTheConfigurationDoNotReachTheTransport() {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 5
+    let transport = URLSessionWebSocketTransport(configuration: configuration)
+
+    configuration.timeoutIntervalForRequest = 99
+
+    #expect(transport.configuration.timeoutIntervalForRequest == 5)
+    #expect(transport.configuration !== configuration)
+  }
 
   @Test
   func rejectsANonWebSocketSchemeWithANonRetryableTransportError() async {
