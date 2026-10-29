@@ -408,7 +408,7 @@ public actor RealtimeClient {
   /// - Returns: A ``RealtimeChannel`` bound to this client.
   public func channel(
     _ topic: String,
-    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannel {
     apply(.channelAdded)
 

@@ -31,18 +31,21 @@ struct RealtimeChannelConfigurationTests {
     #expect(channel.configuration.isPrivate)
   }
 
-  @Test
-  func differentConfigurationReportsIssueAndReturnsExisting() async {
-    let first = await client.channel("room")
+  // `reportIssue` reaches `withKnownIssue` only on Darwin.
+  #if canImport(Darwin)
+    @Test
+    func differentConfigurationReportsIssueAndReturnsExisting() async {
+      let first = await client.channel("room")
 
-    var second: RealtimeChannel?
-    await withKnownIssue {
-      second = await client.channel("room") { $0.isPrivate = true }
+      var second: RealtimeChannel?
+      await withKnownIssue {
+        second = await client.channel("room") { $0.isPrivate = true }
+      }
+
+      #expect(first === second)
+      #expect(second?.configuration.isPrivate == false)
     }
-
-    #expect(first === second)
-    #expect(second?.configuration.isPrivate == false)
-  }
+  #endif
 
   @Test
   func sameConfigurationReportsNoIssue() async {
