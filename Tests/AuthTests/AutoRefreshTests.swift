@@ -30,22 +30,29 @@ struct AutoRefreshTests {
   }
 
   #if !canImport(UIKit) && !os(watchOS)
-    @Test
-    func autoRefreshStartsWhileTheMainThreadIsBlocked() async throws {
-      let world = World()
-      let mainIsBlocked = LockIsolated(false)
-      let unblockMain = DispatchSemaphore(value: 0)
-      DispatchQueue.main.async {
-        mainIsBlocked.setValue(true)
-        unblockMain.wait()
+    // While another suite runs `withMainSerialExecutor`, every job goes to the main queue, which
+    // this test blocks.
+    @Suite(.mainSerialExecutorSerialized)
+    struct WhileTheMainThreadIsBlocked {
+      @Test
+      func autoRefreshStartsWhileTheMainThreadIsBlocked() async throws {
+        let world = World()
+        let mainIsBlocked = LockIsolated(false)
+        let unblockMain = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async {
+          mainIsBlocked.setValue(true)
+          _ = unblockMain.wait(timeout: .now() + 10)
+          mainIsBlocked.setValue(false)
+        }
+        defer { unblockMain.signal() }
+        try #require(await waitUntil { mainIsBlocked.value })
+
+        let client = AuthClient(configuration: world.configuration(observesAppLifecycle: true))
+        try await client.seedSession(world.issueSession())
+
+        #expect(await waitUntil(timeout: 2) { await client.dependencies.autoRefresh.isRegistered })
+        #expect(mainIsBlocked.value, "The main queue unblocked itself before auto refresh started.")
       }
-      defer { unblockMain.signal() }
-      #expect(await waitUntil { mainIsBlocked.value })
-
-      let client = AuthClient(configuration: world.configuration(observesAppLifecycle: true))
-      try await client.seedSession(world.issueSession())
-
-      #expect(await waitUntil(timeout: 2) { await client.dependencies.autoRefresh.isRegistered })
     }
   #endif
 
