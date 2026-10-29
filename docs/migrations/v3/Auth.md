@@ -48,6 +48,45 @@ Changes that still compile but behave differently. Check each one by hand.
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
   throws, `currentSession` is `nil` and `session` throws the storage error, not `.sessionMissing`;
   v2 read a failed read as signed out.
+- **A locked Keychain is not signed out.** `KeychainLocalStorage` throws an `AuthError` of kind
+  `.storageUnavailable` while the device is locked (`errSecInteractionNotAllowed`), and of kind
+  `.storageMisconfigured` when the app lacks the Keychain entitlement (`errSecMissingEntitlement`).
+  v2 threw an internal Keychain error, and a launch into the background before the first unlock
+  emitted `.initialSession` with no session. Now `.initialSession` waits until storage is read.
+  Until then, each call that needs the session reads storage again: `session`,
+  `refreshSessionIfNeeded`, a request that sends the session's access token (such as `user()` or a
+  `SupabaseClient` data request), and each new `onAuthStateChange` or `authStateChanges`
+  subscription. `session` throws `.storageUnavailable` while the device is locked. On iOS, iPadOS,
+  tvOS, visionOS, and Mac Catalyst the client also reads storage when protected data becomes
+  available. watchOS and macOS post no such notification, so there only those calls read storage
+  again. A sign-in that throws `.storageUnavailable` did not sign in, so retry it after the device
+  unlocks. The client also reports the first `.storageMisconfigured` error from its storage as a
+  runtime issue, whether a read at launch or a later write, such as the save of a sign-in, throws
+  it. On macOS with `useDataProtectionKeychain: true` and no entitlement, a read finds no item, so
+  the report comes from the first sign-in.
+- **Unit tests with the default storage report an issue.** A test bundle with no host app on an
+  iOS, tvOS, visionOS, or watchOS simulator has no Keychain entitlement. A test there that creates
+  a client with the default `KeychainLocalStorage` now records a runtime issue when it creates the
+  client, and Swift Testing and XCTest fail the test. Pass storage that keeps values in memory in
+  tests. The SDK's `InMemoryAuthStorage` conforms to `AuthStorage`, not `AuthLocalStorage`, so
+  `AuthOptions(storage:)` does not take it. Define your own:
+
+  ```swift
+  final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: Data] = [:]
+
+    func store(key: String, value: Data) throws { lock.withLock { values[key] = value } }
+    func retrieve(key: String) throws -> Data? { lock.withLock { values[key] } }
+    func remove(key: String) throws { lock.withLock { values[key] = nil } }
+  }
+
+  let client = SupabaseClient(
+    supabaseURL: url,
+    supabaseKey: key,
+    options: .init(auth: .init(storage: InMemoryLocalStorage()))
+  )
+  ```
 - **The stored session is read once.** The client reads `localStorage` when it is created and
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next

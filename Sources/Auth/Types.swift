@@ -19,6 +19,10 @@ public struct AuthChangeEvent: RawRepresentable, Hashable, Sendable, Expressible
   }
 
   /// Emitted when an initial session is loaded from local storage on startup.
+  ///
+  /// While storage cannot be read, for example after a launch into the background before the
+  /// first unlock, this event waits. It fires once storage is read, or just before the first
+  /// other event if that comes first.
   public static let initialSession: AuthChangeEvent = "INITIAL_SESSION"
 
   /// Emitted when a password-recovery email link is clicked, making the session available.

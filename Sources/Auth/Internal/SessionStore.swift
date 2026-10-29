@@ -10,7 +10,8 @@ import Foundation
 
 /// Whether a user is signed in, as the client knows it in memory.
 enum AuthStatus: Hashable, Sendable {
-  /// Storage was not read yet, or the read failed and waits for a retry.
+  /// Storage was not read yet, or it could not be read, for example because the device is locked
+  /// before the first unlock. The next load reads it again.
   case loading
   case signedOut(SignOutReason)
   case signedIn(Session)

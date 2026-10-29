@@ -49,7 +49,7 @@ extension Dependencies {
     )
     let api = APIClient(http: http)
     let storageKey = configuration.storageKey ?? defaultStorageKey
-    let localStorage = configuration.localStorage
+    let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
     let sessionStore = SessionStore(
       storage: AuthLocalStorageAdapter(localStorage: localStorage),
       key: storageKey,
@@ -79,7 +79,7 @@ extension Dependencies {
       api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, sessionStore: sessionStore),
-      codeVerifierStorage: .live(configuration: configuration),
+      codeVerifierStorage: .live(configuration: configuration, localStorage: localStorage),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
       autoRefresh: autoRefresh,
