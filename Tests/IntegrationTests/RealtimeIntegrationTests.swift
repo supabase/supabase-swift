@@ -292,6 +292,45 @@
     }
 
     @Test
+    func customOptionsConnectSubscribeAndReceive() async throws {
+      let realtime = RealtimeClient(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        options: RealtimeClientOptions(
+          headers: [
+            "apikey": DotEnv.supabasePublishableKey,
+            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+          ],
+          reconnectBackoff: .custom { _ in .seconds(1) },
+          requestTimeout: .seconds(10),
+          serverLogLevel: .warning,
+          webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral),
+          handleAppLifecycle: false
+        )
+      )
+      try await withMainSerialExecutor {
+        try await realtime.connect()
+
+        let channel = await realtime.channel("custom-options-\(UUID().uuidString)") {
+          $0.broadcast.receiveOwnBroadcasts = true
+        }
+        let received = await channel.broadcasts(event: "ping")
+        try await channel.subscribe()
+
+        try await channel.broadcast(event: "ping", message: ["value": 1] as JSONObject)
+
+        let messages = try await withTimeout(.seconds(5)) {
+          await received.prefix(1).collect()
+        }
+        #expect(messages.first?["payload"]?.objectValue?["value"]?.intValue == 1)
+        #expect(await realtime.channels.count == 1)
+
+        await realtime.removeAllChannels()
+        #expect(await realtime.channels.isEmpty)
+        #expect(await realtime.status == .disconnected)
+      }
+    }
+
+    @Test
     func aNewTokenIsSentToSubscribedChannelsAndTheServerKeepsThem() async throws {
       let client = client
       try await withMainSerialExecutor {
