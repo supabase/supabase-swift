@@ -316,6 +316,36 @@ struct RealtimeLifecycleTests {
   }
 
   @Test
+  func releasingTheClientAndItsChannelsClosesTheSocket() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+      weak var subscribed: RealtimeChannel?
+      weak var idle: RealtimeChannel?
+    }
+    let box = WeakBox()
+
+    func scope() async throws {
+      let sut = makeClient()
+      box.client = sut
+      try await sut.connect()
+      let subscribed = await sut.channel("subscribed")
+      try await subscribed.subscribe()
+      box.subscribed = subscribed
+      box.idle = await sut.channel("idle")
+    }
+    try await scope()
+
+    let server = try #require(servers.value.last)
+    await waitUntil(timeout: 5) {
+      box.client == nil && box.subscribed == nil && box.idle == nil && server.isClosed
+    }
+
+    #expect(box.client == nil, "RealtimeClient leaked while it still had channels.")
+    #expect(box.subscribed == nil && box.idle == nil, "A channel outlived its client.")
+    #expect(server.isClosed, "WebSocket was left open after the client was released.")
+  }
+
+  @Test
   func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
     let sut = makeClient(handleAppLifecycle: false)
     #expect(sut.lifecycleManager == nil)

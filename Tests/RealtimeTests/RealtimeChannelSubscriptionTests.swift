@@ -118,6 +118,31 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.joinRef == secondJoin.ref)
   }
 
+  @Test
+  func requestTimeoutBoundsAJoinAttempt() async throws {
+    let h = Harness(timeout: .seconds(3))
+    let channel = await h.client.channel("room")
+    let statuses = await channel.statusChanges()
+
+    let subscription = Task { try await channel.subscribe() }
+    defer { subscription.cancel() }
+    _ = try #require(await withTimeout(.seconds(5)) { await h.received(ChannelEvent.join) })
+    await h.clock.advance(by: .milliseconds(2900))
+    guard case .subscribing = await channel.status else {
+      Issue.record("The join timed out before requestTimeout")
+      return
+    }
+    await h.clock.advance(by: .milliseconds(100))
+
+    let lastError = try await withTimeout(.seconds(5)) { () -> RealtimeError? in
+      for await status in statuses {
+        if case .resubscribing(_, _, let lastError) = status { return lastError }
+      }
+      return nil
+    }
+    #expect(lastError?.kind == .timeout)
+  }
+
   /// Issue #1145 (defect 2): a transient socket connect failure must enter the retry ladder
   /// like a timeout instead of aborting the subscribe.
   @Test
@@ -820,7 +845,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
-    await h.clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    await h.clock.advance(by: RealtimeClientOptions.defaultRequestTimeout)
     try h.confirm(join)
     #expect(await waitUntil { await channel.status == .subscribed })
     await h.clock.advance(by: .seconds(1))
@@ -1509,7 +1534,7 @@ struct RealtimeChannelSubscriptionTests {
     /// `onConnect` runs inside each transport call and `onAccessToken` inside each access-token
     /// lookup, both numbered from 1, so a test can park one attempt at that point.
     init(
-      timeout: Duration = RealtimeClientOptions.defaultTimeout,
+      timeout: Duration = RealtimeClientOptions.defaultRequestTimeout,
       failedConnects: Int = 0,
       connectError: any Error = URLError(.notConnectedToInternet),
       connectOnSubscribe: Bool = true,
@@ -1528,7 +1553,7 @@ struct RealtimeChannelSubscriptionTests {
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           heartbeatInterval: .seconds(3600),
-          timeout: timeout,
+          requestTimeout: timeout,
           connectOnSubscribe: connectOnSubscribe,
           accessToken: {
             let call = accessTokenCalls.withValue {

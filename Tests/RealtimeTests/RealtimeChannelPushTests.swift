@@ -215,7 +215,7 @@ struct RealtimeChannelPushTests {
     let server: FakeWebSocket
     let client: RealtimeClient
 
-    init(timeout: Duration = RealtimeClientOptions.defaultTimeout) {
+    init(timeout: Duration = RealtimeClientOptions.defaultRequestTimeout) {
       let clock = SignalingTestClock()
       let (socket, server) = FakeWebSocket.fakes()
       self.clock = clock
@@ -225,7 +225,7 @@ struct RealtimeChannelPushTests {
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           heartbeatInterval: .seconds(3600),
-          timeout: timeout,
+          requestTimeout: timeout,
           handleAppLifecycle: false
         ),
         wsTransport: { _, _ in socket },

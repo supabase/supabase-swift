@@ -183,8 +183,9 @@ struct RealtimeChannelPresenceTests {
     host.server?.close(code: 1006, reason: "network down")
     await host.waitUntil { host.statuses.last == .reconnecting }
     // The first reconnect waits at most the base delay. Going further would also time out the
-    // rejoin, so the join confirmed below would no longer be the current one.
-    await host.clock.advance(by: RealtimeClientOptions.defaultReconnectDelay)
+    // rejoin, so the join confirmed below would no longer be the current one. The first wait of
+    // the default backoff is at most 1 s.
+    await host.clock.advance(by: .seconds(1))
 
     let rejoin = try await host.receive { $0.event == ChannelEvent.join && $0.ref != join.ref }
     host.confirmJoin(rejoin)

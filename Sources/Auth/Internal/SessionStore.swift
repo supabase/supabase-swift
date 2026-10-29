@@ -361,8 +361,11 @@ actor SessionStore {
   }
 
   func stopAutoRefresh(for owner: UUID) {
+    let wasDriving = refresher.activeOwner == owner
     refresher.remove(owner)
-    armRefresher()
+    if wasDriving {
+      armRefresher()
+    }
   }
 
   func isAutoRefreshStarted(by owner: UUID) -> Bool {

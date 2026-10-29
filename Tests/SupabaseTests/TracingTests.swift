@@ -28,7 +28,7 @@ struct TracingTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makeMockSession()))
@@ -56,7 +56,7 @@ struct TracingTests {
         options: SupabaseClientOptions(
           auth: SupabaseClientOptions.AuthOptions(
             storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
+            autoRefresh: .manual
           ),
           global: SupabaseClientOptions.GlobalOptions(
             http: .init(transport: URLSessionTransport(session: makeMockSession()))

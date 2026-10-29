@@ -11,9 +11,13 @@ every module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
-- **Initial session can be expired.** `.initialSession` now fires at once with the stored session,
-  and an expired session refreshes in the background. Check `session.isExpired` in handlers that
-  switch on `.initialSession`.
+- **Initial session can be expired.** `.initialSession` now fires at once with the stored session.
+  With `autoRefresh: .automatic`, auto refresh then refreshes an expired session as soon as it
+  runs. On macOS, Linux, Android, and Windows, it runs when the client is created. On iOS, iPadOS,
+  tvOS, visionOS, Mac Catalyst, and watchOS, it runs only while the app is in the foreground. After
+  a launch into the background, the session stays expired until the app comes to the foreground or
+  a read of `session` refreshes it. Check `session.isExpired` in handlers that switch on
+  `.initialSession`.
 - **`KeychainLocalStorage` returns `nil` for a missing key.** `retrieve(key:)` no longer throws
   when no item exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that
   treated an error as "no session". A custom `AuthLocalStorage` must follow the same contract.
@@ -81,6 +85,22 @@ Changes that still compile but behave differently. Check each one by hand.
   30 seconds. It refreshes once, 90 seconds before the access token expires, and retries a failed
   refresh with a capped exponential backoff. A session stored by v2 counts as received at
   `expiresAt - expiresIn`.
+- **Auto refresh starts with the client and follows the app lifecycle.** With
+  `autoRefresh: .automatic`, the default, auto refresh starts when the client is created, on
+  every platform. v2 waited for the app to become active, and never refreshed on Linux, Android,
+  Windows, or in a command-line tool. On iOS, iPadOS, tvOS, visionOS, Mac Catalyst, and watchOS,
+  it pauses while the app is in the background, also after a launch into the background, and
+  refreshes at once when the app returns to the foreground, if the session is due. v2 paused when the app resigned active, so an alert or
+  Control Center paused it too. On macOS it no longer pauses. After `stopAutoRefresh()`, a return
+  to the foreground no longer restarts it. Remove calls to `startAutoRefresh()` that only started
+  auto refresh at launch. An app extension gets no lifecycle events, so auto refresh now runs there
+  too. Set `autoRefresh: .disabled` in an extension that shares the session with its app.
+- **`startAutoRefresh()` and `stopAutoRefresh()` take effect in order.** Each returns once its
+  call took effect, so `await stopAutoRefresh()` followed by `await startAutoRefresh()` ends with
+  auto refresh running. Under `.manual` and `.disabled`, `startAutoRefresh()` does nothing.
+- **Opening a URL throws where the platform cannot.** On Linux, Android, and Windows,
+  `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
+  `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts
@@ -123,8 +143,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `GetClaimsOptions.allowExpired` | `GetClaimsOptions.allowsExpired` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
-| `AuthClient.Configuration.autoRefreshToken`, `.defaultAutoRefreshToken` | `.automaticallyRefreshesToken`, `.defaultAutomaticallyRefreshesToken` |
-| `SupabaseClientOptions.AuthOptions.autoRefreshToken` | `.automaticallyRefreshesToken` |
+| `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`) |
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `UUID` (was `String`) |
@@ -235,18 +255,40 @@ let auth = AuthClient(url: url, localStorage: storage, encoder: myEncoder, decod
 let auth = AuthClient(url: url, localStorage: storage)
 ```
 
+## `autoRefreshToken` is `autoRefresh`
+
+`autoRefreshToken: true` is `autoRefresh: .automatic`, the default. `autoRefreshToken: false` is
+`autoRefresh: .manual`: `session` still refreshes an expired session, and nothing refreshes it
+ahead of time. The new `.disabled` never refreshes on its own, and `session` throws an
+`AuthError` of kind `.refreshDisabled` when the session is expired. Use it in an app extension
+that shares the session with its app. `observesAppLifecycle: false` stops the client
+from following the app lifecycle, so you can drive it from a SwiftUI `scenePhase` change. Call
+`refreshSessionIfNeeded()` from a `BGAppRefreshTask` to renew the session in the background.
+
+```swift
+// v2
+let supabase = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(autoRefreshToken: false))
+)
+// v3
+let supabase = SupabaseClient(
+  supabaseURL: url,
+  supabaseKey: key,
+  options: .init(auth: .init(autoRefresh: .manual))
+)
+```
+
 ## `AuthClient` is not an actor
 
-Remove `isolated AuthClient` parameters and `assumeIsolated` calls. `startAutoRefresh()` and
-`stopAutoRefresh()` are synchronous now; drop the `await`.
+Remove `isolated AuthClient` parameters and `assumeIsolated` calls.
 
 ```swift
 // v2
 func inspect(_ auth: isolated AuthClient) { print(auth.currentUser?.email ?? "") }
-await supabase.auth.startAutoRefresh()
 // v3
 func inspect(_ auth: AuthClient) { print(auth.currentUser?.email ?? "") }
-supabase.auth.startAutoRefresh()
 ```
 
 ## `WinCredLocalStorage` is removed

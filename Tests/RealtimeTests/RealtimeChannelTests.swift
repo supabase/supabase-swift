@@ -633,7 +633,7 @@ struct RealtimeChannelTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -661,7 +661,7 @@ struct RealtimeChannelTests {
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(
         headers: ["apikey": "test-key"],
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },

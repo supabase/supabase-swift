@@ -16,8 +16,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(100),
-        timeout: .seconds(2),
+        requestTimeout: .seconds(2),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -25,7 +24,8 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))
     )
   }
 
@@ -100,8 +100,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -111,7 +110,8 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-rejoin")
@@ -154,8 +154,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .milliseconds(200),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -167,7 +166,8 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let heartbeatStatuses = LockIsolated<[HeartbeatEvent]>([])

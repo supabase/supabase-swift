@@ -34,22 +34,27 @@ func uniqueStorageKey() -> String {
   "sb-test-\(UUID().uuidString)-auth-token"
 }
 
+// The server expiry is a fixed date, not the wall clock when a test first touches the fixture, so
+// a long test run cannot age it. A store judges expiry from its receipt time plus `expiresIn`,
+// and ignores a server expiry this far off.
 extension Session {
+  /// Valid for 120 seconds after a store receives it. Read from storage without a receipt time,
+  /// it never expires.
   static let valid = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: 120,
-    expiresAt: Date().addingTimeInterval(120).timeIntervalSince1970,
+    expiresAt: 4_102_444_800,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
 
+  /// Inside the expiry margin as soon as a store receives it.
   static let expired = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
     expiresIn: defaultExpiryMargin.timeInterval / 3,
-    expiresAt: Date().addingTimeInterval(defaultExpiryMargin.timeInterval / 3)
-      .timeIntervalSince1970,
+    expiresAt: 1_700_000_000,
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )

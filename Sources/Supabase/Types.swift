@@ -75,12 +75,18 @@ public struct SupabaseClientOptions: Sendable {
     /// applications.
     public let flowType: AuthFlowType
 
-    /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let automaticallyRefreshesToken: Bool
+    /// When the Auth client refreshes the session on its own. See
+    /// ``AuthClient/Configuration/autoRefresh``.
+    public let autoRefresh: AuthClient.AutoRefreshPolicy
+
+    /// Whether auto refresh pauses in the background and resumes in the foreground. See
+    /// ``AuthClient/Configuration/observesAppLifecycle``.
+    public let observesAppLifecycle: Bool
 
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
     /// When set, the `auth` namespace of the Supabase client cannot be used.
+    /// When set, the client also never refreshes a stored session on its own, whatever ``autoRefresh`` says.
     /// Create another client if you wish to use Supabase Auth and third-party authentications concurrently in the same application.
     public let accessToken: (@Sendable () async throws -> String?)?
 
@@ -89,15 +95,16 @@ public struct SupabaseClientOptions: Sendable {
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-      automaticallyRefreshesToken: Bool = AuthClient.Configuration
-        .defaultAutomaticallyRefreshesToken,
+      autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
+      observesAppLifecycle: Bool = true,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.flowType = flowType
-      self.automaticallyRefreshesToken = automaticallyRefreshesToken
+      self.autoRefresh = autoRefresh
+      self.observesAppLifecycle = observesAppLifecycle
       self.accessToken = accessToken
     }
   }
@@ -252,8 +259,8 @@ extension SupabaseClientOptions.AuthOptions {
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    automaticallyRefreshesToken: Bool = AuthClient.Configuration
-      .defaultAutomaticallyRefreshesToken,
+    autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
+    observesAppLifecycle: Bool = true,
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) {
     self.init(
@@ -261,7 +268,8 @@ extension SupabaseClientOptions.AuthOptions {
       redirectToURL: redirectToURL,
       storageKey: storageKey,
       flowType: flowType,
-      automaticallyRefreshesToken: automaticallyRefreshesToken,
+      autoRefresh: autoRefresh,
+      observesAppLifecycle: observesAppLifecycle,
       accessToken: accessToken
     )
   }

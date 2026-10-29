@@ -120,7 +120,7 @@
 
         await client.realtime.disconnect()
 
-        await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
+        await testClock.advance(by: .seconds(2))
 
         #expect(await client.realtime.status == .disconnected)
       }
@@ -220,7 +220,7 @@
         await client.realtime.removeChannel(channel)
 
         #expect(await channel.status == .unsubscribed)
-        let topics = await client.realtime.channels.keys
+        let topics = await client.realtime.channels.map(\.topic)
         #expect(!topics.contains(channel.topic))
       }
     }
@@ -289,6 +289,44 @@
         #expect(decoded.text == "first")
 
         await channel.unsubscribe()
+      }
+    }
+
+    @Test
+    func customOptionsConnectSubscribeAndReceive() async throws {
+      let realtime = RealtimeClient(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        options: RealtimeClientOptions(
+          headers: [
+            "apikey": DotEnv.supabasePublishableKey,
+            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+          ],
+          requestTimeout: .seconds(10),
+          serverLogLevel: .warning,
+          webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral),
+          handleAppLifecycle: false
+        )
+      )
+      try await withMainSerialExecutor {
+        try await realtime.connect()
+
+        let channel = await realtime.channel("custom-options-\(UUID().uuidString)") {
+          $0.broadcast.receiveOwnMessages = true
+        }
+        let received = await channel.broadcasts(event: "ping")
+        try await channel.subscribe()
+
+        try await channel.broadcast(event: "ping", payload: ["value": 1] as JSONObject)
+
+        let messages = try await withTimeout(.seconds(5)) {
+          await received.prefix(1).collect()
+        }
+        #expect(try messages.first?.decode(as: [String: Int].self) == ["value": 1])
+        #expect(await realtime.channels.count == 1)
+
+        await realtime.removeAllChannels()
+        #expect(await realtime.channels.isEmpty)
+        #expect(await realtime.status == .disconnected)
       }
     }
 

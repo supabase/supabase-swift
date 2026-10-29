@@ -67,7 +67,7 @@ struct RealtimeTestHostTests {
     let channel = await host.client.channel("room")
 
     #expect(channel.topic == "room")
-    #expect(await host.client.channels["room"] === channel)
+    #expect(await host.client.channelsByTopic["room"] === channel)
 
     async let subscribed: Void = channel.subscribe()
     let join = try await host.receive(event: "phx_join")

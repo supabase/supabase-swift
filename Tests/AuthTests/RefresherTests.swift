@@ -18,14 +18,14 @@ struct RefresherTests {
     let world = World()
     let client = world.makeClient()
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
 
     await world.advance(to: Self.refreshAfter - 1)
     #expect(await world.refreshCount(settledAt: 0) == 0)
 
     await world.advance(to: Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 1) == 1)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -33,7 +33,7 @@ struct RefresherTests {
     let world = World()
     let client = world.makeClient()
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
 
     await world.advance(to: 1000)
     try await client.seedSession(world.issueSession())
@@ -46,7 +46,7 @@ struct RefresherTests {
 
     await world.advance(to: 1000 + Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 1) == 1)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -54,7 +54,7 @@ struct RefresherTests {
     let world = World()
     let client = world.makeClient()
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
 
     await world.advance(to: 1000)
     try await client.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
@@ -66,7 +66,7 @@ struct RefresherTests {
     try await client.seedSession(world.issueSession())
     await world.advance(to: Self.refreshAfter + 100 + Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 1) == 1)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -75,7 +75,7 @@ struct RefresherTests {
     let clock = GateClock()
     let client = world.makeClient(clock: clock)
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
     #expect(await waitUntil { clock.sleeperCount == 1 })
 
     try await client.seedSession(world.issueSession())
@@ -83,7 +83,7 @@ struct RefresherTests {
     clock.releaseFirst(ignoringCancellation: true)
 
     #expect(await world.refreshCount(settledAt: 0) == 0)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
     clock.releaseFirst(ignoringCancellation: false)
   }
 
@@ -92,7 +92,7 @@ struct RefresherTests {
     let world = World(skew: skew)
     let client = world.makeClient()
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
 
     for lifetime in 1...3 {
       let due = Double(lifetime) * Self.refreshAfter
@@ -101,7 +101,7 @@ struct RefresherTests {
       await world.advance(to: due)
       #expect(await world.refreshCount(settledAt: lifetime) == lifetime)
     }
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -109,7 +109,7 @@ struct RefresherTests {
     let world = World(failures: [.serviceUnavailable, .serviceUnavailable])
     let client = world.makeClient()
     try await client.seedSession(world.issueSession())
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
 
     await world.advance(to: Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 1) == 1)
@@ -137,7 +137,7 @@ struct RefresherTests {
     #expect(await world.refreshCount(settledAt: 3) == 3)
     await world.advance(to: refreshedBy + Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 4) == 4)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -149,9 +149,9 @@ struct RefresherTests {
     await world.advance(to: Self.lifetime - 60)
     #expect(await world.refreshCount(settledAt: 0) == 0)
 
-    await client.sessionManager.startAutoRefresh()
+    await client.autoRefresh.start()
     #expect(await world.refreshCount(settledAt: 1) == 1)
-    await client.sessionManager.stopAutoRefresh()
+    await client.autoRefresh.stop()
   }
 
   @Test
@@ -163,15 +163,15 @@ struct RefresherTests {
     try await first.seedSession(world.issueSession())
     try await second.seedSession(world.issueSession())
 
-    await first.sessionManager.startAutoRefresh()
-    await second.sessionManager.startAutoRefresh()
-    await second.sessionManager.stopAutoRefresh()
+    await first.autoRefresh.start()
+    await second.autoRefresh.start()
+    await second.autoRefresh.stop()
 
-    #expect(await first.sessionManager.isAutoRefreshRunning())
-    #expect(await second.sessionManager.isAutoRefreshRunning() == false)
+    #expect(await first.autoRefresh.isRegistered)
+    #expect(await second.autoRefresh.isRegistered == false)
     await world.advance(to: Self.refreshAfter)
     #expect(await world.refreshCount(settledAt: 1) == 1)
-    await first.sessionManager.stopAutoRefresh()
+    await first.autoRefresh.stop()
   }
 
   private let receivedAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -271,7 +271,7 @@ struct RefresherTests {
   }
 }
 
-private struct World {
+struct World {
   private static let epoch = Date(timeIntervalSince1970: 1_800_000_000)
 
   let clock = SignalingTestClock()
@@ -304,18 +304,32 @@ private struct World {
 
   func makeClient(clock sleepClock: (any Clock<Duration>)? = nil) -> Dependencies {
     .live(
-      configuration: .init(
-        url: clientURL,
-        storageKey: storageKey,
-        localStorage: InMemoryLocalStorage(),
-        automaticallyRefreshesToken: false,
-        clock: sleepClock ?? clock
-      ),
+      configuration: configuration(clock: sleepClock ?? clock),
       http: HTTPClient(transport: http),
-      date: { [clock, start, skew] in
-        Self.epoch.addingTimeInterval(skew + Self.elapsed(on: clock, since: start))
-      }
+      date: now
     )
+  }
+
+  func configuration(
+    autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
+    observesAppLifecycle: Bool = false,
+    clock sleepClock: (any Clock<Duration>)? = nil
+  ) -> AuthClient.Configuration {
+    AuthClient.Configuration(
+      url: clientURL,
+      storageKey: storageKey,
+      localStorage: InMemoryLocalStorage(),
+      http: HTTPClientConfiguration(transport: http),
+      autoRefresh: autoRefresh,
+      observesAppLifecycle: observesAppLifecycle,
+      clock: sleepClock ?? clock
+    )
+  }
+
+  var now: @Sendable () -> Date {
+    { [clock, start, skew] in
+      Self.epoch.addingTimeInterval(skew + Self.elapsed(on: clock, since: start))
+    }
   }
 
   func issueSession() -> Session {

@@ -16,9 +16,9 @@ Changes that still compile but behave differently. Check each one by hand.
   instead (see [Errors](#errors)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
-- **Reconnect waits are shorter and spread out.** `defaultReconnectDelay` is 1 s (was 7 s), and
-  the n-th wait is a random duration in `0...min(30s, reconnectDelay · 2^(n-1))` (was the upper
-  half of that range). Code that relied on a minimum wait before a reconnect must not.
+- **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
+  in `0...min(30 s, 1 s · 2^(n-1))`, and you cannot change it. v2 started from 7 s and waited in
+  the upper half of that range. Code that relied on a minimum wait before a reconnect must not.
 - **Reconnect stops on a refused upgrade.** A reconnect attempt that the server refuses with HTTP
   401, 403 or 404 ends in `.disconnected` instead of retrying forever. Fix the key or token, then
   call `connect()` again.
@@ -47,24 +47,21 @@ Changes that still compile but behave differently. Check each one by hand.
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
 - **`SupabaseClient` sets the Realtime logger.** A `logger:` you pass in
-  `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create `RealtimeClientV2`
+  `SupabaseClientOptions(realtime:)` is replaced by the global logger. Create a `RealtimeClient`
   yourself if Realtime needs its own logger.
-- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. If
-  you need one (for example for certificate pinning), pass it as
-  `SupabaseClientOptions(realtime: .init(session: mySession))`.
-- **Reconnect delays have jitter.** Each reconnect waits a random time between half the delay
-  and the full delay, capped at 30 seconds. It never waits longer than before.
+- **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
+  certificate pinning, pass a transport (see [`session:` is replaced by
+  `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
   token. Channel joins and `httpSend` no longer call it every time. While connected, it also calls it one
   minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
   `null` token to channels, and `setAuth()` without a callback no longer clears the stored
-  token. The callback runs in a task of its own with the client's `timeout`, so cancelling a
+  token. The callback runs in a task of its own with the client's `requestTimeout`, so cancelling a
   `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
   run every time.
-- **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`,
-  and `RealtimeClient.channels` is keyed by that name. Search for `"realtime:"` and for
-  `channels[` lookups.
+- **`topic` has no `realtime:` prefix.** `channel.topic` is the name you pass to `channel(_:)`.
+  Search for `"realtime:"` in code that reads or compares topics.
 - **Broadcast events match exactly.** v2 matched event names without regard to case;
   `broadcasts(event: "ping")` no longer receives `"Ping"`. `"*"` still receives every event.
   Search for `broadcasts(event:` and check the case of each name.
@@ -94,7 +91,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `import RealtimeV2` | `import Realtime` |
 | `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceEntry` |
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
-| `RealtimeClientV2.subscriptions` | `RealtimeClient.channels` |
+| `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
+| `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
 | `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
@@ -116,7 +114,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
 | `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
 | `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
-| `channel(_:options:)`, `RealtimeChannelConfig` | `channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
+| `channel(_:options:)` (`RealtimeClientV2`, `SupabaseClient`), `RealtimeChannelConfig` | `channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
 | `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledge`, `.receiveOwnMessages`, `.waitForReplication` |
 | `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
 | `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
@@ -130,22 +128,26 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
-| `RealtimeClientOptions(timeoutInterval:)` | `timeout:` |
-| `heartbeatInterval:`, `reconnectDelay:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
+| `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
+| `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
+| `RealtimeClientOptions(reconnectDelay:)`, `defaultReconnectDelay` | removed; the reconnect wait is internal (see [Silent changes](#silent-changes)) |
+| `RealtimeClientOptions(disconnectOnSessionLoss:)`, `defaultDisconnectOnSessionLoss` | removed; nothing read them |
+| `RealtimeClientOptions(logLevel:)`, `LogLevel`, `.warn` | `serverLogLevel:`, `RealtimeServerLogLevel`, `.warning` |
+| `RealtimeClientOptions(session:)` | `webSocketTransport:` (see below) |
 | `RealtimeClientOptions(maxRetryAttempts:)`, `defaultMaxRetryAttempts` | removed; `subscribe()` has no attempt limit |
-| `defaultTimeoutInterval` | `defaultTimeout` |
-| `defaultHeartbeatInterval`, `defaultReconnectDelay`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
+| `defaultTimeoutInterval` | `defaultRequestTimeout` |
+| `defaultHeartbeatInterval`, `defaultDisconnectOnEmptyChannelsAfter` (`TimeInterval`) | same names, `Duration` |
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
 | `InsertAction`, `UpdateAction`, `DeleteAction`, `AnyAction`, `PostgresAction` | `PostgresChange`; check `kind` |
 | `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `PostgresChange.record`, `.oldRecord` (`PostgresRow?`); read a column with `row["id"]` or all with `.values` |
 | `HasRecord.decodeRecord(as:decoder:)`, `HasOldRecord.decodeOldRecord(as:decoder:)` | `PostgresRow.decode(as:decoder:)`, or `TypedPostgresChange.row()` |
 | `PostgresAction.rawMessage`, `HasRawMessage` | removed |
 | `Column` | `PostgresColumn` |
-| `PushStatus`, `LogLevel` (`enum`) | `struct`, same member names |
+| `PushStatus` (`enum`) | `struct`, same member names |
 | `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` | removed; set the options on `RealtimeChannelConfiguration` |
 | `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
-A `switch` over `PushStatus` or `LogLevel` needs a `default:` case. `init(rawValue:)` is no
+A `switch` over `PushStatus` or `RealtimeServerLogLevel` needs a `default:` case. `init(rawValue:)` is no
 longer failable, so drop `if let` around it.
 
 Remove `vsn:`. The client always uses protocol 2.0.0, so the server must be Realtime v2.63.0 or
@@ -296,7 +298,7 @@ they wait for the server reply first. `track` and `untrack` always wait for the 
 becomes the result of the call:
 
 - The server acknowledged the push: the call returns.
-- No reply came within the client's `timeout`: the call throws `RealtimeError` with
+- No reply came within the client's `requestTimeout`: the call throws `RealtimeError` with
   `kind == .timeout`.
 - The server rejected the push: the call throws `RealtimeError` with the server's reason in
   `message`, `kind == .payloadTooLarge` for an oversized payload and `.server` otherwise, and
@@ -357,13 +359,31 @@ Pass `Duration` values. Convert a `TimeInterval` with `.seconds(value)`.
 
 ```swift
 // v2
-let options = RealtimeClientOptions(heartbeatInterval: 30, reconnectDelay: 5, timeoutInterval: 15)
+let options = RealtimeClientOptions(heartbeatInterval: 30, timeoutInterval: 15)
 try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
 // v3
 let options = RealtimeClientOptions(
-  heartbeatInterval: .seconds(30), reconnectDelay: .seconds(5), timeout: .seconds(15)
+  heartbeatInterval: .seconds(30), requestTimeout: .seconds(15)
 )
 try await channel.httpSend(event: "ping", payload: ["n": 1], timeout: .seconds(3))
+```
+
+## `session:` is replaced by `webSocketTransport:`
+
+Pass a `URLSessionWebSocketTransport` built from your session, or your own `WebSocketTransport`.
+A custom transport throws `RealtimeError.upgradeFailed(status:underlyingError:)` when the server
+refuses the upgrade, so the client knows whether to retry.
+
+```swift
+// v2
+let options = RealtimeClientOptions(session: pinnedSession)
+// v3
+let options = RealtimeClientOptions(
+  webSocketTransport: URLSessionWebSocketTransport(
+    configuration: pinnedSession.configuration,
+    delegate: pinnedSession.delegate
+  )
+)
 ```
 
 ## `fetch:` is replaced by `http:`
