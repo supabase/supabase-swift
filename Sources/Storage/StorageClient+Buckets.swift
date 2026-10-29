@@ -225,10 +225,11 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - bucket: The unique identifier of the bucket to purge, or `nil` to purge every bucket.
-  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants and
+  ///     keep the original cached. By default, the original and all its variants are purged.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(bucket: String?, includingTransformations: Bool = false) async throws {
+  public func purgeCache(bucket: String?, transformationsOnly: Bool = false) async throws {
     try await api.execute(
-      api.requests.purgeCache(bucket: bucket, includingTransformations: includingTransformations))
+      api.requests.purgeCache(bucket: bucket, transformationsOnly: transformationsOnly))
   }
 }

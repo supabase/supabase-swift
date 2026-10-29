@@ -56,7 +56,7 @@ public import HTTPTypes
 /// - ``list(path:options:)``
 /// - ``info(path:versionId:)``
 /// - ``exists(path:)``
-/// - ``purgeCache(path:includingTransformations:)``
+/// - ``purgeCache(path:transformationsOnly:)``
 ///
 /// ### Creating signed URLs
 ///
@@ -731,12 +731,13 @@ public struct StorageBucket: Sendable {
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`. Only that exact
   ///     file is purged; there is no wildcard or folder purge.
-  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants and
+  ///     keep the original cached. By default, the original and all its variants are purged.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(path: String, includingTransformations: Bool = false) async throws {
+  public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
     try await api.execute(
       api.requests.purgeCache(
-        bucket: id, key: ObjectKey(path), includingTransformations: includingTransformations)
+        bucket: id, key: ObjectKey(path), transformationsOnly: transformationsOnly)
     )
   }
 

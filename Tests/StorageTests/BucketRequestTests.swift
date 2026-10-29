@@ -138,7 +138,7 @@ struct BucketRequestTests {
     let sent = LockIsolated<[Sent]>([])
     let storage = Self.makeClient(sent: sent, response: #"{"message":"success"}"#)
 
-    try await storage.purgeCache(bucket: nil, includingTransformations: true)
+    try await storage.purgeCache(bucket: nil, transformationsOnly: true)
 
     #expect(sent.value.map(\.request.method) == [.delete])
     #expect(sent.value.map(\.request.path) == ["/storage/v1/cdn/?transformations=true"])
