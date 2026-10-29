@@ -63,8 +63,12 @@ Verify.step("fn-missing", "invoke a function that does not exist")
 do {
   _ = try await client.functions.invoke("does-not-exist")
   Verify.check("fn-missing", false, "expected an error, got a response")
+} catch let error as FunctionsError where error.kind == .server {
+  Verify.check(
+    "fn-missing", error.response?.statusCode == 404,
+    "FunctionsError(server) status \(error.response?.statusCode ?? 0)")
 } catch {
-  Verify.check("fn-missing", true, "threw \(String(reflecting: error))")
+  Verify.check("fn-missing", false, "expected FunctionsError(server) 404, threw \(String(reflecting: error))")
 }
 
 Verify.finish()

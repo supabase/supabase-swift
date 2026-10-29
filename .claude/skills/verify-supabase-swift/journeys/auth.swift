@@ -57,7 +57,9 @@ if let session = await Verify.attempt("auth-signin", {
 
 Verify.step("auth-events", "collect the first four auth events")
 if let seen = await Verify.attempt("auth-events", {
-  try await Verify.within(seconds: 5) { await events.value }
+  try await Verify.within(seconds: 5) {
+    await withTaskCancellationHandler { await events.value } onCancel: { events.cancel() }
+  }
 }) {
   Verify.save("auth-events.json", seen)
   Verify.check(

@@ -19,6 +19,8 @@ die() { echo "verify: $*" >&2; exit 1; }
 # macOS has no `timeout`; perl's alarm kills the command after N seconds.
 with_timeout() { local secs="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$secs" "$@"; }
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+# Run ids and labels become path components and shell values, so allow only a safe set.
+check_name() { [[ "$2" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "invalid $1 '$2' (use letters, digits, '.', '_', '-')"; }
 
 resolve_run() {
   local id="${VERIFY_RUN_ID:-}"
@@ -28,6 +30,7 @@ resolve_run() {
     [[ ${#states[@]} -eq 1 ]] || die "set VERIFY_RUN_ID (found ${#states[@]} live runs; see 'verify.sh list')"
     id="$(basename "$(dirname "${states[0]}")")"
   fi
+  check_name "run id" "$id"
   [[ -f "$VERIFY_ROOT/runs/$id/state.env" ]] || die "no live run '$id' (see 'verify.sh list')"
   # shellcheck disable=SC1090
   source "$VERIFY_ROOT/runs/$id/state.env"
@@ -62,6 +65,7 @@ wait_ready() {
 cmd_up() {
   command -v supabase >/dev/null || die "supabase CLI not found (brew install supabase/tap/supabase)"
   local id="${1:-$(date +%Y%m%d-%H%M%S)-$$}"
+  check_name "run id" "$id"
   local run="$VERIFY_ROOT/runs/$id"
   [[ -e "$run" ]] && die "run '$id' already exists"
 
@@ -93,21 +97,22 @@ cmd_up() {
   local j="$run/start.json"
   jq -e '.env.API_URL' "$j" >/dev/null || die "unexpected start output in $j"
 
-  cat >"$run/state.env" <<EOF
-RUN_ID=$id
-RUN_DIR=$run
-EVIDENCE_DIR=$VERIFY_ROOT/evidence/$id
-PORT_BASE=$base
-STACK_ID=$(jq -r '.id' "$j")
-SUPABASE_URL=$(jq -r '.env.API_URL' "$j")
-SUPABASE_DB_URL=$(jq -r '.env.DB_URL' "$j")
-SUPABASE_MAILPIT_URL=$(jq -r '.env.MAILPIT_URL' "$j")
-SUPABASE_PUBLISHABLE_KEY=$(jq -r '.env.PUBLISHABLE_KEY' "$j")
-SUPABASE_SECRET_KEY=$(jq -r '.env.SECRET_KEY' "$j")
-SUPABASE_ANON_KEY=$(jq -r '.env.ANON_KEY' "$j")
-SUPABASE_SERVICE_ROLE_KEY=$(jq -r '.env.SERVICE_ROLE_KEY' "$j")
-GIT_SHA=$(git -C "$REPO" rev-parse HEAD)
-EOF
+  # %q escapes each value, so sourcing the file assigns it as-is (paths with spaces included).
+  {
+    printf 'RUN_ID=%q\n' "$id"
+    printf 'RUN_DIR=%q\n' "$run"
+    printf 'EVIDENCE_DIR=%q\n' "$VERIFY_ROOT/evidence/$id"
+    printf 'PORT_BASE=%q\n' "$base"
+    printf 'STACK_ID=%q\n' "$(jq -r '.id' "$j")"
+    printf 'SUPABASE_URL=%q\n' "$(jq -r '.env.API_URL' "$j")"
+    printf 'SUPABASE_DB_URL=%q\n' "$(jq -r '.env.DB_URL' "$j")"
+    printf 'SUPABASE_MAILPIT_URL=%q\n' "$(jq -r '.env.MAILPIT_URL' "$j")"
+    printf 'SUPABASE_PUBLISHABLE_KEY=%q\n' "$(jq -r '.env.PUBLISHABLE_KEY' "$j")"
+    printf 'SUPABASE_SECRET_KEY=%q\n' "$(jq -r '.env.SECRET_KEY' "$j")"
+    printf 'SUPABASE_ANON_KEY=%q\n' "$(jq -r '.env.ANON_KEY' "$j")"
+    printf 'SUPABASE_SERVICE_ROLE_KEY=%q\n' "$(jq -r '.env.SERVICE_ROLE_KEY' "$j")"
+    printf 'GIT_SHA=%q\n' "$(git -C "$REPO" rev-parse HEAD)"
+  } >"$run/state.env"
   # shellcheck disable=SC1090
   source "$run/state.env"
   wait_ready || die "stack started but is not usable; run 'VERIFY_RUN_ID=$id verify.sh down'"
@@ -196,9 +201,10 @@ cmd_drive() {
   [[ -f "$journey" ]] || journey="$SKILL_DIR/journeys/$1.swift"
   [[ -f "$journey" ]] || die "no journey '$1' (ls $SKILL_DIR/journeys)"
   local label="${2:-$(basename "$journey" .swift)}"
+  check_name label "$label"
   local ev
-  ev="$EVIDENCE_DIR/$label-$(date +%H%M%S)"
-  mkdir -p "$ev"
+  mkdir -p "$EVIDENCE_DIR"
+  ev="$(mktemp -d "$EVIDENCE_DIR/$label-$(date +%H%M%S)-XXXX")"
   cp "$journey" "$ev/journey.swift"
 
   # One driver build at a time: SwiftPM shares the build directory.
@@ -214,7 +220,8 @@ cmd_drive() {
     rmdir "$lock"; trap - EXIT
     echo 2 >"$ev/exit_code"
     grep -E 'error:' "$ev/build.log" | head -20 >&2
-    die "journey build failed; evidence in $ev"
+    echo "verify: journey build failed; evidence in $ev" >&2
+    exit 2
   fi
   local bin
   bin="$(swift build --package-path "$driver" --show-bin-path)/VerifyDrive"
@@ -272,12 +279,19 @@ cmd_list() {
 cmd_down() {
   local id="${VERIFY_RUN_ID:-}"
   if [[ -z "$id" ]]; then resolve_run; id="$RUN_ID"; fi
+  check_name "run id" "$id"
   local run="$VERIFY_ROOT/runs/$id"
   [[ -d "$run" ]] || die "no run directory '$run'"
   if [[ -d "$run/supabase" ]]; then
     (cd "$run" && with_timeout 120 supabase stop >/dev/null 2>&1) || echo "verify: supabase stop failed" >&2
-    (cd "$run" && with_timeout 120 supabase stack destroy --yes >/dev/null 2>&1) ||
-      echo "verify: stack destroy failed; retry with: supabase stack destroy --stack-id <id from $run/start.json>" >&2
+    local out
+    # "No managed stack" means a failed `up` never created one; anything else keeps the run
+    # folder so the teardown can be retried.
+    if ! out="$(cd "$run" && with_timeout 120 supabase stack destroy --yes 2>&1)" &&
+      ! grep -q 'No managed stack was found' <<<"$out"; then
+      echo "$out" | tail -5 >&2
+      die "stack destroy failed; kept $run. Retry 'verify.sh down', or run 'supabase stack destroy --yes' in $run"
+    fi
   fi
   local base=""
   [[ -f "$run/state.env" ]] && base="$(sed -n 's/^PORT_BASE=//p' "$run/state.env")"

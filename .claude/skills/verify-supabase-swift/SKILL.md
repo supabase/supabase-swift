@@ -113,9 +113,11 @@ lasting journeys in `journeys/` and list them in the feature map.
   `PASS`/`FAIL` with the observed value. `Verify.attempt(id) { ... }` turns a thrown error into
   a `FAIL` and goes on.
 - `Verify.within(seconds:) { ... }` bounds a wait. Use it for every stream: a missing realtime
-  event must fail, not hang.
-- `Verify.save("name.json", value)` writes evidence. `Verify.finish()` prints
-  `RESULT PASS|FAIL` and exits.
+  event must fail, not hang. The body must stop when it is cancelled. A `for await` loop does.
+  To wait on a `Task`, wrap `task.value` in `withTaskCancellationHandler` and cancel the task, as
+  `auth.swift` does.
+- `Verify.save("name.json", value)` writes evidence. A failed write is a failed check.
+  `Verify.finish()` prints `RESULT PASS|FAIL` and exits.
 
 ### Looking at side effects from outside the SDK
 
@@ -132,7 +134,7 @@ $V http GET "/storage/v1/bucket"
 
 ## Evidence
 
-Each drive writes to `.verify/evidence/<run-id>/<label>-<HHMMSS>/`:
+Each drive writes to its own folder, `.verify/evidence/<run-id>/<label>-<HHMMSS>-<rand>/`:
 
 | File | Content |
 | --- | --- |
@@ -180,8 +182,8 @@ It does this:
 It keeps `.verify/evidence/<run-id>/` and the shared driver build in `.verify/driver/`.
 `.verify/` is in `.gitignore`. Delete old evidence by hand when you no longer need it.
 
-Run `$V down` after a failed `up` too. If `destroy` fails, it prints the command to destroy the
-stack by id. Do not stop or destroy stacks this skill did not start. `supabase stack list`
+Run `$V down` after a failed `up` too. If `destroy` fails, `down` keeps the run folder and
+exits 1. Fix the cause and run `$V down` again. Do not stop or destroy stacks this skill did not start. `supabase stack list`
 shows many stacks from other worktrees, and they belong to other sessions.
 
 `$V list` shows live runs and the evidence folders.
@@ -198,7 +200,8 @@ shows many stacks from other worktrees, and they belong to other sessions.
 | `$V list` | Show live runs and evidence folders |
 | `$V down` | Tear down this run's stack, keep the evidence |
 
-Every command except `up` and `list` uses `$VERIFY_RUN_ID`. When it is unset and only one run is
+Run ids and labels use only letters, digits, `.`, `_`, and `-`. Every command except `up` and
+`list` uses `$VERIFY_RUN_ID`. When it is unset and only one run is
 live, they use that run.
 
 ## Other surfaces

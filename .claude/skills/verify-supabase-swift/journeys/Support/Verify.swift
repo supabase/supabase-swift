@@ -64,7 +64,8 @@ enum Verify {
     }
   }
 
-  /// Writes an evidence file into the run's evidence directory and logs its path.
+  /// Writes an evidence file into the run's evidence directory and logs its path. A write that
+  /// fails is a failed check, so a run never passes without the evidence it claims.
   static func save(_ name: String, _ value: some Encodable) {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -74,11 +75,15 @@ enum Verify {
       try encoder.encode(value).write(to: file)
       print("SAVE \(file.path)")
     } catch {
-      print("WARN could not save \(name): \(error)")
+      check("save \(name)", false, "could not save: \(error)")
     }
   }
 
   /// Waits for `body` with a deadline, so a missing realtime event fails instead of hanging.
+  ///
+  /// On timeout the group cancels `body` and waits for it to return, so `body` must stop on
+  /// cancellation. Iterating an `AsyncStream` does. Awaiting another task's `value` does not:
+  /// wrap it in `withTaskCancellationHandler` and cancel that task.
   static func within<T: Sendable>(
     seconds: Double,
     _ body: @escaping @Sendable () async throws -> T
