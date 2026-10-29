@@ -1536,6 +1536,12 @@ features:
     supporting_symbols:
       - RealtimePostgresFilterValue
       - RealtimePostgresFilterValue.realtimeFilterValue
+      - String.realtimeFilterValue
+      - Int.realtimeFilterValue
+      - Double.realtimeFilterValue
+      - Bool.realtimeFilterValue
+      - UUID.realtimeFilterValue
+      - Date.realtimeFilterValue
   realtime.subscriptions.private_channel:
     status: implemented
     symbols:
