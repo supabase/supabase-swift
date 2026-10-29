@@ -84,7 +84,7 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func customClientInfoIsKept() async throws {
-    let headers = try await upgradeHeaders(for: ["X-Client-Info": "my-app/1.0"])
+    let headers = try await upgradeHeaders(for: ["x-client-info": "my-app/1.0"])
 
     #expect(headers[values: .xClientInfo] == ["my-app/1.0"])
   }

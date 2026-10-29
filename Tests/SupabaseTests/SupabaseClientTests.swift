@@ -161,7 +161,7 @@ struct SupabaseClientTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
-        realtime: RealtimeClientOptions(headers: ["Apikey": "other", "X-Custom": "1"])
+        realtime: RealtimeClientOptions(headers: ["apikey": "other", "X-Custom": "1"])
       )
     )
 
