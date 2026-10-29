@@ -164,8 +164,10 @@ struct AuthMiddlewareTests {
 
   @Test
   func singlePassBodyIsNotRetried() async throws {
+    let expired = jwt(expiresIn: -60)
+    try await signIn(withAccessToken: expired)
     http.respond(when: { $0.path?.hasPrefix("/storage/v1/object") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data())
+      (HTTPResponse(status: .badRequest), storageExpiredJWTBody)
     }
     let chunks = AsyncStream<ArraySlice<UInt8>> {
       $0.yield(ArraySlice("hello".utf8))
@@ -177,8 +179,8 @@ struct AuthMiddlewareTests {
         path: "a.txt", body: HTTPBody(chunks, length: .known(5), iterationBehavior: .single))
     }
 
-    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer token-1"])
-    #expect(refreshCount == 0)
+    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer \(expired)"])
+    #expect(refreshCount == 1)
   }
 
   @Test
