@@ -90,6 +90,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()`, `presenceStates()` (see [Presence](#presence)) |
 | `PresenceV2`, `PresenceV2.state`, `decodeState(as:decoder:)` | `PresenceEntry`, `payload`, `decode(as:decoder:)` |
 | `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
+| `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
 | `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
 | `broadcast(event:message:)`, `broadcast(event:data:)` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
@@ -234,7 +235,7 @@ subscription.
 
 `presenceChanges()` yields a `PresenceChange` per sync: the entries that joined and left, as
 lists by presence key, so a user on two devices has two entries. `presenceStates()` yields the
-whole state after every sync, and `presenceState` reads it. To show who is online, decode the
+whole state after every sync that changes it, and `presenceState` reads it. To show who is online, decode the
 state instead of applying joins and leaves yourself.
 
 ```swift

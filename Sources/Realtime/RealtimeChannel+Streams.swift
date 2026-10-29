@@ -14,7 +14,9 @@ extension RealtimeChannel {
   ///
   /// Each element holds the joins and leaves of one sync, by presence key. The first sync after
   /// ``subscribe()`` reports every present client as a join. After a rejoin, the stream reports
-  /// only the clients that joined or left while the channel was away.
+  /// only the clients that joined or left while the channel was away. ``unsubscribe()`` reports
+  /// every client as a leave, so the changes always add up to ``presenceState``. A sync that
+  /// changes nothing emits nothing.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
   /// channel, so open it before subscribing. The stream ends when the iterating task is
@@ -32,7 +34,8 @@ extension RealtimeChannel {
 
   /// Returns an async stream of the channel's presence state.
   ///
-  /// The stream emits ``presenceState`` at once, then the new state after every presence sync.
+  /// The stream emits ``presenceState`` at once, then the new state after every presence sync
+  /// that changes it.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
   /// channel, so open it before subscribing. The stream ends when the iterating task is

@@ -114,6 +114,68 @@ struct PresenceTrackerTests {
   }
 
   @Test
+  func aQueuedDiffThatOverlapsTheStateCountsEachEntryOnce() {
+    var tracker = PresenceTracker()
+    _ = tracker.applyDiff([
+      "joins": ["u1": metas([("r1", nil, "ana")])],
+      "leaves": ["u2": metas([("r2", nil, "bo")])],
+    ])
+
+    let change = tracker.applyState([
+      "u1": metas([("r1", nil, "ana")]), "u2": metas([("r2", nil, "bo")]),
+    ])
+
+    #expect(Set(tracker.state.entries.keys) == ["u1"])
+    #expect(change.joins["u1"]?.map(\.ref) == ["r1"])
+    #expect(change.joins["u2"] == nil)
+    #expect(change.leaves.isEmpty)
+  }
+
+  @Test
+  func aDiffReportsOnlyEntriesThatReallyChanged() throws {
+    var tracker = PresenceTracker()
+    _ = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
+
+    let result = tracker.applyDiff([
+      "joins": ["u1": metas([("r1", nil, "ana")])],
+      "leaves": ["u1": metas([("r9", nil, "ghost")]), "u2": metas([("r8", nil, "ghost")])],
+    ])
+    let change = try #require(result)
+
+    #expect(change == PresenceChange())
+    #expect(tracker.state.entries["u1"]?.map(\.ref) == ["r1"])
+  }
+
+  @Test
+  func aLeaveReportsTheTrackedPayload() throws {
+    var tracker = PresenceTracker()
+    _ = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
+
+    let result = tracker.applyDiff([
+      "joins": [:], "leaves": ["u1": .object(["metas": [["phx_ref": "r1"]]])],
+    ])
+    let change = try #require(result)
+
+    #expect(change.leaves["u1"]?.first?.payload == ["name": "ana"])
+  }
+
+  @Test
+  func clearEmptiesTheStateAndReportsEveryEntryAsALeave() {
+    var tracker = PresenceTracker()
+    _ = tracker.applyState(["u1": metas([("r1", nil, "ana"), ("r2", nil, "ana-phone")])])
+
+    let change = tracker.clear()
+
+    #expect(tracker.state.entries.isEmpty)
+    #expect(change.leaves["u1"]?.map(\.ref) == ["r1", "r2"])
+    #expect(change.joins.isEmpty)
+    #expect(tracker.applyDiff(["joins": ["u2": metas([("r3", nil, "bo")])], "leaves": [:]]) == nil)
+
+    let next = tracker.applyState(["u1": metas([("r1", nil, "ana")])])
+    #expect(next.joins["u1"]?.map(\.ref) == ["r1"])
+  }
+
+  @Test
   func malformedMetasAreSkipped() {
     var tracker = PresenceTracker()
 

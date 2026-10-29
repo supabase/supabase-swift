@@ -378,8 +378,8 @@ public actor RealtimeChannel {
 
   /// The clients present on the channel, as of the last presence sync.
   ///
-  /// The state is empty until the first sync after ``subscribe()``. After a rejoin it keeps the
-  /// last known clients until the server sends the new state.
+  /// The state is empty until the first sync after ``subscribe()`` and after ``unsubscribe()``.
+  /// After a rejoin it keeps the last known clients until the server sends the new state.
   public var presenceState: PresenceState {
     presence.state
   }
@@ -728,12 +728,23 @@ public actor RealtimeChannel {
   }
 
   private func handlePresenceDiff(_ message: RealtimeMessageV2) {
-    guard let change = presence.applyDiff(message.payload) else { return }
+    guard isForCurrentJoin(message), let change = presence.applyDiff(message.payload) else {
+      return
+    }
     deliverPresence(change)
   }
 
   private func handlePresenceState(_ message: RealtimeMessageV2) {
+    guard isForCurrentJoin(message) else { return }
     deliverPresence(presence.applyState(message.payload))
+  }
+
+  /// Presence pushed for an earlier join (a late reply to an abandoned attempt) carries that
+  /// join's `join_ref`. Broadcast diffs carry none and always apply.
+  private func isForCurrentJoin(_ message: RealtimeMessageV2) -> Bool {
+    guard let messageJoinRef = message.joinRef, messageJoinRef != joinRef else { return true }
+    logger.debug("Ignoring presence for stale join_ref \(messageJoinRef) on '\(topic)'")
+    return false
   }
 
   /// Called by the client when a binary broadcast frame (type 0x04) is received.
@@ -772,10 +783,12 @@ public actor RealtimeChannel {
     }
   }
 
-  private func deliverPresence(_ change: PresenceChange) {
+  /// Yields `change` and the new state, unless the sync changed nothing.
+  func deliverPresence(_ change: PresenceChange) {
+    guard !change.isEmpty else { return }
     for (_, listener) in listeners {
       switch listener {
-      case .presence(let continuation) where !change.isEmpty: continuation.yield(change)
+      case .presence(let continuation): continuation.yield(change)
       case .presenceState(let continuation): continuation.yield(presence.state)
       default: break
       }
