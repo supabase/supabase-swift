@@ -152,8 +152,7 @@ actor SessionStore {
   private var refreshFlights: [String: RefreshFlight] = [:]
   private var lastRefreshFailure: RefreshFailure?
   private var refreshWindow = RefreshWindow()
-  /// The last entry drives auto refresh. When its owner stops, the one before it takes over.
-  private var autoRefreshDrivers: [(owner: UUID, driver: Refresher.Driver)] = []
+  private var autoRefreshDriver: Refresher.Driver?
   private var autoRefreshTask: Task<Void, Never>? {
     didSet { oldValue?.cancel() }
   }
@@ -382,26 +381,22 @@ actor SessionStore {
       .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
   }
 
-  func startAutoRefresh(for owner: UUID, using driver: Refresher.Driver) {
-    autoRefreshDrivers.removeAll { $0.owner == owner }
-    autoRefreshDrivers.append((owner, driver))
+  func startAutoRefresh(using driver: Refresher.Driver) {
+    autoRefreshDriver = driver
     armRefresher()
   }
 
-  func stopAutoRefresh(for owner: UUID) {
-    let wasDriving = autoRefreshDrivers.last?.owner == owner
-    autoRefreshDrivers.removeAll { $0.owner == owner }
-    if wasDriving {
-      armRefresher()
-    }
+  func stopAutoRefresh() {
+    autoRefreshDriver = nil
+    armRefresher()
   }
 
-  func isAutoRefreshStarted(by owner: UUID) -> Bool {
-    autoRefreshDrivers.contains { $0.owner == owner }
+  var isAutoRefreshStarted: Bool {
+    autoRefreshDriver != nil
   }
 
   private func armRefresher() {
-    guard let received = heldSession, let driver = autoRefreshDrivers.last?.driver else {
+    guard let received = heldSession, let driver = autoRefreshDriver else {
       autoRefreshTask = nil
       return
     }
