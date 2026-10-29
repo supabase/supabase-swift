@@ -40,12 +40,61 @@ struct RealtimeChannelPushTests {
   }
 
   @Test
+  func trackWaitsForTheServerReplyWithoutBroadcastAcknowledgement() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let join = try await h.subscribe(channel)
+
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
+    let frame = try #require(await h.received(ChannelEvent.presence))
+    #expect(frame.payload["event"] == "track")
+    #expect(frame.payload["payload"] == ["online": true])
+    #expect(await channel.pendingPushes.count == 1)
+    try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
+
+    try await push.value
+    #expect(await channel.pendingPushes.isEmpty)
+  }
+
+  @Test
+  func trackEncodesThePayloadWithTheGivenEncoder() async throws {
+    struct Status: Encodable { var lastSeenAt: Int }
+    let h = Harness()
+    let channel = await h.client.channel("room")
+    let join = try await h.subscribe(channel)
+    let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+
+    let push = Task { try await channel.track(Status(lastSeenAt: 1), encoder: encoder) }
+    let frame = try #require(await h.received(ChannelEvent.presence))
+    #expect(frame.payload["payload"] == ["last_seen_at": 1])
+    try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
+
+    try await push.value
+  }
+
+  @Test
+  func untrackWithoutReplyThrowsTimeout() async throws {
+    let h = Harness(timeout: .seconds(10))
+    let channel = await h.client.channel("room")
+    _ = try await h.subscribe(channel)
+
+    let push = Task { try await channel.untrack() }
+    let frame = try #require(await h.received(ChannelEvent.presence))
+    #expect(frame.payload["event"] == "untrack")
+    await h.clock.advance(by: .seconds(10))
+
+    let error = await #expect(throws: RealtimeError.self) { try await push.value }
+    #expect(error?.kind == .timeout)
+  }
+
+  @Test
   func acknowledgedPushReturnsOnServerReply() async throws {
     let h = Harness()
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     let join = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     let frame = try #require(await h.received(ChannelEvent.presence))
     #expect(await channel.pendingPushes.count == 1)
     try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
@@ -60,7 +109,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     let join = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     let frame = try #require(await h.received(ChannelEvent.presence))
     try h.reply(
       h.pushReply(
@@ -80,7 +129,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     let join = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     let frame = try #require(await h.received(ChannelEvent.presence))
     try h.reply(
       h.pushReply(
@@ -103,7 +152,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     _ = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     _ = try #require(await h.received(ChannelEvent.presence))
     await h.clock.advance(by: .seconds(10))
 
@@ -118,7 +167,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     _ = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     _ = try #require(await h.received(ChannelEvent.presence))
     push.cancel()
 
@@ -132,7 +181,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     _ = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     _ = try #require(await h.received(ChannelEvent.presence))
     await h.client.disconnect()
 
@@ -146,7 +195,7 @@ struct RealtimeChannelPushTests {
     let channel = await h.client.channel("room") { $0.broadcast.acknowledgeBroadcasts = true }
     let join = try await h.subscribe(channel)
 
-    let push = Task { try await channel.track(state: ["online": true]) }
+    let push = Task { try await channel.track(["online": true] as JSONObject) }
     _ = try #require(await h.received(ChannelEvent.presence))
     try h.reply(
       RealtimeMessageV2(

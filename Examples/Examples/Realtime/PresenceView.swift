@@ -63,26 +63,32 @@ struct PresenceView: View {
     do {
       let channel = await supabase.channel("presence-example")
 
-      let presence = await channel.presenceChanges()
+      let states = await channel.presenceStates()
 
       try await channel.subscribe()
       self.channel = channel
 
       let userId = auth.currentUserID
-      try await channel.track(
-        PresenceUser(
-          id: userId.uuidString,
-          username: "User \(userId.uuidString.prefix(8))"
-        )
+      let user = PresenceUser(
+        id: userId.uuidString,
+        username: "User \(userId.uuidString.prefix(8))"
       )
 
-      for await state in presence {
-        var users: [PresenceUser] = []
-        for (_, presence) in state.joins {
-          let decoded = try presence.decodeState(as: PresenceUser.self)
-          users.append(decoded)
+      Task {
+        // The server forgets the tracked payload when the channel rejoins.
+        for await status in await channel.statusChanges() where status.isSubscribed {
+          do {
+            try await channel.track(user)
+          } catch {
+            self.error = error
+          }
         }
-        onlineUsers = users
+      }
+
+      for await state in states {
+        onlineUsers = try state.decode(as: PresenceUser.self).values
+          .compactMap(\.first)
+          .sorted { $0.username < $1.username }
       }
     } catch {
       print("Error: \(error)")
