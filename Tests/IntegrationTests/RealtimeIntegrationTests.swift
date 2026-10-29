@@ -386,6 +386,25 @@
     }
 
     @Test
+    func aSignInPushesTheSessionTokenToAnExistingRealtimeClient() async throws {
+      let realtime = client.realtime
+
+      let session = try await client.auth.signUp(
+        email: "realtime-\(UUID().uuidString.lowercased())@supabase.com",
+        password: "The.Pass.123"
+      ).session
+      let accessToken = try #require(session?.accessToken)
+
+      let pushed = try await withTimeout(.seconds(5)) {
+        while !Task.isCancelled, await realtime.accessToken != accessToken {
+          await Task.yield()
+        }
+        return await realtime.accessToken == accessToken
+      }
+      #expect(pushed)
+    }
+
+    @Test
     func broadcastMultipleEvents() async throws {
       let client = client
       try await withMainSerialExecutor {

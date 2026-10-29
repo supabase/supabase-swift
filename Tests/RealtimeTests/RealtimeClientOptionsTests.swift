@@ -118,7 +118,7 @@ struct RealtimeClientOptionsTests {
     options.http = HTTPClientConfiguration(timeout: .seconds(3))
 
     #expect(options.accessToken != nil)
-    #expect(options.logger.label == "custom")
+    #expect(options.logger?.label == "custom")
     #expect(options.http.timeout == .seconds(3))
   }
 
@@ -173,12 +173,28 @@ struct RealtimeClientOptionsTests {
   }
 
   @Test
-  func loggerIsTaggedWithSystemMetadata() {
-    let options = RealtimeClientOptions(
-      headers: ["apikey": "test-key"],
-      logger: Logging.Logger(label: "test")
+  func clientTagsTheGivenLoggerWithSystemMetadata() {
+    let client = RealtimeClient(
+      url: URL(string: "https://example.supabase.co/realtime/v1")!,
+      options: RealtimeClientOptions(
+        logger: Logging.Logger(label: "test"),
+        handleAppLifecycle: false
+      )
     )
-    #expect(options.logger[metadataKey: "system"] == "realtime")
+    #expect(client.logger.label == "test")
+    #expect(client.logger[metadataKey: "system"] == "realtime")
+  }
+
+  @Test
+  func clientUsesTheDefaultLoggerWhenNoneIsGiven() {
+    #expect(RealtimeClientOptions().logger == nil)
+
+    let client = RealtimeClient(
+      url: URL(string: "https://example.supabase.co/realtime/v1")!,
+      options: RealtimeClientOptions(handleAppLifecycle: false)
+    )
+    #expect(client.logger.label == "io.supabase.realtime")
+    #expect(client.logger[metadataKey: "system"] == "realtime")
   }
 }
 

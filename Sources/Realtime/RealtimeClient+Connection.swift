@@ -189,7 +189,7 @@ extension RealtimeClient {
       let effects = Self.transition(&connection, next) { [reconnectBackoff, jitter] attempt in
         reconnectBackoff.delay(forAttempt: attempt, random: jitter)
       }
-      options.logger.debug("Connection → \(connection) on \(next)")
+      logger.debug("Connection → \(connection) on \(next)")
       if connection != previous {
         connectionDidChange()
       }
@@ -238,7 +238,7 @@ extension RealtimeClient {
 
     case .scheduleRetry(let delay):
       if case .reconnecting(let attempt, _, let error) = connection {
-        options.logger.debug(
+        logger.debug(
           "Reconnect attempt \(attempt + 1) in \(delay) after: \(error.message)")
       }
       tasks.replace([timer(after: delay) { $0.fireRetryTimer() }], at: .connection)
@@ -302,18 +302,18 @@ extension RealtimeClient {
   ///   `CancellationError` when the calling task is cancelled or ``disconnect(code:reason:)``
   ///   interrupts the attempt.
   public func connect() async throws {
-    options.logger.debug("Connecting...")
+    logger.debug("Connecting...")
 
     switch connection {
     case .connected:
-      options.logger.debug("Already connected")
+      logger.debug("Already connected")
 
     case .connecting:
-      options.logger.debug("Connection already in progress, waiting...")
+      logger.debug("Connection already in progress, waiting...")
       try await awaitConnectAttempt()
 
     case .reconnecting, .disconnected:
-      options.logger.debug("Initiating new connection")
+      logger.debug("Initiating new connection")
       apply(.connectRequested)
       try await awaitConnectAttempt()
     }
@@ -329,7 +329,7 @@ extension RealtimeClient {
   ///   - code: An optional numeric close code to send to the server.
   ///   - reason: An optional reason string to send to the server.
   public func disconnect(code: Int? = nil, reason: String? = nil) async {
-    options.logger.debug("Closing WebSocket connection")
+    logger.debug("Closing WebSocket connection")
     ref = 0
     sendBuffer = []
     // A developer-initiated disconnect should not be undone on the next foreground event.
@@ -422,7 +422,7 @@ extension RealtimeClient {
     do {
       conn = try await openConnection()
     } catch {
-      options.logger.error("Connection failed: \(error)")
+      logger.error("Connection failed: \(error)")
       if !Task.isCancelled {
         apply(.socketOpenFailed(Self.realtimeError(error)))
       }
@@ -433,7 +433,7 @@ extension RealtimeClient {
     guard case .connected = connection else {
       throw CancellationError()
     }
-    options.logger.debug("Connected to realtime WebSocket")
+    logger.debug("Connected to realtime WebSocket")
   }
 
   /// Asks the transport for a connection. One that opens after the calling task was cancelled
@@ -495,7 +495,7 @@ extension RealtimeClient {
 
     if pendingHeartbeatRef != nil {
       // Previous heartbeat was never acknowledged.
-      options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
+      logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       recordHeartbeat(.timedOut)
       pendingHeartbeatRef = nil
       pendingHeartbeatSentAt = nil
@@ -530,7 +530,7 @@ extension RealtimeClient {
   /// healthy connection.
   func handleSocketEvent(_ event: WebSocketEvent, generation: Int) async {
     guard generation == self.generation else {
-      options.logger.debug("Ignoring event from a stale connection: \(event)")
+      logger.debug("Ignoring event from a stale connection: \(event)")
       return
     }
 
@@ -538,23 +538,23 @@ extension RealtimeClient {
     case .frame(.binary(let data)):
       do {
         let broadcast = try serializer.decodeBinary(data)
-        options.logger.debug(
+        logger.debug(
           "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
         )
         await channel(forWireTopic: broadcast.topic)?.handleBinaryBroadcast(broadcast)
       } catch {
-        options.logger.error("Failed to decode binary frame: \(error)")
+        logger.error("Failed to decode binary frame: \(error)")
       }
 
     case .frame(.text(let text)):
       do {
         await onMessage(try serializer.decodeText(text))
       } catch {
-        options.logger.error("Failed to decode text frame: \(error)")
+        logger.error("Failed to decode text frame: \(error)")
       }
 
     case .closed(let code, let reason):
-      options.logger.debug(
+      logger.debug(
         "WebSocket closed. Code: \(code?.rawValue.description ?? "<none>"), Reason: \(reason ?? "<none>")"
       )
       apply(.socketClosed(code: code?.rawValue, reason: reason))
@@ -568,11 +568,11 @@ extension RealtimeClient {
       pendingHeartbeatSentAt = nil
       // Any reply proves the socket is alive, which is all a heartbeat checks.
       if message.status != .ok {
-        options.logger.warning("The server answered the heartbeat with: \(message.payload)")
+        logger.warning("The server answered the heartbeat with: \(message.payload)")
       }
       recordHeartbeat(.acknowledged(latency: sentAt.map { elapsed() - $0 } ?? .zero))
     } else {
-      options.logger.debug("Received event \(message.event) for channel \(message.topic)")
+      logger.debug("Received event \(message.event) for channel \(message.topic)")
     }
 
     await channel(forWireTopic: message.topic)?.onMessage(message)

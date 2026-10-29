@@ -260,9 +260,11 @@ Changes that still compile but behave differently. Check each one by hand.
   `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
   request went out with the API key. Only a missing session still falls back to the key. A
   refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
-- **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
-  `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
-  yourself if you need a separate Realtime logger.
+- **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
+  you set in `SupabaseClientOptions(realtime:)`. With `nil`, the default, it uses
+  `GlobalOptions.logger`.
+- **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
+  a Realtime client that already exists. A client built later fetches the current token itself.
 - **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
   for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
   `URLSessionWebSocketTransport` built from the session.
