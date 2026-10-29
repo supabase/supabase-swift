@@ -1319,6 +1319,45 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await channel.status == .subscribed)
   }
 
+  /// A server close aborted an older subscribe that is still in flight. Cancelling the newer
+  /// subscribe during its Postgres changes wait must still leave the newer join.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheReadinessWaitLeavesEvenWhenAnOlderSubscribeWasAborted() async throws {
+    let gate = Gate()
+    let h = Harness(timeout: Self.noJoinTimeout)
+    // The first `phx_join` stays in its send, so the aborted attempt is still in flight while
+    // the newer one waits for the Postgres changes.
+    let joinSends = LockIsolated(0)
+    h.socket.onSend { frame in
+      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
+      let send = joinSends.withValue {
+        $0 += 1
+        return $0
+      }
+      if send == 1 { await gate.park() }
+    }
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let firstSubscribe = Task { try await channel.subscribe() }
+    _ = try #require(await h.received(ChannelEvent.join))
+    #expect(await waitUntil { gate.isParked })
+    #expect(await channel.didReceiveClose())
+
+    let secondSubscribe = Task { try await channel.subscribe() }
+    let secondJoin = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(secondJoin)
+    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    secondSubscribe.cancel()
+
+    await #expect(throws: CancellationError.self) { try await secondSubscribe.value }
+    #expect(h.sent(ChannelEvent.leave).contains { $0.joinRef == secondJoin.ref })
+
+    gate.open()
+    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
+    withExtendedLifetime(changes) {}
+  }
+
   /// A subscribe cancelled while its connect is in flight must not write `joinRef` or send a
   /// `phx_join` once the connect returns; the attempt that replaced it owns the join.
   @Test(.timeLimit(.minutes(1)))

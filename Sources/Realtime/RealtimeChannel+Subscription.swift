@@ -460,10 +460,11 @@ extension RealtimeChannel {
       await leaveFailedJoin(ref)
       throw RealtimeError.postgresChangesTimeout
     } catch is CancellationError {
-      // The server accepted the join, so leave it when the caller cancels. An abort needs no
-      // leave: a close already ended the join, and a disconnect would buffer the frame for the
-      // next connection.
-      if abortedSubscribe == nil {
+      // The server accepted the join, so leave it when the caller cancels. An abort of this
+      // attempt needs no leave: a close already ended the join, and a disconnect would buffer
+      // the frame for the next connection. An abort of an older attempt still in flight does
+      // not count.
+      if !isAbortedSubscribeCurrent {
         await leaveFailedJoin(ref)
       }
       throw CancellationError()
@@ -472,6 +473,13 @@ extension RealtimeChannel {
 
   /// Leaves the join `ref` after its Postgres changes failed. The join is dropped before
   /// `phx_leave` goes out, so a confirmation that lands while it is sent is stale.
+  private var isAbortedSubscribeCurrent: Bool {
+    guard let aborted = abortedSubscribe?.task, case .subscribing(let current, _) = state else {
+      return false
+    }
+    return aborted == current
+  }
+
   private func leaveFailedJoin(_ ref: String) async {
     guard joinRef == ref else { return }
     joinRef = nil
