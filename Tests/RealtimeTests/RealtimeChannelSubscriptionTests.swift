@@ -453,6 +453,27 @@ struct RealtimeChannelSubscriptionTests {
     withExtendedLifetime(changes) {}
   }
 
+  /// The server accepted the join, so a `subscribe()` cancelled while it waits for the Postgres
+  /// changes leaves the topic instead of leaving the server-side join behind.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheReadinessWaitLeavesTheTopic() async throws {
+    let h = Harness(timeout: Self.noJoinTimeout)
+    let channel = await h.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    subscription.cancel()
+
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(try #require(await h.received(ChannelEvent.leave)).joinRef == join.ref)
+    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.joinRef == nil)
+    withExtendedLifetime(changes) {}
+  }
+
   /// "Subscribed to PostgreSQL" that lands as the readiness timeout fires: `subscribe()` either
   /// succeeds with the join live, or throws with the join gone. Never a thrown error on a channel
   /// that reports `.subscribed`.

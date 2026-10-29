@@ -459,6 +459,14 @@ extension RealtimeChannel {
       if confirmedJoinRef == ref { return }
       await leaveFailedJoin(ref)
       throw RealtimeError.postgresChangesTimeout
+    } catch is CancellationError {
+      // The server accepted the join, so leave it when the caller cancels. An abort needs no
+      // leave: a close already ended the join, and a disconnect would buffer the frame for the
+      // next connection.
+      if abortedSubscribe == nil {
+        await leaveFailedJoin(ref)
+      }
+      throw CancellationError()
     }
   }
 
