@@ -5,6 +5,7 @@
 //  Created by Lucas Abijmil on 20/02/2025.
 //
 
+import IssueReporting
 import Testing
 
 @testable import Realtime
@@ -185,5 +186,30 @@ struct RealtimePostgresFilterTests {
     let filter: RealtimePostgresFilter = .in("tag", values: ["a,b", "c"])
 
     #expect(filter.value == #"tag=in.("a,b",c)"#)
+  }
+
+  @Test
+  func rawIsSentAsWritten() {
+    let filter: RealtimePostgresFilter = .raw("id=eq.1")
+
+    #expect(filter.value == "id=eq.1")
+  }
+
+  @Test
+  func rawInsideAnd() {
+    let filter: RealtimePostgresFilter = .and([.raw("id=gt.1"), .eq("status", value: "open")])
+
+    #expect(filter.value == "id=gt.1,status=eq.open")
+  }
+
+  @Test(.enabled(if: runsUnderSwiftTest))
+  func notOfRawReportsAnIssueAndSendsTheRawString() {
+    let filter: RealtimePostgresFilter = .not(.raw("id=eq.1"))
+    let issues = IssueCollector()
+
+    let value = withIssueReporters([issues]) { filter.value }
+
+    #expect(value == "id=eq.1")
+    #expect(issues.count == 1)
   }
 }

@@ -61,11 +61,11 @@ struct PresenceView: View {
 
   func subscribe() async {
     do {
-      let channel = await supabase.channel("presence-example")
+      let channel = supabase.channel("presence-example")
 
-      let presence = await channel.presenceChanges()
+      let presence = channel.presenceChange()
 
-      try await channel.subscribe()
+      try await channel.subscribeWithError()
       self.channel = channel
 
       let userId = auth.currentUserID

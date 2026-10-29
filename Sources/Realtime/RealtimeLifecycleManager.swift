@@ -81,8 +81,7 @@ import Foundation
     }
 
     private func handleBackground() {
-      guard let client else { return }
-      Task { await client.handleAppBackground() }
+      client?.handleAppBackground()
     }
   }
 

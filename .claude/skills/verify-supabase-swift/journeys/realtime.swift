@@ -15,14 +15,14 @@ _ = await Verify.attempt("rt-connect") {
 }
 
 Verify.step("rt-broadcast", "receiver subscribes to \(topic); sender broadcasts 'ping'")
-let inbox = await receiver.realtime.channel(topic)
-let pings = await inbox.broadcasts(event: "ping")
-let outbox = await sender.realtime.channel(topic)
+let inbox = receiver.realtime.channel(topic)
+let pings = inbox.broadcastStream(event: "ping")
+let outbox = sender.realtime.channel(topic)
 _ = await Verify.attempt("rt-subscribe") {
-  try await inbox.subscribe()
-  try await outbox.subscribe()
+  try await inbox.subscribeWithError()
+  try await outbox.subscribeWithError()
 }
-Verify.check("rt-subscribe", await inbox.status == .subscribed, "receiver status \(await inbox.status)")
+Verify.check("rt-subscribe", inbox.status == .subscribed, "receiver status \(inbox.status.rawValue)")
 
 _ = await Verify.attempt("rt-broadcast") {
   try await outbox.broadcast(event: "ping", message: ["n": 1, "from": "sender"] as JSONObject)
@@ -41,11 +41,11 @@ if let message = await Verify.attempt("rt-broadcast", {
 }
 
 Verify.step("rt-postgres-insert", "listen for INSERT on key_value_storage, then insert key \(key)")
-let changes = await receiver.realtime.channel(Verify.unique("db"))
-let inserts = await changes.postgresChanges(
+let changes = receiver.realtime.channel(Verify.unique("db"))
+let inserts = changes.postgresChange(
   InsertAction.self, schema: "public", table: "key_value_storage")
-let system = await changes.systemMessages()
-_ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribe() }
+let system = changes.system()
+_ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribeWithError() }
 // The server confirms the Postgres listener with a system message after the subscribe reply.
 // A write before that message is never delivered.
 _ = await Verify.attempt("rt-postgres-subscribe") {

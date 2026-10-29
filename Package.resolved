@@ -1,5 +1,5 @@
 {
-  "originHash" : "226177422a9a10d0c1d446874e6c27ccfba8022fc08443aa241b6baecbc9bee6",
+  "originHash" : "a82ddbca724633c76ee07d58542db5d00b3816c8a9910990a515d2ce6a826f6a",
   "pins" : [
     {
       "identity" : "mocker",
@@ -8,6 +8,14 @@
       "state" : {
         "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
         "version" : "3.0.2"
+      }
+    },
+    {
+      "identity" : "phoenix-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/supabase/phoenix-swift",
+      "state" : {
+        "revision" : "0c5d449f29c88ad10adb5a7612a8d740ec28a147"
       }
     },
     {

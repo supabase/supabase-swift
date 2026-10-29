@@ -102,7 +102,7 @@ extension PresenceV2: Decodable {
 
 /// An event describing clients joining and leaving a Realtime channel's presence set.
 ///
-/// Received via ``RealtimeChannel/presenceChanges()``.
+/// Received via ``RealtimeChannel/presenceChange()``.
 ///
 /// ## Topics
 /// ### Presence Maps

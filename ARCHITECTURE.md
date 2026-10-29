@@ -31,6 +31,10 @@ This is the official Supabase SDK for Swift, mirroring the design of supabase-js
 serves Swift 6.4+, and [`Package@swift-6.2.swift`](Package@swift-6.2.swift) serves earlier
 toolchains. Keep the two in sync.
 
+`Realtime` depends on [phoenix-swift](https://github.com/supabase/phoenix-swift) (the `Phoenix`
+product) for the socket and the Phoenix channel protocol. Its tests use `PhoenixTesting`. Both
+manifests pin it to one revision.
+
 ## Architecture Notes
 
 ### Client Initialization
@@ -48,6 +52,26 @@ All public types should conform to `Sendable` where appropriate for Swift 6 comp
 ### HTTP Layer
 
 Uses modern `HTTPTypes` for request/response handling. Every module shares one public seam: a `ClientTransport` performs the exchange and an ordered `ClientMiddleware` chain runs in front of it, grouped into one `HTTPClientConfiguration` that every client takes as a single `http:` parameter, so a custom networking stack, extra headers, or a test stub can be injected once for the whole SDK.
+
+### Realtime
+
+`Realtime` is built on phoenix-swift. Only `Sources/Realtime` imports `Phoenix`, and it imports
+it internally, so no Phoenix type is part of the public API.
+
+- `RealtimeClient` and `RealtimeChannel` are `final class`es, not actors. Reads such as `status`
+  and `channel(_:options:)` are synchronous.
+- `RealtimeConnection` is what the client and its channels share: the phoenix-swift `Socket`,
+  the resolved `RealtimeClientOptions`, the REST `HTTPClient` for `httpSend`, and the access
+  token. Channels hold the connection, not the client, so there is no reference cycle.
+- `RealtimeChannel` is a lock-guarded state machine with three phases: `idle`, `attached`, and
+  `removed`. Each `subscribeWithError()` attaches one new Phoenix channel. A pump task per
+  Phoenix channel reads its messages and fans them out to the public streams. A generation
+  number drops late values from an old Phoenix channel.
+- `SupabaseFrameCodec` wraps phoenix-swift's `PhoenixFrameCodec`. It adds Supabase's binary
+  broadcast frames: kind 3 outbound and kind 4 inbound.
+- `Sources/Realtime/Policy` holds pure functions with no I/O: the join payload, join reply
+  parsing, message routing, the reconnect policy, the frame codecs, and the bridge between
+  Phoenix and Realtime types. Test them directly, without a socket.
 
 ### Configuration
 

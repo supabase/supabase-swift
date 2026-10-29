@@ -52,8 +52,9 @@ public struct RealtimeError: SupabaseError {
     public static let unauthorized: Kind = "unauthorized"
     /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one.
     public static let rateLimited: Kind = "rateLimited"
-    /// The server closed the channel (`phx_close`) with a `system` error. The message carries
-    /// the server's reason.
+    /// The server closed the channel (`phx_close`) with a `system` error, and the message carries
+    /// the server's reason. ``RealtimeChannel/subscribeWithError()`` also throws it, not
+    /// retryable, after ``RealtimeClient/removeChannel(_:)`` removed the channel.
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
@@ -69,11 +70,15 @@ public struct RealtimeError: SupabaseError {
     public static let server: Kind = "server"
     /// The network path failed: a REST broadcast never completed, the WebSocket upgrade was
     /// refused, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
-    /// there was one; `closeCode` the close status when the socket closed.
+    /// there was one.
     public static let transport: Kind = "transport"
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
+    /// The server answered a join with `postgres_changes` bindings that differ from the ones the
+    /// channel asked for. The channel unsubscribed. Check the schema, table, and filter of each
+    /// `postgresChange` stream, then subscribe again.
+    public static let postgresChangesMismatch: Kind = "postgresChangesMismatch"
 
     /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
     static let encoding: Kind = "encoding"
@@ -160,8 +165,6 @@ public struct RealtimeError: SupabaseError {
   public var message: String
   /// The code parsed from a server error reason, when the reason carried one.
   public var serverCode: ServerCode?
-  /// The close status, when a WebSocket close caused this error.
-  package var closeCode: WebSocketCloseCode?
   /// Whether the same operation can succeed later without the caller changing anything.
   ///
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
@@ -200,11 +203,15 @@ extension RealtimeError {
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
 
+  static let notSubscribed = RealtimeError(
+    kind: .notSubscribed, message: "The channel is not subscribed.")
+
+  static let notConnected = RealtimeError(
+    kind: .notConnected, message: "The client is not connected.")
+
   static let accessTokenMissing = RealtimeError(
     kind: .accessTokenMissing, message: "Access token is required for httpSend()",
     isRetryable: false)
-
-  static let heartbeatTimeout = RealtimeError(kind: .timeout, message: "heartbeat timeout")
 
   static func decoding(_ message: String) -> RealtimeError {
     RealtimeError(kind: .decoding, message: message, isRetryable: false)
@@ -250,23 +257,17 @@ extension RealtimeError {
     return RealtimeError(kind: .server, message: reason, serverCode: ServerCode.parse(reason))
   }
 
-  /// The error for a WebSocket that closed while the client still needed it.
-  package static func socketClosed(code: WebSocketCloseCode?, reason: String?) -> RealtimeError {
-    var message = "WebSocket closed"
-    if let code { message += " (code \(code.rawValue))" }
+  /// The error for a WebSocket the server closed with an application close code.
+  package static func socketClosed(code: Int, reason: String?) -> RealtimeError {
+    var message = "WebSocket closed (code \(code))"
     if let reason, !reason.isEmpty { message += ": \(reason)" }
-    var error = RealtimeError(kind: .transport, message: message)
-    error.closeCode = code
-    return error
+    return RealtimeError(kind: .transport, message: message, isRetryable: code < 4000)
   }
 
-  /// Whether `other` reports the same failure. `underlyingError` is not compared: it is
-  /// rarely `Equatable`, and two errors with the same kind, message and codes mean the same.
-  func isSameFailure(as other: RealtimeError?) -> Bool {
-    guard let other else { return false }
-    return kind == other.kind && message == other.message && serverCode == other.serverCode
-      && closeCode == other.closeCode && isRetryable == other.isRetryable
-  }
+  static let postgresChangesMismatch = RealtimeError(
+    kind: .postgresChangesMismatch,
+    message: "The server's postgres_changes bindings differ from the channel's streams.",
+    isRetryable: false)
 
   /// The error for an HTTP upgrade the server refused.
   ///

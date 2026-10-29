@@ -14,7 +14,7 @@ enum ChannelBinding: Sendable {
   case postgres(PostgresJoinConfig)
   case presence
   case system
-  /// A `statusChanges()` stream. No message reaches it; it keeps the bindings aligned with the
+  /// A `statusChange` stream. No message reaches it; it keeps the bindings aligned with the
   /// channel's streams.
   case status
 }
@@ -33,18 +33,50 @@ enum ChannelDelivery: Sendable {
   case system(RealtimeMessageV2)
 }
 
+/// A route holds no list of its own, so routing a message allocates nothing beyond the delivery.
 struct ChannelRoute {
   let delivery: ChannelDelivery
-  /// Indexes into the bindings the route was computed from, in binding order.
-  let listeners: [Int]
+  private let audience: Audience
+  private let bindings: [ChannelBinding]
 
-  fileprivate init(
-    _ delivery: ChannelDelivery,
-    bindings: [ChannelBinding],
-    where accepts: (ChannelBinding) -> Bool
-  ) {
+  fileprivate init(_ delivery: ChannelDelivery, _ audience: Audience, bindings: [ChannelBinding]) {
     self.delivery = delivery
-    listeners = bindings.indices.filter { accepts(bindings[$0]) }
+    self.audience = audience
+    self.bindings = bindings
+  }
+
+  /// Indexes into the bindings the route was computed from, in binding order.
+  var listeners: [Int] {
+    bindings.indices.filter { accepts(bindings[$0]) }
+  }
+
+  var hasListeners: Bool {
+    bindings.contains(where: accepts)
+  }
+
+  func accepts(_ binding: ChannelBinding) -> Bool {
+    switch (audience, binding) {
+    case (.system, .system), (.presence, .presence):
+      true
+    case (.broadcast(let event), .broadcast(let listening)),
+      (.broadcastData(let event), .broadcastData(let listening)):
+      eventMatches(listening, event)
+    case (.postgres(let ids, let serverChanges), .postgres(let change)):
+      serverChanges.contains { server in
+        ids.contains { $0.intValue == server.id } && server.matches(change)
+      }
+    default:
+      false
+    }
+  }
+
+  fileprivate enum Audience {
+    case system
+    case presence
+    case broadcast(event: String)
+    case broadcastData(event: String)
+    /// `ids` are the server binding ids the change names, as the payload sent them.
+    case postgres(ids: [JSONValue], serverChanges: [PostgresJoinConfig])
   }
 }
 
@@ -65,9 +97,7 @@ func route(
 ) throws -> ChannelRoute? {
   switch message.eventType {
   case .system:
-    return ChannelRoute(.system(message), bindings: bindings) {
-      if case .system = $0 { true } else { false }
-    }
+    return ChannelRoute(.system(message), .system, bindings: bindings)
 
   case .broadcast:
     guard let event = message.payload["event"]?.stringValue else {
@@ -79,13 +109,10 @@ func route(
     guard let data = message.payload["data"] else {
       throw RealtimeError.decoding("Expected \"data\" key in message payload.")
     }
-    let ids = message.payload["ids"]?.arrayValue?.compactMap(\.intValue) ?? []
+    let ids = message.payload["ids"]?.arrayValue ?? []
     let action = try makeAction(from: data.decode(as: PostgresActionData.self), rawMessage: message)
-    let matched = serverChanges.filter { ids.contains($0.id) }
-    return ChannelRoute(.postgres(action), bindings: bindings) { binding in
-      guard case .postgres(let change) = binding else { return false }
-      return matched.contains { $0 == change }
-    }
+    return ChannelRoute(
+      .postgres(action), .postgres(ids: ids, serverChanges: serverChanges), bindings: bindings)
 
   case .presenceDiff:
     let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
@@ -123,18 +150,14 @@ func route(_ broadcast: DecodedBroadcast, bindings: [ChannelBinding]) -> Channel
     return broadcastRoute(message, event: event, bindings: bindings)
 
   case .binary(let data):
-    return ChannelRoute(.broadcastData(data), bindings: bindings) {
-      if case .broadcastData(let listening) = $0 { eventMatches(listening, event) } else { false }
-    }
+    return ChannelRoute(.broadcastData(data), .broadcastData(event: event), bindings: bindings)
   }
 }
 
 private func broadcastRoute(
   _ json: JSONObject, event: String, bindings: [ChannelBinding]
 ) -> ChannelRoute {
-  ChannelRoute(.broadcast(json), bindings: bindings) {
-    if case .broadcast(let listening) = $0 { eventMatches(listening, event) } else { false }
-  }
+  ChannelRoute(.broadcast(json), .broadcast(event: event), bindings: bindings)
 }
 
 private func presenceRoute(
@@ -144,7 +167,7 @@ private func presenceRoute(
   bindings: [ChannelBinding]
 ) -> ChannelRoute {
   let action = PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage)
-  return ChannelRoute(.presence(action), bindings: bindings, where: \.isPresence)
+  return ChannelRoute(.presence(action), .presence, bindings: bindings)
 }
 
 private func eventMatches(_ listening: String, _ event: String) -> Bool {

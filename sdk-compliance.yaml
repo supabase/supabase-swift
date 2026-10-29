@@ -241,16 +241,14 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
-  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
-  # hangs off; their executors and identity properties are not a capability of their own.
+  # RealtimeClient and RealtimeChannel are the classes every realtime.* capability
+  # hangs off; their identity properties are not a capability of their own.
   - SupabaseClient.realtime
   - RealtimeClient
   - RealtimeClient.init
-  - RealtimeClient.unownedExecutor
   - RealtimeChannel
   - RealtimeChannel.topic
   - RealtimeChannel.config
-  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -278,6 +276,7 @@ supporting_symbols:
   - RealtimeError.Kind.rateLimited
   - RealtimeError.Kind.channelClosed
   - RealtimeError.Kind.payloadTooLarge
+  - RealtimeError.Kind.postgresChangesMismatch
   - RealtimeError.serverCode
   - RealtimeError.isRetryable
   # The code the server prefixes to a join or channel error reason (SDK-2098).
@@ -1369,13 +1368,13 @@ features:
     symbols:
       - RealtimeClient.status
     supporting_symbols:
-      - RealtimeClient.statusChanges
+      - RealtimeClient.statusChange
       - RealtimeClientStatus.init
       - RealtimeClientStatus.rawValue
   realtime.client.listen_heartbeats:
     status: implemented
     symbols:
-      - RealtimeClient.heartbeats
+      - RealtimeClient.heartbeat
     supporting_symbols:
       - HeartbeatStatus.init
       - HeartbeatStatus.rawValue
@@ -1391,10 +1390,10 @@ features:
   realtime.channel.subscribe:
     status: implemented
     symbols:
-      - RealtimeChannel.subscribe
+      - RealtimeChannel.subscribeWithError
     supporting_symbols:
       - RealtimeChannel.status
-      - RealtimeChannel.statusChanges
+      - RealtimeChannel.statusChange
       - RealtimeChannelStatus.init
       - RealtimeChannelStatus.rawValue
   realtime.channel.unsubscribe:
@@ -1406,7 +1405,6 @@ features:
     symbols:
       - RealtimeChannel.broadcast
     supporting_symbols:
-      - RealtimeClient.push
       - PushStatus.init
       - PushStatus.rawValue
   realtime.channel.broadcast_http:
@@ -1418,21 +1416,21 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
-      - RealtimeChannel.broadcasts
-      - RealtimeChannel.broadcastData
+      - RealtimeChannel.broadcastStream
+      - RealtimeChannel.broadcastDataStream
     supporting_symbols:
-      - RealtimeChannel.systemMessages
+      - RealtimeChannel.system
       - RealtimeMessageV2.eventType
       - RealtimeMessageV2.EventType.init
       - RealtimeMessageV2.EventType.rawValue
   realtime.subscriptions.postgres_changes:
     status: implemented
     symbols:
-      - RealtimeChannel.postgresChanges
+      - RealtimeChannel.postgresChange
   realtime.subscriptions.subscribe_presence:
     status: implemented
     symbols:
-      - RealtimeChannel.presenceChanges
+      - RealtimeChannel.presenceChange
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -1444,6 +1442,7 @@ features:
       - RealtimePostgresFilter.isDistinct
       - RealtimePostgresFilter.not
       - RealtimePostgresFilter.and
+      - RealtimePostgresFilter.raw
       - RealtimePostgresIsValue
       - RealtimePostgresIsValue.null
       - RealtimePostgresIsValue.true
@@ -1487,11 +1486,11 @@ features:
   # Swift always has a native WebSocket (URLSessionWebSocketTask); unlike
   # supabase-js, there's no runtime (Node <22, Cloudflare Workers, Deno) that
   # needs an injected WebSocket constructor, and the SDK exposes none — the
-  # transport is always the internal URLSessionWebSocketTransport.
+  # transport is always phoenix-swift's URLSessionTransport.
   realtime.configuration.custom_websocket_transport: not_applicable
   realtime.configuration.reconnect_backoff:
     status: partially_implemented
-    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (RealtimeClient.reconnectBackoff, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s) is hardcoded."
+    note: "RealtimeClientOptions.reconnectDelay configures the base delay; there is no hook to supply a custom attempt-count-to-delay function — the backoff curve itself (the internal reconnectDecision policy, a full-jitter exponential built on BackoffPolicy.fullJitter, capped at 30 s, retrying until the connection is back and stopping only on HTTP 401, 403 or 404 or a close code of 4000 or above) is hardcoded. maxRetryAttempts bounds the attempts of one subscribeWithError(), not the socket."
   realtime.configuration.heartbeat_interval:
     status: implemented
     note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."

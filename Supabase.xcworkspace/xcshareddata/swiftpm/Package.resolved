@@ -1,5 +1,5 @@
 {
-  "originHash" : "12df0e226c097895032e0ff49e6ccabb1e99b104ac49aa3a51782a25ec7d9f81",
+  "originHash" : "0732a24f1b7cd2a146df6ab120e12cbaff080ba39e905838a7ad5f085f281d32",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -89,6 +89,14 @@
       "state" : {
         "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
         "version" : "3.0.2"
+      }
+    },
+    {
+      "identity" : "phoenix-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/supabase/phoenix-swift",
+      "state" : {
+        "revision" : "0c5d449f29c88ad10adb5a7612a8d740ec28a147"
       }
     },
     {
