@@ -773,6 +773,81 @@
       }
     }
 
+    @Test
+    func presenceTrackUpdateAndUntrackReachTheOtherClient() async throws {
+      let client = client
+      let client2 = client2
+      try await withMainSerialExecutor {
+        struct Status: Codable, Equatable, Sendable {
+          let name: String
+          let status: String
+        }
+
+        try await client.realtime.connect()
+        try await client2.realtime.connect()
+
+        let topic = "presence-\(UUID().uuidString)"
+        let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
+        let bob = await client2.realtime.channel(topic) { $0.presence.key = "bob" }
+        let anaStates = await ana.presenceStates()
+        let bobChanges = await bob.presenceChanges()
+        try await ana.subscribe()
+        try await bob.subscribe()
+
+        try await ana.track(Status(name: "Ana", status: "online"))
+        try await waitForPresence(on: bob) {
+          try $0.decode(as: Status.self)["ana"] == [Status(name: "Ana", status: "online")]
+        }
+
+        try await ana.track(Status(name: "Ana", status: "away"))
+        try await waitForPresence(on: bob) {
+          try $0.decode(as: Status.self)["ana"] == [Status(name: "Ana", status: "away")]
+        }
+
+        try await ana.untrack()
+        try await waitForPresence(on: bob) { $0.entries["ana"] == nil }
+
+        let changes = try await withTimeout(.seconds(5)) {
+          await bobChanges.filter { $0.joins["ana"] != nil || $0.leaves["ana"] != nil }
+            .prefix(3).collect()
+        }
+        let joined = try #require(changes.first?.joins["ana"]?.first)
+        let updated = try #require(changes.dropFirst().first)
+        #expect(updated.joins["ana"]?.first?.previousRef == joined.ref)
+        #expect(updated.leaves["ana"]?.map(\.ref) == [joined.ref])
+        #expect(changes.last?.leaves["ana"]?.count == 1)
+
+        await ana.unsubscribe()
+        await bob.unsubscribe()
+        withExtendedLifetime(anaStates) {}
+      }
+    }
+
+    @Test
+    func presenceTrackBeforeSubscribeThrowsNotSubscribed() async {
+      let client = client
+      await withMainSerialExecutor {
+        let channel = await client.realtime.channel("presence-\(UUID().uuidString)")
+
+        let error = await #expect(throws: RealtimeError.self) {
+          try await channel.track(["name": "ana"] as JSONObject)
+        }
+        #expect(error?.kind == .notSubscribed)
+      }
+    }
+
+    /// Polls the channel's presence state until `condition` holds, for at most five seconds.
+    private func waitForPresence(
+      on channel: RealtimeChannel,
+      until condition: @escaping @Sendable (PresenceState) throws -> Bool
+    ) async throws {
+      try await withTimeout(.seconds(5)) {
+        while try !condition(await channel.presenceState) {
+          try await Task.sleep(for: .milliseconds(50))
+        }
+      }
+    }
+
     private func subscribeMany(_ channels: [RealtimeChannel]) async throws {
       try await withThrowingTaskGroup { group in
         for channel in channels {

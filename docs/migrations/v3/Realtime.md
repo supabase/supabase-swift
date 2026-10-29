@@ -68,7 +68,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `import RealtimeV2` | `import Realtime` |
-| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceV2` |
+| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceEntry` |
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
 | `RealtimeClientV2.subscriptions` | `RealtimeClient.channels` |
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
@@ -87,9 +87,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)` |
 | `broadcastDataStream(event:)` | `broadcastData(event:)` |
 | `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(_:schema:table:filter: RealtimePostgresFilter?)` |
-| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()` |
+| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()`, `presenceStates()` (see [Presence](#presence)) |
+| `PresenceV2`, `PresenceV2.state`, `decodeState(as:decoder:)` | `PresenceEntry`, `payload`, `decode(as:decoder:)` |
+| `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
+| `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
 | `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
-| `broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)`, `untrack()` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
+| `broadcast(event:message:)`, `broadcast(event:data:)` (`async`) | `async throws`; wait for the server reply when `acknowledgeBroadcasts` is on |
+| `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
 | `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
@@ -103,7 +107,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `httpSend(...timeout: TimeInterval?)` | `httpSend(...timeout: Duration?)` |
 | `PostgresAction.record`, `.oldRecord` (`[String: AnyJSON]`) | `[String: JSONValue]` |
 | `PushStatus`, `LogLevel` (`enum`) | `struct`, same member names |
-| `Column`, `PresenceV2` (`Codable`) | `Decodable` |
+| `Column` (`Codable`) | `Decodable` |
 | `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` (`Codable`) | `Encodable` |
 | `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
@@ -187,15 +191,17 @@ let task = Task {
 defer { task.cancel() }
 ```
 
-Open `postgresChanges` and `presenceChanges` streams before `subscribe()`. They shape the join
-request. Opening one after the join reports an issue and returns an empty stream. Presence is
-sent to the server only when a `presenceChanges()` stream is open.
+Open `postgresChanges`, `presenceChanges` and `presenceStates` streams before `subscribe()`.
+They shape the join request. Opening one after the join reports an issue and returns an empty
+stream. Presence is sent to the server only when a `presenceChanges()` or `presenceStates()`
+stream is open.
 
 ## Pushes throw instead of returning a status
 
-`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:)` and `untrack()` are
-`async throws`. They return once the frame is sent. When `acknowledgeBroadcasts` is on they wait
-for the server reply first, and the reply becomes the result of the call:
+`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
+`async throws`. The broadcasts return once the frame is sent; when `acknowledgeBroadcasts` is on
+they wait for the server reply first. `track` and `untrack` always wait for the reply. The reply
+becomes the result of the call:
 
 - The server acknowledged the push: the call returns.
 - No reply came within the client's `timeout`: the call throws `RealtimeError` with
@@ -224,6 +230,34 @@ do {
 A WebSocket `broadcast` on a channel that is not subscribed no longer falls back to the REST
 endpoint. It throws `kind == .notSubscribed`. Use `httpSend` to broadcast without a
 subscription.
+
+## Presence
+
+`presenceChanges()` yields a `PresenceChange` per sync: the entries that joined and left, as
+lists by presence key, so a user on two devices has two entries. `presenceStates()` yields the
+whole state after every sync that changes it, and `presenceState` reads it. To show who is online, decode the
+state instead of applying joins and leaves yourself.
+
+```swift
+// v2
+let presence = channel.presenceChange()
+try await channel.subscribeWithError()
+try await channel.track(UserStatus(name: "ana"))
+for await action in presence {
+  let joined = try action.decodeJoins(as: UserStatus.self)
+  let left = try action.decodeLeaves(as: UserStatus.self)
+}
+// v3
+let states = await channel.presenceStates()
+try await channel.subscribe()
+try await channel.track(UserStatus(name: "ana"))
+for await state in states {
+  let online: [String: [UserStatus]] = try state.decode()
+}
+```
+
+The SDK does not track again after a rejoin. Call `track` again when `events()` emits
+`.resubscribed`.
 
 ## Intervals are `Duration`
 

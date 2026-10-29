@@ -293,6 +293,7 @@ struct RealtimeChannelTests {
       await sut.broadcasts(event: "test"),
       await sut.broadcasts(event: "cursor-pos"),
       await sut.presenceChanges(),
+      await sut.presenceStates(),
       await sut.events(),
     ]
 
@@ -302,6 +303,7 @@ struct RealtimeChannelTests {
       case .broadcast(let event, _): "broadcast(\(event))"
       case .broadcastData(let event, _): "broadcastData(\(event))"
       case .presence: "presence"
+      case .presenceState: "presenceState"
       case .events: "events"
       case .status: "status"
       }
@@ -310,7 +312,7 @@ struct RealtimeChannelTests {
       kinds == [
         "postgres", "postgres", "postgres", "postgres",
         "broadcast(test)", "broadcast(cursor-pos)",
-        "presence", "events",
+        "presence", "presenceState", "events",
       ]
     )
     #expect(await sut.hasPresenceListener)
