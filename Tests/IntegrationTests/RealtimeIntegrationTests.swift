@@ -396,10 +396,10 @@
       let accessToken = try #require(session?.accessToken)
 
       let pushed = try await withTimeout(.seconds(5)) {
-        while await realtime.accessToken != accessToken {
+        while !Task.isCancelled, await realtime.accessToken != accessToken {
           await Task.yield()
         }
-        return true
+        return await realtime.accessToken == accessToken
       }
       #expect(pushed)
     }

@@ -862,12 +862,14 @@ struct SupabaseClientTests {
     #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
   }
 
+  /// A third-party `accessToken` keeps the client from listening for auth events, so only the
+  /// events a test delivers reach `handleTokenChanged`.
   private func makeRealtimeAuthClient() -> SupabaseClient {
     SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock(), autoRefresh: .manual),
+        auth: .init(storage: AuthLocalStorageMock(), accessToken: { nil }),
         realtime: RealtimeClientOptions(handleAppLifecycle: false)
       )
     )
