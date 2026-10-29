@@ -55,6 +55,38 @@ struct RealtimeClientChannelsTests {
   }
 
   @Test
+  func aLateCloseForAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
+    let old = await client.channel("a")
+    await client.removeChannel(old)
+    let new = await client.channel("a")
+
+    await old.onMessage(
+      RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
+      )
+    )
+
+    #expect(await client.channels.count == 1)
+    #expect(await client.channels.first === new)
+  }
+
+  @Test
+  func removingAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
+    let old = await client.channel("a")
+    await old.onMessage(
+      RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
+      )
+    )
+    let new = await client.channel("a")
+
+    await client.removeChannel(old)
+
+    #expect(await client.channels.count == 1)
+    #expect(await client.channels.first === new)
+  }
+
+  @Test
   func configureAppliesTheConfiguration() async {
     let channel = await client.channel("private-room", configure: { $0.isPrivate = true })
 

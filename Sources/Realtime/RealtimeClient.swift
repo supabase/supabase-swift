@@ -444,7 +444,7 @@ public actor RealtimeClient {
       await channel.unsubscribe()
     }
 
-    channelsByTopic[channel.topic] = nil
+    forget(channel)
     await channel.finishStreams()
 
     if channelsByTopic.isEmpty {
@@ -459,7 +459,15 @@ public actor RealtimeClient {
 
   /// Forgets a channel the server closed. The channel ends its own streams.
   func remove(_ channel: RealtimeChannel) {
-    channelsByTopic[channel.topic] = nil
+    forget(channel)
+  }
+
+  /// Clears `channel`'s topic only while it still holds `channel`: a newer channel created for
+  /// the same topic after `channel` was removed stays registered.
+  private func forget(_ channel: RealtimeChannel) {
+    if channelsByTopic[channel.topic] === channel {
+      channelsByTopic[channel.topic] = nil
+    }
   }
 
   /// Unsubscribes from and removes all channels, then disconnects immediately.
@@ -483,7 +491,7 @@ public actor RealtimeClient {
       await group.waitForAll()
     }
     for channel in removed {
-      channelsByTopic[channel.topic] = nil
+      forget(channel)
     }
 
     // `disconnect()` also cancels a pending idle disconnect.
