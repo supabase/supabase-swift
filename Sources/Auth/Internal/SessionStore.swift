@@ -69,13 +69,13 @@ struct AuthChange: Hashable, Sendable {
 actor SessionStore {
   enum Transition: Sendable {
     case signedIn(Session, event: AuthChangeEvent)
-    /// Applied while ``SessionStore/generation`` still equals `fromGeneration`, or while the store
-    /// still holds the session whose refresh token is `redeemedRefreshToken`.
+    /// Applied only while the store holds the session whose refresh token is `refreshToken`, or
+    /// holds none when `refreshToken` is `nil`: what it held when the refresh started.
     ///
-    /// The server has already rotated `redeemedRefreshToken`, so dropping the result would leave a
-    /// held session whose next refresh redeems a used token. A commit that kept the token, such as
-    /// a user update, keeps its user in the refreshed session.
-    case refreshed(Session, redeemedRefreshToken: String, fromGeneration: UInt64)
+    /// A sign-in or sign-out while the request was out makes the result stale. A change that keeps
+    /// the session, such as a user update, does not: the server already rotated the refresh token,
+    /// so dropping the result would leave the store with a spent one.
+    case refreshed(Session, replacing: String?)
     /// Merged into the session that is current when the commit runs.
     case userUpdated(User, event: AuthChangeEvent)
     case signedOut(SignOutReason, event: AuthChangeEvent)
@@ -139,9 +139,8 @@ actor SessionStore {
 
   private static let refreshFailureCooldown: TimeInterval = 60
 
-  /// Grows by one on every state change. A refresh records it when it starts, so that its result
-  /// applies only to the state it started from, or to a later state that still holds the redeemed
-  /// refresh token.
+  /// Grows by one on every state change, so tests can tell that a commit changed nothing, and the
+  /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
 
   private let storage: any AuthStorage
@@ -161,18 +160,23 @@ actor SessionStore {
     published = LockIsolated(Published())
   }
 
-  /// Starts loaded with what a read of storage already returned: `loadedSession`, or no session
-  /// when it is `nil`.
+  /// Starts loaded with what `initialLoad`, a synchronous read of storage, returns. When it
+  /// throws, the store starts ``AuthStatus/loading`` and ``load()`` reads storage again.
   init(
     storage: any AuthStorage,
     key: String,
-    loadedSession: ReceivedSession?,
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date() },
+    initialLoad: () throws -> ReceivedSession?
   ) {
     self.storage = storage
     self.key = key
     self.now = now
-    let state = loadedSession.map(State.signedIn) ?? .signedOut(.sessionMissing)
+    let state: State
+    if case .success(let loaded) = Result(catching: initialLoad) {
+      state = loaded.map(State.signedIn) ?? .signedOut(.sessionMissing)
+    } else {
+      state = .loading
+    }
     published = LockIsolated(Published(state: state))
   }
 
@@ -243,9 +247,8 @@ actor SessionStore {
   ///
   /// When the storage write throws, the commit throws the same error and changes nothing.
   ///
-  /// - Throws: ``AuthError/refreshDiscarded`` for a `.refreshed` transition whose generation is
-  ///   stale while the store no longer holds the redeemed refresh token, and
-  ///   ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
+  /// - Throws: ``AuthError/refreshDiscarded`` for a `.refreshed` transition whose session is no
+  ///   longer held, and ``AuthError/sessionMissing`` for a `.userUpdated` transition while no user is
   ///   signed in.
   func commit(_ transition: Transition) async throws {
     try await serialized { try await self.apply(transition) }
@@ -291,8 +294,9 @@ actor SessionStore {
     guard refreshWindow.admit(at: now()) else { throw AuthError.excessiveRefresh }
 
     let id = UUID()
-    let fromGeneration = generation
-    let refreshesHeldSession = currentSession?.refreshToken == refreshToken
+    let heldRefreshToken = currentSession?.refreshToken
+    let refreshesHeldSession = heldRefreshToken == refreshToken
+    let heldUserAtStart = refreshesHeldSession ? currentSession?.user : nil
     let task = Task {
       defer {
         if refreshFlights[refreshToken]?.id == id {
@@ -316,12 +320,28 @@ actor SessionStore {
         throw error
       }
 
-      try await commit(
-        .refreshed(session, redeemedRefreshToken: refreshToken, fromGeneration: fromGeneration))
+      try await serialized {
+        try await self.applyRefreshed(
+          session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+      }
       return session
     }
     refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
     return task
+  }
+
+  /// Applies a refresh of the held session. A user update that committed while the request was out
+  /// keeps its user: the server may have read the user before the update.
+  private func applyRefreshed(
+    _ session: Session, replacing heldRefreshToken: String?, heldUserAtStart: User?
+  ) async throws {
+    var session = session
+    if let heldUserAtStart, let held = currentSession, held.refreshToken == heldRefreshToken,
+      held.user != heldUserAtStart
+    {
+      session.user = held.user
+    }
+    try await apply(.refreshed(session, replacing: heldRefreshToken))
   }
 
   private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String) async {
@@ -444,12 +464,9 @@ actor SessionStore {
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = signInEvent
 
-    case .refreshed(var session, let redeemedRefreshToken, let fromGeneration):
-      if fromGeneration != generation {
-        guard let held = currentSession, held.refreshToken == redeemedRefreshToken else {
-          throw AuthError.refreshDiscarded
-        }
-        session.user = held.user
+    case .refreshed(let session, let replacedRefreshToken):
+      guard currentSession?.refreshToken == replacedRefreshToken else {
+        throw AuthError.refreshDiscarded
       }
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
       event = .tokenRefreshed
@@ -513,51 +530,4 @@ actor SessionStore {
     }
     armRefresher()
   }
-}
-
-extension SessionStore {
-  /// Returns the live store for one project and storage key, creating it when none is alive.
-  ///
-  /// Two clients for one project share a store, so each sees the other's changes and they never
-  /// redeem one refresh token twice. The registry holds stores weakly. The first caller's
-  /// `storage` and `now` win: a later caller with the same `url` and `storageKey` gets the
-  /// existing store, whatever storage it passes.
-  ///
-  /// - Parameter initialLoad: A synchronous read of storage, run only when this call creates the
-  ///   store, so that the store starts loaded. When it throws, the store starts
-  ///   ``AuthStatus/loading`` and ``load()`` reads storage again.
-  static func shared(
-    url: URL,
-    storageKey: String,
-    storage: any AuthStorage,
-    now: @escaping @Sendable () -> Date = { Date() },
-    initialLoad: (@Sendable () throws -> ReceivedSession?)? = nil
-  ) -> SessionStore {
-    registry.withValue { stores in
-      let registryKey = RegistryKey(url: url, storageKey: storageKey)
-      if let store = stores[registryKey]?.store {
-        return store
-      }
-      let store: SessionStore
-      if let initialLoad, case .success(let loaded) = Result(catching: initialLoad) {
-        store = SessionStore(storage: storage, key: storageKey, loadedSession: loaded, now: now)
-      } else {
-        store = SessionStore(storage: storage, key: storageKey, now: now)
-      }
-      stores = stores.filter { $0.value.store != nil }
-      stores[registryKey] = WeakStore(store: store)
-      return store
-    }
-  }
-
-  private struct RegistryKey: Hashable {
-    var url: URL
-    var storageKey: String
-  }
-
-  private struct WeakStore {
-    weak var store: SessionStore?
-  }
-
-  private static let registry = LockIsolated<[RegistryKey: WeakStore]>([:])
 }
