@@ -77,7 +77,11 @@ struct PresenceView: View {
       Task {
         // The server forgets the tracked payload when the channel rejoins.
         for await status in await channel.statusChanges() where status.isSubscribed {
-          try await channel.track(user)
+          do {
+            try await channel.track(user)
+          } catch {
+            self.error = error
+          }
         }
       }
 
