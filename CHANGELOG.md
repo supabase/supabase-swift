@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.6](https://github.com/supabase/supabase-swift/compare/v2.55.5...v2.55.6) (2026-10-29)
+
+
+### Bug Fixes
+
+* **realtime:** import HTTPTypes with an explicit access level in RealtimeV2 ([#1649](https://github.com/supabase/supabase-swift/issues/1649)) ([f9c41ee](https://github.com/supabase/supabase-swift/commit/f9c41ee1bb30129d300dc3cc84e31bb18cc1a96a)), closes [#1647](https://github.com/supabase/supabase-swift/issues/1647)
+
 ## [2.55.5](https://github.com/supabase/supabase-swift/compare/v2.55.4...v2.55.5) (2026-10-26)
 
 
