@@ -253,13 +253,13 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
-  func httpSend_urlUsesSubTopicWithoutRealtimePrefix() async throws {
+  func httpSend_urlUsesTheUserTopic() async throws {
     http.respond { _, _ in
       (HTTPResponse(status: .init(code: 202)), Data())
     }
 
     let channel = await sut.channel("test")
-    #expect(await channel.topic == "realtime:test")
+    #expect(channel.topic == "test")
 
     try await channel.httpSend(
       event: "my_event", message: ["hello": .string("world")] as JSONObject

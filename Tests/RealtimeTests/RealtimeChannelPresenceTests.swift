@@ -120,7 +120,8 @@ struct RealtimeChannelPresenceTests {
     _ = try await host.receive(event: ChannelEvent.leave)
     host.server?.send(
       RealtimeMessageV2(
-        joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.close, payload: [:]
+        joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close,
+        payload: [:]
       )
     )
     await left
@@ -196,7 +197,7 @@ struct RealtimeChannelPresenceTests {
   ) {
     host.server?.send(
       RealtimeMessageV2(
-        joinRef: joinRef, ref: nil, topic: channel.topic, event: ChannelEvent.presenceState,
+        joinRef: joinRef, ref: nil, topic: channel.wireTopic, event: ChannelEvent.presenceState,
         payload: state
       )
     )
@@ -208,7 +209,7 @@ struct RealtimeChannelPresenceTests {
   ) {
     host.server?.send(
       RealtimeMessageV2(
-        joinRef: nil, ref: nil, topic: channel.topic, event: ChannelEvent.presenceDiff,
+        joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.presenceDiff,
         payload: ["joins": .object(joins), "leaves": .object(leaves)]
       )
     )

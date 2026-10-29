@@ -66,12 +66,13 @@ import Logging
 /// ### Channel Events
 /// - ``events()``
 public actor RealtimeChannel {
-  /// The fully-qualified topic string sent to the Realtime server (e.g. `"realtime:room:lobby"`).
+  /// The topic name passed to ``RealtimeClient/channel(_:configure:)``, such as `"room:lobby"`.
+  ///
+  /// The SDK adds the `realtime:` prefix the server expects on the WebSocket only.
   public nonisolated let topic: String
 
-  /// The channel's topic without the `realtime:` prefix, as expected by the
-  /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
-  nonisolated let subTopic: String
+  /// The topic on the WebSocket: ``topic`` with the `realtime:` prefix.
+  nonisolated let wireTopic: String
 
   /// The channel's configuration, as set in ``RealtimeClient/channel(_:configure:)``.
   public nonisolated let configuration: RealtimeChannelConfiguration
@@ -226,8 +227,7 @@ public actor RealtimeChannel {
     logger: Logging.Logger
   ) {
     self.topic = topic
-    self.subTopic =
-      topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
+    self.wireTopic = Self.wireTopic(for: topic)
     self.configuration = configuration
     self.logger = logger
     self.client = client
@@ -321,7 +321,7 @@ public actor RealtimeChannel {
     let ref = await client.makeRef()
     try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: message
+        joinRef: joinRef, ref: ref, topic: wireTopic, event: event, jsonPayload: message
       )
     }
   }
@@ -339,7 +339,7 @@ public actor RealtimeChannel {
     let ref = await client.makeRef()
     try await push(ref: ref, awaitingReply: configuration.broadcast.acknowledge) {
       await client.pushBroadcast(
-        joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: data
+        joinRef: joinRef, ref: ref, topic: wireTopic, event: event, binaryPayload: data
       )
     }
   }
@@ -427,7 +427,7 @@ public actor RealtimeChannel {
   }
 
   private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
-    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
+    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: wireTopic, event: event, payload: payload)
   }
 
   /// Sends the frame `send` produces and, when `awaitingReply` is set, waits for the server's
@@ -749,6 +749,17 @@ public actor RealtimeChannel {
   /// The `postgres_changes` bindings of the open streams, in registration order.
   var clientChanges: [PostgresJoinConfig] {
     listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
+  }
+
+  /// The topic on the WebSocket for the topic name `topic`.
+  static func wireTopic(for topic: String) -> String {
+    "realtime:\(topic)"
+  }
+
+  /// The topic name for a topic on the WebSocket, or `nil` when it is not a channel topic.
+  static func topic(forWireTopic wireTopic: String) -> String? {
+    guard wireTopic.hasPrefix("realtime:") else { return nil }
+    return String(wireTopic.dropFirst("realtime:".count))
   }
 
   /// The waits between join attempts after a timeout, a lost connection, or a transient join

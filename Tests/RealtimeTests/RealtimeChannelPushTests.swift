@@ -199,7 +199,7 @@ struct RealtimeChannelPushTests {
     _ = try #require(await h.received(ChannelEvent.presence))
     try h.reply(
       RealtimeMessageV2(
-        joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.close,
+        joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close,
         payload: [:]
       )
     )

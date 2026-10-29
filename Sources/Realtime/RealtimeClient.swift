@@ -204,7 +204,8 @@ public actor RealtimeClient {
 
   /// All managed channels indexed by their topics.
   ///
-  /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
+  /// The dictionary key is the channel's ``RealtimeChannel/topic``, the name passed to
+  /// ``channel(_:configure:)`` (e.g. `"room:lobby"`).
   /// Channels are added by ``channel(_:configure:)`` and removed by ``removeChannel(_:)``
   /// or ``removeAllChannels()``.
   public private(set) var channels: [String: RealtimeChannel] = [:]
@@ -382,7 +383,8 @@ public actor RealtimeClient {
 
   /// Returns an existing channel for the given topic or creates a new one.
   ///
-  /// The fully-qualified topic sent to the server is `"realtime:<topic>"`. The client keeps one
+  /// The returned channel's ``RealtimeChannel/topic`` is `topic`; the SDK adds the `realtime:`
+  /// prefix the server expects on the WebSocket only. The client keeps one
   /// channel per topic: when a channel with the same topic already exists, it is returned
   /// unchanged. Asking for it with a different configuration reports an issue, because the
   /// configuration is fixed when the channel is created; remove the channel first to change it.
@@ -391,7 +393,7 @@ public actor RealtimeClient {
   /// > on the returned instance to join the topic.
   ///
   /// - Parameters:
-  ///   - topic: The channel topic name (without the `realtime:` prefix).
+  ///   - topic: The channel topic name, such as `"room:lobby"`.
   ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: privacy,
   ///     broadcast, presence and Postgres changes options.
   /// - Returns: A ``RealtimeChannel`` bound to this client.
@@ -401,12 +403,10 @@ public actor RealtimeClient {
   ) -> RealtimeChannel {
     apply(.channelAdded)
 
-    let realtimeTopic = "realtime:\(topic)"
-
     var configuration = RealtimeChannelConfiguration()
     configure(&configuration)
 
-    if let channel = channels[realtimeTopic] {
+    if let channel = channels[topic] {
       if channel.configuration != configuration {
         reportIssue(
           """
@@ -419,13 +419,13 @@ public actor RealtimeClient {
     }
 
     let channel = RealtimeChannel(
-      topic: realtimeTopic,
+      topic: topic,
       configuration: configuration,
       client: self,
       logger: options.logger
     )
 
-    channels[realtimeTopic] = channel
+    channels[topic] = channel
 
     return channel
   }

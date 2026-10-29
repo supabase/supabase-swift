@@ -194,7 +194,7 @@ struct RealtimeChannelSubscriptionTests {
     // The `system` confirmation path.
     await channel.onMessage(
       RealtimeMessageV2(
-        joinRef: join.ref, ref: nil, topic: channel.topic, event: ChannelEvent.system,
+        joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.system,
         payload: ["status": "ok"]
       )
     )
