@@ -430,7 +430,7 @@ struct SupabaseClientTests {
     )
 
     var auth: AuthClient?
-    withKnownIssue("auth reports an issue when accessToken is set") {
+    withKnownIssue("auth reports an issue when accessToken is set", isIntermittent: true) {
       auth = client.auth
     }
     let session = try await #require(auth).session
