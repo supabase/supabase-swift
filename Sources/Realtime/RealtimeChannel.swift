@@ -259,7 +259,7 @@ public actor RealtimeChannel {
     self.logger = logger
     self.client = client
     self.isolation = client.isolation
-    self.timeout = client.options.timeout
+    self.timeout = client.options.requestTimeout
     self.clock = client.clock
     self.connectOnSubscribe = client.options.connectOnSubscribe
   }

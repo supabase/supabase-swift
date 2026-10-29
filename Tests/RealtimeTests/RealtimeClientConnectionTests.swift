@@ -9,16 +9,6 @@ import Testing
 
 @Suite
 struct RealtimeClientConnectionTests {
-  @Test
-  func reconnectBackoffClampsAnUnusableBaseDelay() {
-    // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
-    for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
-      let delay = RealtimeClient.reconnectBackoff(baseDelay: base)
-        .delay(forAttempt: 1, random: { $0.upperBound })
-      #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
-    }
-  }
-
   // MARK: - Connect
 
   @Test
@@ -376,6 +366,22 @@ struct RealtimeClientConnectionTests {
   }
 
   @Test
+  func customReconnectBackoffSetsTheRetryDelay() async throws {
+    let h = Harness(reconnectBackoff: .custom { .seconds($0 * 7) })
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    guard case .reconnecting(1, let retryIn, _) = await statuses.next() else {
+      Issue.record("Expected .reconnecting(attempt: 1)")
+      return
+    }
+    #expect(retryIn == .seconds(7))
+  }
+
+  @Test
   func reconnectWaitIsDrawnFromTheJitterRange() async throws {
     // Full jitter: the first wait is anywhere in `0...reconnectDelay`, here its midpoint.
     let h = Harness(reconnectDelay: .seconds(2), jitter: { _ in 0.5 })
@@ -504,6 +510,7 @@ struct RealtimeClientConnectionTests {
       headers: [String: String] = [:],
       heartbeatInterval: Duration = .seconds(3600),
       reconnectDelay: Duration = .seconds(1),
+      reconnectBackoff: BackoffPolicy? = nil,
       jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound },
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
@@ -520,7 +527,8 @@ struct RealtimeClientConnectionTests {
         options: RealtimeClientOptions(
           headers: headers,
           heartbeatInterval: heartbeatInterval,
-          reconnectDelay: reconnectDelay,
+          reconnectBackoff: reconnectBackoff
+            ?? .fullJitter(base: reconnectDelay, cap: .seconds(30)),
           handleAppLifecycle: false
         ),
         wsTransport: { url, headers in

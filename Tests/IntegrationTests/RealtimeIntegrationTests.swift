@@ -120,7 +120,7 @@
 
         await client.realtime.disconnect()
 
-        await testClock.advance(by: RealtimeClientOptions.defaultReconnectDelay + .seconds(1))
+        await testClock.advance(by: .seconds(2))
 
         #expect(await client.realtime.status == .disconnected)
       }

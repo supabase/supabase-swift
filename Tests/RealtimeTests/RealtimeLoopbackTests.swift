@@ -91,8 +91,8 @@ import Testing
         url: URL(string: "http://127.0.0.1:\(port)")!,
         options: RealtimeClientOptions(
           heartbeatInterval: .seconds(30),
-          reconnectDelay: .milliseconds(100),
-          timeout: .seconds(10),
+          reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30)),
+          requestTimeout: .seconds(10),
           handleAppLifecycle: false
         )
       )

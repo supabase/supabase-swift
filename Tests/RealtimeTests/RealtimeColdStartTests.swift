@@ -16,8 +16,8 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(100),
-        timeout: .seconds(2),
+        reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30)),
+        requestTimeout: .seconds(2),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -100,8 +100,8 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30)),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -154,8 +154,8 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .milliseconds(200),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30)),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in

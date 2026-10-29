@@ -37,7 +37,7 @@ public struct RealtimeError: SupabaseError {
     }
 
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout. Retry, or raise `RealtimeClientOptions.timeoutInterval` if it happens often.
+    /// timeout. Retry, or raise ``RealtimeClientOptions/requestTimeout`` if it happens often.
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"

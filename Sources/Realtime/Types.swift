@@ -32,22 +32,49 @@ public import Logging
 /// - ``handleAppLifecycle``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
-/// - ``defaultReconnectDelay``
-/// - ``defaultTimeout``
-/// - ``defaultDisconnectOnSessionLoss``
+/// - ``defaultReconnectBackoff``
+/// - ``defaultRequestTimeout``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:reconnectDelay:timeout:disconnectOnSessionLoss:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:reconnectBackoff:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:session:handleAppLifecycle:clock:)``
 public struct RealtimeClientOptions: Sendable {
   package var headers: HTTPFields
-  var heartbeatInterval: Duration
-  var reconnectDelay: Duration
-  var timeout: Duration
-  var disconnectOnSessionLoss: Bool
-  var connectOnSubscribe: Bool
-  var disconnectOnEmptyChannelsAfter: Duration
+
+  /// How often the client sends a heartbeat to keep the connection alive.
+  ///
+  /// When a heartbeat has no reply by the next one, the client treats the socket as dead,
+  /// closes it, and reconnects. So a dead socket is found within two intervals. Lower this
+  /// value to find one sooner, at the cost of more traffic.
+  public var heartbeatInterval: Duration
+
+  /// How long the client waits before each reconnect attempt after the connection drops.
+  ///
+  /// Attempts never stop while the client wants a connection. The attempt count starts again
+  /// after a successful connect.
+  public var reconnectBackoff: BackoffPolicy
+
+  /// How long the client waits for the server to answer a request.
+  ///
+  /// This bounds:
+  /// - each attempt to join a channel; a timed-out join is retried,
+  /// - a push that expects a reply, such as a broadcast with acknowledgement, `track` or
+  ///   `untrack`,
+  /// - the leave in ``RealtimeChannel/unsubscribe()``,
+  /// - a `RealtimeChannel.httpSend` call without its own `timeout`,
+  /// - each call to the ``accessToken`` callback.
+  public var requestTimeout: Duration
+
+  /// Whether ``RealtimeChannel/subscribe()`` calls ``RealtimeClient/connect()`` when the client
+  /// is not connected.
+  public var connectOnSubscribe: Bool
+
+  /// How long the client keeps the socket open after the last channel is removed.
+  ///
+  /// A channel created within this time reuses the socket and cancels the disconnect. `.zero`
+  /// disconnects at once.
+  public var disconnectOnEmptyChannelsAfter: Duration
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
@@ -92,16 +119,12 @@ public struct RealtimeClientOptions: Sendable {
   /// Default interval between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: Duration = .seconds(25)
 
-  /// Default base delay for reconnecting after a connection drop. The first attempt waits a
-  /// random duration between zero and this; each later attempt doubles the upper bound (capped
-  /// at 30s) until the connection is reestablished.
-  public static let defaultReconnectDelay: Duration = .seconds(1)
+  /// Default for ``reconnectBackoff``: a full-jitter wait with a 1 s base and a 30 s cap.
+  public static let defaultReconnectBackoff: BackoffPolicy = .fullJitter(
+    base: .seconds(1), cap: .seconds(30))
 
-  /// Default maximum time to wait for a server reply before treating a request as timed out.
-  public static let defaultTimeout: Duration = .seconds(10)
-
-  /// Default for whether to disconnect the channel when the session is lost.
-  public static let defaultDisconnectOnSessionLoss = true
+  /// Default for ``requestTimeout``: 10 seconds.
+  public static let defaultRequestTimeout: Duration = .seconds(10)
 
   /// Default for whether to automatically connect the socket when subscribing to a channel.
   public static let defaultConnectOnSubscribe: Bool = true
@@ -129,9 +152,8 @@ public struct RealtimeClientOptions: Sendable {
   /// - Parameters:
   ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
   ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
-  ///   - reconnectDelay: Base delay for reconnecting after a disconnection. The first attempt waits a random duration between zero and this; each later attempt doubles the upper bound (capped at 30s) until reconnected. Defaults to ``defaultReconnectDelay``.
-  ///   - timeout: Maximum time to wait for a server reply. Defaults to ``defaultTimeout``.
-  ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
+  ///   - reconnectBackoff: The wait before each reconnect attempt. Defaults to ``defaultReconnectBackoff``.
+  ///   - requestTimeout: How long to wait for the server to answer a request. Defaults to ``defaultRequestTimeout``.
   ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
   ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - serverLogLevel: How much the Realtime server logs for this connection. Defaults to `nil`.
@@ -146,9 +168,8 @@ public struct RealtimeClientOptions: Sendable {
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
-    reconnectDelay: Duration = Self.defaultReconnectDelay,
-    timeout: Duration = Self.defaultTimeout,
-    disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
+    reconnectBackoff: BackoffPolicy = Self.defaultReconnectBackoff,
+    requestTimeout: Duration = Self.defaultRequestTimeout,
     connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
     disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
     serverLogLevel: RealtimeServerLogLevel? = nil,
@@ -161,9 +182,8 @@ public struct RealtimeClientOptions: Sendable {
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
-    self.reconnectDelay = reconnectDelay
-    self.timeout = timeout
-    self.disconnectOnSessionLoss = disconnectOnSessionLoss
+    self.reconnectBackoff = reconnectBackoff
+    self.requestTimeout = requestTimeout
     self.connectOnSubscribe = connectOnSubscribe
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.handleAppLifecycle = handleAppLifecycle

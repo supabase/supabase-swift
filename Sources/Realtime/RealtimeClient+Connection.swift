@@ -580,16 +580,6 @@ extension RealtimeClient {
 
   // MARK: Reconnect
 
-  /// Full-jitter exponential backoff: the n-th wait is a random duration in
-  /// `0...min(30s, baseDelay · 2^(n-1))`. Spreading the waits over the whole range keeps
-  /// clients that lost the same server from reconnecting in step. Attempts are unbounded.
-  ///
-  /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to `0...30s` here.
-  static func reconnectBackoff(baseDelay: Duration) -> BackoffPolicy {
-    let maxDelay: Duration = .seconds(30)
-    return .fullJitter(base: min(max(baseDelay, .zero), maxDelay), cap: maxDelay)
-  }
-
   /// The transport's failure as the error the connection state carries.
   static func realtimeError(_ error: any Error) -> RealtimeError {
     error as? RealtimeError ?? .transport(error.localizedDescription, underlyingError: error)

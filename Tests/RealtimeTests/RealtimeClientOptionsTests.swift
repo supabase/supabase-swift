@@ -21,6 +21,38 @@ struct RealtimeClientOptionsTests {
   }
 
   @Test
+  func defaults() {
+    let options = RealtimeClientOptions()
+
+    #expect(options.heartbeatInterval == .seconds(25))
+    #expect(options.requestTimeout == .seconds(10))
+    #expect(RealtimeClientOptions.defaultRequestTimeout == .seconds(10))
+    #expect(
+      options.reconnectBackoff.delay(forAttempt: 6, random: { $0.upperBound }) == .seconds(30))
+    #expect(options.reconnectBackoff.delay(forAttempt: 2, random: { $0.upperBound }) == .seconds(2))
+    #expect(options.connectOnSubscribe)
+    #expect(options.disconnectOnEmptyChannelsAfter == .seconds(50))
+    #expect(options.handleAppLifecycle == RealtimeClientOptions.defaultHandleAppLifecycle)
+    #expect(options.serverLogLevel == nil)
+  }
+
+  @Test
+  func everyTimingOptionIsWritable() {
+    var options = RealtimeClientOptions()
+    options.heartbeatInterval = .seconds(5)
+    options.requestTimeout = .seconds(4)
+    options.reconnectBackoff = .steps([.seconds(9)])
+    options.connectOnSubscribe = false
+    options.disconnectOnEmptyChannelsAfter = .zero
+
+    #expect(options.heartbeatInterval == .seconds(5))
+    #expect(options.requestTimeout == .seconds(4))
+    #expect(options.reconnectBackoff.delay(forAttempt: 3) == .seconds(9))
+    #expect(!options.connectOnSubscribe)
+    #expect(options.disconnectOnEmptyChannelsAfter == .zero)
+  }
+
+  @Test
   func sessionDefaultsToNil() {
     let options = RealtimeClientOptions(headers: ["apikey": "test-key"])
     #expect(options.session == nil)

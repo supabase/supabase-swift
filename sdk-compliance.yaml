@@ -308,9 +308,11 @@ supporting_symbols:
   - RealtimeError.ServerCode.errorOnRpcCall
   - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
   - RealtimeError.ServerCode.unknownErrorOnChannel
-  # The default server-reply timeout governs subscribe, unsubscribe,
+  # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.defaultTimeout
+  - RealtimeClientOptions.requestTimeout
+  - RealtimeClientOptions.defaultRequestTimeout
+  - RealtimeClientOptions.connectOnSubscribe
   # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
   # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
   - Trait.requiresMainSerialExecutor
@@ -1520,9 +1522,11 @@ features:
       - WebSocketTransport.connect
       - RealtimeError.upgradeFailed
   realtime.configuration.reconnect_backoff:
-    status: partially_implemented
-    note: "BackoffPolicy.custom maps the attempt count to a delay. Until RealtimeClientOptions.reconnectBackoff lands (SDK-2103), the client still builds its own full-jitter policy from reconnectDelay."
+    status: implemented
+    note: "RealtimeClientOptions.reconnectBackoff takes a BackoffPolicy; BackoffPolicy.custom maps the attempt count to a delay. The default is full jitter, 1 s base, 30 s cap, with unlimited attempts."
     symbols:
+      - RealtimeClientOptions.reconnectBackoff
+      - RealtimeClientOptions.defaultReconnectBackoff
       - BackoffPolicy
       - BackoffPolicy.fullJitter
       - BackoffPolicy.steps
@@ -1530,9 +1534,11 @@ features:
       - BackoffPolicy.delay
   realtime.configuration.heartbeat_interval:
     status: implemented
-    note: "Set via the heartbeatInterval parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
+    note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.heartbeatInterval
+      - RealtimeClientOptions.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
     note: "Set via the accessToken parameter of RealtimeClientOptions.init; the backing stored property is package-visibility, not public."
@@ -1540,9 +1546,10 @@ features:
       - RealtimeClientOptions.init
   realtime.configuration.deferred_disconnect:
     status: implemented
-    note: "Set via the disconnectOnEmptyChannelsAfter parameter of RealtimeClientOptions.init; the backing stored property is internal, not public."
     symbols:
       - RealtimeClientOptions.init
+      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
+      - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
     note: "Set via the logger parameter of RealtimeClientOptions.init (the stored property is package until SDK-2103 makes it public). RealtimeClientOptions.serverLogLevel sets the server-side log level."

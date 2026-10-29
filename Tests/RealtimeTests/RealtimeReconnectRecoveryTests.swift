@@ -14,8 +14,8 @@ struct RealtimeReconnectRecoveryTests {
     RealtimeClientOptions(
       headers: ["apikey": apiKey],
       heartbeatInterval: .seconds(10),
-      reconnectDelay: .milliseconds(50),
-      timeout: timeout,
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30)),
+      requestTimeout: timeout,
       accessToken: { "token" }
     )
   }

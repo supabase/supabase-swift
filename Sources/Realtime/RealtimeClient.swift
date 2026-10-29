@@ -257,7 +257,7 @@ public actor RealtimeClient {
     let start = Date()
     self.elapsed = elapsed
     self.now = { start.addingTimeInterval(elapsed().timeInterval) }
-    self.reconnectBackoff = Self.reconnectBackoff(baseDelay: options.reconnectDelay)
+    self.reconnectBackoff = options.reconnectBackoff
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
@@ -557,7 +557,7 @@ public actor RealtimeClient {
     accessTokenFetchCount += 1
 
     let generation = tokens.beginRefresh()
-    let timeout = options.timeout
+    let timeout = options.requestTimeout
     let logger = options.logger
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = self.clock
