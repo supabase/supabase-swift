@@ -388,6 +388,27 @@
       }
     }
 
+    /// No RLS policy on `realtime.messages` lets the anon role read a private channel, so the
+    /// server refuses the join. `testClock` never advances: `subscribe()` must throw on the
+    /// refusal itself, not after a timeout.
+    @Test
+    func privateChannelWithoutAPolicyFailsAtOnce() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("private-denied") {
+          $0.isPrivate = true
+        }
+
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .unauthorized)
+        #expect(error?.serverCode == .unauthorized)
+        #expect(error?.isRetryable == false)
+        #expect(await channel.status == .unsubscribed)
+      }
+    }
+
     @Test
     func postgresAllChanges() async throws {
       let client = client

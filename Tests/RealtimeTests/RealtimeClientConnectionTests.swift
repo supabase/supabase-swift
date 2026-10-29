@@ -108,6 +108,31 @@ struct RealtimeClientConnectionTests {
     #expect(h.sockets.value.isEmpty)
   }
 
+  /// A cancelled caller stops waiting at once, even while the socket never opens. The attempt
+  /// keeps going for the other callers.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingAConnectCallerEndsItsWaitButNotTheAttempt() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let h = Harness(beforeConnect: { _ in
+      for await _ in gate { break }
+    })
+
+    let first = Task { try await h.client.connect() }
+    for await status in await h.client.statusChanges() where status == .connecting { break }
+    let second = Task { try await h.client.connect() }
+    first.cancel()
+    second.cancel()
+
+    await #expect(throws: CancellationError.self) { try await first.value }
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await h.client.status == .connecting)
+    let third = Task { try await h.client.connect() }
+    open.yield()
+    try await third.value
+    #expect(await h.client.status == .connected)
+    #expect(h.connects.value.count == 1)
+  }
+
   @Test(arguments: [true, false])
   func aCancelledAttemptCannotTouchTheNextOne(staleAttemptSucceeds: Bool) async throws {
     // Both transport calls block until the test releases them, so the stale outcome lands

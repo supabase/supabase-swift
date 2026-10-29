@@ -299,6 +299,32 @@ struct SessionManagerTests {
   }
 
   @Test
+  func userUpdateDuringARefreshKeepsTheRefreshedSession() async throws {
+    let userA = session("A")
+    let refreshedA = session("A2")
+
+    try await dependencies.seedSession(userA)
+    let (requestSeen, release) = heldTokenResponse {
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
+    }
+
+    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let sawRequest = await waitUntil { requestSeen.value }
+    #expect(sawRequest)
+
+    var updatedUser = userA.user
+    updatedUser.email = "updated@example.com"
+    try await dependencies.sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
+
+    release()
+    let result = try await refresh.value
+
+    expectNoDifference(result.refreshToken, refreshedA.refreshToken)
+    expectNoDifference(
+      dependencies.sessionStore.currentSession?.refreshToken, refreshedA.refreshToken)
+  }
+
+  @Test
   func staleRefreshDoesNotDeleteANewerStoredSessionOnACleanupError() async throws {
     let userA = session("A")
     let userB = session("B")
