@@ -170,7 +170,7 @@ struct RealtimeColdStartTests {
       clock: ContinuousClock()
     )
 
-    let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+    let heartbeatStatuses = LockIsolated<[HeartbeatEvent]>([])
     let heartbeats = await sut.heartbeats()
     let heartbeatTask = Task {
       for await status in heartbeats {

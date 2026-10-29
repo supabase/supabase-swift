@@ -101,6 +101,8 @@ public actor RealtimeClient {
   var accessToken: String? { tokens.token }
   var ref = 0
   var pendingHeartbeatRef: String?
+  /// When the pending heartbeat was sent, as read from `elapsed`.
+  var pendingHeartbeatSentAt: Duration?
 
   enum ConnectionState: Equatable {
     /// Idle or stopped. Carries the error when a failure, not the user, stopped the client.
@@ -114,9 +116,11 @@ public actor RealtimeClient {
 
     var status: RealtimeClientStatus {
       switch self {
-      case .disconnected: .disconnected
-      case .connecting, .reconnecting: .connecting
+      case .disconnected(let error): .disconnected(error)
+      case .connecting(let attempt): .connecting(attempt: attempt)
       case .connected: .connected
+      case .reconnecting(let attempt, let retryIn, let lastError):
+        .reconnecting(attempt: attempt, retryIn: retryIn, lastError: lastError)
       }
     }
 
@@ -191,11 +195,11 @@ public actor RealtimeClient {
   var wasConnectedBeforeBackground = false
 
   /// The current WebSocket connection status.
-  public private(set) var status: RealtimeClientStatus = .disconnected
+  public var status: RealtimeClientStatus { connection.status }
   private var statusContinuations: [UUID: AsyncStream<RealtimeClientStatus>.Continuation] = [:]
 
-  private var lastHeartbeat: HeartbeatStatus?
-  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatStatus>.Continuation] = [:]
+  private var lastHeartbeat: HeartbeatEvent?
+  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
 
   /// All managed channels indexed by their topics.
   ///
@@ -320,20 +324,22 @@ public actor RealtimeClient {
     return stream
   }
 
-  /// An async stream that emits heartbeat status updates.
+  /// An async stream that emits each step of the heartbeat cycle.
   ///
   /// The client sends a heartbeat at each ``RealtimeClientOptions/defaultHeartbeatInterval``
-  /// interval to keep the connection alive. The stream replays the latest status, if any, and
+  /// interval to keep the connection alive. The stream replays the latest event, if any, and
   /// then emits every later one. Cancelling the iterating task ends the stream; so does
   /// releasing the client.
   ///
   /// ```swift
-  /// for await beat in await client.heartbeats() {
-  ///   print("Heartbeat: \(beat)")
+  /// for await event in await client.heartbeats() {
+  ///   if case .acknowledged(let latency) = event {
+  ///     print("Round trip: \(latency)")
+  ///   }
   /// }
   /// ```
-  public func heartbeats() -> AsyncStream<HeartbeatStatus> {
-    let (stream, continuation) = AsyncStream<HeartbeatStatus>.makeStream(
+  public func heartbeats() -> AsyncStream<HeartbeatEvent> {
+    let (stream, continuation) = AsyncStream<HeartbeatEvent>.makeStream(
       bufferingPolicy: .unbounded
     )
     let id = UUID()
@@ -353,21 +359,21 @@ public actor RealtimeClient {
     heartbeatContinuations[id] = nil
   }
 
-  func setStatus(_ status: RealtimeClientStatus) {
-    guard self.status != status else { return }
-    self.status = status
+  /// Called by `apply(_:)` after `connection` changed.
+  func connectionDidChange() {
     // The refresh timer runs only while connected: it stops here on a disconnect and starts
     // again on every connect and reconnect.
     scheduleAccessTokenRefresh()
+    let status = status
     for continuation in statusContinuations.values {
       continuation.yield(status)
     }
   }
 
-  func recordHeartbeat(_ status: HeartbeatStatus) {
-    lastHeartbeat = status
+  func recordHeartbeat(_ event: HeartbeatEvent) {
+    lastHeartbeat = event
     for continuation in heartbeatContinuations.values {
-      continuation.yield(status)
+      continuation.yield(event)
     }
   }
 
@@ -425,7 +431,7 @@ public actor RealtimeClient {
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if await channel.status == .subscribed {
+    if await channel.status.isSubscribed {
       await channel.unsubscribe()
     }
 
@@ -459,7 +465,7 @@ public actor RealtimeClient {
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
-          if await channel.status == .subscribed {
+          if await channel.status.isSubscribed {
             await channel.unsubscribe()
           }
           await channel.finishStreams()
@@ -662,7 +668,7 @@ public actor RealtimeClient {
       switch await channel.status {
       case .subscribed:
         break
-      case .subscribing:
+      case .subscribing, .resubscribing:
         guard await channel.joinRef != nil, await channel.joinAccessToken != token else {
           continue
         }
@@ -679,7 +685,7 @@ public actor RealtimeClient {
   /// token replaces the timer. Without a connection, a callback, or a token with an `exp`, there
   /// is nothing to schedule: the next join or heartbeat refreshes the token instead.
   private func scheduleAccessTokenRefresh() {
-    guard options.accessToken != nil, status == .connected,
+    guard options.accessToken != nil, status.isConnected,
       let due = tokens.refreshDelay(now: now(), leeway: Self.accessTokenRefreshLeeway)
     else {
       tasks.cancel(at: .accessTokenRefresh)
@@ -695,7 +701,7 @@ public actor RealtimeClient {
   /// The refresh timer's entry point. A client that disconnected since the timer was set has no
   /// channel to keep alive, so it does not call the callback.
   func refreshAccessTokenIfConnected() async {
-    guard status == .connected else { return }
+    guard status.isConnected else { return }
     await refreshAccessToken()
   }
 

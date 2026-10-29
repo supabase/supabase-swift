@@ -181,116 +181,185 @@ public struct RealtimeClientOptions: Sendable {
   }
 }
 
-/// Describes the subscription state of a ``RealtimeChannel``.
+/// The subscription state of a ``RealtimeChannel``, with the reason when there is one.
+///
+/// The set of cases is fixed until the next major version, so a `switch` needs no `default`.
+/// The type is not `Equatable`: use ``isSubscribed`` and ``error``, or match a case.
+///
+/// ```swift
+/// for await status in await channel.statusChanges() {
+///   switch status {
+///   case .resubscribing(_, let retryIn, let lastError):
+///     print("Joining again in \(retryIn) after: \(lastError.message)")
+///   case .failed(let error):
+///     print("Gave up: \(error.message)")
+///   default:
+///     break
+///   }
+/// }
+/// ```
 ///
 /// ## Topics
 /// ### States
 /// - ``unsubscribed``
-/// - ``subscribing``
+/// - ``subscribing(attempt:)``
 /// - ``subscribed``
+/// - ``resubscribing(attempt:retryIn:lastError:)``
 /// - ``unsubscribing``
-public struct RealtimeChannelStatus: RawRepresentable, Hashable, Sendable,
-  ExpressibleByStringLiteral
-{
-  public let rawValue: String
-
-  /// Creates a ``RealtimeChannelStatus`` from a raw string value.
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-
-  /// Creates a ``RealtimeChannelStatus`` from a string literal.
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  /// The channel has not yet joined or has left the Realtime topic.
-  public static let unsubscribed: RealtimeChannelStatus = "unsubscribed"
-
-  /// The channel is in the process of joining the Realtime topic.
-  public static let subscribing: RealtimeChannelStatus = "subscribing"
-
-  /// The channel has successfully joined the Realtime topic and is receiving events.
-  public static let subscribed: RealtimeChannelStatus = "subscribed"
-
-  /// The channel is in the process of leaving the Realtime topic.
-  public static let unsubscribing: RealtimeChannelStatus = "unsubscribing"
-}
-
-/// Describes the connection state of a ``RealtimeClient``.
-///
-/// ## Topics
-/// ### States
-/// - ``disconnected``
-/// - ``connecting``
-/// - ``connected``
-public struct RealtimeClientStatus: RawRepresentable, Hashable, Sendable,
-  ExpressibleByStringLiteral, CustomStringConvertible
-{
-  public let rawValue: String
-
-  /// Creates a ``RealtimeClientStatus`` from a raw string value.
-  public init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-
-  /// Creates a ``RealtimeClientStatus`` from a string literal.
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  /// The WebSocket is not connected.
-  public static let disconnected: RealtimeClientStatus = "disconnected"
-
-  /// A WebSocket connection attempt is in progress.
-  public static let connecting: RealtimeClientStatus = "connecting"
-
-  /// The WebSocket is connected and ready to exchange messages.
-  public static let connected: RealtimeClientStatus = "connected"
-
-  public var description: String { rawValue }
-}
-
-/// Describes the result of a heartbeat cycle.
-///
-/// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClient/heartbeats()``
-/// to observe heartbeat status changes.
-///
-/// ## Topics
-/// ### States
-/// - ``sent``
-/// - ``ok``
+/// - ``failed(_:)``
+/// ### Predicates
+/// - ``isSubscribed``
 /// - ``error``
-/// - ``timeout``
-/// - ``disconnected``
-public struct HeartbeatStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-  public let rawValue: String
+public enum RealtimeChannelStatus: Sendable {
+  /// The channel has not joined the topic, or has left it.
+  case unsubscribed
 
-  /// Creates a ``HeartbeatStatus`` from a raw string value.
-  public init(rawValue: String) {
-    self.rawValue = rawValue
+  /// The channel sent `phx_join` and waits for the server to confirm it. Attempt 1 is the
+  /// first join of a ``RealtimeChannel/subscribe()`` call; later attempts are rejoins.
+  case subscribing(attempt: Int)
+
+  /// The server confirmed the join. The channel receives events.
+  case subscribed
+
+  /// Join attempt `attempt` failed with `lastError`. The channel joins again after `retryIn`.
+  case resubscribing(attempt: Int, retryIn: Duration, lastError: RealtimeError)
+
+  /// The channel sent `phx_leave` and waits for the server to close it.
+  case unsubscribing
+
+  /// ``RealtimeChannel/subscribe()`` stopped because a retry cannot help. Call it again to
+  /// start over.
+  case failed(RealtimeError)
+
+  /// Whether the channel is ``subscribed``.
+  public var isSubscribed: Bool {
+    if case .subscribed = self { true } else { false }
   }
 
-  /// Creates a ``HeartbeatStatus`` from a string literal.
-  public init(stringLiteral value: String) {
-    self.init(rawValue: value)
+  /// The error behind ``resubscribing(attempt:retryIn:lastError:)`` or ``failed(_:)``, or `nil`.
+  public var error: RealtimeError? {
+    switch self {
+    case .resubscribing(_, _, let error), .failed(let error): error
+    case .unsubscribed, .subscribing, .subscribed, .unsubscribing: nil
+    }
+  }
+}
+
+extension RealtimeChannelStatus {
+  /// Whether `other` is the same case with the same values, so a repeat is not emitted.
+  func isSame(as other: RealtimeChannelStatus) -> Bool {
+    switch (self, other) {
+    case (.unsubscribed, .unsubscribed), (.subscribed, .subscribed),
+      (.unsubscribing, .unsubscribing):
+      true
+    case (.subscribing(let a), .subscribing(let b)):
+      a == b
+    case (.resubscribing(let a, let da, let ea), .resubscribing(let b, let db, let eb)):
+      a == b && da == db && ea.isSameFailure(as: eb)
+    case (.failed(let a), .failed(let b)):
+      a.isSameFailure(as: b)
+    default:
+      false
+    }
+  }
+}
+
+/// The connection state of a ``RealtimeClient``, with the reason when there is one.
+///
+/// The set of cases is fixed until the next major version, so a `switch` needs no `default`.
+/// The type is not `Equatable`: use ``isConnected`` and ``error``, or match a case.
+///
+/// ```swift
+/// for await status in await client.statusChanges() {
+///   if case .reconnecting(let attempt, let retryIn, _) = status {
+///     print("Attempt \(attempt + 1) in \(retryIn)")
+///   }
+/// }
+/// ```
+///
+/// ## Topics
+/// ### States
+/// - ``disconnected(_:)``
+/// - ``connecting(attempt:)``
+/// - ``connected``
+/// - ``reconnecting(attempt:retryIn:lastError:)``
+/// ### Predicates
+/// - ``isConnected``
+/// - ``error``
+public enum RealtimeClientStatus: Sendable {
+  /// The WebSocket is closed. The error is set when a failure, not the caller, closed it.
+  case disconnected(RealtimeError?)
+
+  /// The client is opening the WebSocket. Attempt 1 is the caller's
+  /// ``RealtimeClient/connect()``; later attempts reconnect after a drop.
+  case connecting(attempt: Int)
+
+  /// The WebSocket is open.
+  case connected
+
+  /// Connection attempt `attempt` failed or the socket dropped with `lastError`. The client
+  /// opens the WebSocket again after `retryIn`.
+  case reconnecting(attempt: Int, retryIn: Duration, lastError: RealtimeError)
+
+  /// Whether the client is ``connected``.
+  public var isConnected: Bool {
+    if case .connected = self { true } else { false }
   }
 
-  /// Heartbeat was sent.
-  public static let sent: HeartbeatStatus = "sent"
+  /// The error behind ``disconnected(_:)`` or ``reconnecting(attempt:retryIn:lastError:)``,
+  /// or `nil`.
+  public var error: RealtimeError? {
+    switch self {
+    case .disconnected(let error): error
+    case .reconnecting(_, _, let error): error
+    case .connecting, .connected: nil
+    }
+  }
+}
 
-  /// Heartbeat was received and acknowledged by the server.
-  public static let ok: HeartbeatStatus = "ok"
+/// A server event about a ``RealtimeChannel``, emitted by ``RealtimeChannel/events()``.
+///
+/// ## Topics
+/// ### Events
+/// - ``resubscribed``
+/// - ``postgresChangesReady``
+/// - ``postgresChangesFailed(_:)``
+public enum RealtimeChannelEvent: Sendable, Equatable {
+  /// The channel joined again after it was subscribed, for example after a reconnect. Events
+  /// sent while it was away were missed; reload any state built from them.
+  case resubscribed
 
-  /// Server responded with an error to the heartbeat.
-  public static let error: HeartbeatStatus = "error"
+  /// The server set up the channel's Postgres changes subscriptions ("Subscribed to
+  /// PostgreSQL"). Changes from now on are delivered.
+  case postgresChangesReady
 
-  /// Heartbeat was not acknowledged within the configured timeout interval.
-  public static let timeout: HeartbeatStatus = "timeout"
+  /// The server could not set up the channel's Postgres changes subscriptions. The channel
+  /// stays subscribed, so broadcast and presence keep working. The value is the server's
+  /// message.
+  case postgresChangesFailed(String)
+}
 
-  /// Socket is disconnected; no heartbeat can be sent.
-  public static let disconnected: HeartbeatStatus = "disconnected"
+/// One step of the heartbeat cycle, emitted by ``RealtimeClient/heartbeats()``.
+///
+/// The client sends a heartbeat every ``RealtimeClientOptions/defaultHeartbeatInterval``. When
+/// the next one is due and the server has not acknowledged the previous one, the client
+/// reports ``timedOut`` and reconnects.
+///
+/// ## Topics
+/// ### Events
+/// - ``sent``
+/// - ``acknowledged(latency:)``
+/// - ``timedOut``
+public enum HeartbeatEvent: Sendable, Equatable {
+  /// The client sent a heartbeat.
+  case sent
+
+  /// The server acknowledged the heartbeat `latency` after it was sent.
+  case acknowledged(latency: Duration)
+
+  /// The server did not acknowledge the previous heartbeat in time. The client drops the
+  /// socket and reconnects.
+  case timedOut
 }
 
 extension HTTPField.Name {
