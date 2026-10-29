@@ -157,6 +157,9 @@ public actor RealtimeChannel {
   /// the channel.
   var awaitingPostgresChanges = false
 
+  /// The `ref` of the last join the server confirmed.
+  var confirmedJoinRef: String?
+
   /// The Postgres changes bindings the current join carries.
   var joinedBindings: [PostgresJoinConfig] = []
 

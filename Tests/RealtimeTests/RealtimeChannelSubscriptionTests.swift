@@ -417,12 +417,51 @@ struct RealtimeChannelSubscriptionTests {
     let join = try #require(await h.received(ChannelEvent.join))
     try h.confirm(join)
     #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
-    try h.send(Self.system(join, status: "ok", extension: "system"))
-    try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
+    // Delivered on the actor, so the checks below run after the channel handled it.
+    await channel.onMessage(Self.system(join, status: "ok", extension: "system"))
+    #expect(await !channel.status.isSubscribed)
+    #expect(await channel.joinWaiter?.stage == .postgresChanges)
 
+    try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
     try await subscription.value
     #expect(await channel.status == .subscribed)
     withExtendedLifetime(changes) {}
+  }
+
+  /// "Subscribed to PostgreSQL" that lands as the readiness timeout fires: `subscribe()` either
+  /// succeeds with the join live, or throws with the join gone. Never a thrown error on a channel
+  /// that reports `.subscribed`.
+  @Test(.timeLimit(.minutes(1)))
+  func readyAtTheTimeoutEndsSubscribedOrFailedNeverBoth() async throws {
+    for _ in 1...20 {
+      let h = Harness(timeout: Self.noJoinTimeout)
+      let channel = await h.client.channel("room") {
+        $0.postgresChanges.subscriptionTimeout = .seconds(5)
+      }
+      let changes = await channel.postgresChanges(table: "t")
+
+      let subscription = Task { try await channel.subscribe() }
+      let join = try #require(await h.received(ChannelEvent.join))
+      try h.confirm(join)
+      #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+      await h.clock.advance(by: .seconds(5))
+      // Lands while the channel sends `phx_leave` for the timed-out join.
+      _ = try #require(await h.received(ChannelEvent.leave))
+      await channel.onMessage(Self.system(join, status: "ok", extension: "postgres_changes"))
+
+      let result = await subscription.result
+      let status = await channel.status
+      let joinRef = await channel.joinRef
+      switch result {
+      case .success:
+        #expect(status == .subscribed)
+        #expect(joinRef == join.ref)
+      case .failure:
+        #expect(!status.isSubscribed)
+        #expect(joinRef == nil)
+      }
+      withExtendedLifetime(changes) {}
+    }
   }
 
   @Test

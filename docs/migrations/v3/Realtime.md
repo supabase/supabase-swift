@@ -73,7 +73,9 @@ Changes that still compile but behave differently. Check each one by hand.
   after it is delivered. When the server reports a failure, or does not report within
   `postgresChanges.subscriptionTimeout` (15 s), `subscribe()` throws, the channel leaves the topic
   and becomes `.failed`. v2 returned and only reported the failure as a `system` message. A
-  `PostgresChangesSubscribeTimeout` join error is no longer retried.
+  `PostgresChangesSubscribeTimeout` join error is no longer retried. The automatic rejoin after a
+  reconnect fails the same way, so watch `statusChanges()` for `.failed` and call `subscribe()`
+  again.
 - **A `postgresChanges` stream opened after `subscribe()` works.** The channel leaves and joins
   again with the new binding: it reports `.subscribing` until the server confirms, then
   `events()` emits `.resubscribed`. v2 reported an issue and dropped the callback.

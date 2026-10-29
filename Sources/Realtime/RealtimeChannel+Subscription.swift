@@ -42,7 +42,9 @@ extension RealtimeChannel {
   /// When the channel has Postgres changes streams, the method returns only once the server
   /// reports that those changes are live. If the server reports a failure, or does not report
   /// within ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``, the channel
-  /// leaves the topic and the method throws without a retry.
+  /// leaves the topic and the method throws without a retry. The same holds for the rejoins the
+  /// SDK starts itself, after a reconnect or for a new Postgres changes stream: the channel ends
+  /// ``RealtimeChannelStatus/failed(_:)``. Watch ``statusChanges()`` and call this method again.
   ///
   /// There is no attempt limit. After a timeout, a lost connection, or a transient join error,
   /// the channel joins again after 1, 2 and 5 s, then every 10 s; after a rate limit it waits
@@ -162,6 +164,7 @@ extension RealtimeChannel {
     guard case .subscribing = state else { return }
     logger.debug("Server confirmed subscribe for channel '\(topic)'")
     setState(.subscribed)
+    confirmedJoinRef = joinRef
     joinWaiter?.continuation.resume()
     joinWaiter = nil
     if hasBeenSubscribed {
@@ -447,19 +450,25 @@ extension RealtimeChannel {
         try await self.awaitJoinConfirmation(for: ref, stage: .postgresChanges)
       }
     } catch let error as RealtimeError {
+      if confirmedJoinRef == ref { return }
       await leaveFailedJoin(ref)
       throw error
     } catch is TimeoutError {
+      // The confirmation can land on the actor after the timer fired but before this catch.
+      // The join is live then, and a rejoin it started may already own the state.
+      if confirmedJoinRef == ref { return }
       await leaveFailedJoin(ref)
       throw RealtimeError.postgresChangesTimeout
     }
   }
 
+  /// Leaves the join `ref` after its Postgres changes failed. The join is dropped before
+  /// `phx_leave` goes out, so a confirmation that lands while it is sent is stale.
   private func leaveFailedJoin(_ ref: String) async {
-    awaitingPostgresChanges = false
     guard joinRef == ref else { return }
-    await push(ChannelEvent.leave)
     joinRef = nil
+    awaitingPostgresChanges = false
+    await pushLeave(joinRef: ref)
   }
 
   /// Parks until the server sends the confirmation `stage` names for the join `ref`. A close, a
