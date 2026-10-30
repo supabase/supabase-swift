@@ -44,18 +44,17 @@ struct Race: Sendable {
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
-      url: clientURL, autoRefresh: autoRefresh, storage: storage ?? localStorage,
+      autoRefresh: autoRefresh, storage: storage ?? localStorage,
       redirectToURL: redirectToURL, beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
   /// would.
   func relaunch() -> AuthClient {
-    makeClient(url: clientURL, autoRefresh: .manual, storage: localStorage)
+    makeClient(autoRefresh: .manual, storage: localStorage)
   }
 
   private func makeClient(
-    url: URL,
     autoRefresh: AuthClient.AutoRefreshPolicy,
     storage: any AuthLocalStorage,
     redirectToURL: URL? = nil,
@@ -65,7 +64,7 @@ struct Race: Sendable {
     platform.lifecycleEvents = { AsyncStream { $0.finish() } }
     return AuthClient(
       configuration: AuthClient.Configuration(
-        url: url,
+        url: clientURL,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: storage,

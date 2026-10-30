@@ -626,21 +626,15 @@ public final class AuthClient: Sendable {
   ) async throws -> (url: URL, flowID: UUID) {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
-    let (flow, challenge) = try await dependencies.flowStore.start(
-      purpose: .signIn, redirectTo: redirectTo)
-    do {
+    return try await withFlow(.signIn, redirectTo: redirectTo) { started in
       let url = try authAPI.authorizeURL(
         provider: provider,
         scopes: options.scopesParameter,
         redirectTo: redirectTo,
         queryParams: options.queryParams,
-        pkce: challenge
+        pkce: started.challenge
       )
-      return (url, flow.id)
-    } catch {
-      // No request was sent, so no code can come back for this flow.
-      await removeFlow(flow.id)
-      throw error
+      return (url, started.flow.id)
     }
   }
 
@@ -953,8 +947,7 @@ public final class AuthClient: Sendable {
     )
 
     try await sessionStore.commit(
-      type.map { Self.verifiedTransition(session, for: $0) }
-        ?? .signedIn(session, event: .signedIn),
+      Self.verifiedTransition(session, for: type),
       unlessSignedOutSince: signOuts
     )
     return session
@@ -1087,7 +1080,7 @@ public final class AuthClient: Sendable {
 
   private static func verifiedTransition(
     _ session: Session,
-    for type: EmailOTPType
+    for type: EmailOTPType?
   ) -> SessionStore.Transition {
     switch type {
     case .recovery: .signedIn(session, event: .passwordRecovery)

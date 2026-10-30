@@ -17,15 +17,6 @@ enum AuthRedirect: Sendable, Equatable {
   case error(AuthError)
   case emailChangePending(message: String)
 
-  /// The deduplication key: the code or the access token. `nil` for other cases.
-  var credential: String? {
-    switch self {
-    case .code(let code, _): code
-    case .implicit(let tokens, _): tokens.accessToken
-    case .error, .emailChangePending: nil
-    }
-  }
-
   static func parse(_ url: URL) -> AuthRedirect? {
     let items = items(of: url)
 

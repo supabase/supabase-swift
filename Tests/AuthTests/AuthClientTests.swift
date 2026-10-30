@@ -1580,13 +1580,13 @@ extension AuthMockerTests {
       let flows = sut.dependencies.flowStore
 
       try await sut.update(user: UserAttributes(email: "new@example.com"))
-      #expect(try await flows.newest()?.purpose == .emailChange)
+      #expect(try await flows.pendingFlows().first?.purpose == .emailChange)
 
       try await sut.resend(email: "example@mail.com", type: .signup)
-      #expect(try await flows.newest()?.purpose == .signIn)
+      #expect(try await flows.pendingFlows().first?.purpose == .signIn)
 
       try await sut.resend(email: "example@mail.com", type: .emailChange)
-      #expect(try await flows.newest()?.purpose == .emailChange)
+      #expect(try await flows.pendingFlows().first?.purpose == .emailChange)
     }
 
     @Test

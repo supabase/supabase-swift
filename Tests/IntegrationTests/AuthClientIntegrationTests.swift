@@ -441,9 +441,11 @@ struct AuthClientIntegrationTests {
     }
 
     try await authClient.signInWithOTP(email: email, redirectTo: redirectTo)
-    let magicLinkFlow = try #require(try await authClient.dependencies.flowStore.newest())
+    let magicLinkFlow = try #require(
+      try await authClient.dependencies.flowStore.pendingFlows().first)
     try await authClient.resetPasswordForEmail(otherEmail, redirectTo: redirectTo)
-    let recoveryFlow = try #require(try await authClient.dependencies.flowStore.newest())
+    let recoveryFlow = try #require(
+      try await authClient.dependencies.flowStore.pendingFlows().first)
     #expect(recoveryFlow.id != magicLinkFlow.id)
 
     let magicLink = try await MailCatcher().latestLink(to: email)

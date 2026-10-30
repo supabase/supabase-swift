@@ -41,15 +41,16 @@ struct FlowStoreTests {
 
   private func makeStore(
     storage: RecordingStorage,
-    clock: LockIsolated<Date>
+    clock: LockIsolated<Date>,
+    pkce: PKCE = PKCE(
+      generateCodeVerifier: { "verifier" },
+      generateCodeChallenge: { "challenge-of-\($0)" }
+    )
   ) -> FlowStore {
     FlowStore(
       storage: storage,
       storageKey: Self.storageKey,
-      pkce: PKCE(
-        generateCodeVerifier: { "verifier" },
-        generateCodeChallenge: { "challenge-of-\($0)" }
-      ),
+      pkce: pkce,
       now: { clock.value },
       logger: Logger(label: "test")
     )
@@ -76,12 +77,10 @@ struct FlowStoreTests {
   }
 
   @Test func theChallengeMethodIsPlainWhenTheChallengeEqualsTheVerifier() async throws {
-    let store = FlowStore(
+    let store = makeStore(
       storage: RecordingStorage(),
-      storageKey: Self.storageKey,
-      pkce: PKCE(generateCodeVerifier: { "same" }, generateCodeChallenge: { $0 }),
-      now: { Date() },
-      logger: Logger(label: "test")
+      clock: LockIsolated(Date()),
+      pkce: PKCE(generateCodeVerifier: { "same" }, generateCodeChallenge: { $0 })
     )
     let (_, challenge) = try await store.start(purpose: .signIn, redirectTo: nil)
     #expect(challenge.codeChallengeMethod == "plain")
@@ -122,19 +121,7 @@ struct FlowStoreTests {
     advance(clock, by: 3600)
 
     #expect(try await store.flow(id: flow.id) == nil)
-    #expect(try await store.newest() == nil)
-  }
-
-  @Test func newestReturnsTheLastStartedFlow() async throws {
-    let clock = LockIsolated(Date(timeIntervalSince1970: 1000))
-    let store = makeStore(storage: RecordingStorage(), clock: clock)
-    _ = try await store.start(purpose: .signIn, redirectTo: nil)
-    advance(clock, by: 1)
-    let last = try await store.start(
-      purpose: .recovery, redirectTo: URL(string: "app://callback")
-    ).flow
-
-    #expect(try await store.newest() == last)
+    #expect(try await store.pendingFlows().isEmpty)
   }
 
   @Test func removeDeletesTheRecordAndTheIndexEntry() async throws {
@@ -145,7 +132,7 @@ struct FlowStoreTests {
     try await store.remove(id: flow.id)
 
     #expect(try await store.flow(id: flow.id) == nil)
-    #expect(try await store.newest() == nil)
+    #expect(try await store.pendingFlows().isEmpty)
     #expect(
       await storage.removedKeys == [PendingFlowRecord.key(id: flow.id, storageKey: Self.storageKey)]
     )
@@ -159,7 +146,7 @@ struct FlowStoreTests {
     try await storage.save(Data("legacy".utf8), key: "\(Self.storageKey)-code-verifier")
     let store = makeStore(storage: storage, clock: LockIsolated(Date()))
 
-    #expect(try await store.newest() == nil)
+    #expect(try await store.pendingFlows().isEmpty)
   }
 
   @Test func pendingFlowsListsTheLiveFlowsNewestFirst() async throws {
@@ -181,13 +168,12 @@ struct FlowStoreTests {
     try await storage.save(Data("not json".utf8), key: indexKey)
     let store = makeStore(storage: storage, clock: LockIsolated(Date()))
 
-    #expect(try await store.newest() == nil)
     #expect(try await store.pendingFlows().isEmpty)
 
     let flow = try await store.start(purpose: .signIn, redirectTo: nil).flow
 
     #expect(try await storedIndexIDs(storage) == [flow.id])
-    #expect(try await store.newest() == flow)
+    #expect(try await store.pendingFlows().first == flow)
   }
 
   @Test func aRecordThatFailsToDecodeIsSkipped() async throws {
@@ -200,7 +186,6 @@ struct FlowStoreTests {
     try await storage.save(
       Data("not json".utf8), key: PendingFlowRecord.key(id: newer.id, storageKey: Self.storageKey))
 
-    #expect(try await store.newest() == older)
     #expect(try await store.pendingFlows() == [older])
   }
 

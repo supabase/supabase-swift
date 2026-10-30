@@ -227,7 +227,6 @@ struct AuthClientRedirectTests {
     } throws: { ($0 as? AuthError)?.errorCode == .flowStateNotFound }
 
     #expect(try storedFlow(flowID) == nil)
-    #expect(try await client.dependencies.flowStore.newest() == nil)
   }
 
   @Test
@@ -389,10 +388,10 @@ struct AuthClientRedirectTests {
     let client = race.makeClient()
 
     try await client.resend(email: "a@example.com", type: .emailChange)
-    #expect(try await client.dependencies.flowStore.newest()?.purpose == .emailChange)
+    #expect(try await client.dependencies.flowStore.pendingFlows().first?.purpose == .emailChange)
 
     try await client.resend(email: "a@example.com", type: .signup)
-    #expect(try await client.dependencies.flowStore.newest()?.purpose == .signIn)
+    #expect(try await client.dependencies.flowStore.pendingFlows().first?.purpose == .signIn)
   }
 
   // MARK: - Helpers
@@ -453,7 +452,7 @@ struct AuthClientRedirectTests {
       try await client.signInWithOAuth(.github, presenter: presenter)
     }
 
-    #expect(try await client.dependencies.flowStore.newest() == nil)
+    #expect(try await client.dependencies.flowStore.pendingFlows().isEmpty)
     #expect(race.requestCount(grantType: "pkce") == 0)
   }
 
@@ -481,31 +480,28 @@ struct AuthClientRedirectTests {
     #expect(events == [.userUpdated])
   }
 
-  @Test
-  func aCallbackThatIsNotARedirectThrowsAndRemovesTheFlow() async throws {
+  @Test(
+    arguments: [
+      ("myapp://cb", "The callback URL is not an auth redirect."),
+      (
+        "myapp://cb#message=Confirm",
+        "The callback URL reports a pending email change, not a session."
+      ),
+      ("myapp://cb?error=access_denied&error_description=x", "x"),
+    ]
+  )
+  func aCallbackWithoutASessionThrowsAndRemovesTheFlow(
+    callback: String, message: String
+  ) async throws {
     let client = race.makeClient()
-    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb")! }
+    let presenter = ClosurePresenter { _, _ in URL(string: callback)! }
 
     let error = await #expect(throws: AuthError.self) {
       try await client.signInWithOAuth(.github, presenter: presenter)
     }
 
     #expect(error?.kind == .oauthFlowFailed)
-    #expect(error?.message == "The callback URL is not an auth redirect.")
-    #expect(try pendingFlowCount() == 0)
-  }
-
-  @Test
-  func anEmailChangeCallbackThrowsAndRemovesTheFlow() async throws {
-    let client = race.makeClient()
-    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb#message=Confirm")! }
-
-    let error = await #expect(throws: AuthError.self) {
-      try await client.signInWithOAuth(.github, presenter: presenter)
-    }
-
-    #expect(error?.kind == .oauthFlowFailed)
-    #expect(error?.message == "The callback URL reports a pending email change, not a session.")
+    #expect(error?.message == message)
     #expect(try pendingFlowCount() == 0)
   }
 
@@ -587,22 +583,6 @@ struct AuthClientRedirectTests {
   }
 
   @Test
-  func anErrorCallbackThrowsAndRemovesTheFlow() async throws {
-    let client = race.makeClient()
-    let presenter = ClosurePresenter { _, _ in
-      URL(string: "myapp://cb?error=access_denied&error_description=x")!
-    }
-
-    let error = await #expect(throws: AuthError.self) {
-      try await client.signInWithOAuth(.github, presenter: presenter)
-    }
-
-    #expect(error?.kind == .oauthFlowFailed)
-    #expect(error?.message == "x")
-    #expect(try pendingFlowCount() == 0)
-  }
-
-  @Test
   func aTransportErrorInThePresentedExchangeKeepsTheFlow() async throws {
     race.answerCodeExchange { throw URLError(.timedOut) }
     let client = race.makeClient()
@@ -640,9 +620,9 @@ struct AuthClientRedirectTests {
     race.answer(.post, "recover")
     let client = race.makeClient()
     try await client.signInWithOTP(email: "user@example.com")
-    let magicLink = try #require(try await client.dependencies.flowStore.newest())
+    let magicLink = try #require(try await client.dependencies.flowStore.pendingFlows().first)
     try await client.resetPasswordForEmail("user@example.com")
-    let recovery = try #require(try await client.dependencies.flowStore.newest())
+    let recovery = try #require(try await client.dependencies.flowStore.pendingFlows().first)
     race.answerCodeExchange { [race] body in
       guard body.contains(magicLink.verifier) else {
         return Race.error(
@@ -679,12 +659,20 @@ struct AuthClientRedirectTests {
     #expect(try pendingFlowCount() == 2)
   }
 
-  /// The server checks the code's flow state before the verifier, so these errors do not say which
-  /// flow the code belongs to.
-  @Test(arguments: [ErrorCode.flowStateNotFound, .flowStateExpired])
-  func withoutAnIDAFlowStateErrorKeepsEveryFlow(code: ErrorCode) async throws {
+  /// The server checks the code's flow state before the verifier, and a server failure proves
+  /// nothing either, so these errors do not say which flow the code belongs to.
+  @Test(
+    arguments: [
+      (HTTPResponse.Status.notFound, ErrorCode.flowStateNotFound),
+      (.notFound, .flowStateExpired),
+      (.internalServerError, ErrorCode("unexpected_failure")),
+    ]
+  )
+  func withoutAnIDARejectionOtherThanABadVerifierKeepsEveryFlow(
+    status: HTTPResponse.Status, code: ErrorCode
+  ) async throws {
     race.answerCodeExchange {
-      Race.error(.notFound, code: code.rawValue, message: "invalid flow state")
+      Race.error(status, code: code.rawValue, message: "rejected")
     }
     let client = race.makeClient()
     _ = try await client.oauthSignInURL(.github)
@@ -693,22 +681,6 @@ struct AuthClientRedirectTests {
     await #expect {
       try await client.handleRedirect(callback)
     } throws: { ($0 as? AuthError)?.errorCode == code }
-
-    #expect(race.requestCount(grantType: "pkce") == 1)
-    #expect(try pendingFlowCount() == 2)
-  }
-
-  /// A server failure does not prove the code was the guessed flow's.
-  @Test
-  func withoutAnIDAServerErrorKeepsEveryFlow() async throws {
-    race.answerCodeExchange {
-      Race.error(.internalServerError, code: "unexpected_failure", message: "server error")
-    }
-    let client = race.makeClient()
-    _ = try await client.oauthSignInURL(.github)
-    _ = try await client.oauthSignInURL(.google)
-
-    await #expect(throws: AuthError.self) { try await client.handleRedirect(callback) }
 
     #expect(race.requestCount(grantType: "pkce") == 1)
     #expect(try pendingFlowCount() == 2)

@@ -35,15 +35,14 @@ actor FlowStore {
   ) async throws -> (flow: PendingFlowRecord, challenge: PKCEChallenge) {
     let verifier = pkce.generateCodeVerifier()
     let challenge = pkce.generateCodeChallenge(verifier)
-    let startedAt = now()
     let flow = PendingFlowRecord(
-      id: UUID(), verifier: verifier, purpose: purpose, redirectTo: redirectTo,
-      createdAt: startedAt)
+      id: UUID(), verifier: verifier, purpose: purpose, redirectTo: redirectTo, createdAt: now())
 
     try await storage.save(try flow.encoded(), key: recordKey(flow.id))
 
     let dropped = try await updateIndex { index in
-      index.insert(PendingFlowIndex.Entry(id: flow.id, createdAt: startedAt), now: startedAt)
+      index.insert(
+        PendingFlowIndex.Entry(id: flow.id, createdAt: flow.createdAt), now: flow.createdAt)
     }
 
     for id in dropped {
@@ -66,15 +65,6 @@ actor FlowStore {
     guard let data = try await storage.load(key: recordKey(id)) else { return nil }
     let record = try PendingFlowRecord.decode(data)
     return PendingFlowRecord.isExpired(createdAt: record.createdAt, at: now()) ? nil : record
-  }
-
-  func newest() async throws -> PendingFlowRecord? {
-    for entry in try await loadIndex().flows.reversed() {
-      if let record = try await liveFlow(id: entry.id) {
-        return record
-      }
-    }
-    return nil
   }
 
   /// The live flows, newest first. Expired records and records that fail to decode are skipped.

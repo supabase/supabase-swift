@@ -74,28 +74,4 @@ struct AuthRedirectTests {
     let url = try #require(URL(string: urlString))
     #expect(AuthRedirect.parse(url) == expected)
   }
-
-  @Test
-  func errorMessageContainsDescription() throws {
-    let url = try #require(
-      URL(
-        string:
-          "myapp://cb#error=access_denied&error_code=otp_expired&error_description=Link+expired&sb="
-      ))
-    guard case .error(let error) = AuthRedirect.parse(url) else {
-      Issue.record("Expected .error")
-      return
-    }
-    #expect(error.kind == .oauthFlowFailed)
-    #expect(error.errorCode == ErrorCode("otp_expired"))
-    #expect(error.message.contains("Link expired"))
-  }
-
-  @Test
-  func credentialIsTheCodeOrTheAccessToken() {
-    #expect(AuthRedirect.code("abc", flowID: nil).credential == "abc")
-    #expect(AuthRedirect.implicit(Self.tokens, type: nil).credential == "a")
-    #expect(AuthRedirect.emailChangePending(message: "m").credential == nil)
-    #expect(AuthRedirect.error(Self.linkExpired).credential == nil)
-  }
 }

@@ -26,7 +26,14 @@
     ///   error of the session.
     @MainActor
     public func authenticate(url: URL, callbackScheme: String?) async throws -> URL {
-      let callbackScheme = try Self.callbackScheme(callbackScheme)
+      guard let callbackScheme else {
+        throw AuthError.oauthFlowFailed(
+          """
+          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+          or globally through `AuthClient.Configuration.redirectToURL`.
+          """
+        )
+      }
 
       return try await withCheckedThrowingContinuation { continuation in
         var presentationAnchor: AnyObject?
@@ -56,30 +63,12 @@
       }
     }
 
-    /// Pure so the guidance message can be covered without presenting a session.
-    static func callbackScheme(_ scheme: String?) throws -> String {
-      guard let scheme else {
-        throw AuthError.oauthFlowFailed(
-          """
-          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-          or globally through `AuthClient.Configuration.redirectToURL`.
-          """
-        )
-      }
-      return scheme
-    }
-
     static let sessionContractViolation =
       "ASWebAuthenticationSession returned neither a URL nor an error."
 
-    /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
-    /// the error when it somehow reports both. A cancelled login becomes `CancellationError`, as
-    /// ``WebAuthPresenter/authenticate(url:callbackScheme:)`` requires.
-    ///
-    /// Returns `nil` for the combination it documents as impossible — neither value present —
-    /// which the caller turns into ``sessionContractViolation``. The reporting stays with the
-    /// caller because driving `reportIssue` from a `@Test` function segfaults under
-    /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
+    /// Maps the session's `(url, error)` onto a result, preferring the error. A cancelled login
+    /// becomes `CancellationError`. Returns `nil` when neither is set; the caller reports that,
+    /// because `reportIssue` in a `@Test` crashes under `xcodebuild test`.
     static func callbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
       if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
         return .failure(CancellationError())
@@ -98,7 +87,6 @@
       #if os(tvOS) || os(watchOS)
         return nil
       #else
-        guard session.presentationContextProvider == nil else { return nil }
         let provider = DefaultPresentationContextProvider()
         session.presentationContextProvider = provider
         return provider

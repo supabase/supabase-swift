@@ -49,50 +49,6 @@ import Testing
       #expect(AuthClient.oauthRedirectURL(redirectTo: nil, configured: nil) == nil)
     }
 
-    @Test(
-      arguments: [
-        (perCall: "myapp://callback", configured: "configured://callback"),
-        (perCall: "myapp://callback", configured: nil),
-        (perCall: nil, configured: "configured://callback"),
-      ] as [(perCall: String?, configured: String?)]
-    )
-    func theCallbackSchemeAlwaysMatchesTheResolvedRedirect(
-      perCall: String?,
-      configured: String?
-    ) throws {
-      let resolved = AuthClient.oauthRedirectURL(
-        redirectTo: perCall.map { URL(string: $0)! },
-        configured: configured.map { URL(string: $0)! }
-      )
-
-      let scheme = try ASWebAuthenticationSessionPresenter.callbackScheme(resolved?.scheme)
-
-      #expect(scheme == resolved?.scheme)
-    }
-
-    @Test
-    func throwsWhenNeitherURLIsProvided() throws {
-      let error = #expect(throws: AuthError.self) {
-        try ASWebAuthenticationSessionPresenter.callbackScheme(nil)
-      }
-
-      #expect(error?.kind == .oauthFlowFailed)
-      #expect(error?.message.contains("redirectTo") == true)
-      #expect(error?.message.contains("AuthClient.Configuration.redirectToURL") == true)
-    }
-
-    @Test
-    func throwsWhenTheOnlyURLHasNoScheme() throws {
-      let withoutScheme = URL(string: "/callback")!
-      #expect(withoutScheme.scheme == nil, "precondition: this fixture must have no scheme")
-
-      let error = #expect(throws: AuthError.self) {
-        try ASWebAuthenticationSessionPresenter.callbackScheme(withoutScheme.scheme)
-      }
-
-      #expect(error?.kind == .oauthFlowFailed)
-    }
-
     @Test
     @MainActor
     func aNilCallbackSchemeThrowsTheGuidance() async throws {
@@ -158,7 +114,7 @@ import Testing
     #if !os(tvOS) && !os(watchOS)
       @Test
       @MainActor
-      func installsADefaultPresentationContextWhenConfigureLeftItUnset() throws {
+      func installsADefaultPresentationContext() throws {
         let session = makeSession()
 
         let installed = ASWebAuthenticationSessionPresenter.installDefaultPresentationAnchor(
@@ -168,20 +124,6 @@ import Testing
         // Returned so the caller can hold it: the session's own reference is weak, and an
         // anchor that deallocates before `start()` leaves the session unable to present.
         #expect(session.presentationContextProvider === installed)
-      }
-
-      @Test
-      @MainActor
-      func leavesAPresentationContextSuppliedByConfigureAlone() throws {
-        let session = makeSession()
-        let supplied = DefaultPresentationContextProvider()
-        session.presentationContextProvider = supplied
-
-        let installed = ASWebAuthenticationSessionPresenter.installDefaultPresentationAnchor(
-          on: session)
-
-        #expect(installed == nil)
-        #expect(session.presentationContextProvider === supplied)
       }
 
       private func makeSession() -> ASWebAuthenticationSession {

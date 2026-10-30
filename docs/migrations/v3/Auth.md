@@ -141,8 +141,7 @@ Changes that still compile but behave differently. Check each one by hand.
   with v2 and returns after the upgrade gets an `AuthError` of kind `.oauthFlowFailed`. Ask the user
   to start again.
 - **`handleRedirect(_:)` ignores URLs that are not auth redirects.** v2's `session(from:)` threw
-  for them. v3 returns `nil`. Pass the URLs that reach your auth callback; `isAuthRedirect(_:)`
-  checks one. Search for `catch` blocks that showed an "invalid URL" message.
+  for them. v3 returns `nil`. Search for `catch` blocks that showed an "invalid URL" message.
 - **A redirect with tokens signs in without a pending flow.** `handleRedirect(_:)` accepts a URL
   with implicit tokens (`#access_token=…`), as email links without PKCE and `generateLink` send.
   It signs in the account that the tokens belong to, whoever made the URL. Pass only URLs that
@@ -150,17 +149,12 @@ Changes that still compile but behave differently. Check each one by hand.
 - **The same redirect URL is handled once.** A second delivery of a URL (a scene delegate and
   `onOpenURL` both fire) returns the first result and sends no request. v2 sent the code again and
   failed.
-- **PKCE is always on, and the flow comes from the URL.** `handleRedirect(_:)` handles a PKCE code,
-  tokens from an email link, an error, and a pending email change. There is no `flowType` to set.
 - **`exchangeCodeForSession` needs a pending flow.** With no stored flow for the code, it throws
   `.oauthFlowFailed` without a request. v2 sent the code with no verifier.
 - **Several PKCE flows can be pending.** v2 kept one code verifier, so a new sign-in replaced the
   old one. In v3 each flow has its own verifier. Pass the `flowID` from `oauthSignInURL` or
   `linkIdentityURL` to `exchangeCodeForSession` to pick one. Without it, as for the code in an
-  email link, the client tries the pending flows newest first. A flow that the server rejects
-  with `bad_code_verifier` stays pending, so a link from an earlier email can still finish its own
-  flow. The server may have made that link invalid already, for example when a later email went
-  to the same user.
+  email link, the client tries the pending flows newest first.
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
   session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
