@@ -182,9 +182,7 @@ extension RealtimeClient {
       sendBroadcast(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
 
     case .schedule(let id, let delay):
-      timers.schedule(id, after: delay, clock: clock) { [weak self] id, token in
-        await self?.timerFired(id, token: token)
-      }
+      scheduleTimer(id, after: delay)
 
     case .cancel(let id):
       timers.cancel(id)
@@ -247,6 +245,13 @@ extension RealtimeClient {
   }
 
   // MARK: Timers
+
+  /// Starts the core's timer `id`, replacing the one already scheduled for `id`.
+  func scheduleTimer(_ id: TimerID, after delay: Duration) {
+    timers.schedule(id, after: delay, clock: clock) { [weak self] id, token in
+      await self?.timerFired(id, token: token)
+    }
+  }
 
   /// Applies `.timerFired` for the timer that `token` started, unless it was replaced or
   /// cancelled since.

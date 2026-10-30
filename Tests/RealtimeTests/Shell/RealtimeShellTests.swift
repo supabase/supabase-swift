@@ -68,18 +68,29 @@ struct RealtimeShellTests {
 
   @Test
   func staleTimerFireIsIgnored() async throws {
-    let host = await RealtimeTestHost()
+    let host = await RealtimeTestHost(
+      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
     let channel = host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
+    let timeout = TimerID.joinTimeout(topic: "room", ref: join.ref ?? "")
+    let first = await host.client.timers.task(for: timeout)
 
-    // Token 0 was never handed out, so it is stale for every timer.
-    await host.client.timerFired(.joinTimeout(topic: "room", ref: join.ref ?? ""), token: 0)
+    // Replaces the join timeout, so its first deadline, at 10 s, is stale.
+    await host.client.scheduleTimer(timeout, after: .seconds(20))
+    await first?.value
+    await host.clock.advance(by: .seconds(15))
 
     #expect(channel.status.isSame(as: .subscribing(attempt: 1)))
-    host.confirmJoin(join)
-    try await subscription.value
     #expect(host.frames.filter { $0.event == ChannelEvent.join }.count == 1)
+
+    // The replacement still fires at its own deadline.
+    await host.clock.advance(by: .seconds(5))
+    await host.waitUntil {
+      if case .resubscribing(1, _, _) = channel.status { true } else { false }
+    }
+    subscription.cancel()
+    _ = await subscription.result
   }
 
   @Test
