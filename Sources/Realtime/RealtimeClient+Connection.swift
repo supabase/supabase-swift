@@ -101,6 +101,19 @@ extension RealtimeClient {
     }
   }
 
+  /// Handles an input the pump reads after the client was released: closes a socket that opened
+  /// too late and resumes a flush. Every other input has nothing left to act on.
+  nonisolated static func receiveAfterRelease(_ input: Input) {
+    switch input {
+    case .connectEnded(.success(let conn), _):
+      conn.close(code: .normalClosure, reason: "Client deallocated")
+    case .flush(let continuation):
+      continuation.resume()
+    default:
+      break
+    }
+  }
+
   /// Returns once the pump has applied every input yielded before this call.
   nonisolated func flushInbox() async {
     await withCheckedContinuation { continuation in

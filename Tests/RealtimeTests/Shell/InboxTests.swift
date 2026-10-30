@@ -363,7 +363,45 @@ struct InboxTests {
       }())
   }
 
+  @Test
+  func aSocketThatOpensWhileTheClientIsReleasedIsClosed() async {
+    // Serial, so the pump cannot start before the client is gone: the connect result waits in
+    // the inbox, and the pump finds no client when it reads it.
+    await withMainSerialExecutor {
+      let (socket, _) = FakeWebSocket.fakes()
+      var client: RealtimeClient? = makeClient()
+      client?.inbox.yield(.connectEnded(.success(socket), attempt: 1))
+      client = nil
+
+      await Task.megaYield()
+
+      #expect(socket.isClosed)
+      #expect(socket.closeReason == "Client deallocated")
+    }
+  }
+
+  @Test
+  func aFlushYieldedBeforeTheClientIsReleasedStillResumes() async {
+    await withMainSerialExecutor {
+      await withCheckedContinuation { continuation in
+        var client: RealtimeClient? = makeClient()
+        client?.inbox.yield(.flush(continuation))
+        client = nil
+      }
+    }
+  }
+
   // MARK: Helpers
+
+  private func makeClient() -> RealtimeClient {
+    RealtimeClient(
+      url: URL(string: "http://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(handleAppLifecycle: false),
+      wsTransport: { _, _ in FakeWebSocket.fakes().0 },
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: TestClock<Duration>()
+    )
+  }
 
   @discardableResult
   private func subscribe(

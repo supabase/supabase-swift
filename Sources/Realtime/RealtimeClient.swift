@@ -285,10 +285,13 @@ public actor RealtimeClient {
     #endif
 
     // The pump. Not stored: it holds the client weakly, so it never keeps it alive, and it ends
-    // when `deinit` finishes the inbox.
+    // when `deinit` finishes the inbox. It still reads the inputs buffered before then.
     Task(priority: .medium) { [weak self] in
       for await input in inputs {
-        guard let self else { return }
+        guard let self else {
+          Self.receiveAfterRelease(input)
+          continue
+        }
         await self.receive(input)
       }
     }
