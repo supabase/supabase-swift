@@ -98,7 +98,8 @@ actor SessionStore {
   /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
 
-  /// Grows by one on every ``Transition/signedOut(_:event:)`` commit. A sign-in that started before
+  /// Grows by one on every ``Transition/signedOut(_:event:)`` commit and every
+  /// ``recordSignOut()``. A sign-in that started before
   /// a sign-out passes the count it read to ``commit(_:unlessSignedOutSince:)``.
   private(set) var signOuts: UInt64 = 0
 
@@ -226,6 +227,16 @@ actor SessionStore {
   ///   signed in.
   func commit(_ transition: Transition) async throws {
     try await serialized { try await self.apply(transition) }
+  }
+
+  /// Counts a sign-out that found no session, without an event, so a sign-in that started before
+  /// it cannot commit after it.
+  func recordSignOut() async throws {
+    try await serialized { await self.countSignOut() }
+  }
+
+  private func countSignOut() {
+    signOuts += 1
   }
 
   /// Applies `transition` only when no sign-out was committed since `signOuts` was read.

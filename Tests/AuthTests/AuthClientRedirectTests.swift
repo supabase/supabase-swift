@@ -529,6 +529,41 @@ struct AuthClientRedirectTests {
   }
 
   @Test
+  func aSignOutWithoutASessionDuringTheExchangeDiscardsTheSession() async throws {
+    let gate = Gate()
+    race.answerCodeExchange(through: gate) { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    _ = try await client.oauthSignInURL(.github)
+
+    let redirect = Task { try await client.handleRedirect(callback) }
+    await gate.arrivals(1)
+    try await client.signOut()
+    gate.open()
+
+    await #expect(throws: CancellationError.self) { try await redirect.value }
+    #expect(client.currentSession == nil)
+  }
+
+  @Test
+  func aSignOutWhileTheProviderPageIsOpenDiscardsTheSession() async throws {
+    let presented = Gate()
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in
+      await presented.pass()
+      return URL(string: "myapp://cb?code=c")!
+    }
+
+    let signIn = Task { try await client.signInWithOAuth(.github, presenter: presenter) }
+    await presented.arrivals(1)
+    try await client.signOut()
+    presented.open()
+
+    await #expect(throws: CancellationError.self) { try await signIn.value }
+    #expect(client.currentSession == nil)
+  }
+
+  @Test
   func anImplicitRedirectAfterASignOutDiscardsTheSession() async throws {
     let gate = Gate()
     race.answerSignOut()

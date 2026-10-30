@@ -708,6 +708,8 @@ public final class AuthClient: Sendable {
     options: OAuthOptions,
     with presenter: some WebAuthPresenter
   ) async throws -> Session {
+    // A sign-out while the page is open must win over the callback.
+    let signOuts = await sessionStore.signOuts
     let callbackScheme = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)?.scheme
 
@@ -723,7 +725,7 @@ public final class AuthClient: Sendable {
     // not have reached the server keeps it, so a retry can still finish it.
     let result: RedirectResult?
     do {
-      result = try await handleRedirect(callback, flowID: start.flowID)
+      result = try await handleRedirect(callback, flowID: start.flowID, signOuts: signOuts)
     } catch {
       if !Self.mayHaveReachedServer(error) {
         await removeFlow(start.flowID)
@@ -774,7 +776,7 @@ public final class AuthClient: Sendable {
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
   public func exchangeCodeForSession(_ code: String, flowID: UUID? = nil) async throws -> Session {
-    try await exchange(code: code, flowID: flowID).session
+    try await exchange(code: code, flowID: flowID, signOuts: sessionStore.signOuts).session
   }
 
   /// Returns `true` when `url` is a redirect that ``handleRedirect(_:)`` handles.
@@ -825,8 +827,16 @@ public final class AuthClient: Sendable {
   }
 
   /// `flowID` names the flow the caller started. It wins over the URL's `sb_flow_id`.
-  func handleRedirect(_ url: URL, flowID: UUID?) async throws -> RedirectResult? {
+  ///
+  /// `signOuts` is the sign-out count when the sign-in started; a later sign-out discards it.
+  /// `nil` reads the count now.
+  func handleRedirect(
+    _ url: URL,
+    flowID: UUID?,
+    signOuts: UInt64? = nil
+  ) async throws -> RedirectResult? {
     guard let redirect = AuthRedirect.parse(url) else { return nil }
+    let started = if let signOuts { signOuts } else { await sessionStore.signOuts }
 
     switch redirect {
     case .error(let error):
@@ -837,13 +847,14 @@ public final class AuthClient: Sendable {
 
     case .code(let code, let urlFlowID):
       return try await dependencies.redirectDeduplicator.value(for: code) { [self] in
-        let (session, flow) = try await exchange(code: code, flowID: flowID ?? urlFlowID)
+        let (session, flow) = try await exchange(
+          code: code, flowID: flowID ?? urlFlowID, signOuts: started)
         return .signedIn(session, verification: flow.purpose.verification)
       }
 
     case .implicit(let tokens, let type):
       return try await dependencies.redirectDeduplicator.value(for: tokens.accessToken) { [self] in
-        let session = try await signIn(with: tokens, type: type)
+        let session = try await signIn(with: tokens, type: type, signOuts: started)
         return .signedIn(session, verification: type)
       }
     }
@@ -858,21 +869,24 @@ public final class AuthClient: Sendable {
   /// prove the code was that flow's; the TTL drops it.
   private func exchange(
     code: String,
-    flowID: UUID?
+    flowID: UUID?,
+    signOuts: UInt64
   ) async throws -> (session: Session, flow: PendingFlowRecord) {
     if let flowID {
       guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
         throw AuthError.oauthFlowFailed(
           "No pending flow with ID \(flowID). It finished, expired, or started on another device.")
       }
-      return (try await exchange(code: code, flow: flow, guessed: false), flow)
+      return (try await exchange(code: code, flow: flow, guessed: false, signOuts: signOuts), flow)
     }
 
     let flows = try await dependencies.flowStore.pendingFlows()
     var rejection: (any Error)?
     for flow in flows {
       do {
-        return (try await exchange(code: code, flow: flow, guessed: true), flow)
+        return (
+          try await exchange(code: code, flow: flow, guessed: true, signOuts: signOuts), flow
+        )
       } catch let error as AuthError where error.errorCode == .badCodeVerifier {
         rejection = error
       }
@@ -887,9 +901,9 @@ public final class AuthClient: Sendable {
   private func exchange(
     code: String,
     flow: PendingFlowRecord,
-    guessed: Bool
+    guessed: Bool,
+    signOuts: UInt64
   ) async throws -> Session {
-    let signOuts = await sessionStore.signOuts
     let session: Session
     do {
       session = try await api.execute(
@@ -916,8 +930,11 @@ public final class AuthClient: Sendable {
     }
   }
 
-  private func signIn(with tokens: ImplicitTokens, type: EmailOTPType?) async throws -> Session {
-    let signOuts = await sessionStore.signOuts
+  private func signIn(
+    with tokens: ImplicitTokens,
+    type: EmailOTPType?,
+    signOuts: UInt64
+  ) async throws -> Session {
     let user = try await api.execute(
       authAPI.user(accessToken: tokens.accessToken, tokenType: tokens.tokenType),
       for: sessionOwnership(ofAccessToken: tokens.accessToken)
@@ -995,6 +1012,10 @@ public final class AuthClient: Sendable {
 
     guard let session = currentSession else {
       configuration.logger.warning("signOut called without a session")
+      if scope != .others {
+        // A sign-in that started before this call must not commit after it.
+        try await sessionStore.recordSignOut()
+      }
       return
     }
 
