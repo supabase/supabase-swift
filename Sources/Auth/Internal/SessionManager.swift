@@ -4,7 +4,8 @@ import Logging
 
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
+  /// Redeems `refreshToken`, or refreshes the held session when it is `nil`.
+  var refreshSession: @Sendable (_ refreshToken: String?) async throws -> Session
   var refreshSessionIfNeeded: @Sendable () async throws -> Session?
 }
 
@@ -13,13 +14,15 @@ extension SessionManager {
     policy: AuthClient.AutoRefreshPolicy,
     sessionStore: SessionStore,
     logger: Logging.Logger,
-    request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+    request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void
   ) -> Self {
     let instance = LiveSessionManager(
       policy: policy,
       sessionStore: sessionStore,
       logger: logger,
-      request: request
+      request: request,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     return Self(
       session: { try await instance.session() },
@@ -34,6 +37,7 @@ private struct LiveSessionManager: Sendable {
   let sessionStore: SessionStore
   let logger: Logging.Logger
   let request: @Sendable (_ refreshToken: String) async throws -> Session
+  let beforeRefreshingHeldSession: @Sendable () async -> Void
 
   func session() async throws -> Session {
     try await trace(using: logger) {
@@ -59,13 +63,19 @@ private struct LiveSessionManager: Sendable {
       }
 
       logger.debug("session expired")
-      return try await refreshSession(currentSession.refreshToken)
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
     }
   }
 
-  func refreshSession(_ refreshToken: String) async throws -> Session {
+  func refreshSession(_ refreshToken: String?) async throws -> Session {
     try await trace(using: logger) {
-      try await sessionStore.refresh(refreshToken, using: request)
+      if let refreshToken {
+        return try await sessionStore.refresh(refreshToken, using: request)
+      }
+      guard let currentSession = sessionStore.currentSession else {
+        throw AuthError.sessionMissing
+      }
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
     }
   }
 
@@ -82,7 +92,12 @@ private struct LiveSessionManager: Sendable {
       if let session = sessionStore.validSession(minimumValidity: minimumValidity) {
         return session
       }
-      return try await refreshSession(currentSession.refreshToken)
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
     }
+  }
+
+  private func refreshHeldSession(readWith refreshToken: String) async throws -> Session {
+    await beforeRefreshingHeldSession()
+    return try await sessionStore.refreshHeldSession(readWith: refreshToken, using: request)
   }
 }

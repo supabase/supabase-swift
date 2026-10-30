@@ -254,7 +254,7 @@ private final class LockedAuthStorage: AuthStorage {
   }
 }
 
-private final class LockedLocalStorage: AuthLocalStorage {
+final class LockedLocalStorage: AuthLocalStorage {
   private let storage = InMemoryLocalStorage()
   let isLocked = LockIsolated(false)
   let failedReads = LockIsolated(0)
