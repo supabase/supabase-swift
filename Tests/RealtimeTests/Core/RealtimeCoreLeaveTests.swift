@@ -231,7 +231,7 @@ struct RealtimeCoreLeaveTests {
     let w = harness.waiter()
     let push = harness.waiter()
     _ = harness.send(Self.subscribe(w))
-    // Pushes come with Task 9; the drop already fails whatever waits for a reply.
+    // The drop fails whatever waits for a reply.
     harness.core.channels[Self.topic]?.pendingPushes["7"] = push
     _ = harness.send(.appBackground)
 
@@ -244,6 +244,7 @@ struct RealtimeCoreLeaveTests {
         .scheduleRetry(after: .seconds(1)),
         .cancel(.heartbeat),
         .resume(push, .failure(.notConnected)),
+        .cancel(.pushTimeout(topic: Self.topic, ref: "7")),
         .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
       ])
     #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))

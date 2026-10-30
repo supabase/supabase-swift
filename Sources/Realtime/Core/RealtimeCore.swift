@@ -221,7 +221,9 @@ struct RealtimeCore {
     where message.event == ChannelEvent.close || message.event == ChannelEvent.error:
       return receiveClose(message)
     case .frame(let message):
-      return receiveJoinReply(message)
+      return receiveFrame(message)
+    case .binaryBroadcast(let broadcast):
+      return receiveBinaryBroadcast(broadcast)
 
     case .subscribe(let topic, let configuration, let waiter, let snapshot):
       return subscribe(
@@ -240,13 +242,15 @@ struct RealtimeCore {
       return leaveTimedOut(topic, ref: ref)
     case .removeChannel(let topic, let waiter):
       return removeChannel(topic, waiter: waiter)
-    case .push(let topic, _, _, let waiter) where channels[topic] == nil:
-      return waiter.map { [.resume($0, .failure(.notSubscribed))] } ?? []
+    case .push(let topic, let event, let payload, let waiter):
+      return push(topic, event: event, payload: payload, waiter: waiter)
+    case .broadcast(let topic, let event, let payload, let waiter):
+      return broadcast(topic, event: event, payload: payload, waiter: waiter)
+    case .timerFired(.pushTimeout(let topic, let ref)):
+      return pushTimedOut(topic, ref: ref)
 
-    // Not handled yet: the other channel commands, frames and timers, tokens, and waiter
-    // cancellation.
-    case .push, .broadcast, .setAuth, .binaryBroadcast, .timerFired,
-      .tokenFetched, .waiterCancelled:
+    // Not handled yet: tokens and waiter cancellation.
+    case .setAuth, .timerFired, .tokenFetched, .waiterCancelled:
       return []
     }
   }

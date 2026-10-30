@@ -17,17 +17,19 @@ struct CoreHarness {
   var socket: FakeWebSocket?
   private var lastWaiter: UInt64 = 0
 
-  init(options: RealtimeCore.Options = .test, initialToken: String? = nil) {
-    core = RealtimeCore(options: options, logger: .silent, initialToken: initialToken)
+  init(
+    options: RealtimeCore.Options = .test, initialToken: String? = nil, logger: Logger = .silent
+  ) {
+    core = RealtimeCore(options: options, logger: logger, initialToken: initialToken)
     time = CoreTime(elapsed: .zero, date: Date(timeIntervalSince1970: 0))
   }
 
   /// A harness whose core is `.connected` to ``socket``. Opening it made no refs and used no
   /// waiter ids.
   static func connected(
-    options: RealtimeCore.Options = .test, initialToken: String? = nil
+    options: RealtimeCore.Options = .test, initialToken: String? = nil, logger: Logger = .silent
   ) -> CoreHarness {
-    var harness = CoreHarness(options: options, initialToken: initialToken)
+    var harness = CoreHarness(options: options, initialToken: initialToken, logger: logger)
     let socket = FakeWebSocket.fakes().0
     harness.socket = socket
     _ = harness.send(.connect(waiter: nil))

@@ -371,12 +371,15 @@ extension RealtimeCore {
       + [.schedule(.rejoin(topic: topic), after: delay)]
   }
 
-  /// Ends the subscribe for good: every caller waiting for it fails with `error`.
+  /// Ends the subscribe for good: every caller waiting for it fails with `error`, and every
+  /// push waiting for a reply fails with ``RealtimeError/notSubscribed``.
   mutating func failSubscribe(_ topic: String, with error: RealtimeError) -> [Effect] {
     guard let waiters = channels[topic]?.subscribeWaiters else { return [] }
     channels[topic]?.subscribeWaiters = []
     channels[topic]?.timedOutJoinRef = nil
-    return waiters.map { .resume($0, .failure(error)) } + setPhase(.failed(error), for: topic)
+    return waiters.map { .resume($0, .failure(error)) }
+      + failPendingPushes(topic, with: .notSubscribed)
+      + setPhase(.failed(error), for: topic)
   }
 
   /// Moves the channel for `topic` to `phase`, and publishes its status when the status changed.

@@ -260,7 +260,7 @@ extension RealtimeCore {
 
   // MARK: Helpers
 
-  private var isConnected: Bool {
+  var isConnected: Bool {
     if case .connected = connection { true } else { false }
   }
 
@@ -302,16 +302,6 @@ extension RealtimeCore {
     }
     return transitionConnection(
       .lastChannelRemoved(disconnectAfter: options.disconnectOnEmptyChannelsAfter))
-  }
-
-  /// Fails every push of `topic` that waits for a reply, in the order they were sent.
-  private mutating func failPendingPushes(
-    _ topic: String, with error: RealtimeError
-  ) -> [Effect] {
-    guard let pushes = channels[topic]?.pendingPushes, !pushes.isEmpty else { return [] }
-    channels[topic]?.pendingPushes = [:]
-    return pushes.sorted { (UInt64($0.key) ?? 0) < (UInt64($1.key) ?? 0) }
-      .map { .resume($0.value, .failure(error)) }
   }
 }
 
