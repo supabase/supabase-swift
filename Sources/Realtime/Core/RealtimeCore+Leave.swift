@@ -11,7 +11,30 @@ extension RealtimeCore {
   /// Leaves the topic. A subscribed channel sends `phx_leave` and waits, bounded by the timeout,
   /// for the server's `phx_close`. Any other channel ends its join at once.
   mutating func unsubscribe(_ topic: String, waiter: WaiterID) -> [Effect] {
+    leave(topic, waiter: waiter, removing: false)
+  }
+
+  /// Removes the channel: like ``unsubscribe(_:waiter:)``, but a subscribe in flight and the
+  /// pushes waiting for a reply fail with ``RealtimeError/channelRemoved``, and a join in
+  /// flight on a connected socket leaves too. The channel is then finished and dropped, once
+  /// the leave ends or at once when no leave is in flight.
+  mutating func removeChannel(_ topic: String, waiter: WaiterID) -> [Effect] {
+    guard channels[topic] != nil else {
+      return [.resume(waiter, .success)] + disconnectIfNoChannels()
+    }
+    channels[topic]?.isRemoving = true
+    var effects = failPendingPushes(topic, with: .channelRemoved)
+    effects += leave(topic, waiter: waiter, removing: true)
+    guard case .leaving? = channels[topic]?.phase else {
+      return effects + dropChannel(topic) + disconnectIfNoChannels()
+    }
+    return effects
+  }
+
+  private mutating func leave(_ topic: String, waiter: WaiterID, removing: Bool) -> [Effect] {
     guard var record = channels[topic] else { return [.resume(waiter, .success)] }
+    let subscribers: WaiterOutcome = removing ? .failure(.channelRemoved) : .cancelled
+    let pushes: RealtimeError = removing ? .channelRemoved : .notSubscribed
     // A later subscribe is a new subscription, not a rejoin.
     record.hasBeenSubscribed = false
     let cleared = record.presence.clear()
@@ -31,15 +54,25 @@ extension RealtimeCore {
       // This caller wants the channel to stay unsubscribed.
       channels[topic]?.leaveWaiters.append(waiter)
       channels[topic]?.subscribeWaiters = []
-      return effects + record.subscribeWaiters.map { .resume($0, .cancelled) }
+      return effects + record.subscribeWaiters.map { .resume($0, subscribers) }
 
-    case .subscribed(let joinRef) where isConnected:
+    case .subscribed(let joinRef) where isConnected,
+      .joining(let joinRef, _, _) where isConnected && removing:
+      // A join in flight leaves only for `removeChannel`: the server has the join, so it
+      // answers the leave, and the channel must not outlive it.
       let leaveRef = makeRef()
+      let leaving = ChannelRecord.Phase.leaving(joinRef: joinRef, leaveRef: leaveRef)
       channels[topic]?.leaveWaiters.append(waiter)
       logger.debug("Leaving channel '\(topic)' (join_ref: \(joinRef), ref: \(leaveRef))")
-      return effects + [.send(leaveMessage(topic, joinRef: joinRef, ref: leaveRef))]
-        + setPhase(.leaving(joinRef: joinRef, leaveRef: leaveRef), for: topic)
-        + [.schedule(.leaveTimeout(topic: topic, ref: leaveRef), after: options.timeout)]
+      effects.append(.send(leaveMessage(topic, joinRef: joinRef, ref: leaveRef)))
+      if case .joining = record.phase {
+        effects += endJoin(topic, subscribers: subscribers, pushes: pushes, phase: leaving)
+      } else {
+        effects += setPhase(leaving, for: topic)
+      }
+      return effects + [
+        .schedule(.leaveTimeout(topic: topic, ref: leaveRef), after: options.timeout)
+      ]
 
     case .subscribed, .waitingForSocket, .refreshingToken, .joining, .waitingToRetry:
       // The server may not know the join, or the socket is gone, so `phx_close` may never
@@ -49,8 +82,7 @@ extension RealtimeCore {
         effects += sendLeave(topic, joinRef: joinRef)
       }
       return effects
-        + endJoin(
-          topic, subscribers: .cancelled, pushes: .notSubscribed, phase: .unsubscribed)
+        + endJoin(topic, subscribers: subscribers, pushes: pushes, phase: .unsubscribed)
         + [.resume(waiter, .success)]
     }
   }
@@ -62,7 +94,8 @@ extension RealtimeCore {
   }
 
   /// Ends the leave in flight: its callers return, and the channel is unsubscribed. A
-  /// subscribe that came during the leave then joins again.
+  /// subscribe that came during the leave then joins again. A removal finishes and drops the
+  /// channel instead.
   private mutating func leaveEnded(
     _ topic: String, pushes: RealtimeError, cancelTimer: Bool
   ) -> [Effect] {
@@ -78,6 +111,9 @@ extension RealtimeCore {
     effects += setPhase(.unsubscribed, for: topic)
     if cancelTimer {
       effects.append(.cancel(.leaveTimeout(topic: topic, ref: leaveRef)))
+    }
+    if record.isRemoving {
+      return effects + dropChannel(topic) + disconnectIfNoChannels()
     }
     if !record.subscribeWaiters.isEmpty {
       effects += sendJoin(topic, attempt: 1)
@@ -212,6 +248,9 @@ extension RealtimeCore {
         effects += endJoin(
           topic, subscribers: .failure(.disconnectedWhileSubscribing), pushes: .notConnected,
           phase: .unsubscribed)
+        if record.isRemoving {
+          effects += dropChannel(topic)
+        }
       case .unsubscribed, .failed:
         effects += failPendingPushes(topic, with: .notConnected)
       }
@@ -246,6 +285,23 @@ extension RealtimeCore {
       effects.append(.cancel(timer))
     }
     return effects
+  }
+
+  /// Ends the streams of `topic` and forgets its record.
+  private mutating func dropChannel(_ topic: String) -> [Effect] {
+    channels[topic] = nil
+    return [.finishChannel(topic)]
+  }
+
+  /// Once no channel is left, disconnects at once when ``Options/disconnectOnEmptyChannelsAfter``
+  /// is not positive, and schedules an idle disconnect otherwise.
+  private mutating func disconnectIfNoChannels() -> [Effect] {
+    guard channels.isEmpty else { return [] }
+    if options.disconnectOnEmptyChannelsAfter <= .zero {
+      return transitionConnection(.disconnectRequested(code: nil, reason: nil))
+    }
+    return transitionConnection(
+      .lastChannelRemoved(disconnectAfter: options.disconnectOnEmptyChannelsAfter))
   }
 
   /// Fails every push of `topic` that waits for a reply, in the order they were sent.

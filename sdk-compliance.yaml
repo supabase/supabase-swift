@@ -286,6 +286,7 @@ supporting_symbols:
   - RealtimeError.Kind.unauthorized
   - RealtimeError.Kind.rateLimited
   - RealtimeError.Kind.channelClosed
+  - RealtimeError.Kind.channelRemoved
   - RealtimeError.Kind.payloadTooLarge
   - RealtimeError.serverCode
   - RealtimeError.isRetryable

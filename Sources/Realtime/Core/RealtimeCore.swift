@@ -238,10 +238,14 @@ struct RealtimeCore {
       return unsubscribe(topic, waiter: waiter)
     case .timerFired(.leaveTimeout(let topic, let ref)):
       return leaveTimedOut(topic, ref: ref)
+    case .removeChannel(let topic, let waiter):
+      return removeChannel(topic, waiter: waiter)
+    case .push(let topic, _, _, let waiter) where channels[topic] == nil:
+      return waiter.map { [.resume($0, .failure(.notSubscribed))] } ?? []
 
     // Not handled yet: the other channel commands, frames and timers, tokens, and waiter
     // cancellation.
-    case .push, .broadcast, .removeChannel, .setAuth, .binaryBroadcast, .timerFired,
+    case .push, .broadcast, .setAuth, .binaryBroadcast, .timerFired,
       .tokenFetched, .waiterCancelled:
       return []
     }

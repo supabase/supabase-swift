@@ -26,6 +26,9 @@ struct ChannelRecord {
   var joinAccessToken: String?
   var subscribeWaiters: [WaiterID] = []
   var leaveWaiters: [WaiterID] = []
+  /// Whether `removeChannel` is waiting for the leave to end: the channel is then finished and
+  /// dropped, and a subscribe fails.
+  var isRemoving = false
   /// The pushes that wait for a reply, by ref.
   var pendingPushes: [Ref: WaiterID] = [:]
 

@@ -64,6 +64,9 @@ public struct RealtimeError: SupabaseError {
     /// The server closed the channel while a subscribe was in flight. Goes away with the v2
     /// module (SDK-2109); v3 reports this as ``channelClosed``.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
+    /// The call used a channel that ``RealtimeClient/removeChannel(_:)`` removed, or the removal
+    /// ended a subscribe in flight. Get a new channel from ``RealtimeClient/channel(_:configure:)``.
+    public static let channelRemoved: Kind = "channelRemoved"
     /// The server answered a join or REST broadcast with an error this SDK has no narrower kind
     /// for. Read ``RealtimeError/serverCode`` and ``RealtimeError/message``, or
     /// ``RealtimeError/response`` on the REST path.
@@ -197,6 +200,11 @@ extension RealtimeError {
   /// The server closed the channel while a subscribe was in flight.
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
+
+  /// The channel was removed with ``RealtimeClient/removeChannel(_:)``.
+  static let channelRemoved = RealtimeError(
+    kind: .channelRemoved, message: "The channel was removed from the client.",
+    isRetryable: false)
 
   static let accessTokenMissing = RealtimeError(
     kind: .accessTokenMissing, message: "Access token is required for httpSend()",

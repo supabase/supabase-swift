@@ -446,6 +446,252 @@ struct RealtimeCoreLeaveTests {
       ])
   }
 
+  // MARK: removeChannel
+
+  @Test
+  func removeChannelFailsInFlightSubscribe() {
+    var harness = CoreHarness.connected()
+    let w1 = harness.waiter()
+    let w2 = harness.waiter()
+    _ = harness.send(Self.subscribe(w1))
+
+    #expect(
+      harness.send(.removeChannel(topic: Self.topic, waiter: w2)) == [
+        .send(Self.leave(joinRef: "1", ref: "2")),
+        .resume(w1, .failure(.channelRemoved)),
+        .publishChannelStatus(Self.topic, .unsubscribing),
+        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .schedule(.leaveTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+      ])
+    #expect(harness.core.channels[Self.topic]?.phase == .leaving(joinRef: "1", leaveRef: "2"))
+
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w2, .success),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .finishChannel(Self.topic),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+    #expect(harness.core.channels[Self.topic] == nil)
+    #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
+  }
+
+  @Test
+  func removeChannelOfASubscribedChannelFinishesAfterTheLeaveTimeout() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(.removeChannel(topic: Self.topic, waiter: w)) == [
+        .send(Self.leave(joinRef: "1", ref: "2")),
+        .publishChannelStatus(Self.topic, .unsubscribing),
+        .schedule(.leaveTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+      ])
+    #expect(
+      harness.send(.timerFired(.leaveTimeout(topic: Self.topic, ref: "2"))) == [
+        .resume(w, .success),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .finishChannel(Self.topic),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+    #expect(harness.core.channels[Self.topic] == nil)
+  }
+
+  /// A `phx_close` that answers an earlier `unsubscribe()` also ends the removal: the channel
+  /// is finished and dropped, which a plain unsubscribe never does.
+  @Test
+  func removeChannelDuringALeaveFinishesWhenTheCloseArrives() {
+    var harness = Self.subscribed()
+    let leaver = harness.waiter()
+    let remover = harness.waiter()
+    _ = harness.send(.unsubscribe(topic: Self.topic, waiter: leaver))
+
+    #expect(harness.send(.removeChannel(topic: Self.topic, waiter: remover)) == [])
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(leaver, .success),
+        .resume(remover, .success),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .finishChannel(Self.topic),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+    #expect(harness.core.channels[Self.topic] == nil)
+  }
+
+  @Test
+  func removeChannelWithoutAJoinFinishesAtOnce() {
+    var harness = CoreHarness()
+    let w1 = harness.waiter()
+    let w2 = harness.waiter()
+    _ = harness.send(Self.subscribe(w1))
+
+    let effects = harness.send(.removeChannel(topic: Self.topic, waiter: w2))
+
+    #expect(
+      effects == [
+        .resume(w1, .failure(.channelRemoved)),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .resume(w2, .success),
+        .finishChannel(Self.topic),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+    #expect(harness.core.channels[Self.topic] == nil)
+  }
+
+  @Test
+  func removeChannelOfAnUnsubscribedChannelFinishesAtOnce() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.unsubscribe(topic: Self.topic, waiter: harness.waiter()))
+
+    #expect(
+      harness.send(.removeChannel(topic: Self.topic, waiter: w)) == [
+        .resume(w, .success),
+        .finishChannel(Self.topic),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+  }
+
+  @Test
+  func removeChannelOfAnUnknownTopicSucceeds() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(.removeChannel(topic: Self.topic, waiter: w)) == [
+        .resume(w, .success),
+        .scheduleIdleDisconnect(after: .seconds(50)),
+      ])
+  }
+
+  @Test
+  func removeChannelCancelsPresenceAndFailsPendingPushes() throws {
+    var harness = Self.subscribed()
+    let pusher = harness.waiter()
+    harness.core.channels[Self.topic]?.pendingPushes["5"] = pusher
+    let w = harness.waiter()
+
+    let effects = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+
+    #expect(effects.first == .resume(pusher, .failure(.channelRemoved)))
+    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+  }
+
+  @Test
+  func subscribeOnAChannelBeingRemovedFails() {
+    var harness = Self.subscribed()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: harness.waiter()))
+    let w = harness.waiter()
+
+    #expect(harness.send(Self.subscribe(w)) == [.resume(w, .failure(.channelRemoved))])
+  }
+
+  @Test
+  func userDisconnectDuringRemovalFinishesTheChannel() throws {
+    var harness = Self.subscribed()
+    let socket = try #require(harness.socket)
+    let w = harness.waiter()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+
+    #expect(
+      harness.send(.disconnectRequested(code: nil, reason: nil)) == [
+        .publishClientStatus(.disconnected(nil)),
+        .cancelAllTasks,
+        .closeSocket(socket, code: nil, reason: "Client disconnect"),
+        .cancel(.heartbeat),
+        .resume(w, .success),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .finishChannel(Self.topic),
+      ])
+    #expect(harness.core.channels[Self.topic] == nil)
+  }
+
+  @Test
+  func socketLossDuringRemovalFinishesTheChannel() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+
+    let effects = harness.send(.socketClosed(code: 1006, reason: nil))
+
+    #expect(effects.contains(.resume(w, .success)))
+    #expect(effects.contains(.finishChannel(Self.topic)))
+    #expect(harness.core.channels[Self.topic] == nil)
+  }
+
+  @Test
+  func removingTheLastChannelSchedulesIdleDisconnect() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+
+    let effects = harness.send(.frame(Self.close(joinRef: "1")))
+
+    #expect(effects.last == .scheduleIdleDisconnect(after: .seconds(50)))
+    #expect(harness.core.idleDisconnectPending)
+  }
+
+  @Test
+  func removingAChannelWhileAnotherRemainsDoesNotScheduleIdleDisconnect() {
+    var harness = Self.subscribed()
+    _ = harness.send(
+      .subscribe(
+        topic: "other", configuration: RealtimeChannelConfiguration(), waiter: harness.waiter(),
+        snapshot: Self.noStreams))
+    let w = harness.waiter()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+
+    let effects = harness.send(.frame(Self.close(joinRef: "1")))
+
+    #expect(!effects.contains(.scheduleIdleDisconnect(after: .seconds(50))))
+    #expect(effects.last == .finishChannel(Self.topic))
+    #expect(!harness.core.idleDisconnectPending)
+  }
+
+  @Test
+  func removingTheLastChannelDisconnectsAtOnceWhenTheDelayIsZero() throws {
+    var options = RealtimeCore.Options.test
+    options.disconnectOnEmptyChannelsAfter = .zero
+    var harness = CoreHarness.connected(options: options)
+    let socket = try #require(harness.socket)
+    let w1 = harness.waiter()
+    let w2 = harness.waiter()
+    _ = harness.send(Self.subscribe(w1))
+    _ = harness.send(.frame(Self.reply(ref: "1")))
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w2))
+
+    #expect(
+      harness.send(.frame(Self.close(joinRef: "1"))) == [
+        .resume(w2, .success),
+        .publishChannelStatus(Self.topic, .unsubscribed),
+        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .finishChannel(Self.topic),
+        .publishClientStatus(.disconnected(nil)),
+        .cancelAllTasks,
+        .closeSocket(socket, code: nil, reason: "Client disconnect"),
+        .cancel(.heartbeat),
+      ])
+    #expect(!harness.core.idleDisconnectPending)
+  }
+
+  @Test
+  func commandOnRemovedTopicFails() {
+    var harness = Self.subscribed()
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: harness.waiter()))
+    _ = harness.send(.frame(Self.close(joinRef: "1")))
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(.push(topic: Self.topic, event: "x", payload: [:], waiter: w)) == [
+        .resume(w, .failure(.notSubscribed))
+      ])
+    #expect(harness.send(.push(topic: Self.topic, event: "x", payload: [:], waiter: nil)) == [])
+  }
+
   // MARK: Helpers
 
   static func subscribe(_ waiter: WaiterID) -> Event {

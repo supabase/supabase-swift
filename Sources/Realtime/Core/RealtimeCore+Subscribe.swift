@@ -13,6 +13,9 @@ extension RealtimeCore {
     topic: String, configuration: RealtimeChannelConfiguration, waiter: WaiterID,
     snapshot: JoinSnapshot
   ) -> [Effect] {
+    if channels[topic]?.isRemoving == true {
+      return [.resume(waiter, .failure(.channelRemoved))]
+    }
     var effects: [Effect] = []
     if idleDisconnectPending {
       idleDisconnectPending = false
