@@ -17,6 +17,7 @@ struct WaiterTable {
   }
 
   mutating func park(_ id: WaiterID, _ continuation: CheckedContinuation<Void, any Error>) {
+    assert(continuations[id] == nil, "Waiter \(id.rawValue) is already parked")
     continuations[id] = continuation
   }
 

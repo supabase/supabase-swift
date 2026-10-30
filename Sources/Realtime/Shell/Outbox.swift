@@ -36,6 +36,10 @@ final class Outbox: Sendable {
     }
   }
 
+  deinit {
+    close()
+  }
+
   func enqueue(_ message: RealtimeMessage) {
     continuation.yield(message)
   }
