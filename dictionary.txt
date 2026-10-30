@@ -2,6 +2,7 @@ Abijmil
 accesstoken
 acks
 ahref
+alice
 Alamofire
 alamofire
 apikey
@@ -20,6 +21,7 @@ awailas
 backgrounded
 Backgrounded
 backgrounding
+backoffs
 bitbucket
 Bitbucket
 bpchar
