@@ -659,6 +659,40 @@ struct LiveQueryObservableTests {
 
   @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
   @Test
+  func ignoresARunThatAnotherRunReplaced() async throws {
+    let streams = LockIsolated<
+      [AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.Continuation]
+    >(
+      [])
+    let sut = LiveQuery<Item> {
+      let (updates, update) = AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.makeStream()
+      streams.withValue { $0.append(update) }
+      return updates
+    }
+
+    let first = Task { await sut.run() }
+    await waitUntil { streams.value.count == 1 }
+    let second = Task { await sut.run() }
+    await waitUntil { streams.value.count == 2 }
+
+    streams.value[1].yield(.rows([Item(id: 2, title: "b")]))
+    await waitUntil { await sut.isLive }
+
+    streams.value[0].yield(.rows([Item(id: 1, title: "a")]))
+    streams.value[0].finish(throwing: URLError(.timedOut))
+    await first.value
+
+    #expect(sut.rows == [Item(id: 2, title: "b")])
+    #expect(sut.isLive)
+    #expect(sut.error == nil)
+
+    streams.value[1].finish()
+    await second.value
+    #expect(sut.isLive == false)
+  }
+
+  @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+  @Test
   func publishesRowsAndLiveness() async throws {
     let (updates, update) = AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.makeStream()
     let sut = LiveQuery<Item> { updates }

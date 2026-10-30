@@ -64,6 +64,10 @@
       public var animation: Animation?
     #endif
 
+    /// The latest call to ``run()``. An earlier call that is still ending leaves the state alone.
+    @ObservationIgnored
+    private var runGeneration = 0
+
     @ObservationIgnored
     private let makeUpdates: @Sendable () -> AsyncThrowingStream<LiveQueryUpdate<R>, any Error>
 
@@ -76,12 +80,16 @@
     /// Runs the query until the calling task is cancelled or the query fails.
     ///
     /// The method opens a channel of its own and removes it before it returns. When the query
-    /// fails, the method sets ``error`` and returns. Call it again to start over. Do not run it
-    /// twice at the same time.
+    /// fails, the method sets ``error`` and returns. Call it again to start over. A new call
+    /// takes over from an earlier one: the earlier call no longer changes the state, so cancel it.
     public func run() async {
+      runGeneration += 1
+      let generation = runGeneration
+      var isCurrent: Bool { generation == runGeneration }
+
       error = nil
       do {
-        for try await update in makeUpdates() {
+        for try await update in makeUpdates() where isCurrent {
           switch update {
           case .rows(let rows):
             publish(rows)
@@ -91,9 +99,9 @@
           }
         }
       } catch {
-        self.error = error
+        if isCurrent { self.error = error }
       }
-      isLive = false
+      if isCurrent { isLive = false }
     }
 
     private func publish(_ rows: [R]) {
