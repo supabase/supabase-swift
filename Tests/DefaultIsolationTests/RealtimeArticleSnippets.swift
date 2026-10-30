@@ -36,6 +36,7 @@
     }
   }
 
+  @available(iOS 17, macOS 14, macCatalyst 17, tvOS 17, watchOS 10, visionOS 1, *)
   private enum Lifetime {
     struct RoomView: View {
       let roomID: UUID
@@ -96,6 +97,7 @@
     }
   }
 
+  @available(iOS 17, macOS 14, macCatalyst 17, tvOS 17, watchOS 10, visionOS 1, *)
   private enum Isolation {
     @MainActor @Observable
     final class RoomModel {
@@ -219,6 +221,7 @@
     }
   }
 
+  @available(iOS 17, macOS 14, macCatalyst 17, tvOS 17, watchOS 10, visionOS 1, *)
   private enum ConnectionBehavior {
     @Observable final class Banner {
       var isBannerVisible = false
@@ -261,6 +264,7 @@
     }
   }
 
+  @available(iOS 17, macOS 14, macCatalyst 17, tvOS 17, watchOS 10, visionOS 1, *)
   private enum HighRateFeeds {
     nonisolated struct Tick: Decodable {
       let symbol: String
