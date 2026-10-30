@@ -664,7 +664,8 @@ public final class AuthClient: Sendable {
     ///   - presenter: Shows the provider page. The default is
     ///     ``ASWebAuthenticationSessionPresenter``.
     /// - Returns: The new session.
-    /// - Throws: The error of `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
     ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
     ///   throws.
     @discardableResult
@@ -687,9 +688,10 @@ public final class AuthClient: Sendable {
     ///   - options: The scopes, the redirect URL, and extra query items.
     ///   - presenter: Shows the provider page.
     /// - Returns: The new session.
-    /// - Throws: The error of `presenter`, or an error of kind
-    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
-    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
     @discardableResult
     public func signInWithOAuth(
       _ provider: Provider,
@@ -1163,10 +1165,10 @@ public final class AuthClient: Sendable {
     ///   - presenter: Shows the provider page. The default is
     ///     ``ASWebAuthenticationSessionPresenter``.
     /// - Returns: The new session.
-    /// - Throws: ``AuthError/sessionMissing`` when no user is signed in, the error of
-    ///   `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the
-    ///   callback URL is not an auth redirect or reports an error. The client removes the flow
-    ///   when `presenter` throws.
+    /// - Throws: `CancellationError` when the user cancels. ``AuthError/sessionMissing`` when no
+    ///   user is signed in. Else the error of `presenter`, or an error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
+    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
     @discardableResult
     public func linkIdentity(
       _ provider: Provider,
@@ -1187,10 +1189,10 @@ public final class AuthClient: Sendable {
     ///   - options: The scopes, the redirect URL, and extra query items.
     ///   - presenter: Shows the provider page.
     /// - Returns: The new session.
-    /// - Throws: ``AuthError/sessionMissing`` when no user is signed in, the error of
-    ///   `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the
-    ///   callback URL is not an auth redirect or reports an error. The client removes the flow
-    ///   when `presenter` throws.
+    /// - Throws: `CancellationError` when the user cancels. ``AuthError/sessionMissing`` when no
+    ///   user is signed in. Else the error of `presenter`, or an error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
+    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
     @discardableResult
     public func linkIdentity(
       _ provider: Provider,

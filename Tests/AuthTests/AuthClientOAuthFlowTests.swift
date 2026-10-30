@@ -120,13 +120,22 @@ import Testing
     }
 
     @Test
-    func mapsAReportedErrorToFailure() throws {
+    func mapsACancelledLoginToCancellationError() throws {
       let reported = ASWebAuthenticationSessionError(.canceledLogin)
       let result = try #require(
         ASWebAuthenticationSessionPresenter.callbackResult(url: nil, error: reported))
 
+      #expect(throws: CancellationError.self) { try result.get() }
+    }
+
+    @Test
+    func passesOtherSessionErrorsThroughUnchanged() throws {
+      let reported = ASWebAuthenticationSessionError(.presentationContextInvalid)
+      let result = try #require(
+        ASWebAuthenticationSessionPresenter.callbackResult(url: nil, error: reported))
+
       let failure = #expect(throws: ASWebAuthenticationSessionError.self) { try result.get() }
-      #expect(failure?.code == .canceledLogin)
+      #expect(failure?.code == .presentationContextInvalid)
     }
 
     @Test
@@ -134,7 +143,7 @@ import Testing
       let result = try #require(
         ASWebAuthenticationSessionPresenter.callbackResult(
           url: URL(string: "myapp://callback")!,
-          error: ASWebAuthenticationSessionError(.canceledLogin)
+          error: ASWebAuthenticationSessionError(.presentationContextInvalid)
         )
       )
 

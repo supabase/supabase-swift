@@ -38,7 +38,7 @@ public struct ClosurePresenter: WebAuthPresenter {
   /// Creates a presenter that runs `authenticate`.
   ///
   /// - Parameter authenticate: Opens the URL and returns the callback URL. It gets the same
-  ///   arguments as ``authenticate(url:callbackScheme:)``.
+  ///   arguments as ``ClosurePresenter/authenticate(url:callbackScheme:)``.
   public init(
     _ authenticate:
       @escaping @MainActor @Sendable (_ url: URL, _ callbackScheme: String?) async throws -> URL

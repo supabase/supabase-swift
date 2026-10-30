@@ -1,5 +1,5 @@
 #if canImport(AuthenticationServices)
-  public import AuthenticationServices
+  import AuthenticationServices
   public import Foundation
   import IssueReporting
 
@@ -21,8 +21,9 @@
 
     /// Opens `url` in an `ASWebAuthenticationSession` and returns the callback URL.
     ///
-    /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when
-    ///   `callbackScheme` is `nil`, or the error of the session.
+    /// - Throws: `CancellationError` when the user cancels. An error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when `callbackScheme` is `nil`. Else the
+    ///   error of the session.
     @MainActor
     public func authenticate(url: URL, callbackScheme: String?) async throws -> URL {
       let callbackScheme = try Self.callbackScheme(callbackScheme)
@@ -72,13 +73,17 @@
       "ASWebAuthenticationSession returned neither a URL nor an error."
 
     /// Maps the `(url, error)` pair `ASWebAuthenticationSession` reports onto a result, favouring
-    /// the error when it somehow reports both.
+    /// the error when it somehow reports both. A cancelled login becomes `CancellationError`, as
+    /// ``WebAuthPresenter/authenticate(url:callbackScheme:)`` requires.
     ///
     /// Returns `nil` for the combination it documents as impossible — neither value present —
     /// which the caller turns into ``sessionContractViolation``. The reporting stays with the
     /// caller because driving `reportIssue` from a `@Test` function segfaults under
     /// `xcodebuild test` (SDK-435); keeping it out here is what lets this be tested directly.
     static func callbackResult(url: URL?, error: (any Error)?) -> Result<URL, any Error>? {
+      if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+        return .failure(CancellationError())
+      }
       if let error { return .failure(error) }
       if let url { return .success(url) }
       return nil
