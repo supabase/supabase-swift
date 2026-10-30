@@ -160,9 +160,10 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Throws: ``RealtimeError`` when a retry cannot help: the server refused the join for good
   ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/ServerCode/unauthorized``
   ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
-  ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off, or
-  ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, or the server
-  ///   could not set up the channel's Postgres changes in time.
+  ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off,
+  ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, the server
+  ///   could not set up the channel's Postgres changes in time, or the client was released
+  ///   (``RealtimeError/Kind-swift.struct/notConnected``).
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
   ///   channel during the join, ``RealtimeError/Kind-swift.struct/channelRemoved`` when the
   ///   channel was removed, and `CancellationError` when the calling task is cancelled.
@@ -180,6 +181,12 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///
   /// The channel and its streams stay usable: call ``subscribe()`` to join again. Cancelling the
   /// calling task stops the wait, not the leave.
+  ///
+  /// While ``RealtimeClient/removeChannel(_:)`` removes an older channel of the same topic, the
+  /// leave waits for that removal to end, which takes at most the older channel's leave timeout.
+  /// The call returns only after that, even when the calling task is cancelled.
+  ///
+  /// On a removed channel, or one whose client was released, the method returns at once.
   public func unsubscribe() async {
     guard let client = try? clientForAction() else { return }
     try? await client.wait(on: self, evenIfCancelled: true) { [topic] in
@@ -213,7 +220,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   arrived within the client's configured timeout, the server's reason as
   ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
   ///   ``RealtimeError/Kind-swift.struct/server`` when it rejected the message,
-  ///   ``RealtimeError/Kind-swift.struct/channelRemoved`` when the channel was removed, and
+  ///   ``RealtimeError/Kind-swift.struct/channelRemoved`` when the channel was removed,
+  ///   ``RealtimeError/Kind-swift.struct/notConnected`` when the client was released, and
   ///   `CancellationError` when the awaiting task is cancelled.
   public func broadcast(
     event: String, payload: some Encodable, encoder: JSONEncoder = .supabase()
@@ -266,7 +274,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the channel is not subscribed,
   ///   ``RealtimeError/Kind-swift.struct/timeout`` when the server does not reply in time, the
   ///   server's error when it rejects the call, ``RealtimeError/Kind-swift.struct/channelRemoved``
-  ///   when the channel was removed, and `CancellationError` when the awaiting task is cancelled.
+  ///   when the channel was removed, ``RealtimeError/Kind-swift.struct/notConnected`` when the
+  ///   client was released, and `CancellationError` when the awaiting task is cancelled.
   public func track(_ payload: some Encodable, encoder: JSONEncoder? = nil) async throws {
     let payload = try JSONObject(payload, encoder: encoder ?? JSONValue.encoder)
     try await pushPresence([

@@ -25,7 +25,8 @@ extension RealtimeChannel {
   ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
   ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: An `EncodingError` when `payload` does not encode, and ``RealtimeError`` with kind
-  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, or `.channelRemoved`.
+  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, `.channelRemoved`, or
+  ///   `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
@@ -54,7 +55,7 @@ extension RealtimeChannel {
   ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport`,
-  ///   `.timeout`, or `.channelRemoved`.
+  ///   `.timeout`, `.channelRemoved`, or `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     data: Data,

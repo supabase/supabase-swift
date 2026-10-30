@@ -15,14 +15,14 @@ _ = await Verify.attempt("rt-connect") {
 }
 
 Verify.step("rt-broadcast", "receiver subscribes to \(topic); sender broadcasts 'ping'")
-let inbox = await receiver.realtime.channel(topic)
-let pings = await inbox.broadcasts(event: "ping")
-let outbox = await sender.realtime.channel(topic)
+let inbox = receiver.realtime.channel(topic)
+let pings = inbox.broadcasts(event: "ping")
+let outbox = sender.realtime.channel(topic)
 _ = await Verify.attempt("rt-subscribe") {
   try await inbox.subscribe()
   try await outbox.subscribe()
 }
-Verify.check("rt-subscribe", await inbox.status.isSubscribed, "receiver status \(await inbox.status)")
+Verify.check("rt-subscribe", inbox.status.isSubscribed, "receiver status \(inbox.status)")
 
 _ = await Verify.attempt("rt-broadcast") {
   try await outbox.broadcast(event: "ping", payload: ["n": 1, "from": "sender"] as JSONObject)
@@ -42,10 +42,10 @@ if let message = await Verify.attempt("rt-broadcast", {
 }
 
 Verify.step("rt-postgres-insert", "listen for INSERT on key_value_storage, then insert key \(key)")
-let changes = await receiver.realtime.channel(Verify.unique("db"))
-let inserts = await changes.postgresChanges(
+let changes = receiver.realtime.channel(Verify.unique("db"))
+let inserts = changes.postgresChanges(
   event: .insert, schema: "public", table: "key_value_storage")
-let events = await changes.events()
+let events = changes.events()
 _ = await Verify.attempt("rt-postgres-subscribe") { try await changes.subscribe() }
 // The server confirms the Postgres listener after the subscribe reply. A write before that
 // confirmation is never delivered. Stop on a failure too, so its reason is not lost to a timeout.

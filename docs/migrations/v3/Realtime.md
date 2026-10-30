@@ -31,6 +31,42 @@ Changes that still compile but behave differently. Check each one by hand.
   While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
 - **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
   `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
+- **`disconnect()` unsubscribes every channel.** Subscribed channels become `.unsubscribed` and
+  stay registered, but the next `connect()` does not join them again. v2 rejoined them. Call
+  `subscribe()` on each channel after `connect()`.
+- **A socket drop does not stop `subscribe()`.** A subscribed channel reports `.subscribing`
+  until it joins again, with no `.unsubscribed` step, and a `subscribe()` in flight waits for the
+  reconnect. After a server close with a code from 4000 to 4999 the client does not reconnect:
+  a waiting `subscribe()` throws the close error and the channel becomes `.failed`, and a
+  subscribed channel stays `.subscribing` until you call `connect()`.
+- **Cancelling `subscribe()` stops only that call.** While another `subscribe()` call waits for
+  the same channel, the join goes on for it. When the last waiting call is cancelled before the
+  join is confirmed, the channel leaves the topic and becomes `.unsubscribed`. v2 stopped the
+  join for every caller when the first one was cancelled. A call from a task that is already
+  cancelled throws `CancellationError` and sends nothing.
+- **`unsubscribe()` keeps the channel.** The channel stays in `channels` with its streams open,
+  and `subscribe()` joins again on the same instance. v2 dropped the channel from the client
+  when the server closed it. Because `channel(_:configure:)` returns the existing channel, a
+  new configuration needs `removeChannel(_:)` first. Only `removeChannel(_:)` ends the streams.
+- **A removed channel is spent.** After `removeChannel(_:)`, `subscribe()`, `broadcast`,
+  `track`, `untrack` and `httpSend` throw `RealtimeError` with `kind == .channelRemoved`, and a
+  `subscribe()` in flight throws it too. `unsubscribe()` returns at once, `status` keeps the last
+  value, and a new stream ends at once. Get a new channel from `channel(_:configure:)`.
+- **`removeChannel(_:)` also leaves a channel that is joining.** v2 left only a subscribed
+  channel. The call returns when the leave ends. A new channel for the same topic waits for that
+  leave before it acts.
+- **Channel actions need a live client.** A channel holds its client weakly. After the
+  `RealtimeClient` is released, `subscribe()`, `broadcast`, `track`, `untrack` and `httpSend`
+  throw `RealtimeError` with `kind == .notConnected` and `isRetryable == false`, and
+  `unsubscribe()` returns at once. Keep the client, or the `SupabaseClient`, alive while you use
+  its channels.
+- **Pushes need a subscribed channel.** `broadcast`, `track` and `untrack` throw `RealtimeError`
+  with `kind == .notSubscribed` when the channel is not `.subscribed`, also while the socket
+  reconnects. Nothing is queued to send later. v2 sent `track` with only a reported issue, and
+  queued frames while the socket was down. Wait for `.subscribed` in `statusChanges()` first.
+- **`channel(_:configure:)` does not cancel a scheduled disconnect.** When
+  `disconnectOnEmptyChannelsAfter` scheduled a disconnect after the last channel was removed,
+  only the first `subscribe()` cancels it. v2 cancelled it when `channel(_:)` made a channel.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.
@@ -64,9 +100,10 @@ Changes that still compile but behave differently. Check each one by hand.
   after it is delivered. When the server reports a failure, or does not report within
   `postgresChanges.subscriptionTimeout` (15 s), `subscribe()` throws, the channel leaves the topic
   and becomes `.failed`. v2 returned and only reported the failure as a `system` message. A
-  `PostgresChangesSubscribeTimeout` join error is no longer retried. The automatic rejoin after a
-  reconnect fails the same way, so watch `statusChanges()` for `.failed` and call `subscribe()`
-  again.
+  `PostgresChangesSubscribeTimeout` join error is no longer retried. A join reply that arrives
+  after the join timed out still counts, so the same wait and the same failure apply to it
+  instead of a second join. The automatic rejoin after a reconnect fails the same way, so watch
+  `statusChanges()` for `.failed` and call `subscribe()` again.
 - **A `postgresChanges` stream opened after `subscribe()` works.** The channel leaves and joins
   again with the new binding: it reports `.subscribing` until the server confirms, then
   `events()` emits `.resubscribed`. v2 reported an issue and dropped the callback.
@@ -83,7 +120,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `import RealtimeV2` | `import Realtime` |
-| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient`, `RealtimeChannel` (actors, see below), `PresenceEntry` |
+| `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient` (an actor, see below), `RealtimeChannel`, `PresenceEntry` |
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
 | `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
 | `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
@@ -93,13 +130,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
 | `RealtimeClientV2.disconnect()` | `disconnect() async` |
-| `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
-| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `await heartbeats()`, `HeartbeatEvent` |
+| `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `status`, `statusChanges()` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `heartbeats()`, `HeartbeatEvent` |
 | `RealtimeChannelV2.Status` | `RealtimeChannelStatus`, with values (see below) |
 | `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
 | `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
 | `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
-| `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
+| `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `status`, `statusChanges()` |
 | `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)`, which yields `BroadcastMessage` (see below) |
 | `broadcastDataStream(event:)` | `broadcasts(event:)`; the bytes are in `payload` as `.binary(Data)` |
 | `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(event:schema:table:filter:select:)` or `postgresChanges(of:event:schema:table:filter:select:decoder:)` (see below) |
@@ -148,25 +185,31 @@ The v1 API is removed. See
 [the RealtimeV2 migration guide in v2.55.4](https://github.com/supabase/supabase-swift/blob/v2.55.4/docs/migrations/RealtimeV2%20Migration%20Guide.md)
 to move from v1 to the v2 API first, then apply this guide.
 
-## `RealtimeClient` and `RealtimeChannel` are actors
+## `RealtimeClient` is an actor
 
-Both types are now actors that share one executor. Every call needs `await`, including
-`channel(_:configure:)` on the client and on `SupabaseClient`, the stream methods on a channel,
-and `status`, `statusChanges()` and `heartbeats()`. There is no synchronous status read; a view
-that needs the current status keeps the last value it got from `statusChanges()`.
+`RealtimeClient` is now an actor, and `disconnect(code:reason:)` is `async`. Reads and streams
+stay synchronous: `channel(_:configure:)`, `channels`, `status`, `statusChanges()` and
+`heartbeats()`, on the client and on `SupabaseClient`, need no `await`. `connect()` now throws
+when the socket cannot be opened.
+
+`RealtimeChannel` is still a `Sendable` class. `status`, `presenceState` and the stream methods
+are synchronous; `subscribe()`, `unsubscribe()`, the pushes and `httpSend` are `async`. Two
+channels are equal only when they are the same instance. The client keeps one per topic.
 
 ```swift
 // v2
 let channel = supabase.channel("room")
 let messages = channel.broadcastStream(event: "message")
 try await channel.subscribeWithError()
+if channel.status == .subscribed { showOnline() }
+supabase.realtimeV2.disconnect()
 // v3
-let channel = await supabase.channel("room")
-let messages = await channel.broadcasts(event: "message")
+let channel = supabase.channel("room")
+let messages = channel.broadcasts(event: "message")
 try await channel.subscribe()
+if channel.status.isSubscribed { showOnline() }
+await supabase.realtime.disconnect()
 ```
-
-`connect()` now throws when the socket cannot be opened, and `disconnect()` is `async`.
 
 ## Channel options are `RealtimeChannelConfiguration`
 
@@ -182,7 +225,7 @@ let channel = supabase.channel("room") {
   $0.broadcast.replay = ReplayOption(since: 1_700_000_000_000, limit: 10)
 }
 // v3
-let channel = await supabase.channel("room") {
+let channel = supabase.channel("room") {
   $0.isPrivate = true
   $0.broadcast.receiveOwnMessages = true
   $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
@@ -206,10 +249,10 @@ for await message in channel.system() where message.payload["extension"] == "pos
   break
 }
 // v3
-for await status in await client.statusChanges() where status.isConnected {
+for await status in client.statusChanges() where status.isConnected {
   break
 }
-for await event in await channel.events() where event == .postgresChangesReady {
+for await event in channel.events() where event == .postgresChangesReady {
   break
 }
 ```
@@ -223,7 +266,7 @@ from them. With `broadcast.waitForReplication` on, it emits `.replicationReady` 
 
 The `on*` callback methods and `RealtimeSubscription` tokens are removed. Read the matching
 `AsyncStream` instead. Cancel the task that reads it to stop listening. Removing the channel
-ends every stream.
+ends every stream; `unsubscribe()` does not.
 
 ```swift
 // v2
@@ -233,7 +276,7 @@ let subscription = channel.onBroadcast(event: "message") { payload in
 defer { subscription.cancel() }
 // v3
 let task = Task {
-  for await message in await channel.broadcasts(event: "message") {
+  for await message in channel.broadcasts(event: "message") {
     print(message.payload)
   }
 }
@@ -269,10 +312,10 @@ for await action in channel.postgresChange(AnyAction.self, table: "todos") {
   }
 }
 // v3
-for await message in await channel.broadcasts(event: "cursor") {
+for await message in channel.broadcasts(event: "cursor") {
   let cursor = try message.decode(as: Cursor.self)
 }
-for await change in await channel.postgresChanges(of: Todo.self, table: "todos") {
+for await change in channel.postgresChanges(of: Todo.self, table: "todos") {
   switch change.kind {
   case .insert: todos.append(try change.row())
   case .update: todos.replace(try change.row())
@@ -334,7 +377,7 @@ for await action in presence {
   let left = try action.decodeLeaves(as: UserStatus.self)
 }
 // v3
-let states = await channel.presenceStates()
+let states = channel.presenceStates()
 try await channel.subscribe()
 try await channel.track(UserStatus(name: "ana"))
 for await state in states {
@@ -398,6 +441,9 @@ cause when there is one.
 `subscribe()` no longer gives up after a number of attempts, so there is no
 `maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or
 `kind` is `.unauthorized` after the one rejoin with a fresh token.
+
+`.channelRemoved` is new. Every action on a channel that `removeChannel(_:)` removed throws it.
+Get a new channel from `channel(_:configure:)`.
 
 ```swift
 // v2

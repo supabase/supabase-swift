@@ -62,7 +62,7 @@ extension RealtimeClient {
   ///
   /// While an older channel of the same topic is being removed, the action waits for that
   /// removal to end, then runs as on a new channel. With `evenIfCancelled`, a cancelled caller
-  /// still waits for the removal, then acts.
+  /// still waits for the removal, at most the older channel's leave timeout, then acts.
   func wait(
     on channel: RealtimeChannel, evenIfCancelled: Bool = false,
     _ make: @Sendable (WaiterID) -> RealtimeCore.Event
@@ -85,9 +85,11 @@ extension RealtimeClient {
     return removing
   }
 
-  /// Parks the caller until no other channel's removal holds the topic of `channel`. A cancelled
-  /// caller throws `CancellationError` and leaves nothing behind, unless `evenIfCancelled` is
-  /// set: then it waits on. A channel removed meanwhile throws `channelRemoved` at once.
+  /// Parks the caller until no other channel's removal holds the topic of `channel`. The removal
+  /// ends when the older channel's leave ends, so the wait lasts at most its leave timeout. A
+  /// cancelled caller throws `CancellationError` and leaves nothing behind, unless
+  /// `evenIfCancelled` is set: then it waits on, so a cancelled `unsubscribe()` still leaves
+  /// once the removal ends. A channel removed meanwhile throws `channelRemoved` at once.
   private func waitForRemoval(
     blocking channel: RealtimeChannel, evenIfCancelled: Bool
   ) async throws {
