@@ -28,6 +28,9 @@ struct ChannelRecord {
   /// errors. Another failure ends the run.
   var hasRefreshedExpiredToken = false
   var subscribeWaiters: [WaiterID] = []
+  /// Whether the SDK started the join in flight, after a socket loss or for new bindings. It
+  /// goes on when the subscribe callers that joined it cancel.
+  var isAutomaticRejoin = false
   var leaveWaiters: [WaiterID] = []
   /// Whether `removeChannel` is waiting for the leave to end: the channel is then finished and
   /// dropped, and a subscribe fails.

@@ -31,12 +31,15 @@ extension RealtimeCore {
     return effects
   }
 
-  private mutating func leave(_ topic: String, waiter: WaiterID, removing: Bool) -> [Effect] {
-    guard var record = channels[topic] else { return [.resume(waiter, .success)] }
+  /// Leaves the topic for `waiter`, or for no caller when a join rolls back.
+  private mutating func leave(_ topic: String, waiter: WaiterID?, removing: Bool) -> [Effect] {
+    let done: [Effect] = waiter.map { [.resume($0, .success)] } ?? []
+    guard var record = channels[topic] else { return done }
     let subscribers: WaiterOutcome = removing ? .failure(.channelRemoved) : .cancelled
     let pushes: RealtimeError = removing ? .channelRemoved : .notSubscribed
     // A later subscribe is a new subscription, not a rejoin.
     record.hasBeenSubscribed = false
+    record.isAutomaticRejoin = false
     let cleared = record.presence.clear()
     channels[topic] = record
     var effects: [Effect] =
@@ -45,14 +48,14 @@ extension RealtimeCore {
     switch record.phase {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
-      return effects + [.resume(waiter, .success)]
+      return effects + done
 
     case .failed:
-      return effects + setPhase(.unsubscribed, for: topic) + [.resume(waiter, .success)]
+      return effects + setPhase(.unsubscribed, for: topic) + done
 
     case .leaving:
       // This caller wants the channel to stay unsubscribed.
-      channels[topic]?.leaveWaiters.append(waiter)
+      if let waiter { channels[topic]?.leaveWaiters.append(waiter) }
       channels[topic]?.subscribeWaiters = []
       return effects + record.subscribeWaiters.map { .resume($0, subscribers) }
 
@@ -62,7 +65,7 @@ extension RealtimeCore {
       // answers the leave, and the channel must not outlive it.
       let leaveRef = makeRef()
       let leaving = ChannelRecord.Phase.leaving(joinRef: joinRef, leaveRef: leaveRef)
-      channels[topic]?.leaveWaiters.append(waiter)
+      if let waiter { channels[topic]?.leaveWaiters.append(waiter) }
       logger.debug("Leaving channel '\(topic)' (join_ref: \(joinRef), ref: \(leaveRef))")
       effects.append(.send(leaveMessage(topic, joinRef: joinRef, ref: leaveRef)))
       if case .joining = record.phase {
@@ -83,7 +86,23 @@ extension RealtimeCore {
       }
       return effects
         + endJoin(topic, subscribers: subscribers, pushes: pushes, phase: .unsubscribed)
-        + [.resume(waiter, .success)]
+        + done
+    }
+  }
+
+  /// Rolls back the join in flight once no subscribe caller waits for it, as `unsubscribe`
+  /// does: `phx_leave` goes out only for a join the server may hold. A rejoin the SDK started
+  /// goes on. A leave has nothing to roll back: with no caller left, no join follows it.
+  mutating func rollBackJoinWithoutCallers(_ topic: String) -> [Effect] {
+    guard let record = channels[topic], record.subscribeWaiters.isEmpty,
+      !record.isAutomaticRejoin
+    else { return [] }
+    switch record.phase {
+    case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry:
+      logger.debug("Rolling back the join of channel '\(topic)': its last subscribe was cancelled")
+      return leave(topic, waiter: nil, removing: false)
+    case .unsubscribed, .subscribed, .leaving, .failed:
+      return []
     }
   }
 
@@ -217,6 +236,7 @@ extension RealtimeCore {
         effects += failPendingPushes(topic, with: .notConnected)
         effects += waitForNextSocket(topic, attempt: attempt)
       case .subscribed:
+        channels[topic]?.isAutomaticRejoin = true
         effects += failPendingPushes(topic, with: .notConnected)
         effects += waitForNextSocket(topic, attempt: 1)
       case .leaving:

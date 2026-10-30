@@ -35,6 +35,7 @@ extension RealtimeCore {
       logger.debug("Subscribe requested for channel '\(topic)'")
       record.subscribeWaiters.append(waiter)
       record.hasRefreshedExpiredToken = false
+      record.isAutomaticRejoin = false
       channels[topic] = record
       return effects + sendJoin(topic, attempt: 1)
 
@@ -316,6 +317,7 @@ extension RealtimeCore {
       return []
     }
     logger.debug("Rejoining channel '\(topic)' to add Postgres changes bindings")
+    channels[topic]?.isAutomaticRejoin = true
     return sendLeave(topic, joinRef: joinRef) + sendJoin(topic, attempt: 1)
   }
 

@@ -274,9 +274,33 @@ struct RealtimeCore {
     case .timerFired(.tokenRefresh):
       return tokenRefreshTimerFired()
 
-    // Not handled yet: waiter cancellation.
-    case .waiterCancelled:
-      return []
+    case .waiterCancelled(let waiter):
+      return cancelWaiter(waiter)
     }
+  }
+
+  /// Ends the wait of a caller whose task was cancelled, once: a later event never resumes it.
+  /// The work the caller started goes on, except a subscribe: once its last caller is gone, the
+  /// join rolls back. A waiter the core already resumed is unknown, so nothing happens.
+  mutating func cancelWaiter(_ waiter: WaiterID) -> [Effect] {
+    if let index = connectWaiters.firstIndex(of: waiter) {
+      connectWaiters.remove(at: index)
+      return [.resume(waiter, .cancelled)]
+    }
+    for (topic, record) in channels {
+      if let ref = record.pendingPushes.first(where: { $0.value == waiter })?.key {
+        channels[topic]?.pendingPushes[ref] = nil
+        return [.resume(waiter, .cancelled), .cancel(.pushTimeout(topic: topic, ref: ref))]
+      }
+      if let index = record.leaveWaiters.firstIndex(of: waiter) {
+        channels[topic]?.leaveWaiters.remove(at: index)
+        return [.resume(waiter, .cancelled)]
+      }
+      if let index = record.subscribeWaiters.firstIndex(of: waiter) {
+        channels[topic]?.subscribeWaiters.remove(at: index)
+        return [.resume(waiter, .cancelled)] + rollBackJoinWithoutCallers(topic)
+      }
+    }
+    return []
   }
 }
