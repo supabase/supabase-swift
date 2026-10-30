@@ -126,9 +126,26 @@ extension RealtimeChannel {
     select: [String]? = nil,
     decoder: JSONDecoder = .supabase()
   ) async -> AsyncStream<TypedPostgresChange<Row>> {
+    await postgresChanges(
+      of: Row.self, event: event, schema: schema, table: table, rawFilter: filter?.value,
+      select: select, decoder: decoder
+    )
+  }
+
+  /// The typed stream for a filter already in the `postgres_changes` grammar, for the `Supabase`
+  /// module, which renders it from a typed PostgREST filter.
+  nonisolated package func postgresChanges<Row: Decodable>(
+    of _: Row.Type,
+    event: PostgresChangeEvent,
+    schema: String,
+    table: String,
+    rawFilter: String?,
+    select: [String]?,
+    decoder: JSONDecoder
+  ) async -> AsyncStream<TypedPostgresChange<Row>> {
     let decoder = UncheckedSendable(decoder)
     let changes = await postgresChanges(
-      event: event, schema: schema, table: table, filter: filter?.value, select: select
+      event: event, schema: schema, table: table, filter: rawFilter, select: select
     )
     return AsyncStream(changes.map { TypedPostgresChange(raw: $0, decoder: decoder) })
   }

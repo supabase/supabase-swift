@@ -14,7 +14,7 @@
   import Foundation
   import Logging
   import OSLog
-  import Supabase
+  @_spi(Experimental) import Supabase
   import TestHelpers
   import Testing
   @testable import Helpers
@@ -597,6 +597,48 @@
         let record = try #require(try received[0].record?.decode(as: Entry.self))
         #expect(record.key == testKey1)
         #expect(record.key != testKey2)
+
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
+    func postgresChangesForARelationWithATypedFilter() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-relation")
+
+        let matchedKey = UUID().uuidString
+        let skippedKey = UUID().uuidString
+
+        let changes = await channel.postgresChanges(
+          for: KeyValueStorage.self,
+          event: .insert,
+          where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
+        )
+        let events = await channel.events()
+
+        try await channel.subscribe()
+
+        _ = try await withTimeout(.seconds(10)) {
+          await events.first(where: { $0 == .postgresChangesReady })
+        }
+
+        _ = try await client.from("key_value_storage")
+          .insert(["key": skippedKey, "value": "skipped"]).execute()
+        _ = try await client.from("key_value_storage")
+          .insert(["key": matchedKey, "value": "matched"]).execute()
+
+        let received = try await withTimeout(.seconds(5)) {
+          await changes.prefix(1).collect()
+        }
+
+        #expect(received.map(\.kind) == [.insert])
+        let row = try #require(try received.first?.row())
+        #expect(row.key == matchedKey)
+        #expect(row.value?.stringValue == "matched")
 
         await channel.unsubscribe()
       }

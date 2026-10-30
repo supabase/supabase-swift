@@ -8,8 +8,8 @@
 import Foundation
 import Helpers
 
-indirect enum PostgrestFilterNode: Sendable {
-  enum Operand: Sendable {
+package indirect enum PostgrestFilterNode: Sendable {
+  package enum Operand: Sendable {
     case value(String)
 
     /// The members of the `(a,b)` list `in` takes, each as its raw value. Members are quoted in
@@ -71,7 +71,7 @@ public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   typealias Node = PostgrestFilterNode
   typealias Operand = PostgrestFilterNode.Operand
 
-  var node: Node
+  package var node: PostgrestFilterNode
 
   init(node: Node) {
     self.node = node
@@ -163,7 +163,7 @@ extension PostgrestFilterNode.Operand {
   /// The operand as sent inside `or=(…)`, where a bare `,` or `)` in a value ends the group early.
   /// Only a single value gains quoting here: list members are quoted in every position already,
   /// and an `IS` keyword never is.
-  var grouped: String {
+  package var grouped: String {
     switch self {
     case .value(let raw):
       return escapePostgRESTFilterValue(raw)
