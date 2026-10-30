@@ -103,6 +103,45 @@ struct LiveQueryMachineTests {
   }
 
   @Test
+  func replacesTheRowInPlaceWhenAnUpdateChangesItsPrimaryKey() throws {
+    var sut = machine()
+    _ = sut.start()
+    _ = try sut.handle(.fetched(generation: 1, [item(1, "a"), item(2, "b")]))
+
+    let effects = try sut.handle(
+      .change(change("UPDATE", record: ["id": 3, "title": "a2"], old: ["id": 1], at: 1)))
+
+    #expect(effects == [.emit(.rows([Item(id: 3, title: "a2"), Item(id: 2, title: "b")]))])
+  }
+
+  @Test
+  func skipsAChangeToTheOldKeyOlderThanTheKeyChange() throws {
+    var sut = machine()
+    _ = sut.start()
+    _ = try sut.handle(.fetched(generation: 1, [item(1, "a")]))
+    _ = try sut.handle(
+      .change(change("UPDATE", record: ["id": 3, "title": "a2"], old: ["id": 1], at: 10)))
+
+    let effects = try sut.handle(
+      .change(change("UPDATE", record: ["id": 1, "title": "stale"], at: 5)))
+
+    #expect(effects == [])
+  }
+
+  @Test
+  func skipsAKeyChangeOlderThanTheLastChangeToItsNewKey() throws {
+    var sut = machine()
+    _ = sut.start()
+    _ = try sut.handle(.fetched(generation: 1, [item(1, "a")]))
+    _ = try sut.handle(.change(change("INSERT", record: ["id": 3, "title": "c"], at: 10)))
+
+    let effects = try sut.handle(
+      .change(change("UPDATE", record: ["id": 3, "title": "a2"], old: ["id": 1], at: 5)))
+
+    #expect(effects == [])
+  }
+
+  @Test
   func ignoresAChangeOfAnotherKind() throws {
     var sut = machine()
     _ = sut.start()

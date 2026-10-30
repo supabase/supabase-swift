@@ -113,17 +113,29 @@ struct LiveQueryMachine<R> {
   }
 
   /// Applies a change by primary key. Returns whether the rows changed.
+  ///
+  /// An update that changes the primary key carries the old key in its old record. It replaces
+  /// the row under the old key in place, and it counts as a change to both keys.
   private mutating func apply(_ change: PostgresChange) throws -> Bool {
     let isDelete = change.kind == .delete
     guard isDelete || change.kind == .insert || change.kind == .update,
-      let source = isDelete ? change.oldRecord : change.record
+      let source = isDelete ? change.oldRecord : change.record,
+      let key = key(of: source)
     else { return false }
 
-    let key = primaryKey.map { source[$0] ?? .null }
-    if let last = lastCommit[key], change.commitTimestamp < last {
-      return false
+    var keys = [key]
+    if change.kind == .update, let old = change.oldRecord, let oldKey = self.key(of: old),
+      oldKey != key
+    {
+      keys.append(oldKey)
     }
-    lastCommit[key] = change.commitTimestamp
+    let isStale = keys.contains { key in
+      lastCommit[key].map { change.commitTimestamp < $0 } ?? false
+    }
+    guard !isStale else { return false }
+    for key in keys {
+      lastCommit[key] = change.commitTimestamp
+    }
 
     let index = rows.firstIndex { $0.key == key }
     if isDelete {
@@ -133,12 +145,29 @@ struct LiveQueryMachine<R> {
     }
 
     let row = LiveRow(key: key, row: try decode(source))
-    if let index {
+    let oldIndex = keys.count > 1 ? rows.firstIndex { $0.key == keys[1] } : nil
+    switch (index, oldIndex) {
+    case (let index?, let oldIndex?):
+      rows[oldIndex] = row
+      rows.remove(at: index)
+    case (nil, let oldIndex?):
+      rows[oldIndex] = row
+    case (let index?, nil):
       rows[index] = row
-    } else {
+    case (nil, nil):
       rows.append(row)
     }
     return true
+  }
+
+  /// The primary key values of a record, or `nil` when it lacks a key column.
+  private func key(of record: PostgresRow) -> [JSONValue]? {
+    var key: [JSONValue] = []
+    for column in primaryKey {
+      guard let value = record[column] else { return nil }
+      key.append(value)
+    }
+    return key
   }
 }
 
