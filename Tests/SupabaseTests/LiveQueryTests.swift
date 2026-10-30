@@ -11,6 +11,10 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
+#if canImport(SwiftUI)
+  import SwiftUI
+#endif
+
 @testable import Realtime
 @_spi(Experimental) @testable import Supabase
 
@@ -534,6 +538,32 @@ struct LiveQueryObservableTests {
     #expect(sut.isLive == false)
     #expect(sut.error == nil)
   }
+
+  #if canImport(SwiftUI)
+    @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+    @Test
+    func keepsTheAnimationItIsGiven() {
+      let sut = LiveQuery(makeClient(), LiveItem.self, animation: .easeInOut)
+
+      #expect(sut.animation == .easeInOut)
+    }
+
+    @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+    @Test
+    func publishesRowsWithAnAnimation() async throws {
+      let (updates, update) = AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.makeStream()
+      let sut = LiveQuery<Item> { updates }
+      sut.animation = .default
+
+      let run = Task { await sut.run() }
+      update.yield(.rows([Item(id: 1, title: "a")]))
+      await waitUntil { await sut.rows == [Item(id: 1, title: "a")] }
+      #expect(sut.isLive)
+
+      update.finish()
+      await run.value
+    }
+  #endif
 
   @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
   @Test
