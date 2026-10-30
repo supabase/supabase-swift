@@ -136,8 +136,7 @@ public actor RealtimeClient {
 
   /// The protocol state. Only ``apply(_:)`` hands it events.
   ///
-  /// Lazy, so its `hasRegisteredChannels` closure is formed on the actor and reads
-  /// ``channelStates`` directly.
+  /// Lazy, so it is made on the actor, after ``registeredChannels`` exists.
   lazy var core: RealtimeCore = makeCore()
   var waiters = WaiterTable()
   var timers = TimerTable()
@@ -173,7 +172,11 @@ public actor RealtimeClient {
 
   /// The state of every channel this client created and has not removed. A handle with no entry
   /// is spent: ``removeChannel(_:)`` or a server `phx_close` removed it.
-  var channelStates: [ChannelID: ChannelState] = [:]
+  var channelStates: [ChannelID: ChannelState] = [:] {
+    didSet { registeredChannels.isEmpty = channelStates.isEmpty }
+  }
+  /// Whether ``channelStates`` is empty, for the core's `hasRegisteredChannels` closure.
+  private let registeredChannels = RegisteredChannels()
   /// The channel ``channel(_:configure:)`` returns for each topic.
   var liveChannels: [String: ChannelID] = [:]
   /// The last ``ChannelID`` issued.
@@ -296,10 +299,13 @@ public actor RealtimeClient {
   }
 
   /// The core, with options read from the client. Its `hasRegisteredChannels` closure reads the
-  /// channels this client still has, including those that never subscribed.
+  /// channels this client still has, including those that never subscribed. It holds
+  /// ``registeredChannels``, not the client: an actor-isolated closure cannot capture the actor
+  /// `unowned`, and a strong capture would keep the client alive.
   private func makeCore() -> RealtimeCore {
     let reconnectBackoff = reconnectBackoff
     let jitter = jitter
+    let registeredChannels = registeredChannels
     let coreOptions = RealtimeCore.Options(
       timeout: options.requestTimeout,
       heartbeatInterval: options.heartbeatInterval,
@@ -311,8 +317,7 @@ public actor RealtimeClient {
       retryDelay: { reconnectBackoff.delay(forAttempt: $0, random: jitter) },
       rejoinDelay: { RealtimeChannel.rejoinBackoff.delay(forAttempt: $0) },
       version: headers[.xClientInfo],
-      // Unowned: the core belongs to this client, so it never outlives it.
-      hasRegisteredChannels: { [unowned self] in !self.channelStates.isEmpty }
+      hasRegisteredChannels: { !registeredChannels.isEmpty }
     )
     let initialToken = headers[.authorization]?.split(separator: " ").last.map(String.init)
     return RealtimeCore(options: coreOptions, logger: logger, initialToken: initialToken)

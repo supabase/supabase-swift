@@ -370,7 +370,7 @@ struct InboxTests {
       client?.inbox.yield(.connectEnded(.success(socket), attempt: 1))
       client = nil
 
-      await Task.megaYield()
+      await waitUntil(timeout: 5) { socket.isClosed }
 
       #expect(socket.isClosed)
       #expect(socket.closeReason == "Client deallocated")

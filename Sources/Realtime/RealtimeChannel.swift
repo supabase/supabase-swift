@@ -89,7 +89,8 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   /// Weak: the client owns its channels' state, which holds this handle, and a channel the app
   /// keeps after releasing the client must not keep the client (and its socket) alive.
-  weak let client: RealtimeClient?
+  var client: RealtimeClient? { clientReference.value }
+  private let clientReference: WeakClient
 
   init(
     id: ChannelID,
@@ -101,7 +102,7 @@ public final class RealtimeChannel: Sendable, Hashable {
     self.topic = topic
     self.wireTopic = Self.wireTopic(for: topic)
     self.configuration = configuration
-    self.client = client
+    self.clientReference = WeakClient(value: client)
   }
 
   /// Two channels are equal only when they are the same instance.
@@ -344,4 +345,10 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   /// The wait before the next join attempt after the server applied a rate limit.
   static let rateLimitBackoff: Duration = .seconds(30)
+}
+
+/// Holds a channel's client weakly. A `weak let` stored property does not compile with Swift 6.2,
+/// which the package still supports.
+private struct WeakClient: Sendable {
+  weak var value: RealtimeClient?
 }

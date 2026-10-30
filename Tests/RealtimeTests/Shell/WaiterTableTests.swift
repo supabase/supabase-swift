@@ -3,6 +3,7 @@
 //  RealtimeTests
 //
 
+import ConcurrencyExtras
 import Testing
 
 @testable import Realtime

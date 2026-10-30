@@ -20,6 +20,8 @@ struct TimerTableTests {
   private let clock = TestClock<Duration>()
   private let fired = AsyncStream.makeStream(of: Fired.self)
 
+  /// The timer reads its deadline here, so ``TestClock/advance(by:)`` right after this call
+  /// cannot miss it, even when the timer's task has not started to sleep yet.
   private func schedule(
     _ table: inout TimerTable, _ id: TimerID, after delay: Duration = .seconds(10)
   ) {
@@ -34,7 +36,6 @@ struct TimerTableTests {
     await withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
 
       await clock.advance(by: .seconds(10))
 
@@ -51,13 +52,13 @@ struct TimerTableTests {
       var table = TimerTable()
       schedule(&table, .heartbeat)
       schedule(&table, .tokenRefresh, after: .seconds(5))
-      await Task.megaYield()
 
       await clock.advance(by: .seconds(5))
 
       var iterator = fired.stream.makeAsyncIterator()
       #expect(await iterator.next()?.id == .tokenRefresh)
-      await Task.megaYield()
+      // The clock stands at 5 s, so the heartbeat's sleep cannot have ended: the sentinel comes
+      // next.
       fired.continuation.yield(Fired(id: .rejoin(channel: ChannelID(rawValue: 1)), token: 0))
       #expect(await iterator.next()?.id == .rejoin(channel: ChannelID(rawValue: 1)))
       await clock.advance(by: .seconds(5))
@@ -70,9 +71,7 @@ struct TimerTableTests {
     await withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
 
       await clock.advance(by: .seconds(10))
 
@@ -90,11 +89,8 @@ struct TimerTableTests {
     await withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
       schedule(&table, .tokenRefresh, after: .seconds(20))
-      await Task.megaYield()
 
       await clock.advance(by: .seconds(20))
 
@@ -114,15 +110,15 @@ struct TimerTableTests {
       var table = TimerTable()
       schedule(&table, .heartbeat)
       schedule(&table, .tokenRefresh)
-      await Task.megaYield()
+      let tasks = [table.task(for: .heartbeat), table.task(for: .tokenRefresh)].compactMap { $0 }
 
       table.cancel(.heartbeat)
       await clock.advance(by: .seconds(10))
+      for task in tasks { await task.value }
 
+      fired.continuation.finish()
       var iterator = fired.stream.makeAsyncIterator()
       #expect(await iterator.next()?.id == .tokenRefresh)
-      await Task.megaYield()
-      fired.continuation.finish()
       #expect(await iterator.next() == nil)
     }
   }
@@ -150,11 +146,14 @@ struct TimerTableTests {
       var table = TimerTable()
       schedule(&table, .heartbeat)
       schedule(&table, .rejoin(channel: ChannelID(rawValue: 1)))
-      await Task.megaYield()
+      let tasks = [
+        table.task(for: .heartbeat), table.task(for: .rejoin(channel: ChannelID(rawValue: 1))),
+      ]
+      .compactMap { $0 }
 
       table.cancelAll()
       await clock.advance(by: .seconds(10))
-      await Task.megaYield()
+      for task in tasks { await task.value }
 
       fired.continuation.finish()
       var iterator = fired.stream.makeAsyncIterator()
@@ -172,7 +171,6 @@ struct TimerTableTests {
     await withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
-      await Task.megaYield()
 
       await clock.advance(by: .seconds(10))
       var iterator = fired.stream.makeAsyncIterator()

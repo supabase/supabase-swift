@@ -3,9 +3,9 @@
 //  RealtimeTests
 //
 
-import Clocks
 import ConcurrencyExtras
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -28,16 +28,13 @@ struct OutboxTests {
   @Test
   func outboxSendsInEnqueueOrder() async throws {
     let (fake, _) = FakeWebSocket.fakes()
-    let clock = TestClock<Duration>()
     let serializer = serializer
     fake.onSend { frame in
       guard case .text(let text) = frame,
         let index = try? serializer.decodeText(text).ref.flatMap(Int.init)
       else { return }
-      let steps = index % 3
-      for _ in 0..<steps {
-        try? await clock.sleep(for: .seconds(1))
-      }
+      // Sends take 0, 1 or 2 ms, so a writer that sent concurrently would reorder them.
+      try? await Task.sleep(for: .milliseconds(index % 3))
     }
     let outbox = Outbox(connection: fake, serializer: serializer, logger: .silent)
     defer { outbox.close() }
@@ -46,12 +43,7 @@ struct OutboxTests {
       outbox.enqueue(message(index))
     }
 
-    var iterations = 0
-    while fake.sentEvents.count < 100, iterations < 100_000 {
-      await Task.megaYield()
-      await clock.advance(by: .seconds(1))
-      iterations += 1
-    }
+    await waitUntil(timeout: 10) { fake.sentEvents.count == 100 }
 
     #expect(try refs(of: fake) == (0..<100).map(String.init))
   }
@@ -100,7 +92,10 @@ struct OutboxTests {
     outbox.enqueue(message(0))
     outbox.close()
     outbox.enqueue(message(1))
-    await Task.megaYield()
+    // The drain returns once the writer ends, so nothing can send "1" after this.
+    let deadline = Task { _ = try? await Task.sleep(for: .seconds(5)) }
+    await outbox.drain(until: deadline)
+    deadline.cancel()
 
     #expect(try !refs(of: fake).contains("1"))
   }

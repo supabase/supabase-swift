@@ -301,6 +301,12 @@ final class ChannelState {
     postgres = []
     for binding in ended {
       binding.finish()
+/// Whether the client has any channel, including one that never subscribed. The client updates
+/// it whenever its channel states change. The client actor owns it, so it needs no lock.
+final class RegisteredChannels {
+  var isEmpty = true
+}
+
     }
   }
 }
