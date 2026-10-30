@@ -35,7 +35,7 @@ enum Refresher {
         }
         try await refresh()
         return
-      } catch is CancellationError {
+      } catch is CancellationError where Task.isCancelled {
         return
       } catch {
         attempt += 1
