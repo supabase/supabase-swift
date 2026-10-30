@@ -270,6 +270,10 @@ struct AuthAPITests {
     let update = try api.updateUser(
       UserAttributes(userMetadata: metadata), redirectTo: nil, pkce: nil, accessToken: "t")
     #expect(try body(update) == ["data": ["name": "Jane"]])
+    let emptyUpdate = try api.updateUser(
+      UserAttributes(email: "a@b.c", userMetadata: [:]), redirectTo: nil, pkce: nil,
+      accessToken: "t")
+    #expect(try body(emptyUpdate) == ["email": "a@b.c"])
   }
 
   @Test

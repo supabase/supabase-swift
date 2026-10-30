@@ -585,6 +585,7 @@ extension AuthAPI {
     accessToken: String
   ) throws -> AuthRequest<User> {
     var user = user
+    user.userMetadata = user.userMetadata?.nilIfEmpty
     user.codeChallenge = pkce?.codeChallenge
     user.codeChallengeMethod = pkce?.codeChallengeMethod
 
