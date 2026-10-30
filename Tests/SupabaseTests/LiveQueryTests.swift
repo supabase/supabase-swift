@@ -103,6 +103,15 @@ struct LiveQueryMachineTests {
   }
 
   @Test
+  func ignoresAChangeOfAnotherKind() throws {
+    var sut = machine()
+    _ = sut.start()
+    _ = try sut.handle(.fetched(generation: 1, [item(1, "a")]))
+
+    #expect(try sut.handle(.change(change("TRUNCATE"))) == [])
+  }
+
+  @Test
   func ignoresADeleteOfARowItDoesNotHold() throws {
     var sut = machine()
     _ = sut.start()
@@ -343,33 +352,33 @@ private struct LiveItem: _PostgrestKeyedRelation, Equatable {
   static let columns = Columns()
 }
 
-@Suite
-struct SupabaseClientStreamTests {
-  private func makeClient(
-    respond: @escaping @Sendable (HTTPRequest) -> String
-  ) -> SupabaseClient {
-    SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          autoRefresh: .manual
-        ),
-        global: SupabaseClientOptions.GlobalOptions(
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              (
-                HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
-                HTTPBody(Data(respond(request).utf8))
-              )
-            }
-          )
+private func makeClient(
+  respond: @escaping @Sendable (HTTPRequest) -> String = { _ in "[]" }
+) -> SupabaseClient {
+  SupabaseClient(
+    supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+    supabaseKey: "PUBLISHABLE_KEY",
+    options: SupabaseClientOptions(
+      auth: SupabaseClientOptions.AuthOptions(
+        storage: AuthLocalStorageMock(),
+        autoRefresh: .manual
+      ),
+      global: SupabaseClientOptions.GlobalOptions(
+        http: .init(
+          transport: ClosureTransport { request, _ in
+            (
+              HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+              HTTPBody(Data(respond(request).utf8))
+            )
+          }
         )
       )
     )
-  }
+  )
+}
 
+@Suite
+struct SupabaseClientStreamTests {
   @Test
   func bindsTheFilteredRowsAndEveryDelete() async {
     let supabase = makeClient { _ in "[]" }
@@ -417,6 +426,42 @@ struct SupabaseClientStreamTests {
   }
 
   @Test
+  func throwsWhenAFetchedRowLacksItsPrimaryKey() async throws {
+    let supabase = makeClient { _ in #"[{"title":"a","list_id":7}]"# }
+
+    let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
+    let error = await #expect(throws: PostgrestError.self) { try await source.fetch() }
+    await source.finish()
+
+    let underlying = try #require(error?.underlyingError as? DecodingError)
+    guard case .dataCorrupted(let context) = underlying else {
+      Issue.record("Expected dataCorrupted, got \(underlying)")
+      return
+    }
+    #expect(context.debugDescription.contains("primary key column `id`"))
+  }
+
+  @Test
+  func streamsTheRowsOfEachUpdateAndSkipsStaleOnes() async throws {
+    let (updates, update) = AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.makeStream()
+    let rows = makeClient().liveRows(from: updates)
+
+    update.yield(.stale)
+    update.yield(.rows([Item(id: 1, title: "a")]))
+    update.yield(.stale)
+    update.yield(.rows([]))
+    update.finish(throwing: URLError(.timedOut))
+
+    var received: [[Item]] = []
+    await #expect(throws: URLError.self) {
+      for try await element in rows {
+        received.append(element)
+      }
+    }
+    #expect(received == [[Item(id: 1, title: "a")], []])
+  }
+
+  @Test
   func fetchesTheFilteredRowsWithTheirKeys() async throws {
     let path = LockIsolated<String?>(nil)
     let supabase = makeClient { request in
@@ -441,6 +486,16 @@ struct SupabaseClientStreamTests {
 @Suite
 @MainActor
 struct LiveQueryObservableTests {
+  @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+  @Test
+  func startsEmptyAndNotLive() {
+    let sut = LiveQuery(makeClient(), LiveItem.self, where: { $0.listId.eq(7) })
+
+    #expect(sut.rows.isEmpty)
+    #expect(sut.isLive == false)
+    #expect(sut.error == nil)
+  }
+
   @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
   @Test
   func publishesRowsAndLiveness() async throws {

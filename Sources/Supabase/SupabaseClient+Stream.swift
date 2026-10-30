@@ -55,7 +55,13 @@ extension SupabaseClient {
     _ relation: R.Type,
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil
   ) -> AsyncThrowingStream<[R], any Error> {
-    let updates = liveQueryUpdates(R.self, filter: filter?(R.columns))
+    liveRows(from: liveQueryUpdates(R.self, filter: filter?(R.columns)))
+  }
+
+  /// The rows of each ``LiveQueryUpdate/rows(_:)`` update. Stale updates carry no rows.
+  func liveRows<R: Sendable>(
+    from updates: AsyncThrowingStream<LiveQueryUpdate<R>, any Error>
+  ) -> AsyncThrowingStream<[R], any Error> {
     let (rows, output) = AsyncThrowingStream<[R], any Error>.makeStream()
     let task = Task {
       do {
@@ -124,11 +130,24 @@ private struct LiveRowSelection<R: _PostgrestKeyedRelation>: _PostgrestSelection
 
   let liveRow: LiveRow<R>
 
+  /// - Throws: `DecodingError` when the row lacks a primary key column. Without its key, no
+  ///   change could ever match the row.
   init(from decoder: any Decoder) throws {
     let values = try JSONObject(from: decoder)
-    liveRow = LiveRow(
-      key: R.primaryKeyColumns.map { values[$0] ?? .null },
-      row: try R(from: decoder)
-    )
+    let key = try R.primaryKeyColumns.map { column in
+      guard let value = values[column] else {
+        throw DecodingError.dataCorrupted(
+          DecodingError.Context(
+            codingPath: decoder.codingPath,
+            debugDescription: """
+              A live query needs the primary key column `\(column)` in every row, but \
+              `\(R.self).selectString` does not select it.
+              """
+          )
+        )
+      }
+      return value
+    }
+    liveRow = LiveRow(key: key, row: try R(from: decoder))
   }
 }
