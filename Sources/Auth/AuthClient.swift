@@ -620,8 +620,11 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.remove(flowId)
 
-    let event: AuthEvent = purpose == .recovery ? .passwordRecovery : .signedIn
-    try await sessionStore.commit(.signedIn(session, event: event))
+    switch purpose {
+    case .recovery: try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
+    case .emailChange: try await sessionStore.commit(.userChangeVerified(session))
+    default: try await sessionStore.commit(.signedIn(session, event: .signedIn))
+    }
 
     return session
   }
@@ -1004,7 +1007,7 @@ public final class AuthClient: Sendable {
         type: type,
         redirectTo: emailRedirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: prepareForPKCE(purpose: type == .emailChange ? .emailChange : .signIn).challenge
       )
     )
   }
@@ -1051,7 +1054,7 @@ public final class AuthClient: Sendable {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    let pkce = user.email != nil ? prepareForPKCE().challenge : nil
+    let pkce = user.email != nil ? prepareForPKCE(purpose: .emailChange).challenge : nil
 
     let updatedUser = try await api.authorizedExecute {
       try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)

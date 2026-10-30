@@ -1404,7 +1404,7 @@ extension AuthMockerTests {
 
       let url = URL(
         string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer&type=recovery"
+          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=3600&refresh_token=refreshtoken&token_type=bearer&type=recovery"
       )!
 
       try await assertAuthStateChanges(
@@ -1860,6 +1860,55 @@ extension AuthMockerTests {
         action: { try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-b") },
         expectedEvents: [.initialSession, .signedIn]
       )
+    }
+
+    @Test
+    func pkceExchangeOfAnEmailChangeForTheSignedInUserEmitsUserUpdated() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      let held = try AuthClient.Configuration.jsonDecoder.decode(
+        Session.self, from: MockData.session)
+      try await sut.seedSession(held)
+      sut.dependencies.codeVerifierStorage.set("verifier", "flow", .emailChange)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow") },
+        expectedEvents: [.initialSession, .userUpdated]
+      )
+    }
+
+    @Test
+    func emailChangeRequestsStoreAnEmailChangeFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.put: MockData.user]
+      ).register()
+      Mock(
+        url: clientURL.appendingPathComponent("resend"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+      let storage = sut.dependencies.codeVerifierStorage
+
+      try await sut.update(user: UserAttributes(email: "new@example.com"))
+      #expect(storage.purpose(nil) == .emailChange)
+
+      try await sut.resend(email: "example@mail.com", type: .signup)
+      #expect(storage.purpose(nil) == .signIn)
+
+      try await sut.resend(email: "example@mail.com", type: .emailChange)
+      #expect(storage.purpose(nil) == .emailChange)
     }
 
     @Test
@@ -4274,7 +4323,8 @@ extension AuthMockerTests {
       let receivedEvents = LockIsolated([AuthChange]())
       let finished = LockIsolated(false)
 
-      Task {
+      // Cancelled on return: an issue recorded after the test ends crashes Swift Testing.
+      let listener = Task {
         for await change in sut.events() {
           if finished.value {
             Issue.record("Received event '\(change.event)' after it finished.")
@@ -4282,6 +4332,7 @@ extension AuthMockerTests {
           receivedEvents.withValue { $0.append(change) }
         }
       }
+      defer { listener.cancel() }
 
       await Task.megaYield()
 
