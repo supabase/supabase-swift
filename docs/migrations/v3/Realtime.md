@@ -328,9 +328,10 @@ for await change in channel.postgresChanges(of: Todo.self, table: "todos") {
 ## Pushes throw instead of returning a status
 
 `broadcast(event:payload:encoder:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
-`async throws`. The broadcasts return once the frame is sent; when `broadcast.acknowledge` is on
-they wait for the server reply first. `track` and `untrack` always wait for the reply. The reply
-becomes the result of the call:
+`async throws`. The broadcasts return once the frame is queued for the socket; `disconnect()`
+still writes the frames queued before it, up to the client's `requestTimeout`. When
+`broadcast.acknowledge` is on, the broadcasts wait for the server reply first. `track` and
+`untrack` always wait for the reply. The reply becomes the result of the call:
 
 - The server acknowledged the push: the call returns.
 - No reply came within the client's `requestTimeout`: the call throws `RealtimeError` with

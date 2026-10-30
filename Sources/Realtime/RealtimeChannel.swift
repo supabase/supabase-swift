@@ -201,10 +201,11 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The channel must be subscribed. There is no fallback to the REST API; to broadcast without
   /// a subscription, use ``httpSend(event:payload:encoder:timeout:)``.
   ///
-  /// Returns as soon as the frame is sent, unless
+  /// Returns as soon as the frame is queued for the socket, unless
   /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` is on: then it waits for
   /// the server's reply. Wrap the call in a `Task` to send without waiting; cancelling that task
-  /// stops the wait, not the frame.
+  /// stops the wait, not the frame. ``RealtimeClient/disconnect(code:reason:)`` still writes the
+  /// frames queued before it, up to the client's request timeout; a lost connection drops them.
   ///
   /// > Important: On a private channel the server sends no reply when row level security denies
   /// > the write or the database fails. With `acknowledge` on, such a broadcast fails with

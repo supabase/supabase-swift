@@ -12,6 +12,13 @@ import Logging
 
 // MARK: - Apply loop
 
+/// What the batch of a ``RealtimeClient/disconnect(code:reason:)`` stopped: the outbox of the
+/// socket, which still holds the frames queued before the call, and the close of that socket.
+struct StoppedSocket {
+  var outbox: Outbox?
+  var close: (() -> Void)?
+}
+
 extension RealtimeClient {
   /// Hands `event` to the core and runs the effects it returns, in order. An event that arrives
   /// while a batch is being applied waits in `pending`, so the core never sees two events at
@@ -149,7 +156,12 @@ extension RealtimeClient {
 
     case .closeSocket(let conn, let code, let reason):
       // A `nil` code is a normal closure.
-      conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason)
+      let close = { conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason) }
+      if stoppedByDisconnect != nil {
+        stoppedByDisconnect?.close = close
+      } else {
+        close()
+      }
 
     case .stopSocketLoops:
       stopSocketLoops()
@@ -253,7 +265,11 @@ extension RealtimeClient {
     generation += 1
     reader?.cancel()
     reader = nil
-    outbox?.close()
+    if stoppedByDisconnect != nil {
+      stoppedByDisconnect?.outbox = outbox
+    } else {
+      outbox?.close()
+    }
     outbox = nil
     socket = nil
   }

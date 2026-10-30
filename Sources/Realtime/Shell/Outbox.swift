@@ -3,6 +3,7 @@
 //  Realtime
 //
 
+import ConcurrencyExtras
 import Foundation
 import Logging
 
@@ -63,6 +64,32 @@ final class Outbox: Sendable {
   /// calls to ``enqueue(_:)`` do nothing.
   func close() {
     continuation.finish()
+    writer.cancel()
+  }
+
+  /// Ends the queue and lets the writer send the frames still queued. Returns once they are
+  /// sent, or once `deadline` ends, whichever comes first: then the frames left are dropped as
+  /// with ``close()``. Later calls to ``enqueue(_:)`` do nothing.
+  ///
+  /// A send that never returns cannot hold the caller past `deadline`.
+  func drain(until deadline: Task<Void, Never>) async {
+    continuation.finish()
+    let pending = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let finish: @Sendable () -> Void = {
+      pending.withValue { continuation in
+        continuation?.resume()
+        continuation = nil
+      }
+    }
+    await withCheckedContinuation { continuation in
+      pending.setValue(continuation)
+      for task in [writer, deadline] {
+        Task {
+          await task.value
+          finish()
+        }
+      }
+    }
     writer.cancel()
   }
 }

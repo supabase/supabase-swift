@@ -142,6 +142,10 @@ public actor RealtimeClient {
   var outbox: Outbox?
   /// The current socket, so `deinit` can close it.
   var socket: (any WebSocketConnection)?
+  /// Set only while ``disconnect(code:reason:)`` applies its event. The batch keeps the outbox and
+  /// the close of the socket it stops here, so the frames still queued are written before the
+  /// socket closes. Every other stop drops them.
+  var stoppedByDisconnect: StoppedSocket?
   /// Counts socket installs and stops. The reader carries the value it started with, so a frame
   /// from a socket that has since been replaced is dropped.
   var generation = 0
@@ -354,12 +358,33 @@ public actor RealtimeClient {
   /// Subscribed channels become ``RealtimeChannelStatus/unsubscribed`` and stay registered; the
   /// next ``connect()`` does not join them again, so call ``RealtimeChannel/subscribe()`` on each.
   ///
+  /// The frames already queued, such as broadcasts that returned before this call, are still
+  /// written before the socket closes. The method returns once the socket is closed. The wait
+  /// lasts at most ``RealtimeClientOptions/requestTimeout``; after that, or when the calling task
+  /// is cancelled, the frames left are dropped.
+  ///
   /// - Parameters:
   ///   - code: An optional numeric close code to send to the server.
   ///   - reason: An optional reason string to send to the server.
   public func disconnect(code: Int? = nil, reason: String? = nil) async {
     logger.debug("Closing WebSocket connection")
+    // A local, because the existential in `self.clock` is not opened when passed directly.
+    let clock = clock
+    // Started before the event, so the bound runs from the call.
+    let deadline = sleepThenRun(on: clock, after: options.requestTimeout) {}
+    defer { deadline.cancel() }
+    stoppedByDisconnect = StoppedSocket()
     apply(.disconnectRequested(code: code, reason: reason))
+    let stopped = stoppedByDisconnect
+    stoppedByDisconnect = nil
+    if let outbox = stopped?.outbox {
+      await withTaskCancellationHandler {
+        await outbox.drain(until: deadline)
+      } onCancel: {
+        deadline.cancel()
+      }
+    }
+    stopped?.close?()
   }
 
   /// Records whether the socket is connected as the app enters the background.

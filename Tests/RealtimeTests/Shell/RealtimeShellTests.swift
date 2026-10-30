@@ -187,6 +187,68 @@ struct RealtimeShellTests {
     #expect(host.client.status == .connected)
   }
 
+  // MARK: Disconnect
+
+  @Test
+  func queuedBroadcastsAreWrittenBeforeDisconnectCloses() async throws {
+    let host = await RealtimeTestHost()
+    let channel = host.client.channel("room")
+    try await subscribe(channel, on: host)
+    let socket = try #require(host.sockets.last)
+    let server = try #require(host.server)
+    // Each send stays in flight for a moment, as on a slow network, so the broadcasts queue up.
+    socket.onSend { _ in try? await Task.sleep(for: .milliseconds(20)) }
+
+    for index in 0..<5 {
+      try await channel.broadcast(event: "queued", payload: ["n": index])
+    }
+    await host.client.disconnect()
+
+    let events = server.receivedEvents
+    let broadcasts = events.filter {
+      if case .frame(.binary) = $0 { true } else { false }
+    }
+    #expect(broadcasts.count == 5)
+    #expect(events.last == .closed(code: .normalClosure, reason: "Client disconnect"))
+  }
+
+  @Test
+  func disconnectDrainIsBoundedByRequestTimeout() async throws {
+    let host = await RealtimeTestHost(
+      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+    let (socket, release) = try await stallBroadcast(on: host)
+    defer { release() }
+
+    let disconnect = Task { await host.client.disconnect() }
+    await host.waitUntil {
+      if case .disconnected = host.client.status { true } else { false }
+    }
+    #expect(!socket.isClosed)
+    // The drain does not hold the actor.
+    #expect(await host.client.outbox == nil)
+
+    await host.clock.advance(by: .seconds(10))
+    await disconnect.value
+
+    #expect(socket.isClosed)
+  }
+
+  @Test
+  func cancelledDisconnectStopsTheDrain() async throws {
+    let host = await RealtimeTestHost()
+    let (socket, release) = try await stallBroadcast(on: host)
+    defer { release() }
+
+    let disconnect = Task { await host.client.disconnect() }
+    await host.waitUntil {
+      if case .disconnected = host.client.status { true } else { false }
+    }
+    disconnect.cancel()
+    await disconnect.value
+
+    #expect(socket.isClosed)
+  }
+
   // MARK: Access token
 
   @Test
@@ -489,6 +551,26 @@ struct RealtimeShellTests {
     host.confirmJoin(join)
     try await subscription.value
     return join
+  }
+
+  /// Subscribes a channel and sends a broadcast whose write never ends: the send ignores
+  /// cancellation and returns only once `release` is called. Returns the client's socket.
+  private func stallBroadcast(
+    on host: RealtimeTestHost
+  ) async throws -> (socket: FakeWebSocket, release: @Sendable () -> Void) {
+    let channel = host.client.channel("room")
+    try await subscribe(channel, on: host)
+    let socket = try #require(host.sockets.last)
+    let (released, continuation) = AsyncStream<Void>.makeStream()
+    let stalled = Task { for await _ in released {} }
+    let started = LockIsolated(false)
+    socket.onSend { _ in
+      started.setValue(true)
+      await stalled.value
+    }
+    try await channel.broadcast(event: "stalled", payload: ["n": 1])
+    #expect(await waitUntil(timeout: 5) { started.value })
+    return (socket, { continuation.finish() })
   }
 
   /// The server's `phx_close` for `join`.
