@@ -19,7 +19,8 @@ let events = Task { @MainActor in
 
 Verify.step("auth-signup", "sign up \(email) with metadata source=verify")
 if let response = await Verify.attempt("auth-signup", {
-  try await client.auth.signUp(email: email, password: password, data: ["source": "verify"])
+  try await client.auth.signUp(
+    email: email, password: password, options: SignUpOptions(userMetadata: ["source": "verify"]))
 }) {
   Verify.save("auth-signup-user.json", response.user)
   Verify.check(

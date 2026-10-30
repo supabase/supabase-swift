@@ -142,24 +142,24 @@ extension AuthAPI {
   func signUp(
     email: String,
     password: String,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
-  ) throws -> AuthRequest<AuthResponse> {
+  ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup", query: redirectQuery(redirectTo),
       body: encoder.encode(
         SignUpRequest(
           email: email,
           password: password,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
           codeChallenge: pkce?.codeChallenge,
           codeChallengeMethod: pkce?.codeChallengeMethod
         )
       ),
-      decode: decoding(AuthResponse.self)
+      decode: decoding(SignUpResult.self)
     )
   }
 
@@ -167,9 +167,9 @@ extension AuthAPI {
     phone: String,
     password: String,
     channel: MessagingChannel,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?
-  ) throws -> AuthRequest<AuthResponse> {
+  ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup",
       body: encoder.encode(
@@ -177,25 +177,25 @@ extension AuthAPI {
           password: password,
           phone: phone,
           channel: channel,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(AuthResponse.self)
+      decode: decoding(SignUpResult.self)
     )
   }
 
   /// `POST /signup` with neither email nor phone, which the server treats as an anonymous
   /// sign-up. It always returns a session.
   func signInAnonymously(
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "signup",
       body: encoder.encode(
         SignUpRequest(
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
@@ -225,21 +225,40 @@ extension AuthAPI {
 
   /// `POST /token?grant_type=id_token`. Pass the user's access token to link the identity to
   /// that user instead of signing in.
-  func signInWithIdToken(
-    credentials: OpenIDConnectCredentials,
+  func signInWithIDToken(
+    credentials: IDTokenCredentials,
     linkingTo accessToken: String? = nil
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "id_token",
       authorization: accessToken.map(bearer),
-      body: encoder.encode(credentials),
+      body: encoder.encode(
+        IDTokenBody(
+          provider: credentials.provider.rawValue,
+          idToken: credentials.idToken,
+          accessToken: credentials.accessToken,
+          nonce: credentials.nonce,
+          gotrueMetaSecurity: credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          linkIdentity: accessToken != nil
+        )
+      ),
       decode: decoding(Session.self)
     )
   }
 
   func signInWithWeb3(credentials: Web3Credentials) throws -> AuthRequest<Session> {
     try token(
-      grantType: "web3", body: encoder.encode(credentials), decode: decoding(Session.self))
+      grantType: "web3",
+      body: encoder.encode(
+        Web3Body(
+          chain: credentials.chain,
+          message: credentials.message,
+          signature: credentials.signature,
+          gotrueMetaSecurity: credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+        )
+      ),
+      decode: decoding(Session.self)
+    )
   }
 
   func exchangeCodeForSession(
@@ -275,7 +294,7 @@ extension AuthAPI {
     email: String,
     redirectTo: URL?,
     shouldCreateUser: Bool,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?,
     pkce: PKCEChallenge?
   ) throws -> AuthRequest<Void> {
@@ -285,7 +304,7 @@ extension AuthAPI {
         OTPParams(
           email: email,
           createUser: shouldCreateUser,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
           codeChallenge: pkce?.codeChallenge,
           codeChallengeMethod: pkce?.codeChallengeMethod
@@ -299,7 +318,7 @@ extension AuthAPI {
     phone: String,
     channel: MessagingChannel,
     shouldCreateUser: Bool,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?
   ) throws -> AuthRequest<Void> {
     try request(
@@ -309,7 +328,7 @@ extension AuthAPI {
           phone: phone,
           createUser: shouldCreateUser,
           channel: channel,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
@@ -566,6 +585,7 @@ extension AuthAPI {
     accessToken: String
   ) throws -> AuthRequest<User> {
     var user = user
+    user.userMetadata = user.userMetadata?.nilIfEmpty
     user.codeChallenge = pkce?.codeChallenge
     user.codeChallengeMethod = pkce?.codeChallengeMethod
 

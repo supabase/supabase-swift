@@ -15,7 +15,7 @@ and observes auth events through `client.auth`.
 
 ## How to get to it (user POV)
 
-- `client.auth.signUp(email:password:data:)`
+- `client.auth.signUp(email:password:options:)`
 - `client.auth.session`
 - `client.auth.signOut()`
 - `client.auth.signIn(email:password:)`

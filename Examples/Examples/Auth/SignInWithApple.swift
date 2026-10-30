@@ -67,8 +67,8 @@ struct SignInWithApple: View {
   private func signInWithApple(using idToken: String, fullName: String?) async {
     actionState = .inFlight
     let result = await Result { @Sendable in
-      _ = try await supabase.auth.signInWithIdToken(
-        credentials: .init(
+      _ = try await supabase.auth.signInWithIDToken(
+        IDTokenCredentials(
           provider: .apple,
           idToken: idToken
         ))
@@ -77,7 +77,7 @@ struct SignInWithApple: View {
       // so checking if it is non-nil to not erase data on login.
       if let fullName {
         _ = try? await supabase.auth.update(
-          user: UserAttributes(data: ["full_name": .string(fullName)]))
+          user: UserAttributes(userMetadata: ["full_name": .string(fullName)]))
       }
     }
     actionState = .result(result)

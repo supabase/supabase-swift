@@ -28,12 +28,14 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.signUp(
+      _ = try await sut.signUp(
         email: "example@mail.com",
         password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "dummy-captcha"
+        options: SignUpOptions(
+          userMetadata: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -43,11 +45,13 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.signUp(
+      _ = try await sut.signUp(
         phone: "+1 202-918-2132",
         password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: SignUpOptions(
+          userMetadata: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -83,15 +87,13 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.signInWithIdToken(
-        credentials: OpenIDConnectCredentials(
+      try await sut.signInWithIDToken(
+        IDTokenCredentials(
           provider: .apple,
           idToken: "id-token",
-          accessToken: "access-token",
           nonce: "nonce",
-          gotrueMetaSecurity: AuthMetaSecurity(
-            captchaToken: "captcha-token"
-          )
+          accessToken: "access-token",
+          captchaToken: "captcha-token"
         )
       )
     }
@@ -106,7 +108,7 @@ struct RequestsTests {
         email: "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
+        userMetadata: ["custom_key": .string("custom_value")],
         captchaToken: "dummy-captcha"
       )
     }
@@ -120,7 +122,7 @@ struct RequestsTests {
       try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
         shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
+        userMetadata: ["custom_key": .string("custom_value")],
         captchaToken: "dummy-captcha"
       )
     }
@@ -311,7 +313,7 @@ struct RequestsTests {
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
-          data: ["custom_key": .string("custom_value")]
+          userMetadata: ["custom_key": .string("custom_value")]
         )
       )
     }
@@ -452,7 +454,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.signInAnonymously(
-        data: ["custom_key": .string("custom_value")],
+        userMetadata: ["custom_key": .string("custom_value")],
         captchaToken: "captcha-token"
       )
     }
@@ -719,7 +721,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.signInWithWeb3(
-        credentials: Web3Credentials(
+        Web3Credentials(
           chain: .ethereum,
           message: "example.com wants you to sign in",
           // cspell:ignore xsignature
@@ -764,8 +766,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.linkIdentityWithIdToken(
-        credentials: OpenIDConnectCredentials(
+      try await sut.linkIdentityWithIDToken(
+        IDTokenCredentials(
           provider: .google,
           idToken: "id-token",
           nonce: "nonce"

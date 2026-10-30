@@ -85,7 +85,7 @@
       case .success(let signature):
         do {
           let session = try await supabase.auth.signInWithWeb3(
-            credentials: Web3Credentials(
+            Web3Credentials(
               chain: .ethereum,
               message: message,
               signature: signature
