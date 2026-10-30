@@ -65,7 +65,7 @@ struct InboxTests {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     let broadcasts = await channel.broadcasts(event: "ping")
-    try await subscribe(channel, on: host)
+    try await host.subscribe(channel)
     let generation = await host.client.generation
     let frame = RealtimeMessage(
       joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.broadcast,
@@ -193,13 +193,10 @@ struct InboxTests {
       options: RealtimeClientOptions(
         disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
     let channel = await host.client.channel("room")
-    let join = try await subscribe(channel, on: host)
+    let join = try await host.subscribe(channel)
     let removal = Task { await host.client.removeChannel(channel) }
     _ = try await host.receive(event: ChannelEvent.leave)
-    host.server?.send(
-      RealtimeMessage(
-        joinRef: join.joinRef, ref: nil, topic: join.topic, event: ChannelEvent.close,
-        payload: [:]))
+    host.sendClose(for: join)
     await removal.value
     let token = try #require(await host.client.idleDisconnectTimer?.token)
 
@@ -281,7 +278,7 @@ struct InboxTests {
     await host.client.flushInbox()
     #expect(await !host.client.hasRecord(for: "room"))
     // Frames leave in order, so once this join is in, any frame for "room" would be too.
-    try await subscribe(host.client.channel("barrier"), on: host)
+    try await host.subscribe(host.client.channel("barrier"))
     #expect(host.frames.filter { $0.topic == channel.wireTopic }.isEmpty)
     #expect(await channel.status == .unsubscribed)
   }
@@ -401,19 +398,6 @@ struct InboxTests {
       http: HTTPClient(transport: RecordingTransport()),
       clock: TestClock<Duration>()
     )
-  }
-
-  @discardableResult
-  private func subscribe(
-    _ channel: RealtimeChannel, on host: RealtimeTestHost
-  ) async throws -> RealtimeMessage {
-    let subscription = Task { try await channel.subscribe() }
-    let join = try await host.receive {
-      $0.event == ChannelEvent.join && $0.topic == channel.wireTopic
-    }
-    host.confirmJoin(join)
-    try await subscription.value
-    return join
   }
 }
 

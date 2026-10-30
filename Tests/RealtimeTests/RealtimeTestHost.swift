@@ -177,6 +177,42 @@ final class RealtimeTestHost: Sendable {
   func confirmJoin(_ join: RealtimeMessage, postgresChanges: [JSONValue] = []) {
     reply(to: join, response: ["postgres_changes": .array(postgresChanges)])
   }
+
+  /// Subscribes `channel` and confirms its join. Returns the join.
+  @discardableResult
+  func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessage {
+    let subscription = Task { try await channel.subscribe() }
+    let join = try await receive {
+      $0.event == ChannelEvent.join && $0.topic == channel.wireTopic
+    }
+    confirmJoin(join)
+    try await subscription.value
+    return join
+  }
+
+  /// Closes the channel that `join` opened, as the server does with `phx_close`.
+  func sendClose(for join: RealtimeMessage) {
+    server?.send(
+      RealtimeMessage(
+        joinRef: join.joinRef, ref: nil, topic: join.topic, event: ChannelEvent.close,
+        payload: [:]))
+  }
+}
+
+/// Records an issue unless `action` throws a ``RealtimeError`` with the failure of `expected`.
+func expectError(
+  _ expected: RealtimeError,
+  sourceLocation: SourceLocation = #_sourceLocation,
+  _ action: () async throws -> Void
+) async {
+  do {
+    try await action()
+    Issue.record("Expected \(expected.kind)", sourceLocation: sourceLocation)
+  } catch let error as RealtimeError {
+    #expect(error.isSameFailure(as: expected), sourceLocation: sourceLocation)
+  } catch {
+    Issue.record("Unexpected \(error)", sourceLocation: sourceLocation)
+  }
 }
 
 extension RealtimeClient {
