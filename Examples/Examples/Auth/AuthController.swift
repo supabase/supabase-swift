@@ -28,9 +28,7 @@ final class AuthController {
   init() {
     observeAuthStateChangesTask = Task {
       for await change in supabase.auth.events() {
-        if [.initialSession, .signedIn, .signedOut].contains(change.event) {
-          self.session = change.session
-        }
+        self.session = change.session
 
         if change.event == .passwordRecovery {
           self.isPasswordRecoveryFlow = true

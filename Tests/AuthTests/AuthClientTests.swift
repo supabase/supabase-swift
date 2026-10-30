@@ -1633,7 +1633,7 @@ extension AuthMockerTests {
 
     @Test(arguments: [
       (EmailOTPType.recovery, AuthEvent.passwordRecovery),
-      (EmailOTPType.emailChange, AuthEvent.userUpdated),
+      (EmailOTPType.emailChange, AuthEvent.signedIn),
       (EmailOTPType.email, AuthEvent.signedIn),
     ])
     func verifyOTPWithTokenHashEmitsTheEventForItsType(
@@ -1651,6 +1651,32 @@ extension AuthMockerTests {
         sut: sut,
         action: { try await sut.verifyOTP(tokenHash: "abc-def", type: type) },
         expectedEvents: [.initialSession, event]
+      )
+    }
+
+    @Test(arguments: ["email", "phone"])
+    func verifyOTPForAChangeOfTheSignedInUserEmitsUserUpdated(channel: String) async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("verify"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      let held = try AuthClient.Configuration.jsonDecoder.decode(
+        Session.self, from: MockData.session)
+      try await sut.seedSession(held)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          if channel == "email" {
+            try await sut.verifyOTP(tokenHash: "abc-def", type: .emailChange)
+          } else {
+            try await sut.verifyOTP(phone: "+1 202-918-2132", token: "123456", type: .phoneChange)
+          }
+        },
+        expectedEvents: [.initialSession, .userUpdated]
       )
     }
 
@@ -1674,7 +1700,7 @@ extension AuthMockerTests {
     }
 
     @Test(arguments: [
-      (MobileOTPType.phoneChange, AuthEvent.userUpdated),
+      (MobileOTPType.phoneChange, AuthEvent.signedIn),
       (MobileOTPType.sms, AuthEvent.signedIn),
     ])
     func verifyOTPWithPhoneEmitsTheEventForItsType(

@@ -930,7 +930,7 @@ public final class AuthClient: Sendable {
         redirectTo: redirectTo,
         captchaToken: captchaToken
       ),
-      event: Self.verifiedEvent(for: type)
+      transition: { Self.verifiedTransition($0, for: type) }
     )
   }
 
@@ -944,7 +944,9 @@ public final class AuthClient: Sendable {
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken),
-      event: type == .phoneChange ? .userUpdated : .signedIn
+      transition: {
+        type == .phoneChange ? .userChangeVerified($0) : .signedIn($0, event: .signedIn)
+      }
     )
   }
 
@@ -956,26 +958,29 @@ public final class AuthClient: Sendable {
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
       authAPI.verifyOTP(tokenHash: tokenHash, type: type),
-      event: Self.verifiedEvent(for: type)
+      transition: { Self.verifiedTransition($0, for: type) }
     )
   }
 
-  private static func verifiedEvent(for type: EmailOTPType) -> AuthEvent {
+  private static func verifiedTransition(
+    _ session: Session,
+    for type: EmailOTPType
+  ) -> SessionStore.Transition {
     switch type {
-    case .recovery: .passwordRecovery
-    case .emailChange: .userUpdated
-    default: .signedIn
+    case .recovery: .signedIn(session, event: .passwordRecovery)
+    case .emailChange: .userChangeVerified(session)
+    default: .signedIn(session, event: .signedIn)
     }
   }
 
   private func _verifyOTP(
     _ request: AuthRequest<VerifyOTPResponse>,
-    event: AuthEvent
+    transition: (Session) -> SessionStore.Transition
   ) async throws -> VerifyOTPResponse {
     let response = try await api.execute(request)
 
     if let session = response.session {
-      try await sessionStore.commit(.signedIn(session, event: event))
+      try await sessionStore.commit(transition(session))
     }
 
     return response

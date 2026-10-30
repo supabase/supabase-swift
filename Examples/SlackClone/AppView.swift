@@ -21,10 +21,6 @@ final class AppViewModel {
     Task {
       for await change in supabase.auth.events() {
         Logger.main.debug("AuthStateChange: \(change.event.rawValue)")
-        guard [.signedIn, .signedOut, .initialSession, .tokenRefreshed].contains(change.event)
-        else {
-          return
-        }
         self.session = change.session
 
         if change.session == nil {

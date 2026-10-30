@@ -20,9 +20,7 @@ struct AppView: View {
     }
     .task {
       for await state in supabase.auth.events() {
-        if [.initialSession, .signedIn, .signedOut].contains(state.event) {
-          isAuthenticated = state.session != nil
-        }
+        isAuthenticated = state.session != nil
       }
     }
   }

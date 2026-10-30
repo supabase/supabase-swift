@@ -37,6 +37,10 @@ actor SessionStore {
     /// only while the held user is `userID`. Otherwise the commit changes nothing and does not
     /// throw, so a sign-out or sign-in that lands first keeps its own user.
     case identityUnlinked(UUID, userID: UUID)
+    /// Stores the session from a verified email or phone change. The event is
+    /// ``AuthEvent/userUpdated`` when the held user is the session's user, and
+    /// ``AuthEvent/signedIn`` otherwise, because the change then signs that user in.
+    case userChangeVerified(Session)
   }
 
   private enum State {
@@ -476,9 +480,13 @@ actor SessionStore {
     case .identityUnlinked(let identityID, let userID):
       guard case .signedIn(var current) = published.value.state, current.session.user.id == userID
       else { return }
-      current.session.user.identities?.removeAll { $0.identityId == identityID }
+      current.session.user.removeIdentity(identityID)
       next = .signedIn(current)
       event = .userUpdated
+
+    case .userChangeVerified(let session):
+      event = currentSession?.user.id == session.user.id ? .userUpdated : .signedIn
+      next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
     }
 
     if case .signedIn(let received) = next {
@@ -521,5 +529,18 @@ actor SessionStore {
       }
     }
     armRefresher()
+  }
+}
+
+extension User {
+  /// Removes the identity `identityID`, and its provider from `appMetadata["providers"]` when no
+  /// other identity uses that provider.
+  fileprivate mutating func removeIdentity(_ identityID: UUID) {
+    guard let removed = identities?.first(where: { $0.identityId == identityID }) else { return }
+    identities?.removeAll { $0.identityId == identityID }
+    guard identities?.contains(where: { $0.provider == removed.provider }) != true,
+      case .array(let providers) = appMetadata["providers"]
+    else { return }
+    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider) })
   }
 }
