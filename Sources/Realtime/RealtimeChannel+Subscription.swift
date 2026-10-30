@@ -154,6 +154,8 @@ extension RealtimeChannel {
   /// emits ``RealtimeChannelEvent/resubscribed``.
   func socketDidDisconnect() {
     failPendingPushes(with: RealtimeError.notConnected)
+    // The client restarts its refs, so the next join can reuse this one.
+    confirmedJoinRef = nil
     switch state {
     case .subscribing(let task, _):
       abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
