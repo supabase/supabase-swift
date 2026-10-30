@@ -27,12 +27,12 @@ struct SignInWithOAuth: View {
         Task {
           do {
             try await supabase.auth.signInWithOAuth(
-              provider: provider,
-              redirectTo: Constants.redirectToURL,
-              launchFlow: { @MainActor url in
+              provider,
+              options: OAuthOptions(redirectTo: Constants.redirectToURL),
+              presenter: ClosurePresenter { url, scheme in
                 try await webAuthenticationSession.authenticate(
                   using: url,
-                  callbackURLScheme: Constants.redirectToURL.scheme!
+                  callbackURLScheme: scheme!
                 )
               }
             )
@@ -89,8 +89,9 @@ struct SignInWithOAuth: View {
       Task {
         do {
           try await supabase.auth.signInWithOAuth(
-            provider: provider,
-            redirectTo: Constants.redirectToURL
+            provider,
+            options: OAuthOptions(redirectTo: Constants.redirectToURL),
+            presenter: ASWebAuthenticationSessionPresenter(prefersEphemeralWebBrowserSession: true)
           )
         } catch {
           debug("Failed to sign-in with OAuth flow: \(error)")

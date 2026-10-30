@@ -16,7 +16,7 @@ struct SlackCloneApp: App {
     WindowGroup {
       AppView(model: model)
         .onOpenURL { url in
-          supabase.handle(url)
+          Task { try await supabase.handleRedirect(url) }
         }
     }
   }

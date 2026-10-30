@@ -57,8 +57,8 @@ struct ExamplesApp: App {
     WindowGroup {
       RootView()
         .environment(AuthController())
-        .onOpenURL {
-          supabase.handle($0)
+        .onOpenURL { url in
+          Task { try await supabase.handleRedirect(url) }
         }
         .task {
           _ = try? await supabase.storage.resumableUploads.resumeAll()
