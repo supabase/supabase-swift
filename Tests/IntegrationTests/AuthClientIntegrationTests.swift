@@ -393,12 +393,6 @@ struct AuthClientIntegrationTests {
       attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
-    let events = LockIsolated<[AuthChangeEvent]>([])
-    let token = await authClient.onAuthStateChange { event, _ in
-      events.withValue { $0.append(event) }
-    }
-    defer { token.remove() }
-
     try await authClient.resetPasswordForEmail(
       email,
       redirectTo: URL(string: "http://localhost:3000")!
@@ -408,14 +402,18 @@ struct AuthClientIntegrationTests {
     let items = URLComponents(url: location, resolvingAgainstBaseURL: false)?.queryItems
     #expect(items?.contains { $0.name == "code" } == true)
 
-    let result = try await authClient.handleRedirect(location)
+    let redirectResult = LockIsolated<RedirectResult?>(nil)
+    try await expectAuthChangeEvents([.initialSession, .passwordRecovery]) {
+      let value = try await authClient.handleRedirect(location)
+      redirectResult.setValue(value)
+    }
+    let result = redirectResult.value
     guard case .signedIn(let session, let verification) = result else {
       Issue.record("Expected .signedIn, got \(String(describing: result))")
       return
     }
     #expect(session.user.email == email)
     #expect(verification == .recovery)
-    #expect(events.value.contains(.passwordRecovery))
 
     let replay = try await authClient.handleRedirect(location)
     #expect(replay == result)

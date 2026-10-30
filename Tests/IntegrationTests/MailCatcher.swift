@@ -17,6 +17,19 @@ struct MailCatcher {
     var description: String { "No email with a /verify link arrived for \(email)" }
   }
 
+  struct UnexpectedStatusError: Error, CustomStringConvertible {
+    let url: URL
+    let status: Int?
+    var description: String { "GET \(url) returned status \(status.map(String.init) ?? "none")" }
+  }
+
+  private func get(_ url: URL) async throws -> Data {
+    let (data, response) = try await URLSession.shared.data(from: url)
+    let status = (response as? HTTPURLResponse)?.statusCode
+    guard status == 200 else { throw UnexpectedStatusError(url: url, status: status) }
+    return data
+  }
+
   var baseURL: URL = URL(string: "http://127.0.0.1:54324")!
 
   func latestLink(to email: String, timeout: Duration = .seconds(10)) async throws -> URL {
@@ -39,13 +52,11 @@ struct MailCatcher {
     )!
     search.queryItems = [URLQueryItem(name: "query", value: "to:\(email)")]
 
-    let (searchData, _) = try await URLSession.shared.data(from: search.url!)
+    let searchData = try await get(search.url!)
     let found = try JSONDecoder().decode(SearchResponse.self, from: searchData)
     guard let id = found.messages.first?.ID else { return nil }
 
-    let (messageData, _) = try await URLSession.shared.data(
-      from: baseURL.appendingPathComponent("api/v1/message/\(id)")
-    )
+    let messageData = try await get(baseURL.appendingPathComponent("api/v1/message/\(id)"))
     let message = try JSONDecoder().decode(Message.self, from: messageData)
 
     let pattern = #"href\s*=\s*"([^"]*\/verify[^"]*)""#
@@ -81,7 +92,13 @@ private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unche
   }
 }
 
-struct MissingLocationError: Error {}
+struct MissingLocationError: Error, CustomStringConvertible {
+  let url: URL
+  let status: Int?
+  var description: String {
+    "GET \(url) returned status \(status.map(String.init) ?? "none") without a Location header"
+  }
+}
 
 /// Sends a GET request without following redirects and returns the `Location` header.
 func redirectLocation(of url: URL) async throws -> URL {
@@ -93,10 +110,10 @@ func redirectLocation(of url: URL) async throws -> URL {
   defer { session.finishTasksAndInvalidate() }
 
   let (_, response) = try await session.data(from: url)
+  let http = response as? HTTPURLResponse
   guard
-    let http = response as? HTTPURLResponse,
-    let location = http.value(forHTTPHeaderField: "Location"),
+    let location = http?.value(forHTTPHeaderField: "Location"),
     let result = URL(string: location)
-  else { throw MissingLocationError() }
+  else { throw MissingLocationError(url: url, status: http?.statusCode) }
   return result
 }
