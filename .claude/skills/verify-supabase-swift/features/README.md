@@ -55,6 +55,7 @@ has exactly four H2 sections, in this order:
 - [Database](./database.md) covers PostgREST select, filter, insert, update, delete, and RPC.
 - [Auth](./auth.md) covers email sign-up, session, sign-out, sign-in, and auth events.
 - [Storage](./storage.md) covers buckets, upload, list, download, signed URLs, and removal.
-- [Realtime](./realtime.md) covers broadcast between clients and Postgres change events.
+- [Realtime](./realtime.md) covers broadcast between clients, Postgres change events, presence,
+  and channel handles after `removeChannel` or `unsubscribe`.
 - [Functions](./functions.md) covers Edge Function invocation with JSON, text, query, region,
   and errors.

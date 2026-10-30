@@ -98,8 +98,8 @@ $V drive database my-label   # pick the evidence label
 5. Exits with the journey's exit code: `0` all checks passed, `1` a check failed, `2` the build
    failed.
 
-The bundled journeys are `database`, `auth`, `storage`, `realtime`, and `functions`. To prove a
-change, copy the closest journey, add steps for the new behavior, and drive your copy. Put
+The bundled journeys are `database`, `auth`, `storage`, `realtime`, `realtime-actor`, and
+`functions`. To prove a change, copy the closest journey, add steps for the new behavior, and drive your copy. Put
 lasting journeys in `journeys/` and list them in the feature map.
 
 ### Writing a journey
