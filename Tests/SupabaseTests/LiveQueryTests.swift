@@ -8,7 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
-@_spi(Experimental) import PostgrestMacros
 import TestHelpers
 import Testing
 
@@ -319,11 +318,29 @@ struct LiveQueryUpdatesTests {
   }
 }
 
-@Table("items")
-private struct LiveItem: Equatable {
-  @PrimaryKey var id: Int
+/// Written out as `@Table("items")` with `@PrimaryKey var id` would expand it, for the reason
+/// `RealtimeTodo` gives.
+private struct LiveItem: _PostgrestKeyedRelation, Equatable {
+  static let relationName = "items"
+  static let selectString = "*"
+  static let primaryKeyColumns = ["id"]
+
+  var id: Int
   var title: String
   var listId: Int
+
+  enum CodingKeys: String, CodingKey {
+    case id, title
+    case listId = "list_id"
+  }
+
+  struct Columns: Sendable {
+    let id = _PostgrestColumn<LiveItem, Int>("id")
+    let title = _PostgrestColumn<LiveItem, String>("title")
+    let listId = _PostgrestColumn<LiveItem, Int>("list_id")
+  }
+
+  static let columns = Columns()
 }
 
 @Suite
