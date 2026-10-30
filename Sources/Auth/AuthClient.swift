@@ -1167,12 +1167,9 @@ public final class AuthClient: Sendable {
   /// ``currentUser`` and emits ``AuthEvent/userUpdated``.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
-
-    // The response carries no user, so drop the identity from the held one. Skip it when another
-    // user signed in while the request was out.
-    guard var user = currentUser, user.id == identity.userId else { return }
-    user.identities?.removeAll { $0.identityId == identity.identityId }
-    try await sessionStore.commit(.userUpdated(user, event: .userUpdated))
+    // The response carries no user, so the store drops the identity from the held one.
+    try await sessionStore.commit(
+      .identityUnlinked(identity.identityId, userID: identity.userId))
   }
 
   /// Sends a reset request to an email address.

@@ -545,19 +545,16 @@ public final class SupabaseClient: Sendable {
   /// the current token itself.
   func handleTokenChanged(event: AuthEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
-        $0.changedAccessToken != session?.accessToken
-      {
-        $0.changedAccessToken = session?.accessToken
-        return session?.accessToken ?? supabaseKey
-      }
-
       if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
       }
 
-      return nil
+      // Any event can carry a new token: a recovery or email-change verification, or an MFA
+      // step-up, replaces the session without a `.signedIn`.
+      guard $0.changedAccessToken != session?.accessToken else { return nil }
+      $0.changedAccessToken = session?.accessToken
+      return session?.accessToken ?? supabaseKey
     }
 
     if let accessToken, let realtime = mutableState.realtime {

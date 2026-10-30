@@ -11,6 +11,39 @@ struct SessionStoreTests {
   private let receivedAt = Date(timeIntervalSince1970: 1_700_000_000)
 
   @Test
+  func identityUnlinkedRemovesTheIdentityFromTheHeldUser() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    try await store.load()
+    try await store.commit(.signedIn(.valid, event: .signedIn))
+    let identities = try #require(Session.valid.user.identities)
+    var changes = store.changes().makeAsyncIterator()
+    _ = await changes.next()
+
+    try await store.commit(
+      .identityUnlinked(identities[0].identityId, userID: Session.valid.user.id))
+
+    #expect(await changes.next()?.event == .userUpdated)
+    #expect(store.currentSession?.user.identities == Array(identities.dropFirst()))
+  }
+
+  @Test
+  func identityUnlinkedChangesNothingUnlessItsUserIsSignedIn() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    try await store.load()
+    let identity = try #require(Session.valid.user.identities?.first)
+
+    let signedOut = await store.generation
+    try await store.commit(.identityUnlinked(identity.identityId, userID: Session.valid.user.id))
+    #expect(await store.generation == signedOut)
+
+    try await store.commit(.signedIn(.valid, event: .signedIn))
+    let signedIn = await store.generation
+    try await store.commit(.identityUnlinked(identity.identityId, userID: UUID()))
+    #expect(await store.generation == signedIn)
+    #expect(store.currentSession == .valid)
+  }
+
+  @Test
   func loadWithNothingStoredSignsOutWithSessionMissing() async throws {
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
     var changes = store.changes().makeAsyncIterator()

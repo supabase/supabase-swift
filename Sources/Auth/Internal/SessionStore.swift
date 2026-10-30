@@ -33,6 +33,10 @@ actor SessionStore {
     /// after the request went out. When the store holds another session or none, the commit
     /// changes nothing and does not throw.
     case invalidated(SignOutReason, refreshToken: String)
+    /// Removes the identity `identityID` from the held user with ``AuthEvent/userUpdated``, but
+    /// only while the held user is `userID`. Otherwise the commit changes nothing and does not
+    /// throw, so a sign-out or sign-in that lands first keeps its own user.
+    case identityUnlinked(UUID, userID: UUID)
   }
 
   private enum State {
@@ -468,6 +472,13 @@ actor SessionStore {
       guard currentSession?.refreshToken == refreshToken else { return }
       next = .signedOut(reason)
       event = .signedOut
+
+    case .identityUnlinked(let identityID, let userID):
+      guard case .signedIn(var current) = published.value.state, current.session.user.id == userID
+      else { return }
+      current.session.user.identities?.removeAll { $0.identityId == identityID }
+      next = .signedIn(current)
+      event = .userUpdated
     }
 
     if case .signedIn(let received) = next {
