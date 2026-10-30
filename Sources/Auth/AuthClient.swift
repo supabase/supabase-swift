@@ -67,16 +67,21 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``session``
 ///
 /// ### Signing up
-/// - ``signUp(email:password:data:redirectTo:captchaToken:)``
-/// - ``signUp(phone:password:channel:data:captchaToken:)``
-/// - ``signInAnonymously(data:captchaToken:)``
+/// - ``signUp(email:password:options:)``
+/// - ``signUp(phone:password:options:)``
+/// - ``SignUpResult``
+/// - ``SignUpOptions``
+/// - ``signInAnonymously(userMetadata:captchaToken:)``
 ///
 /// ### Signing in
 /// - ``signIn(email:password:captchaToken:)``
 /// - ``signIn(phone:password:captchaToken:)``
-/// - ``signInWithIdToken(credentials:)``
-/// - ``signInWithOTP(email:redirectTo:shouldCreateUser:data:captchaToken:)``
-/// - ``signInWithOTP(phone:channel:shouldCreateUser:data:captchaToken:)``
+/// - ``signInWithIDToken(_:)``
+/// - ``IDTokenCredentials``
+/// - ``Nonce``
+/// - ``signInWithWeb3(_:)``
+/// - ``signInWithOTP(email:redirectTo:shouldCreateUser:userMetadata:captchaToken:)``
+/// - ``signInWithOTP(phone:channel:shouldCreateUser:userMetadata:captchaToken:)``
 /// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
 /// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
 /// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
@@ -108,7 +113,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``userIdentities()``
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
 /// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
-/// - ``linkIdentityWithIdToken(credentials:)``
+/// - ``linkIdentityWithIDToken(_:)``
 /// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
 /// - ``unlinkIdentity(_:)``
 ///
@@ -342,67 +347,74 @@ public final class AuthClient: Sendable {
     return stream
   }
 
-  /// Creates a new user.
+  /// Creates a user with an email address and a password.
+  ///
+  /// When email confirmation is off, the user is signed in at once: the client stores the session
+  /// and emits ``AuthChangeEvent/signedIn``. When it is on, the server emails a confirmation link
+  /// and the user stays signed out.
+  ///
   /// - Parameters:
-  ///   - email: User's email address.
-  ///   - password: Password for the user.
-  ///   - data: Custom data object to store additional user metadata.
-  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
-  ///   - captchaToken: Optional captcha token for securing this endpoint.
-  @discardableResult
+  ///   - email: The user's email address.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, redirect URL, and captcha token. ``SignUpOptions/channel``
+  ///     does not apply to email sign-up.
+  /// - Returns: ``SignUpResult/signedIn(_:)`` with the new session, or
+  ///   ``SignUpResult/confirmationRequired(_:)`` with the user to confirm.
   public func signUp(
     email: String,
     password: String,
-    data: [String: JSONValue]? = nil,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
     try await _signUp(
       authAPI.signUp(
         email: email,
         password: password,
-        data: data,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
+        userMetadata: options.userMetadata,
+        redirectTo: options.redirectTo,
+        captchaToken: options.captchaToken,
         pkce: prepareForPKCE().challenge
       )
     )
   }
 
-  /// Creates a new user.
+  /// Creates a user with a phone number and a password.
+  ///
+  /// When phone confirmation is off, the user is signed in at once: the client stores the session
+  /// and emits ``AuthChangeEvent/signedIn``. When it is on, the server sends a code over
+  /// ``SignUpOptions/channel`` and the user stays signed out until
+  /// ``verifyOTP(phone:token:type:captchaToken:)``.
+  ///
   /// - Parameters:
-  ///   - phone: User's phone number with international prefix.
-  ///   - password: Password for the user.
-  ///   - channel: Messaging channel to use (e.g. whatsapp or sms).
-  ///   - data: Custom data object to store additional user metadata.
-  ///   - captchaToken: Optional captcha token for securing this endpoint.
-  @discardableResult
+  ///   - phone: The user's phone number, with the international prefix.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, channel, and captcha token. ``SignUpOptions/redirectTo``
+  ///     does not apply to phone sign-up.
+  /// - Returns: ``SignUpResult/signedIn(_:)`` with the new session, or
+  ///   ``SignUpResult/confirmationRequired(_:)`` with the user to confirm.
   public func signUp(
     phone: String,
     password: String,
-    channel: MessagingChannel = .sms,
-    data: [String: JSONValue]? = nil,
-    captchaToken: String? = nil
-  ) async throws -> AuthResponse {
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
     try await _signUp(
       authAPI.signUp(
         phone: phone,
         password: password,
-        channel: channel,
-        data: data,
-        captchaToken: captchaToken
+        channel: options.channel,
+        userMetadata: options.userMetadata,
+        captchaToken: options.captchaToken
       )
     )
   }
 
-  private func _signUp(_ request: AuthRequest<AuthResponse>) async throws -> AuthResponse {
-    let response = try await api.execute(request)
+  private func _signUp(_ request: AuthRequest<SignUpResult>) async throws -> SignUpResult {
+    let result = try await api.execute(request)
 
-    if let session = response.session {
+    if case .signedIn(let session) = result {
       try await sessionStore.commit(.signedIn(session, event: .signedIn))
     }
 
-    return response
+    return result
   }
 
   /// Log in an existing user with an email and password.
@@ -423,7 +435,7 @@ public final class AuthClient: Sendable {
 
   /// Log in an existing user with a phone and password.
   /// - Parameters:
-  ///   - email: User's phone number.
+  ///   - phone: User's phone number.
   ///   - password: User's password.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
@@ -437,11 +449,25 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Allows signing in with an ID token issued by certain supported providers.
-  /// The ID token is verified for validity and a new session is established.
+  /// Signs in with an ID token that a third-party identity provider issued, such as Sign in with
+  /// Apple or Google Sign-In.
+  ///
+  /// The server checks the token and creates the user if needed.
+  ///
+  /// ```swift
+  /// let nonce = Nonce.generate()
+  /// request.nonce = nonce.hashed  // Pass the hashed nonce to the provider.
+  /// // ...
+  /// try await client.auth.signInWithIDToken(
+  ///   IDTokenCredentials(provider: .apple, idToken: idToken, nonce: nonce.raw)
+  /// )
+  /// ```
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The new session.
   @discardableResult
-  public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
-    try await _signIn(authAPI.signInWithIdToken(credentials: credentials))
+  public func signInWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+    try await _signIn(authAPI.signInWithIDToken(credentials: credentials))
   }
 
   /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
@@ -451,7 +477,7 @@ public final class AuthClient: Sendable {
   ///
   /// ```swift
   /// let session = try await client.auth.signInWithWeb3(
-  ///   credentials: Web3Credentials(
+  ///   Web3Credentials(
   ///     chain: .ethereum,
   ///     message: siweMessage,
   ///     signature: signatureHex
@@ -459,22 +485,21 @@ public final class AuthClient: Sendable {
   /// )
   /// ```
   @discardableResult
-  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+  public func signInWithWeb3(_ credentials: Web3Credentials) async throws -> Session {
     try await _signIn(authAPI.signInWithWeb3(credentials: credentials))
   }
 
   /// Creates a new anonymous user.
   /// - Parameters:
-  ///   - data: A custom data object to store the user's metadata. This maps to the
-  /// `auth.users.raw_user_meta_data` column. The `data` should be a JSON object that includes
-  /// user-specific info, such as their first and last name.
-  ///   - captchaToken: Verification token received when the user completes the captcha.
+  ///   - userMetadata: Data to store on the user, in the `auth.users.raw_user_meta_data` column.
+  ///   - captchaToken: The token the user received for completing a captcha.
   @discardableResult
   public func signInAnonymously(
-    data: [String: JSONValue]? = nil,
+    userMetadata: JSONObject = [:],
     captchaToken: String? = nil
   ) async throws -> Session {
-    try await _signIn(authAPI.signInAnonymously(data: data, captchaToken: captchaToken))
+    try await _signIn(
+      authAPI.signInAnonymously(userMetadata: userMetadata, captchaToken: captchaToken))
   }
 
   private func _signIn(_ request: AuthRequest<Session>) async throws -> Session {
@@ -494,13 +519,13 @@ public final class AuthClient: Sendable {
   ///   - email: User's email address.
   ///   - redirectTo: Redirect URL embedded in the email link.
   ///   - shouldCreateUser: Creates a new user, defaults to `true`.
-  ///   - data: User's metadata.
+  ///   - userMetadata: Data to store on the user if the call creates one.
   ///   - captchaToken: Captcha verification token.
   public func signInWithOTP(
     email: String,
     redirectTo: URL? = nil,
     shouldCreateUser: Bool = true,
-    data: [String: JSONValue]? = nil,
+    userMetadata: JSONObject = [:],
     captchaToken: String? = nil
   ) async throws {
     try await api.execute(
@@ -508,7 +533,7 @@ public final class AuthClient: Sendable {
         email: email,
         redirectTo: redirectTo,
         shouldCreateUser: shouldCreateUser,
-        data: data,
+        userMetadata: userMetadata,
         captchaToken: captchaToken,
         pkce: prepareForPKCE().challenge
       )
@@ -521,7 +546,7 @@ public final class AuthClient: Sendable {
   ///   - phone: User's phone with international prefix.
   ///   - channel: Messaging channel to use (e.g `whatsapp` or `sms`), defaults to `sms`.
   ///   - shouldCreateUser: Creates a new user, defaults to `true`.
-  ///   - data: User's metadata.
+  ///   - userMetadata: Data to store on the user if the call creates one.
   ///   - captchaToken: Captcha verification token.
   ///
   /// - Note: You need to configure a WhatsApp sender on Twilio if you are using phone sign in with the `whatsapp` channel.
@@ -529,7 +554,7 @@ public final class AuthClient: Sendable {
     phone: String,
     channel: MessagingChannel = .sms,
     shouldCreateUser: Bool = true,
-    data: [String: JSONValue]? = nil,
+    userMetadata: JSONObject = [:],
     captchaToken: String? = nil
   ) async throws {
     try await api.execute(
@@ -537,7 +562,7 @@ public final class AuthClient: Sendable {
         phone: phone,
         channel: channel,
         shouldCreateUser: shouldCreateUser,
-        data: data,
+        userMetadata: userMetadata,
         captchaToken: captchaToken
       )
     )
@@ -1039,17 +1064,15 @@ public final class AuthClient: Sendable {
     try await user().identities ?? []
   }
 
-  /// Link an identity to the current user using an ID token.
+  /// Links an identity to the current user with an ID token that a third-party identity provider
+  /// issued.
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The updated session.
   @discardableResult
-  public func linkIdentityWithIdToken(
-    credentials: OpenIDConnectCredentials
-  ) async throws -> Session {
-    var credentials = credentials
-    credentials.linkIdentity = true
-
+  public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
-      authAPI.signInWithIdToken(
-        credentials: credentials, linkingTo: session.accessToken)
+      authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
     )
 
     try await sessionStore.commit(.signedIn(session, event: .userUpdated))

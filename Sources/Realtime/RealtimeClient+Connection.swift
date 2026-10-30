@@ -241,7 +241,7 @@ extension RealtimeClient {
 
     case .publishChannelStatus(let id, let status):
       // A spent channel has no state; its handle reads `.unsubscribed`.
-      channelStates[id]?.status.yield(status)
+      channelStates[id]?.publishStatus(status)
 
     case .deliver(let id, let delivery):
       channelStates[id]?.deliver(delivery)

@@ -75,18 +75,6 @@ struct TypesTests {
   }
 
   @Test
-  func oidcProviderEncodesAsRawString() throws {
-    let data = try JSONEncoder().encode(OpenIDConnectCredentials.Provider.apple)
-    #expect(String(decoding: data, as: UTF8.self) == "\"apple\"")
-  }
-
-  @Test
-  func oidcProviderStringLiteral() {
-    let provider: OpenIDConnectCredentials.Provider = "custom_oidc_provider"
-    #expect(provider.rawValue == "custom_oidc_provider")
-  }
-
-  @Test
   func mobileOTPTypeEncodesAsRawString() throws {
     let data = try JSONEncoder().encode(MobileOTPType.phoneChange)
     #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")

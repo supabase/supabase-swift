@@ -156,10 +156,27 @@ final class Fanout<Element: Sendable> {
 /// compile. It holds the handle strongly, so a channel the app released stays alive for as long
 /// as the client keeps its state.
 final class ChannelState {
+  /// A Postgres stream: its bindings and where its changes go.
   private struct Binding {
+    enum Sink {
+      case changes(AsyncStream<PostgresChange>.Continuation)
+      case signals(AsyncStream<PostgresChangesSignal>.Continuation)
+    }
+
     let id: StreamID
-    let config: PostgresJoinConfig
-    let continuation: AsyncStream<PostgresChange>.Continuation
+    let configs: [PostgresJoinConfig]
+    let sink: Sink
+
+    func finish() {
+      switch sink {
+      case .changes(let continuation):
+        continuation.onTermination = nil
+        continuation.finish()
+      case .signals(let continuation):
+        continuation.onTermination = nil
+        continuation.finish()
+      }
+    }
   }
 
   let handle: RealtimeChannel
@@ -185,7 +202,7 @@ final class ChannelState {
   /// enabled while a presence stream is open.
   var joinSnapshot: JoinSnapshot {
     JoinSnapshot(
-      bindings: postgres.map(\.config),
+      bindings: postgres.flatMap(\.configs),
       presenceEnabled: presenceChanges.count + presenceStates.count > 0)
   }
 
@@ -202,8 +219,32 @@ final class ChannelState {
       return stream
     }
     continuation.onTermination = { _ in onTermination() }
-    postgres.append(Binding(id: id, config: config, continuation: continuation))
+    postgres.append(Binding(id: id, configs: [config], sink: .changes(continuation)))
     return stream
+  }
+
+  /// Registers `configs` and returns one stream of the changes the server matches to any of them,
+  /// the channel events, and the status changes, in the order they happen. The bindings stay
+  /// until ``removeStream(_:)`` or ``finishAll()``.
+  func addSignalsStream(
+    _ id: StreamID,
+    _ configs: [PostgresJoinConfig],
+    onTermination: @escaping @Sendable () -> Void
+  ) -> AsyncStream<PostgresChangesSignal> {
+    let (stream, continuation) = AsyncStream.makeStream(of: PostgresChangesSignal.self)
+    guard !isSpent else {
+      continuation.finish()
+      return stream
+    }
+    continuation.onTermination = { _ in onTermination() }
+    postgres.append(Binding(id: id, configs: configs, sink: .signals(continuation)))
+    return stream
+  }
+
+  /// Publishes a new status to the status streams and the signal streams.
+  func publishStatus(_ status: RealtimeChannelStatus) {
+    self.status.yield(status)
+    yieldSignal(.status(status))
   }
 
   /// Forgets the stream `id`, whichever kind it is, after its consumer ended it. Returns `true`
@@ -227,14 +268,24 @@ final class ChannelState {
     case .broadcast(let message):
       broadcasts.yield(message)
     case .postgres(let delivery):
-      for binding in postgres where delivery.matched.contains(binding.config) {
-        binding.continuation.yield(delivery.change)
+      for binding in postgres where binding.configs.contains(where: delivery.matched.contains) {
+        switch binding.sink {
+        case .changes(let continuation): continuation.yield(delivery.change)
+        case .signals(let continuation): continuation.yield(.change(delivery.change))
+        }
       }
     case .presence(let change, let state):
       presenceChanges.yield(change)
       presenceStates.yield(state)
     case .event(let event):
       events.yield(event)
+      yieldSignal(.event(event))
+    }
+  }
+
+  private func yieldSignal(_ signal: PostgresChangesSignal) {
+    for binding in postgres {
+      if case .signals(let continuation) = binding.sink { continuation.yield(signal) }
     }
   }
 
@@ -249,8 +300,7 @@ final class ChannelState {
     let ended = postgres
     postgres = []
     for binding in ended {
-      binding.continuation.onTermination = nil
-      binding.continuation.finish()
+      binding.finish()
     }
   }
 }

@@ -261,9 +261,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let owner = UUID()
     await dependencies.sessionStore.startAutoRefresh(
-      for: owner,
       using: Refresher.Driver(
         clock: ContinuousClock(), logger: dependencies.logger,
         request: { [dependencies] refreshToken in
@@ -281,7 +279,7 @@ struct SessionManagerTests {
 
     let collected = await settled(events, count: 3)
     _ = await waitUntil(timeout: 3) { tokenRequestCount > 1 }
-    await dependencies.sessionStore.stopAutoRefresh(for: owner)
+    await dependencies.sessionStore.stopAutoRefresh()
 
     var expected = rotated
     expected.user = updatedUser

@@ -140,6 +140,25 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Opening a URL throws where the platform cannot.** On Linux, Android, and Windows,
   `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
   `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
+- **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
+  PostgREST, Storage, or Functions request again once when the server says it rejected the
+  session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
+  `error="invalid_token"`. The Edge Functions gateway says so with a 401 whose `sb-error-code` is
+  `UNAUTHORIZED_LEGACY_JWT` or `UNAUTHORIZED_ASYMMETRIC_JWT`. Storage says so with a 400 whose
+  body has code `AccessDenied` and an expired-JWT message. Any other response reaches your code
+  as before: a 401 that your function or your SQL returns, an RLS denial, and a Storage 400 with
+  no body, such as the answer to a `HEAD`. When a newer token for the same user is already
+  stored, the retry uses it. Otherwise the client refreshes the session first, except under
+  `autoRefresh: .disabled`, where the rejection reaches your code. If another user signed in
+  while the request ran, it is not retried. The rejection reaches your code when the refresh fails
+  or the retry is rejected too. A request with a single-pass body, a request that sets its own
+  `Authorization`, and a request sent without a session are not retried. An Edge Function with
+  `verify_jwt` turned off that checks the token itself gets no retry. Storage `download(path:)`,
+  `info(path:)`, and `exists(path:)` get no retry either: Storage answers an expired token there
+  as an anonymous request, so a private bucket fails with code `NoSuchBucket` ("Bucket not
+  found") and the response does not say that the token caused it. Remove your own
+  refresh-and-retry code around these errors, but keep it around those three Storage calls if you
+  need it.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts
@@ -162,7 +181,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `public actor AuthClient` | `public final class AuthClient: Sendable` |
-| `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueMetaSecurity`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthMetaSecurity`, `AuthError` |
+| `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthError` |
+| `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
+| `signInWithIdToken(credentials:)`, `linkIdentityWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `linkIdentityWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `OpenIDConnectCredentials(provider:idToken:accessToken:nonce:gotrueMetaSecurity:)` | `IDTokenCredentials(provider:idToken:nonce:accessToken:captchaToken:)` |
+| `OpenIDConnectCredentials.Provider` | `Provider` |
+| `Web3Credentials.gotrueMetaSecurity` | `Web3Credentials.captchaToken` |
+| `signInAnonymously(data:)`, `signInWithOTP(…data:…)`, `UserAttributes.data`, `UserAttributes(…data:)` | `userMetadata:` (a `JSONObject`; empty sends nothing) |
 | `JSONEncoder.goTrue`, `JSONDecoder.goTrue` | `AuthClient.Configuration.jsonEncoder`, `.jsonDecoder` |
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
@@ -189,9 +214,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
-| `enum` `AuthChangeEvent`, `FactorStatus`, `MessagingChannel`, `Provider`, `OpenIDConnectCredentials.Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
-| `AuthResponse`, `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
-| `OpenIDConnectCredentials`, `OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
+| `enum` `AuthChangeEvent`, `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
+| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
+| `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
+| `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
 | `OAuthResponse`, `Provider`: `Codable` | no `Codable` conformance |
 | `UserCredentials` | internal |
 | `UserAttributes.emailChangeToken` | removed |
@@ -246,9 +272,32 @@ do {
 `throw AuthError.sessionMissing` still compiles. `signInWithOAuth` now throws `.oauthFlowFailed`
 when it has no redirect URL, where v2 trapped.
 
+## `signUp` returns `SignUpResult`
+
+`signUp(email:)` and `signUp(phone:)` return `SignUpResult` instead of `AuthResponse`. Its cases
+say whether the user is signed in: `.signedIn(Session)` or `.confirmationRequired(User)`. The
+`session` and `user` properties stay. The metadata, redirect URL, channel, and captcha token move
+into `SignUpOptions`, and `data:` is `userMetadata:`. `signUp` is no longer
+`@discardableResult`, so a call that ignores the result warns. Write `_ =` if you do not need it.
+
+```swift
+// v2
+let response = try await supabase.auth.signUp(
+  email: email, password: password, data: ["name": .string(name)], captchaToken: token)
+if response.session == nil { showCheckYourInbox() }
+// v3
+let result = try await supabase.auth.signUp(
+  email: email, password: password,
+  options: SignUpOptions(userMetadata: ["name": .string(name)], captchaToken: token))
+switch result {
+case .signedIn(let session): showHome(for: session.user)
+case .confirmationRequired: showCheckYourInbox()
+}
+```
+
 ## `verifyOTP` returns `VerifyOTPResponse`
 
-`verifyOTP` returns `VerifyOTPResponse` instead of `AuthResponse`. The first step of a secure email
+`verifyOTP` returns `VerifyOTPResponse` instead of v2's `AuthResponse`. The first step of a secure email
 change returns no session, so the result has a second case.
 
 ```swift
@@ -362,4 +411,5 @@ Passkeys and WebAuthn MFA are `@_spi(Experimental)`. Import them with
 `@_spi(Experimental) import Supabase` (or `import Auth`). They may change in any release. In v3,
 `getPasskeyRegistrationOptions()` and `getPasskeyAuthenticationOptions()` drop the `get` prefix,
 `AuthAdmin.listPasskeys(userId:)` is `listPasskeys(forUser:)`, and
-`AuthAdmin.deletePasskey(userId:passkeyId:)` is `deletePasskey(id:forUser:)`.
+`AuthAdmin.deletePasskey(userId:passkeyId:)` is `deletePasskey(id:forUser:)`. `signInWithPasskey`
+and `verifyPasskeyAuthentication` return `Session` instead of `AuthResponse`.

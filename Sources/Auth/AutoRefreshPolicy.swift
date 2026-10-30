@@ -12,9 +12,10 @@ extension AuthClient {
     /// ``AuthClient/startAutoRefresh()`` to pause and resume it.
     case automatic
 
-    /// ``AuthClient/session`` refreshes an expired session before it returns, and nothing else
-    /// refreshes it. Call ``AuthClient/refreshSessionIfNeeded()``, for example from a
-    /// `BGAppRefreshTask`, to refresh ahead of time.
+    /// ``AuthClient/session`` refreshes an expired session before it returns, and a
+    /// `SupabaseClient` data request that the server rejects for a stale token refreshes it once.
+    /// The client does not refresh it ahead of time. Call
+    /// ``AuthClient/refreshSessionIfNeeded()``, for example from a `BGAppRefreshTask`, to do that.
     case manual
 
     /// The client never refreshes the session on its own. ``AuthClient/session`` returns the

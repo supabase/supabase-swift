@@ -19,12 +19,15 @@ public struct PostgresChange: Sendable, Hashable {
   /// The server owns this set, so compare against the static members and keep a fallback
   /// branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The statement as the server sends it, such as `"INSERT"`.
     public let rawValue: String
 
+    /// Creates a kind from the value the server sends.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -82,6 +85,13 @@ public struct PostgresChange: Sendable, Hashable {
     oldRecord = payload["old_record"]?.objectValue.map(PostgresRow.init(values:))
     errors = payload["errors"]?.arrayValue?.compactMap(\.stringValue) ?? []
   }
+}
+
+/// An element of `RealtimeChannel.postgresChangesSignals(bindings:)`.
+package enum PostgresChangesSignal: Sendable {
+  case change(PostgresChange)
+  case event(RealtimeChannelEvent)
+  case status(RealtimeChannelStatus)
 }
 
 /// A column of the table a ``PostgresChange`` changed.

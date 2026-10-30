@@ -26,8 +26,8 @@ struct GoogleSignInSDKFlow: View {
           return
         }
 
-        try await supabase.auth.signInWithIdToken(
-          credentials: OpenIDConnectCredentials(
+        try await supabase.auth.signInWithIDToken(
+          IDTokenCredentials(
             provider: .google,
             idToken: idToken
           )

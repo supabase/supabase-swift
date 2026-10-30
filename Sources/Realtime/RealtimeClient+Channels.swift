@@ -82,6 +82,18 @@ extension RealtimeClient {
     return stream
   }
 
+  /// Registers `bindings` like ``postgresChanges(of:_:)`` does, for one stream that also carries
+  /// the channel's events and status changes in order.
+  func postgresChangesSignals(
+    of channel: RealtimeChannel, _ bindings: [PostgresJoinConfig]
+  ) -> AsyncStream<PostgresChangesSignal> {
+    guard let state = state(of: channel) else { return .finished }
+    let id = nextStreamID(channel: channel.id)
+    let stream = state.addSignalsStream(id, bindings, onTermination: onStreamEnd(id))
+    apply(.bindingsChanged(channel: channel.id, snapshot: state.joinSnapshot))
+    return stream
+  }
+
   /// Presence streams shape the join payload, so they can only be opened before the join is sent.
   private func canOpenPresenceStream(on state: ChannelState) -> Bool {
     switch state.status.current ?? .unsubscribed {

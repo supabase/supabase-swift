@@ -59,23 +59,19 @@ extension AuthClient {
   /// - Parameters:
   ///   - challengeId: The challenge ID returned by ``passkeyAuthenticationOptions()``.
   ///   - credentialResponse: The W3C assertion produced by the authenticator.
-  /// - Returns: The authentication response containing the new session.
+  /// - Returns: The new session.
   @_spi(Experimental)
   @discardableResult
   public func verifyPasskeyAuthentication(
     challengeId: String,
     credentialResponse: JSONValue
-  ) async throws -> AuthResponse {
-    let response = try await dependencies.sessionAPI.execute(
+  ) async throws -> Session {
+    let session = try await dependencies.sessionAPI.execute(
       dependencies.authAPI.verifyPasskeyAuthentication(
         challengeId: challengeId, credentialResponse: credentialResponse)
     )
-
-    if let session = response.session {
-      try await dependencies.sessionStore.commit(.signedIn(session, event: .signedIn))
-    }
-
-    return response
+    try await dependencies.sessionStore.commit(.signedIn(session, event: .signedIn))
+    return session
   }
 
   /// Lists the passkeys registered for the current user.
@@ -126,7 +122,7 @@ extension AuthClient {
     @MainActor
     public func signInWithPasskey(
       presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthResponse {
+    ) async throws -> Session {
       try await _signInWithPasskey(
         presentationAnchor: presentationAnchor,
         authenticator: .live
@@ -137,7 +133,7 @@ extension AuthClient {
     func _signInWithPasskey(
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthResponse {
+    ) async throws -> Session {
       let options = try await passkeyAuthenticationOptions()
       let rpId = try options.options.webAuthnAssertionRpId()
       let credentialResponse = try await authenticator.authenticate(

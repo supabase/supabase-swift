@@ -85,6 +85,70 @@ struct RealtimeClientConnectionTests {
     )
   }
 
+  /// The server drops a channel's join with the socket, so a channel that was subscribed must
+  /// join again after the next `connect()`, and report that it missed events.
+  @Test(.timeLimit(.minutes(1)))
+  func aSubscribedChannelCanSubscribeAgainAfterDisconnectAndConnect() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var events = await channel.events().makeAsyncIterator()
+
+    async let subscribed: Void = channel.subscribe()
+    host.confirmJoin(try await host.receive(event: "phx_join"))
+    try await subscribed
+
+    await host.client.disconnect()
+    #expect(await channel.status == .unsubscribed)
+
+    try await host.client.connect()
+    async let resubscribed: Void = channel.subscribe()
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    host.confirmJoin(rejoin)
+    try await resubscribed
+
+    #expect(await channel.status == .subscribed)
+    #expect(await events.next() == .resubscribed)
+    #expect(host.connectCount == 2)
+  }
+
+  /// `disconnect()` restarts the refs, so the next join can reuse the ref of the last confirmed
+  /// one. That old confirmation must not settle the new join's Postgres changes wait.
+  @Test(.timeLimit(.minutes(1)))
+  func aJoinAfterDisconnectIsNotSettledByTheOldConfirmation() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: "phx_join")
+    host.confirmJoin(join)
+    host.server?.send(Self.postgresChangesSystem(join, status: "ok"))
+    try await subscribed
+    await host.client.disconnect()
+
+    try await host.client.connect()
+    let resubscription = Task { try await channel.subscribe() }
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    try #require(rejoin.ref == join.ref)
+    host.confirmJoin(rejoin)
+    host.server?.send(Self.postgresChangesSystem(rejoin, status: "error"))
+
+    await #expect(throws: RealtimeError.self) { try await resubscription.value }
+    #expect(await channel.status.error != nil)
+    withExtendedLifetime(changes) {}
+  }
+
+  private static func postgresChangesSystem(
+    _ join: RealtimeMessage, status: String
+  ) -> RealtimeMessage {
+    RealtimeMessage(
+      joinRef: join.ref, ref: nil, topic: join.topic, event: "system",
+      payload: ["status": .string(status), "extension": "postgres_changes", "message": ""]
+    )
+  }
+
   @Test
   func disconnectWhileConnectingCancelsTheAttempt() async throws {
     let h = Harness(beforeConnect: { _ in try await Task<Never, Never>.never() })

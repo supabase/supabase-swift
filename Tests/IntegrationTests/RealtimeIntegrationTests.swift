@@ -14,7 +14,7 @@
   import Foundation
   import Logging
   import OSLog
-  import Supabase
+  @_spi(Experimental) import Supabase
   import TestHelpers
   import Testing
   @testable import Helpers
@@ -606,6 +606,94 @@
 
         await channel.unsubscribe()
       }
+    }
+
+    @Test
+    func postgresChangesForARelationWithATypedFilter() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-relation")
+
+        let matchedKey = UUID().uuidString
+        let skippedKey = UUID().uuidString
+
+        let changes = await channel.postgresChanges(
+          for: KeyValueStorage.self,
+          event: .insert,
+          where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
+        )
+        let events = await channel.events()
+
+        try await channel.subscribe()
+
+        _ = try await withTimeout(.seconds(10)) {
+          await events.first(where: { $0 == .postgresChangesReady })
+        }
+
+        _ = try await client.from("key_value_storage")
+          .insert(["key": skippedKey, "value": "skipped"]).execute()
+        _ = try await client.from("key_value_storage")
+          .insert(["key": matchedKey, "value": "matched"]).execute()
+
+        let received = try await withTimeout(.seconds(5)) {
+          await changes.prefix(1).collect()
+        }
+
+        #expect(received.map(\.kind) == [.insert])
+        let row = try #require(try received.first?.row())
+        #expect(row.key == matchedKey)
+        #expect(row.value?.stringValue == "matched")
+
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
+    func streamKeepsTheFilteredRowsInSync() async throws {
+      let client = client
+      let first = UUID().uuidString
+      let second = UUID().uuidString
+      let outside = UUID().uuidString
+      _ = try await client.from("key_value_storage")
+        .insert(["key": first, "value": "before"]).execute()
+
+      let results = LockIsolated<[[KeyValueStorage]]>([])
+      let iteration = Task {
+        for try await rows in client.stream(
+          KeyValueStorage.self, where: { $0.key.in([first, second]) })
+        {
+          results.withValue { $0.append(rows) }
+        }
+      }
+      @Sendable func latest() -> [String: String?] {
+        Dictionary(
+          uniqueKeysWithValues: (results.value.last ?? []).map { ($0.key, $0.value?.stringValue) })
+      }
+
+      #expect(await waitUntil { latest() == [first: "before"] })
+
+      _ = try await client.from("key_value_storage")
+        .insert([["key": outside, "value": "outside"], ["key": second, "value": "added"]])
+        .execute()
+      #expect(await waitUntil { latest() == [first: "before", second: "added"] })
+
+      _ = try await client.from("key_value_storage")
+        .update(["value": "after"]).eq("key", value: first).execute()
+      #expect(await waitUntil { latest() == [first: "after", second: "added"] })
+
+      _ = try await client.from("key_value_storage").delete().eq("key", value: second).execute()
+      #expect(await waitUntil { latest() == [first: "after"] })
+
+      iteration.cancel()
+      #expect(
+        await waitUntil {
+          await !client.realtime.channels.contains { $0.topic.hasPrefix("live:") }
+        }
+      )
+      _ = try await client.from("key_value_storage")
+        .delete().in("key", values: [first, outside]).execute()
     }
 
     @Test

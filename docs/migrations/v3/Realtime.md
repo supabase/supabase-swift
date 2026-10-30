@@ -31,10 +31,11 @@ Changes that still compile but behave differently. Check each one by hand.
   While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
 - **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
   `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
-- **`disconnect()` unsubscribes every channel.** Subscribed channels become `.unsubscribed` and
-  stay registered, but the next `connect()` does not join them again. v2 rejoined them. Call
-  `subscribe()` on each channel after `connect()`. Search for `connect()` calls that follow a
-  `disconnect()`.
+- **`disconnect()` unsubscribes subscribed channels.** v2 left them `.subscribed`, so a later
+  `subscribe()` did nothing and the channel got no events. Now they become `.unsubscribed` and
+  stay registered. The next `connect()` does not rejoin them: call `subscribe()` on each channel
+  after `connect()`. The join emits `.resubscribed` on `events()`. Search for `connect()` calls
+  that follow a `disconnect()`.
 - **A socket drop does not stop `subscribe()`.** A subscribed channel reports `.subscribing`
   until it joins again, with no `.unsubscribed` step, and a `subscribe()` in flight waits for the
   reconnect. After a server close with a code from 4000 to 4999 the client does not reconnect:

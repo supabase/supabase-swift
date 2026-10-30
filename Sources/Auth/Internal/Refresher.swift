@@ -2,7 +2,7 @@ import Foundation
 import Helpers
 import Logging
 
-struct Refresher {
+enum Refresher {
   static let refreshLeadTime: Duration = .seconds(90)
   static let backoffBase: Duration = .seconds(2)
   static let backoffCap: Duration = .seconds(60)
@@ -11,38 +11,6 @@ struct Refresher {
     var clock: any Clock<Duration>
     var logger: Logging.Logger
     var request: @Sendable (_ refreshToken: String) async throws -> Session
-  }
-
-  private struct Entry {
-    var owner: UUID
-    var driver: Driver
-  }
-
-  private var entries: [Entry] = []
-
-  var task: Task<Void, Never>? {
-    didSet { oldValue?.cancel() }
-  }
-
-  var activeDriver: Driver? {
-    entries.last?.driver
-  }
-
-  var activeOwner: UUID? {
-    entries.last?.owner
-  }
-
-  mutating func add(_ driver: Driver, for owner: UUID) {
-    remove(owner)
-    entries.append(Entry(owner: owner, driver: driver))
-  }
-
-  mutating func remove(_ owner: UUID) {
-    entries.removeAll { $0.owner == owner }
-  }
-
-  func isDriven(by owner: UUID) -> Bool {
-    entries.contains { $0.owner == owner }
   }
 
   static func run(
@@ -67,7 +35,7 @@ struct Refresher {
         }
         try await refresh()
         return
-      } catch is CancellationError {
+      } catch is CancellationError where Task.isCancelled {
         return
       } catch {
         attempt += 1

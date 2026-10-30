@@ -43,7 +43,7 @@ extension AuthClient.Configuration {
   /// Keychain, so the default keeps values in memory and loses the session when the process ends.
   /// Pass your own ``AuthLocalStorage`` to persist the session.
   public static var defaultLocalStorage: any AuthLocalStorage {
-    AuthPlatform.live.makeDefaultLocalStorage()
+    AuthPlatform.defaultLocalStorage
   }
 }
 

@@ -26,12 +26,15 @@ public import Helpers
 public struct RealtimeError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind's name, such as `"timeout"`.
     public let rawValue: String
 
+    /// Creates a kind from its name.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -61,8 +64,7 @@ public struct RealtimeError: SupabaseError {
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
-    /// The server closed the channel while a subscribe was in flight. Goes away with the v2
-    /// module (SDK-2109); v3 reports this as ``channelClosed``.
+    /// The server closed the channel while a subscribe was in flight.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
     /// The call used a channel that ``RealtimeClient/removeChannel(_:)`` removed or that the
     /// server closed (`phx_close`), or the removal ended a subscribe in flight. Get a new channel
@@ -90,44 +92,73 @@ public struct RealtimeError: SupabaseError {
   /// The server owns this set and adds to it without notice, so compare against the static
   /// members and keep a fallback branch.
   public struct ServerCode: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The code as the server sends it, such as `"Unauthorized"`.
     public let rawValue: String
 
+    /// Creates a code from the value the server sends.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a code from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
 
+    /// The join had no topic.
     public static let topicNameRequired: ServerCode = "TopicNameRequired"
+    /// The server rejected the token, for example because it expired.
     public static let invalidJWTToken: ServerCode = "InvalidJWTToken"
+    /// The token is not a well-formed JWT.
     public static let malformedJWT: ServerCode = "MalformedJWT"
+    /// The server could not verify the token's signature.
     public static let jwtSignatureError: ServerCode = "JwtSignatureError"
+    /// The server could not set up the signer to verify the token.
     public static let jwtSignerError: ServerCode = "JwtSignerError"
+    /// A row level security policy on `realtime.messages` denied the join.
     public static let unauthorized: ServerCode = "Unauthorized"
+    /// The project allows only private channels.
     public static let privateOnly: ServerCode = "PrivateOnly"
+    /// The server does not know the project.
     public static let tenantNotFound: ServerCode = "TenantNotFound"
+    /// Realtime is turned off for the project.
     public static let realtimeDisabledForTenant: ServerCode = "RealtimeDisabledForTenant"
+    /// The server cannot serve the channel's configuration.
     public static let realtimeDisabledForConfiguration: ServerCode =
       "RealtimeDisabledForConfiguration"
+    /// The server could not replay broadcast messages with the requested replay options.
     public static let unableToReplayMessages: ServerCode = "UnableToReplayMessages"
+    /// The project has too many channels open.
     public static let channelRateLimitReached: ServerCode = "ChannelRateLimitReached"
+    /// The project has too many clients connected.
     public static let connectionRateLimitReached: ServerCode = "ConnectionRateLimitReached"
+    /// The project sent too many joins per second.
     public static let clientJoinRateLimitReached: ServerCode = "ClientJoinRateLimitReached"
+    /// The Realtime server is restarting.
     public static let realtimeRestarting: ServerCode = "RealtimeRestarting"
+    /// The server is still connecting to the project's database.
     public static let initializingProjectConnection: ServerCode = "InitializingProjectConnection"
+    /// The server's connection pool to the project's database is full.
     public static let increaseConnectionPool: ServerCode = "IncreaseConnectionPool"
+    /// The project's database has no free connections.
     public static let databaseLackOfConnections: ServerCode = "DatabaseLackOfConnections"
+    /// The server tried to connect to the project's database too often.
     public static let databaseConnectionRateLimitReached: ServerCode =
       "DatabaseConnectionRateLimitReached"
+    /// The server could not connect to the project's database.
     public static let unableToConnectToProject: ServerCode = "UnableToConnectToProject"
+    /// The database canceled a query the server ran for the channel.
     public static let queryCanceled: ServerCode = "QueryCanceled"
+    /// The database is missing the `realtime.messages` partition the server needs.
     public static let missingPartition: ServerCode = "MissingPartition"
+    /// A call between Realtime server nodes timed out.
     public static let timeoutOnRpcCall: ServerCode = "TimeoutOnRpcCall"
+    /// A call between Realtime server nodes failed.
     public static let errorOnRpcCall: ServerCode = "ErrorOnRpcCall"
+    /// The server did not set up the channel's Postgres changes in time.
     public static let postgresChangesSubscribeTimeout: ServerCode =
       "PostgresChangesSubscribeTimeout"
+    /// The server met an error it has no code for.
     public static let unknownErrorOnChannel: ServerCode = "UnknownErrorOnChannel"
 
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
@@ -162,7 +193,9 @@ public struct RealtimeError: SupabaseError {
     }
   }
 
+  /// What failed. Check it first.
   public var kind: Kind
+  /// A description of the failure, from the server or from the SDK.
   public var message: String
   /// The code parsed from a server error reason, when the reason carried one.
   public var serverCode: ServerCode?
@@ -173,9 +206,21 @@ public struct RealtimeError: SupabaseError {
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
   /// upgrade with 401/403/404. The client stops reconnecting when it meets one.
   public var isRetryable: Bool
+  /// The HTTP error response, for a ``Kind-swift.struct/server`` error from the REST broadcast
+  /// endpoint that `httpSend` uses.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`.
   public var underlyingError: (any Error)?
 
+  /// Creates an error.
+  ///
+  /// - Parameters:
+  ///   - kind: What failed.
+  ///   - message: A description of the failure.
+  ///   - serverCode: The code from the server's error reason, if any.
+  ///   - isRetryable: Whether the same call can succeed later without a change.
+  ///   - response: The HTTP error response, if any.
+  ///   - underlyingError: The error that caused this one, if any.
   public init(
     kind: Kind,
     message: String,
@@ -192,6 +237,7 @@ public struct RealtimeError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// The kind and the message, for logs.
   public var description: String {
     formattedDescription(kind: kind.rawValue)
   }
@@ -393,7 +439,7 @@ extension RealtimeError {
   )
 
   /// The server could not set up the channel's Postgres changes bindings.
-  static func postgresChangesFailed(reason: String) -> RealtimeError {
+  package static func postgresChangesFailed(reason: String) -> RealtimeError {
     RealtimeError(
       kind: .server,
       message: "The server could not set up the channel's Postgres changes: \(reason)",
