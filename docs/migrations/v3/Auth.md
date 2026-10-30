@@ -141,16 +141,19 @@ Changes that still compile but behave differently. Check each one by hand.
   `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
   `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
-  PostgREST, Storage, or Functions request again once when the server rejects the session's access
-  token. For PostgREST and Functions that is any 401. Storage answers an expired token with 400,
-  the same status it uses for an RLS denial, so a Storage 400 is retried only when the token sent
-  is past its `exp` by the device clock. When a newer token for the same user is already stored,
-  the retry uses it. Otherwise the client refreshes the session first, except under
+  PostgREST, Storage, or Functions request again once when the server says it rejected the
+  session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
+  `error="invalid_token"`. The Edge Functions gateway says so with a 401 whose `sb-error-code` is
+  `UNAUTHORIZED_LEGACY_JWT` or `UNAUTHORIZED_ASYMMETRIC_JWT`. Storage says so with a 400 whose
+  body has code `AccessDenied` and an expired-JWT message. Any other response reaches your code
+  as before: a 401 that your function or your SQL returns, an RLS denial, and a Storage 400 with
+  no body, such as the answer to a `HEAD`. When a newer token for the same user is already
+  stored, the retry uses it. Otherwise the client refreshes the session first, except under
   `autoRefresh: .disabled`, where the rejection reaches your code. If another user signed in
   while the request ran, it is not retried. The rejection reaches your code when the refresh fails
   or the retry is rejected too. A request with a single-pass body, a request that sets its own
-  `Authorization`, and a request sent without a session are not retried. This covers every HTTP
-  method, so an Edge Function that returns 401 after it has acted runs twice. Remove your own
+  `Authorization`, and a request sent without a session are not retried. An Edge Function with
+  `verify_jwt` turned off that checks the token itself gets no retry. Remove your own
   refresh-and-retry code around these errors.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after

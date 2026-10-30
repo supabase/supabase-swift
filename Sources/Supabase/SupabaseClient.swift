@@ -117,7 +117,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: dataHeaders.dictionary,
       logger: options.global.logger,
-      http: authenticatedHTTP(staleTokenRejection: .unauthorized),
+      http: authenticatedHTTP(staleTokenRejection: .postgrest),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,7 +129,7 @@ public final class SupabaseClient: Sendable {
     var configuration = StorageClientConfiguration(
       url: storageURL,
       headers: dataHeaders,
-      http: authenticatedHTTP(staleTokenRejection: .badRequestWithExpiredToken),
+      http: authenticatedHTTP(staleTokenRejection: .storage),
       logger: options.global.logger,
       usesNewHostname: options.storage.usesNewHostname,
       retryEnabled: options.storage.retryEnabled
@@ -577,7 +577,7 @@ public final class SupabaseClient: Sendable {
             + (options.functions.http?.middlewares ?? [])
             + [
               TraceContextMiddleware(),
-              bearerMiddleware(staleTokenRejection: .unauthorized) { [supabaseKey] in
+              bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
                 APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
               },
             ],

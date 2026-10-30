@@ -2,26 +2,57 @@ import Foundation
 import HTTPTypes
 import Helpers
 
-/// How a service rejects a request whose access token went stale.
+/// How a service tells that it rejected the access token itself, not the request. A response
+/// counts only when the service says so, so an app's own 401 or an RLS denial is never retried.
 enum StaleTokenRejection: Sendable {
-  /// PostgREST and the Functions gateway answer 401.
-  case unauthorized
-  /// Storage answers 400, the same status it uses for an RLS denial and a missing object, so a
-  /// 400 counts only when the token sent is past its `exp`.
-  case badRequestWithExpiredToken
+  /// PostgREST answers 401 with `WWW-Authenticate: Bearer error="invalid_token"` (RFC 6750) for
+  /// every JWT it cannot accept. Its other 401s send no `error`.
+  case postgrest
+  /// The Edge Functions gateway answers 401 with an `sb-error-code` for a JWT it could not
+  /// verify. A 401 from the function's own code carries none of these codes.
+  case functions
+  /// Storage answers 400 with code `AccessDenied` for both an expired JWT and an RLS denial, so
+  /// only the message tells them apart. A 400 with no body is never a rejection.
+  case storage
 
-  func matches(_ status: HTTPResponse.Status, accessToken: String) -> Bool {
+  /// Whether `response` rejects the access token, and the body to pass on in place of `body`.
+  func inspect(
+    _ response: HTTPResponse,
+    body: HTTPBody?
+  ) async throws -> (rejectsToken: Bool, body: HTTPBody?) {
     switch self {
-    case .unauthorized:
-      status == .unauthorized
-    case .badRequestWithExpiredToken:
-      status == .badRequest && Self.isExpired(accessToken)
+    case .postgrest:
+      let challenge = response.headerFields[.wwwAuthenticate] ?? ""
+      return (
+        response.status == .unauthorized && challenge.contains(#"error="invalid_token""#), body
+      )
+    case .functions:
+      let code = response.headerFields[.sbErrorCode].map(FunctionsError.Code.init(rawValue:))
+      return (response.status == .unauthorized && Self.functionsJWTCodes.contains(code), body)
+    case .storage:
+      guard response.status == .badRequest, let body else { return (false, body) }
+      let data = try await Data(collecting: body, upTo: .max)
+      let error = try? JSONDecoder().decode(StorageErrorBody.self, from: data)
+      let rejectsToken =
+        error?.code == StorageError.Code.accessDenied.rawValue
+        && error.flatMap(\.message).map(Self.storageExpiredJWTMessages.contains) == true
+      return (rejectsToken, HTTPBody(data))
     }
   }
 
-  private static func isExpired(_ accessToken: String) -> Bool {
-    guard let exp = JWT.decodePayload(accessToken)?["exp"] as? TimeInterval else { return false }
-    return Date(timeIntervalSince1970: exp) <= Date()
+  /// `UNAUTHORIZED_JWT` is the local CLI gateway's name for `UNAUTHORIZED_LEGACY_JWT`.
+  private static let functionsJWTCodes: Set<FunctionsError.Code?> = [
+    .unauthorizedLegacyJWT, .unauthorizedAsymmetricJWT, "UNAUTHORIZED_JWT",
+  ]
+
+  /// The message Storage sends since its April 2025 JWT library change, then the one before it.
+  private static let storageExpiredJWTMessages: Set<String> = [
+    #""exp" claim timestamp check failed"#, "jwt expired",
+  ]
+
+  private struct StorageErrorBody: Decodable {
+    let code: String?
+    let message: String?
   }
 }
 
@@ -49,11 +80,11 @@ struct AuthMiddleware: ClientMiddleware {
       return try await next(request.signed(with: fallbackToken), body)
     }
 
-    let (response, responseBody) = try await next(request.signed(with: used.accessToken), body)
-    guard body?.iterationBehavior != .single,
-      staleTokenRejection.matches(response.status, accessToken: used.accessToken),
-      let retry = try await retrySession(after: used)
-    else {
+    let (response, sentBody) = try await next(request.signed(with: used.accessToken), body)
+    guard body?.iterationBehavior != .single else { return (response, sentBody) }
+    let (rejectsToken, responseBody) = try await staleTokenRejection.inspect(
+      response, body: sentBody)
+    guard rejectsToken, let retry = try await retrySession(after: used) else {
       return (response, responseBody)
     }
 

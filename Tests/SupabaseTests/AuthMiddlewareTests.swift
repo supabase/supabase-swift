@@ -49,12 +49,6 @@ struct AuthMiddlewareTests {
     (HTTPResponse(status: .ok), sessionJSON(accessToken: "token-2", refreshToken: "refresh-2"))
   }
 
-  func refreshReturns(accessToken: String) {
-    refreshHandler.setValue { _, _ in
-      (HTTPResponse(status: .ok), sessionJSON(accessToken: accessToken, refreshToken: "refresh-2"))
-    }
-  }
-
   var refreshCount: Int {
     http.requests.filter { $0.head.path == "/auth/v1/token?grant_type=refresh_token" }.count
   }
@@ -81,7 +75,7 @@ struct AuthMiddlewareTests {
         return (HTTPResponse(status: .ok), Data("[]".utf8))
       }
       try await client.auth.refreshSession()
-      return (HTTPResponse(status: .unauthorized), Data())
+      return (invalidTokenUnauthorized, Data())
     }
 
     try await client.from("todos").select().execute()
@@ -95,7 +89,7 @@ struct AuthMiddlewareTests {
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
       request.headerFields[.authorization] == "Bearer token-2"
         ? (HTTPResponse(status: .ok), Data("[]".utf8))
-        : (HTTPResponse(status: .unauthorized), Data())
+        : (invalidTokenUnauthorized, Data())
     }
 
     try await client.from("todos").select().execute()
@@ -108,7 +102,7 @@ struct AuthMiddlewareTests {
   func secondUnauthorizedAfterTheRefreshReachesTheCaller() async throws {
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
       let token = request.headerFields[.authorization] ?? ""
-      return (HTTPResponse(status: .unauthorized), Data(#"{"message":"\#(token)"}"#.utf8))
+      return (invalidTokenUnauthorized, Data(#"{"message":"\#(token)"}"#.utf8))
     }
 
     let error = try await #require(throws: PostgrestError.self) {
@@ -128,7 +122,7 @@ struct AuthMiddlewareTests {
         return (HTTPResponse(status: .ok), Data("[]".utf8))
       }
       await bothSent.pass()
-      return (HTTPResponse(status: .unauthorized), Data())
+      return (invalidTokenUnauthorized, Data())
     }
 
     async let first: Void = client.from("todos").select().execute().value
@@ -150,7 +144,7 @@ struct AuthMiddlewareTests {
       )
     }
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data(#"{"message":"JWT expired"}"#.utf8))
+      (invalidTokenUnauthorized, Data(#"{"message":"JWT expired"}"#.utf8))
     }
 
     let error = try await #require(throws: PostgrestError.self) {
@@ -165,7 +159,10 @@ struct AuthMiddlewareTests {
   @Test
   func singlePassBodyIsNotRetried() async throws {
     http.respond(when: { $0.path?.hasPrefix("/storage/v1/object") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data())
+      (
+        HTTPResponse(status: .badRequest),
+        storageExpiredJWTBody(#""exp" claim timestamp check failed"#)
+      )
     }
     let chunks = AsyncStream<ArraySlice<UInt8>> {
       $0.yield(ArraySlice("hello".utf8))
@@ -184,7 +181,7 @@ struct AuthMiddlewareTests {
   @Test
   func perCallAuthorizationIsNeitherReplacedNorRetried() async throws {
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data())
+      (invalidTokenUnauthorized, Data())
     }
 
     await #expect(throws: PostgrestError.self) {
@@ -203,7 +200,7 @@ struct AuthMiddlewareTests {
         return (HTTPResponse(status: .created), Data())
       }
       try await client.auth.signIn(email: "b@b.c", password: "x")
-      return (HTTPResponse(status: .unauthorized), Data())
+      return (invalidTokenUnauthorized, Data())
     }
 
     await #expect(throws: PostgrestError.self) {
@@ -225,7 +222,7 @@ struct AuthMiddlewareTests {
       )
     }
     http.respond(when: { $0.path?.hasPrefix("/functions/v1/hello") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data())
+      (functionsGatewayUnauthorized("UNAUTHORIZED_LEGACY_JWT"), Data())
     }
 
     let request = Task { [client] in try await client.functions.invoke("hello") }
@@ -236,12 +233,12 @@ struct AuthMiddlewareTests {
     #expect(dataAuthorizations("/functions/v1/hello") == ["Bearer token-1"])
   }
 
-  @Test
-  func functionsUnauthorizedRefreshesOnceAndRetries() async throws {
+  @Test(arguments: ["UNAUTHORIZED_LEGACY_JWT", "UNAUTHORIZED_ASYMMETRIC_JWT", "UNAUTHORIZED_JWT"])
+  func functionsGatewayJWTRejectionRefreshesOnceAndRetries(code: String) async throws {
     http.respond(when: { $0.path?.hasPrefix("/functions/v1/hello") == true }) { request, _ in
       request.headerFields[.authorization] == "Bearer token-2"
         ? (HTTPResponse(status: .ok), Data("{}".utf8))
-        : (HTTPResponse(status: .unauthorized), Data(#"{"code":"UNAUTHORIZED"}"#.utf8))
+        : (functionsGatewayUnauthorized(code), Data(#"{"code":"\#(code)"}"#.utf8))
     }
 
     try await client.functions.invoke("hello")
@@ -250,9 +247,44 @@ struct AuthMiddlewareTests {
     #expect(refreshCount == 1)
   }
 
+  @Test(arguments: [nil, "UNAUTHORIZED_INVALID_JWT_FORMAT", "UNAUTHORIZED_NO_AUTH_HEADER"])
+  func functionsUnauthorizedWithNoJWTRejectionCodeIsNotRetried(code: String?) async throws {
+    http.respond(when: { $0.path?.hasPrefix("/functions/v1/hello") == true }) { _, _ in
+      (
+        code.map(functionsGatewayUnauthorized) ?? HTTPResponse(status: .unauthorized),
+        Data(#"{"error":"not an admin"}"#.utf8)
+      )
+    }
+
+    await #expect(throws: FunctionsError.self) {
+      try await client.functions.invoke("hello")
+    }
+
+    #expect(dataAuthorizations("/functions/v1/hello") == ["Bearer token-1"])
+    #expect(refreshCount == 0)
+  }
+
+  @Test
+  func postgrestUnauthorizedWithoutAnInvalidTokenChallengeIsNotRetried() async throws {
+    http.respond(when: { $0.path?.hasPrefix("/rest/v1/rpc/promote") == true }) { _, _ in
+      (
+        HTTPResponse(status: .unauthorized, headerFields: [.wwwAuthenticate: "Bearer"]),
+        Data(#"{"code":"PT401","message":"not an admin"}"#.utf8)
+      )
+    }
+
+    let error = try await #require(throws: PostgrestError.self) {
+      try await client.rpc("promote").execute()
+    }
+
+    #expect(error.serverError?.message == "not an admin")
+    #expect(dataAuthorizations("/rest/v1/rpc/promote") == ["Bearer token-1"])
+    #expect(refreshCount == 0)
+  }
+
   @Test
   func unauthorizedWithoutASessionIsSentWithTheKeyAndNotRetried() async throws {
-    let http = RecordingTransport { _, _ in (HTTPResponse(status: .unauthorized), Data()) }
+    let http = RecordingTransport { _, _ in (invalidTokenUnauthorized, Data()) }
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
@@ -274,51 +306,47 @@ struct AuthMiddlewareTests {
       http.requests.map { $0.head.headerFields[.authorization] } == ["Bearer PUBLISHABLE_KEY"])
   }
 
-  @Test
-  func storageBadRequestForAnExpiredTokenRefreshesAndRetries() async throws {
-    let expired = jwt(expiresIn: -60)
-    try await signIn(withAccessToken: expired)
+  @Test(arguments: [#""exp" claim timestamp check failed"#, "jwt expired"])
+  func storageBadRequestForAnExpiredTokenRefreshesAndRetries(message: String) async throws {
     http.respond(when: { $0.path?.hasPrefix("/storage/v1/bucket") == true }) { request, _ in
-      request.headerFields[.authorization] == "Bearer \(expired)"
-        ? (HTTPResponse(status: .badRequest), storageExpiredJWTBody)
+      request.headerFields[.authorization] == "Bearer token-1"
+        ? (HTTPResponse(status: .badRequest), storageExpiredJWTBody(message))
         : (HTTPResponse(status: .ok), Data("[]".utf8))
     }
 
     _ = try await client.storage.listBuckets()
 
-    #expect(dataAuthorizations("/storage/v1/bucket") == ["Bearer \(expired)", "Bearer token-2"])
-    #expect(refreshCount == 2)
+    #expect(dataAuthorizations("/storage/v1/bucket") == ["Bearer token-1", "Bearer token-2"])
+    #expect(refreshCount == 1)
   }
 
   @Test
-  func storageBadRequestWithAnEmptyBodyForAnExpiredTokenIsRetried() async throws {
-    let expired = jwt(expiresIn: -60)
-    try await signIn(withAccessToken: expired)
-    http.respond(when: { $0.path?.hasPrefix("/storage/v1/object") == true }) { request, _ in
-      request.headerFields[.authorization] == "Bearer \(expired)"
-        ? (HTTPResponse(status: .badRequest), Data())
-        : (HTTPResponse(status: .ok), Data("hello".utf8))
+  func storageBadRequestWithAnEmptyBodyIsNotRetried() async throws {
+    http.respond(when: { $0.path?.hasPrefix("/storage/v1/object") == true }) { _, _ in
+      (HTTPResponse(status: .badRequest), Data())
     }
 
-    _ = try await client.storage.from("avatars").download(path: "a.txt")
+    await #expect(throws: StorageError.self) {
+      try await client.storage.from("avatars").download(path: "a.txt")
+    }
 
-    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer \(expired)", "Bearer token-2"])
+    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer token-1"])
+    #expect(refreshCount == 0)
   }
 
   @Test
-  func storageBadRequestForALiveTokenIsNotRetried() async throws {
-    let live = jwt(expiresIn: 3600)
-    try await signIn(withAccessToken: live)
+  func storageRLSDenialIsNotRetriedAndKeepsItsBody() async throws {
     http.respond(when: { $0.path?.hasPrefix("/storage/v1/object") == true }) { _, _ in
       (HTTPResponse(status: .badRequest), storageRLSDenialBody)
     }
 
-    await #expect(throws: StorageError.self) {
+    let error = try await #require(throws: StorageError.self) {
       try await client.storage.from("avatars").upload(path: "a.txt", data: Data("hello".utf8))
     }
 
-    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer \(live)"])
-    #expect(refreshCount == 1)
+    #expect(error.message == "new row violates row-level security policy")
+    #expect(dataAuthorizations("/storage/v1/object") == ["Bearer token-1"])
+    #expect(refreshCount == 0)
   }
 
   /// Drives the middleware itself, with an `AuthClient` built through the `@testable` seam
@@ -337,7 +365,7 @@ struct AuthMiddlewareTests {
     }
     http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
       request.headerFields[.authorization] == "Bearer token-1"
-        ? (HTTPResponse(status: .unauthorized), Data())
+        ? (invalidTokenUnauthorized, Data())
         : (HTTPResponse(status: .ok), Data("[]".utf8))
     }
     let retryReadTheToken = Gate()
@@ -357,7 +385,7 @@ struct AuthMiddlewareTests {
     )
     _ = try await auth.signIn(email: "a@b.c", password: "x")
     let middleware = AuthMiddleware(
-      auth: auth, fallbackToken: nil, staleTokenRejection: .unauthorized, autoRefresh: .manual)
+      auth: auth, fallbackToken: nil, staleTokenRejection: .postgrest, autoRefresh: .manual)
 
     async let response = middleware.intercept(
       HTTPRequest(
@@ -378,7 +406,7 @@ struct AuthMiddlewareTests {
   func unauthorizedWithTheCurrentTokenUnderDisabledAutoRefreshIsNotRefreshed() async throws {
     let suite = try await AuthMiddlewareTests(autoRefresh: .disabled)
     suite.http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { _, _ in
-      (HTTPResponse(status: .unauthorized), Data(#"{"message":"JWT expired"}"#.utf8))
+      (invalidTokenUnauthorized, Data(#"{"message":"JWT expired"}"#.utf8))
     }
 
     let error = try await #require(throws: PostgrestError.self) {
@@ -399,7 +427,7 @@ struct AuthMiddlewareTests {
         return (HTTPResponse(status: .ok), Data("[]".utf8))
       }
       try await client.auth.refreshSession()
-      return (HTTPResponse(status: .unauthorized), Data())
+      return (invalidTokenUnauthorized, Data())
     }
 
     try await suite.client.from("todos").select().execute()
@@ -407,40 +435,31 @@ struct AuthMiddlewareTests {
     #expect(suite.dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-2"])
     #expect(suite.refreshCount == 1)
   }
-
-  /// Replaces the session with one whose `expires_at` is an hour away, so the client sends
-  /// `accessToken` whatever its own `exp` says.
-  func signIn(withAccessToken accessToken: String) async throws {
-    refreshReturns(accessToken: accessToken)
-    try await client.auth.refreshSession()
-    refreshReturns(accessToken: "token-2")
-  }
 }
 
 private let userB = "0b0b0b0b-a2ee-47c4-80e1-5bd919f3d8b8"
 
-private let storageExpiredJWTBody = Data(
-  #"{"statusCode":"403","error":"Unauthorized","message":"\"exp\" claim timestamp check failed","code":"AccessDenied"}"#
-    .utf8)
+/// PostgREST's answer to a JWT it cannot accept.
+private let invalidTokenUnauthorized = HTTPResponse(
+  status: .unauthorized,
+  headerFields: [
+    .wwwAuthenticate: #"Bearer error="invalid_token", error_description="JWT expired""#
+  ]
+)
+
+private func functionsGatewayUnauthorized(_ code: String) -> HTTPResponse {
+  HTTPResponse(status: .unauthorized, headerFields: [.sbErrorCode: code])
+}
+
+private func storageExpiredJWTBody(_ message: String) -> Data {
+  Data(
+    #"{"statusCode":"403","error":"Unauthorized","message":\#(String(reflecting: message)),"code":"AccessDenied"}"#
+      .utf8)
+}
 
 private let storageRLSDenialBody = Data(
   #"{"statusCode":"403","error":"Unauthorized","message":"new row violates row-level security policy","code":"AccessDenied"}"#
     .utf8)
-
-private func jwt(expiresIn seconds: TimeInterval) -> String {
-  func segment(_ json: String) -> String {
-    Data(json.utf8).base64EncodedString()
-      .replacingOccurrences(of: "+", with: "-")
-      .replacingOccurrences(of: "/", with: "_")
-      .replacingOccurrences(of: "=", with: "")
-  }
-  let exp = Int(Date().timeIntervalSince1970 + seconds)
-  return [
-    segment(#"{"alg":"ES256","typ":"JWT"}"#),
-    segment(#"{"sub":"f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8","exp":\#(exp)}"#),
-    "signature",
-  ].joined(separator: ".")
-}
 
 private func sessionJSON(
   accessToken: String,
