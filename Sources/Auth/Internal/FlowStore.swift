@@ -10,6 +10,7 @@ actor FlowStore {
   private let pkce: PKCE
   private let now: @Sendable () -> Date
   private let logger: Logging.Logger
+  private var lastIndexUpdate: Task<Void, Never>?
 
   init(
     storage: any AuthStorage,
@@ -41,10 +42,9 @@ actor FlowStore {
 
     try await storage.save(try flow.encoded(), key: recordKey(flow.id))
 
-    var index = try await loadIndex()
-    let dropped = index.insert(
-      PendingFlowIndex.Entry(id: flow.id, createdAt: startedAt), now: startedAt)
-    try await storage.save(try index.encoded(), key: PendingFlowIndex.key(storageKey: storageKey))
+    let dropped = try await updateIndex { index in
+      index.insert(PendingFlowIndex.Entry(id: flow.id, createdAt: startedAt), now: startedAt)
+    }
 
     for id in dropped {
       do {
@@ -78,14 +78,32 @@ actor FlowStore {
   }
 
   func remove(id: UUID) async throws {
-    var index = try await loadIndex()
-    index.remove(id: id)
-    try await storage.save(try index.encoded(), key: PendingFlowIndex.key(storageKey: storageKey))
+    try await updateIndex { $0.remove(id: id) }
     try await storage.remove(key: recordKey(id))
   }
 
   private func recordKey(_ id: UUID) -> String {
     PendingFlowRecord.key(id: id, storageKey: storageKey)
+  }
+
+  /// Runs the index read-modify-write one update at a time.
+  ///
+  /// The actor is reentrant across the storage awaits, so without this two updates could read the
+  /// same index and the second save would drop the first one's change.
+  private func updateIndex<Result: Sendable>(
+    _ change: @escaping @Sendable (inout PendingFlowIndex) -> Result
+  ) async throws -> Result {
+    let previous = lastIndexUpdate
+    let update = Task { () throws -> Result in
+      await previous?.value
+      var index = try await self.loadIndex()
+      let result = change(&index)
+      try await self.storage.save(
+        try index.encoded(), key: PendingFlowIndex.key(storageKey: self.storageKey))
+      return result
+    }
+    lastIndexUpdate = Task { _ = await update.result }
+    return try await update.value
   }
 
   private func loadIndex() async throws -> PendingFlowIndex {

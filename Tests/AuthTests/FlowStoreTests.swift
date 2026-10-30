@@ -161,4 +161,38 @@ struct FlowStoreTests {
 
     #expect(try await store.newest() == nil)
   }
+
+  private func storedIndexIDs(_ storage: RecordingStorage) async throws -> Set<UUID> {
+    let data = try #require(
+      try await storage.load(key: PendingFlowIndex.key(storageKey: Self.storageKey)))
+    return Set(try PendingFlowIndex.decode(data).flows.map(\.id))
+  }
+
+  @Test func concurrentStartsKeepEveryIndexEntry() async throws {
+    let storage = RecordingStorage()
+    let store = makeStore(storage: storage, clock: LockIsolated(Date()))
+
+    let ids = try await withThrowingTaskGroup(of: UUID.self) { group in
+      for _ in 0..<5 {
+        group.addTask { try await store.start(purpose: .signIn, redirectTo: nil).flow.id }
+      }
+      return try await group.reduce(into: Set<UUID>()) { $0.insert($1) }
+    }
+
+    #expect(ids.count == 5)
+    #expect(try await storedIndexIDs(storage) == ids)
+  }
+
+  @Test func concurrentStartAndRemoveLeaveAConsistentIndex() async throws {
+    let storage = RecordingStorage()
+    let store = makeStore(storage: storage, clock: LockIsolated(Date()))
+    let existing = try await store.start(purpose: .signIn, redirectTo: nil).flow.id
+
+    async let started = store.start(purpose: .recovery, redirectTo: nil).flow.id
+    async let removed: Void = store.remove(id: existing)
+    let newID = try await started
+    try await removed
+
+    #expect(try await storedIndexIDs(storage) == [newID])
+  }
 }
