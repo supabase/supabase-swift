@@ -357,6 +357,20 @@ struct AuthClientRedirectTests {
     #expect(try pendingFlowCount() == 1)
   }
 
+  /// `signInWithOTP` ignores its response body, so `signUp(email:)` is the call that can fail to
+  /// decode a 2xx.
+  @Test
+  func aDecodingErrorOnTheStartingRequestKeepsItsFlow() async throws {
+    race.answer(.post, "signup") { (HTTPResponse(status: .ok), Data("not json".utf8)) }
+    let client = race.makeClient()
+
+    await #expect {
+      try await client.signUp(email: "user@example.com", password: "secret")
+    } throws: { ($0 as? AuthError)?.kind == .decoding }
+
+    #expect(try pendingFlowCount() == 1)
+  }
+
   @Test
   func linkIdentityURLWithoutASessionLeavesNoFlow() async throws {
     let client = race.makeClient()

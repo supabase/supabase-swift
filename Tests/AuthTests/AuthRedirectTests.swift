@@ -36,6 +36,23 @@ struct AuthRedirectTests {
       .error(linkExpired)
     ),
     (
+      "myapp://cb?error=access_denied",
+      .error(.oauthFlowFailed("access_denied", errorCode: .unknown))
+    ),
+    (
+      "myapp://cb#error=access_denied",
+      .error(.oauthFlowFailed("access_denied", errorCode: .unknown))
+    ),
+    (
+      "myapp://cb?error=access_denied&error_description=User+denied+access",
+      .error(.oauthFlowFailed("User denied access", errorCode: .unknown))
+    ),
+    (
+      "myapp://cb#error_code=otp_expired",
+      .error(
+        .oauthFlowFailed("The redirect reports an error.", errorCode: ErrorCode("otp_expired")))
+    ),
+    (
       "myapp://cb?message=Confirmation+link+accepted&sb=",
       .emailChangePending(message: "Confirmation link accepted")
     ),

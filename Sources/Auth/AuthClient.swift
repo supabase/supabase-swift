@@ -690,9 +690,13 @@ public final class AuthClient: Sendable {
   ///
   /// Call it with every URL that opens your app. The client reads the URL's contents to find the
   /// flow: a PKCE code, tokens from an email link, an error, or an email change that waits for a
-  /// second confirmation. The same URL can arrive more than once, for example from both a scene
-  /// delegate and `onOpenURL`. The later deliveries get the first result, or its error, and send
-  /// no request.
+  /// second confirmation.
+  ///
+  /// The same URL can arrive more than once, for example from both a scene delegate and
+  /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
+  /// request. That includes a transport error: to retry the exchange after one, call
+  /// ``exchangeCodeForSession(_:flowID:)`` with the code. The flow stays stored after a transport
+  /// error, so the retry can still succeed.
   ///
   /// ```swift
   /// SomeView()
@@ -1183,7 +1187,8 @@ public final class AuthClient: Sendable {
   ///
   /// When `request` fails, the flow is removed, so it cannot become the newest flow that a later
   /// code without a flow ID is exchanged with. A transport error or a cancellation keeps it: the
-  /// request may have reached the server, and its email may already be out.
+  /// request may have reached the server, and its email may already be out. A decoding error keeps
+  /// it too: it follows a 2xx, so the server accepted the request.
   private func withFlow<Result>(
     _ purpose: PendingFlowRecord.Purpose,
     redirectTo: URL?,
@@ -1207,7 +1212,8 @@ public final class AuthClient: Sendable {
   private static func mayHaveReachedServer(_ error: any Error) -> Bool {
     if error is CancellationError || error is URLError { return true }
     guard let error = error as? AuthError else { return false }
-    return error.kind == .transport || error.underlyingError is URLError
+    return error.kind == .transport || error.kind == .decoding
+      || error.underlyingError is URLError
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching
