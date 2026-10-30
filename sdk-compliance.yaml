@@ -418,6 +418,8 @@ features:
       - IDTokenCredentials.captchaToken
       - Nonce
       - Nonce.generate
+      - Nonce.raw
+      - Nonce.hashed
   auth.sign_in.sign_in_anonymously:
     status: implemented
     symbols:

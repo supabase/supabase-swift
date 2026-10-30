@@ -9,7 +9,7 @@ struct NonceTests {
   func hashedIsTheSHA256HexOfRaw() {
     let nonce = Nonce.generate()
 
-    #expect(nonce.hashed == Nonce.sha256Hex(nonce.raw))
+    #expect(nonce.hashed == Nonce(raw: nonce.raw).hashed)
     #expect(nonce.hashed.count == 64)
     #expect(nonce.hashed.allSatisfy { $0.isHexDigit && !$0.isUppercase })
   }
@@ -24,13 +24,13 @@ struct NonceTests {
 
   @Test
   func eachCallReturnsANewNonce() {
-    #expect(Nonce.generate().raw != Nonce.generate().raw)
+    #expect(Nonce.generate() != Nonce.generate())
   }
 
   @Test
-  func sha256HexMatchesAKnownVector() {
+  func hashedMatchesAKnownSHA256Vector() {
     #expect(
-      Nonce.sha256Hex("abc")
+      Nonce(raw: "abc").hashed
         == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
   }
 }
