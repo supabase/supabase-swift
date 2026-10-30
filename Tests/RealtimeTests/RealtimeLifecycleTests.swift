@@ -213,7 +213,7 @@ struct RealtimeLifecycleTests {
                   )
                 )
               } else {
-                rejoinJoinTopics.withValue { $0.insert(msg.topic) }
+                rejoinJoinTopics.withValue { _ = $0.insert(msg.topic) }
               }
             }
           }

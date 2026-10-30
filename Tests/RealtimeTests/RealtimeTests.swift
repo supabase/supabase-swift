@@ -91,7 +91,7 @@ final class RealtimeTests: Sendable {
 
   @Test
   func behavior() async throws {
-    try await withMainSerialExecutor {
+    await withMainSerialExecutor {
       let channel = sut.channel("public:messages")
 
       let inserts = channel.postgresChanges(event: .insert, table: "messages")
@@ -231,7 +231,7 @@ final class RealtimeTests: Sendable {
       try await sut.connect()
       await testClock.advance(by: heartbeatInterval)
 
-      Task {
+      _ = Task {
         try await channel.subscribe()
       }
 
