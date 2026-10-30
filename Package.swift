@@ -286,6 +286,7 @@ let package = Package(
           name: "OpenTelemetrySdk", package: "opentelemetry-swift-core",
           condition: .when(traits: ["OpenTelemetry"])
         ),
+        "PostgrestMacros",
         "Supabase",
         "TestHelpers",
       ]
