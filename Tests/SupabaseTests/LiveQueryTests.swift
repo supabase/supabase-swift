@@ -258,6 +258,17 @@ struct LiveQueryMachineTests {
   }
 
   @Test
+  func throwsWhenThePostgresChangesFail() throws {
+    var sut = machine()
+    _ = sut.start()
+    _ = try sut.handle(.fetched(generation: 1, []))
+
+    #expect(throws: RealtimeError.self) {
+      try sut.handle(.postgresChangesFailed("Replication not ready"))
+    }
+  }
+
+  @Test
   func throwsWhenAChangedRowDoesNotDecode() throws {
     var sut = machine()
     _ = sut.start()
@@ -352,6 +363,21 @@ struct LiveQueryUpdatesTests {
 
     await #expect(throws: URLError.self) {
       for try await _ in updates {}
+    }
+    await waitUntil { fixture.finished.value }
+  }
+
+  @Test
+  func throwsWhenThePostgresChangesFailAfterTheFetch() async throws {
+    let fixture = Fixture()
+    let updates = makeLiveQueryUpdates { fixture.source { [] } }
+    var iterator = updates.makeAsyncIterator()
+    #expect(try await iterator.next() == .rows([]))
+
+    fixture.signal.yield(.event(.postgresChangesFailed("Replication not ready")))
+
+    await #expect(throws: RealtimeError.self) {
+      _ = try await iterator.next()
     }
     await waitUntil { fixture.finished.value }
   }

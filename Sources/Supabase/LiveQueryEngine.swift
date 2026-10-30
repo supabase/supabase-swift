@@ -37,6 +37,8 @@ struct LiveQueryMachine<R> {
     case change(PostgresChange)
     case resubscribed
     case status(RealtimeChannelStatus)
+    /// The server could not set up the channel's Postgres changes. No change would arrive.
+    case postgresChangesFailed(String)
     case fetched(generation: Int, [LiveRow<R>])
     case fetchFailed(generation: Int, any Error)
   }
@@ -80,6 +82,9 @@ struct LiveQueryMachine<R> {
 
     case .status(.failed(let error)):
       throw error
+
+    case .postgresChangesFailed(let reason):
+      throw RealtimeError.postgresChangesFailed(reason: reason)
 
     case .status(let status):
       isSubscribed = status.isSubscribed
@@ -221,6 +226,7 @@ private func runLiveQuery<R: Sendable>(
       switch signal {
       case .change(let change): input.yield(.change(change))
       case .event(.resubscribed): input.yield(.resubscribed)
+      case .event(.postgresChangesFailed(let reason)): input.yield(.postgresChangesFailed(reason))
       case .event: break
       case .status(let status): input.yield(.status(status))
       }
