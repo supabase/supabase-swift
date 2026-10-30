@@ -140,6 +140,25 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Opening a URL throws where the platform cannot.** On Linux, Android, and Windows,
   `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
   `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
+- **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
+  PostgREST, Storage, or Functions request again once when the server says it rejected the
+  session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
+  `error="invalid_token"`. The Edge Functions gateway says so with a 401 whose `sb-error-code` is
+  `UNAUTHORIZED_LEGACY_JWT` or `UNAUTHORIZED_ASYMMETRIC_JWT`. Storage says so with a 400 whose
+  body has code `AccessDenied` and an expired-JWT message. Any other response reaches your code
+  as before: a 401 that your function or your SQL returns, an RLS denial, and a Storage 400 with
+  no body, such as the answer to a `HEAD`. When a newer token for the same user is already
+  stored, the retry uses it. Otherwise the client refreshes the session first, except under
+  `autoRefresh: .disabled`, where the rejection reaches your code. If another user signed in
+  while the request ran, it is not retried. The rejection reaches your code when the refresh fails
+  or the retry is rejected too. A request with a single-pass body, a request that sets its own
+  `Authorization`, and a request sent without a session are not retried. An Edge Function with
+  `verify_jwt` turned off that checks the token itself gets no retry. Storage `download(path:)`,
+  `info(path:)`, and `exists(path:)` get no retry either: Storage answers an expired token there
+  as an anonymous request, so a private bucket fails with code `NoSuchBucket` ("Bucket not
+  found") and the response does not say that the token caused it. Remove your own
+  refresh-and-retry code around these errors, but keep it around those three Storage calls if you
+  need it.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts

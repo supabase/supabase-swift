@@ -117,7 +117,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: dataHeaders.dictionary,
       logger: options.global.logger,
-      http: authenticatedHTTP,
+      http: authenticatedHTTP(staleTokenRejection: .postgrest),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,7 +129,7 @@ public final class SupabaseClient: Sendable {
     var configuration = StorageClientConfiguration(
       url: storageURL,
       headers: dataHeaders,
-      http: authenticatedHTTP,
+      http: authenticatedHTTP(staleTokenRejection: .storage),
       logger: options.global.logger,
       usesNewHostname: options.storage.usesNewHostname,
       retryEnabled: options.storage.retryEnabled
@@ -167,8 +167,8 @@ public final class SupabaseClient: Sendable {
   }
 
   /// ``_headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
-  /// bearer is ``AccessTokenMiddleware``'s job, so a per-call header and the session token both
-  /// win over the key.
+  /// bearer is the bearer middleware's job, so a per-call header and the session token both win
+  /// over the key.
   var dataHeaders: HTTPFields {
     var headers = _headers
     headers[.authorization] = nil
@@ -458,22 +458,42 @@ public final class SupabaseClient: Sendable {
   /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
   /// Storage. The bearer is the session token, else the key.
   ///
-  /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtime`` and
+  /// The bearer middleware captures only the dependencies it needs, never `self`, because each
+  /// sub-client stores its middlewares for its whole lifetime: the cached ``realtime`` and
   /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
   /// caller may hold any sub-client for that long too. Capturing `self` here would form a
   /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
   /// running.
-  private var authenticatedHTTP: HTTPClientConfiguration {
+  private func authenticatedHTTP(
+    staleTokenRejection: StaleTokenRejection
+  ) -> HTTPClientConfiguration {
     HTTPClientConfiguration(
       transport: transport,
       middlewares: options.global.http.middlewares + [
         TraceContextMiddleware(),
-        AccessTokenMiddleware(getAccessToken: { [provider = accessTokenProvider, supabaseKey] in
-          try await provider() ?? supabaseKey
-        }),
+        bearerMiddleware(staleTokenRejection: staleTokenRejection),
       ],
       timeout: options.global.http.timeout
+    )
+  }
+
+  /// - Parameter bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the
+  ///   key and a third-party provider's token, not a session token.
+  private func bearerMiddleware(
+    staleTokenRejection: StaleTokenRejection,
+    bearerToken: @escaping @Sendable (String) -> String? = { $0 }
+  ) -> any ClientMiddleware {
+    guard options.auth.accessToken == nil else {
+      return AccessTokenMiddleware(getAccessToken: {
+        [provider = accessTokenProvider, supabaseKey] in
+        bearerToken(try await provider() ?? supabaseKey)
+      })
+    }
+    return AuthMiddleware(
+      auth: _auth,
+      fallbackToken: bearerToken(supabaseKey),
+      staleTokenRejection: staleTokenRejection,
+      autoRefresh: options.auth.autoRefresh
     )
   }
 
@@ -557,11 +577,9 @@ public final class SupabaseClient: Sendable {
             + (options.functions.http?.middlewares ?? [])
             + [
               TraceContextMiddleware(),
-              AccessTokenMiddleware(getAccessToken: {
-                [provider = accessTokenProvider, supabaseKey] in
-                APIKeyFormat.functionsBearerToken(
-                  accessToken: try await provider() ?? supabaseKey, supabaseKey: supabaseKey)
-              }),
+              bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
+                APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+              },
             ],
           timeout: http.timeout ?? options.global.http.timeout
         ),
