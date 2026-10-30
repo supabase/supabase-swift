@@ -146,7 +146,7 @@ struct RealtimeLifecycleTests {
 
     await sut.handleAppBackground()
     let statusUpdates = await sut.statusChanges()
-    let channelUpdates = await channel.statusChanges()
+    let channelUpdates = channel.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
     _ = await statusUpdates.first { $0 == .reconnecting }

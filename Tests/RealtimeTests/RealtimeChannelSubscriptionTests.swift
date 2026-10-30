@@ -122,13 +122,13 @@ struct RealtimeChannelSubscriptionTests {
   func requestTimeoutBoundsAJoinAttempt() async throws {
     let h = Harness(timeout: .seconds(3))
     let channel = await h.client.channel("room")
-    let statuses = await channel.statusChanges()
+    let statuses = channel.statusChanges()
 
     let subscription = Task { try await channel.subscribe() }
     defer { subscription.cancel() }
     _ = try #require(await withTimeout(.seconds(5)) { await h.received(ChannelEvent.join) })
     await h.clock.advance(by: .milliseconds(2900))
-    guard case .subscribing = await channel.status else {
+    guard case .subscribing = channel.status else {
       Issue.record("The join timed out before requestTimeout")
       return
     }
@@ -209,7 +209,7 @@ struct RealtimeChannelSubscriptionTests {
   func joinCarriesThePostgresChangesOfOpenStreams() async throws {
     let h = Harness()
     let channel = await h.client.channel("public:users")
-    let inserts = await channel.postgresChanges(event: .insert, table: "users")
+    let inserts = channel.postgresChanges(event: .insert, table: "users")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -237,11 +237,11 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room")
     let first = try await h.subscribe(channel)
     let events = LockIsolated<[RealtimeChannelEvent]>([])
-    let stream = await channel.events()
+    let stream = channel.events()
     let collector = Task { for await event in stream { events.withValue { $0.append(event) } } }
     defer { collector.cancel() }
 
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let leave = try #require(await h.received(ChannelEvent.leave))
     #expect(leave.joinRef == first.ref)
@@ -262,12 +262,12 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room")
     _ = try await h.subscribe(channel)
     let statuses = LockIsolated<[RealtimeChannelStatus]>([])
-    let stream = await channel.statusChanges()
+    let stream = channel.statusChanges()
     let collector = Task { for await status in stream { statuses.withValue { $0.append(status) } } }
     defer { collector.cancel() }
 
-    let first = await channel.postgresChanges(table: "a")
-    let second = await channel.postgresChanges(table: "b")
+    let first = channel.postgresChanges(table: "a")
+    let second = channel.postgresChanges(table: "b")
 
     // Each rejoin carries every open binding; the last one carries both.
     var rejoin = try #require(await h.received(ChannelEvent.join))
@@ -292,7 +292,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
     try h.confirm(join)
     try await subscription.value
 
@@ -312,7 +312,7 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room")
     let first = try await h.subscribe(channel)
 
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
     let rejoin = try #require(await h.received(ChannelEvent.join))
     // The server closes the old join after the `phx_leave`.
     try h.close(first)
@@ -330,7 +330,7 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room")
     _ = try await h.subscribe(channel)
 
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
     let rejoin = try #require(await h.received(ChannelEvent.join))
     await channel.unsubscribe()
     try h.confirm(rejoin)
@@ -345,8 +345,8 @@ struct RealtimeChannelSubscriptionTests {
   func cancellingAStreamDoesNotRejoin() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let kept = await channel.postgresChanges(table: "a")
-    let dropped = await channel.postgresChanges(table: "b")
+    let kept = channel.postgresChanges(table: "a")
+    let dropped = channel.postgresChanges(table: "b")
     let consumer = Task { for await _ in dropped {} }
 
     let subscription = Task { try await channel.subscribe() }
@@ -357,7 +357,7 @@ struct RealtimeChannelSubscriptionTests {
 
     consumer.cancel()
     #expect(await waitUntil { await channel.clientChanges.count == 1 })
-    _ = await channel.broadcasts(event: "x")
+    _ = channel.broadcasts(event: "x")
 
     #expect(await channel.status == .subscribed)
     #expect(h.sent(ChannelEvent.join).count == 1)
@@ -371,7 +371,7 @@ struct RealtimeChannelSubscriptionTests {
   func subscribeWaitsForPostgresChangesReady() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -390,7 +390,7 @@ struct RealtimeChannelSubscriptionTests {
   func postgresChangesFailureThrowsAndLeaves() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -416,7 +416,7 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room") {
       $0.postgresChanges.subscriptionTimeout = .seconds(5)
     }
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -436,7 +436,7 @@ struct RealtimeChannelSubscriptionTests {
   func replicationReadyDoesNotConfirmThePostgresChangesWait() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -459,7 +459,7 @@ struct RealtimeChannelSubscriptionTests {
   func cancellingTheReadinessWaitLeavesTheTopic() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -484,7 +484,7 @@ struct RealtimeChannelSubscriptionTests {
       let channel = await h.client.channel("room") {
         $0.postgresChanges.subscriptionTimeout = .seconds(5)
       }
-      let changes = await channel.postgresChanges(table: "t")
+      let changes = channel.postgresChanges(table: "t")
 
       let subscription = Task { try await channel.subscribe() }
       let join = try #require(await h.received(ChannelEvent.join))
@@ -496,7 +496,7 @@ struct RealtimeChannelSubscriptionTests {
       await channel.onMessage(Self.system(join, status: "ok", extension: "postgres_changes"))
 
       let result = await subscription.result
-      let status = await channel.status
+      let status = channel.status
       let joinRef = await channel.joinRef
       switch result {
       case .success:
@@ -514,7 +514,7 @@ struct RealtimeChannelSubscriptionTests {
   func postgresChangesReadyBeforeTheWaitParksStillSubscribes() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -543,7 +543,7 @@ struct RealtimeChannelSubscriptionTests {
       $0.postgresChanges.waitForSubscription = true
       $0.postgresChanges.subscriptionTimeout = .seconds(15)
     }
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -566,7 +566,7 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room") {
       $0.postgresChanges.waitForSubscription = true
     }
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
@@ -923,7 +923,7 @@ struct RealtimeChannelSubscriptionTests {
     await h.clock.advance(by: .seconds(2))
 
     #expect(!finished.value)
-    let status = await channel.status
+    let status = channel.status
     #expect(status == .subscribing || status == .resubscribing)
     subscription.cancel()
     await h.client.disconnect()
@@ -1031,7 +1031,7 @@ struct RealtimeChannelSubscriptionTests {
   func systemErrorLeavesTheChannelSubscribed() async throws {
     let h = Harness()
     let channel = await h.client.channel("room")
-    var events = await channel.events().makeAsyncIterator()
+    var events = channel.events().makeAsyncIterator()
     let join = try await h.subscribe(channel)
 
     try h.send(
@@ -1059,7 +1059,7 @@ struct RealtimeChannelSubscriptionTests {
     let h = Harness(timeout: .seconds(10))
     let channel = await h.client.channel("room")
     let statuses = LockIsolated<[RealtimeChannelStatus]>([])
-    let stream = await channel.statusChanges()
+    let stream = channel.statusChanges()
     let collector = Task {
       for await status in stream { statuses.withValue { $0.append(status) } }
     }
@@ -1123,7 +1123,7 @@ struct RealtimeChannelSubscriptionTests {
     let h = Harness(timeout: .seconds(10))
     let channel = await h.client.channel("room")
     let events = LockIsolated<[RealtimeChannelEvent]>([])
-    let stream = await channel.events()
+    let stream = channel.events()
     let collector = Task {
       for await event in stream { events.withValue { $0.append(event) } }
     }
@@ -1337,7 +1337,7 @@ struct RealtimeChannelSubscriptionTests {
       if send == 1 { await gate.park() }
     }
     let channel = await h.client.channel("room")
-    let changes = await channel.postgresChanges(table: "t")
+    let changes = channel.postgresChanges(table: "t")
 
     let firstSubscribe = Task { try await channel.subscribe() }
     _ = try #require(await h.received(ChannelEvent.join))
@@ -1450,8 +1450,8 @@ struct RealtimeChannelSubscriptionTests {
     let roomJoin = try await h.subscribe(room)
     let lobbyJoin = try await h.subscribe(lobby)
 
-    let roomStatuses = await room.statusChanges()
-    let lobbyStatuses = await lobby.statusChanges()
+    let roomStatuses = room.statusChanges()
+    let lobbyStatuses = lobby.statusChanges()
     let removal = Task { await h.client.removeAllChannels() }
     _ = try #require(await h.received(ChannelEvent.leave))
     _ = try #require(await h.received(ChannelEvent.leave))
@@ -1505,7 +1505,7 @@ struct RealtimeChannelSubscriptionTests {
   func statusChangesEmitsEveryTransition() async throws {
     let h = Harness()
     let channel = await h.client.channel("room")
-    var statuses = await channel.statusChanges().makeAsyncIterator()
+    var statuses = channel.statusChanges().makeAsyncIterator()
 
     let join = try await h.subscribe(channel)
     let unsubscription = Task { await channel.unsubscribe() }
@@ -1524,7 +1524,7 @@ struct RealtimeChannelSubscriptionTests {
   func removingTheChannelEndsItsStatusStream() async {
     let h = Harness()
     let channel = await h.client.channel("room")
-    var statuses = await channel.statusChanges().makeAsyncIterator()
+    var statuses = channel.statusChanges().makeAsyncIterator()
     #expect(await statuses.next() == .unsubscribed)
 
     await h.client.removeChannel(channel)
@@ -1536,7 +1536,7 @@ struct RealtimeChannelSubscriptionTests {
   func joinConfirmedWhileThePhxJoinIsStillSendingCompletesTheSubscribe() async throws {
     let h = Harness()
     let channel = await h.client.channel("room")
-    let statuses = await channel.statusChanges()
+    let statuses = channel.statusChanges()
     let server = h.server
     // The join's send stays in flight until its reply has already subscribed the channel.
     h.socket.onSend { frame in

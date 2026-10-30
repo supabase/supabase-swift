@@ -457,7 +457,7 @@ public actor RealtimeClient {
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if await channel.status.isSubscribed {
+    if channel.status.isSubscribed {
       await channel.unsubscribe()
     }
 
@@ -499,7 +499,7 @@ public actor RealtimeClient {
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
-          if await channel.status.isSubscribed {
+          if channel.status.isSubscribed {
             await channel.unsubscribe()
           }
           await channel.finishStreams()
@@ -699,7 +699,7 @@ public actor RealtimeClient {
     for channel in channelsByTopic.values {
       // A newer token was stored while this loop was suspended; its own loop sends it.
       guard tokens.token == token else { break }
-      switch await channel.status {
+      switch channel.status {
       case .subscribed:
         break
       case .subscribing, .resubscribing:

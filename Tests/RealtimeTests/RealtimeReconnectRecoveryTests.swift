@@ -57,7 +57,7 @@ struct RealtimeReconnectRecoveryTests {
 
     let recovered = await waitUntil(timeout: 5) {
       let clientStatus = await sut.status
-      let channelStatus = await channel.status
+      let channelStatus = channel.status
       return connectAttempts.value >= 3 && clientStatus == .connected
         && channelStatus == .subscribed
     }
@@ -115,7 +115,7 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
+    await waitUntil(timeout: 2) { channel.status == .unsubscribed }
     #expect(await channel.status == .unsubscribed)
 
     await sut.disconnect()
@@ -166,7 +166,7 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
+    await waitUntil(timeout: 2) { channel.status == .unsubscribed }
     #expect(await channel.status == .unsubscribed)
 
     await sut.disconnect()

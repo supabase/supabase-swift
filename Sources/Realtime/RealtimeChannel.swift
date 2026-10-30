@@ -24,7 +24,7 @@ import Logging
 ///   config.broadcast.receiveOwnMessages = true
 /// }
 ///
-/// let messages = await channel.broadcasts(event: "message")
+/// let messages = channel.broadcasts(event: "message")
 /// try await channel.subscribe()
 ///
 /// for await message in messages {
@@ -33,8 +33,9 @@ import Logging
 /// ```
 ///
 /// The channel is an actor on its client's executor: every channel of one client, and the client
-/// itself, form a single isolation domain. Cancelling the task that iterates a stream ends the
-/// stream and removes its listener; removing the channel ends every stream.
+/// itself, form a single isolation domain. Reads and stream methods are synchronous and run on
+/// the caller's context. Cancelling the task that iterates a stream ends the stream and removes
+/// its listener; removing the channel ends every stream.
 ///
 /// ## Topics
 /// ### Identity
@@ -200,31 +201,10 @@ public actor RealtimeChannel {
   /// Pushes waiting for a `phx_reply`, by `ref`.
   var pendingPushes: [String: PendingPush] = [:]
 
-  // MARK: Listeners
+  // MARK: Streams
 
-  enum Listener {
-    case broadcast(event: String, AsyncStream<BroadcastMessage>.Continuation)
-    case postgres(PostgresJoinConfig, AsyncStream<PostgresChange>.Continuation)
-    case presence(AsyncStream<PresenceChange>.Continuation)
-    case presenceState(AsyncStream<PresenceState>.Continuation)
-    case events(AsyncStream<RealtimeChannelEvent>.Continuation)
-    case status(AsyncStream<RealtimeChannelStatus>.Continuation)
-
-    func finish() {
-      switch self {
-      case .broadcast(_, let continuation): continuation.finish()
-      case .postgres(_, let continuation): continuation.finish()
-      case .presence(let continuation): continuation.finish()
-      case .presenceState(let continuation): continuation.finish()
-      case .events(let continuation): continuation.finish()
-      case .status(let continuation): continuation.finish()
-      }
-    }
-  }
-
-  /// Open streams, in registration order. The order fixes the `postgres_changes` array of the
-  /// join payload.
-  var listeners: [(id: UUID, listener: Listener)] = []
+  /// The published status and presence state, and the open streams. Only this actor writes them.
+  nonisolated let sinks = ChannelSinks()
 
   /// The `postgres_changes` bindings the server echoed back on join, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
@@ -253,16 +233,14 @@ public actor RealtimeChannel {
   }
 
   deinit {
-    for (_, listener) in listeners {
-      listener.finish()
-    }
+    sinks.finishAll()
   }
 
   // MARK: - Status
 
   /// The current subscription status of the channel.
-  public var status: RealtimeChannelStatus {
-    state.status
+  public nonisolated var status: RealtimeChannelStatus {
+    sinks.status.current ?? .unsubscribed
   }
 
   /// An async stream that emits channel subscription status changes.
@@ -270,13 +248,8 @@ public actor RealtimeChannel {
   /// The stream emits the current status immediately upon iteration and then each
   /// subsequent change. Cancelling the iterating task ends the stream; so does removing the
   /// channel from its client.
-  public func statusChanges() -> AsyncStream<RealtimeChannelStatus> {
-    let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.status(continuation), terminating: continuation)
-    continuation.yield(status)
-    return stream
+  public nonisolated func statusChanges() -> AsyncStream<RealtimeChannelStatus> {
+    sinks.status.subscribe()
   }
 
   func setState(_ newState: SubscriptionState) {
@@ -288,9 +261,7 @@ public actor RealtimeChannel {
     if case .subscribing(_, .joining) = newState {
       presence.waitForNextState()
     }
-    for case .status(let continuation) in listeners.map(\.listener) {
-      continuation.yield(newState.status)
-    }
+    sinks.status.yield(newState.status)
   }
 
   // MARK: - Broadcast
@@ -359,8 +330,8 @@ public actor RealtimeChannel {
   ///
   /// The state is empty until the first sync after ``subscribe()`` and after ``unsubscribe()``.
   /// After a rejoin it keeps the last known clients until the server sends the new state.
-  public var presenceState: PresenceState {
-    presence.state
+  public nonisolated var presenceState: PresenceState {
+    sinks.presenceStates.current ?? PresenceState()
   }
 
   /// Shares a payload with every client on the channel, under this client's presence key.
@@ -592,9 +563,7 @@ public actor RealtimeChannel {
   }
 
   func yield(_ event: RealtimeChannelEvent) {
-    for case .events(let continuation) in listeners.map(\.listener) {
-      continuation.yield(event)
-    }
+    sinks.events.yield(event)
   }
 
   private func handleReply(_ message: RealtimeMessage) throws {
@@ -655,10 +624,7 @@ public actor RealtimeChannel {
     let change = try PostgresChange(payload: data)
 
     let matched = serverChanges.filter { ids.contains($0.id) }
-    for case .postgres(let filter, let continuation) in listeners.map(\.listener)
-    where matched.contains(where: { $0 == filter }) {
-      continuation.yield(change)
-    }
+    sinks.postgres.yield(PostgresDelivery(change: change, matched: matched))
   }
 
   private func handleBroadcast(_ message: RealtimeMessage) throws {
@@ -716,22 +682,14 @@ public actor RealtimeChannel {
   }
 
   private func deliverBroadcast(_ message: BroadcastMessage) {
-    for case .broadcast(let listening, let continuation) in listeners.map(\.listener)
-    where Self.eventMatches(listening, message.event) {
-      continuation.yield(message)
-    }
+    sinks.broadcasts.yield(message)
   }
 
   /// Yields `change` and the new state, unless the sync changed nothing.
   func deliverPresence(_ change: PresenceChange) {
     guard !change.isEmpty else { return }
-    for (_, listener) in listeners {
-      switch listener {
-      case .presence(let continuation): continuation.yield(change)
-      case .presenceState(let continuation): continuation.yield(presence.state)
-      default: break
-      }
-    }
+    sinks.presenceChanges.yield(change)
+    sinks.presenceStates.yield(presence.state)
   }
 
   /// The `data` object of a `postgres_changes` payload, or `nil` when the payload has none.
@@ -745,52 +703,26 @@ public actor RealtimeChannel {
 
   /// Event names match exactly, case included, as the server sends them. `"*"` matches every
   /// event.
-  private static func eventMatches(_ listening: String, _ event: String) -> Bool {
+  static func eventMatches(_ listening: String, _ event: String) -> Bool {
     listening == "*" || listening == event
   }
 
-  // MARK: - Listeners
+  // MARK: - Streams
 
-  /// Registers `listener` and ends it when the stream's consumer goes away.
-  ///
-  /// `onTermination` runs on the consumer's context, so the removal hops back here once.
-  func register<Element>(
-    _ listener: Listener, terminating continuation: AsyncStream<Element>.Continuation
-  ) {
-    let id = UUID()
-    listeners.append((id, listener))
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.removeListener(id) }
-    }
-  }
-
-  private func removeListener(_ id: UUID) {
-    listeners.removeAll { $0.id == id }
-  }
-
-  /// Ends every open stream and forgets its listener.
+  /// Ends every open stream. Streams opened later end at once.
   func finishStreams() {
-    let open = listeners
-    listeners = []
-    for (_, listener) in open {
-      listener.finish()
-    }
+    sinks.finishAll()
   }
 
   /// Whether a `presenceChanges()` or `presenceStates()` stream is open: that is what turns
   /// presence on in the join payload, so the server only tracks presence for channels that read it.
-  var hasPresenceListener: Bool {
-    listeners.contains {
-      switch $0.listener {
-      case .presence, .presenceState: true
-      default: false
-      }
-    }
+  nonisolated var hasPresenceListener: Bool {
+    sinks.hasPresenceListener
   }
 
   /// The `postgres_changes` bindings of the open streams, in registration order.
-  var clientChanges: [PostgresJoinConfig] {
-    listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
+  nonisolated var clientChanges: [PostgresJoinConfig] {
+    sinks.bindings
   }
 
   /// The topic on the WebSocket for the topic name `topic`.

@@ -39,8 +39,8 @@ struct RealtimeColdStartTests {
       let sut = makeClient(socket: socket)
 
       let channel = await sut.channel("library-realtime")
-      let libros = await channel.postgresChanges(schema: "library", table: "libros")
-      let files = await channel.postgresChanges(
+      let libros = channel.postgresChanges(schema: "library", table: "libros")
+      let files = channel.postgresChanges(
         schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
@@ -132,7 +132,7 @@ struct RealtimeColdStartTests {
     }
 
     await waitUntil(timeout: 5) {
-      let channelStatus = await channel.status
+      let channelStatus = channel.status
       return sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
         && channelStatus == .subscribed
     }

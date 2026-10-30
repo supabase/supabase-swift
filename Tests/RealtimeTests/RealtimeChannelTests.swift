@@ -30,6 +30,12 @@ struct RealtimeChannelTests {
   )
 
   @Test
+  func statusIsReadableWithoutAwait() {
+    let status: RealtimeChannelStatus = sut.status
+    #expect(status.isSame(as: .unsubscribed))
+  }
+
+  @Test
   func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() async {
     let stream = await sut.postgresChanges(
       event: .update,
@@ -41,7 +47,7 @@ struct RealtimeChannelTests {
       select: ["id", "name"]
     )
 
-    let changes = await sut.clientChanges
+    let changes = sut.clientChanges
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
@@ -95,13 +101,13 @@ struct RealtimeChannelTests {
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
       #expect(await channel.status == .subscribing)
 
-      let listenerCountBefore = await channel.listeners.count
+      let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
 
-      await withKnownIssue {
-        _ = await channel.presenceChanges()
+      withKnownIssue {
+        _ = channel.presenceChanges()
       }
 
-      #expect(await channel.listeners.count == listenerCountBefore)
+      #expect(channel.sinks.presenceChanges.subscriberCount == listenerCountBefore)
 
       subscribeTask.cancel()
       await socket.disconnect()
@@ -151,13 +157,13 @@ struct RealtimeChannelTests {
       try? await channel.subscribe()
       #expect(await channel.status == .subscribed)
 
-      let listenerCountBefore = await channel.listeners.count
+      let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
 
-      await withKnownIssue {
-        _ = await channel.presenceChanges()
+      withKnownIssue {
+        _ = channel.presenceChanges()
       }
 
-      #expect(await channel.listeners.count == listenerCountBefore)
+      #expect(channel.sinks.presenceChanges.subscriberCount == listenerCountBefore)
 
       await socket.disconnect()
     }
@@ -171,36 +177,24 @@ struct RealtimeChannelTests {
         table: "users",
         filter: .eq("id", value: 1)
       ),
-      await sut.postgresChanges(event: .insert, schema: "private"),
-      await sut.postgresChanges(event: .update, table: "messages"),
-      await sut.postgresChanges(event: .delete),
-      await sut.broadcasts(event: "test"),
-      await sut.broadcasts(event: "cursor-pos"),
-      await sut.presenceChanges(),
-      await sut.presenceStates(),
-      await sut.events(),
+      sut.postgresChanges(event: .insert, schema: "private"),
+      sut.postgresChanges(event: .update, table: "messages"),
+      sut.postgresChanges(event: .delete),
+      sut.broadcasts(event: "test"),
+      sut.broadcasts(event: "cursor-pos"),
+      sut.presenceChanges(),
+      sut.presenceStates(),
+      sut.events(),
     ]
 
-    let kinds = await sut.listeners.map { entry -> String in
-      switch entry.listener {
-      case .postgres: "postgres"
-      case .broadcast(let event, _): "broadcast(\(event))"
-      case .presence: "presence"
-      case .presenceState: "presenceState"
-      case .events: "events"
-      case .status: "status"
-      }
-    }
-    #expect(
-      kinds == [
-        "postgres", "postgres", "postgres", "postgres",
-        "broadcast(test)", "broadcast(cursor-pos)",
-        "presence", "presenceState", "events",
-      ]
-    )
+    #expect(sut.sinks.postgres.subscriberCount == 4)
+    #expect(sut.sinks.broadcasts.subscriberCount == 2)
+    #expect(sut.sinks.presenceChanges.subscriberCount == 1)
+    #expect(sut.sinks.presenceStates.subscriberCount == 1)
+    #expect(sut.sinks.events.subscriberCount == 1)
     #expect(await sut.hasPresenceListener)
 
-    let clientChanges = await sut.clientChanges
+    let clientChanges = sut.clientChanges
     assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
       ▿ 4 elements
@@ -267,7 +261,7 @@ struct RealtimeChannelTests {
     try await socket.connect()
 
     // Open a presence stream before subscribing
-    let presence = await channel.presenceChanges()
+    let presence = channel.presenceChanges()
 
     // Verify that the presence listener exists
     #expect(await channel.hasPresenceListener)
@@ -809,7 +803,7 @@ extension RealtimeChannelTests {
     pollInterval: UInt64 = 10_000_000
   ) async {
     await waitUntil(timeout: timeout, pollInterval: pollInterval) {
-      await channel.status == status
+      channel.status == status
     }
   }
 

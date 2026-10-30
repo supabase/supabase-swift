@@ -43,8 +43,8 @@ struct RealtimeIsolationTests {
 
     func run() async throws {
       let channel = await client.channel("room") { $0.isPrivate = false }
-      let typed = await channel.postgresChanges(of: Row.self, table: "rooms")
-      let raw = await channel.postgresChanges(event: .insert, table: "rooms")
+      let typed = channel.postgresChanges(of: Row.self, table: "rooms")
+      let raw = channel.postgresChanges(event: .insert, table: "rooms")
       try await channel.subscribe()
 
       for await change in typed { rows.append(try change.row()) }
@@ -52,11 +52,11 @@ struct RealtimeIsolationTests {
         changes.append(change)
         if let record = change.record { rows.append(try record.decode(as: Row.self)) }
       }
-      for await state in await channel.presenceStates() { presenceCount = state.entries.count }
-      for await message in await channel.broadcasts(event: "ping") { _ = message.event }
+      for await state in channel.presenceStates() { presenceCount = state.entries.count }
+      for await message in channel.broadcasts(event: "ping") { _ = message.event }
 
       isConnected = await client.status.isConnected
-      channelError = await channel.status.error
+      channelError = channel.status.error
     }
   }
 

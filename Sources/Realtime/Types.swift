@@ -221,7 +221,7 @@ public struct RealtimeClientOptions: Sendable {
 /// The type is not `Equatable`: use ``isSubscribed`` and ``error``, or match a case.
 ///
 /// ```swift
-/// for await status in await channel.statusChanges() {
+/// for await status in channel.statusChanges() {
 ///   switch status {
 ///   case .resubscribing(_, let retryIn, let lastError):
 ///     print("Joining again in \(retryIn) after: \(lastError.message)")

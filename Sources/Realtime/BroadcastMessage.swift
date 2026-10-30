@@ -20,7 +20,7 @@ public enum BroadcastPayload: Sendable, Hashable {
 /// Read it from ``RealtimeChannel/broadcasts(event:)``:
 ///
 /// ```swift
-/// for await message in await channel.broadcasts(event: "cursor") {
+/// for await message in channel.broadcasts(event: "cursor") {
 ///   let cursor = try message.decode(as: Cursor.self)
 /// }
 /// ```

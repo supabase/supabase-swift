@@ -149,7 +149,7 @@
         let channel = await client.realtime.channel("test-channel")
         let statuses = LockIsolated<[RealtimeChannelStatus]>([])
 
-        let statusChanges = await channel.statusChanges()
+        let statusChanges = channel.statusChanges()
         let observer = Task {
           for await status in statusChanges {
             statuses.withValue { $0.append(status) }
@@ -266,7 +266,7 @@
           let text: String
         }
 
-        let receivedMessagesStream = await channel.broadcasts(event: "test-event")
+        let receivedMessagesStream = channel.broadcasts(event: "test-event")
 
         try await channel.subscribe()
 
@@ -313,7 +313,7 @@
         let channel = await realtime.channel("custom-options-\(UUID().uuidString)") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let received = await channel.broadcasts(event: "ping")
+        let received = channel.broadcasts(event: "ping")
         try await channel.subscribe()
 
         try await channel.broadcast(event: "ping", payload: ["value": 1] as JSONObject)
@@ -339,7 +339,7 @@
         let channel = await client.realtime.channel("broadcast-binary") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let messages = await channel.broadcasts(event: "bytes")
+        let messages = channel.broadcasts(event: "bytes")
         try await channel.subscribe()
 
         let bytes = Data([0x00, 0xCA, 0xFE, 0xFF])
@@ -363,7 +363,7 @@
         let channel = await client.realtime.channel("access-token-test") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let messages = await channel.broadcasts(event: "after-token")
+        let messages = channel.broadcasts(event: "after-token")
         try await channel.subscribe()
 
         let session = try await client.auth.signUp(
@@ -414,8 +414,8 @@
           $0.broadcast.receiveOwnMessages = true
         }
 
-        let event1Messages = await channel.broadcasts(event: "event-1")
-        let event2Messages = await channel.broadcasts(event: "event-2")
+        let event1Messages = channel.broadcasts(event: "event-1")
+        let event2Messages = channel.broadcasts(event: "event-2")
 
         try await channel.subscribe()
 
@@ -450,7 +450,7 @@
         }
 
         let receivedCount = LockIsolated<Int>(0)
-        let broadcasts = await channel.broadcasts(event: "test")
+        let broadcasts = channel.broadcasts(event: "test")
         let subscription = Task {
           for await _ in broadcasts {
             receivedCount.withValue { $0 += 1 }
@@ -505,9 +505,9 @@
           let value: JSONValue
         }
 
-        let allChanges = await channel.postgresChanges(
+        let allChanges = channel.postgresChanges(
           of: Entry.self, schema: "public", table: "key_value_storage")
-        let events = await channel.events()
+        let events = channel.events()
 
         try await channel.subscribe()
 
@@ -572,7 +572,7 @@
           table: "key_value_storage",
           filter: .eq("key", value: testKey1)
         )
-        let events = await channel.events()
+        let events = channel.events()
 
         try await channel.subscribe()
 
@@ -615,13 +615,13 @@
           let value: JSONValue
         }
 
-        let insertions = await channel.postgresChanges(
+        let insertions = channel.postgresChanges(
           event: .insert, schema: "public", table: "key_value_storage")
-        let updates = await channel.postgresChanges(
+        let updates = channel.postgresChanges(
           event: .update, schema: "public", table: "key_value_storage")
-        let deletions = await channel.postgresChanges(
+        let deletions = channel.postgresChanges(
           event: .delete, schema: "public", table: "key_value_storage")
-        let events = await channel.events()
+        let events = channel.events()
 
         try await channel.subscribe()
 
@@ -722,11 +722,11 @@
           lastSeen: Date()
         )
 
-        let client1PresenceChanges = await channel1.presenceChanges()
-        let client2PresenceChanges = await channel2.presenceChanges()
+        let client1PresenceChanges = channel1.presenceChanges()
+        let client2PresenceChanges = channel2.presenceChanges()
 
-        let client1Messages = await channel1.broadcasts(event: "chat-message")
-        let client2Messages = await channel2.broadcasts(event: "chat-message")
+        let client1Messages = channel1.broadcasts(event: "chat-message")
+        let client2Messages = channel2.broadcasts(event: "chat-message")
 
         try await channel1.subscribe()
         try await channel2.subscribe()
@@ -850,8 +850,8 @@
         let topic = "presence-\(UUID().uuidString)"
         let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
         let bob = await client2.realtime.channel(topic) { $0.presence.key = "bob" }
-        let anaStates = await ana.presenceStates()
-        let bobChanges = await bob.presenceChanges()
+        let anaStates = ana.presenceStates()
+        let bobChanges = bob.presenceChanges()
         try await ana.subscribe()
         try await bob.subscribe()
 
@@ -935,8 +935,8 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("late-binding")
-        let pings = await channel.broadcasts(event: "ping")
-        let events = await channel.events()
+        let pings = channel.broadcasts(event: "ping")
+        let events = channel.events()
         try await channel.subscribe()
 
         let testKey = UUID().uuidString
@@ -969,9 +969,9 @@
         let channel = await client.realtime.channel("broadcast-exact") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let lowercase = await channel.broadcasts(event: "ping")
-        let exact = await channel.broadcasts(event: "Ping")
-        let wildcard = await channel.broadcasts(event: "*")
+        let lowercase = channel.broadcasts(event: "ping")
+        let exact = channel.broadcasts(event: "Ping")
+        let wildcard = channel.broadcasts(event: "*")
         try await channel.subscribe()
 
         try await channel.broadcast(event: "Ping", payload: ["n": 1])
@@ -1004,7 +1004,7 @@
 
         let channel = await client.realtime.channel("topic-name")
         #expect(channel.topic == "topic-name")
-        let messages = await channel.broadcasts(event: "rest")
+        let messages = channel.broadcasts(event: "rest")
         try await channel.subscribe()
 
         try await channel.httpSend(event: "rest", payload: ["n": 1])
@@ -1028,7 +1028,7 @@
       until condition: @escaping @Sendable (PresenceState) throws -> Bool
     ) async throws {
       try await withTimeout(.seconds(5)) {
-        while try !condition(await channel.presenceState) {
+        while try !condition(channel.presenceState) {
           try await Task.sleep(for: .milliseconds(50))
         }
       }
