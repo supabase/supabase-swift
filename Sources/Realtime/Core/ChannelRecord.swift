@@ -17,6 +17,9 @@ struct ChannelRecord {
   /// The bindings the server echoed in the join reply, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
   var presence = PresenceTracker()
+  /// The ref of the join that timed out while the channel waits to rejoin. A late `ok` for it
+  /// still confirms the join.
+  var timedOutJoinRef: Ref?
   /// The access token the channel last joined with.
   var joinAccessToken: String?
   var subscribeWaiters: [WaiterID] = []

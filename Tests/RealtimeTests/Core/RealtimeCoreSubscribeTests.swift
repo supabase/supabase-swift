@@ -204,21 +204,55 @@ struct RealtimeCoreSubscribeTests {
   @Test
   func lateOkAfterTimeoutConfirms() {
     var harness = CoreHarness.connected()
+    let w1 = harness.waiter()
+    let w2 = harness.waiter()
+    _ = harness.send(Self.subscribe(w1))
+    _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1")))
+    _ = harness.send(Self.subscribe(w2))
+
+    #expect(
+      harness.send(.frame(Self.reply(ref: "1"))) == [
+        .resume(w1, .success),
+        .resume(w2, .success),
+        .publishChannelStatus(Self.topic, .subscribed),
+        .cancel(.rejoin(topic: Self.topic)),
+      ])
+    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.send(.timerFired(.rejoin(topic: Self.topic))) == [])
+  }
+
+  @Test
+  func okForOlderRefStillIgnored() {
+    var harness = CoreHarness.connected()
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w))
     _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1")))
-
-    #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
-
     _ = harness.send(.timerFired(.rejoin(topic: Self.topic)))
-    #expect(harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1"))) == [])
+    _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "2")))
+
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
     #expect(
-      harness.send(.frame(Self.reply(ref: "2"))) == [
+      harness.core.channels[Self.topic]?.phase
+        == .waitingToRetry(attempt: 2, retryIn: .seconds(2), lastError: .joinTimeout))
+
+    _ = harness.send(.timerFired(.rejoin(topic: Self.topic)))
+    #expect(harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.send(.frame(Self.reply(ref: "2"))) == [])
+    #expect(
+      harness.send(.frame(Self.reply(ref: "3"))) == [
         .resume(w, .success),
         .publishChannelStatus(Self.topic, .subscribed),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "2")),
+        .cancel(.joinTimeout(topic: Self.topic, ref: "3")),
       ])
+  }
+
+  @Test
+  func lateOkAfterJoinErrorIsIgnored() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.frame(Self.reply(ref: "1", error: Self.transient)))
+
+    #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
   }
 
   @Test

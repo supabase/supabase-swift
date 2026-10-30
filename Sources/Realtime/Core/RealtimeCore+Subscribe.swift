@@ -55,6 +55,7 @@ extension RealtimeCore {
   private mutating func pushJoin(_ topic: String, attempt: Int) -> [Effect] {
     guard var record = channels[topic] else { return [] }
     let ref = makeRef()
+    record.timedOutJoinRef = nil
     let config = RealtimeJoinConfig(
       record.configuration, bindings: record.bindings, presenceEnabled: record.presenceEnabled)
     record.joinAccessToken = tokens.token
@@ -118,13 +119,29 @@ extension RealtimeCore {
     return effects
   }
 
-  /// Applies a reply to the join in flight. Any other frame is left alone.
+  /// Applies a reply to the join in flight, or a late `ok` to the join that timed out. Any
+  /// other frame is left alone.
   mutating func receiveJoinReply(_ message: RealtimeMessage) -> [Effect] {
     guard message.event == ChannelEvent.reply,
       let topic = RealtimeChannel.topic(forWireTopic: message.topic),
       let ref = message.ref,
-      case .joining(ref, let attempt, .reply)? = channels[topic]?.phase
+      let record = channels[topic]
     else { return [] }
+
+    switch record.phase {
+    case .joining(ref, let attempt, .reply):
+      return receiveReply(message, toJoin: ref, attempt: attempt, on: topic)
+    case .waitingToRetry where record.timedOutJoinRef == ref && message.status == .ok:
+      logger.debug("Late join reply confirmed channel '\(topic)' during the rejoin backoff")
+      return confirmJoin(topic, ref: ref) + [.cancel(.rejoin(topic: topic))]
+    default:
+      return []
+    }
+  }
+
+  private mutating func receiveReply(
+    _ message: RealtimeMessage, toJoin ref: Ref, attempt: Int, on topic: String
+  ) -> [Effect] {
 
     let effects: [Effect]
     if message.status == .ok {
@@ -146,6 +163,7 @@ extension RealtimeCore {
   mutating func joinTimedOut(_ topic: String, ref: Ref) -> [Effect] {
     guard case .joining(ref, let attempt, .reply)? = channels[topic]?.phase else { return [] }
     logger.debug("Subscribe attempt \(attempt) timed out for channel '\(topic)'")
+    channels[topic]?.timedOutJoinRef = ref
     return waitToRejoin(
       topic, attempt: attempt, delay: options.rejoinDelay(attempt), lastError: .joinTimeout)
   }
@@ -162,6 +180,7 @@ extension RealtimeCore {
     let isRejoin = record.hasBeenSubscribed
     record.subscribeWaiters = []
     record.hasBeenSubscribed = true
+    record.timedOutJoinRef = nil
     channels[topic] = record
 
     var effects: [Effect] = waiters.map { .resume($0, .success) }
@@ -202,6 +221,7 @@ extension RealtimeCore {
   private mutating func failSubscribe(_ topic: String, with error: RealtimeError) -> [Effect] {
     guard let waiters = channels[topic]?.subscribeWaiters else { return [] }
     channels[topic]?.subscribeWaiters = []
+    channels[topic]?.timedOutJoinRef = nil
     return waiters.map { .resume($0, .failure(error)) } + setPhase(.failed(error), for: topic)
   }
 
