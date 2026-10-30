@@ -693,14 +693,14 @@ struct AuthClientRedirectTests {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient(redirectToURL: URL(string: "configured://callback")!)
     let presenter = ClosurePresenter { [self] url, callbackScheme in
-      #expect(queryItem("redirect_to", in: url) == "percall://callback")
-      #expect(callbackScheme == "percall")
-      return URL(string: "percall://callback?code=c")!
+      #expect(queryItem("redirect_to", in: url) == "override://callback")
+      #expect(callbackScheme == "override")
+      return URL(string: "override://callback?code=c")!
     }
 
     try await client.signInWithOAuth(
       .github,
-      options: OAuthOptions(redirectTo: URL(string: "percall://callback")!),
+      options: OAuthOptions(redirectTo: URL(string: "override://callback")!),
       presenter: presenter
     )
   }
