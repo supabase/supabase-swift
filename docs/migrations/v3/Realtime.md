@@ -55,17 +55,22 @@ Changes that still compile but behave differently. Check each one by hand.
   `track`, `untrack` and `httpSend` throw `RealtimeError` with `kind == .channelRemoved`, and a
   `subscribe()` in flight throws it too. A channel the server closes with `phx_close` is spent
   the same way; a `subscribe()` in flight then throws `.channelClosedByServer`. `unsubscribe()`
-  returns at once and `status` keeps the last value. A new stream ends at once, except
-  `statusChanges()` and `presenceStates()`, which first replay the last value, then end. Get a
-  new channel from `channel(_:configure:)`. Search for `removeChannel(`.
+  returns at once. `await channel.status` reads `.unsubscribed` and `await channel.presenceState`
+  is empty. A new stream, including `statusChanges()` and
+  `presenceStates()`, ends at once without a replay. Get a new channel from
+  `channel(_:configure:)`. Search for `removeChannel(`.
 - **`removeChannel(_:)` also leaves a channel that is joining.** v2 left only a subscribed
-  channel. The call returns when the leave ends. A new channel for the same topic waits for that
-  leave before it acts. Search for `removeChannel(` followed by `channel(` for the same topic.
+  channel. The call returns when the leave ends. A new channel for the same topic can subscribe
+  at once, while that leave runs. A second `removeChannel(_:)` for the same channel, made while
+  the first runs, returns at once. Search for `removeChannel(` followed by `channel(` for the
+  same topic.
 - **Channel actions need a live client.** A channel holds its client weakly. After the
   `RealtimeClient` is released, `subscribe()`, `broadcast`, `track`, `untrack` and `httpSend`
   throw `RealtimeError` with `kind == .notConnected` and `isRetryable == false`, and
-  `unsubscribe()` returns at once. Keep the client, or the `SupabaseClient`, alive while you use
-  its channels. Search for `RealtimeClient(` and `SupabaseClient(` in local scopes.
+  `unsubscribe()` returns at once. `await channel.status` reads `.unsubscribed`,
+  `await channel.presenceState` is empty, and a new stream ends at once. Keep the client, or the
+  `SupabaseClient`, alive while you use its channels. Search for `RealtimeClient(` and
+  `SupabaseClient(` in local scopes.
 - **Pushes need a subscribed channel.** `broadcast`, `track` and `untrack` throw `RealtimeError`
   with `kind == .notSubscribed` when the channel is not `.subscribed`, also while the socket
   reconnects. Nothing is queued to send later. v2 sent `track` with only a reported issue, and
@@ -130,7 +135,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `import RealtimeV2` | `import Realtime` |
 | `RealtimeClient`, `RealtimeChannel`, `Presence` (v1 API) | `RealtimeClient` (an actor, see below), `RealtimeChannel`, `PresenceEntry` |
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
-| `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
+| `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `await RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
 | `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
 | `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
 | `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
@@ -138,22 +143,22 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
 | `RealtimeClientV2.disconnect()` | `disconnect() async` |
-| `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `status`, `statusChanges()` |
-| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `heartbeats()`, `HeartbeatEvent` |
+| `RealtimeClientV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
+| `RealtimeClientV2.heartbeat`, `onHeartbeat(_:)`, `HeartbeatStatus` | `await heartbeats()`, `HeartbeatEvent` |
 | `RealtimeChannelV2.Status` | `RealtimeChannelStatus`, with values (see below) |
 | `RealtimeChannelV2.Subscription`, `RealtimeSubscription`, `ObservationToken` | removed; cancel the task that reads the stream |
 | `RealtimeChannelV2.subscribe()`, `subscribeWithError()` | `subscribe() async throws` |
 | `RealtimeChannelV2.updateAuth(jwt:)` | `RealtimeClient.setAuth(_:)` |
-| `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `status`, `statusChanges()` |
-| `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `broadcasts(event:)`, which yields `BroadcastMessage` (see below) |
-| `broadcastDataStream(event:)` | `broadcasts(event:)`; the bytes are in `payload` as `.binary(Data)` |
-| `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `postgresChanges(event:schema:table:filter:select:)` or `postgresChanges(of:event:schema:table:filter:select:decoder:)` (see below) |
-| `onPresenceChange(_:)`, `presenceChange()` | `presenceChanges()`, `presenceStates()` (see [Presence](#presence)) |
+| `RealtimeChannelV2.status`, `statusChange`, `onStatusChange(_:)` | `await status`, `await statusChanges()` |
+| `onBroadcast(event:callback:)`, `broadcastStream(event:)`, `broadcast(event:) -> AsyncStream` | `await broadcasts(event:)`, which yields `BroadcastMessage` (see below) |
+| `broadcastDataStream(event:)` | `await broadcasts(event:)`; the bytes are in `payload` as `.binary(Data)` |
+| `onPostgresChange(_:...)`, `postgresChange(_:schema:table:filter: String?)` | `await postgresChanges(event:schema:table:filter:select:)` or `await postgresChanges(of:event:schema:table:filter:select:decoder:)` (see below) |
+| `onPresenceChange(_:)`, `presenceChange()` | `await presenceChanges()`, `await presenceStates()` (see [Presence](#presence)) |
 | `PresenceV2`, `PresenceV2.state`, `decodeState(as:decoder:)` | `PresenceEntry`, `payload`, `decode(as:decoder:)` |
 | `PresenceAction`, `decodeJoins(as:ignoreOtherTypes:decoder:)`, `decodeLeaves(...)` | `PresenceChange`; decode each `PresenceEntry` |
 | `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
-| `onSystem(callback:)`, `system()` | `events()`, which emits `RealtimeChannelEvent` |
-| `channel(_:options:)` (`RealtimeClientV2`, `SupabaseClient`), `RealtimeChannelConfig` | `channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
+| `onSystem(callback:)`, `system()` | `await events()`, which emits `RealtimeChannelEvent` |
+| `channel(_:options:)` (`RealtimeClientV2`, `SupabaseClient`), `RealtimeChannelConfig` | `await channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
 | `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledge`, `.receiveOwnMessages`, `.waitForReplication` |
 | `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
 | `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
@@ -193,30 +198,63 @@ The v1 API is removed. See
 [the RealtimeV2 migration guide in v2.55.4](https://github.com/supabase/supabase-swift/blob/v2.55.4/docs/migrations/RealtimeV2%20Migration%20Guide.md)
 to move from v1 to the v2 API first, then apply this guide.
 
-## `RealtimeClient` is an actor
+## `RealtimeClient` is an actor, and channel reads are `async`
 
-`RealtimeClient` is now an actor, and `disconnect(code:reason:)` is `async`. Reads and streams
-stay synchronous: `channel(_:configure:)`, `channels`, `status`, `statusChanges()` and
-`heartbeats()`, on the client and on `SupabaseClient`, need no `await`. `connect()` now throws
-when the socket cannot be opened.
+`RealtimeClient` is now an actor that owns the state of the connection and of every channel.
+`disconnect(code:reason:)` is `async`, and `connect()` throws when the socket cannot be opened.
+Every read and every stream method is `async` too:
 
-`RealtimeChannel` is still a `Sendable` class. `status`, `presenceState` and the stream methods
-are synchronous; `subscribe()`, `unsubscribe()`, the pushes and `httpSend` are `async`. Two
-channels are equal only when they are the same instance. The client keeps one per topic.
+- On the client and on `SupabaseClient`: `channel(_:configure:)`, `channels`, and on the client
+  `status`, `statusChanges()` and `heartbeats()`.
+- On `RealtimeChannel`: `status`, `presenceState`, `statusChanges()`, `events()`,
+  `broadcasts(...)`, `postgresChanges(...)`, `presenceChanges()` and `presenceStates()`.
+
+A stream is registered when its call returns, so it sees every event that an action you start
+next causes. The `configure:` closure of `channel(_:configure:)` is not `@Sendable`: it runs in
+the caller's isolation. `topic`, `configuration`, `==` and `hash` stay synchronous.
+`subscribe()`, `unsubscribe()`, the pushes and `httpSend` stay `async`. Two channels are equal
+only when they are the same instance. The client keeps one per topic.
+
+`RealtimeChannel` is a `Sendable` class and a handle: the client owns its state. After
+`removeChannel(_:)`, or after the server closes the channel, the handle is spent (see
+[Silent changes](#silent-changes)). A new channel for the same topic is a new handle, and it
+subscribes at once.
 
 ```swift
 // v2
-let channel = supabase.channel("room")
+let channel = supabase.channel("room:lobby") { $0.broadcast.receiveOwnBroadcasts = true }
 let messages = channel.broadcastStream(event: "message")
 try await channel.subscribeWithError()
 if channel.status == .subscribed { showOnline() }
+try await channel.broadcast(event: "message", message: ["text": "hi"])
 supabase.realtimeV2.disconnect()
 // v3
-let channel = supabase.channel("room")
-let messages = channel.broadcasts(event: "message")
+let channel = await supabase.channel("room:lobby") { $0.broadcast.receiveOwnMessages = true }
+let messages = await channel.broadcasts(event: "message")
 try await channel.subscribe()
-if channel.status.isSubscribed { showOnline() }
+if await channel.status.isSubscribed { showOnline() }
+try await channel.broadcast(event: "message", payload: ["text": "hi"])
+for await message in messages { print(message.payload) }
 await supabase.realtime.disconnect()
+```
+
+There is no synchronous read of a status. A SwiftUI view mirrors it with `statusChanges()` in a
+`.task`. The stream first emits the status at that moment, and the task ends with the view.
+
+```swift
+struct RoomView: View {
+  let channel: RealtimeChannel
+  @State private var status: RealtimeChannelStatus = .unsubscribed
+
+  var body: some View {
+    Text(status.isSubscribed ? "Online" : "Offline")
+      .task {
+        for await status in await channel.statusChanges() {
+          self.status = status
+        }
+      }
+  }
+}
 ```
 
 ## Channel options are `RealtimeChannelConfiguration`
@@ -233,7 +271,7 @@ let channel = supabase.channel("room") {
   $0.broadcast.replay = ReplayOption(since: 1_700_000_000_000, limit: 10)
 }
 // v3
-let channel = supabase.channel("room") {
+let channel = await supabase.channel("room") {
   $0.isPrivate = true
   $0.broadcast.receiveOwnMessages = true
   $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
@@ -257,10 +295,10 @@ for await message in channel.system() where message.payload["extension"] == "pos
   break
 }
 // v3
-for await status in client.statusChanges() where status.isConnected {
+for await status in await client.statusChanges() where status.isConnected {
   break
 }
-for await event in channel.events() where event == .postgresChangesReady {
+for await event in await channel.events() where event == .postgresChangesReady {
   break
 }
 ```
@@ -284,7 +322,7 @@ let subscription = channel.onBroadcast(event: "message") { payload in
 defer { subscription.cancel() }
 // v3
 let task = Task {
-  for await message in channel.broadcasts(event: "message") {
+  for await message in await channel.broadcasts(event: "message") {
     print(message.payload)
   }
 }
@@ -320,10 +358,10 @@ for await action in channel.postgresChange(AnyAction.self, table: "todos") {
   }
 }
 // v3
-for await message in channel.broadcasts(event: "cursor") {
+for await message in await channel.broadcasts(event: "cursor") {
   let cursor = try message.decode(as: Cursor.self)
 }
-for await change in channel.postgresChanges(of: Todo.self, table: "todos") {
+for await change in await channel.postgresChanges(of: Todo.self, table: "todos") {
   switch change.kind {
   case .insert: todos.append(try change.row())
   case .update: todos.replace(try change.row())
@@ -373,7 +411,7 @@ subscription.
 
 `presenceChanges()` yields a `PresenceChange` per sync: the entries that joined and left, as
 lists by presence key, so a user on two devices has two entries. `presenceStates()` yields the
-whole state after every sync that changes it, and `presenceState` reads it. To show who is
+whole state after every sync that changes it, and `await presenceState` reads it. To show who is
 online, decode the state instead of applying joins and leaves yourself.
 
 ```swift
@@ -386,7 +424,7 @@ for await action in presence {
   let left = try action.decodeLeaves(as: UserStatus.self)
 }
 // v3
-let states = channel.presenceStates()
+let states = await channel.presenceStates()
 try await channel.subscribe()
 try await channel.track(UserStatus(name: "ana"))
 for await state in states {

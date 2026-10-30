@@ -338,3 +338,8 @@ hotfixes
 # Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
 synchronizable
 Synchronizable
+
+# Realtime client actor: the Fanout type that copies a value to every stream listener.
+Fanout
+fanout
+Fanouts

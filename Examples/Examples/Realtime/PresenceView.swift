@@ -61,9 +61,9 @@ struct PresenceView: View {
 
   func subscribe() async {
     do {
-      let channel = supabase.channel("presence-example")
+      let channel = await supabase.channel("presence-example")
 
-      let states = channel.presenceStates()
+      let states = await channel.presenceStates()
 
       try await channel.subscribe()
       self.channel = channel
@@ -76,7 +76,7 @@ struct PresenceView: View {
 
       Task {
         // The server forgets the tracked payload when the channel rejoins.
-        for await status in channel.statusChanges() where status.isSubscribed {
+        for await status in await channel.statusChanges() where status.isSubscribed {
           do {
             try await channel.track(user)
           } catch {

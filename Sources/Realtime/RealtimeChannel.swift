@@ -131,8 +131,9 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   /// An async stream that emits channel subscription status changes.
   ///
-  /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Cancelling the iterating task ends the stream; so does removing the
+  /// The stream is registered before this method returns. It first emits the status at that
+  /// moment, then each later change, so no change between the call and the first iteration is
+  /// lost. Cancelling the iterating task ends the stream; so does removing the
   /// channel from its client. On a removed channel, or one whose client was released, the
   /// stream ends at once.
   ///

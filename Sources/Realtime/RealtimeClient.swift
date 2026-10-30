@@ -340,8 +340,9 @@ public actor RealtimeClient {
 
   /// An async stream that emits connection status changes.
   ///
-  /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Cancelling the iterating task ends the stream; so does releasing the
+  /// The stream is registered before this method returns. It first emits the status at that
+  /// moment, then each later change, so no change between the call and the first iteration is
+  /// lost. Cancelling the iterating task ends the stream; so does releasing the
   /// client.
   ///
   /// ```swift
@@ -549,7 +550,9 @@ public actor RealtimeClient {
   /// the client disconnects (or schedules a deferred disconnect based on
   /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
   ///
-  /// Removing a channel that was already removed, or that another client created, does nothing.
+  /// Removing a channel that was already removed, or that another client created, does nothing
+  /// and returns at once. This holds for a second call made while the first removal is still
+  /// leaving the topic: the second call does not wait for that leave.
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {

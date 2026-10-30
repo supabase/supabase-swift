@@ -22,11 +22,11 @@ final class ChannelStore {
     Task {
       channels = await fetchChannels()
 
-      let channel = supabase.channel("public:channels")
+      let channel = await supabase.channel("public:channels")
 
-      let insertions = channel.postgresChanges(
+      let insertions = await channel.postgresChanges(
         of: Channel.self, event: .insert, table: "channels", decoder: decoder)
-      let deletions = channel.postgresChanges(
+      let deletions = await channel.postgresChanges(
         of: Channel.self, event: .delete, table: "channels", decoder: decoder)
 
       try await channel.subscribe()

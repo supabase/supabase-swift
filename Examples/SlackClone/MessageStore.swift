@@ -103,13 +103,13 @@ final class MessageStore {
 
   private init() {
     Task {
-      let channel = supabase.channel("public:messages")
+      let channel = await supabase.channel("public:messages")
 
-      let insertions = channel.postgresChanges(
+      let insertions = await channel.postgresChanges(
         of: MessagePayload.self, event: .insert, table: "messages", decoder: decoder)
-      let updates = channel.postgresChanges(
+      let updates = await channel.postgresChanges(
         of: MessagePayload.self, event: .update, table: "messages", decoder: decoder)
-      let deletions = channel.postgresChanges(
+      let deletions = await channel.postgresChanges(
         of: MessagePayload.self, event: .delete, table: "messages", decoder: decoder)
 
       try await channel.subscribe()

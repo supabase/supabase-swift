@@ -19,15 +19,15 @@ final class UserStore {
 
   private init() {
     Task {
-      let channel = supabase.channel("public:users")
-      let changes = channel.postgresChanges(of: User.self, table: "users", decoder: decoder)
+      let channel = await supabase.channel("public:users")
+      let changes = await channel.postgresChanges(of: User.self, table: "users", decoder: decoder)
 
-      let presences = channel.presenceStates()
+      let presences = await channel.presenceStates()
 
       try await channel.subscribe()
 
       Task {
-        let statusChange = channel.statusChanges()
+        let statusChange = await channel.statusChanges()
         for await _ in statusChange.filter(\.isSubscribed) {
           do {
             let userId = try await supabase.auth.session.user.id

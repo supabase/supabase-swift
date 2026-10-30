@@ -672,14 +672,6 @@
       }
     }
 
-    //      try await client.realtime.connect()
-    //      let channel = client.realtime.channel("invalid-channel-test")
-    //        try await channel.subscribe()
-    //      let channel1 = client.realtime.channel("broadcast-no-sub")
-    //      let channel2 = client2.realtime.channel("broadcast-no-sub")
-    //        await channel2.broadcasts(event: "test").prefix(1).collect()
-    //      try await channel2.subscribe()
-
     @Test
     func realApplicationScenario_BroadcastAndPresence() async throws {
       let client = client
