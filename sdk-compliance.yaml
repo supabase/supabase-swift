@@ -1386,8 +1386,10 @@ features:
       - RealtimeClient.disconnect
   realtime.client.get_channels:
     status: implemented
+    note: "An async read: the RealtimeClient actor owns every channel."
     symbols:
       - RealtimeClient.channels
+      - SupabaseClient.channels
   realtime.client.remove_channel:
     status: implemented
     symbols:
@@ -1420,6 +1422,7 @@ features:
       - RealtimeClient.setAuth
   realtime.client.channel:
     status: implemented
+    note: "async. Returns the live channel for the topic or creates one. The configure closure is not @Sendable: it runs on the caller's actor before one hop to the RealtimeClient actor."
     symbols:
       - RealtimeClient.channel
       - SupabaseClient.channel

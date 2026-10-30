@@ -20,12 +20,8 @@ enum Input: Sendable {
   case tokenFetched(String?, generation: Int)
   case streamEnded(StreamID)
   case waiterCancelled(WaiterID)
-  /// A caller parked until the removal on `topic` ends was cancelled.
-  case removalWaitCancelled(WaiterID, topic: String)
   /// A caller of `refreshAccessToken()` waiting for the call in flight was cancelled.
   case tokenWaitCancelled(UUID)
-  /// The channel `id` opened a Postgres stream, so its join payload changed.
-  case bindingsChanged(ChannelID)
   case appBackground
   case appForeground
   /// Resumes once every earlier input is applied.
@@ -38,6 +34,12 @@ enum SocketInput: Sendable {
   case frame(RealtimeMessage)
   case binaryBroadcast(DecodedBroadcast)
   case closed(code: Int?, reason: String?)
+}
+
+/// A Postgres change and the bindings the server matched it to.
+struct PostgresDelivery: Sendable, Equatable {
+  let change: PostgresChange
+  let matched: [PostgresJoinConfig]
 }
 
 /// Identifies one stream the client handed out. `channel` is `nil` for client streams.
@@ -78,8 +80,8 @@ final class Fanout<Element: Sendable> {
   }
 
   /// A state fan-out: subscribers first receive the latest element, or `initial` before the
-  /// first yield.
-  init(retaining initial: Element) {
+  /// first yield. With a `nil` `initial`, subscribers receive nothing until the first yield.
+  init(retaining initial: Element?) {
     current = initial
     retains = true
   }
@@ -250,5 +252,12 @@ final class ChannelState {
       binding.continuation.onTermination = nil
       binding.continuation.finish()
     }
+  }
+}
+
+extension AsyncStream {
+  /// A stream with no elements: what a spent channel or a released client hands out.
+  static var finished: AsyncStream {
+    AsyncStream { $0.finish() }
   }
 }

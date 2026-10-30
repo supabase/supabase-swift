@@ -55,6 +55,20 @@ struct FanoutTests {
   }
 
   @Test
+  func retainingFanoutWithNoInitialReplaysNothingUntilTheFirstYield() async {
+    let fanout = Fanout<Int>(retaining: nil)
+    let early = fanout.subscribe(id(1), onTermination: {})
+    #expect(fanout.current == nil)
+
+    fanout.yield(4)
+    let late = fanout.subscribe(id(2), onTermination: {})
+    fanout.finish()
+
+    #expect(await collect(early) == [4])
+    #expect(await collect(late) == [4])
+  }
+
+  @Test
   func filteredSubscriberSeesOnlyMatchingElements() async {
     let fanout = Fanout<Int>()
     let evens = fanout.subscribe(id(1), where: { $0.isMultiple(of: 2) }, onTermination: {})

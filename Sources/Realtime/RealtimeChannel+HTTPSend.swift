@@ -72,6 +72,7 @@ extension RealtimeChannel {
     timeout: Duration?
   ) async throws {
     let client = try clientForAction()
+    try await client.checkUsable(self)
     guard let accessToken = await client.currentAccessToken() else {
       throw RealtimeError.accessTokenMissing
     }

@@ -22,8 +22,8 @@ struct RealtimeShellTests {
   @Test
   func effectsRunInCoreOrder() async throws {
     let host = await RealtimeTestHost()
-    let a = host.client.channel("a")
-    let b = host.client.channel("b")
+    let a = await host.client.channel("a")
+    let b = await host.client.channel("b")
     try await subscribe(a, on: host)
     try await subscribe(b, on: host)
 
@@ -44,11 +44,11 @@ struct RealtimeShellTests {
   func statusIsCurrentWhenSubscribeReturns() async throws {
     let host = await RealtimeTestHost()
     for index in 1...20 {
-      let channel = host.client.channel("room-\(index)")
+      let channel = await host.client.channel("room-\(index)")
       try await subscribe(channel, on: host)
       // The resume comes before the status in the core's effects; the shell resumes the caller
       // only once the whole batch is applied.
-      #expect(channel.status == .subscribed)
+      #expect(await channel.status == .subscribed)
     }
   }
 
@@ -57,7 +57,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(
         headers: ["X-Client-Info": "my-app/1.2"], handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
 
     let join = try await subscribe(channel, on: host)
 
@@ -70,7 +70,7 @@ struct RealtimeShellTests {
   func staleTimerFireIsIgnored() async throws {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
     let timeout = TimerID.joinTimeout(channel: channel.id, ref: join.ref ?? "")
@@ -81,13 +81,13 @@ struct RealtimeShellTests {
     await first?.value
     await host.clock.advance(by: .seconds(15))
 
-    #expect(channel.status.isSame(as: .subscribing(attempt: 1)))
+    #expect(await channel.status.isSame(as: .subscribing(attempt: 1)))
     #expect(host.frames.filter { $0.event == ChannelEvent.join }.count == 1)
 
     // The replacement still fires at its own deadline.
     await host.clock.advance(by: .seconds(5))
     await host.waitUntil {
-      if case .resubscribing(1, _, _) = channel.status { true } else { false }
+      if case .resubscribing(1, _, _) = await channel.status { true } else { false }
     }
     subscription.cancel()
     _ = await subscription.result
@@ -97,7 +97,7 @@ struct RealtimeShellTests {
   func rejoinBackoffWaitsOneTwoFiveThenTenSeconds() async throws {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     var waits: [Duration] = []
 
@@ -107,10 +107,10 @@ struct RealtimeShellTests {
       }
       await host.clock.advance(by: .seconds(10))
       await host.waitUntil {
-        if case .resubscribing(attempt, _, _) = channel.status { true } else { false }
+        if case .resubscribing(attempt, _, _) = await channel.status { true } else { false }
       }
-      guard case .resubscribing(_, let retryIn, let error) = channel.status else {
-        Issue.record("Expected a backoff after attempt \(attempt), got \(channel.status)")
+      guard case .resubscribing(_, let retryIn, let error) = await channel.status else {
+        Issue.record("Expected a backoff after attempt \(attempt), got \(await channel.status)")
         return
       }
       #expect(error.kind == .timeout)
@@ -128,7 +128,7 @@ struct RealtimeShellTests {
   @Test
   func cancelledSubscribeThrowsCancellationErrorAndLeaves() async throws {
     let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
 
@@ -137,8 +137,8 @@ struct RealtimeShellTests {
     await #expect(throws: CancellationError.self) { try await subscription.value }
     let leave = try await host.receive(event: ChannelEvent.leave)
     #expect(leave.joinRef == join.ref)
-    await host.waitUntil { channel.status == .unsubscribed }
-    #expect(channel.status == .unsubscribed)
+    await host.waitUntil { await channel.status == .unsubscribed }
+    #expect(await channel.status == .unsubscribed)
   }
 
   @Test
@@ -146,7 +146,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost()
     // Connected, so a join would go out at once.
     try await host.client.connect()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let cancelled = Task {
       withUnsafeCurrentTask { $0?.cancel() }
       try await channel.subscribe()
@@ -157,7 +157,7 @@ struct RealtimeShellTests {
     try await subscribe(host.client.channel("barrier"), on: host)
 
     #expect(host.frames.filter { $0.topic == channel.wireTopic }.isEmpty)
-    #expect(channel.status == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   // MARK: Disconnect
@@ -165,7 +165,7 @@ struct RealtimeShellTests {
   @Test
   func queuedBroadcastsAreWrittenBeforeDisconnectCloses() async throws {
     let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     try await subscribe(channel, on: host)
     let socket = try #require(host.sockets.last)
     let server = try #require(host.server)
@@ -194,7 +194,7 @@ struct RealtimeShellTests {
 
     let disconnect = Task { await host.client.disconnect() }
     await host.waitUntil {
-      if case .disconnected = host.client.status { true } else { false }
+      if case .disconnected = await host.client.status { true } else { false }
     }
     #expect(!socket.isClosed)
     // The drain does not hold the actor.
@@ -214,7 +214,7 @@ struct RealtimeShellTests {
 
     let disconnect = Task { await host.client.disconnect() }
     await host.waitUntil {
-      if case .disconnected = host.client.status { true } else { false }
+      if case .disconnected = await host.client.status { true } else { false }
     }
     disconnect.cancel()
     await disconnect.value
@@ -241,7 +241,7 @@ struct RealtimeShellTests {
         },
         handleAppLifecycle: false
       ))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     #expect(await waitUntil(timeout: 5) { called.value })
 
@@ -262,7 +262,7 @@ struct RealtimeShellTests {
         accessToken: { throw Failure() },
         handleAppLifecycle: false
       ))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
 
     let join = try await host.receive(event: ChannelEvent.join)
@@ -278,9 +278,9 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(
         disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
-    let subscribed = host.client.channel("subscribed")
+    let subscribed = await host.client.channel("subscribed")
     let join = try await subscribe(subscribed, on: host)
-    _ = host.client.channel("never-subscribed")
+    _ = await host.client.channel("never-subscribed")
 
     let removal = Task { await host.client.removeChannel(subscribed) }
     _ = try await host.receive(event: ChannelEvent.leave)
@@ -288,149 +288,103 @@ struct RealtimeShellTests {
     await removal.value
 
     #expect(await host.client.idleDisconnectTimer == nil)
-    #expect(host.client.status == .connected)
+    #expect(await host.client.status == .connected)
   }
 
   // MARK: Released client and removed channel
 
   @Test
-  func newHandleSubscribesAfterTheOldHandlesRemovalEnds() async throws {
+  func concurrentChannelCallsReturnOneHandle() async {
+    let client = makeClient()
+    let handles = await withTaskGroup(of: RealtimeChannel.self) { group in
+      for _ in 0..<100 { group.addTask { await client.channel("room") } }
+      return await group.reduce(into: []) { $0.append($1) }
+    }
+    #expect(Set(handles.map(ObjectIdentifier.init)).count == 1)
+  }
+
+  @Test
+  func newHandleSubscribesWhileTheOldHandleLeaves() async throws {
     let host = await RealtimeTestHost()
-    let old = host.client.channel("room")
+    let old = await host.client.channel("room")
     let oldJoin = try await subscribe(old, on: host)
     let removal = Task { await host.client.removeChannel(old) }
     let leave = try await host.receive(event: ChannelEvent.leave)
 
-    let new = host.client.channel("room")
+    let new = await host.client.channel("room")
     #expect(new !== old)
     let subscription = Task { try await new.subscribe() }
-    let broadcast = Task { try await new.broadcast(event: "e", payload: ["a": 1] as JSONObject) }
-    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 2 })
-
-    host.reply(to: leave)
-    host.server?.send(close(oldJoin))
+    // The join goes out while the old handle's leave is still in flight.
     let join = try await host.receive {
       $0.event == ChannelEvent.join && $0.joinRef != oldJoin.joinRef
     }
     host.confirmJoin(join)
-
     try await subscription.value
-    await removal.value
-    #expect(new.status == .subscribed)
-    #expect(host.client.channels.contains(new))
-    // A broadcast parked behind the removal acts on a new channel, which is not subscribed yet.
-    await expectError(.notSubscribed) { try await broadcast.value }
-  }
 
-  @Test
-  func cancellingAnActionParkedBehindARemovalLeavesNothingBehind() async throws {
-    let host = await RealtimeTestHost()
-    let old = host.client.channel("room")
-    let oldJoin = try await subscribe(old, on: host)
-    let removal = Task { await host.client.removeChannel(old) }
-    _ = try await host.receive(event: ChannelEvent.leave)
-
-    let new = host.client.channel("room")
-    let subscription = Task { try await new.subscribe() }
-    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
-    subscription.cancel()
-
-    await #expect(throws: CancellationError.self) { try await subscription.value }
-    #expect(await host.client.removalWaiters["room"] == nil)
+    host.reply(to: leave)
     host.server?.send(close(oldJoin))
     await removal.value
-    #expect(await !host.client.hasRecord(for: "room"))
-    #expect(host.frames.filter { $0.event == ChannelEvent.join }.count == 1)
-    #expect(new.status == .unsubscribed)
+
+    #expect(await new.status == .subscribed)
+    #expect(await old.status == .unsubscribed)
+    #expect(await host.client.channels.contains(new))
+    #expect(await !host.client.channels.contains(old))
   }
 
   @Test
-  func cancelledUnsubscribeParkedBehindARemovalStillLeaves() async throws {
+  func spentHandleReadsUnsubscribed() async throws {
     let host = await RealtimeTestHost()
-    let old = host.client.channel("room")
-    let oldJoin = try await subscribe(old, on: host)
-    let removal = Task { await host.client.removeChannel(old) }
-    let oldLeave = try await host.receive(event: ChannelEvent.leave)
+    let channel = await host.client.channel("room")
+    var states = await channel.presenceStates().makeAsyncIterator()
+    _ = await states.next()
+    let join = try await subscribe(channel, on: host)
+    host.server?.send(
+      RealtimeMessage(
+        joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.presenceState,
+        payload: ["u1": ["metas": [["phx_ref": "r1"]]]]
+      )
+    )
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1"])
+    #expect(await channel.status == .subscribed)
 
-    let new = host.client.channel("room")
-    let subscription = Task { try await new.subscribe() }
-    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
-    let unsubscription = Task { await new.unsubscribe() }
-    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 2 })
-    unsubscription.cancel()
-
-    host.reply(to: oldLeave)
-    host.server?.send(close(oldJoin))
-    await removal.value
-    let join = try await host.receive {
-      $0.event == ChannelEvent.join && $0.joinRef != oldJoin.joinRef
-    }
-    _ = try await host.receive { $0.event == ChannelEvent.leave && $0.joinRef == join.joinRef }
-
-    await unsubscription.value
-    await #expect(throws: CancellationError.self) { try await subscription.value }
-    #expect(new.status == .unsubscribed)
-  }
-
-  @Test
-  func spentHandleWokenFromARemovalWaitThrowsChannelRemoved() async throws {
-    let host = await RealtimeTestHost()
-    let old = host.client.channel("room")
-    try await subscribe(old, on: host)
-    let removal = Task { await host.client.removeChannel(old) }
+    let removal = Task { await host.client.removeChannel(channel) }
     _ = try await host.receive(event: ChannelEvent.leave)
+    host.server?.send(close(join))
+    await removal.value
 
-    let new = host.client.channel("room")
-    let subscription = Task { try await new.subscribe() }
-    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
-    await host.client.removeChannel(new)
-
-    // Wakes the action while the old removal still holds the topic, as a later removal of the
-    // topic would when the action runs.
-    await host.client.removalEnded("room")
-
-    await expectError(.channelRemoved) {
-      try await withTimeout(.seconds(5)) {
-        try await withTaskCancellationHandler {
-          try await subscription.value
-        } onCancel: {
-          subscription.cancel()
-        }
-      }
-    }
-    #expect(await host.client.removalWaiters["room"] == nil)
-    removal.cancel()
+    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.presenceState == PresenceState())
   }
 
   @Test
   func removingAChannelOfAnotherClientIsANoOp() async throws {
     let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     try await subscribe(channel, on: host)
     let other = RealtimeClient(
       url: URL(string: "http://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(handleAppLifecycle: false)
     )
-    _ = other.channel("room")
+    _ = await other.channel("room")
 
     await other.removeChannel(channel)
 
-    #expect(host.client.channels.contains(channel))
-    #expect(channel.status == .subscribed)
+    #expect(await host.client.channels.contains(channel))
+    #expect(await channel.status == .subscribed)
     try await channel.broadcast(event: "e", payload: ["a": 1] as JSONObject)
     #expect(await host.client.hasRecord(for: "room"))
   }
 
   @Test
   func releasedClientActionsThrowClientReleased() async throws {
-    func makeChannel() -> RealtimeChannel {
+    func makeChannel() async -> RealtimeChannel {
       let client = RealtimeClient(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(handleAppLifecycle: false)
       )
-      return client.channel("room")
+      return await client.channel("room")
     }
-    let channel = makeChannel()
+    let channel = await makeChannel()
     try #require(await waitUntil { channel.client == nil })
 
     await expectError(.clientReleased) { try await channel.subscribe() }
@@ -443,6 +397,15 @@ struct RealtimeShellTests {
     await expectError(.clientReleased) {
       try await channel.httpSend(event: "e", payload: ["a": 1] as JSONObject)
     }
+
+    // Reads say `.unsubscribed` and empty, and new streams end at once.
+    #expect(await channel.status == .unsubscribed)
+    #expect(await channel.presenceState == PresenceState())
+    var statuses: [RealtimeChannelStatus] = []
+    for await status in await channel.statusChanges() {
+      statuses.append(status)
+    }
+    #expect(statuses.isEmpty)
   }
 
   @Test
@@ -450,7 +413,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(
         disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let join = try await subscribe(channel, on: host)
     let removal = Task { await host.client.removeChannel(channel) }
     _ = try await host.receive(event: ChannelEvent.leave)
@@ -468,16 +431,16 @@ struct RealtimeShellTests {
       try await channel.httpSend(event: "e", payload: ["a": 1] as JSONObject)
     }
 
-    // Reads keep the last status, and new streams end at once.
-    #expect(channel.status == .subscribed)
+    // Reads say `.unsubscribed`, and new streams end at once.
+    #expect(await channel.status == .unsubscribed)
     var statuses: [RealtimeChannelStatus] = []
-    for await status in channel.statusChanges() {
+    for await status in await channel.statusChanges() {
       statuses.append(status)
     }
-    #expect(statuses.count <= 1)
+    #expect(statuses.isEmpty)
     // A spent handle never reaches the core, so the idle disconnect stays scheduled.
     #expect(await host.client.idleDisconnectTimer != nil)
-    #expect(!host.client.channels.contains(channel))
+    #expect(await !host.client.channels.contains(channel))
   }
 
   @Test
@@ -504,7 +467,7 @@ struct RealtimeShellTests {
       box.client = client
       try await client.connect()
       servers.value.last?.close(code: 1006, reason: "dropped")
-      _ = await waitUntil { client.status != .connected }
+      _ = await waitUntil { await client.status != .connected }
     }
     try await scope()
 
@@ -512,6 +475,13 @@ struct RealtimeShellTests {
   }
 
   // MARK: Helpers
+
+  private func makeClient() -> RealtimeClient {
+    RealtimeClient(
+      url: URL(string: "http://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(handleAppLifecycle: false)
+    )
+  }
 
   @discardableResult
   private func subscribe(
@@ -531,7 +501,7 @@ struct RealtimeShellTests {
   private func stallBroadcast(
     on host: RealtimeTestHost
   ) async throws -> (socket: FakeWebSocket, release: @Sendable () -> Void) {
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     try await subscribe(channel, on: host)
     let socket = try #require(host.sockets.last)
     let (released, continuation) = AsyncStream<Void>.makeStream()

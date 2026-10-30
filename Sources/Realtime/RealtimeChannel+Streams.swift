@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 public import Foundation
-import IssueReporting
 
 extension RealtimeChannel {
   /// Returns an async stream of the entries that join and leave the channel's presence.
@@ -19,13 +18,13 @@ extension RealtimeChannel {
   /// changes nothing emits nothing.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
-  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// channel, so open it before subscribing. Opening one after ``subscribe()`` reports an issue
+  /// and returns a stream that ends at once. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceChange`` values.
-  public func presenceChanges() -> AsyncStream<PresenceChange> {
-    let stream = sinks.presenceChanges.subscribe()
-    return canChangeJoinConfig(for: "presence") ? stream : .finished
+  public func presenceChanges() async -> AsyncStream<PresenceChange> {
+    await client?.presenceChanges(of: self) ?? .finished
   }
 
   /// Returns an async stream of the channel's presence state.
@@ -34,13 +33,13 @@ extension RealtimeChannel {
   /// that changes it.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
-  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// channel, so open it before subscribing. Opening one after ``subscribe()`` reports an issue
+  /// and returns a stream that ends at once. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceState`` values.
-  public func presenceStates() -> AsyncStream<PresenceState> {
-    let stream = sinks.presenceStates.subscribe()
-    return canChangeJoinConfig(for: "presence") ? stream : .finished
+  public func presenceStates() async -> AsyncStream<PresenceState> {
+    await client?.presenceStates(of: self) ?? .finished
   }
 
   /// Returns an async stream of the row changes in a table.
@@ -49,7 +48,7 @@ extension RealtimeChannel {
   /// opened on a joined channel makes the channel leave and join again with the new binding.
   ///
   /// ```swift
-  /// let changes = channel.postgresChanges(table: "messages")
+  /// let changes = await channel.postgresChanges(table: "messages")
   /// try await channel.subscribe()
   /// for await change in changes {
   ///   if change.kind == .delete {
@@ -72,8 +71,8 @@ extension RealtimeChannel {
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
-  ) -> AsyncStream<PostgresChange> {
-    postgresChanges(
+  ) async -> AsyncStream<PostgresChange> {
+    await postgresChanges(
       event: event, schema: schema, table: table, filter: filter?.value, select: select
     )
   }
@@ -88,10 +87,10 @@ extension RealtimeChannel {
   /// opened on a joined channel makes the channel leave and join again with the new binding.
   ///
   /// The method runs on the caller's actor, so `Row` can have a `Decodable` conformance isolated
-  /// to the main actor.
+  /// to the main actor. Only the binding crosses to the client.
   ///
   /// ```swift
-  /// let changes = channel.postgresChanges(of: Message.self, table: "messages")
+  /// let changes = await channel.postgresChanges(of: Message.self, table: "messages")
   /// try await channel.subscribe()
   /// for await change in changes where change.kind == .insert {
   ///   let message = try change.row()
@@ -116,8 +115,8 @@ extension RealtimeChannel {
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil,
     decoder: JSONDecoder = .supabase()
-  ) -> AsyncStream<TypedPostgresChange<Row>> {
-    let changes = postgresChanges(
+  ) async -> AsyncStream<TypedPostgresChange<Row>> {
+    let changes = await postgresChanges(
       event: event, schema: schema, table: table, filter: filter?.value, select: select
     )
     return AsyncStream(
@@ -130,7 +129,7 @@ extension RealtimeChannel {
     table: String?,
     filter: String?,
     select: [String]?
-  ) -> AsyncStream<PostgresChange> {
+  ) async -> AsyncStream<PostgresChange> {
     let config = PostgresJoinConfig(
       event: event,
       schema: schema,
@@ -138,12 +137,7 @@ extension RealtimeChannel {
       filter: filter,
       select: select
     )
-
-    // Registered first: the client reads the bindings when it applies the change, so a join
-    // that read them before this stream existed still learns about it.
-    let stream = sinks.postgresChanges(config)
-    client?.inbox.yield(.bindingsChanged(id))
-    return stream
+    return await client?.postgresChanges(of: self, config) ?? .finished
   }
 
   /// Returns an async stream of the broadcast messages for the given event.
@@ -155,8 +149,8 @@ extension RealtimeChannel {
   /// - Parameter event: The broadcast event name to listen for. Pass `"*"` to receive every
   ///   event.
   /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
-  public func broadcasts(event: String) -> AsyncStream<BroadcastMessage> {
-    sinks.broadcasts.subscribe(where: { Self.eventMatches(event, $0.event) })
+  public func broadcasts(event: String) async -> AsyncStream<BroadcastMessage> {
+    await client?.broadcasts(of: self, event: event) ?? .finished
   }
 
   /// Returns an async stream of server events about this channel.
@@ -167,33 +161,14 @@ extension RealtimeChannel {
   /// channel from its client.
   ///
   /// ```swift
-  /// for await event in channel.events() {
+  /// for await event in await channel.events() {
   ///   if event == .resubscribed {
   ///     await reloadMessages()
   ///   }
   /// }
   /// ```
-  public func events() -> AsyncStream<RealtimeChannelEvent> {
-    sinks.events.subscribe()
-  }
-
-  /// Presence streams shape the join payload, so they can only be opened before the join is sent.
-  ///
-  /// Call it after registering the stream: either this read sees the join in progress, or the
-  /// join that starts later sees the stream.
-  private func canChangeJoinConfig(for feature: String) -> Bool {
-    switch status {
-    case .unsubscribed, .unsubscribing, .failed:
-      return true
-    case .subscribing, .resubscribing, .subscribed:
-      reportIssue(
-        """
-        Cannot open "\(feature)" streams for "\(topic)" after `subscribe()`.
-        Please open all your \(feature) streams before subscribing to the channel.
-        """
-      )
-      return false
-    }
+  public func events() async -> AsyncStream<RealtimeChannelEvent> {
+    await client?.events(of: self) ?? .finished
   }
 }
 
@@ -217,12 +192,5 @@ private struct TypedPostgresChanges<Row>: AsyncSequence, Sendable {
 
   func makeAsyncIterator() -> AsyncIterator {
     AsyncIterator(base: base.makeAsyncIterator(), decoder: decoder)
-  }
-}
-
-extension AsyncStream {
-  /// A stream with no elements.
-  fileprivate static var finished: AsyncStream {
-    AsyncStream { $0.finish() }
   }
 }

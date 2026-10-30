@@ -78,7 +78,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     try await channel.subscribe()
 
     try await channel.broadcast(
@@ -100,7 +100,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     try await channel.subscribe()
 
     let binaryData = Data([0x01, 0x02, 0x03, 0x04])
@@ -118,9 +118,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
   @Test
   func receive_jsonBroadcastFromBinaryFrame() async throws {
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "my_event")
+    let stream = await channel.broadcasts(event: "my_event")
 
     let broadcast = DecodedBroadcast(
       topic: "realtime:test",
@@ -137,9 +137,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
   @Test
   func receive_binaryBroadcastFromBinaryFrame() async throws {
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "bin_event")
+    let stream = await channel.broadcasts(event: "bin_event")
 
     let binaryPayload = Data([0xCA, 0xFE, 0xBA, 0xBE])
     let broadcast = DecodedBroadcast(
@@ -157,9 +157,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
   @Test
   func receive_jsonBroadcastHasCorrectFormat() async throws {
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "evt")
+    let stream = await channel.broadcasts(event: "evt")
 
     let broadcast = DecodedBroadcast(
       topic: "realtime:test",
@@ -178,9 +178,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
   @Test
   func receive_jsonBroadcastForwardsFrameMetadataAsMeta() async throws {
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "INSERT")
+    let stream = await channel.broadcasts(event: "INSERT")
 
     let broadcast = DecodedBroadcast(
       topic: "realtime:test",
@@ -203,7 +203,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     try await channel.subscribe()
 
     struct Message: Codable {
@@ -229,7 +229,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     try await channel.subscribe()
 
     try await channel.broadcast(
@@ -253,7 +253,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let snakeCaseEncoder = JSONEncoder()
     snakeCaseEncoder.keyEncodingStrategy = .convertToSnakeCase
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     try await channel.httpSend(
       event: "my_event", payload: Message(userName: "abc"), encoder: snakeCaseEncoder)
 
@@ -272,7 +272,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
       (HTTPResponse(status: .init(code: 202)), Data())
     }
 
-    let channel = sut.channel("test") { config in
+    let channel = await sut.channel("test") { config in
       config.broadcast.acknowledge = true
     }
 
@@ -291,7 +291,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
       (HTTPResponse(status: .init(code: 202)), Data())
     }
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
     #expect(channel.topic == "test")
 
     try await channel.httpSend(
@@ -312,9 +312,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "my_event")
+    let stream = await channel.broadcasts(event: "my_event")
     let receivedPayload = LockIsolated<BroadcastMessage?>(nil)
     let listenTask = Task {
       for await message in stream {
@@ -364,9 +364,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
     setupServerAutoResponder()
     try await sut.connect()
 
-    let channel = sut.channel("test")
+    let channel = await sut.channel("test")
 
-    let stream = channel.broadcasts(event: "INSERT")
+    let stream = await channel.broadcasts(event: "INSERT")
     let receivedPayload = LockIsolated<BroadcastMessage?>(nil)
     let listenTask = Task {
       for await message in stream {
@@ -409,7 +409,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
   private func firstBuffered<Element: Sendable>(
     _ stream: AsyncStream<Element>, on channel: RealtimeChannel
   ) async -> Element? {
-    channel.sinks.finishAll()
+    await channel.client?.finishStreams(of: channel)
     return await stream.first { _ in true }
   }
 }

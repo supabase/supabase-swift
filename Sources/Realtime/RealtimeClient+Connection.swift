@@ -74,21 +74,14 @@ extension RealtimeClient {
     case .tokenFetched(let token, let generation):
       tokenFetchEnded(token, generation: generation)
 
-    case .streamEnded:
-      // No stream yields this yet.
-      break
+    case .streamEnded(let id):
+      streamEnded(id)
 
     case .waiterCancelled(let id):
       apply(.waiterCancelled(id))
 
-    case .removalWaitCancelled(let id, let topic):
-      removalWaitCancelled(id, topic: topic)
-
     case .tokenWaitCancelled(let id):
       tokenFetchWaiters.removeValue(forKey: id)?.resume()
-
-    case .bindingsChanged(let id):
-      bindingsChanged(id)
 
     case .appBackground:
       handleAppBackground()
@@ -150,80 +143,17 @@ extension RealtimeClient {
     }
   }
 
-  /// ``wait(evenIfCancelled:_:)`` for an action of `channel`. The checks run here, on the actor,
+  /// ``wait(evenIfCancelled:_:)`` for an action of `channel`. The check runs here, on the actor,
   /// so an action cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
   ///
-  /// While an older channel of the same topic is being removed, the action waits for that
-  /// removal to end, then runs as on a new channel. With `evenIfCancelled`, a cancelled caller
-  /// still waits for the removal, at most the older channel's leave timeout, then acts.
+  /// - Throws: ``RealtimeError/Kind-swift.struct/channelRemoved`` when `channel` is spent, and
+  ///   what the wait throws otherwise.
   func wait(
     on channel: RealtimeChannel, evenIfCancelled: Bool = false,
     _ make: @Sendable (WaiterID) -> RealtimeCore.Event
   ) async throws {
-    try await waitForRemoval(blocking: channel, evenIfCancelled: evenIfCancelled)
+    guard state(of: channel) != nil else { throw RealtimeError.channelRemoved }
     try await wait(evenIfCancelled: evenIfCancelled, make)
-  }
-
-  /// The channel being removed that holds the topic of `channel`, if it is another channel. The
-  /// core keeps that channel's record until its leave ends, so an action of `channel` would act on
-  /// the old record.
-  func removal(blocking channel: RealtimeChannel) -> RealtimeChannel? {
-    guard let removing = removedChannels[channel.topic], removing !== channel else { return nil }
-    guard core.channels[removing.id] != nil else {
-      // The removal is over; its `removeChannel(_:)` has not resumed yet.
-      removedChannels[channel.topic] = nil
-      removalEnded(channel.topic)
-      return nil
-    }
-    return removing
-  }
-
-  /// Parks the caller until no other channel's removal holds the topic of `channel`. The removal
-  /// ends when the older channel's leave ends, so the wait lasts at most its leave timeout. A
-  /// cancelled caller throws `CancellationError` and leaves nothing behind, unless
-  /// `evenIfCancelled` is set: then it waits on, so a cancelled `unsubscribe()` still leaves
-  /// once the removal ends. A channel removed meanwhile throws `channelRemoved` at once.
-  private func waitForRemoval(
-    blocking channel: RealtimeChannel, evenIfCancelled: Bool
-  ) async throws {
-    let topic = channel.topic
-    while true {
-      guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
-      guard removal(blocking: channel) != nil else { return }
-      let id = waiters.next()
-      if evenIfCancelled {
-        try await parkUntilRemovalEnds(id, topic: topic)
-        continue
-      }
-      try Task.checkCancellation()
-      try await withTaskCancellationHandler {
-        try await parkUntilRemovalEnds(id, topic: topic)
-      } onCancel: { [inbox] in
-        inbox.yield(.removalWaitCancelled(id, topic: topic))
-      }
-    }
-  }
-
-  private func parkUntilRemovalEnds(_ id: WaiterID, topic: String) async throws {
-    try await withCheckedThrowingContinuation { continuation in
-      waiters.park(id, continuation)
-      removalWaiters[topic, default: []].append(id)
-    }
-  }
-
-  private func removalWaitCancelled(_ id: WaiterID, topic: String) {
-    removalWaiters[topic]?.removeAll { $0 == id }
-    if removalWaiters[topic]?.isEmpty == true {
-      removalWaiters[topic] = nil
-    }
-    waiters.resume(id, with: .cancelled)
-  }
-
-  /// Wakes the actions that wait for the removal on `topic` to end.
-  func removalEnded(_ topic: String) {
-    for id in removalWaiters.removeValue(forKey: topic) ?? [] {
-      waiters.resume(id, with: .success)
-    }
   }
 
   /// Runs one effect. It never hands an event to the core: the tasks it starts yield their
@@ -303,49 +233,30 @@ extension RealtimeClient {
       waiters.resume(id, with: outcome)
 
     case .publishClientStatus(let status):
-      sinks.status.yield(status)
+      statusFanout.yield(status)
 
     case .publishHeartbeat(let event):
-      sinks.heartbeats.yield(event)
+      heartbeatFanout.yield(event)
 
     case .publishChannelStatus(let id, let status):
-      channel(withID: id)?.sinks.status.yield(status)
+      // A spent channel has no state; its handle reads `.unsubscribed`.
+      channelStates[id]?.status.yield(status)
 
     case .deliver(let id, let delivery):
-      guard let sinks = channel(withID: id)?.sinks else { return }
-      switch delivery {
-      case .broadcast(let message):
-        sinks.broadcasts.yield(message)
-      case .postgres(let change):
-        sinks.postgres.yield(change)
-      case .presence(let change, let state):
-        sinks.presenceChanges.yield(change)
-        sinks.presenceStates.yield(state)
-      case .event(let event):
-        sinks.events.yield(event)
-      }
+      channelStates[id]?.deliver(delivery)
 
     case .finishChannel(let id):
-      if let removed = removedChannels.first(where: { $0.value.id == id })?.value {
-        // `removeChannel(_:)` already spent it.
-        removedChannels[removed.topic] = nil
-        removalEnded(removed.topic)
-        return
+      // The server closed the channel, which spends it. After `removeChannel(_:)` the state is
+      // already gone.
+      guard let state = channelStates.removeValue(forKey: id) else { return }
+      if liveChannels[state.handle.topic] == id {
+        liveChannels[state.handle.topic] = nil
       }
-      // The server closed the channel.
-      guard let channel = sinks.channel(withID: id) else { return }
-      sinks.removeChannel(channel)
-      channel.sinks.finishAll()
+      state.finishAll()
 
     case .fetchAccessToken(let generation):
       fetchAccessToken(generation: generation)
     }
-  }
-
-  /// The channel that gets the effects for `id`: a registered channel, or one being removed
-  /// until the core drops it, even when a newer channel took its topic in the registry.
-  private func channel(withID id: ChannelID) -> RealtimeChannel? {
-    removedChannels.values.first { $0.id == id } ?? sinks.channel(withID: id)
   }
 
   private func stopSocketLoops() {

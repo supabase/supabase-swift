@@ -14,7 +14,7 @@ public import Foundation
 /// is fixed for the life of the channel; to change it, remove the channel and create it again.
 ///
 /// ```swift
-/// let channel = client.channel("room:lobby") { config in
+/// let channel = await client.channel("room:lobby") { config in
 ///   config.isPrivate = true
 ///   config.broadcast.receiveOwnMessages = true
 /// }

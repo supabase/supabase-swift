@@ -19,20 +19,20 @@ import Testing
 
 @Suite
 struct RealtimeChannelTests {
-  let sut = RealtimeChannel(
-    id: ChannelID(rawValue: 1),
-    topic: "topic",
-    configuration: RealtimeChannelConfiguration(),
-    client: RealtimeClient(
+  let client: RealtimeClient
+  let sut: RealtimeChannel
+
+  init() async {
+    client = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(headers: ["apikey": "test-key"])
-    ),
-    logger: supabaseDefaultLogger(label: "io.supabase.realtime")
-  )
+    )
+    sut = await client.channel("topic")
+  }
 
   @Test
-  func statusIsReadableWithoutAwait() {
-    let status: RealtimeChannelStatus = sut.status
+  func statusIsUnsubscribedBeforeTheFirstSubscribe() async {
+    let status: RealtimeChannelStatus = await sut.status
     #expect(status.isSame(as: .unsubscribed))
   }
 
@@ -48,7 +48,7 @@ struct RealtimeChannelTests {
       select: ["id", "name"]
     )
 
-    let changes = sut.sinks.bindings
+    let changes = await client.bindings(of: sut)
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
@@ -75,7 +75,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask1 = Task { @Sendable [server] in
         for await event in server.events {
@@ -100,15 +100,15 @@ struct RealtimeChannelTests {
       let subscribeTask = Task { try? await channel.subscribe() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      #expect(channel.status == .subscribing)
+      #expect(await channel.status == .subscribing)
 
-      let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
+      let listenerCountBefore = await socket.streamCounts(of: channel).presenceChanges
 
-      withKnownIssue {
-        _ = channel.presenceChanges()
+      await withKnownIssue {
+        _ = await channel.presenceChanges()
       }
 
-      #expect(channel.sinks.presenceChanges.subscriberCount == listenerCountBefore)
+      #expect(await socket.streamCounts(of: channel).presenceChanges == listenerCountBefore)
 
       subscribeTask.cancel()
       await socket.disconnect()
@@ -131,7 +131,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask2 = Task { @Sendable [server] in
         for await event in server.events {
@@ -156,15 +156,15 @@ struct RealtimeChannelTests {
 
       try await socket.connect()
       try? await channel.subscribe()
-      #expect(channel.status == .subscribed)
+      #expect(await channel.status == .subscribed)
 
-      let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
+      let listenerCountBefore = await socket.streamCounts(of: channel).presenceChanges
 
-      withKnownIssue {
-        _ = channel.presenceChanges()
+      await withKnownIssue {
+        _ = await channel.presenceChanges()
       }
 
-      #expect(channel.sinks.presenceChanges.subscriberCount == listenerCountBefore)
+      #expect(await socket.streamCounts(of: channel).presenceChanges == listenerCountBefore)
 
       await socket.disconnect()
     }
@@ -172,7 +172,7 @@ struct RealtimeChannelTests {
 
   @Test
   func attachCallbacks() async {
-    let streams: [any Sendable] = [
+    let streams: [any Sendable] = await [
       await sut.postgresChanges(
         schema: "public",
         table: "users",
@@ -188,14 +188,13 @@ struct RealtimeChannelTests {
       sut.events(),
     ]
 
-    #expect(sut.sinks.postgres.subscriberCount == 4)
-    #expect(sut.sinks.broadcasts.subscriberCount == 2)
-    #expect(sut.sinks.presenceChanges.subscriberCount == 1)
-    #expect(sut.sinks.presenceStates.subscriberCount == 1)
-    #expect(sut.sinks.events.subscriberCount == 1)
-    #expect(sut.sinks.hasPresenceListener)
+    #expect(
+      await client.streamCounts(of: sut)
+        == RealtimeClient.StreamCounts(
+          events: 1, broadcasts: 2, presenceChanges: 1, presenceStates: 1, postgres: 4))
+    #expect(await client.hasPresenceListener(sut))
 
-    let clientChanges = sut.sinks.bindings
+    let clientChanges = await client.bindings(of: sut)
     assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
       ▿ 4 elements
@@ -257,15 +256,15 @@ struct RealtimeChannelTests {
     )
 
     // Create a channel without a presence stream initially
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     try await socket.connect()
 
     // Open a presence stream before subscribing
-    let presence = channel.presenceChanges()
+    let presence = await channel.presenceChanges()
 
     // Verify that the presence listener exists
-    #expect(channel.sinks.hasPresenceListener)
+    #expect(await socket.hasPresenceListener(channel))
 
     Task {
       try? await channel.subscribe()
@@ -308,7 +307,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -339,7 +338,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     let task = Task { try await channel.httpSend(event: "test", payload: ["data": "test"]) }
     for await _ in requestStarted { break }
@@ -369,7 +368,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", data: Data())
@@ -401,7 +400,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic") { config in
+    let channel = await socket.channel("test-topic") { config in
       config.isPrivate = true
     }
 
@@ -443,7 +442,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("room/one")
+    let channel = await socket.channel("room/one")
 
     try await channel.httpSend(event: "cursor move", payload: ["x": 1])
 
@@ -473,7 +472,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     let payload = Data([0x01, 0x02, 0x03])
     try await channel.httpSend(event: "binary-event", data: payload)
@@ -503,7 +502,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", data: Data([0x01]))
@@ -534,7 +533,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -561,7 +560,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -587,7 +586,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     await #expect(throws: CancellationError.self) {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -609,7 +608,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     await #expect(throws: FetchError.self) {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -636,7 +635,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: .seconds(3))
 
@@ -664,7 +663,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"])
 
@@ -692,7 +691,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -721,7 +720,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = socket.channel("test-topic")
+    let channel = await socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -751,7 +750,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = socket.channel("test-topic")
+      let channel = await socket.channel("test-topic")
 
       let serverTask = Task { @Sendable [server] in
         for await event in server.events {
@@ -776,7 +775,7 @@ struct RealtimeChannelTests {
 
       try await socket.connect()
       try? await channel.subscribe()
-      #expect(channel.status == .subscribed)
+      #expect(await channel.status == .subscribed)
 
       server.send(
         RealtimeMessage(
@@ -789,7 +788,7 @@ struct RealtimeChannelTests {
       )
 
       await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      #expect(channel.status == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
 
       await socket.disconnect()
     }
@@ -804,7 +803,7 @@ extension RealtimeChannelTests {
     pollInterval: UInt64 = 10_000_000
   ) async {
     await waitUntil(timeout: timeout, pollInterval: pollInterval) {
-      channel.status == status
+      await channel.status == status
     }
   }
 

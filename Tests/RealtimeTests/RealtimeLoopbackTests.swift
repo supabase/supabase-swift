@@ -29,14 +29,14 @@ import Testing
 
       let client = makeClient(port: port)
       try await client.connect()
-      #expect(client.status == .connected)
+      #expect(await client.status == .connected)
 
-      let channel = client.channel("room") {
+      let channel = await client.channel("room") {
         $0.broadcast.receiveOwnMessages = true
       }
-      let pings = channel.broadcasts(event: "ping")
+      let pings = await channel.broadcasts(event: "ping")
       try await channel.subscribe()
-      #expect(channel.status == .subscribed)
+      #expect(await channel.status == .subscribed)
       #expect(joins.value == 1)
 
       try await channel.broadcast(event: "ping", payload: ["n": 1] as JSONObject)
@@ -47,7 +47,7 @@ import Testing
       #expect(received?.payload == .json(["n": 1]))
 
       await client.disconnect()
-      #expect(client.status == .disconnected)
+      #expect(await client.status == .disconnected)
     }
 
     @Test
@@ -58,13 +58,13 @@ import Testing
       let joins = script(server)
 
       let client = makeClient(port: port)
-      let channel = client.channel("room")
+      let channel = await client.channel("room")
       try await channel.subscribe()
       #expect(joins.value == 1)
 
-      var clientStatuses = client.statusChanges().makeAsyncIterator()
-      var channelStatuses = channel.statusChanges().makeAsyncIterator()
-      var channelEvents = channel.events().makeAsyncIterator()
+      var clientStatuses = await client.statusChanges().makeAsyncIterator()
+      var channelStatuses = await channel.statusChanges().makeAsyncIterator()
+      var channelEvents = await channel.events().makeAsyncIterator()
       #expect(await clientStatuses.next() == .connected)
       #expect(await channelStatuses.next() == .subscribed)
 

@@ -77,7 +77,7 @@ final class RealtimeTestHost: Sendable {
       clock: clock
     )
 
-    let statusChanges = client.statusChanges()
+    let statusChanges = await client.statusChanges()
     let statusObserver = Task {
       for await status in statusChanges {
         state.withValue { $0.statuses.append(status) }
@@ -120,13 +120,13 @@ final class RealtimeTestHost: Sendable {
   /// an issue after `timeout` of wall-clock time.
   func waitUntil(
     timeout: Duration = .seconds(5),
-    _ condition: @escaping @Sendable () -> Bool,
+    _ condition: @escaping @Sendable () async -> Bool,
     sourceLocation: SourceLocation = #_sourceLocation
   ) async {
-    if condition() { return }
+    if await condition() { return }
     do {
       try await withTimeout(timeout, clock: ContinuousClock()) {
-        for await _ in signal where condition() {
+        for await _ in signal where await condition() {
           return
         }
       }
@@ -180,15 +180,57 @@ final class RealtimeTestHost: Sendable {
 }
 
 extension RealtimeClient {
-  /// The id of the core record for `topic`, if there is one.
+  /// The id of the core record for `topic`, if there is one: the live channel's record first,
+  /// then any other record of the topic, such as one still leaving.
   private func recordID(for topic: String) -> ChannelID? {
-    core.channels.first { $0.value.topic == topic }?.key
+    if let id = liveChannels[topic], core.channels[id] != nil { return id }
+    return core.channels.first { $0.value.topic == topic }?.key
+  }
+
+  /// The channel ``channel(_:configure:)`` returns for `topic`, without creating one.
+  func liveChannel(for topic: String) -> RealtimeChannel? {
+    liveChannels[topic].flatMap { channelStates[$0]?.handle }
+  }
+
+  /// Ends every stream of `channel`, as removing it would, but keeps it registered. A test then
+  /// reads what a stream had buffered without waiting for more.
+  func finishStreams(of channel: RealtimeChannel) {
+    state(of: channel)?.finishAll()
+  }
+
+  /// The Postgres bindings of the open streams of `channel`, in registration order.
+  func bindings(of channel: RealtimeChannel) -> [PostgresJoinConfig] {
+    state(of: channel)?.joinSnapshot.bindings ?? []
+  }
+
+  /// Whether a presence stream of `channel` is open, which enables presence on its join.
+  func hasPresenceListener(_ channel: RealtimeChannel) -> Bool {
+    state(of: channel)?.joinSnapshot.presenceEnabled ?? false
+  }
+
+  /// How many streams of each kind `channel` feeds.
+  struct StreamCounts: Equatable {
+    var events = 0
+    var broadcasts = 0
+    var presenceChanges = 0
+    var presenceStates = 0
+    var postgres = 0
+  }
+
+  func streamCounts(of channel: RealtimeChannel) -> StreamCounts {
+    guard let state = state(of: channel) else { return StreamCounts() }
+    return StreamCounts(
+      events: state.events.count,
+      broadcasts: state.broadcasts.count,
+      presenceChanges: state.presenceChanges.count,
+      presenceStates: state.presenceStates.count,
+      postgres: state.joinSnapshot.bindings.count)
   }
 
   /// Gives the core a subscribed channel for `topic`, as a confirmed join would, so frames for
   /// it reach the channel's streams without a socket. The client must have a channel for `topic`.
   func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
-    guard let id = sinks.channel(for: topic)?.id else {
+    guard let id = liveChannels[topic] else {
       preconditionFailure("No channel for '\(topic)'")
     }
     var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())

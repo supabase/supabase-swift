@@ -18,7 +18,10 @@ struct ChannelStateTests {
     let client = RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions(handleAppLifecycle: false))
-    return ChannelState(handle: client.channel("room"))
+    return ChannelState(
+      handle: RealtimeChannel(
+        id: channelID, topic: "room", configuration: RealtimeChannelConfiguration(),
+        client: client))
   }
 
   func id(_ rawValue: UInt64) -> StreamID {

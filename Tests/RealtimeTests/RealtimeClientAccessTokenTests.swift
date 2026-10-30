@@ -193,7 +193,7 @@ struct RealtimeClientAccessTokenTests {
   func aJoinSentWithTheOldTokenGetsTheNewOne() async throws {
     let provider = TokenProvider { _ in "first" }
     let host = await makeHost(provider)
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
 
     async let subscribed: Void = channel.subscribe()
     let join = try await host.receive(event: ChannelEvent.join)
@@ -388,7 +388,7 @@ struct RealtimeClientAccessTokenTests {
   }
 
   private func subscribe(_ host: RealtimeTestHost) async throws {
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     async let subscribed: Void = channel.subscribe()
     host.confirmJoin(try await host.receive(event: ChannelEvent.join))
     try await subscribed

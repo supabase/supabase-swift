@@ -38,9 +38,9 @@ struct RealtimeColdStartTests {
 
       let sut = makeClient(socket: socket)
 
-      let channel = sut.channel("library-realtime")
-      let libros = channel.postgresChanges(schema: "library", table: "libros")
-      let files = channel.postgresChanges(
+      let channel = await sut.channel("library-realtime")
+      let libros = await channel.postgresChanges(schema: "library", table: "libros")
+      let files = await channel.postgresChanges(
         schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
@@ -57,7 +57,7 @@ struct RealtimeColdStartTests {
         return
       }
 
-      #expect(channel.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel.status == .subscribed, "Iteration \(iteration)")
       await sut.disconnect()
     }
   }
@@ -71,8 +71,8 @@ struct RealtimeColdStartTests {
 
       let sut = makeClient(socket: socket)
 
-      let channel1 = sut.channel("room-1")
-      let channel2 = sut.channel("room-2")
+      let channel1 = await sut.channel("room-1")
+      let channel2 = await sut.channel("room-2")
 
       async let s1: Void = channel1.subscribe()
       async let s2: Void = channel2.subscribe()
@@ -84,8 +84,8 @@ struct RealtimeColdStartTests {
         return
       }
 
-      #expect(channel1.status == .subscribed, "Iteration \(iteration)")
-      #expect(channel2.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel1.status == .subscribed, "Iteration \(iteration)")
+      #expect(await channel2.status == .subscribed, "Iteration \(iteration)")
       await sut.disconnect()
     }
   }
@@ -114,10 +114,10 @@ struct RealtimeColdStartTests {
       reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let channel = sut.channel("room-rejoin")
+    let channel = await sut.channel("room-rejoin")
 
     try await channel.subscribe()
-    #expect(channel.status == .subscribed)
+    #expect(await channel.status == .subscribed)
     #expect(sockets.value.count == 1)
 
     // A remote close with a transport-level code initiates a reconnect. A malformed
@@ -132,11 +132,11 @@ struct RealtimeColdStartTests {
     }
 
     await waitUntil(timeout: 5) {
-      let channelStatus = channel.status
+      let channelStatus = await channel.status
       return sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
         && channelStatus == .subscribed
     }
-    #expect(channel.status == .subscribed, "Channel did not rejoin after reconnect")
+    #expect(await channel.status == .subscribed, "Channel did not rejoin after reconnect")
 
     let joinsSentOnNewSocket = sockets.value[1].sentMessages.filter { $0.event == "phx_join" }
     #expect(joinsSentOnNewSocket.count == 1, "Expected one phx_join on the new socket")
@@ -171,7 +171,7 @@ struct RealtimeColdStartTests {
     )
 
     let heartbeatStatuses = LockIsolated<[HeartbeatEvent]>([])
-    let heartbeats = sut.heartbeats()
+    let heartbeats = await sut.heartbeats()
     let heartbeatTask = Task {
       for await status in heartbeats {
         heartbeatStatuses.withValue { $0.append(status) }

@@ -52,7 +52,7 @@ struct InboxTests {
     await host.client.flushInbox()
 
     // A fire applied before the reply finds the heartbeat unanswered and fails the socket.
-    #expect(host.client.status.isConnected)
+    #expect(await host.client.status.isConnected)
     _ = try await host.receive {
       $0.event == ChannelEvent.heartbeat && $0.ref != heartbeat.ref
     }
@@ -63,8 +63,8 @@ struct InboxTests {
   @Test
   func framesFromAnOldSocketGenerationAreDropped() async throws {
     let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
-    let broadcasts = channel.broadcasts(event: "ping")
+    let channel = await host.client.channel("room")
+    let broadcasts = await channel.broadcasts(event: "ping")
     try await subscribe(channel, on: host)
     let generation = await host.client.generation
     let frame = RealtimeMessage(
@@ -75,14 +75,14 @@ struct InboxTests {
     host.client.inbox.yield(.socket(.closed(code: nil, reason: "old"), generation: generation - 1))
     host.client.inbox.yield(.socket(.frame(frame), generation: generation))
     await host.client.flushInbox()
-    channel.sinks.finishAll()
+    await host.client.finishStreams(of: channel)
 
     var received: [BroadcastMessage] = []
     for await message in broadcasts {
       received.append(message)
     }
     #expect(received.count == 1)
-    #expect(host.client.status.isConnected)
+    #expect(await host.client.status.isConnected)
   }
 
   @Test
@@ -119,13 +119,13 @@ struct InboxTests {
     await client.flushInbox()
 
     #expect(late.isClosed)
-    #expect(client.status.isSame(as: .connecting(attempt: 1)))
+    #expect(await client.status.isSame(as: .connecting(attempt: 1)))
     #expect(await client.socket == nil)
 
     let (socket, _) = FakeWebSocket.fakes()
     client.inbox.yield(.connectEnded(.success(socket), attempt: current))
     try await second.value
-    #expect(client.status.isConnected)
+    #expect(await client.status.isConnected)
     #expect(await client.socket === socket)
     await client.disconnect()
   }
@@ -134,7 +134,7 @@ struct InboxTests {
   func aStaleTimerTokenIsDropped() async throws {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
     let timeout = TimerID.joinTimeout(channel: channel.id, ref: join.ref ?? "")
@@ -142,21 +142,21 @@ struct InboxTests {
 
     host.client.inbox.yield(.timerFired(timeout, token: token + 1))
     await host.client.flushInbox()
-    #expect(channel.status.isSame(as: .subscribing(attempt: 1)))
+    #expect(await channel.status.isSame(as: .subscribing(attempt: 1)))
 
     host.client.inbox.yield(.timerFired(timeout, token: token))
     await host.client.flushInbox()
     #expect(
-      {
-        if case .resubscribing(1, _, _) = channel.status { true } else { false }
+      await {
+        if case .resubscribing(1, _, _) = await channel.status { true } else { false }
       }())
 
     // A timer fires once: its token is spent.
     host.client.inbox.yield(.timerFired(timeout, token: token))
     await host.client.flushInbox()
     #expect(
-      {
-        if case .resubscribing(1, _, _) = channel.status { true } else { false }
+      await {
+        if case .resubscribing(1, _, _) = await channel.status { true } else { false }
       }())
     subscription.cancel()
     _ = await subscription.result
@@ -168,22 +168,22 @@ struct InboxTests {
     try await host.client.connect()
     host.server?.close(code: 1006, reason: "dropped")
     await host.waitUntil {
-      if case .reconnecting = host.client.status { true } else { false }
+      if case .reconnecting = await host.client.status { true } else { false }
     }
     let token = try #require(await host.client.retryTimer?.token)
 
     host.client.inbox.yield(.retryTimerFired(token: token + 1))
     await host.client.flushInbox()
     #expect(
-      {
-        if case .reconnecting = host.client.status { true } else { false }
+      await {
+        if case .reconnecting = await host.client.status { true } else { false }
       }())
     #expect(host.connectCount == 1)
 
     host.client.inbox.yield(.retryTimerFired(token: token))
     await host.client.flushInbox()
     #expect(await host.client.retryTimer == nil)
-    await host.waitUntil { host.client.status.isConnected }
+    await host.waitUntil { await host.client.status.isConnected }
     #expect(host.connectCount == 2)
   }
 
@@ -192,7 +192,7 @@ struct InboxTests {
     let host = await RealtimeTestHost(
       options: RealtimeClientOptions(
         disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let join = try await subscribe(channel, on: host)
     let removal = Task { await host.client.removeChannel(channel) }
     _ = try await host.receive(event: ChannelEvent.leave)
@@ -205,11 +205,11 @@ struct InboxTests {
 
     host.client.inbox.yield(.idleTimerFired(token: token + 1))
     await host.client.flushInbox()
-    #expect(host.client.status.isConnected)
+    #expect(await host.client.status.isConnected)
 
     host.client.inbox.yield(.idleTimerFired(token: token))
     await host.client.flushInbox()
-    #expect(host.client.status.isSame(as: .disconnected(nil)))
+    #expect(await host.client.status.isSame(as: .disconnected(nil)))
   }
 
   @Test(arguments: [TokenRace.callWins, .timeoutWins, .callReturnsNil])
@@ -233,7 +233,7 @@ struct InboxTests {
         handleAppLifecycle: false
       ))
     defer { calls.value.forEach { $0.finish() } }
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     #expect(await waitUntil(timeout: 5) { calls.value.count == 1 })
     let fetch = try #require(await host.client.tokenFetch)
@@ -271,7 +271,7 @@ struct InboxTests {
     let host = await RealtimeTestHost()
     // Connected, so a join would go out at once.
     try await host.client.connect()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let cancelled = Task {
       withUnsafeCurrentTask { $0?.cancel() }
       try await channel.subscribe()
@@ -283,13 +283,13 @@ struct InboxTests {
     // Frames leave in order, so once this join is in, any frame for "room" would be too.
     try await subscribe(host.client.channel("barrier"), on: host)
     #expect(host.frames.filter { $0.topic == channel.wireTopic }.isEmpty)
-    #expect(channel.status == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   @Test
   func cancelAfterParkRollsBackTheJoin() async throws {
     let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
+    let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
 
@@ -299,7 +299,7 @@ struct InboxTests {
     await host.client.flushInbox()
     let leave = try await host.receive(event: ChannelEvent.leave)
     #expect(leave.joinRef == join.ref)
-    #expect(channel.status == .unsubscribed)
+    #expect(await channel.status == .unsubscribed)
   }
 
   // MARK: Lifecycle

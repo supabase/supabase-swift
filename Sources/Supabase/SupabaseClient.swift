@@ -360,11 +360,22 @@ public final class SupabaseClient: Sendable {
   }
 
   /// All active Realtime channels.
+  ///
+  /// The Realtime client owns its channels, so the read is `async`.
   public var channels: [RealtimeChannel] {
-    realtime.channels
+    get async { await realtime.channels }
   }
 
-  /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
+  /// Returns the Realtime channel for `name`, creating it when it does not exist, with support
+  /// for Broadcast, Presence, and Postgres Changes.
+  ///
+  /// `configure` runs on the caller's actor before the call reaches the Realtime client.
+  ///
+  /// ```swift
+  /// let channel = await supabase.channel("room:lobby") { $0.broadcast.receiveOwnMessages = true }
+  /// try await channel.subscribe()
+  /// ```
+  ///
   /// - Parameters:
   ///   - name: A unique name for the channel.
   ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
@@ -372,9 +383,9 @@ public final class SupabaseClient: Sendable {
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
-  ) -> RealtimeChannel {
-    realtime.channel(name, configure: configure)
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
+  ) async -> RealtimeChannel {
+    await realtime.channel(name, configure: configure)
   }
 
   /// Unsubscribes from and removes a Realtime channel.

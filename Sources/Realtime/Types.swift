@@ -221,7 +221,7 @@ public struct RealtimeClientOptions: Sendable {
 /// The type is not `Equatable`: use ``isSubscribed`` and ``error``, or match a case.
 ///
 /// ```swift
-/// for await status in channel.statusChanges() {
+/// for await status in await channel.statusChanges() {
 ///   switch status {
 ///   case .resubscribing(_, let retryIn, let lastError):
 ///     print("Joining again in \(retryIn) after: \(lastError.message)")
@@ -304,7 +304,7 @@ extension RealtimeChannelStatus {
 /// The type is not `Equatable`: use ``isConnected`` and ``error``, or match a case.
 ///
 /// ```swift
-/// for await status in client.statusChanges() {
+/// for await status in await client.statusChanges() {
 ///   if case .reconnecting(let attempt, let retryIn, _) = status {
 ///     print("Attempt \(attempt + 1) in \(retryIn)")
 ///   }

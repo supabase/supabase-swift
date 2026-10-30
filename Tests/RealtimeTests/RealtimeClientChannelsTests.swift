@@ -6,6 +6,8 @@
 //
 
 import Foundation
+import Helpers
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -22,70 +24,186 @@ struct RealtimeClientChannelsTests {
 
   @Test
   func channelsListsCreatedChannels() async {
-    _ = client.channel("a")
-    _ = client.channel("b")
-    _ = client.channel("a")
+    _ = await client.channel("a")
+    _ = await client.channel("b")
+    _ = await client.channel("a")
 
-    let topics = client.channels.map(\.topic)
+    let topics = await client.channels.map(\.topic)
     #expect(topics.count == 2)
     #expect(Set(topics) == ["a", "b"])
   }
 
   @Test
   func channelsDropsRemovedChannels() async {
-    let first = client.channel("a")
-    _ = client.channel("b")
+    let first = await client.channel("a")
+    _ = await client.channel("b")
 
     await client.removeChannel(first)
 
-    #expect(client.channels.map(\.topic) == ["b"])
+    #expect(await client.channels.map(\.topic) == ["b"])
   }
 
   @Test
   func channelsDropsAChannelTheServerClosed() async {
-    let channel = client.channel("a")
+    let channel = await client.channel("a")
 
     await client.installSubscribedRecord("a")
     await client.apply(.frame(Self.close(channel)))
 
-    #expect(client.channels.isEmpty)
+    #expect(await client.channels.isEmpty)
   }
 
   @Test
   func aLateCloseForAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
-    let old = client.channel("a")
+    let old = await client.channel("a")
     await client.removeChannel(old)
-    let new = client.channel("a")
+    let new = await client.channel("a")
 
     await client.apply(.frame(Self.close(old)))
 
-    #expect(client.channels.count == 1)
-    #expect(client.channels.first === new)
+    #expect(await client.channels.count == 1)
+    #expect(await client.channels.first === new)
   }
 
   @Test
   func removingAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
-    let old = client.channel("a")
+    let old = await client.channel("a")
     await client.installSubscribedRecord("a")
     await client.apply(.frame(Self.close(old)))
-    let new = client.channel("a")
+    let new = await client.channel("a")
 
     await client.removeChannel(old)
 
-    #expect(client.channels.count == 1)
-    #expect(client.channels.first === new)
+    #expect(await client.channels.count == 1)
+    #expect(await client.channels.first === new)
   }
 
   @Test
   func configureAppliesTheConfiguration() async {
-    let channel = client.channel("private-room", configure: { $0.isPrivate = true })
+    let channel = await client.channel("private-room", configure: { $0.isPrivate = true })
 
     #expect(channel.configuration.isPrivate)
+  }
+
+  @Test
+  func statusChangesReplaysCurrentStatus() async {
+    var statuses = await client.statusChanges().makeAsyncIterator()
+
+    let first = await statuses.next()
+    guard case .disconnected(nil)? = first else {
+      Issue.record("Expected .disconnected(nil), got \(String(describing: first))")
+      return
+    }
+    guard case .disconnected(nil) = await client.status else {
+      Issue.record("Expected .disconnected(nil), got \(await client.status)")
+      return
+    }
+  }
+
+  @Test
+  func heartbeatsReplayLatestOnly() async {
+    let early = await client.heartbeats()
+    #expect(await client.latestHeartbeat == nil)
+
+    await client.publishHeartbeat(.sent)
+
+    var earlyIterator = early.makeAsyncIterator()
+    #expect(await earlyIterator.next() == .sent)
+
+    var lateIterator = await client.heartbeats().makeAsyncIterator()
+    #expect(await lateIterator.next() == .sent)
+  }
+
+  @Test
+  func creatingChannelDoesNotCancelIdleDisconnect() async throws {
+    let harness = IdleDisconnectHarness()
+    let client = harness.client
+    try await client.connect()
+
+    await client.removeChannel(client.channel("room"))
+    #expect(await client.idleDisconnectTimer != nil)
+
+    _ = await client.channel("x")
+    #expect(await client.idleDisconnectTimer != nil)
+
+    await harness.clock.advance(by: .seconds(5))
+
+    for await status in await client.statusChanges() {
+      if case .disconnected(nil) = status { break }
+    }
+  }
+
+  @Test
+  func subscribeCancelsIdleDisconnect() async throws {
+    let harness = IdleDisconnectHarness()
+    let client = harness.client
+    try await client.connect()
+
+    await client.removeChannel(client.channel("room"))
+    #expect(await client.idleDisconnectTimer != nil)
+
+    let channel = await client.channel("x")
+    try await channel.subscribe()
+    #expect(await client.idleDisconnectTimer == nil)
+
+    await harness.clock.advance(by: .seconds(5))
+
+    #expect(await client.status.isConnected)
+    await client.disconnect()
   }
 
   /// A server `phx_close` for `channel`, without a `join_ref`.
   private static func close(_ channel: RealtimeChannel) -> RealtimeMessage {
     RealtimeMessage(
       joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close, payload: [:])
+  }
+}
+
+/// A connected-on-demand client with a 5 s idle disconnect, whose server confirms every join.
+private final class IdleDisconnectHarness: Sendable {
+  let clock = SignalingTestClock()
+  let client: RealtimeClient
+  private let responder: Task<Void, Never>
+
+  init() {
+    let (socket, server) = FakeWebSocket.fakes()
+    client = RealtimeClient(
+      url: URL(string: "http://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(
+        disconnectOnEmptyChannelsAfter: .seconds(5),
+        handleAppLifecycle: false
+      ),
+      wsTransport: { _, _ in socket },
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: clock
+    )
+    responder = Task {
+      for await event in server.events {
+        guard let message = event.realtimeMessage, message.event == "phx_join" else { continue }
+        server.send(
+          RealtimeMessage(
+            joinRef: message.joinRef,
+            ref: message.ref,
+            topic: message.topic,
+            event: "phx_reply",
+            payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
+          )
+        )
+      }
+    }
+  }
+
+  deinit {
+    responder.cancel()
+  }
+}
+
+extension RealtimeClient {
+  /// The heartbeat a new ``heartbeats()`` stream replays first, if any.
+  fileprivate var latestHeartbeat: HeartbeatEvent? { heartbeatFanout.current }
+
+  /// Publishes `event` as the core's `.publishHeartbeat` effect would.
+  fileprivate func publishHeartbeat(_ event: HeartbeatEvent) {
+    heartbeatFanout.yield(event)
   }
 }

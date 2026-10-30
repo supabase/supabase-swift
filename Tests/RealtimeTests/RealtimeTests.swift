@@ -92,13 +92,13 @@ final class RealtimeTests: Sendable {
   @Test
   func behavior() async throws {
     await withMainSerialExecutor {
-      let channel = sut.channel("public:messages")
+      let channel = await sut.channel("public:messages")
 
-      let inserts = channel.postgresChanges(event: .insert, table: "messages")
-      let updates = channel.postgresChanges(event: .update, table: "messages")
-      let deletes = channel.postgresChanges(event: .delete, table: "messages")
+      let inserts = await channel.postgresChanges(event: .insert, table: "messages")
+      let updates = await channel.postgresChanges(event: .update, table: "messages")
+      let deletes = await channel.postgresChanges(event: .delete, table: "messages")
 
-      let socketStatuses = collect(sut.statusChanges())
+      let socketStatuses = collect(await sut.statusChanges())
       defer { socketStatuses.task.cancel() }
 
       let serverTask = Task { @Sendable [server = server] in
@@ -122,7 +122,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let channelStatuses = collect(channel.statusChanges())
+      let channelStatuses = await collect(channel.statusChanges())
       defer { channelStatuses.task.cancel() }
 
       do {
@@ -201,7 +201,7 @@ final class RealtimeTests: Sendable {
   @Test(.requiresMainSerialExecutor)
   func subscribeTimeout() async throws {
     try await withMainSerialExecutor {
-      let channel = sut.channel("public:messages")
+      let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
       let serverTask = Task { @Sendable [server = server] in
@@ -315,7 +315,7 @@ final class RealtimeTests: Sendable {
   func subscribeTimeout_successAfterRetries() async throws {
     try await withMainSerialExecutor {
       let successAttempt = 3
-      let channel = sut.channel("public:messages")
+      let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
       let serverTask = Task { @Sendable [server = server] in
@@ -362,14 +362,14 @@ final class RealtimeTests: Sendable {
       }
 
       #expect(events.count == successAttempt)
-      #expect(channel.status == .subscribed)
+      #expect(await channel.status == .subscribed)
     }
   }
 
   @Test(.requiresMainSerialExecutor)
   func subscribeTimeout_keepsRetryingUntilCancelled() async throws {
     try await withMainSerialExecutor {
-      let channel = sut.channel("public:messages")
+      let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
       let serverTask = Task { @Sendable [server = server] in
@@ -409,18 +409,18 @@ final class RealtimeTests: Sendable {
         $0.event == "phx_join"
       }
       #expect(events.count == 6)
-      #expect(channel.status == .subscribing)
+      #expect(await channel.status == .subscribing)
 
       subscribeTask.cancel()
       await #expect(throws: CancellationError.self) { try await subscribeTask.value }
-      #expect(channel.status == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
     }
   }
 
   @Test
   func subscribeTimeout_cancelsOnTaskCancel() async throws {
     try await withMainSerialExecutor {
-      let channel = sut.channel("public:messages")
+      let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
 
       let serverTask = Task { @Sendable [server = server] in
@@ -467,7 +467,7 @@ final class RealtimeTests: Sendable {
       }
 
       #expect(events.count == 1)
-      #expect(channel.status == .unsubscribed)
+      #expect(await channel.status == .unsubscribed)
     }
   }
 
@@ -498,7 +498,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let heartbeatStatuses = collect(sut.heartbeats())
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -532,7 +532,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let statuses = collect(sut.statusChanges())
+      let statuses = collect(await sut.statusChanges())
       defer { statuses.task.cancel() }
 
       try await sut.connect()
@@ -572,7 +572,7 @@ final class RealtimeTests: Sendable {
   @Test
   func heartbeat_timeout() async throws {
     try await withMainSerialExecutor {
-      let heartbeatStatuses = collect(sut.heartbeats())
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -614,7 +614,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let heartbeatStatuses = collect(sut.heartbeats())
+      let heartbeatStatuses = collect(await sut.heartbeats())
       defer { heartbeatStatuses.task.cancel() }
 
       try await sut.connect()
@@ -637,7 +637,7 @@ final class RealtimeTests: Sendable {
         (HTTPResponse(status: .init(code: 202)), "{}".data(using: .utf8)!)
       }
 
-      let channel = sut.channel("public:messages") {
+      let channel = await sut.channel("public:messages") {
         $0.broadcast.acknowledge = true
       }
 
@@ -766,7 +766,7 @@ final class RealtimeTests: Sendable {
       await sut.setAuth(validToken)
       #expect(await sut.accessToken == validToken)
 
-      let channel = sut.channel("room")
+      let channel = await sut.channel("room")
       try await channel.subscribe()
 
       let sentBefore = client.sentEvents.count
@@ -897,17 +897,17 @@ final class RealtimeTests: Sendable {
       let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
 
       try await deferredSut.connect()
-      #expect(deferredSut.status == .connected)
+      #expect(await deferredSut.status == .connected)
 
-      let channel = deferredSut.channel("test:deferred")
+      let channel = await deferredSut.channel("test:deferred")
       await deferredSut.removeChannel(channel)
 
-      #expect(deferredSut.status == .connected)
+      #expect(await deferredSut.status == .connected)
       #expect(await deferredSut.pendingDisconnectTask != nil)
 
       await testClock.advance(by: .seconds(5))
 
-      #expect(deferredSut.status == .disconnected)
+      #expect(await deferredSut.status == .disconnected)
       #expect(await deferredSut.pendingDisconnectTask == nil)
     }
   }
@@ -934,14 +934,14 @@ final class RealtimeTests: Sendable {
 
       try await deferredSut.connect()
 
-      let channel = deferredSut.channel("test:deferred")
+      let channel = await deferredSut.channel("test:deferred")
       await deferredSut.removeChannel(channel)
 
-      #expect(deferredSut.status == .connected)
+      #expect(await deferredSut.status == .connected)
       let pendingTask = await deferredSut.pendingDisconnectTask
       #expect(pendingTask != nil)
 
-      let newChannel = deferredSut.channel("test:new")
+      let newChannel = await deferredSut.channel("test:new")
       #expect(await deferredSut.pendingDisconnectTask != nil)
 
       try await newChannel.subscribe()
@@ -950,7 +950,7 @@ final class RealtimeTests: Sendable {
       #expect(pendingTask?.isCancelled ?? false)
 
       await testClock.advance(by: .seconds(5))
-      #expect(deferredSut.status == .connected)
+      #expect(await deferredSut.status == .connected)
 
       await deferredSut.disconnect()
     }
@@ -963,7 +963,7 @@ final class RealtimeTests: Sendable {
 
       try await deferredSut.connect()
 
-      let channel = deferredSut.channel("test:deferred")
+      let channel = await deferredSut.channel("test:deferred")
       await deferredSut.removeChannel(channel)
 
       let pendingTask = await deferredSut.pendingDisconnectTask
@@ -983,12 +983,12 @@ final class RealtimeTests: Sendable {
 
       try await deferredSut.connect()
 
-      _ = deferredSut.channel("test:ch1")
-      _ = deferredSut.channel("test:ch2")
+      _ = await deferredSut.channel("test:ch1")
+      _ = await deferredSut.channel("test:ch2")
 
       await deferredSut.removeAllChannels()
 
-      #expect(deferredSut.status == .disconnected)
+      #expect(await deferredSut.status == .disconnected)
       #expect(await deferredSut.pendingDisconnectTask == nil)
     }
   }

@@ -45,15 +45,15 @@ struct DefaultIsolationTests {
       let session = try await client.auth.signIn(email: "user@example.com", password: "password")
       _ = session.accessToken
       rows = try await client.from("table").select().execute().value
-      let channel = client.channel("room")
-      for await status in channel.statusChanges() { _ = status }
-      for await message in channel.broadcasts(event: "answer") {
+      let channel = await client.channel("room")
+      for await status in await channel.statusChanges() { _ = status }
+      for await message in await channel.broadcasts(event: "answer") {
         _ = try message.decode(as: Answer.self)
       }
-      for await change in channel.postgresChanges(table: "answers") {
+      for await change in await channel.postgresChanges(table: "answers") {
         _ = try change.record?.decode(as: Answer.self)
       }
-      for await change in channel.postgresChanges(of: Answer.self, table: "answers") {
+      for await change in await channel.postgresChanges(of: Answer.self, table: "answers") {
         _ = try change.row()
       }
       try await client.storage.from("bucket").upload(path: "key", data: Data())

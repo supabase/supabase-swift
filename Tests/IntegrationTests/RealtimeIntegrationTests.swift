@@ -75,13 +75,13 @@
     func connectionAndDisconnection() async throws {
       let client = client
       try await withMainSerialExecutor {
-        #expect(client.realtime.status == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
 
         try await client.realtime.connect()
-        #expect(client.realtime.status == .connected)
+        #expect(await client.realtime.status == .connected)
 
         await client.realtime.disconnect()
-        #expect(client.realtime.status == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -91,7 +91,7 @@
       try await withMainSerialExecutor {
         let statuses = LockIsolated<[RealtimeClientStatus]>([])
 
-        let statusChanges = client.realtime.statusChanges()
+        let statusChanges = await client.realtime.statusChanges()
         let observer = Task {
           for await status in statusChanges {
             statuses.withValue { $0.append(status) }
@@ -116,13 +116,13 @@
       let testClock = testClock
       try await withMainSerialExecutor {
         try await client.realtime.connect()
-        #expect(client.realtime.status == .connected)
+        #expect(await client.realtime.status == .connected)
 
         await client.realtime.disconnect()
 
         await testClock.advance(by: .seconds(2))
 
-        #expect(client.realtime.status == .disconnected)
+        #expect(await client.realtime.status == .disconnected)
       }
     }
 
@@ -131,12 +131,12 @@
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
-        #expect(client.realtime.status == .connected)
+        #expect(await client.realtime.status == .connected)
 
         try await client.realtime.connect()
         try await client.realtime.connect()
 
-        #expect(client.realtime.status == .connected)
+        #expect(await client.realtime.status == .connected)
       }
     }
 
@@ -146,10 +146,10 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("test-channel")
+        let channel = await client.realtime.channel("test-channel")
         let statuses = LockIsolated<[RealtimeChannelStatus]>([])
 
-        let statusChanges = channel.statusChanges()
+        let statusChanges = await channel.statusChanges()
         let observer = Task {
           for await status in statusChanges {
             statuses.withValue { $0.append(status) }
@@ -173,17 +173,17 @@
       let client = client
       try await withMainSerialExecutor {
 
-        let channel1 = client.realtime.channel("channel-1")
-        let channel2 = client.realtime.channel("channel-2")
-        let channel3 = client.realtime.channel("channel-3")
+        let channel1 = await client.realtime.channel("channel-1")
+        let channel2 = await client.realtime.channel("channel-2")
+        let channel3 = await client.realtime.channel("channel-3")
 
         try await subscribeMany([channel1, channel2, channel3])
 
-        #expect(channel1.status == .subscribed)
-        #expect(channel2.status == .subscribed)
-        #expect(channel3.status == .subscribed)
+        #expect(await channel1.status == .subscribed)
+        #expect(await channel2.status == .subscribed)
+        #expect(await channel3.status == .subscribed)
 
-        #expect(client.realtime.channels.count == 3)
+        #expect(await client.realtime.channels.count == 3)
 
         await unsubscribeMany([channel1, channel2, channel3])
       }
@@ -195,16 +195,16 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel1 = client.realtime.channel("reuse-channel")
+        let channel1 = await client.realtime.channel("reuse-channel")
         try await channel1.subscribe()
 
-        let channel2 = client.realtime.channel("reuse-channel")
+        let channel2 = await client.realtime.channel("reuse-channel")
         #expect(channel1 === channel2)
-        #expect(channel2.status == .subscribed)
+        #expect(await channel2.status == .subscribed)
 
         await channel1.unsubscribe()
 
-        #expect(channel2.status == .unsubscribed)
+        #expect(await channel2.status == .unsubscribed)
       }
     }
 
@@ -214,16 +214,16 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("remove-test")
+        let channel = await client.realtime.channel("remove-test")
         try await channel.subscribe()
 
         await client.realtime.removeChannel(channel)
 
-        // A removed handle keeps its last status; its actions throw `channelRemoved`.
-        #expect(channel.status == .subscribed)
+        // A removed handle reads `.unsubscribed`; its actions throw `channelRemoved`.
+        #expect(await channel.status == .unsubscribed)
         let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
         #expect(error?.kind == .channelRemoved)
-        let topics = client.realtime.channels.map(\.topic)
+        let topics = await client.realtime.channels.map(\.topic)
         #expect(!topics.contains(channel.topic))
       }
     }
@@ -234,24 +234,24 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel1 = client.realtime.channel("all-1")
-        let channel2 = client.realtime.channel("all-2")
-        let channel3 = client.realtime.channel("all-3")
+        let channel1 = await client.realtime.channel("all-1")
+        let channel2 = await client.realtime.channel("all-2")
+        let channel3 = await client.realtime.channel("all-3")
 
         try await subscribeMany([channel1, channel2, channel3])
 
         await client.realtime.removeAllChannels()
 
-        // A removed handle keeps its last status; its actions throw `channelRemoved`.
+        // A removed handle reads `.unsubscribed`; its actions throw `channelRemoved`.
         for channel in [channel1, channel2, channel3] {
-          #expect(channel.status == .subscribed)
+          #expect(await channel.status == .unsubscribed)
           let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
           #expect(error?.kind == .channelRemoved)
         }
-        #expect(client.realtime.channels.count == 0)
+        #expect(await client.realtime.channels.count == 0)
 
         #expect(
-          client.realtime.status == .disconnected,
+          await client.realtime.status == .disconnected,
           "Should disconnect client if all channels are removed"
         )
       }
@@ -263,7 +263,7 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("broadcast-test") {
+        let channel = await client.realtime.channel("broadcast-test") {
           $0.broadcast.receiveOwnMessages = true
         }
 
@@ -272,7 +272,7 @@
           let text: String
         }
 
-        let receivedMessagesStream = channel.broadcasts(event: "test-event")
+        let receivedMessagesStream = await channel.broadcasts(event: "test-event")
 
         try await channel.subscribe()
 
@@ -316,10 +316,10 @@
       try await withMainSerialExecutor {
         try await realtime.connect()
 
-        let channel = realtime.channel("custom-options-\(UUID().uuidString)") {
+        let channel = await realtime.channel("custom-options-\(UUID().uuidString)") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let received = channel.broadcasts(event: "ping")
+        let received = await channel.broadcasts(event: "ping")
         try await channel.subscribe()
 
         try await channel.broadcast(event: "ping", payload: ["value": 1] as JSONObject)
@@ -328,11 +328,11 @@
           await received.prefix(1).collect()
         }
         #expect(try messages.first?.decode(as: [String: Int].self) == ["value": 1])
-        #expect(realtime.channels.count == 1)
+        #expect(await realtime.channels.count == 1)
 
         await realtime.removeAllChannels()
-        #expect(realtime.channels.isEmpty)
-        #expect(realtime.status == .disconnected)
+        #expect(await realtime.channels.isEmpty)
+        #expect(await realtime.status == .disconnected)
       }
     }
 
@@ -342,10 +342,10 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("broadcast-binary") {
+        let channel = await client.realtime.channel("broadcast-binary") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let messages = channel.broadcasts(event: "bytes")
+        let messages = await channel.broadcasts(event: "bytes")
         try await channel.subscribe()
 
         let bytes = Data([0x00, 0xCA, 0xFE, 0xFF])
@@ -366,10 +366,10 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("access-token-test") {
+        let channel = await client.realtime.channel("access-token-test") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let messages = channel.broadcasts(event: "after-token")
+        let messages = await channel.broadcasts(event: "after-token")
         try await channel.subscribe()
 
         let session = try await client.auth.signUp(
@@ -386,7 +386,7 @@
         }
 
         #expect(received?.payload == .json(["value": 1]))
-        #expect(channel.status == .subscribed)
+        #expect(await channel.status == .subscribed)
         await channel.unsubscribe()
       }
     }
@@ -416,12 +416,12 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("broadcast-multi") {
+        let channel = await client.realtime.channel("broadcast-multi") {
           $0.broadcast.receiveOwnMessages = true
         }
 
-        let event1Messages = channel.broadcasts(event: "event-1")
-        let event2Messages = channel.broadcasts(event: "event-2")
+        let event1Messages = await channel.broadcasts(event: "event-1")
+        let event2Messages = await channel.broadcasts(event: "event-2")
 
         try await channel.subscribe()
 
@@ -451,12 +451,12 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("broadcast-no-own") {
+        let channel = await client.realtime.channel("broadcast-no-own") {
           $0.broadcast.receiveOwnMessages = false
         }
 
         let receivedCount = LockIsolated<Int>(0)
-        let broadcasts = channel.broadcasts(event: "test")
+        let broadcasts = await channel.broadcasts(event: "test")
         let subscription = Task {
           for await _ in broadcasts {
             receivedCount.withValue { $0 += 1 }
@@ -485,7 +485,7 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("private-denied") {
+        let channel = await client.realtime.channel("private-denied") {
           $0.isPrivate = true
         }
 
@@ -493,8 +493,8 @@
         #expect(error?.kind == .unauthorized)
         #expect(error?.serverCode == .unauthorized)
         #expect(error?.isRetryable == false)
-        #expect(channel.status == .failed)
-        #expect(channel.status.error?.serverCode == .unauthorized)
+        #expect(await channel.status == .failed)
+        #expect(await channel.status.error?.serverCode == .unauthorized)
       }
     }
 
@@ -504,16 +504,16 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("postgres-all")
+        let channel = await client.realtime.channel("postgres-all")
 
         struct Entry: Codable, Equatable {
           let key: String
           let value: JSONValue
         }
 
-        let allChanges = channel.postgresChanges(
+        let allChanges = await channel.postgresChanges(
           of: Entry.self, schema: "public", table: "key_value_storage")
-        let events = channel.events()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
@@ -562,7 +562,7 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("postgres-filter")
+        let channel = await client.realtime.channel("postgres-filter")
 
         struct Entry: Codable, Equatable {
           let key: String
@@ -578,7 +578,7 @@
           table: "key_value_storage",
           filter: .eq("key", value: testKey1)
         )
-        let events = channel.events()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
@@ -614,20 +614,20 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("postgres-multi")
+        let channel = await client.realtime.channel("postgres-multi")
 
         struct Entry: Codable, Equatable {
           let key: String
           let value: JSONValue
         }
 
-        let insertions = channel.postgresChanges(
+        let insertions = await channel.postgresChanges(
           event: .insert, schema: "public", table: "key_value_storage")
-        let updates = channel.postgresChanges(
+        let updates = await channel.postgresChanges(
           event: .update, schema: "public", table: "key_value_storage")
-        let deletions = channel.postgresChanges(
+        let deletions = await channel.postgresChanges(
           event: .delete, schema: "public", table: "key_value_storage")
-        let events = channel.events()
+        let events = await channel.events()
 
         try await channel.subscribe()
 
@@ -703,11 +703,11 @@
         try await client.realtime.connect()
         try await client2.realtime.connect()
 
-        let channel1 = client.realtime.channel("app-room") {
+        let channel1 = await client.realtime.channel("app-room") {
           $0.broadcast.receiveOwnMessages = true
         }
 
-        let channel2 = client2.realtime.channel("app-room") {
+        let channel2 = await client2.realtime.channel("app-room") {
           $0.broadcast.receiveOwnMessages = true
         }
 
@@ -728,11 +728,11 @@
           lastSeen: Date()
         )
 
-        let client1PresenceChanges = channel1.presenceChanges()
-        let client2PresenceChanges = channel2.presenceChanges()
+        let client1PresenceChanges = await channel1.presenceChanges()
+        let client2PresenceChanges = await channel2.presenceChanges()
 
-        let client1Messages = channel1.broadcasts(event: "chat-message")
-        let client2Messages = channel2.broadcasts(event: "chat-message")
+        let client1Messages = await channel1.broadcasts(event: "chat-message")
+        let client2Messages = await channel2.broadcasts(event: "chat-message")
 
         try await channel1.subscribe()
         try await channel2.subscribe()
@@ -854,10 +854,10 @@
         try await client2.realtime.connect()
 
         let topic = "presence-\(UUID().uuidString)"
-        let ana = client.realtime.channel(topic) { $0.presence.key = "ana" }
-        let bob = client2.realtime.channel(topic) { $0.presence.key = "bob" }
-        let anaStates = ana.presenceStates()
-        let bobChanges = bob.presenceChanges()
+        let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
+        let bob = await client2.realtime.channel(topic) { $0.presence.key = "bob" }
+        let anaStates = await ana.presenceStates()
+        let bobChanges = await bob.presenceChanges()
         try await ana.subscribe()
         try await bob.subscribe()
 
@@ -894,7 +894,7 @@
     func presenceTrackBeforeSubscribeThrowsNotSubscribed() async {
       let client = client
       await withMainSerialExecutor {
-        let channel = client.realtime.channel("presence-\(UUID().uuidString)")
+        let channel = await client.realtime.channel("presence-\(UUID().uuidString)")
 
         let error = await #expect(throws: RealtimeError.self) {
           try await channel.track(["name": "ana"] as JSONObject)
@@ -913,7 +913,7 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("postgres-live-\(waitForSubscription)") {
+        let channel = await client.realtime.channel("postgres-live-\(waitForSubscription)") {
           $0.postgresChanges.waitForSubscription = waitForSubscription
         }
         let testKey = UUID().uuidString
@@ -940,9 +940,9 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("late-binding")
-        let pings = channel.broadcasts(event: "ping")
-        let events = channel.events()
+        let channel = await client.realtime.channel("late-binding")
+        let pings = await channel.broadcasts(event: "ping")
+        let events = await channel.events()
         try await channel.subscribe()
 
         let testKey = UUID().uuidString
@@ -952,7 +952,7 @@
         _ = try await withTimeout(.seconds(10)) {
           await events.first(where: { $0 == .resubscribed })
         }
-        #expect(channel.status == .subscribed)
+        #expect(await channel.status == .subscribed)
 
         try await client.from("key_value_storage").insert(["key": testKey, "value": "v"]).execute()
         let change = try await withTimeout(.seconds(5)) {
@@ -972,12 +972,12 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("broadcast-exact") {
+        let channel = await client.realtime.channel("broadcast-exact") {
           $0.broadcast.receiveOwnMessages = true
         }
-        let lowercase = channel.broadcasts(event: "ping")
-        let exact = channel.broadcasts(event: "Ping")
-        let wildcard = channel.broadcasts(event: "*")
+        let lowercase = await channel.broadcasts(event: "ping")
+        let exact = await channel.broadcasts(event: "Ping")
+        let wildcard = await channel.broadcasts(event: "*")
         try await channel.subscribe()
 
         try await channel.broadcast(event: "Ping", payload: ["n": 1])
@@ -1008,9 +1008,9 @@
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = client.realtime.channel("topic-name")
+        let channel = await client.realtime.channel("topic-name")
         #expect(channel.topic == "topic-name")
-        let messages = channel.broadcasts(event: "rest")
+        let messages = await channel.broadcasts(event: "rest")
         try await channel.subscribe()
 
         try await channel.httpSend(event: "rest", payload: ["n": 1])
@@ -1034,7 +1034,7 @@
       until condition: @escaping @Sendable (PresenceState) throws -> Bool
     ) async throws {
       try await withTimeout(.seconds(5)) {
-        while try !condition(channel.presenceState) {
+        while try !condition(await channel.presenceState) {
           try await Task.sleep(for: .milliseconds(50))
         }
       }

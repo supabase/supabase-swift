@@ -66,7 +66,7 @@ enum TimerID: Hashable, Sendable {
   case pushTimeout(channel: ChannelID, ref: Ref)
 }
 
-/// One element for the streams of a channel's sinks.
+/// One element for the streams of a channel.
 enum Delivery: Sendable, Equatable {
   case broadcast(BroadcastMessage)
   case postgres(PostgresDelivery)
@@ -74,7 +74,7 @@ enum Delivery: Sendable, Equatable {
   case event(RealtimeChannelEvent)
 }
 
-/// What a join payload depends on besides the configuration, read from the channel's sinks when
+/// What a join payload depends on besides the configuration, read from the channel's state when
 /// the command is made.
 struct JoinSnapshot: Sendable, Equatable {
   /// The Postgres bindings of the open streams, in registration order.

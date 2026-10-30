@@ -29,7 +29,7 @@ struct RealtimeChannelOnMessageTests {
       options: RealtimeClientOptions()
     )
     self.client = client
-    self.sut = client.channel("public:messages")
+    self.sut = await client.channel("public:messages")
     await client.installSubscribedRecord("public:messages", joinRef: "1")
     let timestamp = Date(timeIntervalSince1970: 1_703_592_000)
     self.commitTimestamp = timestamp
@@ -37,8 +37,8 @@ struct RealtimeChannelOnMessageTests {
   }
   @Test
   func unknownEventDispatchesNothing() async {
-    let events = sut.events()
-    let broadcasts = sut.broadcasts(event: "*")
+    let events = await sut.events()
+    let broadcasts = await sut.broadcasts(event: "*")
     await deliver(message(event: "not_a_channel_event"))
 
     let receivedEvents = await collect(events)
@@ -49,7 +49,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func systemOKForPostgresChangesEmitsReady() async {
-    let events = sut.events()
+    let events = await sut.events()
 
     await deliver(
       message(
@@ -62,12 +62,12 @@ struct RealtimeChannelOnMessageTests {
     )
 
     #expect(await collect(events) == [.postgresChangesReady])
-    #expect(sut.status == .unsubscribed)
+    #expect(await sut.status == .unsubscribed)
   }
 
   @Test
   func systemErrorForPostgresChangesEmitsFailedWithTheServerMessage() async {
-    let events = sut.events()
+    let events = await sut.events()
 
     await deliver(
       message(
@@ -87,7 +87,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func systemMessagesForReplicationEmitReadyOrFailed() async {
-    let events = sut.events()
+    let events = await sut.events()
 
     await deliver(
       message(
@@ -111,7 +111,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func systemMessageWithoutAKnownExtensionEmitsNothing() async {
-    let events = sut.events()
+    let events = await sut.events()
 
     await deliver(message(event: ChannelEvent.system, payload: ["status": "ok"]))
     await deliver(message(event: ChannelEvent.system, payload: ["status": "error"]))
@@ -276,7 +276,7 @@ struct RealtimeChannelOnMessageTests {
       let id: Int
       let body: String
     }
-    let changes = sut.postgresChanges(of: Message.self, table: "messages")
+    let changes = await sut.postgresChanges(of: Message.self, table: "messages")
     await client.setServerChanges(
       for: "public:messages",
       [
@@ -301,7 +301,7 @@ struct RealtimeChannelOnMessageTests {
       of: Message.self, event: .insert, schema: "chat", table: "messages",
       filter: .eq("room", value: 1), select: ["id"])
 
-    let changes = sut.sinks.bindings
+    let changes = await client.bindings(of: sut)
     withExtendedLifetime(stream) {}
     #expect(
       changes == [
@@ -314,7 +314,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func broadcastTriggersMatchingBroadcastCallback() async throws {
-    let broadcasts = sut.broadcasts(event: "message")
+    let broadcasts = await sut.broadcasts(event: "message")
 
     await deliver(
       message(
@@ -334,7 +334,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func broadcastMatchingIsCaseSensitive() async {
-    let broadcasts = sut.broadcasts(event: "Typing")
+    let broadcasts = await sut.broadcasts(event: "Typing")
 
     for event in ["typing", "Typing", "TYPING"] {
       await deliver(
@@ -350,7 +350,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func wildcardReceivesEveryEvent() async {
-    let broadcasts = sut.broadcasts(event: "*")
+    let broadcasts = await sut.broadcasts(event: "*")
 
     for event in ["a", "B"] {
       await deliver(
@@ -366,7 +366,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func broadcastWithoutEventIsSwallowed() async {
-    let broadcasts = sut.broadcasts(event: "*")
+    let broadcasts = await sut.broadcasts(event: "*")
 
     await deliver(
       message(event: ChannelEvent.broadcast, payload: ["payload": ["body": "hi"]])
@@ -380,27 +380,27 @@ struct RealtimeChannelOnMessageTests {
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
     await deliver(message(event: ChannelEvent.close))
 
-    #expect(client.sinks.channel(for: sut.topic) == nil)
+    #expect(await client.liveChannel(for: sut.topic) == nil)
   }
 
   @Test
   func closeForStaleJoinRefDoesNotRemoveChannel() async {
     await deliver(message(event: ChannelEvent.close, joinRef: "stale-ref"))
 
-    #expect(client.sinks.channel(for: sut.topic) != nil)
+    #expect(await client.liveChannel(for: sut.topic) != nil)
   }
 
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
     await deliver(message(event: ChannelEvent.error))
 
-    #expect(client.sinks.channel(for: sut.topic) != nil)
-    #expect(sut.status == .unsubscribed)
+    #expect(await client.liveChannel(for: sut.topic) != nil)
+    #expect(await sut.status == .unsubscribed)
   }
 
   @Test
   func presenceStateYieldsItsEntriesAsJoins() async throws {
-    let changes = sut.presenceChanges()
+    let changes = await sut.presenceChanges()
 
     await deliver(
       message(
@@ -417,7 +417,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func presenceDiffAfterAStateYieldsJoinsAndLeaves() async throws {
-    let changes = sut.presenceChanges()
+    let changes = await sut.presenceChanges()
     await deliver(
       message(
         event: ChannelEvent.presenceState,
@@ -442,7 +442,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func presenceMessagesWithoutChangesYieldNothing() async {
-    let changes = sut.presenceChanges()
+    let changes = await sut.presenceChanges()
 
     await deliver(message(event: ChannelEvent.presenceState))
     await deliver(message(event: ChannelEvent.presenceDiff))
@@ -452,7 +452,7 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func malformedPresenceMetasAreSkipped() async {
-    let changes = sut.presenceChanges()
+    let changes = await sut.presenceChanges()
 
     await deliver(
       message(
@@ -487,7 +487,7 @@ struct RealtimeChannelOnMessageTests {
   /// Ends the channel's streams, then returns everything they had buffered. Every delivery in
   /// these tests happens synchronously inside `deliver(_:)`, so nothing can arrive later.
   private func collect<Element>(_ stream: AsyncStream<Element>) async -> [Element] {
-    sut.sinks.finishAll()
+    await client.finishStreams(of: sut)
     var elements: [Element] = []
     for await element in stream {
       elements.append(element)
@@ -497,7 +497,7 @@ struct RealtimeChannelOnMessageTests {
 
   /// Opens a postgres stream and records server-change id `1` for it, matching the
   private func recordPostgresChanges() async -> AsyncStream<PostgresChange> {
-    let changes = sut.postgresChanges(schema: "public", table: "messages")
+    let changes = await sut.postgresChanges(schema: "public", table: "messages")
     await client.setServerChanges(
       for: "public:messages",
       [

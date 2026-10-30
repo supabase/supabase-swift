@@ -5,12 +5,8 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import ConcurrencyExtras
 public import Foundation
-internal import HTTPTypes
 import Helpers
-import IssueReporting
-import Logging
 
 /// A Realtime channel that joins a topic and delivers its events as `AsyncStream`s.
 ///
@@ -20,11 +16,11 @@ import Logging
 /// the new binding. Broadcast and system streams can be opened at any time.
 ///
 /// ```swift
-/// let channel = client.channel("room:lobby") { config in
+/// let channel = await client.channel("room:lobby") { config in
 ///   config.broadcast.receiveOwnMessages = true
 /// }
 ///
-/// let messages = channel.broadcasts(event: "message")
+/// let messages = await channel.broadcasts(event: "message")
 /// try await channel.subscribe()
 ///
 /// for await message in messages {
@@ -32,10 +28,18 @@ import Logging
 /// }
 /// ```
 ///
-/// A channel is a handle: reads and stream methods are synchronous and run on the caller's
-/// context, and actions that wait for the network are `async`. Two handles are equal only when
-/// they are the same instance; the client keeps one per topic. Cancelling the task that iterates
-/// a stream ends the stream and removes its listener; removing the channel ends every stream.
+/// A channel is a handle: its client owns its state, so reads, stream methods, and actions are
+/// `async`, one hop to the client each. A stream is registered by the time its method returns,
+/// so it sees every event the next action causes. Two handles are equal only when they are the
+/// same instance; the client keeps one per topic. Cancelling the task that iterates a stream
+/// ends the stream and removes its listener; removing the channel ends every stream.
+///
+/// A removed channel, by ``RealtimeClient/removeChannel(_:)`` or by the server, is spent: its
+/// actions throw ``RealtimeError/Kind-swift.struct/channelRemoved``, ``status`` reads
+/// ``RealtimeChannelStatus/unsubscribed``, ``presenceState`` is empty, and new streams end at
+/// once. Get a new channel from ``RealtimeClient/channel(_:configure:)``. A channel whose client
+/// was released reads the same, and its actions throw an error of kind
+/// ``RealtimeError/Kind-swift.struct/notConnected``.
 ///
 /// ## Topics
 /// ### Identity
@@ -80,32 +84,21 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The channel's configuration, as set in ``RealtimeClient/channel(_:configure:)``.
   public let configuration: RealtimeChannelConfiguration
 
-  let logger: Logging.Logger
-
-  /// Weak: the client owns its channels, and a channel the app keeps after releasing the client
-  /// must not keep the client (and its socket) alive.
+  /// Weak: the client owns its channels' state, which holds this handle, and a channel the app
+  /// keeps after releasing the client must not keep the client (and its socket) alive.
   weak let client: RealtimeClient?
-
-  /// The published status and presence state, and the open streams. Only the client writes them.
-  let sinks = ChannelSinks()
 
   init(
     id: ChannelID,
     topic: String,
     configuration: RealtimeChannelConfiguration,
-    client: RealtimeClient,
-    logger: Logging.Logger
+    client: RealtimeClient
   ) {
     self.id = id
     self.topic = topic
     self.wireTopic = Self.wireTopic(for: topic)
     self.configuration = configuration
-    self.logger = logger
     self.client = client
-  }
-
-  deinit {
-    sinks.finishAll()
   }
 
   /// Two channels are equal only when they are the same instance.
@@ -118,10 +111,9 @@ public final class RealtimeChannel: Sendable, Hashable {
     hasher.combine(ObjectIdentifier(self))
   }
 
-  /// The client to run an action on. A removed channel and a channel whose client is gone
-  /// cannot act.
+  /// The client to run an action on. The client checks on its own actor whether the channel
+  /// was removed.
   func clientForAction() throws(RealtimeError) -> RealtimeClient {
-    guard !sinks.isSpent else { throw .channelRemoved }
     guard let client else { throw .clientReleased }
     return client
   }
@@ -129,17 +121,28 @@ public final class RealtimeChannel: Sendable, Hashable {
   // MARK: - Status
 
   /// The current subscription status of the channel.
+  ///
+  /// A removed channel, or one whose client was released, reads
+  /// ``RealtimeChannelStatus/unsubscribed``. To follow the status, for example in a view, use
+  /// ``statusChanges()``.
   public var status: RealtimeChannelStatus {
-    sinks.status.current ?? .unsubscribed
+    get async { await client?.channelStatus(self) ?? .unsubscribed }
   }
 
   /// An async stream that emits channel subscription status changes.
   ///
   /// The stream emits the current status immediately upon iteration and then each
   /// subsequent change. Cancelling the iterating task ends the stream; so does removing the
-  /// channel from its client.
-  public func statusChanges() -> AsyncStream<RealtimeChannelStatus> {
-    sinks.status.subscribe()
+  /// channel from its client. On a removed channel, or one whose client was released, the
+  /// stream ends at once.
+  ///
+  /// ```swift
+  /// for await status in await channel.statusChanges() {
+  ///   print("Channel status: \(status)")
+  /// }
+  /// ```
+  public func statusChanges() async -> AsyncStream<RealtimeChannelStatus> {
+    await client?.statusChanges(of: self) ?? .finished
   }
 
   // MARK: - Lifecycle
@@ -182,13 +185,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   channel was removed or the server closed it earlier, and `CancellationError` when the
   ///   calling task is cancelled.
   public func subscribe() async throws {
-    let client = try clientForAction()
-    // The snapshot is read on the client, when it applies the event.
-    try await client.wait(on: self) { [self] waiter in
-      .subscribe(
-        channel: id, topic: topic, configuration: configuration, waiter: waiter,
-        snapshot: joinSnapshot)
-    }
+    try await clientForAction().subscribe(self)
   }
 
   /// Leaves the Realtime topic and transitions the channel to
@@ -197,16 +194,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The channel and its streams stay usable: call ``subscribe()`` to join again. Cancelling the
   /// calling task stops the wait, not the leave.
   ///
-  /// While ``RealtimeClient/removeChannel(_:)`` removes an older channel of the same topic, the
-  /// leave waits for that removal to end, which takes at most the older channel's leave timeout.
-  /// The call returns only after that, even when the calling task is cancelled.
-  ///
   /// On a removed channel, or one whose client was released, the method returns at once.
   public func unsubscribe() async {
-    guard let client = try? clientForAction() else { return }
-    try? await client.wait(on: self, evenIfCancelled: true) { [id] in
-      .unsubscribe(channel: id, waiter: $0)
-    }
+    await client?.unsubscribe(self)
   }
 
   // MARK: - Broadcast
@@ -257,10 +247,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   }
 
   private func broadcast(event: String, payload: BroadcastPushPayload) async throws {
-    let client = try clientForAction()
-    try await client.wait(on: self) { [id] in
-      .broadcast(channel: id, event: event, payload: payload, waiter: $0)
-    }
+    try await clientForAction().broadcast(self, event: event, payload: payload)
   }
 
   // MARK: - Presence
@@ -268,9 +255,11 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The clients present on the channel, as of the last presence sync.
   ///
   /// The state is empty until the first sync after ``subscribe()`` and after ``unsubscribe()``.
-  /// After a rejoin it keeps the last known clients until the server sends the new state.
+  /// After a rejoin it keeps the last known clients until the server sends the new state. A
+  /// removed channel, or one whose client was released, reads an empty state. To follow the
+  /// state, use ``presenceStates()``.
   public var presenceState: PresenceState {
-    sinks.presenceStates.current ?? PresenceState()
+    get async { await client?.presenceState(of: self) ?? PresenceState() }
   }
 
   /// Shares a payload with every client on the channel, under this client's presence key.
@@ -312,10 +301,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   }
 
   private func pushPresence(_ payload: JSONObject) async throws {
-    let client = try clientForAction()
-    try await client.wait(on: self) { [id] in
-      .push(channel: id, event: ChannelEvent.presence, payload: payload, waiter: $0)
-    }
+    try await clientForAction().push(self, event: ChannelEvent.presence, payload: payload)
   }
 
   // MARK: - Helpers
@@ -333,12 +319,6 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// event.
   static func eventMatches(_ listening: String, _ event: String) -> Bool {
     listening == "*" || listening == event
-  }
-
-  /// What a join sends besides the configuration: the bindings and presence listener of the
-  /// open streams.
-  var joinSnapshot: JoinSnapshot {
-    JoinSnapshot(bindings: sinks.bindings, presenceEnabled: sinks.hasPresenceListener)
   }
 
   /// The topic on the WebSocket for the topic name `topic`.
