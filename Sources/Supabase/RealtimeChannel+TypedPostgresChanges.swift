@@ -36,7 +36,8 @@ extension RealtimeChannel {
   /// `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`, `isDistinct`, and the
   /// `IS` checks, on stored columns. It can negate one condition with `!` and join conditions with
   /// `&&`. Any other filter is a programmer error and traps: `||`, `!` over a group, the array,
-  /// range, JSON and full-text operators, and JSON paths.
+  /// range, JSON and full-text operators, JSON paths, and casts. A `raw` filter must follow the
+  /// same rules.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
@@ -106,16 +107,24 @@ extension PostgrestFilterNode {
     let prefix = negated ? "not." : ""
     switch self {
     case .comparison(let column, let `operator`, let operand):
-      precondition(
-        !column.contains("->"),
-        "Realtime cannot filter on the JSON path `\(column)`. Filter on a stored column."
-      )
-      Self.requireRealtimeSupport(`operator`)
+      Self.requireRealtimeColumn(column)
+      Self.requireRealtimeOperator(`operator`.token)
       if case .invalid(let reason) = operand {
         preconditionFailure(reason)
       }
       return "\(column)=\(prefix)\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
+      Self.requireRealtimeColumn(column)
+      var expression = Substring(operand)
+      if expression.hasPrefix("not.") {
+        precondition(!negated, "Realtime filters cannot negate `\(column)=\(operand)` again.")
+        expression = expression.dropFirst("not.".count)
+      }
+      precondition(
+        expression.contains("."),
+        "The raw Realtime filter `\(column)=\(operand)` is not in the `operator.value` form."
+      )
+      Self.requireRealtimeOperator(String(expression.prefix { $0 != "." }))
       return "\(column)=\(prefix)\(operand)"
     case .or:
       preconditionFailure(
@@ -128,14 +137,28 @@ extension PostgrestFilterNode {
     }
   }
 
-  private static func requireRealtimeSupport(_ operator: _PostgrestFilterOperator) {
-    switch `operator` {
-    case .eq, .neq, .gt, .gte, .lt, .lte, .is, .isDistinct, .in, .like, .ilike, .regexMatch,
-      .regexIMatch:
-      return
-    case .likeAllOf, .likeAnyOf, .ilikeAllOf, .ilikeAnyOf, .contains, .containedBy, .overlaps,
-      .rangeLt, .rangeGt, .rangeGte, .rangeLte, .rangeAdjacent, .textSearch:
-      preconditionFailure("Realtime filters do not support the `\(`operator`.token)` operator.")
-    }
+  /// The values of the server's `realtime.equality_op` type. A raw node is checked against the
+  /// same list as a typed operator, so both spellings accept and reject the same filters.
+  private static let realtimeOperators: Set<String> = [
+    "eq", "neq", "gt", "gte", "lt", "lte", "in", "like", "ilike", "is", "match", "imatch",
+    "isdistinct",
+  ]
+
+  private static func requireRealtimeOperator(_ token: String) {
+    precondition(
+      realtimeOperators.contains(token),
+      "Realtime filters do not support the `\(token)` operator."
+    )
+  }
+
+  private static func requireRealtimeColumn(_ column: String) {
+    precondition(
+      !column.contains("->"),
+      "Realtime cannot filter on the JSON path `\(column)`. Filter on a stored column."
+    )
+    precondition(
+      !column.contains("::"),
+      "Realtime cannot filter on the cast `\(column)`. Filter on a stored column."
+    )
   }
 }

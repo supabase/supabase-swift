@@ -71,6 +71,9 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (c.title.in(["a,b", "c"]), #"title=in.("a,b",c)"#),
       (c.title.raw("eq.milk"), "title=eq.milk"),
       (!c.title.raw("eq.milk"), "title=not.eq.milk"),
+      (c.title.raw("not.ilike.%milk%"), "title=not.ilike.%milk%"),
+      (c.priority.raw("in.(1,2)"), "priority=in.(1,2)"),
+      (Filter.raw("title", "isdistinct.milk"), "title=isdistinct.milk"),
       (
         c.id.eq(1) && c.isDone.isFalse() && !c.priority.gt(3),
         "id=eq.1,is_done=is.false,priority=not.gt.3"
@@ -105,6 +108,27 @@ struct RealtimeChannelTypedPostgresChangesTests {
     func trapsOnAnOperatorRealtimeDoesNotSupport() async {
       await #expect(processExitsWith: .failure) {
         _ = RealtimeTodo.columns.tags.contains(["home"]).realtimeFilter
+      }
+    }
+
+    @Test
+    func trapsOnARawOperatorRealtimeDoesNotSupport() async {
+      await #expect(processExitsWith: .failure) {
+        _ = RealtimeTodo.columns.tags.raw("cs.{home}").realtimeFilter
+      }
+    }
+
+    @Test
+    func trapsOnANegatedRawNegation() async {
+      await #expect(processExitsWith: .failure) {
+        _ = (!RealtimeTodo.columns.title.raw("not.eq.milk")).realtimeFilter
+      }
+    }
+
+    @Test
+    func trapsOnARawCastColumn() async {
+      await #expect(processExitsWith: .failure) {
+        _ = _PostgrestFilter<RealtimeTodo>.raw("priority::text", "eq.1").realtimeFilter
       }
     }
   #endif
