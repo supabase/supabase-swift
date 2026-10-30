@@ -13,9 +13,13 @@ import IssueReporting
 ///
 /// Mirrors the SQL `IS` check: `column IS null / true / false / unknown`.
 public enum RealtimePostgresIsValue: Sendable {
+  /// `IS NULL`.
   case null
+  /// `IS TRUE`.
   case `true`
+  /// `IS FALSE`.
   case `false`
+  /// `IS UNKNOWN`.
   case unknown
 
   var rawValue: String {
