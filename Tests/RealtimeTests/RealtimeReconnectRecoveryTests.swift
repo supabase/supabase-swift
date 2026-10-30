@@ -46,9 +46,9 @@ struct RealtimeReconnectRecoveryTests {
       reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let channel = await sut.channel("room-1")
+    let channel = sut.channel("room-1")
     try await channel.subscribe()
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
 
     // Outage: the socket drops and the first auto-reconnect attempt fails. A remote close with a
     // transport-level code triggers the reconnect; `RealtimeClient` now only logs a malformed
@@ -56,7 +56,7 @@ struct RealtimeReconnectRecoveryTests {
     sockets.value[0].receiveFromServer(.close(code: 1006, reason: "network down"))
 
     let recovered = await waitUntil(timeout: 5) {
-      let clientStatus = await sut.status
+      let clientStatus = sut.status
       let channelStatus = channel.status
       return connectAttempts.value >= 3 && clientStatus == .connected
         && channelStatus == .subscribed
@@ -84,9 +84,9 @@ struct RealtimeReconnectRecoveryTests {
       reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let channel = await sut.channel("room-close")
+    let channel = sut.channel("room-close")
     try await channel.subscribe()
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
 
     let socket = sockets.value[0]
     let joinRef = socket.sentMessages.first { $0.event == "phx_join" }?.ref
@@ -103,8 +103,8 @@ struct RealtimeReconnectRecoveryTests {
     )
 
     try? await Task.sleep(nanoseconds: 300_000_000)
-    #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(await sut.channelsByTopic[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(channel.status == .subscribed, "Stale phx_close killed the current subscription")
+    #expect(sut.sinks.channel(for: channel.topic) != nil, "Stale phx_close removed the channel")
 
     socket.reply(
       RealtimeMessage(
@@ -116,7 +116,7 @@ struct RealtimeReconnectRecoveryTests {
       )
     )
     await waitUntil(timeout: 2) { channel.status == .unsubscribed }
-    #expect(await channel.status == .unsubscribed)
+    #expect(channel.status == .unsubscribed)
 
     await sut.disconnect()
   }
@@ -139,9 +139,9 @@ struct RealtimeReconnectRecoveryTests {
       reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let channel = await sut.channel("room-error")
+    let channel = sut.channel("room-error")
     try await channel.subscribe()
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
 
     let socket = sockets.value[0]
     socket.reply(
@@ -155,7 +155,7 @@ struct RealtimeReconnectRecoveryTests {
     )
 
     try? await Task.sleep(nanoseconds: 300_000_000)
-    #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
+    #expect(channel.status == .subscribed, "Stale phx_error killed the current subscription")
 
     socket.reply(
       RealtimeMessage(
@@ -167,7 +167,7 @@ struct RealtimeReconnectRecoveryTests {
       )
     )
     await waitUntil(timeout: 2) { channel.status == .unsubscribed }
-    #expect(await channel.status == .unsubscribed)
+    #expect(channel.status == .unsubscribed)
 
     await sut.disconnect()
   }
@@ -190,14 +190,14 @@ struct RealtimeReconnectRecoveryTests {
       reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let channel = await sut.channel("room-leave")
+    let channel = sut.channel("room-leave")
     try await channel.subscribe()
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
 
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
-    await waitUntil(timeout: 2) { await sut.status == .disconnected }
-    #expect(await sut.status == .disconnected)
-    #expect(await channel.status == .subscribed)
+    await waitUntil(timeout: 2) { sut.status == .disconnected }
+    #expect(sut.status == .disconnected)
+    #expect(channel.status == .subscribed)
 
     let start = ContinuousClock.now
     await sut.removeChannel(channel)
@@ -206,10 +206,10 @@ struct RealtimeReconnectRecoveryTests {
       elapsed < .seconds(1.5),
       "removeChannel on a dead socket stalled waiting for phx_close (\(elapsed))"
     )
-    #expect(await channel.status == .unsubscribed)
+    #expect(channel.status == .unsubscribed)
 
     try await sut.connect()
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
     try? await Task.sleep(nanoseconds: 200_000_000)
 
     let leaves = sockets.value[1].sentMessages.filter { $0.event == "phx_leave" }

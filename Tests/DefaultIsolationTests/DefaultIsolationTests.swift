@@ -45,7 +45,7 @@ struct DefaultIsolationTests {
       let session = try await client.auth.signIn(email: "user@example.com", password: "password")
       _ = session.accessToken
       rows = try await client.from("table").select().execute().value
-      let channel = await client.channel("room")
+      let channel = client.channel("room")
       for await status in channel.statusChanges() { _ = status }
       for await message in channel.broadcasts(event: "answer") {
         _ = try message.decode(as: Answer.self)

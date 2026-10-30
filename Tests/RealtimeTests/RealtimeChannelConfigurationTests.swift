@@ -26,7 +26,7 @@ struct RealtimeChannelConfigurationTests {
 
   @Test
   func channelKeepsConfiguration() async {
-    let channel = await client.channel("room") { $0.isPrivate = true }
+    let channel = client.channel("room") { $0.isPrivate = true }
 
     #expect(channel.configuration.isPrivate)
   }
@@ -35,11 +35,11 @@ struct RealtimeChannelConfigurationTests {
   #if canImport(Darwin)
     @Test
     func differentConfigurationReportsIssueAndReturnsExisting() async {
-      let first = await client.channel("room")
+      let first = client.channel("room")
 
       var second: RealtimeChannel?
-      await withKnownIssue {
-        second = await client.channel("room") { $0.isPrivate = true }
+      withKnownIssue {
+        second = client.channel("room") { $0.isPrivate = true }
       }
 
       #expect(first === second)
@@ -49,8 +49,8 @@ struct RealtimeChannelConfigurationTests {
 
   @Test
   func sameConfigurationReportsNoIssue() async {
-    let first = await client.channel("room") { $0.broadcast.acknowledge = true }
-    let second = await client.channel("room") { $0.broadcast.acknowledge = true }
+    let first = client.channel("room") { $0.broadcast.acknowledge = true }
+    let second = client.channel("room") { $0.broadcast.acknowledge = true }
 
     #expect(first === second)
   }

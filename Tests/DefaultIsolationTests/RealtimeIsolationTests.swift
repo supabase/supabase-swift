@@ -10,9 +10,9 @@ import Supabase
 import Testing
 
 /// Compile-time coverage of the Realtime v3 flows from a module that opts into
-/// `.defaultIsolation(MainActor.self)`. `RealtimeClient` and `RealtimeChannel` are actors, so each
-/// member read below needs one `await` from the main actor and nothing more. Nothing here opens a
-/// socket.
+/// `.defaultIsolation(MainActor.self)`. Reads and stream subscriptions on `RealtimeClient` and
+/// `RealtimeChannel` are synchronous, so the main actor reads them without `await`; only actions
+/// such as `subscribe()` suspend. Nothing here opens a socket.
 @Suite
 struct RealtimeIsolationTests {
   /// A plain `Decodable` row with a main-actor-isolated conformance. `PostgresRow.decode(as:)` and
@@ -42,7 +42,7 @@ struct RealtimeIsolationTests {
     var channelError: RealtimeError?
 
     func run() async throws {
-      let channel = await client.channel("room") { $0.isPrivate = false }
+      let channel = client.channel("room") { $0.isPrivate = false }
       let typed = channel.postgresChanges(of: Row.self, table: "rooms")
       let raw = channel.postgresChanges(event: .insert, table: "rooms")
       try await channel.subscribe()
@@ -55,17 +55,17 @@ struct RealtimeIsolationTests {
       for await state in channel.presenceStates() { presenceCount = state.entries.count }
       for await message in channel.broadcasts(event: "ping") { _ = message.event }
 
-      isConnected = await client.status.isConnected
+      isConnected = client.status.isConnected
       channelError = channel.status.error
     }
   }
 
   @Test
-  func realtimeIsUsableFromAMainActorIsolatedModule() async {
+  func realtimeIsUsableFromAMainActorIsolatedModule() {
     let model = Model()
     #expect(model.rows.isEmpty)
-    #expect(await !model.client.status.isConnected)
-    let channel = await model.client.channel("room")
-    #expect(await channel.status.error == nil)
+    #expect(!model.client.status.isConnected)
+    let channel = model.client.channel("room")
+    #expect(channel.status.error == nil)
   }
 }

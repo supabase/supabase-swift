@@ -74,7 +74,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = await socket.channel("test-topic")
+      let channel = socket.channel("test-topic")
 
       let serverTask1 = Task { @Sendable [server] in
         for await event in server.events {
@@ -99,7 +99,7 @@ struct RealtimeChannelTests {
       let subscribeTask = Task { try? await channel.subscribe() }
 
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      #expect(await channel.status == .subscribing)
+      #expect(channel.status == .subscribing)
 
       let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
 
@@ -130,7 +130,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = await socket.channel("test-topic")
+      let channel = socket.channel("test-topic")
 
       let serverTask2 = Task { @Sendable [server] in
         for await event in server.events {
@@ -155,7 +155,7 @@ struct RealtimeChannelTests {
 
       try await socket.connect()
       try? await channel.subscribe()
-      #expect(await channel.status == .subscribed)
+      #expect(channel.status == .subscribed)
 
       let listenerCountBefore = channel.sinks.presenceChanges.subscriberCount
 
@@ -192,7 +192,7 @@ struct RealtimeChannelTests {
     #expect(sut.sinks.presenceChanges.subscriberCount == 1)
     #expect(sut.sinks.presenceStates.subscriberCount == 1)
     #expect(sut.sinks.events.subscriberCount == 1)
-    #expect(await sut.hasPresenceListener)
+    #expect(sut.hasPresenceListener)
 
     let clientChanges = sut.clientChanges
     assertInlineSnapshot(of: clientChanges, as: .dump) {
@@ -256,7 +256,7 @@ struct RealtimeChannelTests {
     )
 
     // Create a channel without a presence stream initially
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     try await socket.connect()
 
@@ -264,7 +264,7 @@ struct RealtimeChannelTests {
     let presence = channel.presenceChanges()
 
     // Verify that the presence listener exists
-    #expect(await channel.hasPresenceListener)
+    #expect(channel.hasPresenceListener)
 
     Task {
       try? await channel.subscribe()
@@ -307,7 +307,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -338,7 +338,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     let task = Task { try await channel.httpSend(event: "test", payload: ["data": "test"]) }
     for await _ in requestStarted { break }
@@ -368,7 +368,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", data: Data())
@@ -400,7 +400,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic") { config in
+    let channel = socket.channel("test-topic") { config in
       config.isPrivate = true
     }
 
@@ -442,7 +442,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("room/one")
+    let channel = socket.channel("room/one")
 
     try await channel.httpSend(event: "cursor move", payload: ["x": 1])
 
@@ -472,7 +472,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     let payload = Data([0x01, 0x02, 0x03])
     try await channel.httpSend(event: "binary-event", data: payload)
@@ -502,7 +502,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", data: Data([0x01]))
@@ -533,7 +533,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -560,7 +560,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -586,7 +586,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     await #expect(throws: CancellationError.self) {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -608,7 +608,7 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     await #expect(throws: FetchError.self) {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -635,7 +635,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: .seconds(3))
 
@@ -663,7 +663,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"])
 
@@ -691,7 +691,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -720,7 +720,7 @@ struct RealtimeChannelTests {
       clock: ContinuousClock()
     )
 
-    let channel = await socket.channel("test-topic")
+    let channel = socket.channel("test-topic")
 
     do {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
@@ -750,7 +750,7 @@ struct RealtimeChannelTests {
         clock: ContinuousClock()
       )
 
-      let channel = await socket.channel("test-topic")
+      let channel = socket.channel("test-topic")
 
       let serverTask = Task { @Sendable [server] in
         for await event in server.events {
@@ -775,7 +775,7 @@ struct RealtimeChannelTests {
 
       try await socket.connect()
       try? await channel.subscribe()
-      #expect(await channel.status == .subscribed)
+      #expect(channel.status == .subscribed)
 
       server.send(
         RealtimeMessage(
@@ -788,7 +788,7 @@ struct RealtimeChannelTests {
       )
 
       await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      #expect(await channel.status == .unsubscribed)
+      #expect(channel.status == .unsubscribed)
 
       await socket.disconnect()
     }

@@ -11,7 +11,7 @@ struct RealtimeChannelPushTests {
   @Test
   func broadcastWithoutAcknowledgementReturnsOnceSent() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
     _ = try await h.subscribe(channel)
 
     try await channel.broadcast(event: "cursor", payload: ["x": 1] as JSONObject)
@@ -22,7 +22,7 @@ struct RealtimeChannelPushTests {
   @Test
   func broadcastBeforeSubscribeThrowsNotSubscribed() async {
     let h = Harness()
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
 
     let error = await #expect(throws: RealtimeError.self) {
       try await channel.broadcast(event: "cursor", payload: ["x": 1] as JSONObject)
@@ -33,7 +33,7 @@ struct RealtimeChannelPushTests {
   @Test
   func untrackBeforeSubscribeThrowsNotSubscribed() async {
     let h = Harness()
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.untrack() }
     #expect(error?.kind == .notSubscribed)
@@ -42,7 +42,7 @@ struct RealtimeChannelPushTests {
   @Test
   func trackWaitsForTheServerReplyWithoutBroadcastAcknowledgement() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
     let join = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -60,7 +60,7 @@ struct RealtimeChannelPushTests {
   func trackEncodesThePayloadWithTheGivenEncoder() async throws {
     struct Status: Encodable { var lastSeenAt: Int }
     let h = Harness()
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
     let join = try await h.subscribe(channel)
     let encoder = JSONEncoder()
     encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -76,7 +76,7 @@ struct RealtimeChannelPushTests {
   @Test
   func untrackWithoutReplyThrowsTimeout() async throws {
     let h = Harness(timeout: .seconds(10))
-    let channel = await h.client.channel("room")
+    let channel = h.client.channel("room")
     _ = try await h.subscribe(channel)
 
     let push = Task { try await channel.untrack() }
@@ -91,7 +91,7 @@ struct RealtimeChannelPushTests {
   @Test
   func acknowledgedPushReturnsOnServerReply() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     let join = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -106,7 +106,7 @@ struct RealtimeChannelPushTests {
   @Test
   func errorReplyThrowsTheServerReason() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     let join = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -126,7 +126,7 @@ struct RealtimeChannelPushTests {
   @Test
   func errorReplyWithACodedReasonCarriesTheServerCode() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     let join = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -149,7 +149,7 @@ struct RealtimeChannelPushTests {
   @Test
   func pushWithoutReplyThrowsTimeout() async throws {
     let h = Harness(timeout: .seconds(10))
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     _ = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -164,7 +164,7 @@ struct RealtimeChannelPushTests {
   @Test
   func cancellingTheAwaitingTaskThrowsCancellationErrorAndDropsTheSlot() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     _ = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -178,7 +178,7 @@ struct RealtimeChannelPushTests {
   @Test
   func disconnectFailsPendingPushWithNotConnected() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     _ = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
@@ -192,7 +192,7 @@ struct RealtimeChannelPushTests {
   @Test
   func serverCloseFailsPendingPushWithChannelClosedByServer() async throws {
     let h = Harness()
-    let channel = await h.client.channel("room") { $0.broadcast.acknowledge = true }
+    let channel = h.client.channel("room") { $0.broadcast.acknowledge = true }
     let join = try await h.subscribe(channel)
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }

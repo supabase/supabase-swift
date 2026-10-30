@@ -77,7 +77,7 @@ final class RealtimeTestHost: Sendable {
       clock: clock
     )
 
-    let statusChanges = await client.statusChanges()
+    let statusChanges = client.statusChanges()
     let statusObserver = Task {
       for await status in statusChanges {
         state.withValue { $0.statuses.append(status) }

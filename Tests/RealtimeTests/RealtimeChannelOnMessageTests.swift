@@ -28,7 +28,7 @@ struct RealtimeChannelOnMessageTests {
       options: RealtimeClientOptions()
     )
     self.client = client
-    self.sut = await client.channel("public:messages")
+    self.sut = client.channel("public:messages")
     let timestamp = Date(timeIntervalSince1970: 1_703_592_000)
     self.commitTimestamp = timestamp
     self.commitTimestampJSON = try JSONValue(timestamp)
@@ -60,7 +60,7 @@ struct RealtimeChannelOnMessageTests {
     )
 
     #expect(await collect(events) == [.postgresChangesReady])
-    #expect(await sut.status == .unsubscribed)
+    #expect(sut.status == .unsubscribed)
   }
 
   @Test
@@ -466,22 +466,22 @@ struct RealtimeChannelOnMessageTests {
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.close))
 
-    #expect(await client.channelsByTopic[sut.topic] == nil)
+    #expect(client.sinks.channel(for: sut.topic) == nil)
   }
 
   @Test
   func closeForStaleJoinRefDoesNotRemoveChannel() async {
     await sut.onMessage(message(event: ChannelEvent.close, joinRef: "stale-ref"))
 
-    #expect(await client.channelsByTopic[sut.topic] != nil)
+    #expect(client.sinks.channel(for: sut.topic) != nil)
   }
 
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
     await sut.onMessage(message(event: ChannelEvent.error))
 
-    #expect(await client.channelsByTopic[sut.topic] != nil)
-    #expect(await sut.status == .unsubscribed)
+    #expect(client.sinks.channel(for: sut.topic) != nil)
+    #expect(sut.status == .unsubscribed)
   }
 
   @Test

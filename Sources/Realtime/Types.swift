@@ -304,7 +304,7 @@ extension RealtimeChannelStatus {
 /// The type is not `Equatable`: use ``isConnected`` and ``error``, or match a case.
 ///
 /// ```swift
-/// for await status in await client.statusChanges() {
+/// for await status in client.statusChanges() {
 ///   if case .reconnecting(let attempt, let retryIn, _) = status {
 ///     print("Attempt \(attempt + 1) in \(retryIn)")
 ///   }

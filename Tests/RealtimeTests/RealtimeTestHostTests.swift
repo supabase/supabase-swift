@@ -10,7 +10,7 @@ struct RealtimeTestHostTests {
   @Test
   func subscribeCompletesWhenTheServerConfirmsTheJoin() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
 
     async let subscribed: Void = channel.subscribe()
     let join = try await host.receive(event: "phx_join")
@@ -18,7 +18,7 @@ struct RealtimeTestHostTests {
     host.confirmJoin(join)
     try await subscribed
 
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
     await host.waitUntil { host.statuses == [.disconnected, .connecting, .connected] }
     #expect(host.connectCount == 1)
   }
@@ -26,7 +26,7 @@ struct RealtimeTestHostTests {
   @Test
   func acknowledgedBroadcastResolvesOnTheServerReply() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room") {
+    let channel = host.client.channel("room") {
       $0.broadcast.acknowledge = true
     }
 
@@ -64,23 +64,23 @@ struct RealtimeTestHostTests {
   @Test
   func topicIsTheUserNameAndTheWireTopicIsPrefixed() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
 
     #expect(channel.topic == "room")
-    #expect(await host.client.channelsByTopic["room"] === channel)
+    #expect(host.client.sinks.channel(for: "room") === channel)
 
     async let subscribed: Void = channel.subscribe()
     let join = try await host.receive(event: "phx_join")
     #expect(join.topic == "realtime:room")
     host.confirmJoin(join)
     try await subscribed
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
   }
 
   @Test
   func aTopicThatStartsWithRealtimeIsStillPrefixedOnTheWire() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("realtime:room")
+    let channel = host.client.channel("realtime:room")
 
     #expect(channel.topic == "realtime:room")
 
@@ -89,6 +89,6 @@ struct RealtimeTestHostTests {
     #expect(join.topic == "realtime:realtime:room")
     host.confirmJoin(join)
     try await subscribed
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
   }
 }

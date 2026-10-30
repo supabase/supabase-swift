@@ -17,7 +17,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func presenceChangesReportJoinsAndLeavesPerKey() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var changes = channel.presenceChanges().makeAsyncIterator()
     try await subscribe(channel, on: host)
 
@@ -42,7 +42,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func presenceStatesYieldTheCurrentStateThenEverySync() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var states = channel.presenceStates().makeAsyncIterator()
     #expect(await states.next() == PresenceState())
     try await subscribe(channel, on: host)
@@ -57,7 +57,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func presenceStatesAloneEnablePresenceOnJoin() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     let states = channel.presenceStates()
 
     async let subscribed: Void = channel.subscribe()
@@ -73,7 +73,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func diffBeforeTheFirstStateWaitsForIt() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var states = channel.presenceStates().makeAsyncIterator()
     _ = await states.next()
     try await subscribe(channel, on: host)
@@ -87,7 +87,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func aRejoinReportsOnlyRealJoinsAndLeaves() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var changes = channel.presenceChanges().makeAsyncIterator()
     let firstJoin = try await subscribe(channel, on: host)
     sendPresenceState(
@@ -96,7 +96,7 @@ struct RealtimeChannelPresenceTests {
     _ = await changes.next()
 
     try await dropSocketAndRejoin(channel, after: firstJoin, on: host)
-    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u2"])
+    #expect(Set(channel.presenceState.entries.keys) == ["u1", "u2"])
     sendPresenceState(
       ["u1": metas([("r1", "ana")]), "u3": metas([("r3", "cy")])], on: channel, host: host
     )
@@ -104,13 +104,13 @@ struct RealtimeChannelPresenceTests {
     let change = try #require(await changes.next())
     #expect(Set(change.joins.keys) == ["u3"])
     #expect(Set(change.leaves.keys) == ["u2"])
-    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u3"])
+    #expect(Set(channel.presenceState.entries.keys) == ["u1", "u3"])
   }
 
   @Test
   func unsubscribeClearsTheStateAndReportsTheLeaves() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var changes = channel.presenceChanges().makeAsyncIterator()
     let join = try await subscribe(channel, on: host)
     sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
@@ -127,13 +127,13 @@ struct RealtimeChannelPresenceTests {
     await left
 
     #expect(await changes.next()?.leaves["u1"]?.map(\.ref) == ["r1"])
-    #expect(await channel.presenceState == PresenceState())
+    #expect(channel.presenceState == PresenceState())
   }
 
   @Test
   func presenceMessagesFromAnotherJoinAreIgnored() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var states = channel.presenceStates().makeAsyncIterator()
     _ = await states.next()
     let join = try await subscribe(channel, on: host)
@@ -147,7 +147,7 @@ struct RealtimeChannelPresenceTests {
   @Test
   func presenceStatesSkipASyncThatChangesNothing() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room")
+    let channel = host.client.channel("room")
     var states = channel.presenceStates().makeAsyncIterator()
     _ = await states.next()
     try await subscribe(channel, on: host)

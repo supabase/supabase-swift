@@ -22,28 +22,28 @@ struct RealtimeClientChannelsTests {
 
   @Test
   func channelsListsCreatedChannels() async {
-    _ = await client.channel("a")
-    _ = await client.channel("b")
-    _ = await client.channel("a")
+    _ = client.channel("a")
+    _ = client.channel("b")
+    _ = client.channel("a")
 
-    let topics = await client.channels.map(\.topic)
+    let topics = client.channels.map(\.topic)
     #expect(topics.count == 2)
     #expect(Set(topics) == ["a", "b"])
   }
 
   @Test
   func channelsDropsRemovedChannels() async {
-    let first = await client.channel("a")
-    _ = await client.channel("b")
+    let first = client.channel("a")
+    _ = client.channel("b")
 
     await client.removeChannel(first)
 
-    #expect(await client.channels.map(\.topic) == ["b"])
+    #expect(client.channels.map(\.topic) == ["b"])
   }
 
   @Test
   func channelsDropsAChannelTheServerClosed() async {
-    let channel = await client.channel("a")
+    let channel = client.channel("a")
 
     await channel.onMessage(
       RealtimeMessage(
@@ -51,14 +51,14 @@ struct RealtimeClientChannelsTests {
       )
     )
 
-    #expect(await client.channels.isEmpty)
+    #expect(client.channels.isEmpty)
   }
 
   @Test
   func aLateCloseForAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
-    let old = await client.channel("a")
+    let old = client.channel("a")
     await client.removeChannel(old)
-    let new = await client.channel("a")
+    let new = client.channel("a")
 
     await old.onMessage(
       RealtimeMessage(
@@ -66,29 +66,29 @@ struct RealtimeClientChannelsTests {
       )
     )
 
-    #expect(await client.channels.count == 1)
-    #expect(await client.channels.first === new)
+    #expect(client.channels.count == 1)
+    #expect(client.channels.first === new)
   }
 
   @Test
   func removingAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
-    let old = await client.channel("a")
+    let old = client.channel("a")
     await old.onMessage(
       RealtimeMessage(
         joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
       )
     )
-    let new = await client.channel("a")
+    let new = client.channel("a")
 
     await client.removeChannel(old)
 
-    #expect(await client.channels.count == 1)
-    #expect(await client.channels.first === new)
+    #expect(client.channels.count == 1)
+    #expect(client.channels.first === new)
   }
 
   @Test
   func configureAppliesTheConfiguration() async {
-    let channel = await client.channel("private-room", configure: { $0.isPrivate = true })
+    let channel = client.channel("private-room", configure: { $0.isPrivate = true })
 
     #expect(channel.configuration.isPrivate)
   }

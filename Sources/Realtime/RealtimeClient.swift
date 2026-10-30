@@ -35,7 +35,7 @@ actor RealtimeExecutor {}
 ///
 /// try await client.connect()
 ///
-/// let channel = await client.channel("room:lobby")
+/// let channel = client.channel("room:lobby")
 /// try await channel.subscribe()
 /// ```
 ///
@@ -203,22 +203,20 @@ public actor RealtimeClient {
   /// would spuriously open a connection.
   var wasConnectedBeforeBackground = false
 
-  /// The current WebSocket connection status.
-  public var status: RealtimeClientStatus { connection.status }
-  private var statusContinuations: [UUID: AsyncStream<RealtimeClientStatus>.Continuation] = [:]
+  /// The published status and heartbeats, and the channels by their ``RealtimeChannel/topic``.
+  /// Only this actor yields into them.
+  nonisolated let sinks = ClientSinks()
 
-  private var lastHeartbeat: HeartbeatEvent?
-  private var heartbeatContinuations: [UUID: AsyncStream<HeartbeatEvent>.Continuation] = [:]
+  /// The current WebSocket connection status.
+  public nonisolated var status: RealtimeClientStatus {
+    sinks.status.current ?? .disconnected(nil)
+  }
 
   /// Every channel this client created and has not removed.
   ///
   /// ``channel(_:configure:)`` adds a channel. ``removeChannel(_:)``, ``removeAllChannels()``,
   /// and a server that closes the channel remove it. The order is not specified.
-  public var channels: [RealtimeChannel] { Array(channelsByTopic.values) }
-
-  /// The channels by their ``RealtimeChannel/topic``. Incoming messages carry the wire topic; see
-  /// ``RealtimeChannel/topic(forWireTopic:)``.
-  private(set) var channelsByTopic: [String: RealtimeChannel] = [:]
+  public nonisolated var channels: [RealtimeChannel] { sinks.channels }
 
   /// Creates a new ``RealtimeClient``.
   ///
@@ -311,12 +309,7 @@ public actor RealtimeClient {
       break
     }
     // `tasks` cancels its own contents when it is destroyed right after this body.
-    for continuation in statusContinuations.values {
-      continuation.finish()
-    }
-    for continuation in heartbeatContinuations.values {
-      continuation.finish()
-    }
+    sinks.finishAll()
   }
 
   // MARK: - Status
@@ -328,21 +321,12 @@ public actor RealtimeClient {
   /// client.
   ///
   /// ```swift
-  /// for await status in await client.statusChanges() {
+  /// for await status in client.statusChanges() {
   ///   print("Status changed to \(status)")
   /// }
   /// ```
-  public func statusChanges() -> AsyncStream<RealtimeClientStatus> {
-    let (stream, continuation) = AsyncStream<RealtimeClientStatus>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    let id = UUID()
-    statusContinuations[id] = continuation
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.removeStream(id) }
-    }
-    continuation.yield(status)
-    return stream
+  public nonisolated func statusChanges() -> AsyncStream<RealtimeClientStatus> {
+    sinks.status.subscribe()
   }
 
   /// An async stream that emits each step of the heartbeat cycle.
@@ -353,49 +337,27 @@ public actor RealtimeClient {
   /// releasing the client.
   ///
   /// ```swift
-  /// for await event in await client.heartbeats() {
+  /// for await event in client.heartbeats() {
   ///   if case .acknowledged(let latency) = event {
   ///     print("Round trip: \(latency)")
   ///   }
   /// }
   /// ```
-  public func heartbeats() -> AsyncStream<HeartbeatEvent> {
-    let (stream, continuation) = AsyncStream<HeartbeatEvent>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    let id = UUID()
-    heartbeatContinuations[id] = continuation
-    continuation.onTermination = { [weak self] _ in
-      Task { await self?.removeStream(id) }
-    }
-    if let lastHeartbeat {
-      continuation.yield(lastHeartbeat)
-    }
-    return stream
-  }
-
-  /// `onTermination` runs on the consumer's context, so the removal hops back here once.
-  private func removeStream(_ id: UUID) {
-    statusContinuations[id] = nil
-    heartbeatContinuations[id] = nil
+  public nonisolated func heartbeats() -> AsyncStream<HeartbeatEvent> {
+    sinks.heartbeats.subscribe()
   }
 
   /// Called by `apply(_:)` after `connection` changed.
   func connectionDidChange() {
+    // Published first: `status` reads the sink, and the refresh timer below checks it.
+    sinks.status.yield(connection.status)
     // The refresh timer runs only while connected: it stops here on a disconnect and starts
     // again on every connect and reconnect.
     scheduleAccessTokenRefresh()
-    let status = status
-    for continuation in statusContinuations.values {
-      continuation.yield(status)
-    }
   }
 
   func recordHeartbeat(_ event: HeartbeatEvent) {
-    lastHeartbeat = event
-    for continuation in heartbeatContinuations.values {
-      continuation.yield(event)
-    }
+    sinks.heartbeats.yield(event)
   }
 
   // MARK: - Channels
@@ -409,44 +371,39 @@ public actor RealtimeClient {
   /// configuration is fixed when the channel is created; remove the channel first to change it.
   ///
   /// > Note: This method does not subscribe to the channel. Call ``RealtimeChannel/subscribe()``
-  /// > on the returned instance to join the topic.
+  /// > on the returned instance to join the topic. Only the subscribe cancels a disconnect
+  /// > scheduled by ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``.
   ///
   /// - Parameters:
   ///   - topic: The channel topic name, such as `"room:lobby"`.
   ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: privacy,
   ///     broadcast, presence and Postgres changes options.
   /// - Returns: A ``RealtimeChannel`` bound to this client.
-  public func channel(
+  public nonisolated func channel(
     _ topic: String,
     configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannel {
-    apply(.channelAdded)
-
     var configuration = RealtimeChannelConfiguration()
     configure(&configuration)
 
-    if let channel = channelsByTopic[topic] {
-      if channel.configuration != configuration {
-        reportIssue(
-          """
-          Channel "\(topic)" already exists with a different configuration. The existing channel \
-          is returned unchanged; remove it first to change its configuration.
-          """
-        )
-      }
-      return channel
+    let channel = sinks.channel(for: topic) { [configuration] in
+      RealtimeChannel(topic: topic, configuration: configuration, client: self, logger: logger)
     }
-
-    let channel = RealtimeChannel(
-      topic: topic,
-      configuration: configuration,
-      client: self,
-      logger: logger
-    )
-
-    channelsByTopic[topic] = channel
-
+    if channel.configuration != configuration {
+      reportIssue(
+        """
+        Channel "\(topic)" already exists with a different configuration. The existing channel \
+        is returned unchanged; remove it first to change its configuration.
+        """
+      )
+    }
     return channel
+  }
+
+  /// Called by ``RealtimeChannel/subscribe()``: a channel that joins cancels a pending idle
+  /// disconnect.
+  func channelWillSubscribe() {
+    apply(.channelAdded)
   }
 
   /// Unsubscribes from and removes a channel, ending every stream opened on it.
@@ -464,7 +421,7 @@ public actor RealtimeClient {
     forget(channel)
     await channel.finishStreams()
 
-    if channelsByTopic.isEmpty {
+    if sinks.channels.isEmpty {
       logger.debug("No more subscribed channel in socket")
       if options.disconnectOnEmptyChannelsAfter <= .zero {
         await disconnect()
@@ -482,9 +439,7 @@ public actor RealtimeClient {
   /// Clears `channel`'s topic only while it still holds `channel`: a newer channel created for
   /// the same topic after `channel` was removed stays registered.
   private func forget(_ channel: RealtimeChannel) {
-    if channelsByTopic[channel.topic] === channel {
-      channelsByTopic[channel.topic] = nil
-    }
+    sinks.removeChannel(channel)
   }
 
   /// Unsubscribes from and removes all channels, then disconnects immediately.
@@ -495,7 +450,7 @@ public actor RealtimeClient {
   public func removeAllChannels() async {
     // Keep the channels routable until they have unsubscribed: each one waits for the server's
     // `phx_close`, which `onMessage` can only deliver to a channel still in `channels`.
-    let removed = Array(channelsByTopic.values)
+    let removed = sinks.channels
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
         group.addTask {
@@ -696,7 +651,7 @@ public actor RealtimeClient {
   /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
   /// went out with another token. A channel still waiting for a token joins with this one.
   private func pushAccessToken(_ token: String) async {
-    for channel in channelsByTopic.values {
+    for channel in sinks.channels {
       // A newer token was stored while this loop was suspended; its own loop sends it.
       guard tokens.token == token else { break }
       switch channel.status {

@@ -81,47 +81,47 @@ struct RealtimeLifecycleTests {
   @Test
   func handleAppForegroundWhileConnectedIsNoOp() async throws {
     let sut = makeClient()
-    let channel = await sut.channel("public:messages")
+    let channel = sut.channel("public:messages")
     try await channel.subscribe()
 
-    #expect(await sut.status == .connected)
-    #expect(await channel.status == .subscribed)
+    #expect(sut.status == .connected)
+    #expect(channel.status == .subscribed)
 
     await sut.handleAppBackground()
     await sut.handleAppForeground()
 
-    #expect(await sut.status == .connected)
-    #expect(await channel.status == .subscribed)
+    #expect(sut.status == .connected)
+    #expect(channel.status == .subscribed)
   }
 
   @Test
   func handleAppForegroundWithoutPriorBackgroundIsNoOp() async {
     let sut = makeClient()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
 
     await sut.handleAppForeground()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
   }
 
   @Test
   func handleAppForegroundDoesNotConnectIfNotConnectedBeforeBackground() async {
     let sut = makeClient()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
 
     await sut.handleAppBackground()
     await sut.handleAppForeground()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
   }
 
   @Test
   func handleAppForegroundReconnectsWhenBackgroundedWhileConnected() async throws {
     let sut = makeClient()
     try await sut.connect()
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
 
     await sut.handleAppBackground()
     // Open the stream before the OS close so no transition is missed.
-    let statusUpdates = await sut.statusChanges()
+    let statusUpdates = sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
     _ = await statusUpdates.first { $0 == .reconnecting }
@@ -129,23 +129,23 @@ struct RealtimeLifecycleTests {
     // auto-reconnect task wakes and reconnects.
     await testClock.advance(by: .seconds(8))
     _ = await statusUpdates.first { $0 == .connected }
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
 
     // the connection and rejoins channels itself.
     await sut.handleAppForeground()
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
   }
 
   @Test
   func handleAppForegroundResubscribesChannelsWhenBackgroundedWhileConnected() async throws {
     let sut = makeClient()
-    let channel = await sut.channel("public:messages")
+    let channel = sut.channel("public:messages")
     try await channel.subscribe()
-    #expect(await sut.status == .connected)
-    #expect(await channel.status == .subscribed)
+    #expect(sut.status == .connected)
+    #expect(channel.status == .subscribed)
 
     await sut.handleAppBackground()
-    let statusUpdates = await sut.statusChanges()
+    let statusUpdates = sut.statusChanges()
     let channelUpdates = channel.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
@@ -153,18 +153,18 @@ struct RealtimeLifecycleTests {
 
     await testClock.advance(by: .seconds(8))
     _ = await statusUpdates.first { $0 == .connected }
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
 
     // rejoinChannels() runs after the reconnect: it resets the channel and joins again on
     // the new socket. Wait for that new join to complete rather than for a `.subscribed`
     // that the stale pre-reconnect state could still satisfy.
     _ = await channelUpdates.first { $0 == .subscribing }
     _ = await channelUpdates.first { $0 == .subscribed }
-    #expect(await channel.status == .subscribed)
+    #expect(channel.status == .subscribed)
 
     await sut.handleAppForeground()
-    #expect(await sut.status == .connected)
-    #expect(await channel.status == .subscribed)
+    #expect(sut.status == .connected)
+    #expect(channel.status == .subscribed)
   }
 
   @Test
@@ -224,14 +224,14 @@ struct RealtimeLifecycleTests {
       clock: testClock
     )
 
-    let channelA = await sut.channel("topic-a")
-    let channelB = await sut.channel("topic-b")
+    let channelA = sut.channel("topic-a")
+    let channelB = sut.channel("topic-b")
     try await channelA.subscribe()
     try await channelB.subscribe()
-    #expect(await channelA.status == .subscribed)
-    #expect(await channelB.status == .subscribed)
+    #expect(channelA.status == .subscribed)
+    #expect(channelB.status == .subscribed)
 
-    let statusUpdates = await sut.statusChanges()
+    let statusUpdates = sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "OS teardown")
     // The client waits out the backoff in `.reconnecting`, not `.disconnected`.
     _ = await statusUpdates.first { $0 == .reconnecting }
@@ -250,14 +250,14 @@ struct RealtimeLifecycleTests {
   func explicitDisconnectWhileBackgroundedDoesNotReconnectOnForeground() async throws {
     let sut = makeClient()
     try await sut.connect()
-    #expect(await sut.status == .connected)
+    #expect(sut.status == .connected)
 
     await sut.handleAppBackground()
     await sut.disconnect()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
 
     await sut.handleAppForeground()
-    #expect(await sut.status == .disconnected)
+    #expect(sut.status == .disconnected)
   }
 
   @Test
@@ -271,7 +271,7 @@ struct RealtimeLifecycleTests {
       let sut = makeClient()
       box.client = sut
       try await sut.connect()
-      #expect(await sut.status == .connected)
+      #expect(sut.status == .connected)
 
       await testClock.advance(by: .seconds(30))
 
@@ -298,7 +298,7 @@ struct RealtimeLifecycleTests {
       let sut = makeClient()
       box.client = sut
       try await sut.connect()
-      #expect(await sut.status == .connected)
+      #expect(sut.status == .connected)
     }
     try await scope()
 
@@ -328,10 +328,10 @@ struct RealtimeLifecycleTests {
       let sut = makeClient()
       box.client = sut
       try await sut.connect()
-      let subscribed = await sut.channel("subscribed")
+      let subscribed = sut.channel("subscribed")
       try await subscribed.subscribe()
       box.subscribed = subscribed
-      box.idle = await sut.channel("idle")
+      box.idle = sut.channel("idle")
     }
     try await scope()
 

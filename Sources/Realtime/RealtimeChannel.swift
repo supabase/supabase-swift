@@ -20,7 +20,7 @@ import Logging
 /// the new binding. Broadcast and system streams can be opened at any time.
 ///
 /// ```swift
-/// let channel = await client.channel("room:lobby") { config in
+/// let channel = client.channel("room:lobby") { config in
 ///   config.broadcast.receiveOwnMessages = true
 /// }
 ///

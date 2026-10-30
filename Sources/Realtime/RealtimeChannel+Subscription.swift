@@ -60,6 +60,7 @@ extension RealtimeChannel {
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
   ///   channel during the join, and `CancellationError` when the calling task is cancelled.
   public func subscribe() async throws {
+    await client?.channelWillSubscribe()
     switch state {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -84,10 +85,7 @@ extension RealtimeChannel {
   /// Leaves the Realtime topic and transitions the channel to
   /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
-    // Probe the socket before reading `state`: the probe suspends, and another caller could move
-    // the state while this one waits. After it, the switch and the transition run without a
-    // suspension point.
-    let socketConnected = await isSocketConnected()
+    let socketConnected = isSocketConnected
     // A later subscribe is a new subscription, not a rejoin.
     hasBeenSubscribed = false
     deliverPresence(presence.clear())
@@ -570,7 +568,7 @@ extension RealtimeChannel {
   ///   `connectOnSubscribe` is off, or the server refused the upgrade for good.
   private func ensureSocketConnected() async throws -> Bool {
     guard let client else { throw RealtimeError.clientReleased }
-    let status = await client.status
+    let status = client.status
     switch status {
     case .connected:
       return true
@@ -590,13 +588,13 @@ extension RealtimeChannel {
     } catch {
       logger.debug("Connect for channel '\(topic)' failed: \(error)")
     }
-    return await client.status.isConnected
+    return client.status.isConnected
   }
 
   /// Socket-status probe: never connects. Used to decide whether `phx_leave` can be delivered
   /// at all.
-  private func isSocketConnected() async -> Bool {
-    await client?.status.isConnected ?? false
+  private var isSocketConnected: Bool {
+    client?.status.isConnected ?? false
   }
 
   /// Fails the parked join waiter. With `ref`, only if the parked waiter belongs to that join;

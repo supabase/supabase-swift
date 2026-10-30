@@ -33,9 +33,10 @@ extension RealtimeClient {
     /// A hint that the network may be back (the app came to the foreground). Cuts a backoff
     /// wait short; ignored in every other state.
     case wake
-    /// The last channel was removed; disconnect after `disconnectAfter` unless one is added.
+    /// The last channel was removed; disconnect after `disconnectAfter` unless a channel
+    /// subscribes first.
     case lastChannelRemoved(disconnectAfter: Duration)
-    /// A channel was added.
+    /// A channel is about to subscribe.
     case channelAdded
   }
 
@@ -337,7 +338,7 @@ extension RealtimeClient {
 
     apply(.disconnectRequested(code: code, reason: reason))
 
-    for channel in channelsByTopic.values {
+    for channel in sinks.channels {
       await channel.socketDidDisconnect()
     }
   }
@@ -379,7 +380,7 @@ extension RealtimeClient {
       break
     }
 
-    let hadChannels = !channelsByTopic.isEmpty
+    let hadChannels = !sinks.channels.isEmpty
     try? await connect()
 
     if hadChannels, status.isConnected {
@@ -448,7 +449,7 @@ extension RealtimeClient {
   }
 
   func rejoinChannels() async {
-    for channel in channelsByTopic.values {
+    for channel in sinks.channels {
       await channel.resetForReconnect()
       // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
       // and a task that waited for it would keep a released client alive.
@@ -579,7 +580,7 @@ extension RealtimeClient {
   }
 
   private func channel(forWireTopic wireTopic: String) -> RealtimeChannel? {
-    RealtimeChannel.topic(forWireTopic: wireTopic).flatMap { channelsByTopic[$0] }
+    RealtimeChannel.topic(forWireTopic: wireTopic).flatMap { sinks.channel(for: $0) }
   }
 
   // MARK: Reconnect
