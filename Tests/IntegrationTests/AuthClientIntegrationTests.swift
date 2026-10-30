@@ -418,6 +418,21 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func verifyOTPForRecoveryEmitsPasswordRecovery() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    _ = try await admin.admin.createUser(
+      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
+    let link = try await admin.admin.generateLink(params: .recovery(email: email))
+
+    try await expectAuthEvents([.initialSession, .passwordRecovery]) {
+      try await authClient.verifyOTP(tokenHash: link.properties.hashedToken, type: .recovery)
+    }
+
+    #expect(authClient.currentUser?.email == email)
+  }
+
+  @Test
   func generateLinkInvite() async throws {
     let client = Self.makeClient(serviceRole: true)
     let email = mockEmail()
