@@ -804,8 +804,9 @@ public final class AuthClient: Sendable {
   /// or an email change that waits for a second confirmation.
   ///
   /// A code without a flow ID, such as the code in an email link, can belong to any pending flow.
-  /// The client tries the pending flows newest first, so a link from an earlier email still
-  /// finishes its own flow.
+  /// The client tries the pending flows newest first, so a link from an earlier email can still
+  /// finish its own flow. The server may have made that link invalid already, for example when a
+  /// later email went to the same user.
   ///
   /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
   /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
@@ -858,13 +859,13 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Exchanges `code` with the flow `flowID` names. Never falls back to another flow.
+  /// Exchanges `code` with the flow `flowID` names. With an ID, never falls back to another flow.
   ///
   /// Without an ID, the code can belong to any pending flow, for example an email link that cannot
   /// carry an ID. The client tries the flows newest first. A ``ErrorCode/badCodeVerifier``
-  /// rejection means the code belongs to another flow, so the client keeps that flow and tries the
-  /// next one. A rejection that does not name the flow, ``ErrorCode/flowStateNotFound`` or
-  /// ``ErrorCode/flowStateExpired``, keeps every flow and throws.
+  /// rejection means the code belongs to another flow, so the client tries the next one. Any other
+  /// rejection throws. A guessed flow is kept on every rejection, because a rejection does not
+  /// prove the code was that flow's; the TTL drops it.
   private func exchange(
     code: String,
     flowID: UUID?
@@ -891,8 +892,8 @@ public final class AuthClient: Sendable {
         "No pending flow for this code. It finished, expired, or started on another device.")
   }
 
-  /// `guessed` is `true` when the caller chose `flow` without an ID, so a rejection that does not
-  /// prove the code belongs to `flow` keeps it.
+  /// `guessed` is `true` when the caller chose `flow` without an ID. A rejection then keeps `flow`,
+  /// because it does not prove the code belongs to `flow`.
   private func exchange(
     code: String,
     flow: PendingFlowRecord,
@@ -904,9 +905,7 @@ public final class AuthClient: Sendable {
         authAPI.exchangeCodeForSession(authCode: code, codeVerifier: flow.verifier))
     } catch {
       // After a transport error the server may not have seen the code, so a retry can still work.
-      if let error = error as? AuthError, error.response != nil,
-        !(guessed && Self.keepsAGuessedFlow(error))
-      {
+      if !guessed, let error = error as? AuthError, error.response != nil {
         await removeFlow(flow.id)
       }
       throw error
@@ -915,10 +914,6 @@ public final class AuthClient: Sendable {
     await removeFlow(flow.id)
     try await sessionStore.commit(.signedIn(session, event: flow.purpose.event))
     return session
-  }
-
-  private static func keepsAGuessedFlow(_ error: AuthError) -> Bool {
-    [.badCodeVerifier, .flowStateNotFound, .flowStateExpired].contains(error.errorCode)
   }
 
   /// A failed removal is only logged. The flow cannot be used again, and the TTL drops it.
@@ -1015,6 +1010,8 @@ public final class AuthClient: Sendable {
 
     if scope != .others {
       try await sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+      // A redirect cached between the first clear and the commit must not replay either.
+      await dependencies.redirectDeduplicator.removeAll()
     }
 
     do {

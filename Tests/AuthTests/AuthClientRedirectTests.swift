@@ -607,6 +607,22 @@ struct AuthClientRedirectTests {
     #expect(try pendingFlowCount() == 2)
   }
 
+  /// A server failure does not prove the code was the guessed flow's.
+  @Test
+  func withoutAnIDAServerErrorKeepsEveryFlow() async throws {
+    race.answerCodeExchange {
+      Race.error(.internalServerError, code: "unexpected_failure", message: "server error")
+    }
+    let client = race.makeClient()
+    _ = try await client.oauthSignInURL(.github)
+    _ = try await client.oauthSignInURL(.google)
+
+    await #expect(throws: AuthError.self) { try await client.handleRedirect(callback) }
+
+    #expect(race.requestCount(grantType: "pkce") == 1)
+    #expect(try pendingFlowCount() == 2)
+  }
+
   @Test
   func withAnIDABadVerifierRemovesThatFlowOnly() async throws {
     race.answerCodeExchange {

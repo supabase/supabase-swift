@@ -159,8 +159,9 @@ Changes that still compile but behave differently. Check each one by hand.
   old one. In v3 each flow has its own verifier. Pass the `flowID` from `oauthSignInURL` or
   `linkIdentityURL` to `exchangeCodeForSession` to pick one. Without it, as for the code in an
   email link, the client tries the pending flows newest first. A flow that the server rejects
-  with `bad_code_verifier` stays pending, so a link from an earlier email still finishes its own
-  flow.
+  with `bad_code_verifier` stays pending, so a link from an earlier email can still finish its own
+  flow. The server may have made that link invalid already, for example when a later email went
+  to the same user.
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
   session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
