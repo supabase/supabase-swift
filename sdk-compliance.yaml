@@ -346,8 +346,19 @@ features:
     status: implemented
     symbols:
       - AuthClient.signUp
+    supporting_symbols:
       - SignUpResult
+      - SignUpResult.signedIn
+      - SignUpResult.confirmationRequired
+      - SignUpResult.init
+      - SignUpResult.user
+      - SignUpResult.session
       - SignUpOptions
+      - SignUpOptions.init
+      - SignUpOptions.userMetadata
+      - SignUpOptions.redirectTo
+      - SignUpOptions.channel
+      - SignUpOptions.captchaToken
   auth.sign_in.sign_in_with_password:
     status: implemented
     symbols:
@@ -397,7 +408,15 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithIDToken
+    supporting_symbols:
       - IDTokenCredentials
+      - IDTokenCredentials.init
+      - IDTokenCredentials.provider
+      - IDTokenCredentials.idToken
+      - IDTokenCredentials.nonce
+      - IDTokenCredentials.accessToken
+      - IDTokenCredentials.captchaToken
+      - Nonce
       - Nonce.generate
   auth.sign_in.sign_in_anonymously:
     status: implemented
@@ -519,6 +538,9 @@ features:
     status: implemented
     symbols:
       - AuthClient.update
+    supporting_symbols:
+      - UserAttributes
+      - UserAttributes.userMetadata
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
