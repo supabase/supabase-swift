@@ -848,7 +848,7 @@ features:
       - AuthClient.authStateChanges
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with every URL. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."
     symbols:
       - SupabaseClient.handleRedirect
       - AuthClient.handleRedirect
@@ -857,6 +857,9 @@ features:
       - RedirectResult
       - RedirectResult.signedIn
       - RedirectResult.emailChangePending
+  client.authentication_integration.oauth_flow_type:
+    status: not_applicable
+    note: "PKCE is always used; the flow type is not configurable."
 
   client.session_management.custom_storage:
     status: implemented
