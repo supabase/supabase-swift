@@ -52,8 +52,12 @@ Start it from the task that owns the channel:
 .task {
   let channel = await supabase.channel("prices")
   let ticks = await channel.broadcasts(event: "tick")
-  try? await channel.subscribe()
-  await pump(ticks, into: board)
+  do {
+    try await channel.subscribe()
+    await pump(ticks, into: board)
+  } catch {
+    // subscribe() failed, or the task was cancelled.
+  }
   await supabase.removeChannel(channel)
 }
 ```

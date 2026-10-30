@@ -5,8 +5,9 @@ the task ends.
 
 ## Overview
 
-A stream lives as long as the loop that iterates it. Leaving the loop, or cancelling the task
-that runs it, ends the stream and removes its listener. The channel itself stays joined until
+A stream ends when the task that iterates it is cancelled, or when its channel is removed. When
+the stream ends, the channel removes its listener. Breaking out of the loop alone does not end a
+stream that you still hold, so it keeps buffering events. The channel itself stays joined until
 you call ``RealtimeChannel/unsubscribe()`` or ``RealtimeClient/removeChannel(_:)``. So the task
 that iterates the streams also owns the channel, and removes it on the way out.
 
@@ -103,20 +104,30 @@ data again when ``RealtimeChannelEvent/resubscribed`` arrives:
   let channel = await supabase.channel("room:\(roomID)")
   let changes = await channel.postgresChanges(table: "messages")
   let events = await channel.events()
-  try? await channel.subscribe()
 
-  await withTaskGroup { group in
-    group.addTask {
-      for await event in events where event == .resubscribed {
-        await model.reload()
+  do {
+    try await channel.subscribe()
+    await withTaskGroup { group in
+      group.addTask {
+        for await event in events where event == .resubscribed {
+          await model.reload()
+        }
+      }
+      group.addTask {
+        for await change in changes {
+          await model.apply(change)
+        }
       }
     }
-    group.addTask {
-      for await change in changes {
-        await model.apply(change)
-      }
-    }
+  } catch {
+    // subscribe() failed, or the task was cancelled.
   }
   await supabase.removeChannel(channel)
 }
 ```
+
+Catch the error from ``RealtimeChannel/subscribe()`` instead of discarding it with `try?`. A
+failed join leaves the streams open, so a loop after it would wait until the task is cancelled.
+
+A channel that the server closes does not join again. See
+<doc:ConnectionBehavior#When-the-server-closes-a-channel>.

@@ -14,18 +14,22 @@ Every subscription is an `AsyncStream`. Open the streams, subscribe the channel,
 let channel = await supabase.channel("room:42")
 let messages = await channel.broadcasts(event: "message")
 
-try await channel.subscribe()
-for await message in messages {
-  let chat = try message.decode(as: ChatMessage.self)
-  print(chat.text)
+do {
+  try await channel.subscribe()
+  for await message in messages {
+    let chat = try message.decode(as: ChatMessage.self)
+    print(chat.text)
+  }
+} catch {
+  // A RealtimeError from subscribe() or decode(as:), or CancellationError.
 }
 await supabase.removeChannel(channel)
 ```
 
-Streams never throw. A lost socket or a lost join is a status, on
-``RealtimeClient/statusChanges()`` and ``RealtimeChannel/statusChanges()``, and the client
-recovers on its own. Calls with one result, such as ``RealtimeChannel/subscribe()``, throw
-``RealtimeError``.
+Streams never throw. A lost socket is a status, on ``RealtimeClient/statusChanges()``, and the
+client reconnects and joins its channels again on its own. A channel that the server closes does
+not join again; see <doc:ConnectionBehavior#When-the-server-closes-a-channel>. Calls with one
+result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``.
 
 ## Topics
 

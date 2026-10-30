@@ -35,8 +35,9 @@ public import Foundation
 public struct RealtimeChannelConfiguration: Sendable, Hashable {
   /// Whether the channel is private.
   ///
-  /// A private channel checks the `realtime.messages` row level security policies against the
-  /// caller's token on join, and on every broadcast and presence call. See the
+  /// For a private channel, the server works out the caller's permissions from the
+  /// `realtime.messages` row level security policies and the token when the channel joins, and
+  /// checks every broadcast and presence call against them. See the
   /// [Realtime authorization guide](https://supabase.com/docs/guides/realtime/authorization).
   public var isPrivate = false
 

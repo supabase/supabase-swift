@@ -38,14 +38,20 @@ sign-in, token refresh and sign-out, `SupabaseClient` also sends the new token w
 
 ### When a token expires
 
-If a token expires anyway, for example because the closure failed or the device slept through
-the refresh, the server refuses or closes the channel. The client calls the closure again at
-once and joins one more time with the new token.
+A token can expire anyway, for example because the closure failed or the device slept through
+the refresh. What happens next depends on the channel's state:
 
-If that join also fails with an expired token, the channel stops in
-``RealtimeChannelStatus/failed(_:)``, and ``RealtimeChannel/subscribe()`` throws. Without a
-closure, the client has nothing new to send, so call ``RealtimeClient/setAuth(_:)`` before the
-old token expires.
+- **A join that the server refuses for an expired token.** The client calls the closure again at
+  once and joins one more time with the new token. If that join also fails with an expired
+  token, the channel stops in ``RealtimeChannelStatus/failed(_:)``, and
+  ``RealtimeChannel/subscribe()`` throws.
+- **A joined channel.** The server closes it. The client does not join it again: the channel
+  becomes ``RealtimeChannelStatus/unsubscribed`` and its streams end. Make sure a valid token is
+  available, then ask the client for a new channel and subscribe it. See
+  <doc:ConnectionBehavior#When-the-server-closes-a-channel>.
+
+Without a closure, the client has nothing new to send, so call ``RealtimeClient/setAuth(_:)``
+before the old token expires.
 
 ### Private channels and row level security
 
@@ -68,9 +74,9 @@ and the channel stays in ``RealtimeChannelStatus/failed(_:)``. The client does n
 what happens with the publishable key on a private channel: sign the user in, then subscribe
 again.
 
-The server works out the channel's permissions when it joins, from the policies, the token and
-the topic. A policy change does not reach a channel that is already joined. To apply it, remove
-the channel and join again.
+The server works out the channel's permissions when the channel joins, from the policies, the
+token and the topic, and checks each broadcast and presence call against them. To make sure a
+changed policy applies, remove the channel and join again.
 
 With ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` on, a broadcast that a
 policy denies fails with ``RealtimeError/Kind-swift.struct/timeout``, because the server does not

@@ -53,6 +53,22 @@ The client stops when the answer cannot change:
 
 A failure in ``RealtimeClient/connect()`` itself is not retried: `connect()` throws it.
 
+### When the server closes a channel
+
+The automatic rejoin covers a dropped socket. It does not cover a channel that the server ends
+while the socket stays up, for example when the token expires:
+
+- After a close (`phx_close`), the channel's status becomes
+  ``RealtimeChannelStatus/unsubscribed``, the client removes the channel, and every stream on it
+  ends. Your `for await` loops end. To keep receiving events, ask the client for a new channel
+  and subscribe it.
+- After a channel error (`phx_error`), the status becomes
+  ``RealtimeChannelStatus/unsubscribed``, but the channel and its streams stay. Call
+  ``RealtimeChannel/subscribe()`` again.
+
+In both cases ``RealtimeChannel/statusChanges()`` reports ``RealtimeChannelStatus/unsubscribed``
+without a call from you. Watch for it if your screen must stay live.
+
 ### Heartbeat and liveness
 
 The client sends a heartbeat every ``RealtimeClientOptions/heartbeatInterval`` (25 seconds by
@@ -99,9 +115,13 @@ struct RoomView: View {
         guard scenePhase != .background else { return }
         let channel = await supabase.channel("room:\(roomID)")
         let messages = await channel.broadcasts(event: "message")
-        try? await channel.subscribe()
-        for await message in messages {
-          show(message)
+        do {
+          try await channel.subscribe()
+          for await message in messages {
+            show(message)
+          }
+        } catch {
+          // subscribe() failed, or the task was cancelled.
         }
         await supabase.removeChannel(channel)
       }
