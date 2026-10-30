@@ -51,7 +51,8 @@ struct TimerTable {
     entries[id]?.token == token
   }
 
-  /// The token of the timer scheduled for `id`, if any.
+  /// The token of the timer scheduled for `id`, if any. Test hook: `entries` is private, so a
+  /// test cannot read the token any other way, and nothing in the SDK calls it.
   func token(for id: TimerID) -> UInt64? {
     entries[id]?.token
   }

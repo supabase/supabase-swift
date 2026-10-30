@@ -39,7 +39,10 @@ import Helpers
 /// ``RealtimeChannelStatus/unsubscribed``, ``presenceState`` is empty, and new streams end at
 /// once. Get a new channel from ``RealtimeClient/channel(_:configure:)``. A channel whose client
 /// was released reads the same, and its actions throw an error of kind
-/// ``RealtimeError/Kind-swift.struct/notConnected``.
+/// ``RealtimeError/Kind-swift.struct/notConnected``. A handle cannot tell that it was removed
+/// once its client is gone, so a removed channel whose client was released throws
+/// ``RealtimeError/Kind-swift.struct/notConnected``, not
+/// ``RealtimeError/Kind-swift.struct/channelRemoved``.
 ///
 /// ## Topics
 /// ### Identity

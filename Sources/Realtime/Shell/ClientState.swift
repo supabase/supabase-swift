@@ -24,7 +24,7 @@ enum Input: Sendable {
   case tokenWaitCancelled(UUID)
   case appBackground
   case appForeground
-  /// Resumes once every earlier input is applied.
+  /// Resumes once every earlier input is applied. Test hook: only `flushInbox()` yields it.
   case flush(CheckedContinuation<Void, Never>)
 }
 

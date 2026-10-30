@@ -47,9 +47,10 @@ struct RealtimeIsolationTests {
     var presenceCount = 0
     var isConnected = false
     var channelError: RealtimeError?
+    var isPrivate = false
 
     func run() async throws {
-      let channel = await client.channel("room") { $0.isPrivate = false }
+      let channel = await client.channel("room") { $0.isPrivate = self.isPrivate }
       let typed = await channel.postgresChanges(of: Row.self, table: "rooms")
       let raw = await channel.postgresChanges(event: .insert, table: "rooms")
       let states = await channel.presenceStates()

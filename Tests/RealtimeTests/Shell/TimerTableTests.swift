@@ -5,11 +5,12 @@
 
 import Clocks
 import ConcurrencyExtras
+import TestHelpers
 import Testing
 
 @testable import Realtime
 
-@Suite
+@Suite(.mainSerialExecutorSerialized)
 struct TimerTableTests {
   struct Fired: Equatable {
     let id: TimerID

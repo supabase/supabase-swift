@@ -107,7 +107,8 @@ extension RealtimeClient {
     }
   }
 
-  /// Returns once the pump has applied every input yielded before this call.
+  /// Returns once the pump has applied every input yielded before this call. Tests use it to wait
+  /// for the pump; nothing in the SDK calls it.
   nonisolated func flushInbox() async {
     await withCheckedContinuation { continuation in
       if case .terminated = inbox.yield(.flush(continuation)) {

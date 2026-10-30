@@ -30,7 +30,7 @@ enum TokenRace: Sendable {
 
 /// The client's inbox: every edge yields one input, one pump applies them in order, and a stamp
 /// drops the inputs of work that was replaced or stopped.
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.timeLimit(.minutes(1)), .mainSerialExecutorSerialized)
 struct InboxTests {
   // MARK: Order
 

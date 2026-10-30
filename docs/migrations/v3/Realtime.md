@@ -68,8 +68,9 @@ Changes that still compile but behave differently. Check each one by hand.
   `RealtimeClient` is released, `subscribe()`, `broadcast`, `track`, `untrack` and `httpSend`
   throw `RealtimeError` with `kind == .notConnected` and `isRetryable == false`, and
   `unsubscribe()` returns at once. `await channel.status` reads `.unsubscribed`,
-  `await channel.presenceState` is empty, and a new stream ends at once. Keep the client, or the
-  `SupabaseClient`, alive while you use its channels. Search for `RealtimeClient(` and
+  `await channel.presenceState` is empty, and a new stream ends at once. This check comes first:
+  a removed channel whose client was released throws `.notConnected`, not `.channelRemoved`.
+  Keep the client, or the `SupabaseClient`, alive while you use its channels. Search for `RealtimeClient(` and
   `SupabaseClient(` in local scopes.
 - **Pushes need a subscribed channel.** `broadcast`, `track` and `untrack` throw `RealtimeError`
   with `kind == .notSubscribed` when the channel is not `.subscribed`, also while the socket
