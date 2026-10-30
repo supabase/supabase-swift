@@ -14,9 +14,13 @@ struct CodeVerifierStorage: Sendable {
   /// Returns the verifier for `flowId`, or `nil` if none is stored. With `flowId == nil`,
   /// returns the most recently stored verifier.
   var get: @Sendable (_ flowId: String?) -> String?
-  /// Stores `code` under a new slot for `flowId`, evicting the oldest pending flow if the
-  /// ring is full.
-  var set: @Sendable (_ code: String, _ flowId: String) -> Void
+  /// Returns the purpose of the flow `flowId`, or `nil` if none is stored. With `flowId == nil`,
+  /// returns the purpose of the most recently stored verifier.
+  var purpose: @Sendable (_ flowId: String?) -> PendingFlowRecord.Purpose?
+  /// Stores `code` and `purpose` under a new slot for `flowId`, evicting the oldest pending flow
+  /// if the ring is full.
+  var set:
+    @Sendable (_ code: String, _ flowId: String, _ purpose: PendingFlowRecord.Purpose) -> Void
   /// Removes the verifier for `flowId`. With `flowId == nil`, removes the legacy fallback slot.
   var remove: @Sendable (_ flowId: String?) -> Void
   /// Removes every pending verifier.
@@ -36,9 +40,13 @@ extension CodeVerifierStorage {
       configuration.storageKey ?? defaultStorageKey
     }
     let legacyVerifierKey: @Sendable () -> String = { "\(baseStorageKey())-code-verifier" }
+    let legacyPurposeKey: @Sendable () -> String = { "\(baseStorageKey())-code-verifier-purpose" }
     let flowIndexKey: @Sendable () -> String = { "\(baseStorageKey())-flows-code-verifier" }
     let flowSlotKey: @Sendable (String) -> String = { flowId in
       "\(baseStorageKey())-flow-\(flowId)-code-verifier"
+    }
+    let flowPurposeKey: @Sendable (String) -> String = { flowId in
+      "\(baseStorageKey())-flow-\(flowId)-purpose"
     }
 
     let readString: @Sendable (String) -> String? = { key in
@@ -91,20 +99,27 @@ extension CodeVerifierStorage {
         }
         return readString(legacyVerifierKey())
       },
-      set: { code, flowId in
+      purpose: { flowId in
+        readString(flowId.map(flowPurposeKey) ?? legacyPurposeKey())
+          .flatMap(PendingFlowRecord.Purpose.init(rawValue:))
+      },
+      set: { code, flowId, purpose in
         lock.lock()
         defer { lock.unlock() }
 
         writeString(code, flowSlotKey(flowId))
+        writeString(purpose.rawValue, flowPurposeKey(flowId))
 
         var index = readIndex().filter { $0 != flowId }
         index.append(flowId)
         while index.count > maxConcurrentFlows {
           let evicted = index.removeFirst()
           removeKey(flowSlotKey(evicted))
+          removeKey(flowPurposeKey(evicted))
         }
         writeIndex(index)
         writeString(code, legacyVerifierKey())
+        writeString(purpose.rawValue, legacyPurposeKey())
       },
       remove: { flowId in
         lock.lock()
@@ -112,15 +127,18 @@ extension CodeVerifierStorage {
 
         guard let flowId else {
           removeKey(legacyVerifierKey())
+          removeKey(legacyPurposeKey())
           return
         }
 
         let slotValue = readString(flowSlotKey(flowId))
         removeKey(flowSlotKey(flowId))
+        removeKey(flowPurposeKey(flowId))
         writeIndex(readIndex().filter { $0 != flowId })
 
         if let slotValue, slotValue == readString(legacyVerifierKey()) {
           removeKey(legacyVerifierKey())
+          removeKey(legacyPurposeKey())
         }
       },
       removeAll: {
@@ -129,9 +147,11 @@ extension CodeVerifierStorage {
 
         for flowId in readIndex() {
           removeKey(flowSlotKey(flowId))
+          removeKey(flowPurposeKey(flowId))
         }
         removeKey(flowIndexKey())
         removeKey(legacyVerifierKey())
+        removeKey(legacyPurposeKey())
       }
     )
   }

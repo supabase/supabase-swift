@@ -64,7 +64,7 @@ struct DefaultIsolationTests {
       _ = try await client.functions.invoke("function", as: Answer.self)
       let streamed = try await client.functions.stream("function")
       for try await chunk in streamed.body { _ = chunk }
-      for await (event, session) in client.auth.authStateChanges { _ = (event, session) }
+      for await change in client.auth.events() { _ = change }
     }
   }
 
