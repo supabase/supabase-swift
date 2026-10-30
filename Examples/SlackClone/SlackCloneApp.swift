@@ -22,7 +22,7 @@ struct SlackCloneApp: App {
             do {
               try await supabase.handleRedirect(url)
             } catch {
-              Logger.main.debug("Failed to handle redirect URL \(url): \(error)")
+              Logger.main.debug("Failed to handle a redirect: \(error)")
             }
           }
         }
