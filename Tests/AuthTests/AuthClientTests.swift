@@ -538,7 +538,7 @@ extension AuthMockerTests {
         mock.register()
 
         let sut = makeSUT()
-        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
+        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b", .signIn)
 
         do {
           _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
