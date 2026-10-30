@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import TestHelpers
 import IssueReporting
 
@@ -21,10 +22,43 @@ extension Dependencies {
   }
 }
 
+extension Dependencies {
+  /// Redeems `refreshToken` through the session store, as a refresh with a token from elsewhere.
+  func redeem(_ refreshToken: String) async throws -> Session {
+    try await sessionStore.refresh(refreshToken, using: refreshRequest)
+  }
+}
+
 extension AuthClient {
   /// Signs `session` in through the session store, the only writer of the session.
   func seedSession(_ session: Session) async throws {
     try await dependencies.seedSession(session)
+  }
+
+  /// A client whose network `http` answers, with auto refresh off.
+  static func testing(http: RecordingTransport) -> AuthClient {
+    AuthClient(
+      configuration: .init(
+        url: clientURL,
+        storageKey: uniqueStorageKey(),
+        localStorage: InMemoryLocalStorage(),
+        http: .init(transport: http),
+        autoRefresh: .manual
+      ),
+      date: { Date() },
+      pkce: .live,
+      platform: .live
+    )
+  }
+
+  /// Runs `action` and returns its result with every change the client emitted up to its return.
+  func recordingChanges<T>(
+    _ action: () async throws -> T
+  ) async throws -> (T, [AuthChange]) {
+    let changes = events()
+    let result = try await action()
+    dependencies.sessionStore.finishChanges()
+    return (result, await changes.collect())
   }
 }
 
@@ -59,3 +93,32 @@ extension Session {
     user: User(fromMockNamed: "user")
   )
 }
+
+/// A GoTrue error response in the 2024-01-01 shape, or an empty JSON body when `errorCode` is
+/// `nil`.
+func errorResponse(_ status: HTTPResponse.Status, _ errorCode: String?) -> (HTTPResponse, Data) {
+  var fields = HTTPFields()
+  fields[.contentType] = "application/json"
+  let body = errorCode.map { #"{"code":"\#($0)","message":"\#($0)"}"# } ?? "{}"
+  return (HTTPResponse(status: status, headerFields: fields), Data(body.utf8))
+}
+
+/// An empty `204 No Content` answer.
+let noContent = (HTTPResponse(status: .noContent), Data())
+
+/// A `200 OK` answer with `session` as the body.
+func sessionResponse(_ session: Session) throws -> (HTTPResponse, Data) {
+  (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
+}
+
+let isTokenRequest: @Sendable (HTTPRequest) -> Bool = {
+  $0.url?.path.hasSuffix("/token") == true
+}
+
+/// A JWT whose `exp` is in 2123.
+let unexpiredAccessToken =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
+
+/// A JWT whose `exp` is in 2022.
+let expiredAccessToken =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"

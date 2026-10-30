@@ -93,7 +93,7 @@ struct StoredSessionTests {
     let sut = makeSUT(localStorage)
 
     #expect(sut.currentSession == nil)
-    let error = await #expect(throws: AuthError.self) { try await sut.session }
+    let error = await #expect(throws: AuthError.self) { try await sut.session() }
     #expect(error?.kind == .sessionMissing)
     #expect(try localStorage.retrieve(key: key) == nil)
   }
@@ -109,11 +109,11 @@ struct StoredSessionTests {
 
     #expect(sut.currentSession == nil)
     #expect(sut.dependencies.sessionStore.currentStatus == .loading)
-    let error = await #expect(throws: AuthError.self) { try await sut.session }
+    let error = await #expect(throws: AuthError.self) { try await sut.session() }
     #expect(error?.kind == .storageUnavailable)
 
     localStorage.failsReads.setValue(false)
-    let session = try await sut.session
+    let session = try await sut.session()
     expectNoDifference(session, .valid)
   }
 

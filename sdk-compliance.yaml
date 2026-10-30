@@ -524,7 +524,7 @@ features:
   auth.session.set_session:
     status: implemented
     symbols:
-      - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -532,7 +532,6 @@ features:
     supporting_symbols:
       - SignOutScope
       - SignOutScope.init
-      - SignOutScope.rawValue
       - SignOutScope.global
       - SignOutScope.local
       - SignOutScope.others

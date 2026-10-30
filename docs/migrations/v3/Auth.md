@@ -16,7 +16,7 @@ Changes that still compile but behave differently. Check each one by hand.
   runs. On macOS, Linux, Android, and Windows, it runs when the client is created. On iOS, iPadOS,
   tvOS, visionOS, Mac Catalyst, and watchOS, it runs only while the app is in the foreground. After
   a launch into the background, the session stays expired until the app comes to the foreground or
-  a read of `session` refreshes it. Check `session.isExpired` in handlers that switch on
+  a call to `session()` refreshes it. Check `session.isExpired` in handlers that switch on
   `.initialSession`.
 - **`KeychainLocalStorage` returns `nil` for a missing key.** `retrieve(key:)` no longer throws
   when no item exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that
@@ -46,16 +46,16 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Storage errors surface.** When `localStorage` throws while the client saves or removes the
   session, the call that changed the session (a sign-in, `refreshSession`, `signOut`) throws that
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
-  throws, `currentSession` is `nil` and `session` throws the storage error, not `.sessionMissing`;
+  throws, `currentSession` is `nil` and `session()` throws the storage error, not `.sessionMissing`;
   v2 read a failed read as signed out.
 - **A locked Keychain is not signed out.** `KeychainLocalStorage` throws an `AuthError` of kind
   `.storageUnavailable` while the device is locked (`errSecInteractionNotAllowed`), and of kind
   `.storageMisconfigured` when the app lacks the Keychain entitlement (`errSecMissingEntitlement`).
   v2 threw an internal Keychain error, and a launch into the background before the first unlock
   emitted `.initialSession` with no session. Now `.initialSession` waits until storage is read.
-  Until then, each call that needs the session reads storage again: `session`,
+  Until then, each call that needs the session reads storage again: `session()`,
   `refreshSessionIfNeeded`, a request that sends the session's access token (such as `user()` or a
-  `SupabaseClient` data request), each new `events()` stream, and `initialization()`. `session` throws `.storageUnavailable` while the device is locked. On iOS, iPadOS,
+  `SupabaseClient` data request), each new `events()` stream, and `initialization()`. `session()` throws `.storageUnavailable` while the device is locked. On iOS, iPadOS,
   tvOS, visionOS, and Mac Catalyst the client also reads storage when protected data becomes
   available. watchOS and macOS post no such notification, so there only those calls read storage
   again. A sign-in that throws `.storageUnavailable` did not sign in, so retry it after the device
@@ -96,13 +96,29 @@ Changes that still compile but behave differently. Check each one by hand.
   `refresh_token_already_used`. It signs out on the first such refresh after its session
   expires. Create one client per project, or give each client its own `storageKey`.
 - **Refreshes are deduplicated and throttled.** A client runs one refresh of a refresh token at a
-  time. A cancelled caller of `session` or `refreshSession` throws `CancellationError` at once,
+  time. A cancelled caller of `session()` or `refreshSession()` throws `CancellationError` at once,
   and the shared refresh still finishes. When a refresh fails, a new refresh with that same token
   in the next 60 seconds throws the same error without a request. After five refreshes in 30
   seconds, the next one throws an `AuthError` with kind `.excessiveRefresh`. `signOut` cancels a
   running refresh. Its callers get `CancellationError`, whatever error the request then ends
   with, or `.refreshDiscarded` when a successful response arrived first. Search for retry loops
   around `refreshSession`.
+- **`signOut()` signs out only this device.** The default scope is `.local`, not `.global`, so
+  the user's sessions on other devices stay. Pass `scope: .global` to keep the v2 behavior. The
+  scopes also handle failures differently:
+  - `.local` removes the session, clears pending PKCE flows, and emits `.signedOut` before the
+    request, so the device is signed out whatever the server answers.
+  - `.global` removes the session only after the server ended every session. When the request
+    fails, the session stays, and `signOut` throws, so you can retry or fall back to `.local`. v2
+    removed it first.
+  - `.others` never changes the local session, and throws `.sessionMissing` when no session is
+    stored. v2 returned without an error.
+
+  v2 ignored a 401, 403, or 404 from the server. v3 ignores only `403 user_not_found`, and
+  `403 session_not_found` for `.local`; every other failure throws. With no stored session,
+  `.local` and `.global` still emit `.signedOut`. Search for `signOut(`.
+- **`claims()` throws the refresh error.** When `claims()` reads the session and its refresh
+  fails, it throws that error. v2 threw `.sessionMissing` for every failure.
 - **A rejected refresh does not sign out while the access token is valid.** A refresh that fails
   with a network error, a 5xx, a 408, a 409, or a 429 keeps the session. A refresh that the server
   rejects (`.sessionInvalidated`) signs out only when the access token is expired, as the client
@@ -113,11 +129,11 @@ Changes that still compile but behave differently. Check each one by hand.
   `session_not_found`. v3 also signs out on `user_banned` and on an OAuth `invalid_grant`. Do not
   read a `.sessionInvalidated` error from `refreshSession()` as a sign-out. Wait for the
   `.signedOut` event. A rejected token that is not the current session's, as in
-  `refreshSession(refreshToken:)` or `user(jwt:)` with another token or while signed out, never
+  `importSession(accessToken:refreshToken:)` or `user(jwt:)` with another token or while signed out, never
   signs out and fires no event.
 - **Expiry follows the local clock, and auto refresh runs on a deadline.** The client judges
   expiry from the local time it received the session plus `expiresIn`, not from `expiresAt`
-  against the device clock. On a device whose clock is wrong, `session` no longer refreshes on
+  against the device clock. On a device whose clock is wrong, `session()` no longer refreshes on
   every call. `Session.isExpired` still compares `expiresAt` with the device clock, so on such a
   device it can disagree with the client. `startAutoRefresh()` no longer checks the session every
   30 seconds. It refreshes once, 90 seconds before the access token expires, and retries a failed
@@ -213,6 +229,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
 | `AuthClient.getClaims(jwt:options:)` | `AuthClient.claims(jwt:options:)` |
+| `try await auth.session` | `try await auth.session()` |
+| `AuthClient.setSession(accessToken:refreshToken:)` | `AuthClient.importSession(accessToken:refreshToken:)`; it emits only `.signedIn`, not `.tokenRefreshed` then `.signedIn` |
+| `AuthClient.refreshSession(refreshToken:)` | `AuthClient.refreshSession()`; see below |
 | `GetClaimsOptions.allowExpired` | `GetClaimsOptions.allowsExpired` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
@@ -224,7 +243,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
-| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
+| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType` | `RawRepresentable` structs with the same member names |
 | `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
@@ -241,6 +260,19 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## `refreshSession(refreshToken:)` is gone
+
+`refreshSession()` refreshes only the stored session. To sign in with a refresh token from
+elsewhere, pass both tokens to `importSession`. It redeems the refresh token when the access token
+has expired.
+
+```swift
+// v2
+let session = try await auth.refreshSession(refreshToken: refreshToken)
+// v3
+let session = try await auth.importSession(accessToken: accessToken, refreshToken: refreshToken)
+```
 
 ## `AuthError` is a struct
 
@@ -410,8 +442,8 @@ let auth = AuthClient(url: url, localStorage: storage)
 ## `autoRefreshToken` is `autoRefresh`
 
 `autoRefreshToken: true` is `autoRefresh: .automatic`, the default. `autoRefreshToken: false` is
-`autoRefresh: .manual`: `session` still refreshes an expired session, and nothing refreshes it
-ahead of time. The new `.disabled` never refreshes on its own, and `session` throws an
+`autoRefresh: .manual`: `session()` still refreshes an expired session, and nothing refreshes it
+ahead of time. The new `.disabled` never refreshes on its own, and `session()` throws an
 `AuthError` of kind `.refreshDisabled` when the session is expired. Use it in an app extension
 that shares the session with its app. `observesAppLifecycle: false` stops the client
 from following the app lifecycle, so you can drive it from a SwiftUI `scenePhase` change. Call

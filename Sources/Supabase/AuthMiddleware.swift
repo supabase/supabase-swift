@@ -96,7 +96,7 @@ struct AuthMiddleware: ClientMiddleware {
 
   private func signedInSession() async throws -> Session? {
     do {
-      return try await auth.session
+      return try await auth.session()
     } catch let error as AuthError where error.kind == .sessionMissing {
       return nil
     }

@@ -155,7 +155,7 @@ struct LockedStorageTests {
 
       #expect(await waitUntil { reporter.messages.value.count == 1 })
       #expect(reporter.messages.value.first?.contains("keychain-access-groups") == true)
-      let error = await #expect(throws: AuthError.self) { try await client.session }
+      let error = await #expect(throws: AuthError.self) { try await client.session() }
       #expect(error?.kind == .storageMisconfigured)
       #expect(error?.message.contains("keychain-access-groups") == true)
       #expect(client.dependencies.sessionStore.currentStatus == .loading)

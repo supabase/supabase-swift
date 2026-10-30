@@ -137,19 +137,6 @@ struct TypesTests {
   }
 
   @Test
-  func signOutScopeStringLiteral() {
-    let scope: SignOutScope = "future_scope"
-    #expect(scope.rawValue == "future_scope")
-  }
-
-  @Test
-  func signOutScopeHashability() {
-    let scope1: SignOutScope = .global
-    let scope2: SignOutScope = "global"
-    #expect(scope1 == scope2)
-  }
-
-  @Test
   func userDecodesEmptyEmailAndPhoneAsNil() throws {
     let user = try decodeUser(#""email": "", "phone": """#)
     #expect(user.email == nil)

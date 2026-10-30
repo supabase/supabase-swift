@@ -40,20 +40,57 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func multipleAuthInstances() async throws {
+  func importSessionSignsInASecondClientOnce() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
     let client2 = Self.makeClient()
+    await client2.initialization()
+    let events = client2.events()
 
-    let sessionFromClient1 = try await authClient.session
-    let sessionFromClient2 = try await client2.setSession(
+    let sessionFromClient1 = try await authClient.session()
+    let sessionFromClient2 = try await client2.importSession(
       accessToken: sessionFromClient1.accessToken,
       refreshToken: sessionFromClient1.refreshToken
     )
+    client2.dependencies.sessionStore.finishChanges()
 
     expectNoDifference(sessionFromClient1.accessToken, sessionFromClient2.accessToken)
     expectNoDifference(sessionFromClient1.refreshToken, sessionFromClient2.refreshToken)
     expectNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
+    let changes = await events.collect()
+    expectNoDifference(changes.map(\.event), [.initialSession, .signedIn])
+  }
+
+  @Test
+  func signOutLocalKeepsTheOtherSessionsOfTheUser() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut()
+
+    #expect(thisDevice.status == .signedOut(.userInitiated))
+    _ = try await otherDevice.refreshSession()
+  }
+
+  @Test
+  func signOutGlobalEndsEveryOtherSessionOfTheUser() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut(scope: .global)
+
+    #expect(thisDevice.status == .signedOut(.userInitiated))
+    let error = await #expect(throws: AuthError.self) { try await otherDevice.refreshSession() }
+    #expect(error?.kind == .sessionInvalidated)
+  }
+
+  @Test
+  func signOutOthersKeepsThisSession() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut(scope: .others)
+
+    _ = try await thisDevice.refreshSession()
+    let error = await #expect(throws: AuthError.self) { try await otherDevice.refreshSession() }
+    #expect(error?.kind == .sessionInvalidated)
   }
 
   @Test
@@ -263,7 +300,7 @@ struct AuthClientIntegrationTests {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let refreshedSession = try await authClient.refreshSession()
-      let currentStoredSession = try await authClient.session
+      let currentStoredSession = try await authClient.session()
 
       #expect(currentStoredSession.accessToken == refreshedSession.accessToken)
     }
@@ -342,7 +379,7 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
-    let session = try await authClient.session
+    let session = try await authClient.session()
 
     let client = Self.makeClient(serviceRole: true)
     let passkeys = try await client.admin.listPasskeys(forUser: session.user.id)
@@ -354,7 +391,7 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
-    let session = try await authClient.session
+    let session = try await authClient.session()
 
     let client = Self.makeClient(serviceRole: true)
     do {
@@ -371,13 +408,13 @@ struct AuthClientIntegrationTests {
     let changes = try await expectAuthEvents([.initialSession, .signedIn, .signedOut]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      _ = try await authClient.session
+      _ = try await authClient.session()
       #expect(authClient.currentSession != nil)
 
       try await authClient.signOut()
 
       do {
-        _ = try await authClient.session
+        _ = try await authClient.session()
         Issue.record("Expected to throw AuthError.sessionMissing")
       } catch let error as AuthError {
         #expect(error.kind == .sessionMissing)
@@ -591,6 +628,16 @@ struct AuthClientIntegrationTests {
   }
 
   @discardableResult
+  /// Signs one user in on two clients, so the user has two sessions on the server.
+  private func signInOnTwoDevices() async throws -> (AuthClient, AuthClient) {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let otherDevice = Self.makeClient()
+    try await otherDevice.signIn(email: email, password: password)
+    return (authClient, otherDevice)
+  }
+
   private func signUpIfNeededOrSignIn(
     email: String,
     password: String
