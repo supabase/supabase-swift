@@ -71,10 +71,6 @@ public struct SupabaseClientOptions: Sendable {
     /// Optional key name used for storing tokens in local storage.
     public let storageKey: String?
 
-    /// OAuth flow to use - defaults to PKCE flow. PKCE is recommended for mobile and server-side
-    /// applications.
-    public let flowType: AuthFlowType
-
     /// When the Auth client refreshes the session on its own. See
     /// ``AuthClient/Configuration/autoRefresh``.
     public let autoRefresh: AuthClient.AutoRefreshPolicy
@@ -94,7 +90,6 @@ public struct SupabaseClientOptions: Sendable {
       storage: any AuthLocalStorage,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
-      flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
       autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
       accessToken: (@Sendable () async throws -> String?)? = nil
@@ -102,7 +97,6 @@ public struct SupabaseClientOptions: Sendable {
       self.storage = storage
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
-      self.flowType = flowType
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
       self.accessToken = accessToken
@@ -258,7 +252,6 @@ extension SupabaseClientOptions.AuthOptions {
   public init(
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
     observesAppLifecycle: Bool = true,
     accessToken: (@Sendable () async throws -> String?)? = nil
@@ -267,7 +260,6 @@ extension SupabaseClientOptions.AuthOptions {
       storage: AuthClient.Configuration.defaultLocalStorage,
       redirectToURL: redirectToURL,
       storageKey: storageKey,
-      flowType: flowType,
       autoRefresh: autoRefresh,
       observesAppLifecycle: observesAppLifecycle,
       accessToken: accessToken

@@ -262,14 +262,6 @@ struct AutoRefreshTests {
 
   #if !canImport(Darwin)
     @Test
-    func openURLThrowsWhereThePlatformCannotOpenOne() async {
-      let error = await #expect(throws: AuthError.self) {
-        try await AuthPlatform.live.openURL(URL(string: "https://example.com")!)
-      }
-      #expect(error?.kind == .oauthFlowFailed)
-    }
-
-    @Test
     func eachDefaultStorageKeepsItsOwnValues() throws {
       try AuthClient.Configuration.defaultLocalStorage.store(key: "key", value: Data("a".utf8))
       #expect(try AuthClient.Configuration.defaultLocalStorage.retrieve(key: "key") == nil)

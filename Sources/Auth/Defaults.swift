@@ -27,7 +27,4 @@ extension AuthClient.Configuration {
   public static let defaultHeaders: [String: String] = [
     "X-Client-Info": "auth-swift/\(version)"
   ]
-
-  /// The default ``AuthFlowType`` used when initializing a ``AuthClient`` instance.
-  public static let defaultFlowType: AuthFlowType = .pkce
 }

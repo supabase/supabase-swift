@@ -131,16 +131,19 @@ struct RequestsTests {
   @Test
   func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try sut.oauthSignInURL(
-      provider: .github, scopes: "read,write",
-      redirectTo: URL(string: "https://dummy-url.com/redirect")!,
-      queryParams: [("extra_key", "extra_value")]
+    let (url, _) = try await sut.oauthSignInURL(
+      .github,
+      options: OAuthOptions(
+        scopes: ["read", "write"],
+        redirectTo: URL(string: "https://dummy-url.com/redirect")!,
+        queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
+      )
     )
     #expect(
       url
         == URL(
           string:
-            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=challenge&code_challenge_method=s256&extra_key=extra_value"
         )!
     )
   }
@@ -172,7 +175,7 @@ struct RequestsTests {
           "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
       )!
 
-      let session = try await sut.session(from: url)
+      let result = try await sut.handleRedirect(url)
       let expectedSession = Session(
         accessToken: "accesstoken",
         tokenType: "bearer",
@@ -181,7 +184,7 @@ struct RequestsTests {
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
-      #expect(session == expectedSession)
+      #expect(result == .signedIn(expectedSession, verification: nil))
     }
   #endif
 
@@ -194,13 +197,10 @@ struct RequestsTests {
         "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
     )!
 
-    do {
-      _ = try await sut.session(from: url)
-    } catch {
-      let authError = error as? AuthError
-      #expect(authError?.kind == .oauthFlowFailed)
-      #expect(authError?.message == "No session defined in URL")
+    let error = await #expect(throws: AuthError.self) {
+      try await sut.handleRedirect(url)
     }
+    #expect(error?.kind == .oauthFlowFailed)
   }
 
   @Test
@@ -468,10 +468,12 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.linkIdentityURL(
-        provider: .github,
-        scopes: "user:email",
-        redirectTo: URL(string: "https://supabase.com"),
-        queryParams: [("extra_key", "extra_value")]
+        .github,
+        options: OAuthOptions(
+          scopes: ["user:email"],
+          redirectTo: URL(string: "https://supabase.com"),
+          queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
+        )
       )
     }
   }
@@ -737,7 +739,8 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.exchangeCodeForSession(authCode: "auth-code")
+      _ = try await sut.oauthSignInURL(.github)
+      try await sut.exchangeCodeForSession("auth-code")
     }
   }
 
@@ -1061,7 +1064,6 @@ struct RequestsTests {
 
   private func makeSUT(
     record: Bool = false,
-    flowType: AuthFlowType = .implicit,
     fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
     date: @escaping @Sendable () -> Date = { Date() },
     file: StaticString = #filePath,
@@ -1071,7 +1073,6 @@ struct RequestsTests {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
-      flowType: flowType,
       storageKey: uniqueStorageKey(),
       localStorage: InMemoryLocalStorage(),
       http: .init(
@@ -1098,7 +1099,11 @@ struct RequestsTests {
       autoRefresh: .manual
     )
 
-    return AuthClient(configuration: configuration, date: date, pkce: .live, platform: .live)
+    let pkce = PKCE(
+      generateCodeVerifier: { "verifier" },
+      generateCodeChallenge: { _ in "challenge" }
+    )
+    return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: .live)
   }
 }
 

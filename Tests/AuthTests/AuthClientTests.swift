@@ -421,7 +421,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func signInWithOAuth() async throws {
+    func oauthSignInThroughHandleRedirect() async throws {
       try await withMainSerialExecutor {
         Mock(
           url: clientURL.appendingPathComponent("token").appendingQueryItems([
@@ -455,58 +455,13 @@ extension AuthMockerTests {
 
         await Task.megaYield()
 
-        try await sut.signInWithOAuth(
-          provider: .google,
-          redirectTo: URL(string: "supabase://auth-callback")
-        ) { (url: URL) in
-          URL(string: "supabase://auth-callback?code=12345") ?? url
-        }
+        _ = try await sut.oauthSignInURL(
+          .google, options: OAuthOptions(redirectTo: URL(string: "supabase://auth-callback")))
+        try await sut.handleRedirect(URL(string: "supabase://auth-callback?code=12345")!)
 
         let events = await eventsTask.value.map(\.event)
 
         expectNoDifference(events, [.initialSession, .signedIn])
-      }
-    }
-
-    @Test
-    func exchangeCodeForSessionUsesVerifierForGivenFlowId() async throws {
-      struct ExchangeCodeRequestBody: Decodable, Sendable {
-        let codeVerifier: String?
-
-        enum CodingKeys: String, CodingKey {
-          case codeVerifier = "code_verifier"
-        }
-      }
-
-      try await withMainSerialExecutor {
-        let capturedVerifier = LockIsolated<String?>(nil)
-
-        var mock = Mock(
-          url: clientURL.appendingPathComponent("token").appendingQueryItems([
-            URLQueryItem(name: "grant_type", value: "pkce")
-          ]),
-          statusCode: 200,
-          data: [
-            .post: MockData.session
-          ]
-        )
-        mock.onRequestHandler = OnRequestHandler(httpBodyType: ExchangeCodeRequestBody.self) {
-          _, body in
-          capturedVerifier.setValue(body?.codeVerifier)
-        }
-        mock.register()
-
-        let sut = makeSUT()
-
-        sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a")
-        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
-
-        _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
-
-        expectNoDifference(capturedVerifier.value, "verifier-a")
-
-        #expect(sut.dependencies.codeVerifierStorage.get("flow-a") == nil)
-        #expect(sut.dependencies.codeVerifierStorage.get("flow-b") == "verifier-b")
       }
     }
 
@@ -526,13 +481,11 @@ extension AuthMockerTests {
         )
         .register()
 
-        let flowA = try await sut.linkIdentityURL(provider: .github)
+        let flowA = try await sut.linkIdentityURL(.github).flowID
 
-        let flowB = try await sut.linkIdentityURL(provider: .google)
+        let flowB = try await sut.linkIdentityURL(.google).flowID
 
-        #expect(flowA.flowId != nil)
-        #expect(flowB.flowId != nil)
-        expectNoDifference(flowA.flowId != flowB.flowId, true)
+        #expect(flowA != flowB)
 
         Mock(
           url: clientURL.appendingPathComponent("token").appendingQueryItems([
@@ -545,9 +498,10 @@ extension AuthMockerTests {
         )
         .register()
 
-        _ = try await sut.exchangeCodeForSession(authCode: "code-a", flowId: flowA.flowId)
+        _ = try await sut.exchangeCodeForSession("code-a", flowID: flowA)
 
-        #expect(sut.dependencies.codeVerifierStorage.get(flowB.flowId) != nil)
+        #expect(try await sut.dependencies.flowStore.flow(id: flowA) == nil)
+        #expect(try await sut.dependencies.flowStore.flow(id: flowB) != nil)
       }
     }
 
@@ -586,57 +540,10 @@ extension AuthMockerTests {
 
         try await sut.seedSession(.valid)
 
-        let response = try await sut.linkIdentityURL(provider: .github)
+        let response = try await sut.linkIdentityURL(.github)
 
-        expectNoDifference(response.provider, .github)
         expectNoDifference(response.url, URL(string: url)!)
-        #expect(response.flowId != nil)
-      }
-    }
-
-    @Test
-    func linkIdentity() async throws {
-      try await withMainSerialExecutor {
-        let url =
-          "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-
-        Mock(
-          url: clientURL.appendingPathComponent("user/identities/authorize"),
-          ignoreQuery: true,
-          statusCode: 200,
-          data: [
-            .get: Data(
-              """
-              {
-                "url": "\(url)"
-              }
-              """.utf8
-            )
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&provider=github&skip_http_redirect=true"
-          """#
-        }
-        .register()
-
-        let receivedURL = LockIsolated<URL?>(nil)
-        var platform = AuthPlatform.live
-        platform.openURL = { url in receivedURL.setValue(url) }
-
-        let sut = makeSUT(platform: platform)
-
-        try await sut.seedSession(.valid)
-
-        try await sut.linkIdentity(provider: .github)
-
-        expectNoDifference(receivedURL.value?.absoluteString, url)
+        #expect(try await sut.dependencies.flowStore.flow(id: response.flowID) != nil)
       }
     }
 
@@ -754,28 +661,6 @@ extension AuthMockerTests {
       expectNoDifference(response.total, 669)
       #expect(response.nextPage == nil)
       expectNoDifference(response.lastPage, 14)
-    }
-
-    @Test
-    func sessionFromURL_withError() async throws {
-      let sut = makeSUT()
-
-      sut.dependencies.codeVerifierStorage.set("code-verifier", "test-flow")
-
-      let url = URL(
-        string:
-          "https://my.redirect.com?error=server_error&error_code=422&error_description=Identity+is+already+linked+to+another+user#error=server_error&error_code=422&error_description=Identity+is+already+linked+to+another+user"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expect failure")
-      } catch {
-        let authError = error as? AuthError
-        #expect(authError?.kind == .oauthFlowFailed)
-        #expect(authError?.message == "server_error: Identity is already linked to another user")
-        #expect(authError?.errorCode == ErrorCode("422"))
-      }
     }
 
     @Test
@@ -1171,18 +1056,20 @@ extension AuthMockerTests {
 
     @Test
     func oauthSignInURL() async throws {
-      let sut = makeSUT(flowType: .implicit)
-      let url = try sut.oauthSignInURL(
-        provider: .github,
-        scopes: "read,write",
-        redirectTo: URL(string: "https://dummy-url.com/redirect")!,
-        queryParams: [("extra_key", "extra_value")]
+      let sut = makeSUT()
+      let (url, _) = try await sut.oauthSignInURL(
+        .github,
+        options: OAuthOptions(
+          scopes: ["read", "write"],
+          redirectTo: URL(string: "https://dummy-url.com/redirect")!,
+          queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
+        )
       )
       expectNoDifference(
         url,
         URL(
           string:
-            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&extra_key=extra_value"
         )!
       )
     }
@@ -1237,14 +1124,14 @@ extension AuthMockerTests {
 
         let currentDate = Date()
 
-        let sut = makeSUT(flowType: .implicit, date: { currentDate })
+        let sut = makeSUT(date: { currentDate })
 
         let url = URL(
           string:
             "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
         )!
 
-        let session = try await sut.session(from: url)
+        let result = try await sut.handleRedirect(url)
         let expectedSession = Session(
           accessToken: "accesstoken",
           tokenType: "bearer",
@@ -1253,223 +1140,9 @@ extension AuthMockerTests {
           refreshToken: "refreshtoken",
           user: User(fromMockNamed: "user")
         )
-        expectNoDifference(session, expectedSession)
+        expectNoDifference(result, .signedIn(expectedSession, verification: nil))
       }
     #endif
-
-    @Test
-    func sessionWithURL_implicitFlow() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        statusCode: 200,
-        data: [
-          .get: MockData.user
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--header "Authorization: bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/user"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
-      )!
-      try await sut.session(from: url)
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_invalidURL() async throws {
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#invalid_key=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "Not a valid implicit grant flow URL: \(url)")
-      }
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_error() async throws {
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#error_description=Invalid+code&error=invalid_grant"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "Invalid code")
-      }
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_errorQueryParam() async throws {
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback?error=access_denied&error_description=User+denied+access"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "User denied access")
-      }
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_errorQueryParamNoDescription() async throws {
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(string: "https://dummy-url.com/callback?error=access_denied")!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "access_denied")
-      }
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_errorHashFragmentNoDescription() async throws {
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(string: "https://dummy-url.com/callback#error=access_denied")!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "access_denied")
-      }
-    }
-
-    @Test
-    func sessionWithURL_implicitFlow_recoveryType() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        statusCode: 200,
-        data: [
-          .get: MockData.user
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--header "Authorization: bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/user"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT(flowType: .implicit)
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer&type=recovery"
-      )!
-
-      let eventsTask = Task {
-        await sut.authStateChanges.prefix(3).collect().map(\.event)
-      }
-
-      await Task.yield()
-
-      try await sut.session(from: url)
-
-      let events = await eventsTask.value
-      expectNoDifference(events, [.initialSession, .signedIn, .passwordRecovery])
-    }
-
-    @Test
-    func sessionWithURL_pkceFlow_error() async throws {
-      let sut = makeSUT()
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#error_description=Invalid+code&error=invalid_grant&error_code=500"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(error.message, "invalid_grant: Invalid code")
-        expectNoDifference(error.errorCode, ErrorCode("500"))
-      }
-    }
-
-    @Test
-    func sessionWithURL_pkceFlow_error_noErrorDescription() async throws {
-      let sut = makeSUT()
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#error=invalid_grant&error_code=500"
-      )!
-
-      do {
-        try await sut.session(from: url)
-        Issue.record("Expected oauthFlowFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .oauthFlowFailed)
-        expectNoDifference(
-          error.message, "invalid_grant: Error in URL with unspecified error_description.")
-        expectNoDifference(error.errorCode, ErrorCode("500"))
-      }
-    }
-
-    @Test
-    func sessionFromURLWithMissingComponent() async {
-      let sut = makeSUT()
-
-      let url = URL(
-        string:
-          "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
-      )!
-
-      do {
-        _ = try await sut.session(from: url)
-      } catch {
-        let authError = error as? AuthError
-        #expect(authError?.kind == .oauthFlowFailed)
-        #expect(
-          authError?.message
-            == "Not a valid PKCE flow URL: https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
-        )
-      }
-    }
 
     @Test
     func setSessionWithAFutureExpirationDate() async throws {
@@ -1770,18 +1443,18 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 107" \
+        	--header "Content-Length: 201" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"type\":\"email_change\"}" \
+        	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"type\":\"email_change\"}" \
         	"http://localhost:54321/auth/v1/resend?redirect_to=https://supabase.com"
         """#
       }
       .register()
 
-      let sut = makeSUT(flowType: .implicit)
+      let sut = makeSUT()
 
       try await sut.resend(
         email: "example@mail.com",
@@ -3385,7 +3058,7 @@ extension AuthMockerTests {
     @Test
     func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws
     {
-      let sut = makeSUT(flowType: .implicit)
+      let sut = makeSUT()
 
       Mock(
         url: clientURL.appendingPathComponent("user"),
@@ -3414,7 +3087,7 @@ extension AuthMockerTests {
         sut: sut,
         action: {
           do {
-            _ = try await sut.session(from: url)
+            _ = try await sut.handleRedirect(url)
             Issue.record("Expected failure")
           } catch {
             #expect((error as? AuthError)?.kind == .sessionInvalidated)
@@ -4051,7 +3724,6 @@ extension AuthMockerTests {
     }
 
     private func makeSUT(
-      flowType: AuthFlowType = .pkce,
       date: @escaping @Sendable () -> Date = { Date() },
       platform: AuthPlatform = .live
     ) -> AuthClient {
@@ -4065,7 +3737,6 @@ extension AuthMockerTests {
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        flowType: flowType,
         storageKey: uniqueStorageKey(),
         localStorage: storage,
         http: .init(transport: URLSessionTransport(session: session)))

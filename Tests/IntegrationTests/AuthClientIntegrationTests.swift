@@ -323,9 +323,8 @@ struct AuthClientIntegrationTests {
   func linkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    try await authClient.linkIdentity(provider: .apple) { url in
-      #expect(url.absoluteString.contains("apple.com"))
-    }
+    let (url, _) = try await authClient.linkIdentityURL(.apple)
+    #expect(url.absoluteString.contains("apple.com"))
   }
 
   @Test(.disabled("Requires secret key and pre-seeded users"))

@@ -45,6 +45,26 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
   }
 }
 
+extension PendingFlowRecord.Purpose {
+  /// The event a finished flow of this purpose emits.
+  var event: AuthChangeEvent {
+    switch self {
+    case .signIn: .signedIn
+    case .recovery: .passwordRecovery
+    case .emailChange, .linkIdentity: .userUpdated
+    }
+  }
+
+  /// The email link type a finished flow of this purpose reports in ``RedirectResult``.
+  var verification: EmailOTPType? {
+    switch self {
+    case .recovery: .recovery
+    case .emailChange: .emailChange
+    case .signIn, .linkIdentity: nil
+    }
+  }
+}
+
 /// The pending PKCE flows, oldest first, stored as JSON under `<storageKey>-flows`.
 ///
 /// The index lets the client find and expire flows without reading every record. It keeps at most

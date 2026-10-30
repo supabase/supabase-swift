@@ -21,7 +21,6 @@ extension AuthClient {
   /// ### Networking
   /// - ``url``
   /// - ``headers``
-  /// - ``flowType``
   /// - ``redirectToURL``
   /// - ``http``
   ///
@@ -39,7 +38,6 @@ extension AuthClient {
   /// - ``clock``
   ///
   /// ### Defaults
-  /// - ``defaultFlowType``
   /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The URL of the Auth server.
@@ -47,9 +45,6 @@ extension AuthClient {
 
     /// Any additional headers to send to the Auth server.
     public var headers: [String: String]
-
-    /// The OAuth / sign-in flow type to use (``AuthFlowType/implicit`` or ``AuthFlowType/pkce``).
-    public let flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
     public let redirectToURL: URL?
@@ -114,7 +109,6 @@ extension AuthClient {
     /// - Parameters:
     ///   - url: The base URL of the Auth server.
     ///   - headers: Custom headers to be included in requests.
-    ///   - flowType: The authentication flow type.
     ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
@@ -127,7 +121,6 @@ extension AuthClient {
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
@@ -140,7 +133,6 @@ extension AuthClient {
       self.init(
         url: url,
         headers: headers,
-        flowType: flowType,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: localStorage,
@@ -161,7 +153,6 @@ extension AuthClient {
     init(
       url: URL? = nil,
       headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
@@ -177,7 +168,6 @@ extension AuthClient {
 
       self.url = url ?? defaultAuthURL
       self.headers = headers
-      self.flowType = flowType
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
@@ -198,7 +188,6 @@ extension AuthClient {
   /// - Parameters:
   ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
-  ///   - flowType: The authentication flow type..
   ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
@@ -211,7 +200,6 @@ extension AuthClient {
   public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
@@ -225,7 +213,6 @@ extension AuthClient {
       configuration: Configuration(
         url: url,
         headers: headers,
-        flowType: flowType,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: localStorage,

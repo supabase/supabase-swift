@@ -15,7 +15,7 @@ that can.
 A value stays an `enum` when the set of cases is fixed by design:
 
 - The cases carry associated values, so a struct cannot express them: `SignUpResult`,
-  `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
+  `RedirectResult`, `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
   `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
   `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,
   because their cases carry errors: match a case, or use `isConnected`, `isSubscribed` and
@@ -23,9 +23,8 @@ A value stays an `enum` when the set of cases is fixed by design:
 - The client produces the value and never reads it from the server, so only an SDK release can
   add a case: `RealtimeChannelEvent`, `HeartbeatEvent`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
-  `AuthFlowType`, `RealtimePostgresIsValue`, `_PostgrestFilterOperator`,
-  `_PostgrestAggregateFunction`, `PostgresChangeEvent` (the SDK sends each event in the join
-  request).
+  `RealtimePostgresIsValue`, `_PostgrestFilterOperator`, `_PostgrestAggregateFunction`,
+  `PostgresChangeEvent` (the SDK sends each event in the join request).
 
 Switch over these exhaustively. Adding a case to one of them is a breaking change and only ships
 in a major release, so the compiler tells you exactly where to look when you upgrade.

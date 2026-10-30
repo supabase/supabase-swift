@@ -1044,20 +1044,6 @@ struct RecoverParams: Encodable, Hashable, Sendable {
   var codeChallengeMethod: String?
 }
 
-/// The OAuth / sign-in flow type used by ``AuthClient``.
-public enum AuthFlowType: Sendable {
-  /// The implicit grant flow — tokens are returned in the URL fragment.
-  ///
-  /// > Warning: This flow is less secure than PKCE and should only be used when PKCE is not
-  /// > supported by the environment.
-  case implicit
-
-  /// The Proof Key for Code Exchange (PKCE) flow — an authorization code is exchanged for tokens.
-  ///
-  /// This is the recommended flow for mobile and desktop applications.
-  case pkce
-}
-
 /// The string type used to identify an MFA factor type (e.g. `"totp"`, `"phone"`, `"webauthn"`).
 public typealias FactorType = String
 
@@ -1601,31 +1587,54 @@ public struct SSOResponse: Decodable, Hashable, Sendable {
   public let url: URL
 }
 
-/// The URL and provider returned when building an OAuth sign-in URL.
-public struct OAuthResponse: Hashable, Sendable {
-  /// The OAuth provider.
-  public let provider: Provider
+/// Options for an OAuth sign-in or identity link.
+public struct OAuthOptions: Sendable, Hashable {
+  /// The scopes to request from the provider. The client sends them separated by spaces.
+  public var scopes: [String]
 
-  /// The URL to open in order to start the OAuth flow.
-  public let url: URL
+  /// The URL the server redirects to after the provider step. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
 
-  /// The id of the PKCE flow this call started, when the client is configured for the PKCE
-  /// flow. Pass it to ``AuthClient/exchangeCodeForSession(authCode:flowId:)`` to select this
-  /// flow's code verifier when multiple PKCE flows may be pending at once. `nil` when not
-  /// using the PKCE flow.
-  public let flowId: String?
+  /// Extra query items to add to the authorize URL, for example `access_type=offline`.
+  public var queryItems: [URLQueryItem]
 
-  /// Creates an ``OAuthResponse``.
+  /// Creates OAuth options.
   ///
   /// - Parameters:
-  ///   - provider: The OAuth provider.
-  ///   - url: The URL to open in order to start the OAuth flow.
-  ///   - flowId: The id of the PKCE flow this call started, if any.
-  public init(provider: Provider, url: URL, flowId: String? = nil) {
-    self.provider = provider
-    self.url = url
-    self.flowId = flowId
+  ///   - scopes: The scopes to request from the provider.
+  ///   - redirectTo: The URL the server redirects to after the provider step.
+  ///   - queryItems: Extra query items to add to the authorize URL.
+  public init(scopes: [String] = [], redirectTo: URL? = nil, queryItems: [URLQueryItem] = []) {
+    self.scopes = scopes
+    self.redirectTo = redirectTo
+    self.queryItems = queryItems
   }
+}
+
+extension OAuthOptions {
+  /// `nil` when empty, so the authorize URL has no `scopes` item.
+  var scopesParameter: String? {
+    scopes.isEmpty ? nil : scopes.joined(separator: " ")
+  }
+
+  var queryParams: [(name: String, value: String?)] {
+    queryItems.map { ($0.name, $0.value) }
+  }
+}
+
+/// What ``AuthClient/handleRedirect(_:)`` did with a redirect URL.
+public enum RedirectResult: Sendable, Hashable {
+  /// The redirect gave a session. The client stored it and emitted one auth event.
+  ///
+  /// `verification` is the kind of email link that started the flow: ``EmailOTPType/recovery``
+  /// for a password reset, ``EmailOTPType/emailChange`` for an email change, or the `type` that
+  /// the server put in the URL. It is `nil` for an OAuth sign-in or an identity link.
+  case signedIn(Session, verification: EmailOTPType?)
+
+  /// The user confirmed one of two addresses in an email change. The server waits for the
+  /// other confirmation. The client stores nothing.
+  case emailChangePending(message: String)
 }
 
 /// Pagination parameters for list endpoints.

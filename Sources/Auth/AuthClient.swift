@@ -84,11 +84,16 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOTP(phone:channel:shouldCreateUser:userMetadata:captchaToken:)``
 /// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
 /// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
-/// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
+/// - ``oauthSignInURL(_:options:)``
+/// - ``OAuthOptions``
+///
+/// ### Handling redirects
+/// - ``handleRedirect(_:)``
+/// - ``isAuthRedirect(_:)``
+/// - ``RedirectResult``
+/// - ``exchangeCodeForSession(_:flowID:)``
 ///
 /// ### Session management
-/// - ``exchangeCodeForSession(authCode:flowId:)``
-/// - ``session(from:)``
 /// - ``setSession(accessToken:refreshToken:)``
 /// - ``refreshSession(refreshToken:)``
 /// - ``refreshSessionIfNeeded()``
@@ -111,10 +116,8 @@ private let globalJWKSCache = GlobalJWKSCache()
 ///
 /// ### Identities
 /// - ``userIdentities()``
-/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
-/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
 /// - ``linkIdentityWithIDToken(_:)``
-/// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
@@ -148,17 +151,12 @@ public final class AuthClient: Sendable {
 
   var configuration: AuthClient.Configuration { dependencies.configuration }
 
-  private var codeVerifierStorage: CodeVerifierStorage {
-    dependencies.codeVerifierStorage
-  }
-
   private var date: @Sendable () -> Date { dependencies.date }
   private var sessionManager: SessionManager { dependencies.sessionManager }
   private var sessionStore: SessionStore { dependencies.sessionStore }
   private var logger: Logging.Logger {
     dependencies.configuration.logger
   }
-  private var pkce: PKCE { dependencies.pkce }
 
   /// Loads the stored session when the first read failed, then posts
   /// ``didChangeAuthStateNotification`` for each change, for as long as the client lives.
@@ -372,7 +370,7 @@ public final class AuthClient: Sendable {
         userMetadata: options.userMetadata,
         redirectTo: options.redirectTo,
         captchaToken: options.captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(.signIn, redirectTo: options.redirectTo)
       )
     )
   }
@@ -535,7 +533,7 @@ public final class AuthClient: Sendable {
         shouldCreateUser: shouldCreateUser,
         userMetadata: userMetadata,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(.signIn, redirectTo: redirectTo)
       )
     )
   }
@@ -584,7 +582,7 @@ public final class AuthClient: Sendable {
         domain: domain,
         redirectTo: redirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(.signIn, redirectTo: redirectTo)
       )
     )
   }
@@ -606,99 +604,37 @@ public final class AuthClient: Sendable {
         providerId: providerId,
         redirectTo: redirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(.signIn, redirectTo: redirectTo)
       )
     )
   }
 
-  /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
-  /// - Parameters:
-  ///   - authCode: The auth code received from the PKCE callback.
-  ///   - flowId: The id of the flow that generated `authCode`, as returned by
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
-  /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
-  /// most recently started flow's verifier is used.
-  public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
-    -> Session
-  {
-    let codeVerifier = codeVerifierStorage.get(flowId)
-
-    if codeVerifier == nil {
-      logger.error(
-        "code verifier not found, a code verifier should exist when calling this method."
-      )
-    }
-
-    let session = try await api.execute(
-      authAPI.exchangeCodeForSession(authCode: authCode, codeVerifier: codeVerifier)
-    )
-
-    codeVerifierStorage.remove(flowId)
-
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
-
-    return session
-  }
-
-  /// Get a URL which you can use to start an OAuth flow for a third-party provider.
+  /// Returns the URL that starts an OAuth sign-in with a third-party provider.
   ///
-  /// Use this method if you want to have full control over the OAuth flow implementation, once you
-  /// have result URL with a OAuth token, use method ``session(from:)`` to load the session
-  /// into the client.
-  ///
-  /// If that isn't the case, you should consider using
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  public func oauthSignInURL(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) throws -> URL {
-    try authAPI.authorizeURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams,
-      pkce: prepareForPKCE().challenge
-    )
-  }
-
-  /// Sign-in an existing user via a third-party provider.
+  /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
+  /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or pass the code
+  /// and `flowID` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - queryParams: Additional query params.
-  ///   - launchFlow: A launch closure that you can use to implement the authentication flow. Use
-  /// the `url` to initiate the flow and return a `URL` that contains the OAuth result.
-  ///
-  /// - Note: This method support the PKCE flow.
-  @discardableResult
-  public func signInWithOAuth(
-    provider: Provider,
-    redirectTo: URL? = nil,
-    scopes: String? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
-  ) async throws -> Session {
-    let (pkce, flowId) = prepareForPKCE()
+  ///   - options: The scopes, the redirect URL, and extra query items.
+  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  public func oauthSignInURL(
+    _ provider: Provider,
+    options: OAuthOptions = .init()
+  ) async throws -> (url: URL, flowID: UUID) {
+    let redirectTo = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+    let (flow, challenge) = try await dependencies.flowStore.start(
+      purpose: .signIn, redirectTo: redirectTo)
     let url = try authAPI.authorizeURL(
       provider: provider,
-      scopes: scopes,
-      redirectTo: Self.oauthRedirectURL(
-        redirectTo: redirectTo,
-        configured: configuration.redirectToURL
-      ),
-      queryParams: queryParams,
-      pkce: pkce
+      scopes: options.scopesParameter,
+      redirectTo: redirectTo,
+      queryParams: options.queryParams,
+      pkce: challenge
     )
-
-    let resultURL = try await launchFlow(url)
-
-    return try await session(from: resultURL, flowId: flowId)
+    return (url, flow.id)
   }
 
   /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
@@ -712,160 +648,157 @@ public final class AuthClient: Sendable {
     redirectTo ?? configured
   }
 
-  /// Handles an incoming URL received by the app.
+  /// Exchanges an authorization code for a session, and stores the session.
   ///
-  /// ## Usage example:
+  /// The client emits one auth event, chosen by the call that started the flow:
+  /// ``AuthChangeEvent/passwordRecovery`` for ``resetPasswordForEmail(_:redirectTo:captchaToken:)``,
+  /// ``AuthChangeEvent/userUpdated`` for an email change or an identity link, and
+  /// ``AuthChangeEvent/signedIn`` otherwise.
   ///
-  /// ### UIKit app lifecycle
+  /// This call is not deduplicated. To handle a redirect URL that can arrive more than once, use
+  /// ``handleRedirect(_:)``.
   ///
-  /// In your `AppDelegate.swift`:
+  /// - Parameters:
+  ///   - code: The authorization code from the redirect URL.
+  ///   - flowID: The ID of the flow that produced `code`, as returned by
+  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)``. When `nil`, the client
+  ///     uses the newest pending flow.
+  /// - Returns: The new session.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
+  ///   flow matches, without a request.
+  public func exchangeCodeForSession(_ code: String, flowID: UUID? = nil) async throws -> Session {
+    try await exchange(code: code, flow: pendingFlow(id: flowID))
+  }
+
+  /// Returns `true` when `url` is a redirect that ``handleRedirect(_:)`` handles.
   ///
-  /// ```swift
-  /// public func application(
-  ///   _ application: UIApplication,
-  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  /// ) -> Bool {
-  ///   if let url = launchOptions?[.url] as? URL {
-  ///     supabase.auth.handle(url)
-  ///   }
+  /// It reads only the URL, not storage. A URL with a code returns `true` even when no flow
+  /// waits for it.
+  public func isAuthRedirect(_ url: URL) -> Bool {
+    AuthRedirect.parse(url) != nil
+  }
+
+  /// Finishes the auth flow that a redirect URL reports, and stores the session.
   ///
-  ///   return true
-  /// }
-  ///
-  /// func application(
-  ///   _ app: UIApplication,
-  ///   open url: URL,
-  ///   options: [UIApplication.OpenURLOptionsKey: Any]
-  /// ) -> Bool {
-  ///   supabase.auth.handle(url)
-  ///   return true
-  /// }
-  /// ```
-  ///
-  /// ### UIKit app lifecycle with scenes
-  ///
-  /// In your `SceneDelegate.swift`:
-  ///
-  /// ```swift
-  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-  ///   guard let url = URLContexts.first?.url else { return }
-  ///   supabase.auth.handle(url)
-  /// }
-  /// ```
-  ///
-  /// ### SwiftUI app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
+  /// Call it with every URL that opens your app. The client reads the URL's contents to find the
+  /// flow: a PKCE code, tokens from an email link, an error, or an email change that waits for a
+  /// second confirmation. The same URL can arrive more than once, for example from both a scene
+  /// delegate and `onOpenURL`. The later deliveries get the first result, or its error, and send
+  /// no request.
   ///
   /// ```swift
   /// SomeView()
   ///   .onOpenURL { url in
-  ///     supabase.auth.handle(url)
+  ///     Task { try await supabase.auth.handleRedirect(url) }
   ///   }
   /// ```
-  public func handle(_ url: URL) {
-    Task {
-      do {
-        try await session(from: url)
-      } catch {
-        logger.error("Failure loading session from url '\(url)' error: \(error)")
-      }
-    }
-  }
-
-  /// Gets the session data from a OAuth2 callback URL.
+  ///
+  /// - Parameter url: The URL that opened the app.
+  /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the URL
+  ///   reports an error or no pending flow matches its code, or the error of the request.
   @discardableResult
-  public func session(from url: URL) async throws -> Session {
-    try await session(from: url, flowId: nil)
+  public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
+    try await handleRedirect(url, flowID: nil)
   }
 
-  /// Gets the session data from a OAuth2 callback URL.
-  /// - Parameter flowId: The id of the PKCE flow that produced this callback, when known ahead
-  /// of time (e.g. the flow that was just launched by ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``).
-  /// `nil` falls back to the most recently started flow's verifier.
-  private func session(from url: URL, flowId: String?) async throws -> Session {
-    logger.debug("Received URL: \(url)")
+  /// `flowID` names the flow the caller started. It wins over the URL's `sb_flow_id`.
+  func handleRedirect(_ url: URL, flowID: UUID?) async throws -> RedirectResult? {
+    guard let redirect = AuthRedirect.parse(url) else { return nil }
 
-    let params = extractParams(from: url)
+    switch redirect {
+    case .error(let error):
+      throw error
 
-    switch configuration.flowType {
-    case .implicit:
-      guard isImplicitGrantFlow(params: params) else {
-        throw AuthError.oauthFlowFailed("Not a valid implicit grant flow URL: \(url)")
+    case .emailChangePending(let message):
+      return .emailChangePending(message: message)
+
+    case .code(let code, let urlFlowID):
+      return try await dependencies.redirectDeduplicator.value(for: code) { [self] in
+        let flow = try await pendingFlow(id: flowID ?? urlFlowID)
+        let session = try await exchange(code: code, flow: flow)
+        return .signedIn(session, verification: flow.purpose.verification)
       }
-      return try await handleImplicitGrantFlow(params: params)
 
-    case .pkce:
-      guard isPKCEFlow(params: params) else {
-        throw AuthError.oauthFlowFailed("Not a valid PKCE flow URL: \(url)")
+    case .implicit(let tokens, let type):
+      return try await dependencies.redirectDeduplicator.value(for: tokens.accessToken) { [self] in
+        let session = try await signIn(with: tokens, type: type)
+        return .signedIn(session, verification: type)
       }
-      return try await handlePKCEFlow(params: params, flowId: flowId)
     }
   }
 
-  /// Only reached from ``session(from:)``, under `case .implicit` of its switch on
-  /// `configuration.flowType`, which is what guarantees the flow type here.
-  private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
-    if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.oauthFlowFailed(errorMessage)
+  /// The flow with `id`, or the newest pending flow when `id` is `nil`. Never falls back to
+  /// another flow, so a code is never sent with a verifier that belongs to a different flow.
+  private func pendingFlow(id: UUID?) async throws -> PendingFlowRecord {
+    if let id {
+      guard let flow = try await dependencies.flowStore.flow(id: id) else {
+        throw AuthError.oauthFlowFailed(
+          "No pending flow with ID \(id). It finished, expired, or started on another device.")
+      }
+      return flow
     }
 
-    guard
-      let accessToken = params["access_token"],
-      let expiresIn = params["expires_in"].flatMap(TimeInterval.init),
-      let refreshToken = params["refresh_token"],
-      let tokenType = params["token_type"]
-    else {
-      throw AuthError.oauthFlowFailed("No session defined in URL")
+    guard let flow = try await dependencies.flowStore.newest() else {
+      throw AuthError.oauthFlowFailed(
+        "No pending flow for this code. It finished, expired, or started on another device.")
+    }
+    return flow
+  }
+
+  private func exchange(code: String, flow: PendingFlowRecord) async throws -> Session {
+    let session: Session
+    do {
+      session = try await api.execute(
+        authAPI.exchangeCodeForSession(authCode: code, codeVerifier: flow.verifier))
+    } catch {
+      // After a transport error the server may not have seen the code, so a retry can still work.
+      if (error as? AuthError)?.response != nil {
+        await removeFlow(flow.id)
+      }
+      throw error
     }
 
-    let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
-    let providerToken = params["provider_token"]
-    let providerRefreshToken = params["provider_refresh_token"]
-
-    let user = try await api.execute(
-      authAPI.user(accessToken: accessToken, tokenType: tokenType),
-      for: sessionOwnership(ofAccessToken: accessToken)
-    )
-
-    let session = Session(
-      providerToken: providerToken,
-      providerRefreshToken: providerRefreshToken,
-      accessToken: accessToken,
-      tokenType: tokenType,
-      expiresIn: expiresIn,
-      expiresAt: expiresAt ?? date().addingTimeInterval(expiresIn).timeIntervalSince1970,
-      refreshToken: refreshToken,
-      user: user
-    )
-
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
-
-    if let type = params["type"], type == "recovery" {
-      try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
-    }
-
+    await removeFlow(flow.id)
+    try await sessionStore.commit(.signedIn(session, event: flow.purpose.event))
     return session
   }
 
-  /// Only reached from ``session(from:)``, under `case .pkce` of its switch on
-  /// `configuration.flowType`, which is what guarantees the flow type here.
-  private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
-    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
-      let oauthError = params["error"] ?? "unspecified_error"
-      let description =
-        params["error_description"] ?? "Error in URL with unspecified error_description."
-      throw AuthError.oauthFlowFailed(
-        "\(oauthError): \(description)",
-        errorCode: params["error_code"].map { ErrorCode($0) } ?? .unknown
-      )
+  /// The flow is finished either way, so a failed removal is only logged and the TTL drops it.
+  private func removeFlow(_ id: UUID) async {
+    do {
+      try await dependencies.flowStore.remove(id: id)
+    } catch {
+      logger.error("Failure removing a finished flow: \(error.localizedDescription)")
     }
+  }
 
-    guard let code = params["code"] else {
-      throw AuthError.oauthFlowFailed("No code detected.")
-    }
+  private func signIn(with tokens: ImplicitTokens, type: EmailOTPType?) async throws -> Session {
+    let user = try await api.execute(
+      authAPI.user(accessToken: tokens.accessToken, tokenType: tokens.tokenType),
+      for: sessionOwnership(ofAccessToken: tokens.accessToken)
+    )
 
-    return try await exchangeCodeForSession(authCode: code, flowId: flowId)
+    let session = Session(
+      providerToken: tokens.providerToken,
+      providerRefreshToken: tokens.providerRefreshToken,
+      accessToken: tokens.accessToken,
+      tokenType: tokens.tokenType,
+      expiresIn: tokens.expiresIn,
+      expiresAt: tokens.expiresAt
+        ?? date().addingTimeInterval(tokens.expiresIn).timeIntervalSince1970,
+      refreshToken: tokens.refreshToken,
+      user: user
+    )
+
+    let event: AuthChangeEvent =
+      switch type {
+      case .recovery: .passwordRecovery
+      case .emailChange: .userUpdated
+      default: .signedIn
+      }
+    try await sessionStore.commit(.signedIn(session, event: event))
+    return session
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -1003,7 +936,7 @@ public final class AuthClient: Sendable {
         type: type,
         redirectTo: emailRedirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: emailRedirectTo)
       )
     )
   }
@@ -1050,7 +983,12 @@ public final class AuthClient: Sendable {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    let pkce = user.email != nil ? prepareForPKCE().challenge : nil
+    let pkce: PKCEChallenge? =
+      if user.email != nil {
+        try await startFlow(.emailChange, redirectTo: redirectTo)
+      } else {
+        nil
+      }
 
     let updatedUser = try await api.authorizedExecute {
       try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
@@ -1080,90 +1018,35 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Links an OAuth identity to an existing user.
+  /// Returns the URL that links an OAuth identity to the signed-in user.
   ///
-  /// This method supports the PKCE flow.
-  ///
-  /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
-  ///   - launchURL: Custom launch URL logic.
-  public func linkIdentity(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    launchURL: @MainActor (_ url: URL) -> Void
-  ) async throws {
-    let response = try await linkIdentityURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams
-    )
-
-    await launchURL(response.url)
-  }
-
-  /// Links an OAuth identity to an existing user.
-  ///
-  /// This method supports the PKCE flow.
+  /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
+  /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, which emits
+  /// ``AuthChangeEvent/userUpdated``.
   ///
   /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
-  ///
-  /// - Note: This method opens the URL with the platform's default handler. Where the platform
-  /// cannot open a URL, such as Linux, it throws an error of kind
-  /// ``AuthError/Kind-swift.struct/oauthFlowFailed``. To open the URL yourself, use
-  /// ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``.
-  public func linkIdentity(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) async throws {
-    let response = try await linkIdentityURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams
-    )
-    try await dependencies.platform.openURL(response.url)
-  }
-
-  /// Returns the URL to link the user's identity with an OAuth provider.
-  ///
-  /// This method supports the PKCE flow.
-  ///
-  /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
+  ///   - provider: The provider to link.
+  ///   - options: The scopes, the redirect URL, and extra query items.
+  /// - Returns: The URL to open, and the ID of the flow that this call started.
   public func linkIdentityURL(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) async throws -> OAuthResponse {
-    let (pkce, flowId) = prepareForPKCE()
+    _ provider: Provider,
+    options: OAuthOptions = .init()
+  ) async throws -> (url: URL, flowID: UUID) {
+    let redirectTo = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+    let (flow, challenge) = try await dependencies.flowStore.start(
+      purpose: .linkIdentity, redirectTo: redirectTo)
     let url = try await api.authorizedExecute {
       try authAPI.linkIdentityURL(
         provider: provider,
-        scopes: scopes,
+        scopes: options.scopesParameter,
         redirectTo: redirectTo,
-        queryParams: queryParams,
-        pkce: pkce,
+        queryParams: options.queryParams,
+        pkce: challenge,
         accessToken: $0
       )
     }
-
-    return OAuthResponse(provider: provider, url: url, flowId: flowId)
+    return (url, flow.id)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
@@ -1183,7 +1066,7 @@ public final class AuthClient: Sendable {
         email,
         redirectTo: redirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: startFlow(.recovery, redirectTo: redirectTo)
       )
     )
   }
@@ -1278,34 +1161,15 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Starts a PKCE flow when the client uses one: stores a new code verifier under a new flow id
-  /// and returns the challenge to send.
-  private func prepareForPKCE() -> (challenge: PKCEChallenge?, flowId: String?) {
-    guard configuration.flowType == .pkce else {
-      return (nil, nil)
-    }
-
-    let flowId = UUID().uuidString
-    let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier, flowId)
-
-    let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
-    let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
-
-    return (
-      PKCEChallenge(codeChallenge: codeChallenge, codeChallengeMethod: codeChallengeMethod),
-      flowId
-    )
-  }
-
-  private func isImplicitGrantFlow(params: [String: String]) -> Bool {
-    params["access_token"] != nil || params["error_description"] != nil || params["error"] != nil
-  }
-
-  private func isPKCEFlow(params: [String: String]) -> Bool {
-    let currentCodeVerifier = codeVerifierStorage.get(nil)
-    return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
-      || params["error_code"] != nil && currentCodeVerifier != nil
+  /// Stores a new PKCE flow and returns the challenge to send with the request that starts it.
+  private func startFlow(
+    _ purpose: PendingFlowRecord.Purpose,
+    redirectTo: URL?
+  ) async throws -> PKCEChallenge {
+    try await dependencies.flowStore.start(
+      purpose: purpose,
+      redirectTo: redirectTo ?? configuration.redirectToURL
+    ).challenge
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching

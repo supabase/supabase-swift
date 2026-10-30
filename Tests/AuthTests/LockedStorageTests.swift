@@ -166,7 +166,7 @@ struct LockedStorageTests {
     }
 
     @Test
-    func missingEntitlementOnACodeVerifierWriteIsReported() async throws {
+    func missingEntitlementOnAFlowRecordWriteIsReported() async throws {
       let entitlementError = KeychainError(code: .init(rawValue: errSecMissingEntitlement))
       let storage = KeychainLocalStorage(
         keychain: FakeKeychain(writeError: entitlementError),
@@ -175,12 +175,11 @@ struct LockedStorageTests {
       let reporter = RecordingIssueReporter()
       let client = withIssueReporters([reporter]) { makeClient(World(), storage: storage) }
 
-      await #expect(throws: CancellationError.self) {
-        try await withIssueReporters([reporter]) {
-          try await client.signInWithOAuth(provider: .github) { _ in throw CancellationError() }
-        }
+      let error = await #expect(throws: AuthError.self) {
+        try await withIssueReporters([reporter]) { _ = try await client.oauthSignInURL(.github) }
       }
 
+      #expect(error?.kind == .storageMisconfigured)
       #expect(reporter.messages.value.count == 1)
     }
   #endif
