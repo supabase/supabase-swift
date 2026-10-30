@@ -37,7 +37,15 @@ extension RealtimeClient {
   /// Parks the caller until the core resolves the waiter that `make` hands the event. The
   /// waiter is parked before the event is applied, in one synchronous step, so the core can
   /// resolve it in the same batch. A cancelled caller throws `CancellationError` at once.
-  func wait(_ make: @Sendable (WaiterID) -> RealtimeCore.Event) async throws {
+  ///
+  /// A caller that is already cancelled throws before the core sees the event, unless
+  /// `evenIfCancelled` is set: then the event is applied, and only the wait ends at once.
+  func wait(
+    evenIfCancelled: Bool = false, _ make: @Sendable (WaiterID) -> RealtimeCore.Event
+  ) async throws {
+    if !evenIfCancelled {
+      try Task.checkCancellation()
+    }
     let id = waiters.next()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
@@ -49,18 +57,19 @@ extension RealtimeClient {
     }
   }
 
-  /// ``wait(_:)`` for an action of `channel`. The checks run here, on the actor,
+  /// ``wait(evenIfCancelled:_:)`` for an action of `channel`. The checks run here, on the actor,
   /// so an action cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
   ///
   /// While an older channel of the same topic is being removed, the action waits for that
   /// removal to end, then runs as on a new channel.
   func wait(
-    on channel: RealtimeChannel, _ make: @Sendable (WaiterID) -> RealtimeCore.Event
+    on channel: RealtimeChannel, evenIfCancelled: Bool = false,
+    _ make: @Sendable (WaiterID) -> RealtimeCore.Event
   ) async throws {
     guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
     try await waitForRemoval(blocking: channel)
     guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
-    try await wait(make)
+    try await wait(evenIfCancelled: evenIfCancelled, make)
   }
 
   /// The channel being removed that holds the topic of `channel`, if it is another channel. The

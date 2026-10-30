@@ -435,7 +435,7 @@ public actor RealtimeClient {
     // While an older channel of the topic is being removed, the record is that channel's.
     guard removal(blocking: channel) == nil else { return }
     removedChannels[topic] = channel
-    try? await wait { .removeChannel(topic: topic, waiter: $0) }
+    try? await wait(evenIfCancelled: true) { .removeChannel(topic: topic, waiter: $0) }
     if core.channels[topic] == nil, removedChannels[topic] === channel {
       removedChannels[topic] = nil
       removalEnded(topic)

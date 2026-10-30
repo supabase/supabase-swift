@@ -130,6 +130,25 @@ struct RealtimeShellTests {
     #expect(channel.status == .unsubscribed)
   }
 
+  @Test
+  func subscribeFromACancelledTaskSendsNothing() async throws {
+    let host = await RealtimeTestHost()
+    // Connected, so a join would go out at once.
+    try await host.client.connect()
+    let channel = host.client.channel("room")
+    let cancelled = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      try await channel.subscribe()
+    }
+
+    await #expect(throws: CancellationError.self) { try await cancelled.value }
+    // Frames leave in order, so once this join is in, any frame for "room" would be too.
+    try await subscribe(host.client.channel("barrier"), on: host)
+
+    #expect(host.frames.filter { $0.topic == channel.wireTopic }.isEmpty)
+    #expect(channel.status == .unsubscribed)
+  }
+
   // MARK: Socket
 
   @Test

@@ -182,7 +182,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// calling task stops the wait, not the leave.
   public func unsubscribe() async {
     guard let client = try? clientForAction() else { return }
-    try? await client.wait(on: self) { [topic] in .unsubscribe(topic: topic, waiter: $0) }
+    try? await client.wait(on: self, evenIfCancelled: true) { [topic] in
+      .unsubscribe(topic: topic, waiter: $0)
+    }
   }
 
   // MARK: - Broadcast
