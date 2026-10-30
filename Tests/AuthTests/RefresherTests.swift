@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 import TestHelpers
 import Testing
 
@@ -217,6 +218,42 @@ struct RefresherTests {
     let session = ReceivedSession(session: makeSession(expiresAt: receivedAt))
     #expect(session.expiryDate == receivedAt)
     #expect(!session.hasClockSkew)
+  }
+
+  @Test
+  func cancellationErrorFromARefreshNobodyCancelledIsRetried() async {
+    let attempts = LockIsolated(0)
+    await runRefresher {
+      let attempt = attempts.withValue {
+        $0 += 1
+        return $0
+      }
+      if attempt == 1 { throw CancellationError() }
+    }
+    #expect(attempts.value == 2)
+  }
+
+  @Test
+  func cancellationEndsTheRefreshLoop() async {
+    let attempts = LockIsolated(0)
+    await runRefresher {
+      attempts.withValue { $0 += 1 }
+      withUnsafeCurrentTask { $0?.cancel() }
+      throw CancellationError()
+    }
+    #expect(attempts.value == 1)
+  }
+
+  private func runRefresher(refresh: () async throws -> Void) async {
+    let receivedAt = receivedAt
+    await Refresher.run(
+      for: received(serverOffset: 0),
+      driver: Refresher.Driver(
+        clock: ImmediateClock(), logger: Logger(label: "test"),
+        request: { _ in throw CancellationError() }),
+      now: { receivedAt },
+      refresh: refresh
+    )
   }
 
   private let retryable = AuthError(kind: .server, message: "unavailable")

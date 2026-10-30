@@ -77,6 +77,27 @@ struct SignUpRequest: Encodable, Hashable, Sendable {
   var codeChallengeMethod: String?
 }
 
+struct IDTokenBody: Encodable, Hashable, Sendable {
+  var provider: String
+  var idToken: String
+  var accessToken: String?
+  var nonce: String?
+  var gotrueMetaSecurity: AuthMetaSecurity?
+  var linkIdentity: Bool
+}
+
+struct Web3Body: Encodable, Hashable, Sendable {
+  var chain: Web3Chain
+  var message: String
+  var signature: String
+  var gotrueMetaSecurity: AuthMetaSecurity?
+}
+
+extension JSONObject {
+  /// `nil` for an empty object, so the request leaves the field out.
+  var nilIfEmpty: JSONObject? { isEmpty ? nil : self }
+}
+
 /// An active authentication session containing the tokens and user details.
 public struct Session: Codable, Hashable, Sendable {
   /// The OAuth provider token. If present, this can be used to make external API requests to the
@@ -501,87 +522,55 @@ public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStrin
   public static let fly: Provider = "fly"
 }
 
-/// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
-public struct OpenIDConnectCredentials: Encodable, Hashable, Sendable {
-  /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
-  /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
+/// Credentials for signing in with an ID token that a third-party identity provider issued, such
+/// as Sign in with Apple or Google Sign-In.
+///
+/// When the provider takes a nonce, pass ``Nonce/generate()``'s `hashed` value to the provider
+/// and its `raw` value here. The server hashes `nonce` and compares the result with the token's
+/// `nonce` claim.
+public struct IDTokenCredentials: Sendable, Hashable {
+  /// The provider that issued the token, such as ``Provider/apple`` or ``Provider/google``, or
+  /// the token's `iss` value for a custom OIDC provider.
   public var provider: Provider
 
-  /// OIDC ID token issued by the specified provider. The `iss` claim in the ID token must match the
-  /// supplied provider. Some ID tokens contain an `at_hash` which require that you provide an
-  /// `access_token` value to be accepted properly. If the token contains a `nonce` claim you must
-  /// supply the nonce used to obtain the ID token.
+  /// The ID token the provider issued. Its `iss` claim must match ``provider``.
   public var idToken: String
 
-  /// If the ID token contains an `at_hash` claim, then the hash of this value is compared to the
-  /// value in the ID token.
-  public var accessToken: String?
-
-  /// If the ID token contains a `nonce` claim, then the hash of this value is compared to the value
-  /// in the ID token.
+  /// The raw nonce used to request the token. Required when the token has a `nonce` claim.
   public var nonce: String?
 
-  /// Verification token received when the user completes the captcha on the site.
-  public var gotrueMetaSecurity: AuthMetaSecurity?
+  /// The provider's access token. Required when the token has an `at_hash` claim.
+  public var accessToken: String?
 
-  var linkIdentity: Bool = false
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
 
-  /// Creates OIDC credentials for sign-in.
+  /// Creates ID token credentials.
   ///
   /// - Parameters:
-  ///   - provider: The OIDC provider.
-  ///   - idToken: The ID token issued by the provider.
-  ///   - accessToken: Optional access token, required when the ID token contains an `at_hash` claim.
-  ///   - nonce: Optional nonce, required when the ID token contains a `nonce` claim.
-  ///   - gotrueMetaSecurity: Optional captcha verification token.
+  ///   - provider: The provider that issued the token.
+  ///   - idToken: The ID token the provider issued.
+  ///   - nonce: The raw nonce used to request the token.
+  ///   - accessToken: The provider's access token.
+  ///   - captchaToken: The token the user received for completing a captcha.
   public init(
     provider: Provider,
     idToken: String,
-    accessToken: String? = nil,
     nonce: String? = nil,
-    gotrueMetaSecurity: AuthMetaSecurity? = nil
+    accessToken: String? = nil,
+    captchaToken: String? = nil
   ) {
     self.provider = provider
     self.idToken = idToken
-    self.accessToken = accessToken
     self.nonce = nonce
-    self.gotrueMetaSecurity = gotrueMetaSecurity
-  }
-
-  /// Providers supported by the OIDC sign-in flow.
-  public struct Provider: RawRepresentable, Encodable, Hashable, Sendable,
-    ExpressibleByStringLiteral
-  {
-    public let rawValue: String
-
-    /// Creates a ``Provider`` from a raw string value.
-    public init(rawValue: String) {
-      self.rawValue = rawValue
-    }
-
-    /// Creates a ``Provider`` from a string literal.
-    public init(stringLiteral value: String) {
-      self.init(rawValue: value)
-    }
-
-    public static let google: Provider = "google"
-    public static let apple: Provider = "apple"
-    public static let azure: Provider = "azure"
-    public static let facebook: Provider = "facebook"
+    self.accessToken = accessToken
+    self.captchaToken = captchaToken
   }
 }
 
-/// A captcha verification token used to secure Auth endpoints.
-public struct AuthMetaSecurity: Encodable, Hashable, Sendable {
-  /// The captcha token obtained after the user completes a captcha challenge.
-  public var captchaToken: String
-
-  /// Creates an ``AuthMetaSecurity`` value with the given captcha token.
-  ///
-  /// - Parameter captchaToken: The captcha token.
-  public init(captchaToken: String) {
-    self.captchaToken = captchaToken
-  }
+/// A captcha verification token, in the shape the server reads it.
+struct AuthMetaSecurity: Encodable, Hashable, Sendable {
+  var captchaToken: String
 }
 
 /// A Web3 chain supported by Sign in with Web3.
@@ -611,7 +600,8 @@ public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, Expres
 /// The caller is responsible for constructing a spec-compliant SIWE (EIP-4361) or SIWS message and
 /// obtaining a signature over it from the user's wallet (e.g. via WalletConnect or a native wallet
 /// SDK) — this type only carries the already-signed result to the server for verification.
-public struct Web3Credentials: Encodable, Hashable, Sendable {
+public struct Web3Credentials: Hashable, Sendable {
+  /// The chain the message was signed for.
   public var chain: Web3Chain
 
   /// The SIWE- or SIWS-formatted message that was signed.
@@ -622,8 +612,8 @@ public struct Web3Credentials: Encodable, Hashable, Sendable {
   /// - Solana: base64 (standard or URL-safe, padded or not) encoding of the 64-byte Ed25519 signature.
   public var signature: String
 
-  /// Verification token received when the user completes the captcha on the site.
-  public var gotrueMetaSecurity: AuthMetaSecurity?
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
 
   /// Creates Web3 credentials for sign-in.
   ///
@@ -631,7 +621,7 @@ public struct Web3Credentials: Encodable, Hashable, Sendable {
   ///   - chain: The Web3 chain the message was signed for.
   ///   - message: The SIWE/SIWS-formatted message that was signed.
   ///   - signature: The signature over `message`.
-  ///   - captchaToken: Optional captcha verification token.
+  ///   - captchaToken: The token the user received for completing a captcha.
   public init(
     chain: Web3Chain,
     message: String,
@@ -641,7 +631,7 @@ public struct Web3Credentials: Encodable, Hashable, Sendable {
     self.chain = chain
     self.message = message
     self.signature = signature
-    self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+    self.captchaToken = captchaToken
   }
 }
 
@@ -752,34 +742,88 @@ public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
   public static let email: EmailOTPType = "email"
 }
 
-/// The response from sign-up and passkey calls that may return either a session or a user,
-/// depending on whether email confirmation is required.
-public enum AuthResponse: Decodable, Hashable, Sendable {
-  /// A full session was created, meaning the user is immediately signed in.
-  case session(Session)
+/// The result of ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+///
+/// Switch on the result to learn whether the user is signed in:
+///
+/// ```swift
+/// switch try await client.auth.signUp(email: email, password: password) {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .confirmationRequired(let user):
+///   showCheckYourInbox(for: user)
+/// }
+/// ```
+public enum SignUpResult: Decodable, Hashable, Sendable {
+  /// The account is active and the user is signed in. The client stored the session and emitted
+  /// ``AuthEvent/signedIn``.
+  case signedIn(Session)
 
-  /// Only a user record was returned, meaning email confirmation is still pending.
-  case user(User)
+  /// The server sent a confirmation email or SMS. The user is not signed in until they confirm.
+  ///
+  /// When email confirmation is on and the email or phone number already belongs to a confirmed
+  /// account, the server does not say so. It returns a fake user with an empty `identities`
+  /// list instead, and sends no message. A real new user has one identity. The SDK returns
+  /// either user as is.
+  case confirmationRequired(User)
 
   public init(from decoder: any Decoder) throws {
     self =
       try decoder.isSessionBody()
-      ? .session(Session(from: decoder))
-      : .user(User(from: decoder))
+      ? .signedIn(Session(from: decoder))
+      : .confirmationRequired(User(from: decoder))
   }
 
-  /// The user in either case of the response.
+  /// The user in either case.
   public var user: User {
     switch self {
-    case .session(let session): session.user
-    case .user(let user): user
+    case .signedIn(let session): session.user
+    case .confirmationRequired(let user): user
     }
   }
 
-  /// The session, or `nil` if only a user was returned (confirmation pending).
+  /// The session, or `nil` when the user must confirm first.
   public var session: Session? {
-    if case .session(let session) = self { return session }
+    if case .signedIn(let session) = self { return session }
     return nil
+  }
+}
+
+/// Options for ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+public struct SignUpOptions: Sendable, Hashable {
+  /// Data to store on the user, in the `auth.users.raw_user_meta_data` column. The user can
+  /// change it later, so do not use it for authorization.
+  public var userMetadata: JSONObject
+
+  /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
+  /// the client uses ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The channel that delivers the confirmation code. Applies to phone sign-up only.
+  public var channel: MessagingChannel
+
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
+
+  /// Creates sign-up options.
+  ///
+  /// - Parameters:
+  ///   - userMetadata: Data to store on the user.
+  ///   - redirectTo: The URL the confirmation link sends the user to. Email sign-up only.
+  ///   - channel: The channel that delivers the confirmation code. Phone sign-up only.
+  ///   - captchaToken: The token the user received for completing a captcha.
+  public init(
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.channel = channel
+    self.captchaToken = captchaToken
   }
 }
 
@@ -855,13 +899,17 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
   public var nonce: String?
 
-  /// A custom data object to store the user's metadata. This maps to the `auth.users.user_metadata`
-  /// column. The `data` should be a JSON object that includes user-specific info, such as their
-  /// first and last name.
-  public var data: [String: JSONValue]?
+  /// Data to merge into the user's metadata, in the `auth.users.raw_user_meta_data` column. The
+  /// user can change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
 
   var codeChallenge: String?
   var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email, phone, password, nonce, codeChallenge, codeChallengeMethod
+    case userMetadata = "data"
+  }
 
   /// Creates user attributes for an update call.
   ///
@@ -870,19 +918,19 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   ///   - phone: New phone number.
   ///   - password: New password.
   ///   - nonce: Reauthentication nonce, required when updating the password.
-  ///   - data: Additional user metadata to merge.
+  ///   - userMetadata: Data to merge into the user's metadata.
   public init(
     email: String? = nil,
     phone: String? = nil,
     password: String? = nil,
     nonce: String? = nil,
-    data: [String: JSONValue]? = nil
+    userMetadata: JSONObject? = nil
   ) {
     self.email = email
     self.phone = phone
     self.password = password
     self.nonce = nonce
-    self.data = data
+    self.userMetadata = userMetadata
   }
 }
 

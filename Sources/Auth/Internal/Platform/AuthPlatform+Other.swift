@@ -17,8 +17,9 @@
           `linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)`.
           """
         )
-      },
-      makeDefaultLocalStorage: { EphemeralLocalStorage() }
+      }
     )
+
+    static var defaultLocalStorage: any AuthLocalStorage { EphemeralLocalStorage() }
   }
 #endif

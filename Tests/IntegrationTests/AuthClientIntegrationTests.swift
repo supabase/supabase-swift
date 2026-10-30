@@ -66,15 +66,19 @@ struct AuthClientIntegrationTests {
         "test": .integer(42)
       ]
 
-      let response = try await authClient.signUp(
+      let result = try await authClient.signUp(
         email: email,
         password: password,
-        data: metadata
+        options: SignUpOptions(userMetadata: metadata)
       )
 
-      #expect(response.session != nil)
-      #expect(response.user.email == email)
-      #expect(response.user.userMetadata["test"] == 42)
+      guard case .signedIn(let session) = result else {
+        Issue.record("Expected .signedIn, got \(result)")
+        return
+      }
+      #expect(authClient.currentSession == session)
+      #expect(session.user.email == email)
+      #expect(session.user.userMetadata["test"] == 42)
 
       try await authClient.signOut()
 
@@ -103,7 +107,7 @@ struct AuthClientIntegrationTests {
       let signature = try privateKey.signature(for: Data(message.utf8))
 
       let session = try await authClient.signInWithWeb3(
-        credentials: Web3Credentials(
+        Web3Credentials(
           chain: .solana,
           message: message,
           signature: signature.base64EncodedString()
@@ -137,7 +141,7 @@ struct AuthClientIntegrationTests {
       let signature = try signEthereumPersonalMessage(message, privateKeyHex: privateKeyHex)
 
       let session = try await authClient.signInWithWeb3(
-        credentials: Web3Credentials(
+        Web3Credentials(
           chain: .ethereum,
           message: message,
           signature: signature
@@ -217,7 +221,8 @@ struct AuthClientIntegrationTests {
     try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      let updatedUser = try await authClient.update(user: .init(data: ["test": .integer(42)]))
+      let updatedUser = try await authClient.update(
+        user: .init(userMetadata: ["test": .integer(42)]))
       #expect(updatedUser.userMetadata["test"] == 42)
     }
   }
@@ -268,6 +273,19 @@ struct AuthClientIntegrationTests {
   func signInAnonymous() async throws {
     try await expectAuthEvents([.initialSession, .signedIn]) {
       try await authClient.signInAnonymously()
+    }
+  }
+
+  @Test
+  func signInAnonymouslyStoresUserMetadata() async throws {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
+      let session = try await authClient.signInAnonymously(
+        userMetadata: ["nickname": "guest"]
+      )
+
+      #expect(session.user.isAnonymous)
+      #expect(session.user.userMetadata["nickname"] == "guest")
+      #expect(try await authClient.user().userMetadata["nickname"] == "guest")
     }
   }
 
@@ -460,7 +478,14 @@ struct AuthClientIntegrationTests {
     let newEmail = mockEmail()
     let password = mockPassword()
 
-    _ = try await client.signUp(email: email, password: password)
+    let signUp = try await client.signUp(email: email, password: password)
+    guard case .confirmationRequired(let user) = signUp else {
+      Issue.record("Expected .confirmationRequired, got \(signUp)")
+      return
+    }
+    expectNoDifference(user.email, email)
+    #expect(user.identities?.isEmpty == false)
+    #expect(client.currentSession == nil)
 
     let currentEmailLink = try await client.admin.generateLink(
       params: .emailChangeCurrent(email: email, newEmail: newEmail)
@@ -569,10 +594,10 @@ struct AuthClientIntegrationTests {
   private func signUpIfNeededOrSignIn(
     email: String,
     password: String
-  ) async throws -> AuthResponse {
+  ) async throws -> SignUpResult {
     do {
       let session = try await authClient.signIn(email: email, password: password)
-      return .session(session)
+      return .signedIn(session)
     } catch {
       return try await authClient.signUp(email: email, password: password)
     }

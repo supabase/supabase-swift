@@ -346,6 +346,19 @@ features:
     status: implemented
     symbols:
       - AuthClient.signUp
+    supporting_symbols:
+      - SignUpResult
+      - SignUpResult.signedIn
+      - SignUpResult.confirmationRequired
+      - SignUpResult.init
+      - SignUpResult.user
+      - SignUpResult.session
+      - SignUpOptions
+      - SignUpOptions.init
+      - SignUpOptions.userMetadata
+      - SignUpOptions.redirectTo
+      - SignUpOptions.channel
+      - SignUpOptions.captchaToken
   auth.sign_in.sign_in_with_password:
     status: implemented
     symbols:
@@ -394,7 +407,19 @@ features:
   auth.sign_in.sign_in_with_id_token:
     status: implemented
     symbols:
-      - AuthClient.signInWithIdToken
+      - AuthClient.signInWithIDToken
+    supporting_symbols:
+      - IDTokenCredentials
+      - IDTokenCredentials.init
+      - IDTokenCredentials.provider
+      - IDTokenCredentials.idToken
+      - IDTokenCredentials.nonce
+      - IDTokenCredentials.accessToken
+      - IDTokenCredentials.captchaToken
+      - Nonce
+      - Nonce.generate
+      - Nonce.raw
+      - Nonce.hashed
   auth.sign_in.sign_in_anonymously:
     status: implemented
     symbols:
@@ -409,7 +434,7 @@ features:
       - Web3Credentials.chain
       - Web3Credentials.message
       - Web3Credentials.signature
-      - Web3Credentials.gotrueMetaSecurity
+      - Web3Credentials.captchaToken
       - Web3Chain
       - Web3Chain.init
       - Web3Chain.rawValue
@@ -515,6 +540,9 @@ features:
     status: implemented
     symbols:
       - AuthClient.update
+    supporting_symbols:
+      - UserAttributes
+      - UserAttributes.userMetadata
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -572,7 +600,7 @@ features:
     symbols:
       - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
-      - AuthClient.linkIdentityWithIdToken
+      - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
     status: implemented
     symbols:

@@ -186,7 +186,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `public actor AuthClient` | `public final class AuthClient: Sendable` |
-| `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueMetaSecurity`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthMetaSecurity`, `AuthError` |
+| `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthError` |
+| `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
+| `signInWithIdToken(credentials:)`, `linkIdentityWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `linkIdentityWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `OpenIDConnectCredentials(provider:idToken:accessToken:nonce:gotrueMetaSecurity:)` | `IDTokenCredentials(provider:idToken:nonce:accessToken:captchaToken:)` |
+| `OpenIDConnectCredentials.Provider` | `Provider` |
+| `Web3Credentials.gotrueMetaSecurity` | `Web3Credentials.captchaToken` |
+| `signInAnonymously(data:)`, `signInWithOTP(…data:…)`, `UserAttributes.data`, `UserAttributes(…data:)` | `userMetadata:` (a `JSONObject`; empty sends nothing) |
 | `JSONEncoder.goTrue`, `JSONDecoder.goTrue` | `AuthClient.Configuration.jsonEncoder`, `.jsonDecoder` |
 | `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
@@ -214,9 +220,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
-| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `OpenIDConnectCredentials.Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
-| `AuthResponse`, `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
-| `OpenIDConnectCredentials`, `OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
+| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
+| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
+| `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
+| `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
 | `OAuthResponse`, `Provider`: `Codable` | no `Codable` conformance |
 | `UserCredentials` | internal |
 | `UserAttributes.emailChangeToken` | removed |
@@ -271,9 +278,32 @@ do {
 `throw AuthError.sessionMissing` still compiles. `signInWithOAuth` now throws `.oauthFlowFailed`
 when it has no redirect URL, where v2 trapped.
 
+## `signUp` returns `SignUpResult`
+
+`signUp(email:)` and `signUp(phone:)` return `SignUpResult` instead of `AuthResponse`. Its cases
+say whether the user is signed in: `.signedIn(Session)` or `.confirmationRequired(User)`. The
+`session` and `user` properties stay. The metadata, redirect URL, channel, and captcha token move
+into `SignUpOptions`, and `data:` is `userMetadata:`. `signUp` is no longer
+`@discardableResult`, so a call that ignores the result warns. Write `_ =` if you do not need it.
+
+```swift
+// v2
+let response = try await supabase.auth.signUp(
+  email: email, password: password, data: ["name": .string(name)], captchaToken: token)
+if response.session == nil { showCheckYourInbox() }
+// v3
+let result = try await supabase.auth.signUp(
+  email: email, password: password,
+  options: SignUpOptions(userMetadata: ["name": .string(name)], captchaToken: token))
+switch result {
+case .signedIn(let session): showHome(for: session.user)
+case .confirmationRequired: showCheckYourInbox()
+}
+```
+
 ## `verifyOTP` returns `VerifyOTPResponse`
 
-`verifyOTP` returns `VerifyOTPResponse` instead of `AuthResponse`. The first step of a secure email
+`verifyOTP` returns `VerifyOTPResponse` instead of v2's `AuthResponse`. The first step of a secure email
 change returns no session, so the result has a second case.
 
 ```swift
@@ -441,4 +471,5 @@ Passkeys and WebAuthn MFA are `@_spi(Experimental)`. Import them with
 `@_spi(Experimental) import Supabase` (or `import Auth`). They may change in any release. In v3,
 `getPasskeyRegistrationOptions()` and `getPasskeyAuthenticationOptions()` drop the `get` prefix,
 `AuthAdmin.listPasskeys(userId:)` is `listPasskeys(forUser:)`, and
-`AuthAdmin.deletePasskey(userId:passkeyId:)` is `deletePasskey(id:forUser:)`.
+`AuthAdmin.deletePasskey(userId:passkeyId:)` is `deletePasskey(id:forUser:)`. `signInWithPasskey`
+and `verifyPasskeyAuthentication` return `Session` instead of `AuthResponse`.

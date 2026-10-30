@@ -14,7 +14,7 @@ that can.
 
 A value stays an `enum` when the set of cases is fixed by design:
 
-- The cases carry associated values, so a struct cannot express them: `AuthResponse`,
+- The cases carry associated values, so a struct cannot express them: `SignUpResult`,
   `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
   `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
   `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,

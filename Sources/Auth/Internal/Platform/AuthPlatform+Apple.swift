@@ -27,9 +27,10 @@
         #elseif canImport(AppKit)
           NSWorkspace.shared.open(url)
         #endif
-      },
-      makeDefaultLocalStorage: { KeychainLocalStorage() }
+      }
     )
+
+    static var defaultLocalStorage: any AuthLocalStorage { KeychainLocalStorage() }
 
     #if os(watchOS) || canImport(UIKit)
       private static let hasBackgroundState = true

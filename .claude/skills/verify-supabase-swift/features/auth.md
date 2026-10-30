@@ -15,11 +15,11 @@ and observes auth events through `client.auth`.
 
 ## How to get to it (user POV)
 
-- `client.auth.signUp(email:password:data:)`
+- `client.auth.signUp(email:password:options:)`
 - `client.auth.session`
 - `client.auth.signOut()`
 - `client.auth.signIn(email:password:)`
-- `client.auth.authStateChanges`
+- `client.auth.events()`
 
 ## Driving it with verify.sh
 
@@ -43,7 +43,7 @@ Preconditions:
 
 - `client.auth.session` throws after sign-out. It does not return `nil`. A journey that wraps
   it in `Verify.attempt` reports a false `FAIL`.
-- `authStateChanges` emits `INITIAL_SESSION` as soon as a listener starts. Start the listener
+- `events()` emits `INITIAL_SESSION` as soon as a listener starts. Start the listener
   before the first auth call, or the order differs.
 - `Verify.client()` stores the session in memory. The Keychain store is not covered. To verify
   Keychain behavior, run the Examples app on a simulator.

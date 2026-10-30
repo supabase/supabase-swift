@@ -3,34 +3,43 @@ import Foundation
 import Testing
 
 @Suite
-struct AuthResponseTests {
+struct SignUpResultTests {
   @Test
-  func session() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
-      AuthResponse.self,
+  func sessionBodyIsSignedIn() throws {
+    let result = try AuthClient.Configuration.jsonDecoder.decode(
+      SignUpResult.self,
       from: json(named: "session")
     )
-    #expect(response.session != nil)
-    #expect(response.user == response.session?.user)
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(result.session == session)
+    #expect(result.user == session.user)
   }
 
   @Test
-  func user() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
-      AuthResponse.self,
+  func userBodyIsConfirmationRequired() throws {
+    let result = try AuthClient.Configuration.jsonDecoder.decode(
+      SignUpResult.self,
       from: json(named: "user")
     )
-    #expect(response.session == nil)
+    guard case .confirmationRequired(let user) = result else {
+      Issue.record("Expected .confirmationRequired, got \(result)")
+      return
+    }
+    #expect(result.session == nil)
+    #expect(result.user == user)
   }
 
   @Test
   func signUpConfirmationRequired() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
-      AuthResponse.self,
+    let result = try AuthClient.Configuration.jsonDecoder.decode(
+      SignUpResult.self,
       from: json(named: "signup-response")
     )
-    #expect(response.session == nil)
-    #expect(response.user.email == "jane@example.com")
+    #expect(result.session == nil)
+    #expect(result.user.email == "jane@example.com")
   }
 
   @Test
@@ -52,10 +61,10 @@ struct AuthResponseTests {
   }
 
   @Test
-  func emailChangeSingleConfirmation_isNotAValidAuthResponse() {
+  func emailChangeSingleConfirmation_isNotAValidSignUpResult() {
     #expect(throws: (any Error).self) {
       try AuthClient.Configuration.jsonDecoder.decode(
-        AuthResponse.self,
+        SignUpResult.self,
         from: json(named: "email-change-single-confirmation")
       )
     }

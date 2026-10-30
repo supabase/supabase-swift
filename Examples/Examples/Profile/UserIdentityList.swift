@@ -163,8 +163,8 @@ struct UserIdentityList: View {
               try await supabase.auth.linkIdentity(provider: .google)
 
               // For Apple, use OIDC flow
-              try await supabase.auth.linkIdentityWithIdToken(
-                credentials: OpenIDConnectCredentials(
+              try await supabase.auth.linkIdentityWithIDToken(
+                IDTokenCredentials(
                   provider: .apple,
                   idToken: appleIDToken
                 )
@@ -337,8 +337,8 @@ struct UserIdentityList: View {
       return
     }
 
-    try await supabase.auth.linkIdentityWithIdToken(
-      credentials: OpenIDConnectCredentials(
+    try await supabase.auth.linkIdentityWithIDToken(
+      IDTokenCredentials(
         provider: .apple,
         idToken: identityToken
       )

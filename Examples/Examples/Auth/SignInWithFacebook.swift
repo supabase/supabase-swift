@@ -39,8 +39,8 @@ struct SignInWithFacebook: View {
 
             Task {
               do {
-                try await supabase.auth.signInWithIdToken(
-                  credentials: OpenIDConnectCredentials(
+                try await supabase.auth.signInWithIDToken(
+                  IDTokenCredentials(
                     provider: .facebook,
                     idToken: idToken
                   )
