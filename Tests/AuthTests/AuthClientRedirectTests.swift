@@ -775,12 +775,12 @@ struct AuthClientRedirectTests {
   private func events(
     on client: AuthClient,
     during action: () async throws -> Void
-  ) async throws -> [AuthChangeEvent] {
-    let stream = client.authStateChanges
+  ) async throws -> [AuthEvent] {
+    let stream = client.events()
     try await action()
     try await client.signIn(email: "sentinel@example.com", password: "secret")
 
-    var events: [AuthChangeEvent] = []
+    var events: [AuthEvent] = []
     for await change in stream.dropFirst() {
       if change.event == .signedIn, change.session?.accessToken == "sentinel-access" {
         break

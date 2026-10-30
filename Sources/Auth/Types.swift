@@ -5,15 +5,15 @@ import Helpers
 ///
 /// New events can be added in a minor release, so a `switch` over this value needs a `default:`
 /// case.
-public struct AuthChangeEvent: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct AuthEvent: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
-  /// Creates a ``AuthChangeEvent`` from a raw string value.
+  /// Creates an ``AuthEvent`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``AuthChangeEvent`` from a string literal.
+  /// Creates an ``AuthEvent`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
@@ -23,28 +23,25 @@ public struct AuthChangeEvent: RawRepresentable, Hashable, Sendable, Expressible
   /// While storage cannot be read, for example after a launch into the background before the
   /// first unlock, this event waits. It fires once storage is read, or just before the first
   /// other event if that comes first.
-  public static let initialSession: AuthChangeEvent = "INITIAL_SESSION"
+  public static let initialSession: AuthEvent = "INITIAL_SESSION"
 
   /// Emitted when a password-recovery email link is clicked, making the session available.
-  public static let passwordRecovery: AuthChangeEvent = "PASSWORD_RECOVERY"
+  public static let passwordRecovery: AuthEvent = "PASSWORD_RECOVERY"
 
   /// Emitted when a user signs in or a new session is established.
-  public static let signedIn: AuthChangeEvent = "SIGNED_IN"
+  public static let signedIn: AuthEvent = "SIGNED_IN"
 
   /// Emitted when a user signs out.
-  public static let signedOut: AuthChangeEvent = "SIGNED_OUT"
+  public static let signedOut: AuthEvent = "SIGNED_OUT"
 
   /// Emitted when the access token is refreshed.
-  public static let tokenRefreshed: AuthChangeEvent = "TOKEN_REFRESHED"
+  public static let tokenRefreshed: AuthEvent = "TOKEN_REFRESHED"
 
   /// Emitted when the user's data is updated.
-  public static let userUpdated: AuthChangeEvent = "USER_UPDATED"
-
-  /// Emitted when the user's account is deleted.
-  public static let userDeleted: AuthChangeEvent = "USER_DELETED"
+  public static let userUpdated: AuthEvent = "USER_UPDATED"
 
   /// Emitted when an MFA challenge is successfully verified.
-  public static let mfaChallengeVerified: AuthChangeEvent = "MFA_CHALLENGE_VERIFIED"
+  public static let mfaChallengeVerified: AuthEvent = "MFA_CHALLENGE_VERIFIED"
 }
 
 struct UserCredentials: Encodable, Hashable, Sendable {
@@ -760,7 +757,7 @@ public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
 /// ```
 public enum SignUpResult: Decodable, Hashable, Sendable {
   /// The account is active and the user is signed in. The client stored the session and emitted
-  /// ``AuthChangeEvent/signedIn``.
+  /// ``AuthEvent/signedIn``.
   case signedIn(Session)
 
   /// The server sent a confirmation email or SMS. The user is not signed in until they confirm.
@@ -1458,7 +1455,7 @@ public struct SignOutScope: RawRepresentable, Hashable, Sendable, ExpressibleByS
   public static let local: SignOutScope = "local"
 
   /// All other sessions except the current one will be signed out. When using
-  /// ``SignOutScope/others``, there is no ``AuthChangeEvent/signedOut`` event fired on the current
+  /// ``SignOutScope/others``, there is no ``AuthEvent/signedOut`` event fired on the current
   /// session.
   public static let others: SignOutScope = "others"
 }

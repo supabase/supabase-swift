@@ -92,8 +92,8 @@ extension AuthClient {
     /// available, so a session that a locked Keychain hid at launch loads once the device unlocks.
     /// watchOS, macOS, and other platforms post no such notification. There, the client reads
     /// storage again only when a call needs the session: ``AuthClient/session``,
-    /// ``AuthClient/refreshSessionIfNeeded()``, a request that sends the session's access token, or
-    /// a new ``AuthClient/onAuthStateChange(_:)`` or ``AuthClient/authStateChanges`` subscription.
+    /// ``AuthClient/refreshSessionIfNeeded()``, a request that sends the session's access token, a
+    /// new ``AuthClient/events()`` stream, or ``AuthClient/initialization()``.
     public let observesAppLifecycle: Bool
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.

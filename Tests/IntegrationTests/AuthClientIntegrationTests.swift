@@ -58,7 +58,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signUpAndSignInWithEmail() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn, .signedOut, .signedIn]) {
       let email = mockEmail()
       let password = mockPassword()
 
@@ -88,7 +88,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInWithWeb3Solana() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
       let privateKey = Curve25519.Signing.PrivateKey()
       let address = base58Encode(privateKey.publicKey.rawRepresentation)
       let issuedAt = ISO8601DateFormatter().string(from: Date())
@@ -120,7 +120,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInWithWeb3Ethereum() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
       let privateKeyHex = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"
       let address = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
       let issuedAt = ISO8601DateFormatter().string(from: Date())
@@ -171,7 +171,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signOut_otherScope_shouldSignOutLocally() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
       let email = mockEmail()
       let password = mockPassword()
 
@@ -218,7 +218,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func updateUser() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
+    try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let updatedUser = try await authClient.update(
@@ -259,7 +259,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func refreshToken() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn, .tokenRefreshed]) {
+    try await expectAuthEvents([.initialSession, .signedIn, .tokenRefreshed]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let refreshedSession = try await authClient.refreshSession()
@@ -271,14 +271,14 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInAnonymous() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
       try await authClient.signInAnonymously()
     }
   }
 
   @Test
   func signInAnonymouslyStoresUserMetadata() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn]) {
+    try await expectAuthEvents([.initialSession, .signedIn]) {
       let session = try await authClient.signInAnonymously(
         userMetadata: ["nickname": "guest"]
       )
@@ -291,7 +291,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInAnonymousAndLinkUserWithEmail() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn, .userUpdated]) {
+    try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
@@ -314,7 +314,7 @@ struct AuthClientIntegrationTests {
 
     _ = try await URLSession.shared.data(for: request)
 
-    try await expectAuthChangeEvents([.initialSession, .signedOut]) {
+    try await expectAuthEvents([.initialSession, .signedOut]) {
       try await authClient.signOut()
     }
   }
@@ -367,7 +367,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signOut() async throws {
-    try await expectAuthChangeEvents([.initialSession, .signedIn, .signedOut]) {
+    let changes = try await expectAuthEvents([.initialSession, .signedIn, .signedOut]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       _ = try await authClient.session
@@ -383,6 +383,8 @@ struct AuthClientIntegrationTests {
       }
       #expect(authClient.currentSession == nil)
     }
+    #expect(changes.last?.signOutReason == .userInitiated)
+    #expect(authClient.status == .signedOut(.userInitiated))
   }
 
   @Test
@@ -403,7 +405,7 @@ struct AuthClientIntegrationTests {
     #expect(items?.contains { $0.name == "code" } == true)
 
     let redirectResult = LockIsolated<RedirectResult?>(nil)
-    try await expectAuthChangeEvents([.initialSession, .passwordRecovery]) {
+    try await expectAuthEvents([.initialSession, .passwordRecovery]) {
       let value = try await authClient.handleRedirect(location)
       redirectResult.setValue(value)
     }
@@ -529,6 +531,21 @@ struct AuthClientIntegrationTests {
     let link = try await client.admin.generateLink(params: .recovery(email: email))
 
     expectNoDifference(link.properties.verificationType, .recovery)
+  }
+
+  @Test
+  func verifyOTPForRecoveryEmitsPasswordRecovery() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    _ = try await admin.admin.createUser(
+      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
+    let link = try await admin.admin.generateLink(params: .recovery(email: email))
+
+    try await expectAuthEvents([.initialSession, .passwordRecovery]) {
+      try await authClient.verifyOTP(tokenHash: link.properties.hashedToken, type: .recovery)
+    }
+
+    #expect(authClient.currentUser?.email == email)
   }
 
   @Test
@@ -725,28 +742,20 @@ struct AuthClientIntegrationTests {
     return password
   }
 
-  private func expectAuthChangeEvents(
-    _ events: [AuthChangeEvent],
+  @discardableResult
+  private func expectAuthEvents(
+    _ events: [AuthEvent],
     block: () async throws -> Void
-  ) async rethrows {
-    let receivedEvents = LockIsolated<[AuthChangeEvent]>([])
-
-    let token = await authClient.onAuthStateChange { event, _ in
-      receivedEvents.withValue {
-        $0.append(event)
-      }
-    }
+  ) async throws -> [AuthChange] {
+    let stream = authClient.events()
 
     try await block()
 
-    let deadline = Date().addingTimeInterval(0.5)
-    while receivedEvents.value.count < events.count, Date() < deadline {
-      try? await Task.sleep(nanoseconds: 10_000_000)
+    let received = try await withTimeout(.seconds(5)) {
+      await stream.prefix(events.count).collect()
     }
-
-    expectNoDifference(events, receivedEvents.value)
-
-    token.remove()
+    expectNoDifference(events, received.map(\.event))
+    return received
   }
 }
 

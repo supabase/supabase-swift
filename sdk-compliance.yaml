@@ -560,11 +560,29 @@ features:
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
-      - AuthClient.authStateChanges
-      - AuthClient.onAuthStateChange
+      - AuthClient.events
+      - AuthClient.status
+      - AuthClient.initialization
     supporting_symbols:
-      - AuthChangeEvent.init
-      - AuthChangeEvent.rawValue
+      - AuthEvent
+      - AuthEvent.init
+      - AuthEvent.rawValue
+      - AuthEvent.initialSession
+      - AuthEvent.signedIn
+      - AuthEvent.signedOut
+      - AuthEvent.tokenRefreshed
+      - AuthEvent.userUpdated
+      - AuthEvent.passwordRecovery
+      - AuthEvent.mfaChallengeVerified
+      - AuthChange
+      - AuthChange.init
+      - AuthChange.event
+      - AuthChange.status
+      - AuthChange.session
+      - AuthStatus
+      - AuthStatus.loading
+      - AuthStatus.signedOut
+      - AuthStatus.signedIn
   auth.session.auto_refresh:
     status: implemented
     symbols:
@@ -578,7 +596,18 @@ features:
       - AuthClient.AutoRefreshPolicy.disabled
       - SupabaseClientOptions.AuthOptions.autoRefresh
       - SupabaseClientOptions.AuthOptions.observesAppLifecycle
-  auth.session.sign_out_reason: not_implemented
+  auth.session.sign_out_reason:
+    status: implemented
+    symbols:
+      - AuthChange.signOutReason
+    supporting_symbols:
+      - SignOutReason
+      - SignOutReason.init
+      - SignOutReason.rawValue
+      - SignOutReason.userInitiated
+      - SignOutReason.sessionExpired
+      - SignOutReason.sessionRevoked
+      - SignOutReason.sessionMissing
 
   auth.identities.link_identity:
     status: implemented
@@ -843,9 +872,9 @@ features:
       - SupabaseClientOptions.AuthOptions.accessToken
   client.authentication_integration.cross_client_token_sync:
     status: implemented
-    note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.authStateChanges and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
+    note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.events() and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
     symbols:
-      - AuthClient.authStateChanges
+      - AuthClient.events
   client.authentication_integration.session_url_detection:
     status: implemented
     note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."

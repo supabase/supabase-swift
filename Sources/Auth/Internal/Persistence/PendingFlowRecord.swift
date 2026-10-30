@@ -46,12 +46,15 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
 }
 
 extension PendingFlowRecord.Purpose {
-  /// The event a finished flow of this purpose emits.
-  var event: AuthChangeEvent {
+  /// How a finished flow of this purpose commits its session.
+  ///
+  /// An email change or an identity link updates the held user, so it emits
+  /// ``AuthEvent/userUpdated``; for another user it signs that user in.
+  func transition(_ session: Session) -> SessionStore.Transition {
     switch self {
-    case .signIn: .signedIn
-    case .recovery: .passwordRecovery
-    case .emailChange, .linkIdentity: .userUpdated
+    case .signIn: .signedIn(session, event: .signedIn)
+    case .recovery: .signedIn(session, event: .passwordRecovery)
+    case .emailChange, .linkIdentity: .userChangeVerified(session)
     }
   }
 

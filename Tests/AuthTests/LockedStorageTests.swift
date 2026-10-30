@@ -91,6 +91,54 @@ struct LockedStorageTests {
     #expect(await changes.next()?.event == .tokenRefreshed)
   }
 
+  @Test
+  func initializationAndEventsWaitUntilLockedStorageIsRead() async throws {
+    let world = World()
+    let issued = world.issueSession()
+    let storage = LockedLocalStorage()
+    try storage.store(
+      key: key,
+      value: PersistedSessionCodec.encode(ReceivedSession(session: issued, receivedAt: world.now()))
+    )
+    storage.isLocked.setValue(true)
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    let client = makeClient(world, storage: storage, lifecycle: events)
+    var changes = client.events().makeAsyncIterator()
+    let initialized = LockIsolated(false)
+    let initialization = Task {
+      await client.initialization()
+      initialized.setValue(true)
+    }
+
+    #expect(await waitUntil { storage.failedReads.value >= 2 })
+    #expect(client.status == .loading)
+    #expect(!initialized.value)
+
+    storage.isLocked.setValue(false)
+    lifecycle.yield(.protectedDataDidBecomeAvailable)
+    await initialization.value
+
+    #expect(client.status == .signedIn(issued))
+    #expect(await changes.next() == AuthChange(event: .initialSession, status: .signedIn(issued)))
+  }
+
+  @Test
+  func initializationReturnsWhenCancelledWhileStorageStaysLocked() async throws {
+    let storage = LockedLocalStorage()
+    storage.isLocked.setValue(true)
+    let client = makeClient(World(), storage: storage)
+    let store = client.dependencies.sessionStore
+    let subscribersBefore = store.subscriberCount
+
+    let initialization = Task { await client.initialization() }
+    #expect(await waitUntil { store.subscriberCount == subscribersBefore + 1 })
+    initialization.cancel()
+    await initialization.value
+
+    #expect(client.status == .loading)
+    #expect(await waitUntil { store.subscriberCount == subscribersBefore })
+  }
+
   #if canImport(Security)
     @Test
     func missingEntitlementIsReportedAndKeepsTheClientLoading() async throws {

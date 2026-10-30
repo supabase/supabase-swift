@@ -19,14 +19,11 @@ final class AppViewModel {
 
   init() {
     Task {
-      for await (event, session) in supabase.auth.authStateChanges {
-        Logger.main.debug("AuthStateChange: \(event.rawValue)")
-        guard [.signedIn, .signedOut, .initialSession, .tokenRefreshed].contains(event) else {
-          return
-        }
-        self.session = session
+      for await change in supabase.auth.events() {
+        Logger.main.debug("AuthStateChange: \(change.event.rawValue)")
+        self.session = change.session
 
-        if session == nil {
+        if change.session == nil {
           for subscription in await supabase.channels {
             await subscription.unsubscribe()
           }

@@ -267,9 +267,9 @@ public struct AuthError: SupabaseError {
     public static let sessionMissing: Kind = "sessionMissing"
     /// The server rejected the session or its refresh token: it expired, was revoked, was
     /// already used, or the user is banned. When the rejected session is the current one, the
-    /// client signs out and removes it from storage, and you get ``AuthChangeEvent/signedOut``.
+    /// client signs out and removes it from storage, and you get ``AuthEvent/signedOut``.
     /// A rejected refresh while the access token is still valid keeps the session until it
-    /// expires, so react to ``AuthChangeEvent/signedOut``, not to this error, to show
+    /// expires, so react to ``AuthEvent/signedOut``, not to this error, to show
     /// sign-in. ``AuthError/errorCode`` and ``AuthError/message`` keep the server's values.
     public static let sessionInvalidated: Kind = "sessionInvalidated"
     /// The claims of an ID token do not match the sign-in request, for example a nonce,

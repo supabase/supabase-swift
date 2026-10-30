@@ -43,7 +43,7 @@ A value is a `RawRepresentable` struct when the set can grow without a major rel
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
   `FactorStatus`, `PushStatus`, `RealtimeServerLogLevel`, `PostgresChange.Kind`.
 - Consumers `switch` over it and the SDK expects to add members in minor releases:
-  `AuthChangeEvent`.
+  `AuthEvent`.
 
 These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`.
 The known values are `static let` members, so call sites read the same as they did with an

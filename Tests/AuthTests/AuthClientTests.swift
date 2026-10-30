@@ -34,47 +34,55 @@ extension AuthMockerTests {
     }
 
     @Test
-    func onAuthStateChanges() async throws {
+    func eventsStartWithInitialSession() async throws {
       try await withMainSerialExecutor {
-        let session = Session.valid
         let sut = makeSUT()
-        try await sut.seedSession(session)
+        try await sut.seedSession(.valid)
 
-        let events = LockIsolated([AuthChangeEvent]())
+        let change = await sut.events().first { _ in true }
 
-        let handle = await sut.onAuthStateChange { event, _ in
-          events.withValue {
-            $0.append(event)
-          }
-        }
-
-        expectNoDifference(events.value, [.initialSession])
-
-        handle.remove()
+        expectNoDifference(change, AuthChange(event: .initialSession, status: .signedIn(.valid)))
+        expectNoDifference(sut.status, .signedIn(.valid))
       }
     }
 
     @Test
-    func authStateChanges() async throws {
+    func eventsKeepAChangeAppliedBeforeTheFirstRead() async throws {
       try await withMainSerialExecutor {
-        let session = Session.valid
         let sut = makeSUT()
-        try await sut.seedSession(session)
+        try await sut.seedSession(.valid)
 
-        let stateChange = await sut.authStateChanges.first { _ in true }
-        expectNoDifference(stateChange?.event, .initialSession)
-        expectNoDifference(stateChange?.session, session)
+        let events = sut.events()
+        try await sut.dependencies.sessionStore.commit(
+          .signedOut(.userInitiated, event: .signedOut))
+        let changes = await events.prefix(2).collect()
+
+        expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
+        expectNoDifference(changes.last?.signOutReason, .userInitiated)
+        expectNoDifference(sut.status, .signedOut(.userInitiated))
       }
     }
 
     @Test
-    func authStateChangesRemovesListenerWhenCancelledBeforeRegistrationRuns() async throws {
+    func eventsFinishWhenTheClientIsReleased() async throws {
+      var sut: AuthClient? = makeSUT()
+      let events = try #require(sut).events()
+
+      sut = nil
+      let changes = try await withTimeout(.seconds(5)) { await events.collect() }
+
+      expectNoDifference(
+        changes, [AuthChange(event: .initialSession, status: .signedOut(.sessionMissing))])
+    }
+
+    @Test
+    func eventsReleaseTheSubscriberWhenCancelledBeforeTheFirstRead() async throws {
       await withMainSerialExecutor {
         let sut = makeSUT()
         let store = sut.dependencies.sessionStore
         let subscribersBefore = store.subscriberCount
 
-        let stream = sut.authStateChanges
+        let stream = sut.events()
 
         expectNoDifference(store.subscriberCount, subscribersBefore + 1)
 
@@ -199,7 +207,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -248,7 +256,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -297,7 +305,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -450,7 +458,7 @@ extension AuthMockerTests {
         let sut = makeSUT()
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -1301,6 +1309,96 @@ extension AuthMockerTests {
       )
     }
 
+    @Test(arguments: [
+      (EmailOTPType.recovery, AuthEvent.passwordRecovery),
+      (EmailOTPType.emailChange, AuthEvent.signedIn),
+      (EmailOTPType.email, AuthEvent.signedIn),
+    ])
+    func verifyOTPWithTokenHashEmitsTheEventForItsType(
+      type: EmailOTPType, event: AuthEvent
+    ) async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("verify"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.verifyOTP(tokenHash: "abc-def", type: type) },
+        expectedEvents: [.initialSession, event]
+      )
+    }
+
+    @Test(arguments: ["email", "phone"])
+    func verifyOTPForAChangeOfTheSignedInUserEmitsUserUpdated(channel: String) async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("verify"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      let held = try AuthClient.Configuration.jsonDecoder.decode(
+        Session.self, from: MockData.session)
+      try await sut.seedSession(held)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          if channel == "email" {
+            try await sut.verifyOTP(tokenHash: "abc-def", type: .emailChange)
+          } else {
+            try await sut.verifyOTP(phone: "+1 202-918-2132", token: "123456", type: .phoneChange)
+          }
+        },
+        expectedEvents: [.initialSession, .userUpdated]
+      )
+    }
+
+    @Test
+    func verifyOTPWithEmailForRecoveryEmitsPasswordRecovery() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("verify"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          try await sut.verifyOTP(email: "example@mail.com", token: "123456", type: .recovery)
+        },
+        expectedEvents: [.initialSession, .passwordRecovery]
+      )
+    }
+
+    @Test(arguments: [
+      (MobileOTPType.phoneChange, AuthEvent.signedIn),
+      (MobileOTPType.sms, AuthEvent.signedIn),
+    ])
+    func verifyOTPWithPhoneEmitsTheEventForItsType(
+      type: MobileOTPType, event: AuthEvent
+    ) async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("verify"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.verifyOTP(phone: "+1 202-918-2132", token: "123456", type: type) },
+        expectedEvents: [.initialSession, event]
+      )
+    }
+
     @Test
     func verifyOTPForEmailChangeSingleConfirmation() async throws {
       Mock(
@@ -1396,6 +1494,99 @@ extension AuthMockerTests {
         redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
+    }
+
+    @Test
+    func pkceExchangeAfterResetPasswordForEmailEmitsPasswordRecovery() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("recover"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()]
+      ).register()
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+
+      try await sut.resetPasswordForEmail("example@mail.com")
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.handleRedirect(URL(string: "https://supabase.com?code=12345")!) },
+        expectedEvents: [.initialSession, .passwordRecovery]
+      )
+    }
+
+    @Test
+    func pkceExchangeOfASignInFlowEmitsSignedIn() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      _ = try await sut.dependencies.flowStore.start(purpose: .recovery, redirectTo: nil)
+      let signIn = try await sut.dependencies.flowStore.start(purpose: .signIn, redirectTo: nil)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.exchangeCodeForSession("12345", flowID: signIn.flow.id) },
+        expectedEvents: [.initialSession, .signedIn]
+      )
+    }
+
+    @Test
+    func pkceExchangeOfAnEmailChangeForTheSignedInUserEmitsUserUpdated() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      let held = try AuthClient.Configuration.jsonDecoder.decode(
+        Session.self, from: MockData.session)
+      try await sut.seedSession(held)
+      let flow = try await sut.dependencies.flowStore.start(purpose: .emailChange, redirectTo: nil)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.exchangeCodeForSession("12345", flowID: flow.flow.id) },
+        expectedEvents: [.initialSession, .userUpdated]
+      )
+    }
+
+    @Test
+    func emailChangeRequestsStoreAnEmailChangeFlow() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.put: MockData.user]
+      ).register()
+      Mock(
+        url: clientURL.appendingPathComponent("resend"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+      let flows = sut.dependencies.flowStore
+
+      try await sut.update(user: UserAttributes(email: "new@example.com"))
+      #expect(try await flows.newest()?.purpose == .emailChange)
+
+      try await sut.resend(email: "example@mail.com", type: .signup)
+      #expect(try await flows.newest()?.purpose == .signIn)
+
+      try await sut.resend(email: "example@mail.com", type: .emailChange)
+      #expect(try await flows.newest()?.purpose == .emailChange)
     }
 
     @Test
@@ -1661,6 +1852,48 @@ extension AuthMockerTests {
           updatedAt: Date()
         )
       )
+    }
+
+    @Test
+    func unlinkIdentityEmitsUserUpdatedWithoutTheIdentity() async throws {
+      let identities = try #require(Session.valid.user.identities)
+      let unlinked = identities[0]
+      Mock(
+        url: clientURL.appendingPathComponent("user/identities/\(unlinked.identityId.uuidString)"),
+        statusCode: 200,
+        data: [.delete: Data("{}".utf8)]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.unlinkIdentity(unlinked) },
+        expectedEvents: [.initialSession, .userUpdated]
+      )
+
+      expectNoDifference(sut.currentUser?.identities, Array(identities.dropFirst()))
+    }
+
+    @Test
+    func unlinkIdentityOfAnotherUserEmitsNothing() async throws {
+      var identity = try #require(Session.valid.user.identities?.first)
+      identity.userId = UUID()
+      Mock(
+        url: clientURL.appendingPathComponent("user/identities/\(identity.identityId.uuidString)"),
+        statusCode: 200,
+        data: [.delete: Data("{}".utf8)]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.unlinkIdentity(identity) },
+        expectedEvents: [.initialSession]
+      )
+
+      expectNoDifference(sut.currentUser, Session.valid.user)
     }
 
     @Test
@@ -3123,7 +3356,7 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.expired)
 
-      let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
+      let expectedEvents = [AuthEvent.initialSession, .signedOut]
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -3159,7 +3392,7 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.expired)
 
-      let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
+      let expectedEvents = [AuthEvent.initialSession, .tokenRefreshed]
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -3755,7 +3988,7 @@ extension AuthMockerTests {
     private func assertAuthStateChanges<T>(
       sut: AuthClient,
       action: () async throws -> T,
-      expectedEvents: [AuthChangeEvent],
+      expectedEvents: [AuthEvent],
       expectedSessions: [Session?]? = nil,
       timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
@@ -3763,17 +3996,19 @@ extension AuthMockerTests {
       line: UInt = #line,
       column: UInt = #column
     ) async throws -> T {
-      let receivedEvents = LockIsolated([(event: AuthChangeEvent, session: Session?)]())
+      let receivedEvents = LockIsolated([AuthChange]())
       let finished = LockIsolated(false)
 
-      Task {
-        for await change in sut.authStateChanges {
+      // Cancelled on return: an issue recorded after the test ends crashes Swift Testing.
+      let listener = Task {
+        for await change in sut.events() {
           if finished.value {
             Issue.record("Received event '\(change.event)' after it finished.")
           }
           receivedEvents.withValue { $0.append(change) }
         }
       }
+      defer { listener.cancel() }
 
       await Task.megaYield()
 
@@ -3782,6 +4017,7 @@ extension AuthMockerTests {
       try await withTimeout(timeout) {
         defer { finished.setValue(true) }
         while receivedEvents.count < expectedEvents.count {
+          try Task.checkCancellation()
           await Task.yield()
         }
       }
