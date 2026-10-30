@@ -61,14 +61,13 @@ extension RealtimeClient {
   /// so an action cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
   ///
   /// While an older channel of the same topic is being removed, the action waits for that
-  /// removal to end, then runs as on a new channel.
+  /// removal to end, then runs as on a new channel. With `evenIfCancelled`, a cancelled caller
+  /// still waits for the removal, then acts.
   func wait(
     on channel: RealtimeChannel, evenIfCancelled: Bool = false,
     _ make: @Sendable (WaiterID) -> RealtimeCore.Event
   ) async throws {
-    guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
-    try await waitForRemoval(blocking: channel)
-    guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
+    try await waitForRemoval(blocking: channel, evenIfCancelled: evenIfCancelled)
     try await wait(evenIfCancelled: evenIfCancelled, make)
   }
 
@@ -87,20 +86,33 @@ extension RealtimeClient {
   }
 
   /// Parks the caller until no other channel's removal holds the topic of `channel`. A cancelled
-  /// caller throws `CancellationError` and leaves nothing behind.
-  private func waitForRemoval(blocking channel: RealtimeChannel) async throws {
+  /// caller throws `CancellationError` and leaves nothing behind, unless `evenIfCancelled` is
+  /// set: then it waits on. A channel removed meanwhile throws `channelRemoved` at once.
+  private func waitForRemoval(
+    blocking channel: RealtimeChannel, evenIfCancelled: Bool
+  ) async throws {
     let topic = channel.topic
-    while removal(blocking: channel) != nil {
-      try Task.checkCancellation()
+    while true {
+      guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
+      guard removal(blocking: channel) != nil else { return }
       let id = waiters.next()
+      if evenIfCancelled {
+        try await parkUntilRemovalEnds(id, topic: topic)
+        continue
+      }
+      try Task.checkCancellation()
       try await withTaskCancellationHandler {
-        try await withCheckedThrowingContinuation { continuation in
-          waiters.park(id, continuation)
-          removalWaiters[topic, default: []].append(id)
-        }
+        try await parkUntilRemovalEnds(id, topic: topic)
       } onCancel: {
         Task { await self.removalWaitCancelled(id, topic: topic) }
       }
+    }
+  }
+
+  private func parkUntilRemovalEnds(_ id: WaiterID, topic: String) async throws {
+    try await withCheckedThrowingContinuation { continuation in
+      waiters.park(id, continuation)
+      removalWaiters[topic, default: []].append(id)
     }
   }
 

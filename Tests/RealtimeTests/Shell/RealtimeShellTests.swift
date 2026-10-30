@@ -310,6 +310,64 @@ struct RealtimeShellTests {
   }
 
   @Test
+  func cancelledUnsubscribeParkedBehindARemovalStillLeaves() async throws {
+    let host = await RealtimeTestHost()
+    let old = host.client.channel("room")
+    let oldJoin = try await subscribe(old, on: host)
+    let removal = Task { await host.client.removeChannel(old) }
+    let oldLeave = try await host.receive(event: ChannelEvent.leave)
+
+    let new = host.client.channel("room")
+    let subscription = Task { try await new.subscribe() }
+    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
+    let unsubscription = Task { await new.unsubscribe() }
+    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 2 })
+    unsubscription.cancel()
+
+    host.reply(to: oldLeave)
+    host.server?.send(close(oldJoin))
+    await removal.value
+    let join = try await host.receive {
+      $0.event == ChannelEvent.join && $0.joinRef != oldJoin.joinRef
+    }
+    _ = try await host.receive { $0.event == ChannelEvent.leave && $0.joinRef == join.joinRef }
+
+    await unsubscription.value
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(new.status == .unsubscribed)
+  }
+
+  @Test
+  func spentHandleWokenFromARemovalWaitThrowsChannelRemoved() async throws {
+    let host = await RealtimeTestHost()
+    let old = host.client.channel("room")
+    try await subscribe(old, on: host)
+    let removal = Task { await host.client.removeChannel(old) }
+    _ = try await host.receive(event: ChannelEvent.leave)
+
+    let new = host.client.channel("room")
+    let subscription = Task { try await new.subscribe() }
+    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
+    await host.client.removeChannel(new)
+
+    // Wakes the action while the old removal still holds the topic, as a later removal of the
+    // topic would when the action runs.
+    await host.client.removalEnded("room")
+
+    await expectError(.channelRemoved) {
+      try await withTimeout(.seconds(5)) {
+        try await withTaskCancellationHandler {
+          try await subscription.value
+        } onCancel: {
+          subscription.cancel()
+        }
+      }
+    }
+    #expect(await host.client.removalWaiters["room"] == nil)
+    removal.cancel()
+  }
+
+  @Test
   func removingAChannelOfAnotherClientIsANoOp() async throws {
     let host = await RealtimeTestHost()
     let channel = host.client.channel("room")
