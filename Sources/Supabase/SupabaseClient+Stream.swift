@@ -28,8 +28,9 @@ extension SupabaseClient {
   /// example after a reconnect, the stream fetches again, because changes sent while the channel
   /// was away are lost.
   ///
-  /// Rows keep the order of the fetch. A new row goes at the end. Sort the rows yourself when the
-  /// order matters.
+  /// The fetch reads every matching row in pages, in primary key order, so the server's row limit
+  /// does not cut the result. Fetched rows keep that order, and a new row goes at the end. Sort
+  /// the rows yourself when another order matters.
   ///
   /// The filter applies to the fetch and to the changes, so it takes only what Realtime can run:
   /// `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`,
@@ -89,9 +90,13 @@ extension SupabaseClient {
   }
 
   /// Opens a dedicated channel for a live query and returns what the query runs against.
+  ///
+  /// - Parameter pageSize: The rows the fetch asks for per request. It defaults to PostgREST's
+  ///   default `max_rows`. A server with a lower limit still gets every row, only in more pages.
   func liveQuerySource<R: _PostgrestKeyedRelation>(
     for _: R.Type,
-    filter: _PostgrestFilter<R>?
+    filter: _PostgrestFilter<R>?,
+    pageSize: Int = 1000
   ) async -> LiveQuerySource<R> {
     let realtimeFilter = filter?.realtimeFilter
     var bindings = [
@@ -109,21 +114,60 @@ extension SupabaseClient {
     let signals = await channel.postgresChangesSignals(bindings: bindings)
 
     let selection = from(R.self).select(LiveRowSelection<R>.self)
-    let query = filter.map { filter in selection.where { _ in filter } } ?? selection
+    var query = filter.map { filter in selection.where { _ in filter } } ?? selection
+    for column in R.primaryKeyColumns {
+      query = query.order { _ in _PostgrestColumn<R, String>(column).asc() }
+    }
+    let firstPage = query.limit(pageSize)
 
     return LiveQuerySource(
       signals: signals,
       primaryKey: R.primaryKeyColumns,
       decode: { try $0.decode(as: R.self) },
       subscribe: { try await channel.subscribe() },
-      fetch: { try await query.execute().value.map(\.liveRow) },
+      fetch: { try await Self.fetchAllPages(firstPage) },
       finish: { await realtime.removeChannel(channel) }
     )
+  }
+
+  /// Fetches every row of a query ordered by primary key, one page after another.
+  ///
+  /// Each page asks for the rows after the last key of the page before, until a page is empty.
+  /// PostgREST caps a response at its `max_rows`, so one request can miss rows. Keys, unlike
+  /// offsets, do not shift when a row is deleted between two pages, so no row is skipped.
+  private static func fetchAllPages<R: _PostgrestKeyedRelation>(
+    _ firstPage: _PostgrestQuery<R, [LiveRowSelection<R>]>
+  ) async throws -> [LiveRow<R>] {
+    var rows: [LiveRow<R>] = []
+    var page = firstPage
+    while true {
+      let fetched = try await page.execute().value.map(\.liveRow)
+      guard let last = fetched.last else { return rows }
+      rows += fetched
+      page = firstPage.where { _ in after(last.key) }
+    }
+  }
+
+  /// Matches the rows whose primary key comes after `key` in ascending key order.
+  ///
+  /// For the key `(a, b)` after `(x, y)` this is `a > x || (a == x && b > y)`.
+  private static func after<R: _PostgrestKeyedRelation>(_ key: [JSONValue]) -> _PostgrestFilter<R> {
+    let columns = R.primaryKeyColumns.map { _PostgrestColumn<R, String>($0) }
+    let values = key.map(\.rawValue)
+    var filter = columns[0].gt(values[0])
+    for index in columns.indices.dropFirst() {
+      var branch = columns[index].gt(values[index])
+      for earlier in columns.indices.prefix(index).reversed() {
+        branch = columns[earlier].eq(values[earlier]) && branch
+      }
+      filter = filter || branch
+    }
+    return filter
   }
 }
 
 /// Selects a whole row of `R` and keeps its primary key values, to match changes to it.
-private struct LiveRowSelection<R: _PostgrestKeyedRelation>: _PostgrestSelection {
+struct LiveRowSelection<R: _PostgrestKeyedRelation>: _PostgrestSelection {
   typealias Source = R
 
   static var selectString: String { R.selectString }

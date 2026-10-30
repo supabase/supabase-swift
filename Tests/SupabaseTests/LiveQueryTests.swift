@@ -395,6 +395,24 @@ private struct LiveItem: _PostgrestKeyedRelation, Equatable {
   static let columns = Columns()
 }
 
+private struct Membership: _PostgrestKeyedRelation {
+  static let relationName = "memberships"
+  static let selectString = "*"
+  static let primaryKeyColumns = ["team_id", "user_id"]
+
+  var teamId: Int
+  var userId: String
+
+  enum CodingKeys: String, CodingKey {
+    case teamId = "team_id"
+    case userId = "user_id"
+  }
+
+  struct Columns: Sendable {}
+
+  static let columns = Columns()
+}
+
 private func makeClient(
   respond: @escaping @Sendable (HTTPRequest) -> String = { _ in "[]" }
 ) -> SupabaseClient {
@@ -505,11 +523,12 @@ struct SupabaseClientStreamTests {
   }
 
   @Test
-  func fetchesTheFilteredRowsWithTheirKeys() async throws {
-    let path = LockIsolated<String?>(nil)
+  func fetchesTheFilteredRowsWithTheirKeysInPrimaryKeyOrder() async throws {
+    let paths = LockIsolated<[String?]>([])
     let supabase = makeClient { request in
-      path.setValue(request.path)
-      return #"[{"id":2,"title":"b","list_id":7},{"id":1,"title":"a","list_id":7}]"#
+      paths.withValue { $0.append(request.path) }
+      guard request.path?.contains("id=gt.") == false else { return "[]" }
+      return #"[{"id":1,"title":"a","list_id":7},{"id":2,"title":"b","list_id":7}]"#
     }
 
     let source = await supabase.liveQuerySource(
@@ -517,12 +536,59 @@ struct SupabaseClientStreamTests {
     let rows = try await source.fetch()
     await source.finish()
 
-    #expect(path.value == "/rest/v1/items?select=%2A&list_id=eq.7")
-    #expect(rows.map(\.key) == [[.integer(2)], [.integer(1)]])
+    #expect(
+      paths.value == [
+        "/rest/v1/items?select=%2A&list_id=eq.7&order=id.asc&limit=1000",
+        "/rest/v1/items?select=%2A&list_id=eq.7&order=id.asc&limit=1000&id=gt.2",
+      ])
+    #expect(rows.map(\.key) == [[.integer(1)], [.integer(2)]])
     #expect(
       rows.map(\.row) == [
-        LiveItem(id: 2, title: "b", listId: 7), LiveItem(id: 1, title: "a", listId: 7),
+        LiveItem(id: 1, title: "a", listId: 7), LiveItem(id: 2, title: "b", listId: 7),
       ])
+  }
+
+  @Test
+  func fetchesEveryPageAfterTheLastKey() async throws {
+    let supabase = makeClient { request in
+      switch request.path {
+      case "/rest/v1/items?select=%2A&order=id.asc&limit=2":
+        #"[{"id":1,"title":"a","list_id":7},{"id":2,"title":"b","list_id":7}]"#
+      case "/rest/v1/items?select=%2A&order=id.asc&limit=2&id=gt.2":
+        #"[{"id":3,"title":"c","list_id":7}]"#
+      case "/rest/v1/items?select=%2A&order=id.asc&limit=2&id=gt.3":
+        "[]"
+      default:
+        #"{"message":"unexpected request \#(request.path ?? "")"}"#
+      }
+    }
+
+    let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil, pageSize: 2)
+    let rows = try await source.fetch()
+    await source.finish()
+
+    #expect(rows.map(\.row.id) == [1, 2, 3])
+  }
+
+  @Test
+  func pagesACompositeKeyAfterTheLastRow() async throws {
+    let paths = LockIsolated<[String?]>([])
+    let supabase = makeClient { request in
+      paths.withValue { $0.append(request.path) }
+      guard paths.value.count == 1 else { return "[]" }
+      return #"[{"team_id":1,"user_id":"a,b"}]"#
+    }
+
+    let source = await supabase.liveQuerySource(for: Membership.self, filter: nil)
+    let rows = try await source.fetch()
+    await source.finish()
+
+    #expect(rows.map(\.key) == [[.integer(1), .string("a,b")]])
+    #expect(paths.value.count == 2)
+    #expect(
+      paths.value.last??.removingPercentEncoding
+        == #"/rest/v1/memberships?select=*&order=team_id.asc,user_id.asc&limit=1000&or=(team_id.gt.1,and(team_id.eq.1,user_id.gt."a,b"))"#
+    )
   }
 }
 
