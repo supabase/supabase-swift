@@ -84,8 +84,12 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOTP(phone:channel:shouldCreateUser:userMetadata:captchaToken:)``
 /// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
 /// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
+/// - ``signInWithOAuth(_:options:presenter:)``
 /// - ``oauthSignInURL(_:options:)``
 /// - ``OAuthOptions``
+/// - ``WebAuthPresenter``
+/// - ``ClosurePresenter``
+/// - ``ASWebAuthenticationSessionPresenter``
 ///
 /// ### Handling redirects
 /// - ``handleRedirect(_:)``
@@ -116,6 +120,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 ///
 /// ### Identities
 /// - ``userIdentities()``
+/// - ``linkIdentity(_:options:presenter:)``
 /// - ``linkIdentityWithIDToken(_:)``
 /// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``

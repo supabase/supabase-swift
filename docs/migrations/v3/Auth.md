@@ -137,9 +137,25 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`startAutoRefresh()` and `stopAutoRefresh()` take effect in order.** Each returns once its
   call took effect, so `await stopAutoRefresh()` followed by `await startAutoRefresh()` ends with
   auto refresh running. Under `.manual` and `.disabled`, `startAutoRefresh()` does nothing.
-- **Opening a URL throws where the platform cannot.** On Linux, Android, and Windows,
-  `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
-  `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
+- **Pending v2 OAuth flows cannot finish.** v3 keeps PKCE flows in its own store and does not
+  read the v2 code verifier. A user who started a sign-in, a password reset, or an identity link
+  with v2 and returns after the upgrade gets an `AuthError` of kind `.oauthFlowFailed`. Ask the user
+  to start again.
+- **`handleRedirect(_:)` ignores URLs that are not auth redirects.** v2's `session(from:)` threw
+  for them. v3 returns `nil`, so you can pass every URL that opens the app. Search for `catch`
+  blocks that showed an "invalid URL" message.
+- **The same redirect URL is handled once.** A second delivery of a URL (a scene delegate and
+  `onOpenURL` both fire) returns the first result and sends no request. v2 sent the code again and
+  failed.
+- **PKCE is always on, and the flow comes from the URL.** `handleRedirect(_:)` handles a PKCE code,
+  tokens from an email link, an error, and a pending email change. There is no `flowType` to set.
+- **`exchangeCodeForSession` needs a pending flow.** With no stored flow for the code, it throws
+  `.oauthFlowFailed` without a request. v2 sent the code with no verifier.
+- **Several PKCE flows can be pending.** v2 kept one code verifier, so a new sign-in replaced the
+  old one. In v3 each flow has its own verifier, and an earlier flow can still finish. Pass the
+  `flowID` from `oauthSignInURL` or `linkIdentityURL` to `exchangeCodeForSession` to pick one.
+  Without it, the newest flow wins.
+
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
   session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
@@ -203,6 +219,11 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
+| `getLinkIdentityURL` returns `OAuthResponse` (`provider`, `url`); `getOAuthSignInURL` returns `URL` | `oauthSignInURL` and `linkIdentityURL` return the tuple `(url: URL, flowID: UUID)` |
+| `exchangeCodeForSession(authCode:)` | `exchangeCodeForSession(_:flowID:)`, `flowID` is an optional `UUID` |
+| `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
+| `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
+| `AuthClient.Configuration.flowType`, `AuthOptions.flowType`, `AuthFlowType`, `defaultFlowType` | removed; see below |
 | `AuthClient.getClaims(jwt:options:)` | `AuthClient.claims(jwt:options:)` |
 | `GetClaimsOptions.allowExpired` | `GetClaimsOptions.allowsExpired` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
@@ -218,7 +239,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
-| `OAuthResponse`, `Provider`: `Codable` | no `Codable` conformance |
+| `Provider`: `Codable` | no `Codable` conformance |
 | `UserCredentials` | internal |
 | `UserAttributes.emailChangeToken` | removed |
 
@@ -231,6 +252,128 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## OAuth has one entry point
+
+v2 had `signInWithOAuth` with a `configure:` closure for `ASWebAuthenticationSession`,
+`getOAuthSignInURL`, and two `linkIdentity` overloads. v3 has three calls: `signInWithOAuth(_:options:presenter:)`, `oauthSignInURL(_:options:)`, and
+`linkIdentity(_:options:presenter:)`. The provider is unlabeled. `scopes`, `redirectTo` and
+`queryParams` move into `OAuthOptions`; `scopes` is an array and `queryParams` is `queryItems`.
+`presenter` shows the provider page. The default on Apple platforms is
+`ASWebAuthenticationSessionPresenter`. On other platforms you must pass one.
+
+```swift
+// v2
+try await supabase.auth.signInWithOAuth(
+  provider: .github,
+  redirectTo: URL(string: "myapp://login-callback"),
+  scopes: "repo user",
+  queryParams: [("access_type", "offline")]
+)
+// v3
+try await supabase.auth.signInWithOAuth(
+  .github,
+  options: OAuthOptions(
+    scopes: ["repo", "user"],
+    redirectTo: URL(string: "myapp://login-callback"),
+    queryItems: [URLQueryItem(name: "access_type", value: "offline")]
+  )
+)
+```
+
+## `configure:` is `ASWebAuthenticationSessionPresenter`
+
+The `configure:` closure that customized the `ASWebAuthenticationSession` is gone. Set
+`prefersEphemeralWebBrowserSession` on the presenter. To control the session fully, or to open the
+page another way, pass a `ClosurePresenter`. It gets the URL and the callback scheme, and returns
+the callback URL.
+
+```swift
+// v2
+try await supabase.auth.signInWithOAuth(provider: .github) { session in
+  session.prefersEphemeralWebBrowserSession = true
+}
+// v3
+try await supabase.auth.signInWithOAuth(
+  .github,
+  presenter: ASWebAuthenticationSessionPresenter(prefersEphemeralWebBrowserSession: true)
+)
+try await supabase.auth.signInWithOAuth(
+  .github,
+  presenter: ClosurePresenter { url, callbackScheme in
+    try await myBrowser.open(url)
+  }
+)
+```
+
+A user who cancels now gets `CancellationError`.
+
+## `linkIdentity` shows the page and returns a session
+
+The v2 `linkIdentity` overloads took a `launchURL` closure or opened the URL, and returned
+nothing. v3 runs the whole flow with a presenter, like `signInWithOAuth`, and returns the new
+`Session`. It emits `.userUpdated`. For your own flow, use `linkIdentityURL(_:options:)`.
+
+```swift
+// v2
+try await supabase.auth.linkIdentity(provider: .google, redirectTo: callback) { url in
+  UIApplication.shared.open(url)
+}
+let response = try await supabase.auth.linkIdentityURL(provider: .google)
+open(response.url)
+// v3
+let session = try await supabase.auth.linkIdentity(
+  .google, options: OAuthOptions(redirectTo: callback))
+let (url, flowID) = try await supabase.auth.linkIdentityURL(.google)
+open(url)
+```
+
+## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`
+
+`handleRedirect(_:)` takes the URL that opened your app. It returns `nil` when the URL is not an
+auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verification:)` or
+`.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
+`AuthClient` and `SupabaseClient` have the method.
+
+```swift
+// v2
+.onOpenURL { url in supabase.handle(url) }
+let session = try await supabase.auth.session(from: url)
+// v3
+.onOpenURL { url in
+  Task { try await supabase.handleRedirect(url) }
+}
+if case .signedIn(let session, _)? = try await supabase.auth.handleRedirect(url) {
+  show(session.user)
+}
+```
+
+## `flowType` is removed
+
+v3 always uses PKCE for the flows it starts, and `handleRedirect(_:)` reads the flow from the URL,
+so email links and implicit tokens still work. Remove `flowType:` from `AuthClient`,
+`AuthClient.Configuration` and `SupabaseClientOptions.AuthOptions`.
+
+```swift
+// v2
+let options = SupabaseClientOptions(auth: .init(flowType: .pkce))
+// v3
+let options = SupabaseClientOptions(auth: .init())
+```
+
+## `oauthSignInURL` returns a flow ID
+
+`oauthSignInURL` and `linkIdentityURL` are `async` and return the URL with the ID of the flow they
+started. Pass the ID back to `exchangeCodeForSession` when more than one flow can be pending.
+
+```swift
+// v2
+let url = try supabase.auth.getOAuthSignInURL(provider: .github)
+let session = try await supabase.auth.exchangeCodeForSession(authCode: code)
+// v3
+let (url, flowID) = try await supabase.auth.oauthSignInURL(.github)
+let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flowID)
+```
 
 ## `AuthError` is a struct
 
