@@ -496,6 +496,62 @@ struct AuthClientRedirectTests {
   }
 
   @Test
+  func anEmailChangeCallbackThrowsAndRemovesTheFlow() async throws {
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb#message=Confirm")! }
+
+    let error = await #expect(throws: AuthError.self) {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    }
+
+    #expect(error?.kind == .oauthFlowFailed)
+    #expect(error?.message == "The callback URL reports a pending email change, not a session.")
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func aSignOutDuringTheExchangeDiscardsTheSession() async throws {
+    let gate = Gate()
+    race.answerCodeExchange(through: gate) { [race] in try Race.ok(race.issue("exchanged")) }
+    race.answerSignOut()
+    let client = race.makeClient()
+    try await client.signIn(email: "a@example.com", password: "secret")
+    _ = try await client.oauthSignInURL(.github)
+
+    let redirect = Task { try await client.handleRedirect(callback) }
+    await gate.arrivals(1)
+    try await client.signOut()
+    gate.open()
+
+    await #expect(throws: CancellationError.self) { try await redirect.value }
+    #expect(client.currentSession == nil)
+    #expect(race.relaunch().currentSession == nil)
+  }
+
+  @Test
+  func anImplicitRedirectAfterASignOutDiscardsTheSession() async throws {
+    let gate = Gate()
+    race.answerSignOut()
+    let client = race.makeClient()
+    try await client.signIn(email: "a@example.com", password: "secret")
+    race.answerUser(through: gate, Race.user(nickname: "implicit"))
+
+    let redirect = Task {
+      try await client.handleRedirect(
+        URL(
+          string:
+            "myapp://cb#access_token=a&refresh_token=r&expires_in=3600&token_type=bearer"
+        )!)
+    }
+    await gate.arrivals(1)
+    try await client.signOut()
+    gate.open()
+
+    await #expect(throws: CancellationError.self) { try await redirect.value }
+    #expect(client.currentSession == nil)
+  }
+
+  @Test
   func anErrorCallbackThrowsAndRemovesTheFlow() async throws {
     let client = race.makeClient()
     let presenter = ClosurePresenter { _, _ in

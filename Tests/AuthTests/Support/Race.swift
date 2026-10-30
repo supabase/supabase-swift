@@ -157,9 +157,11 @@ struct Race: Sendable {
     }
   }
 
-  func answerUser(_ user: User) {
+  func answerUser(through gate: Gate? = nil, _ user: User) {
     transport.respond(when: { $0.method == .get && $0.url?.path.hasSuffix("/user") == true }) {
-      _, _ in try Self.ok(user)
+      _, _ in
+      await gate?.pass()
+      return try Self.ok(user)
     }
   }
 

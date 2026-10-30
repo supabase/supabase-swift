@@ -715,7 +715,7 @@ public final class AuthClient: Sendable {
     do {
       callback = try await presenter.authenticate(url: start.url, callbackScheme: callbackScheme)
     } catch {
-      try? await dependencies.flowStore.remove(id: start.flowID)
+      await removeFlow(start.flowID)
       throw error
     }
 
@@ -733,10 +733,15 @@ public final class AuthClient: Sendable {
 
     // A code exchange removed the flow already. Implicit tokens or a non-redirect leave it.
     await removeFlow(start.flowID)
-    guard case .signedIn(let session, _) = result else {
+    switch result {
+    case .signedIn(let session, _):
+      return session
+    case .emailChangePending:
+      throw AuthError.oauthFlowFailed(
+        "The callback URL reports a pending email change, not a session.")
+    case nil:
       throw AuthError.oauthFlowFailed("The callback URL is not an auth redirect.")
     }
-    return session
   }
 
   /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
@@ -812,6 +817,8 @@ public final class AuthClient: Sendable {
   /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the URL
   ///   reports an error or no pending flow matches its code, or the error of the request.
+  ///   `CancellationError` when ``signOut(scope:)`` finished while the redirect was handled; the
+  ///   client then stores nothing.
   @discardableResult
   public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
     try await handleRedirect(url, flowID: nil)
@@ -882,6 +889,7 @@ public final class AuthClient: Sendable {
     flow: PendingFlowRecord,
     guessed: Bool
   ) async throws -> Session {
+    let signOuts = await sessionStore.signOuts
     let session: Session
     do {
       session = try await api.execute(
@@ -895,7 +903,7 @@ public final class AuthClient: Sendable {
     }
 
     await removeFlow(flow.id)
-    try await sessionStore.commit(flow.purpose.transition(session))
+    try await sessionStore.commit(flow.purpose.transition(session), unlessSignedOutSince: signOuts)
     return session
   }
 
@@ -909,6 +917,7 @@ public final class AuthClient: Sendable {
   }
 
   private func signIn(with tokens: ImplicitTokens, type: EmailOTPType?) async throws -> Session {
+    let signOuts = await sessionStore.signOuts
     let user = try await api.execute(
       authAPI.user(accessToken: tokens.accessToken, tokenType: tokens.tokenType),
       for: sessionOwnership(ofAccessToken: tokens.accessToken)
@@ -927,7 +936,9 @@ public final class AuthClient: Sendable {
     )
 
     try await sessionStore.commit(
-      type.map { Self.verifiedTransition(session, for: $0) } ?? .signedIn(session, event: .signedIn)
+      type.map { Self.verifiedTransition(session, for: $0) }
+        ?? .signedIn(session, event: .signedIn),
+      unlessSignedOutSince: signOuts
     )
     return session
   }
