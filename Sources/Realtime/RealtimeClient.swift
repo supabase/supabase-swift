@@ -428,7 +428,7 @@ public actor RealtimeClient {
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    guard !channel.sinks.isSpent else { return }
+    guard channel.client === self, !channel.sinks.isSpent else { return }
     let topic = channel.topic
     sinks.removeChannel(channel)
     channel.sinks.finishAll()

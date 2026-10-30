@@ -299,6 +299,25 @@ struct RealtimeShellTests {
   }
 
   @Test
+  func removingAChannelOfAnotherClientIsANoOp() async throws {
+    let host = await RealtimeTestHost()
+    let channel = host.client.channel("room")
+    try await subscribe(channel, on: host)
+    let other = RealtimeClient(
+      url: URL(string: "http://localhost:54321/realtime/v1")!,
+      options: RealtimeClientOptions(handleAppLifecycle: false)
+    )
+    _ = other.channel("room")
+
+    await other.removeChannel(channel)
+
+    #expect(host.client.channels.contains(channel))
+    #expect(channel.status == .subscribed)
+    try await channel.broadcast(event: "e", payload: ["a": 1] as JSONObject)
+    #expect(await host.client.hasRecord(for: "room"))
+  }
+
+  @Test
   func releasedClientActionsThrowClientReleased() async throws {
     func makeChannel() -> RealtimeChannel {
       let client = RealtimeClient(
