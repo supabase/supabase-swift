@@ -144,7 +144,22 @@ extension RealtimeCore {
   /// connection, every channel loses its join and waits for the next socket.
   mutating func socketWentAway(_ event: Event) -> [Effect] {
     guard isConnected else { return transitionConnection(event) }
-    return transitionConnection(event) + channelsLostSocket()
+    return transitionConnection(event) + channelsLostSocket() + failSubscribesIfStopped()
+  }
+
+  /// Fails the subscribes that wait for a socket when the client will not reconnect on its
+  /// own, for example after a 4000–4999 close. A channel with no caller keeps waiting, so the
+  /// next `connect()` or a return to the foreground rejoins it.
+  private mutating func failSubscribesIfStopped() -> [Effect] {
+    guard case .disconnected(let error?) = connection else { return [] }
+    var effects: [Effect] = []
+    for topic in channels.keys.sorted() {
+      guard let record = channels[topic], case .waitingForSocket = record.phase,
+        !record.subscribeWaiters.isEmpty
+      else { continue }
+      effects += failSubscribe(topic, with: error)
+    }
+    return effects
   }
 
   /// Moves the channels on once the socket went away without `disconnect()`: a join in flight,

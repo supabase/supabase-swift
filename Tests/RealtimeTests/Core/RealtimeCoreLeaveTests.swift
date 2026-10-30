@@ -366,6 +366,38 @@ struct RealtimeCoreLeaveTests {
     #expect(opened.contains(.send(try Self.join(ref: "2"))))
   }
 
+  @Test
+  func serverAuthCloseFailsPendingSubscribe() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
+    let closed = RealtimeError.socketClosed(
+      code: WebSocketCloseCode(rawValue: 4001), reason: "jwt expired")
+
+    let effects = harness.send(.socketClosed(code: 4001, reason: "jwt expired"))
+
+    #expect(
+      Array(effects.suffix(3)) == [
+        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .resume(w, .failure(closed)),
+        .publishChannelStatus(Self.topic, .failed(closed)),
+      ])
+    #expect(harness.core.channels[Self.topic]?.phase == .failed(closed))
+    #expect(harness.core.channels[Self.topic]?.subscribeWaiters.isEmpty == true)
+  }
+
+  @Test
+  func serverAuthCloseKeepsASubscribedChannelWaitingToRejoin() throws {
+    var harness = Self.subscribed()
+
+    _ = harness.send(.socketClosed(code: 4001, reason: "jwt expired"))
+    #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))
+
+    _ = harness.send(.connect(waiter: nil))
+    let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    #expect(opened.contains(.send(try Self.join(ref: "2"))))
+  }
+
   // MARK: disconnect()
 
   @Test

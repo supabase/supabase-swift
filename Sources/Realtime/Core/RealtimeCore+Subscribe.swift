@@ -369,7 +369,7 @@ extension RealtimeCore {
   }
 
   /// Ends the subscribe for good: every caller waiting for it fails with `error`.
-  private mutating func failSubscribe(_ topic: String, with error: RealtimeError) -> [Effect] {
+  mutating func failSubscribe(_ topic: String, with error: RealtimeError) -> [Effect] {
     guard let waiters = channels[topic]?.subscribeWaiters else { return [] }
     channels[topic]?.subscribeWaiters = []
     channels[topic]?.timedOutJoinRef = nil
