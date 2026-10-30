@@ -330,6 +330,26 @@ struct RealtimeCoreTokenTests {
   }
 
   @Test
+  func reconnectSchedulesTheRefreshTimerAgain() throws {
+    var harness = CoreHarness.connected(options: Self.withProvider)
+    _ = harness.send(.setAuth(token: makeJWT(exp: 3600)))
+    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
+    _ = harness.send(.connect(waiter: nil))
+
+    let socket = FakeWebSocket.fakes().0
+    let effects = harness.send(.socketOpened(socket))
+
+    #expect(effects.contains(.schedule(.tokenRefresh, after: .seconds(3540))))
+  }
+
+  @Test
+  func refreshTimerWhileDisconnectedDoesNotFetch() {
+    var harness = CoreHarness(options: Self.withProvider)
+
+    #expect(harness.send(.timerFired(.tokenRefresh)) == [])
+  }
+
+  @Test
   func heartbeatTriggersTokenRefresh() {
     var harness = CoreHarness.connected(options: Self.withProvider)
 

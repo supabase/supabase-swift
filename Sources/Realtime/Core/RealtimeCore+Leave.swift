@@ -318,9 +318,10 @@ extension RealtimeCore {
   }
 
   /// Once no channel is left, disconnects at once when ``Options/disconnectOnEmptyChannelsAfter``
-  /// is not positive, and schedules an idle disconnect otherwise.
+  /// is not positive, and schedules an idle disconnect otherwise. A channel the client still
+  /// registers counts, even without a record.
   private mutating func disconnectIfNoChannels() -> [Effect] {
-    guard channels.isEmpty else { return [] }
+    guard channels.isEmpty, !options.hasRegisteredChannels() else { return [] }
     if options.disconnectOnEmptyChannelsAfter <= .zero {
       return transitionConnection(.disconnectRequested(code: nil, reason: nil))
     }

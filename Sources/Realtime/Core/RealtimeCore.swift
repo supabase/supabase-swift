@@ -32,6 +32,9 @@ struct RealtimeCore {
     var rejoinDelay: (_ attempt: Int) -> Duration
     /// The `version` a join sends: the client's `X-Client-Info` header.
     var version: String? = nil
+    /// Whether the client still registers a channel, read when the last channel record goes. A
+    /// channel that never subscribed has no record, but it keeps the connection open.
+    var hasRegisteredChannels: () -> Bool = { false }
   }
 
   enum Event {

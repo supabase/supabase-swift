@@ -128,7 +128,7 @@ struct TimerTableTests {
 
   @Test
   func cancelMakesTheTokenStale() async {
-    await withMainSerialExecutor {
+    withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
       table.cancel(.heartbeat)
@@ -162,6 +162,28 @@ struct TimerTableTests {
         #expect(table.isCurrent(.heartbeat, token: UInt64(token)) == false)
         #expect(table.isCurrent(.rejoin(topic: "a"), token: UInt64(token)) == false)
       }
+    }
+  }
+
+  @Test
+  func claimFireAcceptsTheCurrentTokenOnce() async {
+    await withMainSerialExecutor {
+      var table = TimerTable()
+      schedule(&table, .heartbeat)
+      await Task.megaYield()
+
+      await clock.advance(by: .seconds(10))
+      var iterator = fired.stream.makeAsyncIterator()
+      guard let event = await iterator.next() else {
+        Issue.record("The timer did not fire")
+        return
+      }
+
+      let first = table.claimFire(event.id, token: event.token)
+      let second = table.claimFire(event.id, token: event.token)
+      #expect(first)
+      #expect(!second)
+      #expect(!table.isCurrent(event.id, token: event.token))
     }
   }
 }

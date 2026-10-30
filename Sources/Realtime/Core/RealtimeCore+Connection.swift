@@ -55,6 +55,8 @@ extension RealtimeCore {
     }
     if case .connected = connection {
       result.append(.schedule(.heartbeat, after: options.heartbeatInterval))
+      // The refresh timer runs only while connected, so every connect starts it again.
+      result += scheduleTokenRefresh()
     }
     if case .connecting = previous {
       result += resolveConnectWaiters()

@@ -654,6 +654,21 @@ struct RealtimeCoreLeaveTests {
   }
 
   @Test
+  func removingTheLastRecordWhileTheClientRegistersAChannelDoesNotScheduleIdleDisconnect() {
+    var options = RealtimeCore.Options.test
+    options.hasRegisteredChannels = { true }
+    var harness = CoreHarness.connected(options: options)
+    _ = harness.send(Self.subscribe(harness.waiter()))
+    _ = harness.send(.frame(Self.reply(ref: "1")))
+    _ = harness.send(.removeChannel(topic: Self.topic, waiter: harness.waiter()))
+
+    let effects = harness.send(.frame(Self.close(joinRef: "1")))
+
+    #expect(effects.last == .finishChannel(Self.topic))
+    #expect(!harness.core.idleDisconnectPending)
+  }
+
+  @Test
   func removingTheLastChannelDisconnectsAtOnceWhenTheDelayIsZero() throws {
     var options = RealtimeCore.Options.test
     options.disconnectOnEmptyChannelsAfter = .zero

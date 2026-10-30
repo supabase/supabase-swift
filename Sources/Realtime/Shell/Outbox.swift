@@ -11,20 +11,30 @@ import Logging
 /// ``enqueue(_:)`` never waits: a writer task drains the queue one frame at a time, so a slow or
 /// stalled send delays the frames behind it but never the caller.
 final class Outbox: Sendable {
-  private let continuation: AsyncStream<RealtimeMessage>.Continuation
+  private enum Item {
+    case message(RealtimeMessage)
+    case frame(WebSocketFrame)
+  }
+
+  private let continuation: AsyncStream<Item>.Continuation
   private let writer: Task<Void, Never>
 
   init(connection: any WebSocketConnection, serializer: RealtimeSerializer, logger: Logger) {
-    let (messages, continuation) = AsyncStream.makeStream(of: RealtimeMessage.self)
+    let (items, continuation) = AsyncStream.makeStream(of: Item.self)
     self.continuation = continuation
     writer = Task {
-      for await message in messages {
+      for await item in items {
         let frame: WebSocketFrame
-        do {
-          frame = .text(try serializer.encodeText(message))
-        } catch {
-          logger.error("Failed to encode message \(message): \(error)")
-          continue
+        switch item {
+        case .frame(let encoded):
+          frame = encoded
+        case .message(let message):
+          do {
+            frame = .text(try serializer.encodeText(message))
+          } catch {
+            logger.error("Failed to encode message \(message): \(error)")
+            continue
+          }
         }
         do {
           try await connection.send(frame)
@@ -41,7 +51,12 @@ final class Outbox: Sendable {
   }
 
   func enqueue(_ message: RealtimeMessage) {
-    continuation.yield(message)
+    continuation.yield(.message(message))
+  }
+
+  /// Queues a frame that is already encoded, such as a binary broadcast.
+  func enqueue(_ frame: WebSocketFrame) {
+    continuation.yield(.frame(frame))
   }
 
   /// Ends the writer task. Frames still queued, and any send in flight, are dropped, and later

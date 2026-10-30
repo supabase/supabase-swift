@@ -58,4 +58,18 @@ struct TimerTable {
   func isCurrent(_ id: TimerID, token: UInt64) -> Bool {
     entries[id]?.token == token
   }
+
+  /// The task of the timer scheduled for `id`, if any.
+  func task(for id: TimerID) -> Task<Void, Never>? {
+    entries[id]?.task
+  }
+
+  /// Returns whether the fire of `token` is the current timer for `id`, and drops that timer:
+  /// a timer fires once. The entry is dropped without a cancel, because the caller runs on the
+  /// timer's own task.
+  mutating func claimFire(_ id: TimerID, token: UInt64) -> Bool {
+    guard isCurrent(id, token: token) else { return false }
+    entries[id] = nil
+    return true
+  }
 }
