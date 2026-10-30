@@ -76,3 +76,21 @@ enum BroadcastPushPayload: Sendable, Hashable {
   case json(JSONObject)
   case binary(Data)
 }
+
+/// The fields of a Postgres changes binding the server matches on. `PostgresJoinConfig`'s `==`
+/// treats `.all` as matching any event, which would hide a new binding.
+struct BindingKey: Hashable {
+  let event: PostgresChangeEvent?
+  let schema: String
+  let table: String?
+  let filter: String?
+  let select: [String]?
+
+  init(_ binding: PostgresJoinConfig) {
+    event = binding.event
+    schema = binding.schema
+    table = binding.table
+    filter = binding.filter
+    select = binding.select
+  }
+}

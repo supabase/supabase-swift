@@ -211,6 +211,8 @@ struct RealtimeCore {
       return heartbeatTimerFired(at: time)
     case .frame(let message) where message.topic == "phoenix":
       return receiveHeartbeatReply(message, at: time)
+    case .frame(let message) where message.event == ChannelEvent.system:
+      return receiveSystem(message)
     case .frame(let message):
       return receiveJoinReply(message)
 
@@ -221,11 +223,15 @@ struct RealtimeCore {
       return joinTimedOut(topic, ref: ref)
     case .timerFired(.rejoin(let topic)):
       return rejoinTimerFired(topic)
+    case .timerFired(.postgresTimeout(let topic, let ref)):
+      return postgresTimedOut(topic, ref: ref)
+    case .bindingsChanged(let topic, let snapshot):
+      return bindingsChanged(topic, snapshot: snapshot)
 
     // Not handled yet: the other channel commands, frames and timers, tokens, and waiter
     // cancellation.
-    case .unsubscribe, .push, .broadcast, .removeChannel, .bindingsChanged,
-      .setAuth, .binaryBroadcast, .timerFired, .tokenFetched, .waiterCancelled:
+    case .unsubscribe, .push, .broadcast, .removeChannel, .setAuth, .binaryBroadcast, .timerFired,
+      .tokenFetched, .waiterCancelled:
       return []
     }
   }

@@ -14,6 +14,8 @@ struct ChannelRecord {
   var bindings: [PostgresJoinConfig] = []
   /// Whether a presence stream is open, so the join turns presence on.
   var presenceEnabled = false
+  /// The bindings the last `phx_join` carried.
+  var joinedBindings: [PostgresJoinConfig] = []
   /// The bindings the server echoed in the join reply, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
   var presence = PresenceTracker()
@@ -29,6 +31,39 @@ struct ChannelRecord {
 
   init(configuration: RealtimeChannelConfiguration) {
     self.configuration = configuration
+  }
+
+  /// The ref of the join the server can still confirm, or already confirmed.
+  var currentJoinRef: Ref? {
+    switch phase {
+    case .joining(let ref, _, _), .subscribed(let ref):
+      ref
+    case .waitingToRetry:
+      timedOutJoinRef
+    case .unsubscribed, .waitingForSocket, .refreshingToken, .leaving, .failed:
+      nil
+    }
+  }
+
+  /// Whether the current join waits for "Subscribed to PostgreSQL", so only that message
+  /// confirms it.
+  var awaitsPostgresChanges: Bool {
+    switch phase {
+    case .joining(_, _, .postgres):
+      true
+    case .joining(_, _, .reply):
+      joinWaitsForPostgresChanges
+    case .waitingToRetry:
+      timedOutJoinRef != nil && joinWaitsForPostgresChanges
+    case .unsubscribed, .waitingForSocket, .refreshingToken, .subscribed, .leaving, .failed:
+      false
+    }
+  }
+
+  /// Whether the last join needs "Subscribed to PostgreSQL" after its reply: it has bindings,
+  /// and the server does not hold the reply until they are set up.
+  var joinWaitsForPostgresChanges: Bool {
+    !joinedBindings.isEmpty && !configuration.postgresChanges.waitForSubscription
   }
 
   /// What a `phx_join` waits for.
