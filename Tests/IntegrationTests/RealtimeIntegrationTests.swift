@@ -219,7 +219,10 @@
 
         await client.realtime.removeChannel(channel)
 
-        #expect(channel.status == .unsubscribed)
+        // A removed handle keeps its last status; its actions throw `channelRemoved`.
+        #expect(channel.status == .subscribed)
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .channelRemoved)
         let topics = client.realtime.channels.map(\.topic)
         #expect(!topics.contains(channel.topic))
       }
@@ -239,9 +242,12 @@
 
         await client.realtime.removeAllChannels()
 
-        #expect(channel1.status == .unsubscribed)
-        #expect(channel2.status == .unsubscribed)
-        #expect(channel3.status == .unsubscribed)
+        // A removed handle keeps its last status; its actions throw `channelRemoved`.
+        for channel in [channel1, channel2, channel3] {
+          #expect(channel.status == .subscribed)
+          let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+          #expect(error?.kind == .channelRemoved)
+        }
         #expect(client.realtime.channels.count == 0)
 
         #expect(
