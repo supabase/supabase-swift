@@ -148,10 +148,22 @@ extension RealtimeChannel {
 
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
   /// be answered any more, and a subscribe in flight stops instead of connecting again.
+  ///
+  /// The server drops the join with the socket, so a subscribed channel becomes `.unsubscribed`:
+  /// ``subscribe()`` joins it again after the next ``RealtimeClient/connect()``, and that join
+  /// emits ``RealtimeChannelEvent/resubscribed``.
   func socketDidDisconnect() {
     failPendingPushes(with: RealtimeError.notConnected)
-    guard case .subscribing(let task, _) = state else { return }
-    abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
+    // The client restarts its refs, so the next join can reuse this one.
+    confirmedJoinRef = nil
+    switch state {
+    case .subscribing(let task, _):
+      abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
+    case .subscribed:
+      break
+    case .unsubscribed, .unsubscribing, .failed:
+      return
+    }
     joinRef = nil
     setState(.unsubscribed)
   }
