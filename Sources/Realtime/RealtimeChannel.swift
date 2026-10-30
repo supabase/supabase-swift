@@ -440,14 +440,14 @@ public actor RealtimeChannel {
     guard let client else { return }
     let ref = await client.makeRef()
     await client.push(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: leftJoinRef, ref: ref, topic: wireTopic, event: ChannelEvent.leave, payload: [:]
       )
     )
   }
 
-  private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessageV2 {
-    RealtimeMessageV2(joinRef: joinRef, ref: ref, topic: wireTopic, event: event, payload: payload)
+  private func message(ref: String, event: String, payload: JSONObject) -> RealtimeMessage {
+    RealtimeMessage(joinRef: joinRef, ref: ref, topic: wireTopic, event: event, payload: payload)
   }
 
   /// Sends the frame `send` produces and, when `awaitingReply` is set, waits for the server's
@@ -533,7 +533,7 @@ public actor RealtimeChannel {
 
   // MARK: - Incoming messages
 
-  func onMessage(_ message: RealtimeMessageV2) async {
+  func onMessage(_ message: RealtimeMessage) async {
     do {
       switch message.event {
       case ChannelEvent.system: handleSystem(message)
@@ -551,7 +551,7 @@ public actor RealtimeChannel {
     }
   }
 
-  private func handleSystem(_ message: RealtimeMessageV2) {
+  private func handleSystem(_ message: RealtimeMessage) {
     let `extension` = message.payload["extension"]?.stringValue
     let isPostgresChanges = `extension` == ChannelEvent.postgresChanges
     let isReplication = `extension` == ChannelEvent.system
@@ -597,7 +597,7 @@ public actor RealtimeChannel {
     }
   }
 
-  private func handleReply(_ message: RealtimeMessageV2) throws {
+  private func handleReply(_ message: RealtimeMessage) throws {
     guard
       let ref = message.ref,
       let status = message.payload["status"]?.stringValue
@@ -645,7 +645,7 @@ public actor RealtimeChannel {
     }
   }
 
-  private func handlePostgresChanges(_ message: RealtimeMessageV2) throws {
+  private func handlePostgresChanges(_ message: RealtimeMessage) throws {
     guard let data = try Self.postgresChangeData(in: message.payload) else {
       logger.debug("Expected \"data\" key in message payload.")
       return
@@ -661,14 +661,14 @@ public actor RealtimeChannel {
     }
   }
 
-  private func handleBroadcast(_ message: RealtimeMessageV2) throws {
+  private func handleBroadcast(_ message: RealtimeMessage) throws {
     guard let broadcast = BroadcastMessage(message) else {
       throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
     }
     deliverBroadcast(broadcast)
   }
 
-  private func handleClose(_ message: RealtimeMessageV2) async {
+  private func handleClose(_ message: RealtimeMessage) async {
     // Phoenix tags `phx_close` with the `join_ref` of the join it closes. A close for a previous
     // incarnation of this topic (e.g. a join abandoned during a reconnect) must not tear down
     // the current subscription (issue #1145, defect 3).
@@ -679,7 +679,7 @@ public actor RealtimeChannel {
     finishStreams()
   }
 
-  private func handleError(_ message: RealtimeMessageV2) {
+  private func handleError(_ message: RealtimeMessage) {
     logger.error(
       "Received an error in channel \(message.topic). That could be as a result of an invalid access token"
     )
@@ -690,21 +690,21 @@ public actor RealtimeChannel {
     didReceiveClose(joinRef: message.joinRef)
   }
 
-  private func handlePresenceDiff(_ message: RealtimeMessageV2) {
+  private func handlePresenceDiff(_ message: RealtimeMessage) {
     guard isForCurrentJoin(message), let change = presence.applyDiff(message.payload) else {
       return
     }
     deliverPresence(change)
   }
 
-  private func handlePresenceState(_ message: RealtimeMessageV2) {
+  private func handlePresenceState(_ message: RealtimeMessage) {
     guard isForCurrentJoin(message) else { return }
     deliverPresence(presence.applyState(message.payload))
   }
 
   /// Presence pushed for an earlier join (a late reply to an abandoned attempt) carries that
   /// join's `join_ref`. Broadcast diffs carry none and always apply.
-  private func isForCurrentJoin(_ message: RealtimeMessageV2) -> Bool {
+  private func isForCurrentJoin(_ message: RealtimeMessage) -> Bool {
     guard let messageJoinRef = message.joinRef, messageJoinRef != joinRef else { return true }
     logger.debug("Ignoring presence for stale join_ref \(messageJoinRef) on '\(topic)'")
     return false

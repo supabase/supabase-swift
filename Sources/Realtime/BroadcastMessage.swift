@@ -57,7 +57,7 @@ public struct BroadcastMessage: Sendable, Hashable {
   }
 
   /// Reads a text `broadcast` message. `nil` when the payload has no `event`.
-  init?(_ message: RealtimeMessageV2) {
+  init?(_ message: RealtimeMessage) {
     guard let event = message.payload["event"]?.stringValue else { return nil }
     self.init(
       event: event,

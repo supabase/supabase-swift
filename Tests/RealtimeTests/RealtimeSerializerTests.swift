@@ -16,7 +16,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_withAllFields() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: "1",
       ref: "2",
       topic: "realtime:public:messages",
@@ -37,7 +37,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_withNilRefs() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil,
       ref: nil,
       topic: "phoenix",
@@ -101,7 +101,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func textRoundTrip() throws {
-    let original = RealtimeMessageV2(
+    let original = RealtimeMessage(
       joinRef: "join-1",
       ref: "ref-42",
       topic: "realtime:public:messages",
@@ -296,7 +296,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_emptyPayload() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "t", event: "e", payload: [:])
     let text = try serializer.encodeText(message)
     let decoded = try serializer.decodeText(text)

@@ -23,7 +23,7 @@ package struct DecodedBroadcast: Sendable {
   }
 }
 
-/// Handles encoding/decoding between ``RealtimeMessageV2`` and the Realtime protocol 2.0.0 wire format.
+/// Handles encoding/decoding between ``RealtimeMessage`` and the Realtime protocol 2.0.0 wire format.
 ///
 /// Protocol 2.0.0 uses:
 /// - JSON array text frames for non-broadcast messages: `[joinRef, ref, topic, event, payload]`
@@ -45,8 +45,8 @@ package struct RealtimeSerializer: Sendable {
     case json = 1
   }
 
-  /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
-  package func encodeText(_ message: RealtimeMessageV2) throws -> String {
+  /// Encodes a ``RealtimeMessage`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
+  package func encodeText(_ message: RealtimeMessage) throws -> String {
     let array: [JSONValue] = [
       message.joinRef.map { .string($0) } ?? .null,
       message.ref.map { .string($0) } ?? .null,
@@ -59,8 +59,8 @@ package struct RealtimeSerializer: Sendable {
     return String(decoding: data, as: UTF8.self)
   }
 
-  /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessageV2``.
-  package func decodeText(_ text: String) throws -> RealtimeMessageV2 {
+  /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessage``.
+  package func decodeText(_ text: String) throws -> RealtimeMessage {
     let data = Data(text.utf8)
     let array = try JSONDecoder().decode([JSONValue].self, from: data)
 
@@ -82,7 +82,7 @@ package struct RealtimeSerializer: Sendable {
       throw RealtimeError.decoding("Expected object for payload at index 4.")
     }
 
-    return RealtimeMessageV2(
+    return RealtimeMessage(
       joinRef: joinRef,
       ref: ref,
       topic: topic,

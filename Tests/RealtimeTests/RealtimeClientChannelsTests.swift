@@ -46,7 +46,7 @@ struct RealtimeClientChannelsTests {
     let channel = await client.channel("a")
 
     await channel.onMessage(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: nil, topic: channel.topic, event: ChannelEvent.close, payload: [:]
       )
     )
@@ -61,7 +61,7 @@ struct RealtimeClientChannelsTests {
     let new = await client.channel("a")
 
     await old.onMessage(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
       )
     )
@@ -74,7 +74,7 @@ struct RealtimeClientChannelsTests {
   func removingAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
     let old = await client.channel("a")
     await old.onMessage(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
       )
     )

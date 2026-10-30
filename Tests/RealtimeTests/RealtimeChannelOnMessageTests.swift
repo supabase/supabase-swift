@@ -555,8 +555,8 @@ struct RealtimeChannelOnMessageTests {
     payload: JSONObject = [:],
     ref: String? = nil,
     joinRef: String? = nil
-  ) -> RealtimeMessageV2 {
-    RealtimeMessageV2(
+  ) -> RealtimeMessage {
+    RealtimeMessage(
       joinRef: joinRef,
       ref: ref,
       topic: topic,
@@ -587,7 +587,7 @@ struct RealtimeChannelOnMessageTests {
 
   /// A `postgres_changes` message for server-change id `1` on `public.messages`. `data` adds to
   /// or overrides the defaults.
-  private func postgresChange(_ data: JSONObject) -> RealtimeMessageV2 {
+  private func postgresChange(_ data: JSONObject) -> RealtimeMessage {
     let defaults: JSONObject = [
       "schema": "public", "table": "messages", "commit_timestamp": commitTimestampJSON,
     ]

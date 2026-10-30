@@ -4,8 +4,7 @@ This guide moves an app from supabase-swift v2 (`2.55.4`) to v3. This file cover
 that apply to every module and to `SupabaseClient`; each module has its own file for the rest.
 
 > [!NOTE]
-> v3 is in prerelease (alpha). The Auth and Realtime APIs can still change before the final
-> release.
+> v3 is in prerelease (alpha). The Auth API can still change before the final release.
 
 ## How to migrate
 
@@ -33,7 +32,7 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 | PostgREST | [PostgREST.md](docs/migrations/v3/PostgREST.md) | ready for feedback |
 | Storage | [Storage.md](docs/migrations/v3/Storage.md) | ready for feedback |
 | Functions | [Functions.md](docs/migrations/v3/Functions.md) | ready for feedback |
-| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | still changing |
+| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | ready for feedback |
 
 ## Changes in every module
 

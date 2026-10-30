@@ -16,27 +16,27 @@ import Foundation
 /// - ``status``
 /// ### Initialization
 /// - ``init(joinRef:ref:topic:event:payload:)``
-public struct RealtimeMessageV2: Hashable, Sendable {
+package struct RealtimeMessage: Hashable, Sendable {
   /// The join reference that associates this message with the `phx_join` that opened the channel.
   ///
   /// `nil` for messages that are not scoped to a channel (e.g. heartbeats).
-  public let joinRef: String?
+  package let joinRef: String?
 
   /// A unique reference string for this individual message, used to correlate replies.
   ///
   /// `nil` for server-pushed messages that do not expect a client reply.
-  public let ref: String?
+  package let ref: String?
 
   /// The Realtime topic this message is addressed to (e.g. `"realtime:room:lobby"`).
-  public let topic: String
+  package let topic: String
 
   /// The Phoenix event name (e.g. `"phx_join"`, `"broadcast"`, `"postgres_changes"`).
-  public let event: String
+  package let event: String
 
   /// The JSON payload carried by this message.
-  public let payload: JSONObject
+  package let payload: JSONObject
 
-  /// Creates a new ``RealtimeMessageV2``.
+  /// Creates a new ``RealtimeMessage``.
   ///
   /// - Parameters:
   ///   - joinRef: The join reference, or `nil` for non-channel messages.
@@ -44,7 +44,7 @@ public struct RealtimeMessageV2: Hashable, Sendable {
   ///   - topic: The Realtime topic string.
   ///   - event: The Phoenix event name.
   ///   - payload: The JSON payload.
-  public init(joinRef: String?, ref: String?, topic: String, event: String, payload: JSONObject) {
+  package init(joinRef: String?, ref: String?, topic: String, event: String, payload: JSONObject) {
     self.joinRef = joinRef
     self.ref = ref
     self.topic = topic
@@ -56,32 +56,32 @@ public struct RealtimeMessageV2: Hashable, Sendable {
   ///
   /// Parsed from `payload["status"]`. Common values are ``PushStatus/ok`` and
   /// ``PushStatus/error``.
-  public var status: PushStatus? {
+  package var status: PushStatus? {
     payload["status"]
       .flatMap(\.stringValue)
       .map(PushStatus.init(rawValue:))
   }
 }
 
-/// The status the server put in a reply, as read by ``RealtimeMessageV2/status``.
+/// The status the server put in a reply, as read by ``RealtimeMessage/status``.
 ///
 /// A status this SDK has no member for is preserved in ``rawValue``.
-public struct PushStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-  public let rawValue: String
+package struct PushStatus: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  package let rawValue: String
 
   /// Creates a ``PushStatus`` from a raw string value.
-  public init(rawValue: String) {
+  package init(rawValue: String) {
     self.rawValue = rawValue
   }
 
   /// Creates a ``PushStatus`` from a string literal.
-  public init(stringLiteral value: String) {
+  package init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
   /// The server acknowledged the push.
-  public static let ok: PushStatus = "ok"
+  package static let ok: PushStatus = "ok"
 
   /// The server rejected the push.
-  public static let error: PushStatus = "error"
+  package static let error: PushStatus = "error"
 }

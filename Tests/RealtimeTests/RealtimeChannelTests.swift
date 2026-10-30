@@ -75,7 +75,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -131,7 +131,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "realtime:test-topic",
@@ -763,7 +763,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "realtime:test-topic",
@@ -784,7 +784,7 @@ struct RealtimeChannelTests {
       #expect(await channel.status == .subscribed)
 
       server.send(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: nil,
           topic: "realtime:test-topic",
@@ -818,7 +818,7 @@ extension RealtimeChannelTests {
     event: String,
     timeout: TimeInterval,
     pollInterval: UInt64 = 10_000_000
-  ) async -> [RealtimeMessageV2] {
+  ) async -> [RealtimeMessage] {
     let deadline = Date().addingTimeInterval(timeout)
 
     while Date() < deadline {

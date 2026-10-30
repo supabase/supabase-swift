@@ -218,7 +218,7 @@ struct RealtimeChannelSubscriptionTests {
     #expect(changes?.first?.objectValue?["table"]?.stringValue == "users")
     // The `system` confirmation path: "Subscribed to PostgreSQL" confirms the join on its own.
     await channel.onMessage(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.system,
         payload: ["status": "ok", "extension": "postgres_changes"]
       )
@@ -580,9 +580,9 @@ struct RealtimeChannelSubscriptionTests {
   }
 
   private static func system(
-    _ join: RealtimeMessageV2, status: String, extension: String, message: String = ""
-  ) -> RealtimeMessageV2 {
-    RealtimeMessageV2(
+    _ join: RealtimeMessage, status: String, extension: String, message: String = ""
+  ) -> RealtimeMessage {
+    RealtimeMessage(
       joinRef: join.ref, ref: nil, topic: join.topic, event: ChannelEvent.system,
       payload: [
         "status": .string(status), "extension": .string(`extension`),
@@ -774,7 +774,7 @@ struct RealtimeChannelSubscriptionTests {
       guard case .text(let text) = frame,
         let join = try? RealtimeSerializer().decodeText(text), join.event == ChannelEvent.join,
         let reply = try? RealtimeSerializer().encodeText(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
             payload: ["status": "error", "response": ["reason": "Unauthorized: denied"]]
           )
@@ -826,7 +826,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let firstJoin = try #require(await h.received(ChannelEvent.join))
     try h.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: firstJoin.ref, ref: firstJoin.ref, topic: firstJoin.topic,
         event: ChannelEvent.reply, payload: ["status": "error", "response": [:]]
       )
@@ -847,7 +847,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
         payload: ["status": "ok", "response": [:]]
       )
@@ -939,7 +939,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
         payload: ["status": "ok", "response": ["postgres_changes": "not-an-array"]]
       )
@@ -1035,7 +1035,7 @@ struct RealtimeChannelSubscriptionTests {
     let join = try await h.subscribe(channel)
 
     try h.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: nil, topic: join.topic, event: ChannelEvent.system,
         payload: [
           "status": "error", "extension": "postgres_changes", "channel": "room",
@@ -1543,7 +1543,7 @@ struct RealtimeChannelSubscriptionTests {
       guard case .text(let text) = frame,
         let join = try? RealtimeSerializer().decodeText(text), join.event == ChannelEvent.join,
         let reply = try? RealtimeSerializer().encodeText(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
             payload: ["status": "ok", "response": ["postgres_changes": .array([])]]
           )
@@ -1642,7 +1642,7 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// The next frame for `event` the server receives.
-    func received(_ event: String) async -> RealtimeMessageV2? {
+    func received(_ event: String) async -> RealtimeMessage? {
       for await frame in server.events {
         if let message = Self.decode(frame), message.event == event {
           return message
@@ -1652,14 +1652,14 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// Every frame for `event` the client has sent so far.
-    func sent(_ event: String) -> [RealtimeMessageV2] {
+    func sent(_ event: String) -> [RealtimeMessage] {
       socket.sentEvents.compactMap(Self.decode).filter { $0.event == event }
     }
 
     /// Answers `join` the way the server does.
-    func confirm(_ join: RealtimeMessageV2) throws {
+    func confirm(_ join: RealtimeMessage) throws {
       try reply(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
           payload: ["status": "ok", "response": ["postgres_changes": .array([])]]
         )
@@ -1667,9 +1667,9 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// Refuses `join` with `reason`, as the server does.
-    func fail(_ join: RealtimeMessageV2, reason: String) throws {
+    func fail(_ join: RealtimeMessage, reason: String) throws {
       try reply(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: join.ref, ref: join.ref, topic: join.topic, event: ChannelEvent.reply,
           payload: ["status": "error", "response": ["reason": .string(reason)]]
         )
@@ -1677,9 +1677,9 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// Closes the channel `join` opened, as the server does.
-    func close(_ join: RealtimeMessageV2) throws {
+    func close(_ join: RealtimeMessage) throws {
       try reply(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: join.ref, ref: nil, topic: join.topic, event: ChannelEvent.close,
           payload: [:]
         )
@@ -1687,7 +1687,7 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// Subscribes `channel` and confirms its join. Returns the join.
-    func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessageV2 {
+    func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessage {
       async let subscription: Void = channel.subscribe()
       let join = try #require(await received(ChannelEvent.join))
       try confirm(join)
@@ -1696,15 +1696,15 @@ struct RealtimeChannelSubscriptionTests {
     }
 
     /// Sends `message` from the server.
-    func send(_ message: RealtimeMessageV2) throws {
+    func send(_ message: RealtimeMessage) throws {
       server.send(try RealtimeSerializer().encodeText(message))
     }
 
-    private func reply(_ message: RealtimeMessageV2) throws {
+    private func reply(_ message: RealtimeMessage) throws {
       try send(message)
     }
 
-    private static func decode(_ frame: WebSocketEvent) -> RealtimeMessageV2? {
+    private static func decode(_ frame: WebSocketEvent) -> RealtimeMessage? {
       guard case .frame(.text(let text)) = frame else { return nil }
       return try? RealtimeSerializer().decodeText(text)
     }

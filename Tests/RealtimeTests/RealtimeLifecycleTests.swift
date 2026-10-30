@@ -45,7 +45,7 @@ struct RealtimeLifecycleTests {
             guard let msg = event.realtimeMessage else { continue }
             if msg.event == "heartbeat" {
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: "phoenix",
@@ -55,7 +55,7 @@ struct RealtimeLifecycleTests {
               )
             } else if msg.event == "phx_join" {
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: msg.topic,
@@ -190,7 +190,7 @@ struct RealtimeLifecycleTests {
             guard let msg = event.realtimeMessage else { continue }
             if msg.event == "heartbeat" {
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: "phoenix",
@@ -201,7 +201,7 @@ struct RealtimeLifecycleTests {
             } else if msg.event == "phx_join" {
               if isFirstConnection {
                 server.send(
-                  RealtimeMessageV2(
+                  RealtimeMessage(
                     joinRef: msg.joinRef,
                     ref: msg.ref,
                     topic: msg.topic,

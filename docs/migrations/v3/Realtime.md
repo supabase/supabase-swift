@@ -3,9 +3,6 @@
 This file covers the changes to the `Realtime` module from v2.55.4 to v3. See
 [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every module.
 
-> [!NOTE]
-> Realtime is still being reworked for v3. The Realtime API may still change before v3.0.0.
-
 ## Silent changes
 
 Changes that still compile but behave differently. Check each one by hand.
@@ -37,9 +34,6 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.
-- **Status values keep unknown raw values.** `RealtimeMessageV2.status` used to be `nil` for a
-  reply status the SDK did not know. It now returns a `PushStatus` with that raw value.
-  `X(rawValue:) != nil` checks on the status types are now always `true`.
 - **The client reports `.reconnecting` while it waits to reconnect.** v2 reported
   `.connecting` for the whole reconnect. Code that waits for `.connecting` after a drop must
   also accept `.reconnecting`.
@@ -123,8 +117,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `httpSend(event:message:timeout:)` | `httpSend(event:payload:encoder:timeout:)` |
 | `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
-| `PushStatus.timeout` | removed; a push that gets no reply throws `RealtimeError` with `kind == .timeout` |
-| `RealtimeMessageV2.eventType`, `RealtimeMessageV2.EventType` | removed; compare `event` |
+| `RealtimeMessageV2`, `PushStatus` | removed; the client builds and reads the protocol messages, and a push throws `RealtimeError` (see [Pushes throw](#pushes-throw-instead-of-returning-a-status)) |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger?` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
@@ -143,17 +136,16 @@ Changes that still compile but behave differently. Check each one by hand.
 | `HasRecord.decodeRecord(as:decoder:)`, `HasOldRecord.decodeOldRecord(as:decoder:)` | `PostgresRow.decode(as:decoder:)`, or `TypedPostgresChange.row()` |
 | `PostgresAction.rawMessage`, `HasRawMessage` | removed |
 | `Column` | `PostgresColumn` |
-| `PushStatus` (`enum`) | `struct`, same member names |
 | `ReplayOption`, `BroadcastJoinConfig`, `PresenceJoinConfig` | removed; set the options on `RealtimeChannelConfiguration` |
-| `RealtimeMessageV2` (`Codable`) | not `Codable` |
 
-A `switch` over `PushStatus` or `RealtimeServerLogLevel` needs a `default:` case. `init(rawValue:)` is no
-longer failable, so drop `if let` around it.
+A `switch` over `RealtimeServerLogLevel` needs a `default:` case. `init(rawValue:)` is no longer
+failable, so drop `if let` around it and `!= nil` checks on it, which are now always `true`.
 
 Remove `vsn:`. The client always uses protocol 2.0.0, so the server must be Realtime v2.63.0 or
 later. Upgrade a self-hosted Realtime before you upgrade the SDK.
 
-The v1 API is removed. See [the RealtimeV2 migration guide](../RealtimeV2%20Migration%20Guide.md)
+The v1 API is removed. See
+[the RealtimeV2 migration guide in v2.55.4](https://github.com/supabase/supabase-swift/blob/v2.55.4/docs/migrations/RealtimeV2%20Migration%20Guide.md)
 to move from v1 to the v2 API first, then apply this guide.
 
 ## `RealtimeClient` and `RealtimeChannel` are actors
@@ -292,7 +284,7 @@ for await change in await channel.postgresChanges(of: Todo.self, table: "todos")
 
 ## Pushes throw instead of returning a status
 
-`broadcast(event:message:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
+`broadcast(event:payload:encoder:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
 `async throws`. The broadcasts return once the frame is sent; when `broadcast.acknowledge` is on
 they wait for the server reply first. `track` and `untrack` always wait for the reply. The reply
 becomes the result of the call:
@@ -397,30 +389,11 @@ let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
 let options = RealtimeClientOptions(http: .init(transport: URLSessionTransport(session: session)))
 ```
 
-## `RealtimeMessageV2` is not `Codable`
-
-Build the JSON from the fields if you encoded messages yourself. Code that passes a message to
-`JSONSerialization` or another `Any`-based encoder still compiles but fails at run time.
-
-```swift
-// v2
-let data = try JSONEncoder().encode(message)
-// v3
-let json: JSONObject = [
-  "event": .string(message.event),
-  "join_ref": message.joinRef.map(JSONValue.string) ?? .null,
-  "payload": .object(message.payload),
-  "ref": message.ref.map(JSONValue.string) ?? .null,
-  "topic": .string(message.topic),
-]
-let data = try JSONEncoder().encode(json)
-```
-
 ## Errors
 
 Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.server` with
-`response` set. A network or WebSocket failure is `.transport` with the cause in
-`underlyingError`.
+`response` set. A network or WebSocket failure is `.transport`; `underlyingError` holds the
+cause when there is one.
 
 `subscribe()` no longer gives up after a number of attempts, so there is no
 `maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or
