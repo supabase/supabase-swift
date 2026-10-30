@@ -189,6 +189,11 @@ extension RealtimeClient {
     core.channels[topic] = record
   }
 
+  /// Whether the core has a record for `topic`.
+  func hasRecord(for topic: String) -> Bool {
+    core.channels[topic] != nil
+  }
+
   /// How many pushes on the channel for `topic` wait for a reply.
   func pendingPushCount(for topic: String) -> Int {
     core.channels[topic]?.pendingPushes.count ?? 0

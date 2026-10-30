@@ -229,6 +229,57 @@ struct RealtimeShellTests {
   // MARK: Released client and removed channel
 
   @Test
+  func newHandleSubscribesAfterTheOldHandlesRemovalEnds() async throws {
+    let host = await RealtimeTestHost()
+    let old = host.client.channel("room")
+    let oldJoin = try await subscribe(old, on: host)
+    let removal = Task { await host.client.removeChannel(old) }
+    let leave = try await host.receive(event: ChannelEvent.leave)
+
+    let new = host.client.channel("room")
+    #expect(new !== old)
+    let subscription = Task { try await new.subscribe() }
+    let broadcast = Task { try await new.broadcast(event: "e", payload: ["a": 1] as JSONObject) }
+    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 2 })
+
+    host.reply(to: leave)
+    host.server?.send(close(oldJoin))
+    let join = try await host.receive {
+      $0.event == ChannelEvent.join && $0.joinRef != oldJoin.joinRef
+    }
+    host.confirmJoin(join)
+
+    try await subscription.value
+    await removal.value
+    #expect(new.status == .subscribed)
+    #expect(host.client.channels.contains(new))
+    // A broadcast parked behind the removal acts on a new channel, which is not subscribed yet.
+    await expectError(.notSubscribed) { try await broadcast.value }
+  }
+
+  @Test
+  func cancellingAnActionParkedBehindARemovalLeavesNothingBehind() async throws {
+    let host = await RealtimeTestHost()
+    let old = host.client.channel("room")
+    let oldJoin = try await subscribe(old, on: host)
+    let removal = Task { await host.client.removeChannel(old) }
+    _ = try await host.receive(event: ChannelEvent.leave)
+
+    let new = host.client.channel("room")
+    let subscription = Task { try await new.subscribe() }
+    #expect(await waitUntil { await host.client.removalWaiters["room"]?.count == 1 })
+    subscription.cancel()
+
+    await #expect(throws: CancellationError.self) { try await subscription.value }
+    #expect(await host.client.removalWaiters["room"] == nil)
+    host.server?.send(close(oldJoin))
+    await removal.value
+    #expect(await !host.client.hasRecord(for: "room"))
+    #expect(host.frames.filter { $0.event == ChannelEvent.join }.count == 1)
+    #expect(new.status == .unsubscribed)
+  }
+
+  @Test
   func releasedClientActionsThrowClientReleased() async throws {
     func makeChannel() -> RealtimeChannel {
       let client = RealtimeClient(

@@ -157,6 +157,8 @@ public actor RealtimeClient {
   /// The channels ``removeChannel(_:)`` spent while their removal is in flight, by topic. Their
   /// topic may already map to a newer channel, which must not get their effects.
   var removedChannels: [String: RealtimeChannel] = [:]
+  /// The actions of a newer channel that wait for the removal on their topic to end, by topic.
+  var removalWaiters: [String: [WaiterID]] = [:]
 
   /// Retains the optional app-lifecycle observer for the client's lifetime.
   /// Stored as `AnyObject?` so this type remains available on platforms where
@@ -430,10 +432,13 @@ public actor RealtimeClient {
     let topic = channel.topic
     sinks.removeChannel(channel)
     channel.sinks.finishAll()
+    // While an older channel of the topic is being removed, the record is that channel's.
+    guard removal(blocking: channel) == nil else { return }
     removedChannels[topic] = channel
     try? await wait { .removeChannel(topic: topic, waiter: $0) }
     if core.channels[topic] == nil, removedChannels[topic] === channel {
       removedChannels[topic] = nil
+      removalEnded(topic)
     }
   }
 

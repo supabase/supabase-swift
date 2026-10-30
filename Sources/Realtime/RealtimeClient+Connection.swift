@@ -49,13 +49,65 @@ extension RealtimeClient {
     }
   }
 
-  /// ``wait(_:)`` for an action of `channel`. The check runs here, on the actor, so an action
-  /// cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
+  /// ``wait(_:)`` for an action of `channel`. The checks run here, on the actor,
+  /// so an action cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
+  ///
+  /// While an older channel of the same topic is being removed, the action waits for that
+  /// removal to end, then runs as on a new channel.
   func wait(
     on channel: RealtimeChannel, _ make: @Sendable (WaiterID) -> RealtimeCore.Event
   ) async throws {
     guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
+    try await waitForRemoval(blocking: channel)
+    guard !channel.sinks.isSpent else { throw RealtimeError.channelRemoved }
     try await wait(make)
+  }
+
+  /// The channel being removed that holds the topic of `channel`, if it is another channel. The
+  /// core keeps that channel's record until its leave ends, so an action of `channel` would act on
+  /// the old record.
+  func removal(blocking channel: RealtimeChannel) -> RealtimeChannel? {
+    guard let removing = removedChannels[channel.topic], removing !== channel else { return nil }
+    guard core.channels[channel.topic] != nil else {
+      // The removal is over; its `removeChannel(_:)` has not resumed yet.
+      removedChannels[channel.topic] = nil
+      removalEnded(channel.topic)
+      return nil
+    }
+    return removing
+  }
+
+  /// Parks the caller until no other channel's removal holds the topic of `channel`. A cancelled
+  /// caller throws `CancellationError` and leaves nothing behind.
+  private func waitForRemoval(blocking channel: RealtimeChannel) async throws {
+    let topic = channel.topic
+    while removal(blocking: channel) != nil {
+      try Task.checkCancellation()
+      let id = waiters.next()
+      try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation { continuation in
+          waiters.park(id, continuation)
+          removalWaiters[topic, default: []].append(id)
+        }
+      } onCancel: {
+        Task { await self.removalWaitCancelled(id, topic: topic) }
+      }
+    }
+  }
+
+  private func removalWaitCancelled(_ id: WaiterID, topic: String) {
+    removalWaiters[topic]?.removeAll { $0 == id }
+    if removalWaiters[topic]?.isEmpty == true {
+      removalWaiters[topic] = nil
+    }
+    waiters.resume(id, with: .cancelled)
+  }
+
+  /// Wakes the actions that wait for the removal on `topic` to end.
+  func removalEnded(_ topic: String) {
+    for id in removalWaiters.removeValue(forKey: topic) ?? [] {
+      waiters.resume(id, with: .success)
+    }
   }
 
   /// Runs one effect. It never hands an event to the core directly: tasks apply their events
@@ -157,6 +209,7 @@ extension RealtimeClient {
     case .finishChannel(let topic):
       if removedChannels.removeValue(forKey: topic) != nil {
         // `removeChannel(_:)` already spent it.
+        removalEnded(topic)
         return
       }
       // The server closed the channel.
