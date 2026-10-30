@@ -153,8 +153,12 @@ Changes that still compile but behave differently. Check each one by hand.
   while the request ran, it is not retried. The rejection reaches your code when the refresh fails
   or the retry is rejected too. A request with a single-pass body, a request that sets its own
   `Authorization`, and a request sent without a session are not retried. An Edge Function with
-  `verify_jwt` turned off that checks the token itself gets no retry. Remove your own
-  refresh-and-retry code around these errors.
+  `verify_jwt` turned off that checks the token itself gets no retry. Storage `download(path:)`,
+  `info(path:)`, and `exists(path:)` get no retry either: Storage answers an expired token there
+  as an anonymous request, so a private bucket fails with code `NoSuchBucket` ("Bucket not
+  found") and the response does not say that the token caused it. Remove your own
+  refresh-and-retry code around these errors, but keep it around those three Storage calls if you
+  need it.
 - **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
   `authStateChanges` receive events in the order the session changed, but a listener can run after
   the call that caused the event returns. `didChangeAuthStateNotification` posts
