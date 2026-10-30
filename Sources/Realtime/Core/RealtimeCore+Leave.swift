@@ -199,9 +199,9 @@ extension RealtimeCore {
   }
 
   /// Moves the channels on once the socket went away without `disconnect()`: a join in flight,
-  /// a join waiting to retry, and a subscribed channel wait for the next socket, which joins
-  /// them once (see ``connectAttemptEnded()``), and a leave is over. A push waiting for a reply
-  /// fails with ``RealtimeError/notConnected``.
+  /// a join waiting for a token or to retry, and a subscribed channel wait for the next socket,
+  /// which joins them once (see ``connectAttemptEnded()``), and a leave is over. A push waiting
+  /// for a reply fails with ``RealtimeError/notConnected``.
   private mutating func channelsLostSocket() -> [Effect] {
     var effects: [Effect] = []
     for topic in channels.keys.sorted() {
@@ -213,12 +213,15 @@ extension RealtimeCore {
       case .waitingToRetry(let attempt, _, _):
         effects += failPendingPushes(topic, with: .notConnected)
         effects += waitForNextSocket(topic, attempt: attempt + 1)
+      case .refreshingToken(let attempt):
+        effects += failPendingPushes(topic, with: .notConnected)
+        effects += waitForNextSocket(topic, attempt: attempt)
       case .subscribed:
         effects += failPendingPushes(topic, with: .notConnected)
         effects += waitForNextSocket(topic, attempt: 1)
       case .leaving:
         effects += leaveEnded(topic, pushes: .notConnected, cancelTimer: true)
-      case .unsubscribed, .waitingForSocket, .refreshingToken, .failed:
+      case .unsubscribed, .waitingForSocket, .failed:
         effects += failPendingPushes(topic, with: .notConnected)
       }
     }
@@ -228,6 +231,7 @@ extension RealtimeCore {
   private mutating func waitForNextSocket(_ topic: String, attempt: Int) -> [Effect] {
     let timer = channels[topic]?.phase.timer(for: topic)
     channels[topic]?.timedOutJoinRef = nil
+    channels[topic]?.hasRefreshedExpiredToken = false
     return setPhase(.waitingForSocket(attempt: attempt), for: topic)
       + (timer.map { [.cancel($0)] } ?? [])
   }

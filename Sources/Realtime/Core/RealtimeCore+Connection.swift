@@ -51,6 +51,7 @@ extension RealtimeCore {
     result += effects
     if case .connected = previous {
       result.append(.cancel(.heartbeat))
+      result += cancelTokenRefresh()
     }
     if case .connected = connection {
       result.append(.schedule(.heartbeat, after: options.heartbeatInterval))
@@ -199,6 +200,7 @@ extension RealtimeCore {
   // MARK: Heartbeat
 
   /// Sends the next heartbeat, or fails the socket when the previous one was never acknowledged.
+  /// A heartbeat also refreshes the token, as `setAuth()` does.
   mutating func heartbeatTimerFired(at time: CoreTime) -> [Effect] {
     guard case .connected = connection else { return [] }
 
@@ -215,7 +217,7 @@ extension RealtimeCore {
       ),
       .publishHeartbeat(.sent),
       .schedule(.heartbeat, after: options.heartbeatInterval),
-    ]
+    ] + refreshAccessToken(ignoringInterval: false)
   }
 
   mutating func receiveHeartbeatReply(_ message: RealtimeMessage, at time: CoreTime) -> [Effect] {

@@ -34,6 +34,7 @@ extension RealtimeCore {
     case .unsubscribed, .failed:
       logger.debug("Subscribe requested for channel '\(topic)'")
       record.subscribeWaiters.append(waiter)
+      record.hasRefreshedExpiredToken = false
       channels[topic] = record
       return effects + sendJoin(topic, attempt: 1)
 
@@ -46,16 +47,21 @@ extension RealtimeCore {
   }
 
   /// Starts join attempt `attempt` for `topic`: sends `phx_join` on a connected socket, and
-  /// waits for the socket otherwise.
+  /// waits for the socket otherwise. With an `accessToken` callback, the join first waits for a
+  /// call in flight, or for a new call unless the last one is recent.
   mutating func sendJoin(_ topic: String, attempt: Int) -> [Effect] {
     guard case .connected = connection else {
       return waitForSocket(topic, attempt: attempt)
     }
-    return pushJoin(topic, attempt: attempt)
+    let fetch = refreshAccessToken(ignoringInterval: false)
+    guard tokenFetchInFlight else {
+      return pushJoin(topic, attempt: attempt)
+    }
+    return waitForToken(topic, attempt: attempt) + fetch
   }
 
   /// Writes the `phx_join` for attempt `attempt`, with the current token, and starts its timeout.
-  private mutating func pushJoin(_ topic: String, attempt: Int) -> [Effect] {
+  mutating func pushJoin(_ topic: String, attempt: Int) -> [Effect] {
     guard var record = channels[topic] else { return [] }
     let ref = makeRef()
     record.timedOutJoinRef = nil
@@ -334,6 +340,7 @@ extension RealtimeCore {
     record.subscribeWaiters = []
     record.hasBeenSubscribed = true
     record.timedOutJoinRef = nil
+    record.hasRefreshedExpiredToken = false
     channels[topic] = record
 
     var effects: [Effect] = waiters.map { .resume($0, .success) }
@@ -350,6 +357,9 @@ extension RealtimeCore {
     _ topic: String, attempt: Int, error: RealtimeError
   ) -> [Effect] {
     switch error.joinRecovery {
+    case .refreshToken where channels[topic]?.hasRefreshedExpiredToken == false:
+      logger.debug("Token expired for channel '\(topic)', rejoining with a fresh one")
+      return rejoinWithFreshToken(topic, attempt: attempt + 1)
     case .fail, .refreshToken:
       logger.error("Failed to subscribe to channel '\(topic)': \(error.message)")
       return failSubscribe(topic, with: error)
@@ -366,6 +376,8 @@ extension RealtimeCore {
     _ topic: String, attempt: Int, delay: Duration, lastError: RealtimeError
   ) -> [Effect] {
     logger.debug("Retrying subscribe for '\(topic)' in \(delay)")
+    // Another failure ends the run of expired-token errors.
+    channels[topic]?.hasRefreshedExpiredToken = false
     return setPhase(
       .waitingToRetry(attempt: attempt, retryIn: delay, lastError: lastError), for: topic)
       + [.schedule(.rejoin(topic: topic), after: delay)]

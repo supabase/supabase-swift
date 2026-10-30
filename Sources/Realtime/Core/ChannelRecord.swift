@@ -24,6 +24,9 @@ struct ChannelRecord {
   var timedOutJoinRef: Ref?
   /// The access token the channel last joined with.
   var joinAccessToken: String?
+  /// Whether the channel already rejoined with a fresh token in this run of expired-token join
+  /// errors. Another failure ends the run.
+  var hasRefreshedExpiredToken = false
   var subscribeWaiters: [WaiterID] = []
   var leaveWaiters: [WaiterID] = []
   /// Whether `removeChannel` is waiting for the leave to end: the channel is then finished and

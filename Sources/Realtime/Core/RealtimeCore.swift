@@ -114,7 +114,9 @@ struct RealtimeCore {
     case deliver(String, Delivery)
     /// End every stream of the channel for a topic.
     case finishChannel(String)
-    /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`.
+    /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`. The shell
+    /// applies it exactly once per fetch, also after `cancelAllTasks`: with `nil` when the call
+    /// fails or is cancelled. Until then, no other fetch starts and no waiting channel joins.
     case fetchAccessToken(generation: Int)
 
     /// Connections compare by identity, and errors with `isSameFailure(as:)`.
@@ -171,6 +173,17 @@ struct RealtimeCore {
   var channels: [String: ChannelRecord] = [:]
 
   var tokens = TokenState()
+  /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.
+  var lastTokenFetch: Duration?
+  /// Whether a ``Effect/fetchAccessToken(generation:)`` waits for its `.tokenFetched`.
+  var tokenFetchInFlight = false
+  /// Whether a channel whose token expired waits for a fetch that starts after the one in
+  /// flight, which may return the refused token.
+  var tokenRefetchQueued = false
+  /// Whether a `.tokenRefresh` timer is scheduled, so leaving `.connected` cancels it.
+  var tokenRefreshScheduled = false
+  /// The time of the event being handled.
+  var now = CoreTime(elapsed: .zero, date: .distantPast)
   /// The last ref ``makeRef()`` made.
   var lastRef: UInt64 = 0
   var heartbeat = HeartbeatState()
@@ -194,6 +207,7 @@ struct RealtimeCore {
   }
 
   mutating func handle(_ event: Event, at time: CoreTime) -> [Effect] {
+    now = time
     switch event {
     case .connect(let waiter):
       return connect(waiter: waiter)
@@ -249,8 +263,15 @@ struct RealtimeCore {
     case .timerFired(.pushTimeout(let topic, let ref)):
       return pushTimedOut(topic, ref: ref)
 
-    // Not handled yet: tokens and waiter cancellation.
-    case .setAuth, .timerFired, .tokenFetched, .waiterCancelled:
+    case .setAuth(let token):
+      return setAuth(token)
+    case .tokenFetched(let token, let generation):
+      return tokenFetched(token, generation: generation)
+    case .timerFired(.tokenRefresh):
+      return tokenRefreshTimerFired()
+
+    // Not handled yet: waiter cancellation.
+    case .waiterCancelled:
       return []
     }
   }
