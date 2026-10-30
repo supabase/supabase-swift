@@ -247,18 +247,14 @@ final class ChannelState {
     yieldSignal(.status(status))
   }
 
-  /// Forgets the stream `id`, whichever kind it is, after its consumer ended it. Returns `true`
-  /// only when it removed a Postgres binding, because only that changes the join payload.
-  @discardableResult
-  func removeStream(_ id: StreamID) -> Bool {
+  /// Forgets the stream `id`, whichever kind it is, after its consumer ended it.
+  func removeStream(_ id: StreamID) {
     if status.remove(id) || events.remove(id) || broadcasts.remove(id)
       || presenceChanges.remove(id) || presenceStates.remove(id)
     {
-      return false
+      return
     }
-    guard let index = postgres.firstIndex(where: { $0.id == id }) else { return false }
-    postgres.remove(at: index)
-    return true
+    postgres.removeAll { $0.id == id }
   }
 
   /// Hands `delivery` to the streams it belongs to. A Postgres change reaches only the bindings
@@ -301,14 +297,14 @@ final class ChannelState {
     postgres = []
     for binding in ended {
       binding.finish()
+    }
+  }
+}
+
 /// Whether the client has any channel, including one that never subscribed. The client updates
 /// it whenever its channel states change. The client actor owns it, so it needs no lock.
 final class RegisteredChannels {
   var isEmpty = true
-}
-
-    }
-  }
 }
 
 extension AsyncStream {

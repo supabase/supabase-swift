@@ -71,15 +71,17 @@ struct ChannelStateTests {
   }
 
   @Test
-  func removeStreamReportsOnlyPostgresBindings() {
+  func removeStreamDropsOnlyThatStream() {
     let state = makeState()
     let changes = state.addPostgresStream(id(1), tableA, onTermination: {})
     let events = state.events.subscribe(id(2), onTermination: {})
 
-    #expect(!state.removeStream(id(2)))
-    #expect(state.removeStream(id(1)))
-    #expect(!state.removeStream(id(1)))
+    state.removeStream(id(2))
     #expect(state.events.count == 0)
+    #expect(state.joinSnapshot.bindings == [tableA])
+
+    state.removeStream(id(1))
+    #expect(state.joinSnapshot.bindings.isEmpty)
     withExtendedLifetime((changes, events)) {}
   }
 

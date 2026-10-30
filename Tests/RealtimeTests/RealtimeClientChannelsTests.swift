@@ -33,6 +33,22 @@ struct RealtimeClientChannelsTests {
     #expect(Set(topics) == ["a", "b"])
   }
 
+  /// The core must not ask for presence in the next join once the last presence stream ended.
+  @Test
+  func endingTheLastPresenceStreamTurnsPresenceOffForTheNextJoin() async {
+    let channel = await client.channel("a")
+    let presence = await channel.presenceChanges()
+    await client.installSubscribedRecord("a")
+    await client.turnPresenceOn(in: channel)
+
+    let reader = Task { for await _ in presence {} }
+    reader.cancel()
+    await reader.value
+
+    let client = client
+    #expect(await waitUntil(timeout: 5) { await client.presenceIsOn(in: channel) == false })
+  }
+
   @Test
   func channelsDropsRemovedChannels() async {
     let first = await client.channel("a")
@@ -205,5 +221,15 @@ extension RealtimeClient {
   /// Publishes `event` as the core's `.publishHeartbeat` effect would.
   fileprivate func publishHeartbeat(_ event: HeartbeatEvent) {
     heartbeatFanout.yield(event)
+  }
+
+  /// Marks the core record of `channel` as joined with presence on.
+  fileprivate func turnPresenceOn(in channel: RealtimeChannel) {
+    core.channels[channel.id]?.presenceEnabled = true
+  }
+
+  /// Whether the next join of `channel` asks for presence.
+  fileprivate func presenceIsOn(in channel: RealtimeChannel) -> Bool? {
+    core.channels[channel.id]?.presenceEnabled
   }
 }
