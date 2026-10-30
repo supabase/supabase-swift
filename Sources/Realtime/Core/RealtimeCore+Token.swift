@@ -32,16 +32,20 @@ extension RealtimeCore {
       return []
     }
     lastTokenFetch = now.elapsed
-    tokenFetchInFlight = true
-    return [.fetchAccessToken(generation: tokens.beginRefresh())]
+    let generation = tokens.beginRefresh()
+    tokenFetchGeneration = generation
+    return [.fetchAccessToken(generation: generation)]
   }
 
-  /// Applies the callback's result. A result from before a newer token was set is dropped. The
-  /// channels waiting for a token then join with the stored one, and a new token goes to the
-  /// joined channels.
+  /// Applies the result of the fetch in flight; a result for any other fetch is ignored. Its
+  /// token is dropped when a newer token was set during the fetch. The channels waiting for a
+  /// token then join with the stored one, and a new token goes to the joined channels.
   mutating func tokenFetched(_ token: String?, generation: Int) -> [Effect] {
-    guard tokenFetchInFlight else { return [] }
-    tokenFetchInFlight = false
+    guard generation == tokenFetchGeneration else {
+      logger.debug("Ignoring the result of access token fetch \(generation): not in flight")
+      return []
+    }
+    tokenFetchGeneration = nil
 
     var effects: [Effect] = []
     var stored = false

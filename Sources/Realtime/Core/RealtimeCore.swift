@@ -114,9 +114,10 @@ struct RealtimeCore {
     case deliver(String, Delivery)
     /// End every stream of the channel for a topic.
     case finishChannel(String)
-    /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`. The shell
-    /// applies it exactly once per fetch, also after `cancelAllTasks`: with `nil` when the call
-    /// fails or is cancelled. Until then, no other fetch starts and no waiting channel joins.
+    /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`, which is
+    /// unique to this fetch. The shell applies it once, also after `cancelAllTasks`: with `nil`
+    /// when the call fails or is cancelled. Until then, no other fetch starts and no waiting
+    /// channel joins. A `.tokenFetched` with any other generation is ignored.
     case fetchAccessToken(generation: Int)
 
     /// Connections compare by identity, and errors with `isSameFailure(as:)`.
@@ -175,14 +176,17 @@ struct RealtimeCore {
   var tokens = TokenState()
   /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.
   var lastTokenFetch: Duration?
-  /// Whether a ``Effect/fetchAccessToken(generation:)`` waits for its `.tokenFetched`.
-  var tokenFetchInFlight = false
+  /// The generation of the ``Effect/fetchAccessToken(generation:)`` that waits for its
+  /// `.tokenFetched`. Each fetch gets a new generation, so a result for another fetch is ignored.
+  var tokenFetchGeneration: Int?
+  var tokenFetchInFlight: Bool { tokenFetchGeneration != nil }
   /// Whether a channel whose token expired waits for a fetch that starts after the one in
-  /// flight, which may return the refused token.
+  /// flight, which may return the refused token. A queued refetch makes every channel in
+  /// `refreshingToken` wait for it.
   var tokenRefetchQueued = false
   /// Whether a `.tokenRefresh` timer is scheduled, so leaving `.connected` cancels it.
   var tokenRefreshScheduled = false
-  /// The time of the event being handled.
+  /// The time of the event being handled. Only ``handle(_:at:)`` writes it.
   var now = CoreTime(elapsed: .zero, date: .distantPast)
   /// The last ref ``makeRef()`` made.
   var lastRef: UInt64 = 0

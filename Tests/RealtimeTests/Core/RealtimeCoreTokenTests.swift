@@ -260,6 +260,37 @@ struct RealtimeCoreTokenTests {
       ])
     #expect(harness.core.tokens.token == "t2")
     #expect(harness.core.tokenFetchInFlight == false)
+    // The fetch is over: the next one may start.
+    harness.advance(by: .seconds(10))
+    #expect(harness.send(.setAuth(token: nil)) == [.fetchAccessToken(generation: 3)])
+  }
+
+  /// Each fetch has its own generation: a late or duplicate result for an earlier fetch does not
+  /// end the fetch in flight.
+  @Test
+  func duplicateFetchResultWhileANewerFetchRunsIsIgnored() throws {
+    var harness = CoreHarness.connected(options: Self.withProvider)
+    _ = harness.send(Self.subscribe(harness.waiter(), topic: "a"))
+    _ = harness.send(.tokenFetched(token: "t1", generation: 1))
+    harness.advance(by: .seconds(10))
+    #expect(
+      harness.send(Self.subscribe(harness.waiter(), topic: "b")) == [
+        .publishChannelStatus("b", .subscribing(attempt: 1)),
+        .fetchAccessToken(generation: 2),
+      ])
+
+    #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
+    #expect(harness.core.channels["b"]?.phase == .refreshingToken(attempt: 1))
+    #expect(harness.core.tokenFetchGeneration == 2)
+
+    #expect(
+      harness.send(.tokenFetched(token: "t2", generation: 2)) == [
+        .send(try Self.join(ref: "2", token: "t2", topic: "b")),
+        .schedule(.joinTimeout(topic: "b", ref: "2"), after: .seconds(10)),
+        .send(Self.accessToken("t2", joinRef: "1", ref: "3", topic: "a")),
+      ])
+    #expect(harness.core.tokens.token == "t2")
+    #expect(harness.send(.tokenFetched(token: "t9", generation: 2)) == [])
   }
 
   // MARK: Refresh timer
