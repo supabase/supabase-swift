@@ -8,60 +8,6 @@
 import ConcurrencyExtras
 import Foundation
 
-/// Whether a user is signed in, as the client knows it in memory.
-enum AuthStatus: Hashable, Sendable {
-  /// Storage was not read yet, or it could not be read, for example because the device is locked
-  /// before the first unlock. The next load reads it again.
-  case loading
-  case signedOut(SignOutReason)
-  case signedIn(Session)
-
-  var session: Session? {
-    guard case .signedIn(let session) = self else { return nil }
-    return session
-  }
-}
-
-/// Why no user is signed in.
-struct SignOutReason: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
-  let rawValue: String
-
-  init(rawValue: String) {
-    self.rawValue = rawValue
-  }
-
-  init(stringLiteral value: String) {
-    self.init(rawValue: value)
-  }
-
-  /// The app asked to sign out.
-  static let userInitiated: SignOutReason = "userInitiated"
-  /// The server reported that the session expired or that it no longer knows the refresh token.
-  static let sessionExpired: SignOutReason = "sessionExpired"
-  /// The server revoked the session: its refresh token was already used, the session is gone,
-  /// or the user is banned.
-  static let sessionRevoked: SignOutReason = "sessionRevoked"
-  /// Storage held no usable session.
-  static let sessionMissing: SignOutReason = "sessionMissing"
-
-  /// The reason for an error whose ``AuthError/invalidatesSession`` is `true`.
-  init(invalidatedBy error: AuthError) {
-    switch error.errorCode {
-    case .refreshTokenAlreadyUsed, .sessionNotFound, .userBanned:
-      self = .sessionRevoked
-    default:
-      // refresh_token_not_found, session_expired, and an OAuth invalid_grant on refresh.
-      self = .sessionExpired
-    }
-  }
-}
-
-/// One change of the auth status, delivered in the order the store applied it.
-struct AuthChange: Hashable, Sendable {
-  var event: AuthChangeEvent
-  var status: AuthStatus
-}
-
 /// The one owner of the session.
 ///
 /// Every change goes through ``commit(_:)``, which writes storage, then memory, then tells
@@ -69,7 +15,7 @@ struct AuthChange: Hashable, Sendable {
 /// memory, and the order of ``changes()`` always agree.
 actor SessionStore {
   enum Transition: Sendable {
-    case signedIn(Session, event: AuthChangeEvent)
+    case signedIn(Session, event: AuthEvent)
     /// Applied only while the store holds the session whose refresh token is `refreshToken`, or
     /// holds none when `refreshToken` is `nil`: what it held when the refresh started.
     ///
@@ -78,9 +24,9 @@ actor SessionStore {
     /// so dropping the result would leave the store with a spent one.
     case refreshed(Session, replacing: String?)
     /// Merged into the session that is current when the commit runs.
-    case userUpdated(User, event: AuthChangeEvent)
-    case signedOut(SignOutReason, event: AuthChangeEvent)
-    /// Signs out with ``AuthChangeEvent/signedOut``, but only while the store holds the session
+    case userUpdated(User, event: AuthEvent)
+    case signedOut(SignOutReason, event: AuthEvent)
+    /// Signs out with ``AuthEvent/signedOut``, but only while the store holds the session
     /// whose refresh token is `refreshToken`.
     ///
     /// A request that failed because its session is gone must not sign out whoever signed in
@@ -215,7 +161,7 @@ actor SessionStore {
 
   /// A lossless stream of changes.
   ///
-  /// The first element is ``AuthChangeEvent/initialSession`` with the status once storage was
+  /// The first element is ``AuthEvent/initialSession`` with the status once storage was
   /// read, or once a commit ended loading, in which case that commit's change follows it. Every
   /// later element is one change, in the order the store applied it.
   nonisolated func changes() -> AsyncStream<AuthChange> {
@@ -231,6 +177,18 @@ actor SessionStore {
       }
     }
     return stream
+  }
+
+  /// Finishes every ``changes()`` stream, for a client that is released while a running task
+  /// still holds the store.
+  nonisolated func finishChanges() {
+    let continuations = published.withValue { current in
+      defer { current.subscribers = [:] }
+      return current.subscribers.values
+    }
+    for continuation in continuations {
+      continuation.finish()
+    }
   }
 
   /// Reads the stored session, migrating older formats, and leaves ``AuthStatus/loading``.
@@ -481,7 +439,7 @@ actor SessionStore {
 
   private func apply(_ transition: Transition) async throws {
     let next: State
-    let event: AuthChangeEvent
+    let event: AuthEvent
     switch transition {
     case .signedIn(let session, let signInEvent):
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
@@ -535,7 +493,7 @@ actor SessionStore {
     }
   }
 
-  private func update(to next: State, event: AuthChangeEvent) {
+  private func update(to next: State, event: AuthEvent) {
     generation += 1
     published.withValue { current in
       var changes = [AuthChange(event: event, status: next.status)]

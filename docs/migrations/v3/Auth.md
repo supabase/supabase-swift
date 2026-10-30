@@ -55,8 +55,7 @@ Changes that still compile but behave differently. Check each one by hand.
   emitted `.initialSession` with no session. Now `.initialSession` waits until storage is read.
   Until then, each call that needs the session reads storage again: `session`,
   `refreshSessionIfNeeded`, a request that sends the session's access token (such as `user()` or a
-  `SupabaseClient` data request), and each new `onAuthStateChange` or `authStateChanges`
-  subscription. `session` throws `.storageUnavailable` while the device is locked. On iOS, iPadOS,
+  `SupabaseClient` data request), each new `events()` stream, and `initialization()`. `session` throws `.storageUnavailable` while the device is locked. On iOS, iPadOS,
   tvOS, visionOS, and Mac Catalyst the client also reads storage when protected data becomes
   available. watchOS and macOS post no such notification, so there only those calls read storage
   again. A sign-in that throws `.storageUnavailable` did not sign in, so retry it after the device
@@ -159,10 +158,9 @@ Changes that still compile but behave differently. Check each one by hand.
   found") and the response does not say that the token caused it. Remove your own
   refresh-and-retry code around these errors, but keep it around those three Storage calls if you
   need it.
-- **Auth events are delivered asynchronously.** `onAuthStateChange` listeners and
-  `authStateChanges` receive events in the order the session changed, but a listener can run after
-  the call that caused the event returns. `didChangeAuthStateNotification` posts
-  `.initialSession` once per client, not once per `onAuthStateChange` call.
+- **Auth events are delivered asynchronously.** `events()` delivers changes in the order the
+  session changed, but your loop can run after the call that caused the change returns. Read
+  `auth.status` or `auth.currentSession` for the state right after a call.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.
@@ -208,7 +206,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
-| `enum` `AuthChangeEvent`, `FactorStatus`, `MessagingChannel`, `Provider`, `OpenIDConnectCredentials.Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
+| `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
+| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `OpenIDConnectCredentials.Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
 | `AuthResponse`, `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
 | `OpenIDConnectCredentials`, `OpenIDConnectCredentials.Provider`, `AuthMetaSecurity`, `Web3Credentials`, `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OAuthResponse`, `Provider`: `Codable` | no `Codable` conformance |
@@ -296,8 +295,62 @@ for await (event, session) in supabase.auth.authStateChanges {
   if event == .initialSession, let session { signIn(user: session.user) }
 }
 // v3
+for await change in supabase.auth.events() {
+  if change.event == .initialSession, let session = change.session, !session.isExpired {
+    signIn(user: session.user)
+  }
+}
+```
+
+## `authStateChanges` and `onAuthStateChange(_:)` are `events()`
+
+`events()` returns one `AsyncStream<AuthChange>` per call. It is registered when the call returns,
+so it loses no change, and it finishes when your task is cancelled or the client is released.
+`AuthChange` has `event`, `session`, `status` (an `AuthStatus`), and `signOutReason`, which tells
+`.userInitiated` from `.sessionExpired`, `.sessionRevoked`, and `.sessionMissing`. For the state
+without a stream, read `auth.status`, or `await auth.initialization()` to wait until storage is
+read. `AuthStateChangeListener` and `AuthStateChangeListenerRegistration` are removed.
+
+```swift
+// v2
 for await (event, session) in supabase.auth.authStateChanges {
-  if event == .initialSession, let session, !session.isExpired { signIn(user: session.user) }
+  if event == .signedOut { showSignIn() }
+}
+let subscription = await supabase.auth.onAuthStateChange { event, session in
+  print(event, session?.user.id as Any)
+}
+subscription.remove()
+// v3
+for await change in supabase.auth.events() {
+  if change.event == .signedOut { showSignIn() }
+}
+let task = Task {
+  for await change in supabase.auth.events() {
+    print(change.event, change.session?.user.id as Any)
+  }
+}
+task.cancel()
+```
+
+## `didChangeAuthStateNotification` is removed
+
+`AuthClient.didChangeAuthStateNotification`, `authChangeEventInfoKey`, and
+`authChangeSessionInfoKey` are removed. The notification was posted with `object: nil`, so two
+clients could not be told apart. Use `events()` on the client you care about.
+
+```swift
+// v2
+NotificationCenter.default.addObserver(
+  forName: AuthClient.didChangeAuthStateNotification, object: nil, queue: .main
+) { notification in
+  let event = notification.userInfo?[AuthClient.authChangeEventInfoKey] as? AuthChangeEvent
+  print(event as Any)
+}
+// v3
+Task {
+  for await change in supabase.auth.events() {
+    print(change.event)
+  }
 }
 ```
 

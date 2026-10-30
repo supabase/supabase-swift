@@ -234,26 +234,19 @@ extension AuthMockerTests {
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        let events = LockIsolated([AuthChangeEvent]())
-        let sessions = LockIsolated([Session?]())
-        let handle = await sut.onAuthStateChange { event, session in
-          events.withValue { $0.append(event) }
-          sessions.withValue { $0.append(session) }
-        }
+        let events = sut.events()
 
         let response = try await sut.mfa.recoveryCodes.verify(code: "K4M9-X7QP-2AB8-HT3Z")
-
-        await Task.megaYield()
-        handle.remove()
+        let changes = await events.prefix(2).collect()
 
         expectNoDifference(response.refreshToken, "GGduTeu95GraIXQ56jppkw")
         expectNoDifference(
           sut.currentSession?.refreshToken,
           "GGduTeu95GraIXQ56jppkw"
         )
-        expectNoDifference(events.value, [.initialSession, .mfaChallengeVerified])
+        expectNoDifference(changes.map(\.event), [.initialSession, .mfaChallengeVerified])
         expectNoDifference(
-          sessions.value.map { $0?.refreshToken },
+          changes.map { $0.session?.refreshToken },
           [Session.valid.refreshToken, "GGduTeu95GraIXQ56jppkw"]
         )
       }

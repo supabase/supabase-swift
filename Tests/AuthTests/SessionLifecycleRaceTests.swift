@@ -22,7 +22,7 @@ struct SessionLifecycleRaceTests {
     race.answerRefresh(through: gate) { try Race.ok(race.issue("refreshed")) }
     race.answerSignOut()
     let client = race.makeClient()
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
     #expect(await events.next()?.event == .initialSession)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -49,7 +49,7 @@ struct SessionLifecycleRaceTests {
     race.answerRefresh(through: gate) { try Race.ok(race.issue("refreshed")) }
     race.answerUserUpdate(with: Race.user(nickname: "updated"))
     let client = race.makeClient()
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
     #expect(await events.next()?.event == .initialSession)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -100,7 +100,7 @@ struct SessionLifecycleRaceTests {
       }
       if isFirst { await readTheExpiredToken.pass() }
     })
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
     #expect(await events.next()?.event == .initialSession)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -200,7 +200,7 @@ struct SessionLifecycleRaceTests {
     )
     storage.isLocked.setValue(true)
     let client = race.makeClient(storage: storage)
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
 
     for _ in 0..<2 {
       let error = await #expect(throws: AuthError.self) { try await client.session }
@@ -225,7 +225,7 @@ struct SessionLifecycleRaceTests {
     race.answerRefresh { try Race.ok(race.issue("refreshed")) }
     let client = race.makeClient(autoRefresh: .automatic)
     await waitForTheStartAtCreation(of: client)
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
     #expect(await events.next()?.event == .initialSession)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -254,7 +254,7 @@ struct SessionLifecycleRaceTests {
         message: "Invalid Refresh Token: Already Used")
     }
     let client = race.makeClient()
-    var events = client.authStateChanges.makeAsyncIterator()
+    var events = client.events().makeAsyncIterator()
     #expect(await events.next()?.event == .initialSession)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -279,7 +279,7 @@ struct SessionLifecycleRaceTests {
       race.issue(body.contains("first@example.com") ? "first" : "second")
     }
     let client = race.makeClient()
-    let observers = [client.authStateChanges, client.authStateChanges]
+    let observers = [client.events(), client.events()]
 
     let first = Task { try await client.signIn(email: "first@example.com", password: "secret") }
     let second = Task { try await client.signIn(email: "second@example.com", password: "secret") }
@@ -312,7 +312,7 @@ struct SessionLifecycleRaceTests {
     race.answerSignIn { _ in race.issue("signed-in") }
     race.answerSignOut()
     let client = race.makeClient()
-    let stream = client.authStateChanges
+    let stream = client.events()
 
     try await client.signIn(email: "a@example.com", password: "secret")
     try await client.signOut()

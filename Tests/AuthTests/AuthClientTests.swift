@@ -34,47 +34,55 @@ extension AuthMockerTests {
     }
 
     @Test
-    func onAuthStateChanges() async throws {
+    func eventsStartWithInitialSession() async throws {
       try await withMainSerialExecutor {
-        let session = Session.valid
         let sut = makeSUT()
-        try await sut.seedSession(session)
+        try await sut.seedSession(.valid)
 
-        let events = LockIsolated([AuthChangeEvent]())
+        let change = await sut.events().first { _ in true }
 
-        let handle = await sut.onAuthStateChange { event, _ in
-          events.withValue {
-            $0.append(event)
-          }
-        }
-
-        expectNoDifference(events.value, [.initialSession])
-
-        handle.remove()
+        expectNoDifference(change, AuthChange(event: .initialSession, status: .signedIn(.valid)))
+        expectNoDifference(sut.status, .signedIn(.valid))
       }
     }
 
     @Test
-    func authStateChanges() async throws {
+    func eventsKeepAChangeAppliedBeforeTheFirstRead() async throws {
       try await withMainSerialExecutor {
-        let session = Session.valid
         let sut = makeSUT()
-        try await sut.seedSession(session)
+        try await sut.seedSession(.valid)
 
-        let stateChange = await sut.authStateChanges.first { _ in true }
-        expectNoDifference(stateChange?.event, .initialSession)
-        expectNoDifference(stateChange?.session, session)
+        let events = sut.events()
+        try await sut.dependencies.sessionStore.commit(
+          .signedOut(.userInitiated, event: .signedOut))
+        let changes = await events.prefix(2).collect()
+
+        expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
+        expectNoDifference(changes.last?.signOutReason, .userInitiated)
+        expectNoDifference(sut.status, .signedOut(.userInitiated))
       }
     }
 
     @Test
-    func authStateChangesRemovesListenerWhenCancelledBeforeRegistrationRuns() async throws {
+    func eventsFinishWhenTheClientIsReleased() async throws {
+      var sut: AuthClient? = makeSUT()
+      let events = try #require(sut).events()
+
+      sut = nil
+      let changes = try await withTimeout(.seconds(5)) { await events.collect() }
+
+      expectNoDifference(
+        changes, [AuthChange(event: .initialSession, status: .signedOut(.sessionMissing))])
+    }
+
+    @Test
+    func eventsReleaseTheSubscriberWhenCancelledBeforeTheFirstRead() async throws {
       await withMainSerialExecutor {
         let sut = makeSUT()
         let store = sut.dependencies.sessionStore
         let subscribersBefore = store.subscriberCount
 
-        let stream = sut.authStateChanges
+        let stream = sut.events()
 
         expectNoDifference(store.subscriberCount, subscribersBefore + 1)
 
@@ -199,7 +207,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -248,7 +256,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -297,7 +305,7 @@ extension AuthMockerTests {
         try await sut.seedSession(validSession)
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -450,7 +458,7 @@ extension AuthMockerTests {
         let sut = makeSUT()
 
         let eventsTask = Task {
-          await sut.authStateChanges.prefix(2).collect()
+          await sut.events().prefix(2).collect()
         }
 
         await Task.megaYield()
@@ -1376,7 +1384,7 @@ extension AuthMockerTests {
       )!
 
       let eventsTask = Task {
-        await sut.authStateChanges.prefix(3).collect().map(\.event)
+        await sut.events().prefix(3).collect().map(\.event)
       }
 
       await Task.yield()
@@ -3429,7 +3437,7 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.expired)
 
-      let expectedEvents = [AuthChangeEvent.initialSession, .signedOut]
+      let expectedEvents = [AuthEvent.initialSession, .signedOut]
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -3465,7 +3473,7 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.expired)
 
-      let expectedEvents = [AuthChangeEvent.initialSession, .tokenRefreshed]
+      let expectedEvents = [AuthEvent.initialSession, .tokenRefreshed]
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -4063,7 +4071,7 @@ extension AuthMockerTests {
     private func assertAuthStateChanges<T>(
       sut: AuthClient,
       action: () async throws -> T,
-      expectedEvents: [AuthChangeEvent],
+      expectedEvents: [AuthEvent],
       expectedSessions: [Session?]? = nil,
       timeout: Duration = .seconds(30),
       fileID: StaticString = #fileID,
@@ -4071,11 +4079,11 @@ extension AuthMockerTests {
       line: UInt = #line,
       column: UInt = #column
     ) async throws -> T {
-      let receivedEvents = LockIsolated([(event: AuthChangeEvent, session: Session?)]())
+      let receivedEvents = LockIsolated([AuthChange]())
       let finished = LockIsolated(false)
 
       Task {
-        for await change in sut.authStateChanges {
+        for await change in sut.events() {
           if finished.value {
             Issue.record("Received event '\(change.event)' after it finished.")
           }
