@@ -212,15 +212,9 @@ struct RealtimeCorePostgresTests {
     var harness = CoreHarness.connected()
     _ = harness.send(Self.subscribe(harness.waiter(), snapshot: Self.noStreams))
     _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1")))
-    _ = harness.send(.disconnectRequested(code: nil, reason: nil))
-    _ = harness.send(.timerFired(.rejoin(topic: Self.topic)))
+    _ = harness.send(.socketClosed(code: 1001, reason: nil))
     #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 2))
     #expect(harness.core.channels[Self.topic]?.timedOutJoinRef == nil)
-
-    _ = harness.send(.socketOpenFailed(.transport("unreachable")))
-    #expect(
-      harness.core.channels[Self.topic]?.phase
-        == .waitingToRetry(attempt: 2, retryIn: .seconds(2), lastError: .notConnected))
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
   }
 

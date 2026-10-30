@@ -286,17 +286,6 @@ extension RealtimeCore {
     return sendLeave(topic, joinRef: ref) + failSubscribe(topic, with: error)
   }
 
-  /// Sends `phx_leave` for the join `joinRef` on a connected socket.
-  private mutating func sendLeave(_ topic: String, joinRef: Ref) -> [Effect] {
-    guard case .connected = connection else { return [] }
-    return [
-      .send(
-        RealtimeMessage(
-          joinRef: joinRef, ref: makeRef(), topic: RealtimeChannel.wireTopic(for: topic),
-          event: ChannelEvent.leave, payload: [:]))
-    ]
-  }
-
   mutating func bindingsChanged(_ topic: String, snapshot: JoinSnapshot) -> [Effect] {
     guard channels[topic] != nil else { return [] }
     channels[topic]?.bindings = snapshot.bindings

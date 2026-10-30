@@ -358,9 +358,10 @@ struct RealtimeCoreSubscribeTests {
   func resubscribedEventOnRejoinAfterFirstSuccess() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    // What a socket drop leaves behind.
-    harness.core.channels[Self.topic]?.phase = .unsubscribed
+    _ = harness.send(.socketClosed(code: 1001, reason: nil))
     _ = harness.send(Self.subscribe(w))
+    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.socketOpened(FakeWebSocket.fakes().0))
 
     #expect(
       harness.send(.frame(Self.reply(ref: "2"))) == [

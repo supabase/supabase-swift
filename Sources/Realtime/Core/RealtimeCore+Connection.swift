@@ -204,7 +204,7 @@ extension RealtimeCore {
 
     if heartbeat.pendingRef != nil {
       logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      return [.publishHeartbeat(.timedOut)] + transitionConnection(.socketFailed(.heartbeatTimeout))
+      return [.publishHeartbeat(.timedOut)] + socketWentAway(.socketFailed(.heartbeatTimeout))
     }
 
     let ref = makeRef()

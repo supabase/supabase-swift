@@ -82,7 +82,8 @@ struct RealtimeCore {
     // Connection
     /// Start a connect attempt.
     case openSocket
-    /// Start reading the socket. After an automatic reconnect, also rejoin the channels.
+    /// Start reading the socket. `rejoinChannels` is `true` after an automatic reconnect. The
+    /// core sends those rejoins itself, so the shell must not join the channels again.
     case installSocket(any WebSocketConnection, rejoinChannels: Bool)
     /// Close a socket, either the current one or one that opened too late.
     case closeSocket(any WebSocketConnection, code: Int?, reason: String)
@@ -200,8 +201,11 @@ struct RealtimeCore {
       let previous = connection
       let effects = transitionConnection(event)
       return connection == previous ? effects : effects + connectAttemptEnded()
-    case .disconnectRequested, .socketClosed, .socketFailed, .retryTimerFired, .wake,
-      .lastChannelRemoved:
+    case .socketClosed, .socketFailed:
+      return socketWentAway(event)
+    case .disconnectRequested:
+      return transitionConnection(event) + disconnectChannels()
+    case .retryTimerFired, .wake, .lastChannelRemoved:
       return transitionConnection(event)
     case .appBackground:
       return enterBackground()
@@ -213,6 +217,9 @@ struct RealtimeCore {
       return receiveHeartbeatReply(message, at: time)
     case .frame(let message) where message.event == ChannelEvent.system:
       return receiveSystem(message)
+    case .frame(let message)
+    where message.event == ChannelEvent.close || message.event == ChannelEvent.error:
+      return receiveClose(message)
     case .frame(let message):
       return receiveJoinReply(message)
 
@@ -227,10 +234,14 @@ struct RealtimeCore {
       return postgresTimedOut(topic, ref: ref)
     case .bindingsChanged(let topic, let snapshot):
       return bindingsChanged(topic, snapshot: snapshot)
+    case .unsubscribe(let topic, let waiter):
+      return unsubscribe(topic, waiter: waiter)
+    case .timerFired(.leaveTimeout(let topic, let ref)):
+      return leaveTimedOut(topic, ref: ref)
 
     // Not handled yet: the other channel commands, frames and timers, tokens, and waiter
     // cancellation.
-    case .unsubscribe, .push, .broadcast, .removeChannel, .setAuth, .binaryBroadcast, .timerFired,
+    case .push, .broadcast, .removeChannel, .setAuth, .binaryBroadcast, .timerFired,
       .tokenFetched, .waiterCancelled:
       return []
     }
