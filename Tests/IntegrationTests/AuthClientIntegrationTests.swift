@@ -386,6 +386,68 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func pkceRecoveryLinkSignsInThroughHandleRedirect() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    try await admin.admin.createUser(
+      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    let events = LockIsolated<[AuthChangeEvent]>([])
+    let token = await authClient.onAuthStateChange { event, _ in
+      events.withValue { $0.append(event) }
+    }
+    defer { token.remove() }
+
+    try await authClient.resetPasswordForEmail(
+      email,
+      redirectTo: URL(string: "http://localhost:3000")!
+    )
+    let link = try await MailCatcher().latestLink(to: email)
+    let location = try await redirectLocation(of: link)
+    let items = URLComponents(url: location, resolvingAgainstBaseURL: false)?.queryItems
+    #expect(items?.contains { $0.name == "code" } == true)
+
+    let result = try await authClient.handleRedirect(location)
+    guard case .signedIn(let session, let verification) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(verification == .recovery)
+    #expect(events.value.contains(.passwordRecovery))
+
+    let replay = try await authClient.handleRedirect(location)
+    #expect(replay == result)
+  }
+
+  @Test
+  func implicitMagicLinkSignsInThroughHandleRedirect() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    try await admin.admin.createUser(
+      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    let link = try await admin.admin.generateLink(params: .magicLink(email: email))
+    let location = try await redirectLocation(of: link.properties.actionLink)
+    #expect(location.fragment?.contains("access_token=") == true)
+
+    let result = try await authClient.handleRedirect(location)
+    guard case .signedIn(let session, _) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+  }
+
+  @Test
+  func unrelatedURLIsNotAnAuthRedirect() async throws {
+    let result = try await authClient.handleRedirect(URL(string: "http://localhost:3000/profile")!)
+    #expect(result == nil)
+  }
+
+  @Test
   func generateLinkSignUp() async throws {
     let client = Self.makeClient(serviceRole: true)
     let email = mockEmail()
