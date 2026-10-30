@@ -363,16 +363,18 @@ public final class AuthClient: Sendable {
     password: String,
     options: SignUpOptions = .init()
   ) async throws -> SignUpResult {
-    try await _signUp(
-      authAPI.signUp(
-        email: email,
-        password: password,
-        userMetadata: options.userMetadata,
-        redirectTo: options.redirectTo,
-        captchaToken: options.captchaToken,
-        pkce: startFlow(.signIn, redirectTo: options.redirectTo)
+    try await withFlow(.signIn, redirectTo: options.redirectTo) {
+      try await _signUp(
+        authAPI.signUp(
+          email: email,
+          password: password,
+          userMetadata: options.userMetadata,
+          redirectTo: options.redirectTo,
+          captchaToken: options.captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Creates a user with a phone number and a password.
@@ -526,16 +528,18 @@ public final class AuthClient: Sendable {
     userMetadata: JSONObject = [:],
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.signInWithOTP(
-        email: email,
-        redirectTo: redirectTo,
-        shouldCreateUser: shouldCreateUser,
-        userMetadata: userMetadata,
-        captchaToken: captchaToken,
-        pkce: startFlow(.signIn, redirectTo: redirectTo)
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithOTP(
+          email: email,
+          redirectTo: redirectTo,
+          shouldCreateUser: shouldCreateUser,
+          userMetadata: userMetadata,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Log in user using a one-time password (OTP)..
@@ -577,14 +581,16 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    try await api.execute(
-      authAPI.signInWithSSO(
-        domain: domain,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: startFlow(.signIn, redirectTo: redirectTo)
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithSSO(
+          domain: domain,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -599,14 +605,16 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    try await api.execute(
-      authAPI.signInWithSSO(
-        providerId: providerId,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: startFlow(.signIn, redirectTo: redirectTo)
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithSSO(
+          providerId: providerId,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Returns the URL that starts an OAuth sign-in with a third-party provider.
@@ -764,7 +772,7 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// The flow is finished either way, so a failed removal is only logged and the TTL drops it.
+  /// A failed removal is only logged. The flow cannot be used again, and the TTL drops it.
   private func removeFlow(_ id: UUID) async {
     do {
       try await dependencies.flowStore.remove(id: id)
@@ -930,15 +938,17 @@ public final class AuthClient: Sendable {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.resend(
-        email: email,
-        type: type,
-        redirectTo: emailRedirectTo,
-        captchaToken: captchaToken,
-        pkce: startFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: emailRedirectTo)
+    try await withFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: emailRedirectTo) {
+      try await api.execute(
+        authAPI.resend(
+          email: email,
+          type: type,
+          redirectTo: emailRedirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Resends an existing SMS OTP or phone change OTP.
@@ -983,13 +993,19 @@ public final class AuthClient: Sendable {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    let pkce: PKCEChallenge? =
-      if user.email != nil {
-        try await startFlow(.emailChange, redirectTo: redirectTo)
-      } else {
-        nil
-      }
+    guard user.email != nil else {
+      return try await updateUser(user, redirectTo: redirectTo, pkce: nil)
+    }
+    return try await withFlow(.emailChange, redirectTo: redirectTo) {
+      try await updateUser(user, redirectTo: redirectTo, pkce: $0.challenge)
+    }
+  }
 
+  private func updateUser(
+    _ user: UserAttributes,
+    redirectTo: URL?,
+    pkce: PKCEChallenge?
+  ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
       try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
@@ -1034,19 +1050,19 @@ public final class AuthClient: Sendable {
   ) async throws -> (url: URL, flowID: UUID) {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
-    let (flow, challenge) = try await dependencies.flowStore.start(
-      purpose: .linkIdentity, redirectTo: redirectTo)
-    let url = try await api.authorizedExecute {
-      try authAPI.linkIdentityURL(
-        provider: provider,
-        scopes: options.scopesParameter,
-        redirectTo: redirectTo,
-        queryParams: options.queryParams,
-        pkce: challenge,
-        accessToken: $0
-      )
+    return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
+      let url = try await api.authorizedExecute {
+        try authAPI.linkIdentityURL(
+          provider: provider,
+          scopes: options.scopesParameter,
+          redirectTo: redirectTo,
+          queryParams: options.queryParams,
+          pkce: started.challenge,
+          accessToken: $0
+        )
+      }
+      return (url, started.flow.id)
     }
-    return (url, flow.id)
   }
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
@@ -1061,14 +1077,16 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.resetPasswordForEmail(
-        email,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: startFlow(.recovery, redirectTo: redirectTo)
+    try await withFlow(.recovery, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.resetPasswordForEmail(
+          email,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Refresh and return a session, regardless of expiry status.
@@ -1161,15 +1179,35 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Stores a new PKCE flow and returns the challenge to send with the request that starts it.
-  private func startFlow(
+  /// Stores a new PKCE flow, then runs `request`, which starts the flow on the server.
+  ///
+  /// When `request` fails, the flow is removed, so it cannot become the newest flow that a later
+  /// code without a flow ID is exchanged with. A transport error or a cancellation keeps it: the
+  /// request may have reached the server, and its email may already be out.
+  private func withFlow<Result>(
     _ purpose: PendingFlowRecord.Purpose,
-    redirectTo: URL?
-  ) async throws -> PKCEChallenge {
-    try await dependencies.flowStore.start(
+    redirectTo: URL?,
+    _ request: (_ started: (flow: PendingFlowRecord, challenge: PKCEChallenge)) async throws ->
+      Result
+  ) async throws -> Result {
+    let started = try await dependencies.flowStore.start(
       purpose: purpose,
       redirectTo: redirectTo ?? configuration.redirectToURL
-    ).challenge
+    )
+    do {
+      return try await request(started)
+    } catch {
+      if !Self.mayHaveReachedServer(error) {
+        await removeFlow(started.flow.id)
+      }
+      throw error
+    }
+  }
+
+  private static func mayHaveReachedServer(_ error: any Error) -> Bool {
+    if error is CancellationError || error is URLError { return true }
+    guard let error = error as? AuthError else { return false }
+    return error.kind == .transport || error.underlyingError is URLError
   }
 
   /// Fetches a JWK from the JWKS endpoint with caching

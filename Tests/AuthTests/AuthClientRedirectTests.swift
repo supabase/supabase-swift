@@ -325,6 +325,51 @@ struct AuthClientRedirectTests {
   }
 
   @Test
+  func aRejectedStartingRequestRemovesItsFlow() async throws {
+    race.answer(.post, "otp") {
+      Race.error(
+        .tooManyRequests, code: "over_email_send_rate_limit", message: "email rate limit exceeded")
+    }
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let previous = try await client.oauthSignInURL(.github).flowID
+    let previousVerifier = try #require(try storedFlow(previous)).verifier
+
+    await #expect {
+      try await client.signInWithOTP(email: "user@example.com")
+    } throws: { ($0 as? AuthError)?.errorCode == .overEmailSendRateLimit }
+    #expect(try pendingFlowCount() == 1)
+
+    try await client.handleRedirect(callback)
+
+    #expect(exchangeBodies() == [exchangeBody(verifier: previousVerifier)])
+  }
+
+  @Test
+  func aTransportErrorOnTheStartingRequestKeepsItsFlow() async throws {
+    race.answer(.post, "otp") { throw URLError(.timedOut) }
+    let client = race.makeClient()
+
+    await #expect {
+      try await client.signInWithOTP(email: "user@example.com")
+    } throws: { ($0 as? AuthError)?.kind == .transport }
+
+    #expect(try pendingFlowCount() == 1)
+  }
+
+  @Test
+  func linkIdentityURLWithoutASessionLeavesNoFlow() async throws {
+    let client = race.makeClient()
+
+    await #expect {
+      try await client.linkIdentityURL(.github)
+    } throws: { ($0 as? AuthError)?.kind == .sessionMissing }
+
+    #expect(try pendingFlowCount() == 0)
+    #expect(race.transport.requests.isEmpty)
+  }
+
+  @Test
   func resendPicksThePurposeFromTheType() async throws {
     race.answer(.post, "resend")
     let client = race.makeClient()
