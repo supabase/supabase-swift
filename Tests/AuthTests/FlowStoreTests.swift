@@ -162,6 +162,48 @@ struct FlowStoreTests {
     #expect(try await store.newest() == nil)
   }
 
+  @Test func pendingFlowsListsTheLiveFlowsNewestFirst() async throws {
+    let clock = LockIsolated(Date(timeIntervalSince1970: 1000))
+    let store = makeStore(storage: RecordingStorage(), clock: clock)
+    let first = try await store.start(purpose: .signIn, redirectTo: nil).flow
+    advance(clock, by: 1)
+    let second = try await store.start(purpose: .recovery, redirectTo: nil).flow
+    advance(clock, by: 1)
+    let third = try await store.start(purpose: .emailChange, redirectTo: nil).flow
+    try await store.remove(id: second.id)
+
+    #expect(try await store.pendingFlows() == [third, first])
+  }
+
+  @Test func anIndexThatFailsToDecodeIsEmptyAndIsOverwritten() async throws {
+    let storage = RecordingStorage()
+    let indexKey = PendingFlowIndex.key(storageKey: Self.storageKey)
+    try await storage.save(Data("not json".utf8), key: indexKey)
+    let store = makeStore(storage: storage, clock: LockIsolated(Date()))
+
+    #expect(try await store.newest() == nil)
+    #expect(try await store.pendingFlows().isEmpty)
+
+    let flow = try await store.start(purpose: .signIn, redirectTo: nil).flow
+
+    #expect(try await storedIndexIDs(storage) == [flow.id])
+    #expect(try await store.newest() == flow)
+  }
+
+  @Test func aRecordThatFailsToDecodeIsSkipped() async throws {
+    let storage = RecordingStorage()
+    let clock = LockIsolated(Date(timeIntervalSince1970: 1000))
+    let store = makeStore(storage: storage, clock: clock)
+    let older = try await store.start(purpose: .signIn, redirectTo: nil).flow
+    advance(clock, by: 1)
+    let newer = try await store.start(purpose: .recovery, redirectTo: nil).flow
+    try await storage.save(
+      Data("not json".utf8), key: PendingFlowRecord.key(id: newer.id, storageKey: Self.storageKey))
+
+    #expect(try await store.newest() == older)
+    #expect(try await store.pendingFlows() == [older])
+  }
+
   private func storedIndexIDs(_ storage: RecordingStorage) async throws -> Set<UUID> {
     let data = try #require(
       try await storage.load(key: PendingFlowIndex.key(storageKey: Self.storageKey)))

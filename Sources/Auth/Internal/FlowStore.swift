@@ -70,16 +70,37 @@ actor FlowStore {
 
   func newest() async throws -> PendingFlowRecord? {
     for entry in try await loadIndex().flows.reversed() {
-      if let record = try await flow(id: entry.id) {
+      if let record = try await liveFlow(id: entry.id) {
         return record
       }
     }
     return nil
   }
 
+  /// The live flows, newest first. Expired records and records that fail to decode are skipped.
+  func pendingFlows() async throws -> [PendingFlowRecord] {
+    var flows: [PendingFlowRecord] = []
+    for entry in try await loadIndex().flows.reversed() {
+      if let record = try await liveFlow(id: entry.id) {
+        flows.append(record)
+      }
+    }
+    return flows
+  }
+
   func remove(id: UUID) async throws {
     try await updateIndex { $0.remove(id: id) }
     try await storage.remove(key: recordKey(id))
+  }
+
+  /// Like ``flow(id:)``, but a record that fails to decode is logged and skipped.
+  private func liveFlow(id: UUID) async throws -> PendingFlowRecord? {
+    do {
+      return try await flow(id: id)
+    } catch is DecodingError {
+      logger.warning("Skipping a pending flow record that fails to decode.")
+      return nil
+    }
   }
 
   private func recordKey(_ id: UUID) -> String {
@@ -106,9 +127,15 @@ actor FlowStore {
     return try await update.value
   }
 
+  /// An index that fails to decode reads as empty, so the next update overwrites it.
   private func loadIndex() async throws -> PendingFlowIndex {
     guard let data = try await storage.load(key: PendingFlowIndex.key(storageKey: storageKey))
     else { return PendingFlowIndex() }
-    return try PendingFlowIndex.decode(data)
+    do {
+      return try PendingFlowIndex.decode(data)
+    } catch {
+      logger.warning("The pending flow index fails to decode. It is treated as empty.")
+      return PendingFlowIndex()
+    }
   }
 }
