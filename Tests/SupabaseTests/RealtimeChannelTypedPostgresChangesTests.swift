@@ -6,20 +6,40 @@
 //
 
 import Foundation
-@_spi(Experimental) import PostgrestMacros
 import Testing
 
 @testable import Realtime
 @_spi(Experimental) @testable import Supabase
 
-@Table("todos")
-struct RealtimeTodo: Equatable {
-  @PrimaryKey var id: Int
+/// Written out as `@Table("todos")` would expand it. Using the macro here would link the macro
+/// plugin into this target, and its sources would count as uncovered lines in the coverage report.
+struct RealtimeTodo: _PostgrestRelation, Equatable {
+  static let relationName = "todos"
+  static let selectString = "id,title,is_done,priority,due_date,tags"
+
+  var id: Int
   var title: String
   var isDone: Bool
   var priority: Int
   var dueDate: Date?
   var tags: [String]?
+
+  enum CodingKeys: String, CodingKey {
+    case id, title, priority, tags
+    case isDone = "is_done"
+    case dueDate = "due_date"
+  }
+
+  struct Columns: Sendable {
+    let id = _PostgrestColumn<RealtimeTodo, Int>("id")
+    let title = _PostgrestColumn<RealtimeTodo, String>("title")
+    let isDone = _PostgrestColumn<RealtimeTodo, Bool>("is_done")
+    let priority = _PostgrestColumn<RealtimeTodo, Int>("priority")
+    let dueDate = _PostgrestNullableColumn<RealtimeTodo, Date>("due_date")
+    let tags = _PostgrestNullableColumn<RealtimeTodo, [String]>("tags")
+  }
+
+  static let columns = Columns()
 }
 
 @Suite
