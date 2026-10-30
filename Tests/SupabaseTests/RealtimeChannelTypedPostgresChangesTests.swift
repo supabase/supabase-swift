@@ -64,28 +64,30 @@ struct RealtimeChannelTypedPostgresChangesTests {
     #expect(filter.realtimeFilter == expected)
   }
 
-  @Test
-  func trapsOnAnOrFilter() async {
-    await #expect(processExitsWith: .failure) {
-      let c = RealtimeTodo.columns
-      _ = (c.id.eq(1) || c.id.eq(2)).realtimeFilter
+  #if os(macOS) || os(Linux)
+    @Test
+    func trapsOnAnOrFilter() async {
+      await #expect(processExitsWith: .failure) {
+        let c = RealtimeTodo.columns
+        _ = (c.id.eq(1) || c.id.eq(2)).realtimeFilter
+      }
     }
-  }
 
-  @Test
-  func trapsOnANegatedGroup() async {
-    await #expect(processExitsWith: .failure) {
-      let c = RealtimeTodo.columns
-      _ = (!(c.id.eq(1) && c.id.eq(2))).realtimeFilter
+    @Test
+    func trapsOnANegatedGroup() async {
+      await #expect(processExitsWith: .failure) {
+        let c = RealtimeTodo.columns
+        _ = (!(c.id.eq(1) && c.id.eq(2))).realtimeFilter
+      }
     }
-  }
 
-  @Test
-  func trapsOnAnOperatorRealtimeDoesNotSupport() async {
-    await #expect(processExitsWith: .failure) {
-      _ = RealtimeTodo.columns.tags.contains(["home"]).realtimeFilter
+    @Test
+    func trapsOnAnOperatorRealtimeDoesNotSupport() async {
+      await #expect(processExitsWith: .failure) {
+        _ = RealtimeTodo.columns.tags.contains(["home"]).realtimeFilter
+      }
     }
-  }
+  #endif
 
   @Test
   func streamsTypedChangesForTheRelationTableAndFilter() async throws {
