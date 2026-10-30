@@ -78,96 +78,52 @@ extension RealtimeClient {
         return false
       }
     }
+
+    /// The same connection effect, or `nil` for an effect the connection table never emits.
+    init?(_ effect: RealtimeCore.Effect) {
+      switch effect {
+      case .openSocket: self = .openSocket
+      case .installSocket(let conn, let rejoinChannels):
+        self = .installSocket(conn, rejoinChannels: rejoinChannels)
+      case .closeSocket(let conn, let code, let reason):
+        self = .closeSocket(conn, code: code, reason: reason)
+      case .stopSocketLoops: self = .stopSocketLoops
+      case .cancelAllTasks: self = .cancelAllTasks
+      case .scheduleRetry(let delay): self = .scheduleRetry(after: delay)
+      case .cancelRetry: self = .cancelRetry
+      case .scheduleIdleDisconnect(let delay): self = .scheduleIdleDisconnect(after: delay)
+      case .cancelIdleDisconnect: self = .cancelIdleDisconnect
+      case .send, .sendBroadcast, .schedule, .cancel, .resume, .publishClientStatus,
+        .publishHeartbeat, .publishChannelStatus, .deliver, .finishChannel, .fetchAccessToken:
+        return nil
+      }
+    }
   }
 
   /// The pure transition table. It never touches the actor: given the current state and an
   /// event, it updates the state and says which effects follow. `retryDelay(n)` is the wait
   /// after the n-th attempt failed.
+  ///
+  /// Forwards to ``RealtimeCore/connectionTable(_:_:retryDelay:)`` until the actor runs the core.
   static func transition(
     _ state: inout ConnectionState, _ event: Event, retryDelay: (_ attempt: Int) -> Duration
   ) -> [Effect] {
-    func waitToRetry(after attempt: Int, _ error: RealtimeError) -> Effect {
-      let delay = retryDelay(attempt)
-      state = .reconnecting(attempt: attempt, retryIn: delay, lastError: error)
-      return .scheduleRetry(after: delay)
+    let coreEvent: RealtimeCore.Event
+    switch event {
+    case .connectRequested: coreEvent = .connect(waiter: nil)
+    case .socketOpened(let conn): coreEvent = .socketOpened(conn)
+    case .socketOpenFailed(let error): coreEvent = .socketOpenFailed(error)
+    case .disconnectRequested(let code, let reason):
+      coreEvent = .disconnectRequested(code: code, reason: reason)
+    case .socketClosed(let code, let reason): coreEvent = .socketClosed(code: code, reason: reason)
+    case .socketFailed(let error): coreEvent = .socketFailed(error)
+    case .retryTimerFired: coreEvent = .retryTimerFired
+    case .wake: coreEvent = .wake
+    case .lastChannelRemoved(let delay): coreEvent = .lastChannelRemoved(disconnectAfter: delay)
+    case .channelAdded: return [.cancelIdleDisconnect]
     }
-
-    switch (state, event) {
-    // connect()
-    case (.disconnected, .connectRequested):
-      state = .connecting(attempt: 1)
-      return [.openSocket]
-    case (.reconnecting(let attempt, _, _), .connectRequested),
-      (.reconnecting(let attempt, _, _), .wake):
-      state = .connecting(attempt: attempt + 1)
-      return [.cancelRetry, .openSocket]
-    case (_, .connectRequested), (_, .wake):
-      return []
-
-    case (.reconnecting(let attempt, _, _), .retryTimerFired):
-      state = .connecting(attempt: attempt + 1)
-      return [.openSocket]
-    case (_, .retryTimerFired):
-      return []
-
-    // The transport answered.
-    case (.connecting(let attempt), .socketOpened(let conn)):
-      state = .connected(conn)
-      return [.installSocket(conn, rejoinChannels: attempt > 1)]
-    case (_, .socketOpened(let conn)):
-      // `disconnect()` ran while the handshake was in flight and already moved on.
-      return [.closeSocket(conn, code: nil, reason: "Connection cancelled")]
-    case (.connecting(let attempt), .socketOpenFailed(let error)):
-      // The user's own `connect()` reports the failure and stops; so does a retry that can
-      // never succeed. Any other failed retry waits longer and tries again.
-      guard attempt > 1, error.isRetryable else {
-        state = .disconnected(error)
-        return []
-      }
-      return [waitToRetry(after: attempt, error)]
-    case (_, .socketOpenFailed):
-      return []
-
-    // disconnect()
-    case (.connected(let conn), .disconnectRequested(let code, let reason)):
-      state = .disconnected(nil)
-      return [
-        .cancelAllTasks, .closeSocket(conn, code: code, reason: reason ?? "Client disconnect"),
-      ]
-    case (_, .disconnectRequested):
-      state = .disconnected(nil)
-      return [.cancelAllTasks]
-
-    // The socket went away.
-    case (.connected, .socketClosed(let code, let reason)):
-      let error = RealtimeError.socketClosed(
-        code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
-      // Application-level close codes (4000–4999) typically signal auth or protocol errors.
-      // Reconnecting with the same bad token would loop; the caller must re-authenticate.
-      if let code, code >= 4000 {
-        state = .disconnected(error)
-        return [.stopSocketLoops]
-      }
-      return [.stopSocketLoops, waitToRetry(after: 1, error)]
-    case (.connected(let conn), .socketFailed(let error)):
-      return [
-        // 1001 rather than a normal closure: the client gives up on a connection that failed.
-        .closeSocket(conn, code: 1001, reason: "error: \(error.message)"),
-        .stopSocketLoops,
-        waitToRetry(after: 1, error),
-      ]
-    case (_, .socketClosed), (_, .socketFailed):
-      // Not connected: the socket this came from is already gone.
-      return []
-
-    // Channels come and go.
-    case (.disconnected, .lastChannelRemoved):
-      return []
-    case (_, .lastChannelRemoved(let delay)):
-      return [.scheduleIdleDisconnect(after: delay)]
-    case (_, .channelAdded):
-      return [.cancelIdleDisconnect]
-    }
+    return RealtimeCore.connectionTable(&state, coreEvent, retryDelay: retryDelay)
+      .compactMap(Effect.init)
   }
 
   /// Applies `event` in two phases: the pure transition first, then its effects. An event

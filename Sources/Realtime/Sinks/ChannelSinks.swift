@@ -6,7 +6,7 @@
 import ConcurrencyExtras
 
 /// A Postgres change and the bindings the server matched it to.
-struct PostgresDelivery: Sendable {
+struct PostgresDelivery: Sendable, Equatable {
   let change: PostgresChange
   let matched: [PostgresJoinConfig]
 }
