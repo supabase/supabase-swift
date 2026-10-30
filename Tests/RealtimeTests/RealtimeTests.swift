@@ -36,8 +36,9 @@ final class RealtimeTests: Sendable {
   let testClock: SignalingTestClock
 
   let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
-  let reconnectDelay = RealtimeClientOptions.defaultReconnectDelay
-  let timeout = RealtimeClientOptions.defaultTimeout
+  /// The upper bound of the first reconnect wait under the default full-jitter backoff.
+  let reconnectDelay: Duration = .seconds(1)
+  let timeout = RealtimeClientOptions.defaultRequestTimeout
 
   init() {
     let (client, server) = FakeWebSocket.fakes()
@@ -67,7 +68,7 @@ final class RealtimeTests: Sendable {
         url: url,
         options: RealtimeClientOptions(
           headers: ["apikey": apiKey],
-          logLevel: .warn,
+          serverLogLevel: .warning,
           accessToken: {
             "custom.access.token"
           }
@@ -93,9 +94,9 @@ final class RealtimeTests: Sendable {
     try await withMainSerialExecutor {
       let channel = await sut.channel("public:messages")
 
-      let inserts = await channel.postgresChanges(InsertAction.self, table: "messages")
-      let updates = await channel.postgresChanges(UpdateAction.self, table: "messages")
-      let deletes = await channel.postgresChanges(DeleteAction.self, table: "messages")
+      let inserts = await channel.postgresChanges(event: .insert, table: "messages")
+      let updates = await channel.postgresChanges(event: .update, table: "messages")
+      let deletes = await channel.postgresChanges(event: .delete, table: "messages")
 
       let socketStatuses = collect(await sut.statusChanges())
       defer { socketStatuses.task.cancel() }
@@ -105,7 +106,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -114,7 +115,8 @@ final class RealtimeTests: Sendable {
               )
             )
           } else if msg.event == "phx_join" {
-            server.send(.messagesSubscribed)
+            server.send(.messagesSubscribed(to: msg))
+            server.send(.postgresChangesReady(for: msg))
           }
         }
       }
@@ -207,7 +209,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -218,7 +220,8 @@ final class RealtimeTests: Sendable {
           } else if msg.event == "phx_join" {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == 2 {
-              server.send(.messagesSubscribed)
+              server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -320,7 +323,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -331,7 +334,8 @@ final class RealtimeTests: Sendable {
           } else if msg.event == "phx_join" {
             joinEventCount.withValue { $0 += 1 }
             if joinEventCount.value == successAttempt {
-              server.send(.messagesSubscribed)
+              server.send(.messagesSubscribed(to: msg))
+              server.send(.postgresChangesReady(for: msg))
             }
           }
         }
@@ -363,7 +367,7 @@ final class RealtimeTests: Sendable {
   }
 
   @Test(.requiresMainSerialExecutor)
-  func subscribeTimeout_failsAfterMaxRetries() async throws {
+  func subscribeTimeout_keepsRetryingUntilCancelled() async throws {
     try await withMainSerialExecutor {
       let channel = await sut.channel("public:messages")
       let joinEventCount = LockIsolated(0)
@@ -373,7 +377,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -395,25 +399,20 @@ final class RealtimeTests: Sendable {
         try await channel.subscribe()
       }
 
-      for attempt in 1...5 {
+      // No attempt limit: each timed-out join is followed by another after the next step.
+      for step in [1, 2, 5, 10, 10] {
         await testClock.advance(by: timeout)
-        if attempt < 5 {
-          let retryDelay = 2.5 * Double(attempt)
-          await testClock.advance(by: .seconds(retryDelay))
-        }
-      }
-
-      do {
-        try await subscribeTask.value
-        Issue.record("Expected error but got success")
-      } catch {
-        #expect(error is RealtimeError)
+        await testClock.advance(by: .seconds(step))
       }
 
       let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
         $0.event == "phx_join"
       }
-      #expect(events.count == 5)
+      #expect(events.count == 6)
+      #expect(await channel.status == .subscribing)
+
+      subscribeTask.cancel()
+      await #expect(throws: CancellationError.self) { try await subscribeTask.value }
       #expect(await channel.status == .unsubscribed)
     }
   }
@@ -429,7 +428,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -483,7 +482,7 @@ final class RealtimeTests: Sendable {
           if msg.event == "heartbeat" {
             heartbeatCount.withValue { $0 += 1 }
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -511,7 +510,11 @@ final class RealtimeTests: Sendable {
       }
       #expect(sawTwoHeartbeats)
 
-      expectNoDifference(heartbeatStatuses.values.value, [.sent, .ok, .sent, .ok])
+      // The server replies before the test clock moves, so the latency reads as zero.
+      expectNoDifference(
+        heartbeatStatuses.values.value,
+        [.sent, .acknowledged(latency: .zero), .sent, .acknowledged(latency: .zero)]
+      )
     }
   }
 
@@ -545,59 +548,24 @@ final class RealtimeTests: Sendable {
 
       await testClock.advance(by: reconnectDelay)
 
-      await waitUntil(timeout: 5) { statuses.values.value.count >= 5 }
-      // A heartbeat timeout moves the client straight to `.connecting` while it reconnects:
-      // `RealtimeClient` no longer publishes an intermediate `.disconnected`.
+      await waitUntil(timeout: 5) { statuses.values.value.count >= 6 }
+      // A heartbeat timeout moves the client to `.reconnecting`, not `.disconnected`.
       #expect(
         statuses.values.value
           == [
             .disconnected,
             .connecting,
             .connected,
+            .reconnecting,
             .connecting,
             .connected,
           ]
       )
-    }
-  }
-
-  /// `heartbeats` consumers — it's an internal bookkeeping signal, not a
-  /// heartbeat outcome.
-  @Test
-  func heartbeat_doesNotLeakDisconnectedStatus() async throws {
-    try await withMainSerialExecutor {
-      let (client, server) = FakeWebSocket.fakes()
-      let sut = RealtimeClient(
-        url: url,
-        options: RealtimeClientOptions(
-          headers: ["apikey": apiKey],
-          heartbeatInterval: .seconds(1),
-          reconnectDelay: .seconds(10),
-          accessToken: { "custom.access.token" }
-        ),
-        wsTransport: { _, _ in client },
-        http: HTTPClient(transport: http),
-        clock: testClock
-      )
-
-      let heartbeatStatuses = collect(await sut.heartbeats())
-      defer { heartbeatStatuses.task.cancel() }
-
-      try await sut.connect()
-
-      server.close(code: nil, reason: "boom")
-      try await withTimeout(.seconds(5)) {
-        for await status in await sut.statusChanges() where status == .connecting { break }
+      guard case .reconnecting(1, _, let lastError) = statuses.values.value[3] else {
+        Issue.record("Expected .reconnecting(attempt: 1), got \(statuses.values.value[3])")
+        return
       }
-
-      await testClock.advance(by: .seconds(1))
-
-      #expect(
-        !heartbeatStatuses.values.value.contains(.disconnected),
-        "heartbeat status leaked .disconnected to consumers: \(heartbeatStatuses.values.value)"
-      )
-
-      await sut.disconnect()
+      #expect(lastError.isSameFailure(as: .heartbeatTimeout))
     }
   }
 
@@ -618,7 +586,7 @@ final class RealtimeTests: Sendable {
       await testClock.advance(by: heartbeatInterval)
 
       await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
-      #expect(heartbeatStatuses.values.value == [.sent, .timeout])
+      #expect(heartbeatStatuses.values.value == [.sent, .timedOut])
     }
   }
 
@@ -630,7 +598,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -658,7 +626,7 @@ final class RealtimeTests: Sendable {
       await testClock.advance(by: heartbeatInterval)
 
       await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
-      #expect(heartbeatStatuses.values.value == [.sent, .ok])
+      #expect(heartbeatStatuses.values.value == [.sent, .acknowledged(latency: .zero)])
     }
   }
 
@@ -670,19 +638,19 @@ final class RealtimeTests: Sendable {
       }
 
       let channel = await sut.channel("public:messages") {
-        $0.broadcast.acknowledgeBroadcasts = true
+        $0.broadcast.acknowledge = true
       }
 
       // `broadcast` on a channel that is not subscribed no longer falls back to the REST
       // endpoint: it throws `.notSubscribed` and no request goes out. REST delivery is the
       // explicit `httpSend`, which expects a 202.
       let error = await #expect(throws: RealtimeError.self) {
-        try await channel.broadcast(event: "test", message: ["value": 42] as JSONObject)
+        try await channel.broadcast(event: "test", payload: ["value": 42] as JSONObject)
       }
       #expect(error?.kind == .notSubscribed)
       #expect(http.requests.isEmpty)
 
-      try await channel.httpSend(event: "test", message: ["value": 42] as JSONObject)
+      try await channel.httpSend(event: "test", payload: ["value": 42] as JSONObject)
 
       let request = try #require(http.requests.last)
       var urlRequest = try #require(URLRequest(httpRequest: request.head))
@@ -776,14 +744,14 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef, ref: msg.ref, topic: "phoenix",
                 event: "phx_reply", payload: ["response": [:]]
               )
             )
           } else if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
                 event: "phx_reply",
                 payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
@@ -1030,53 +998,70 @@ extension RealtimeClient {
   }
 }
 
-extension RealtimeMessageV2 {
-  static let messagesSubscribed = Self(
-    joinRef: nil,
-    ref: "2",
-    topic: "realtime:public:messages",
-    event: "phx_reply",
-    payload: [
-      "response": [
-        "postgres_changes": [
-          ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
-          ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
-          ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
-        ]
-      ],
-      "status": "ok",
-    ]
-  )
+extension RealtimeMessage {
+  /// The server's confirmation of `join`.
+  static func messagesSubscribed(to join: RealtimeMessage) -> Self {
+    Self(
+      joinRef: join.ref,
+      ref: join.ref,
+      topic: "realtime:public:messages",
+      event: "phx_reply",
+      payload: [
+        "response": [
+          "postgres_changes": [
+            ["id": 43_783_255, "event": "INSERT", "schema": "public", "table": "messages"],
+            ["id": 124_973_000, "event": "UPDATE", "schema": "public", "table": "messages"],
+            ["id": 85_243_397, "event": "DELETE", "schema": "public", "table": "messages"],
+          ]
+        ],
+        "status": "ok",
+      ]
+    )
+  }
+
+  /// The server's "Subscribed to PostgreSQL" message, sent once the join's Postgres changes
+  /// bindings are live.
+  static func postgresChangesReady(for join: RealtimeMessage) -> Self {
+    Self(
+      joinRef: join.ref,
+      ref: nil,
+      topic: "realtime:public:messages",
+      event: "system",
+      payload: [
+        "extension": "postgres_changes", "message": "Subscribed to PostgreSQL", "status": "ok",
+      ]
+    )
+  }
 }
 
 extension FakeWebSocket {
-  func send(_ message: RealtimeMessageV2) {
+  func send(_ message: RealtimeMessage) {
     let serializer = RealtimeSerializer()
     try! self.send(serializer.encodeText(message))
   }
 }
 
-extension LegacyWebSocketEvent {
+extension WebSocketEvent {
   var json: Any {
     switch self {
-    case .binary(let data):
+    case .frame(.binary(let data)):
       let json = try? JSONSerialization.jsonObject(with: data)
       return ["binary": json]
-    case .text(let text):
+    case .frame(.text(let text)):
       let json = try? JSONSerialization.jsonObject(with: Data(text.utf8))
       return ["text": json]
-    case .close(let code, let reason):
+    case .closed(let code, let reason):
       return [
         "close": [
-          "code": code as Any,
-          "reason": reason,
+          "code": code?.rawValue as Any,
+          "reason": reason ?? "",
         ]
       ]
     }
   }
 
-  var realtimeMessage: RealtimeMessageV2? {
-    guard case .text(let text) = self else { return nil }
+  var realtimeMessage: RealtimeMessage? {
+    guard case .frame(.text(let text)) = self else { return nil }
     let serializer = RealtimeSerializer()
     return try? serializer.decodeText(text)
   }

@@ -6,11 +6,11 @@
 //
 
 public import Foundation
-import HTTPTypes
+internal import HTTPTypes
 import Helpers
 
 extension RealtimeChannel {
-  /// Sends a broadcast message via the REST API using a `Codable` payload.
+  /// Sends a broadcast message via the REST API.
   ///
   /// This method always targets the REST broadcast endpoint regardless of the current
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
@@ -21,39 +21,20 @@ extension RealtimeChannel {
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
-  ///   - message: A `Codable` value to send as the message payload.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
-  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
+  ///   - payload: The value to send as the JSON request body.
+  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
+  /// - Throws: An `EncodingError` when `payload` does not encode, and ``RealtimeError`` with kind
+  ///   `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
-    message: some Codable,
-    timeout: Duration? = nil
-  ) async throws {
-    try await httpSend(event: event, message: JSONObject(message), timeout: timeout)
-  }
-
-  /// Sends a broadcast message via the REST API using a raw `JSONObject` payload.
-  ///
-  /// This method always targets the REST broadcast endpoint regardless of the current
-  /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
-  /// a broadcast before subscribing to the channel.
-  ///
-  /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
-  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
-  ///
-  /// - Parameters:
-  ///   - event: The broadcast event name.
-  ///   - message: A ``JSONObject`` to send as the message payload.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
-  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
-  public func httpSend(
-    event: String,
-    message: JSONObject,
+    payload: some Encodable,
+    encoder: JSONEncoder = .supabase(),
     timeout: Duration? = nil
   ) async throws {
     try await httpSend(
       event: event,
-      body: try JSONEncoder.supabase().encode(message),
+      body: try encoder.encode(payload),
       contentType: "application/json",
       timeout: timeout
     )
@@ -71,7 +52,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout. Defaults to the socket's configured timeout.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport` or `.timeout`.
   public func httpSend(
     event: String,
@@ -96,14 +77,14 @@ extension RealtimeChannel {
     }
 
     var headers: HTTPFields = [.contentType: contentType]
-    if let apiKey = client.options.apikey {
+    if let apiKey = client.headers[.apiKey] {
       headers[.apiKey] = apiKey
     }
     headers[.authorization] = "Bearer \(accessToken)"
 
     let request = HTTPRequest(
       method: .post,
-      url: client.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
+      url: client.broadcastURL(topic: topic, event: event, isPrivate: configuration.isPrivate),
       headerFields: headers
     )
 
@@ -111,7 +92,7 @@ extension RealtimeChannel {
     let data: Data
     do {
       (response, data) = try await withTimeout(
-        timeout ?? client.options.timeout, clock: client.clock
+        timeout ?? client.options.requestTimeout, clock: client.clock
       ) {
         try await client.http.send(request, body: body)
       }

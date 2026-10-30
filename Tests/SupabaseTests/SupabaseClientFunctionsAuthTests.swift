@@ -75,7 +75,7 @@ struct SupabaseClientFunctionsAuthTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
@@ -98,7 +98,7 @@ struct SupabaseClientFunctionsAuthTests {
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
           storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
@@ -156,5 +156,28 @@ struct SupabaseClientFunctionsAuthTests {
 
     let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer live-session-token")
+  }
+
+  @Test
+  func functionsInvokeSendsNoBearerWhenTheProviderReturnsTheNewFormatKey() async throws {
+    FunctionsAuthCapturingProtocol.capturedRequest = nil
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "sb_publishable_abc123",
+      options: SupabaseClientOptions(
+        auth: SupabaseClientOptions.AuthOptions(
+          storage: AuthLocalStorageMock(),
+          accessToken: { "sb_publishable_abc123" }
+        ),
+        global: SupabaseClientOptions.GlobalOptions(
+          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
+        )
+      )
+    )
+
+    try await client.functions.invoke("hello-world")
+
+    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
+    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
   }
 }

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import HTTPTypes
 
 /// Single-use backup codes that let a user reach `aal2` when they cannot use any of their other
 /// MFA factors, for example after losing an authenticator app.
@@ -44,14 +43,9 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// value kept past its call site keeps the client alive instead of dangling.
   let client: AuthClient
 
-  var configuration: AuthClient.Configuration { client.configuration }
   var api: SessionAPIClient { client.dependencies.sessionAPI }
-  var encoder: JSONEncoder { configuration.resolvedEncoder }
-  var decoder: JSONDecoder { configuration.resolvedDecoder }
-  var sessionManager: SessionManager { client.dependencies.sessionManager }
-  var eventEmitter: AuthStateChangeEventEmitter { client.dependencies.eventEmitter }
-
-  private var url: URL { configuration.url.appendingPathComponent("factors/recovery-codes") }
+  var authAPI: AuthAPI { client.dependencies.authAPI }
+  var sessionStore: SessionStore { client.dependencies.sessionStore }
 
   /// Returns how many recovery codes the user's current set holds and how many of them are still
   /// unused. Never returns the codes themselves.
@@ -63,8 +57,7 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// - Returns: The enrollment status of the user's recovery codes.
   /// - Throws: An error with code `mfa_factor_not_found` when the user has no recovery codes.
   public func status() async throws -> AuthMFARecoveryCodesStatusResponse {
-    try await api.authorizedExecute(HTTPRequest(method: .get, url: url))
-      .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.recoveryCodesStatus(accessToken: $0) }
   }
 
   /// Generates the user's set of recovery codes.
@@ -81,9 +74,9 @@ public struct AuthMFARecoveryCodes: Sendable {
   public func generate(
     friendlyName: String? = nil
   ) async throws -> AuthMFARecoveryCodesGenerateResponse {
-    let body = try friendlyName.map { try encoder.encode(GenerateParams(friendlyName: $0)) }
-    return try await api.authorizedExecute(HTTPRequest(method: .post, url: url), body: body)
-      .decoded(decoder: decoder)
+    try await api.authorizedExecute {
+      try authAPI.generateRecoveryCodes(friendlyName: friendlyName, accessToken: $0)
+    }
   }
 
   /// Verifies one of the user's recovery codes and upgrades the current session to `aal2`. Each
@@ -99,15 +92,11 @@ public struct AuthMFARecoveryCodes: Sendable {
   ///   missing.
   @discardableResult
   public func verify(code: String) async throws -> AuthMFAVerifyResponse {
-    let response: AuthMFAVerifyResponse = try await api.authorizedExecute(
-      HTTPRequest(method: .post, url: url.appendingPathComponent("verify")),
-      body: encoder.encode(VerifyParams(code: code))
-    )
-    .decoded(decoder: decoder)
+    let response = try await api.authorizedExecute {
+      try authAPI.verifyRecoveryCode(code, accessToken: $0)
+    }
 
-    await sessionManager.update(response)
-
-    eventEmitter.emit(.mfaChallengeVerified, session: response, token: nil)
+    try await sessionStore.commit(.signedIn(response, event: .mfaChallengeVerified))
 
     return response
   }
@@ -121,10 +110,7 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// - Throws: An error with code `mfa_factor_not_found` when the user has no recovery codes to
   ///   replace. Use ``generate(friendlyName:)`` instead.
   public func regenerate() async throws -> AuthMFARecoveryCodesGenerateResponse {
-    try await api.authorizedExecute(
-      HTTPRequest(method: .post, url: url.appendingPathComponent("regenerate"))
-    )
-    .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.regenerateRecoveryCodes(accessToken: $0) }
   }
 
   /// Removes the user's recovery codes factor and every code in it. The session has to be at
@@ -134,15 +120,6 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// - Throws: An error with code `mfa_factor_not_found` when the user has no recovery codes.
   @discardableResult
   public func unenroll() async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute(HTTPRequest(method: .delete, url: url))
-      .decoded(decoder: decoder)
+    try await api.authorizedExecute { authAPI.unenrollRecoveryCodes(accessToken: $0) }
   }
-}
-
-private struct GenerateParams: Encodable {
-  let friendlyName: String
-}
-
-private struct VerifyParams: Encodable {
-  let code: String
 }

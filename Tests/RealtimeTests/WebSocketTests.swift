@@ -15,70 +15,6 @@ import Testing
 @Suite(.serialized)
 struct WebSocketTests {
 
-  @Test
-  func webSocketEventEquality() {
-    let textEvent1 = LegacyWebSocketEvent.text("hello")
-    let textEvent2 = LegacyWebSocketEvent.text("hello")
-    let textEvent3 = LegacyWebSocketEvent.text("world")
-
-    #expect(textEvent1 == textEvent2)
-    #expect(textEvent1 != textEvent3)
-
-    let binaryData = Data([1, 2, 3])
-    let binaryEvent1 = LegacyWebSocketEvent.binary(binaryData)
-    let binaryEvent2 = LegacyWebSocketEvent.binary(binaryData)
-    let binaryEvent3 = LegacyWebSocketEvent.binary(Data([4, 5, 6]))
-
-    #expect(binaryEvent1 == binaryEvent2)
-    #expect(binaryEvent1 != binaryEvent3)
-
-    let closeEvent1 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent2 = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
-    let closeEvent3 = LegacyWebSocketEvent.close(code: 1001, reason: "going away")
-
-    #expect(closeEvent1 == closeEvent2)
-    #expect(closeEvent1 != closeEvent3)
-  }
-
-  @Test
-  func webSocketEventHashable() {
-    let textEvent = LegacyWebSocketEvent.text("hello")
-    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
-
-    let events: Set<LegacyWebSocketEvent> = [textEvent, binaryEvent, closeEvent]
-    #expect(events.count == 3)
-  }
-
-  @Test
-  func webSocketEventPatternMatching() {
-    let textEvent = LegacyWebSocketEvent.text("hello world")
-    let binaryEvent = LegacyWebSocketEvent.binary(Data([1, 2, 3]))
-    let closeEvent = LegacyWebSocketEvent.close(code: 1000, reason: "normal")
-
-    switch textEvent {
-    case .text(let message):
-      #expect(message == "hello world")
-    default:
-      Issue.record("Expected text event")
-    }
-
-    switch binaryEvent {
-    case .binary(let data):
-      #expect(data == Data([1, 2, 3]))
-    default:
-      Issue.record("Expected binary event")
-    }
-
-    switch closeEvent {
-    case .close(let code, let reason):
-      #expect(code == 1000)
-      #expect(reason == "normal")
-    default:
-      Issue.record("Expected close event")
-    }
-  }
-
   #if !canImport(FoundationNetworking)
     @Test
     func connectFailureWrapsURLErrorAsConnectionKind() async {
@@ -95,12 +31,12 @@ struct WebSocketTests {
 
       let config = URLSessionConfiguration.ephemeral
       config.protocolClasses = [UnreachableProtocol.self]
-      let session = URLSession(configuration: config)
+      let transport = URLSessionWebSocketTransport(configuration: config)
 
       let url = URL(string: "ws://127.0.0.1:1")!
 
       do {
-        _ = try await URLSessionWebSocket.connect(to: url, session: session)
+        _ = try await transport.connect(to: url, headerFields: [:])
         Issue.record("expected connect to throw")
       } catch let error as RealtimeError {
         #expect(error.kind == .transport)
@@ -109,6 +45,34 @@ struct WebSocketTests {
       } catch {
         Issue.record("Unexpected error: \(error)")
       }
+    }
+
+    /// A delegate that rejects a pinned certificate cancels the challenge, so the handshake
+    /// fails with `URLError.cancelled`. That is a failed connect the client must retry, not a
+    /// cancellation of the caller's task.
+    @Test
+    func cancelledHandshakeIsARetryableTransportError() async {
+      final class CancelledProtocol: URLProtocol {
+        override static func canInit(with request: URLRequest) -> Bool { true }
+        override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+        override func startLoading() {
+          client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+        }
+
+        override func stopLoading() {}
+      }
+
+      let config = URLSessionConfiguration.ephemeral
+      config.protocolClasses = [CancelledProtocol.self]
+      let transport = URLSessionWebSocketTransport(configuration: config)
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
+      }
+      #expect(error?.kind == .transport)
+      #expect(error?.isRetryable == true)
+      #expect((error?.underlyingError as? URLError)?.code == .cancelled)
     }
 
   #endif
@@ -124,14 +88,15 @@ struct WebSocketTests {
 
       try await confirmation("sockets deallocated", expectedCount: 5) { deallocated in
         for _ in 0..<5 {
-          let socket = try await URLSessionWebSocket.connect(to: url)
+          let connection = try await URLSessionWebSocketTransport()
+            .connect(to: url, headerFields: [:])
           objc_setAssociatedObject(
-            socket,
+            connection as AnyObject,
             &deinitNotifierKey,
             DeinitNotifier { deallocated() },
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
           )
-          socket.close(code: 1000, reason: nil)
+          connection.close(code: .normalClosure, reason: nil)
         }
 
         try await Task.sleep(for: .seconds(1))
@@ -150,8 +115,11 @@ struct WebSocketTests {
       let delegate = RecordingDelegate()
       let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-      let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-      socket.close(code: 1000, reason: nil)
+      let transport = URLSessionWebSocketTransport(
+        configuration: session.configuration, delegate: session.delegate)
+
+      let connection = try await transport.connect(to: url, headerFields: [:])
+      connection.close(code: .normalClosure, reason: nil)
     }
 
     @Test
@@ -163,67 +131,18 @@ struct WebSocketTests {
       let url = URL(string: "ws://127.0.0.1:\(port)")!
       let session = URLSession(configuration: .default)
 
-      let firstSocket = try await URLSessionWebSocket.connect(to: url, session: session)
-      firstSocket.close(code: 1000, reason: nil)
+      let transport = URLSessionWebSocketTransport(
+        configuration: session.configuration, delegate: session.delegate)
+
+      let first = try await transport.connect(to: url, headerFields: [:])
+      first.close(code: .normalClosure, reason: nil)
 
       // `finishTasksAndInvalidate()` invalidates asynchronously via a delegate callback;
       // give it time to take effect before checking whether the session still works.
       try await Task.sleep(for: .milliseconds(200))
 
-      let secondSocket = try await URLSessionWebSocket.connect(to: url, session: session)
-      secondSocket.close(code: 1000, reason: nil)
-    }
-
-    @Test
-    func deliversServerFramesAndKeepsListeningAfterEachOne() async throws {
-      let server = try LoopbackWebSocketServer()
-      let port = try server.start()
-      defer { server.stop() }
-
-      let url = URL(string: "ws://127.0.0.1:\(port)")!
-      let socket = try await URLSessionWebSocket.connect(to: url)
-      defer { socket.close(code: 1000, reason: nil) }
-
-      let received = LockIsolated([LegacyWebSocketEvent]())
-      let pump = Task { [socket] in
-        for await event in socket.events {
-          received.withValue { $0.append(event) }
-        }
-      }
-      defer { pump.cancel() }
-
-      server.send(text: "hello")
-      #expect(await waitUntil { received.value.contains(.text("hello")) })
-
-      let payload = Data([0x01, 0x02, 0x03])
-      server.send(binary: payload)
-      #expect(await waitUntil { received.value.contains(.binary(payload)) })
-    }
-
-    @Test
-    func deliversNothingOnceTheSocketIsClosed() async throws {
-      let server = try LoopbackWebSocketServer()
-      let port = try server.start()
-      defer { server.stop() }
-
-      let url = URL(string: "ws://127.0.0.1:\(port)")!
-      let socket = try await URLSessionWebSocket.connect(to: url)
-
-      let received = LockIsolated([LegacyWebSocketEvent]())
-      let pump = Task { [socket] in
-        for await event in socket.events {
-          received.withValue { $0.append(event) }
-        }
-      }
-      defer { pump.cancel() }
-
-      socket.close(code: 1000, reason: nil)
-      #expect(await waitUntil { socket.isClosed })
-
-      server.send(text: "too late")
-
-      try await Task.sleep(for: .milliseconds(200))
-      #expect(received.value.contains(.text("too late")) == false)
+      let second = try await transport.connect(to: url, headerFields: [:])
+      second.close(code: .normalClosure, reason: nil)
     }
 
     #if os(macOS)
@@ -261,8 +180,10 @@ struct WebSocketTests {
         let delegate = PinningSessionDelegate(expectedCertificateData: certificateData)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-        socket.close(code: 1000, reason: nil)
+        let connection = try await URLSessionWebSocketTransport(
+          configuration: session.configuration, delegate: session.delegate
+        ).connect(to: url, headerFields: [:])
+        connection.close(code: .normalClosure, reason: nil)
 
         #expect(delegate.wasInvoked)
       }
@@ -282,9 +203,15 @@ struct WebSocketTests {
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
         do {
-          _ = try await URLSessionWebSocket.connect(to: url, session: session)
+          _ = try await URLSessionWebSocketTransport(
+            configuration: session.configuration, delegate: session.delegate
+          ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)
@@ -302,8 +229,10 @@ struct WebSocketTests {
         let delegate = PinningTaskDelegate(expectedCertificateData: certificateData)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-        let socket = try await URLSessionWebSocket.connect(to: url, session: session)
-        socket.close(code: 1000, reason: nil)
+        let connection = try await URLSessionWebSocketTransport(
+          configuration: session.configuration, delegate: session.delegate
+        ).connect(to: url, headerFields: [:])
+        connection.close(code: .normalClosure, reason: nil)
 
         #expect(delegate.wasInvoked)
       }
@@ -323,9 +252,15 @@ struct WebSocketTests {
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
         do {
-          _ = try await URLSessionWebSocket.connect(to: url, session: session)
+          _ = try await URLSessionWebSocketTransport(
+            configuration: session.configuration, delegate: session.delegate
+          ).connect(to: url, headerFields: [:])
           Issue.record("expected connection to fail due to certificate mismatch")
+        } catch let error as RealtimeError {
+          #expect(error.kind == .transport)
+          #expect(error.isRetryable)
         } catch {
+          Issue.record("Unexpected error: \(error)")
         }
 
         #expect(delegate.wasInvoked)

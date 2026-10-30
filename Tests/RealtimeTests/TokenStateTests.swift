@@ -74,6 +74,16 @@ struct TokenStateTests {
   }
 
   @Test
+  func refreshDelayIsCappedForAnExpiryFarInTheFuture() {
+    var state = TokenState()
+    _ = state.apply(makeJWT(exp: 1e300), generation: state.beginRefresh())
+
+    #expect(
+      state.refreshDelay(now: Date(), leeway: .seconds(60))
+        == TokenState.maximumRefreshDelay - .seconds(60))
+  }
+
+  @Test
   func refreshDelayIsZeroWhenAlreadyInsideTheLeewayAndNilWithoutExpiry() {
     var state = TokenState()
     let now = Date()

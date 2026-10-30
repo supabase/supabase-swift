@@ -1,22 +1,21 @@
-/// Represents the different events that can be sent through
-/// a channel regarding a Channel's lifecycle.
-public enum ChannelEvent {
-  public static let join = "phx_join"
-  public static let leave = "phx_leave"
-  public static let close = "phx_close"
-  public static let error = "phx_error"
-  public static let reply = "phx_reply"
-  public static let system = "system"
-  public static let broadcast = "broadcast"
-  public static let accessToken = "access_token"
-  public static let presence = "presence"
-  public static let presenceDiff = "presence_diff"
-  public static let presenceState = "presence_state"
-  public static let postgresChanges = "postgres_changes"
+/// The Phoenix and Realtime event names on the wire.
+enum ChannelEvent {
+  static let join = "phx_join"
+  static let leave = "phx_leave"
+  static let close = "phx_close"
+  static let error = "phx_error"
+  static let reply = "phx_reply"
+  static let system = "system"
+  static let broadcast = "broadcast"
+  static let accessToken = "access_token"
+  static let presence = "presence"
+  static let presenceDiff = "presence_diff"
+  static let presenceState = "presence_state"
+  static let postgresChanges = "postgres_changes"
 
-  public static let heartbeat = "heartbeat"
+  static let heartbeat = "heartbeat"
 
-  package static func isLifecycleEvent(_ event: String) -> Bool {
+  static func isLifecycleEvent(_ event: String) -> Bool {
     switch event {
     case join, leave, reply, error, close: true
     default: false

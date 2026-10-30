@@ -1,6 +1,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import TestHelpers
 import Testing
 
@@ -8,15 +9,6 @@ import Testing
 
 @Suite
 struct RealtimeClientConnectionTests {
-  @Test
-  func reconnectBackoffClampsAnUnusableBaseDelay() {
-    // `reconnectDelay` is user-supplied, so the backoff must clamp it into `0...30s`.
-    for base: Duration in [.seconds(1_000_000_000), .seconds(-5)] {
-      let delay = RealtimeClient.reconnectBackoff(baseDelay: base).backoffDelay(retry: 1)
-      #expect(delay >= .zero && delay <= .seconds(30), "baseDelay \(base)")
-    }
-  }
-
   // MARK: - Connect
 
   @Test
@@ -36,7 +28,7 @@ struct RealtimeClientConnectionTests {
       connect.url.absoluteString
         == "ws://localhost:54321/realtime/v1/websocket?apikey=key&vsn=2.0.0"
     )
-    #expect(connect.headers["apikey"] == "key")
+    #expect(connect.headers[HTTPField.Name("apikey")!] == "key")
   }
 
   @Test
@@ -88,7 +80,73 @@ struct RealtimeClientConnectionTests {
     await h.client.disconnect(reason: "test reason")
 
     #expect(await h.client.status == .disconnected)
-    #expect(h.sockets.value.first?.sentEvents.last == .close(code: nil, reason: "test reason"))
+    #expect(
+      h.sockets.value.first?.sentEvents.last == .closed(code: .normalClosure, reason: "test reason")
+    )
+  }
+
+  /// The server drops a channel's join with the socket, so a channel that was subscribed must
+  /// join again after the next `connect()`, and report that it missed events.
+  @Test(.timeLimit(.minutes(1)))
+  func aSubscribedChannelCanSubscribeAgainAfterDisconnectAndConnect() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var events = await channel.events().makeAsyncIterator()
+
+    async let subscribed: Void = channel.subscribe()
+    host.confirmJoin(try await host.receive(event: "phx_join"))
+    try await subscribed
+
+    await host.client.disconnect()
+    #expect(await channel.status == .unsubscribed)
+
+    try await host.client.connect()
+    async let resubscribed: Void = channel.subscribe()
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    host.confirmJoin(rejoin)
+    try await resubscribed
+
+    #expect(await channel.status == .subscribed)
+    #expect(await events.next() == .resubscribed)
+    #expect(host.connectCount == 2)
+  }
+
+  /// `disconnect()` restarts the refs, so the next join can reuse the ref of the last confirmed
+  /// one. That old confirmation must not settle the new join's Postgres changes wait.
+  @Test(.timeLimit(.minutes(1)))
+  func aJoinAfterDisconnectIsNotSettledByTheOldConfirmation() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    let changes = await channel.postgresChanges(table: "t")
+
+    async let subscribed: Void = channel.subscribe()
+    let join = try await host.receive(event: "phx_join")
+    host.confirmJoin(join)
+    host.server?.send(Self.postgresChangesSystem(join, status: "ok"))
+    try await subscribed
+    await host.client.disconnect()
+
+    try await host.client.connect()
+    let resubscription = Task { try await channel.subscribe() }
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    try #require(rejoin.ref == join.ref)
+    host.confirmJoin(rejoin)
+    host.server?.send(Self.postgresChangesSystem(rejoin, status: "error"))
+
+    await #expect(throws: RealtimeError.self) { try await resubscription.value }
+    #expect(await channel.status.error != nil)
+    withExtendedLifetime(changes) {}
+  }
+
+  private static func postgresChangesSystem(
+    _ join: RealtimeMessage, status: String
+  ) -> RealtimeMessage {
+    RealtimeMessage(
+      joinRef: join.ref, ref: nil, topic: join.topic, event: "system",
+      payload: ["status": .string(status), "extension": "postgres_changes", "message": ""]
+    )
   }
 
   @Test
@@ -102,6 +160,31 @@ struct RealtimeClientConnectionTests {
     await #expect(throws: CancellationError.self) { try await connect.value }
     #expect(await h.client.status == .disconnected)
     #expect(h.sockets.value.isEmpty)
+  }
+
+  /// A cancelled caller stops waiting at once, even while the socket never opens. The attempt
+  /// keeps going for the other callers.
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingAConnectCallerEndsItsWaitButNotTheAttempt() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let h = Harness(beforeConnect: { _ in
+      for await _ in gate { break }
+    })
+
+    let first = Task { try await h.client.connect() }
+    for await status in await h.client.statusChanges() where status == .connecting { break }
+    let second = Task { try await h.client.connect() }
+    first.cancel()
+    second.cancel()
+
+    await #expect(throws: CancellationError.self) { try await first.value }
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await h.client.status == .connecting)
+    let third = Task { try await h.client.connect() }
+    open.yield()
+    try await third.value
+    #expect(await h.client.status == .connected)
+    #expect(h.connects.value.count == 1)
   }
 
   @Test(arguments: [true, false])
@@ -147,7 +230,7 @@ struct RealtimeClientConnectionTests {
   @Test
   func releasingTheClientEndsItsStatusAndHeartbeatStreams() async {
     let statuses: AsyncStream<RealtimeClientStatus>
-    let beats: AsyncStream<HeartbeatStatus>
+    let beats: AsyncStream<HeartbeatEvent>
     do {
       let h = Harness()
       statuses = await h.client.statusChanges()
@@ -172,14 +255,37 @@ struct RealtimeClientConnectionTests {
     #expect(await beats.next() == .sent)
     let heartbeat = try #require(await h.received("heartbeat", on: 0))
     #expect(heartbeat.topic == "phoenix")
+    await h.clock.advance(by: .seconds(3))
     try h.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: heartbeat.ref, topic: "phoenix", event: ChannelEvent.reply,
         payload: ["status": "ok", "response": [:]]
       ),
       on: 0
     )
-    #expect(await beats.next() == .ok)
+    #expect(await beats.next() == .acknowledged(latency: .seconds(3)))
+  }
+
+  /// Any reply proves the socket is alive, so an error reply also acknowledges the heartbeat.
+  @Test
+  func heartbeatErrorReplyStillAcknowledges() async throws {
+    let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
+    try await h.client.connect()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
+
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .sent)
+    let heartbeat = try #require(await h.received("heartbeat", on: 0))
+    try h.reply(
+      RealtimeMessage(
+        joinRef: nil, ref: heartbeat.ref, topic: "phoenix", event: ChannelEvent.reply,
+        payload: ["status": "error", "response": [:]]
+      ),
+      on: 0
+    )
+
+    #expect(await beats.next() == .acknowledged(latency: .zero))
+    #expect(await h.client.pendingHeartbeatRef == nil)
   }
 
   @Test
@@ -192,14 +298,41 @@ struct RealtimeClientConnectionTests {
     await h.clock.advance(by: .seconds(25))
     #expect(await beats.next() == .sent)
     await h.clock.advance(by: .seconds(25))
-    #expect(await beats.next() == .timeout)
+    #expect(await beats.next() == .timedOut)
 
     #expect(await statuses.next() == .connected)
-    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .reconnecting)
     await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connecting)
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
     #expect(h.sockets.value.first?.isClosed == true)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func heartbeatStuckOnItsWriteStillTimesOutAndReconnects() async throws {
+    let h = Harness(heartbeatInterval: .seconds(25), reconnectDelay: .seconds(1))
+    try await h.client.connect()
+    var beats = await h.client.heartbeats().makeAsyncIterator()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+    let (stall, release) = AsyncStream<Void>.makeStream()
+    defer { release.finish() }
+    // A half-open socket: the heartbeat's write never completes.
+    h.sockets.value[0].onSend { _ in
+      for await _ in stall {}
+    }
+
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .sent)
+    await h.clock.advance(by: .seconds(25))
+    #expect(await beats.next() == .timedOut)
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+    await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .connected)
+    #expect(h.sockets.value.first?.closeCode == 1001)
   }
 
   // MARK: - Remote close
@@ -229,11 +362,12 @@ struct RealtimeClientConnectionTests {
     h.servers.value[0].close(code: 1001, reason: "going away")
 
     #expect(await statuses.next() == .connected)
-    #expect(await statuses.next() == .connecting)
-    // The first wait is in `reconnectDelay/2 ... reconnectDelay`.
-    await h.clock.advance(by: .milliseconds(900))
+    #expect(await statuses.next() == .reconnecting)
+    // The harness pins the jitter, so the first wait is exactly `reconnectDelay`.
+    await h.clock.advance(by: .milliseconds(1900))
     #expect(h.connects.value.count == 1)
-    await h.clock.advance(by: .milliseconds(1100))
+    await h.clock.advance(by: .milliseconds(100))
+    #expect(await statuses.next() == .connecting)
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
   }
@@ -253,9 +387,19 @@ struct RealtimeClientConnectionTests {
     h.servers.value[0].close(code: 1001, reason: "going away")
 
     #expect(await statuses.next() == .connected)
-    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .reconnecting)
     // Attempt 1 waits at most 1s and fails; attempt 2 waits at most 2s more.
     await h.clock.advance(by: .seconds(3))
+    guard case .connecting(2) = await statuses.next() else {
+      Issue.record("Expected .connecting(attempt: 2)")
+      return
+    }
+    guard case .reconnecting(2, _, let lastError) = await statuses.next() else {
+      Issue.record("Expected .reconnecting(attempt: 2)")
+      return
+    }
+    #expect(lastError.kind == .transport)
+    #expect(await statuses.next() == .connecting)
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 3)
   }
@@ -270,8 +414,9 @@ struct RealtimeClientConnectionTests {
 
     h.servers.value[0].close(code: 1001, reason: "going away")
     #expect(await statuses.next() == .connected)
-    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .reconnecting)
     await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connecting)
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
 
@@ -284,6 +429,134 @@ struct RealtimeClientConnectionTests {
     #expect(h.connects.value.count == 2)
   }
 
+  @Test
+  func reconnectBackoffSetsTheRetryDelay() async throws {
+    let h = Harness(reconnectBackoff: .steps([.seconds(7)]))
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    guard case .reconnecting(1, let retryIn, _) = await statuses.next() else {
+      Issue.record("Expected .reconnecting(attempt: 1)")
+      return
+    }
+    #expect(retryIn == .seconds(7))
+  }
+
+  @Test
+  func reconnectWaitIsDrawnFromTheJitterRange() async throws {
+    // Full jitter: the first wait is anywhere in `0...reconnectDelay`, here its midpoint.
+    let h = Harness(reconnectDelay: .seconds(2), jitter: { _ in 0.5 })
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+    await h.clock.advance(by: .milliseconds(900))
+    #expect(h.connects.value.count == 1)
+    await h.clock.advance(by: .milliseconds(100))
+    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test
+  func refusedUpgradeStopsReconnecting() async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 2 { throw RealtimeError.upgradeFailed(status: 401) }
+      }
+    )
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+    await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connecting)
+    // A 401 cannot succeed by retrying: the client stops and keeps the reason.
+    let stopped = await statuses.next()
+    #expect(stopped == .disconnected)
+    #expect(stopped?.error?.isRetryable == false)
+    #expect(await h.client.connection.error?.isRetryable == false)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test(arguments: [401, 403, 404])
+  func connectThrowsAndStopsWhenTheTransportReportsAFatalUpgrade(status: Int) async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { _ in throw RealtimeError.upgradeFailed(status: status) }
+    )
+
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    let stopped = await h.client.status
+    #expect(stopped == .disconnected)
+    #expect(stopped.error?.isRetryable == false)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 1)
+  }
+
+  @Test
+  func connectThrowsARetryableErrorForATransientUpgradeFailure() async throws {
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 1 { throw RealtimeError.upgradeFailed(status: 503) }
+      }
+    )
+
+    // The caller's own `connect()` reports the failure and leaves the retry to the caller.
+    await #expect(throws: RealtimeError.self) { try await h.client.connect() }
+
+    #expect(await h.client.status.error?.isRetryable == true)
+    try await h.client.connect()
+    #expect(await h.client.status == .connected)
+  }
+
+  @Test
+  func connectWhileWaitingToRetryTriesAtOnce() async throws {
+    let h = Harness(reconnectDelay: .seconds(30))
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+
+    try await h.client.connect()
+
+    #expect(await h.client.status == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
+  @Test
+  func foregroundCutsTheBackoffShort() async throws {
+    let h = Harness(reconnectDelay: .seconds(30))
+    try await h.client.connect()
+    await h.client.handleAppBackground()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+
+    await h.client.handleAppForeground()
+
+    #expect(await statuses.next() == .connecting)
+    #expect(await statuses.next() == .connected)
+    #expect(h.connects.value.count == 2)
+  }
+
   // MARK: - Harness
 
   /// A client on a `TestClock` whose transport opens a fresh in-memory socket pair per connect.
@@ -291,7 +564,7 @@ struct RealtimeClientConnectionTests {
     let clock: SignalingTestClock
     let client: RealtimeClient
     /// The URL and headers of every transport call, in order.
-    let connects: LockIsolated<[(url: URL, headers: [String: String])]>
+    let connects: LockIsolated<[(url: URL, headers: HTTPFields)]>
     /// The client side of every socket opened, in order.
     let sockets: LockIsolated<[FakeWebSocket]>
     /// The server side of every socket opened, in order.
@@ -301,10 +574,12 @@ struct RealtimeClientConnectionTests {
       headers: [String: String] = [:],
       heartbeatInterval: Duration = .seconds(3600),
       reconnectDelay: Duration = .seconds(1),
+      reconnectBackoff: BackoffPolicy? = nil,
+      jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound },
       beforeConnect: @escaping @Sendable (_ attempt: Int) async throws -> Void = { _ in }
     ) {
       let clock = SignalingTestClock()
-      let connects = LockIsolated<[(url: URL, headers: [String: String])]>([])
+      let connects = LockIsolated<[(url: URL, headers: HTTPFields)]>([])
       let sockets = LockIsolated<[FakeWebSocket]>([])
       let servers = LockIsolated<[FakeWebSocket]>([])
       self.clock = clock
@@ -316,7 +591,6 @@ struct RealtimeClientConnectionTests {
         options: RealtimeClientOptions(
           headers: headers,
           heartbeatInterval: heartbeatInterval,
-          reconnectDelay: reconnectDelay,
           handleAppLifecycle: false
         ),
         wsTransport: { url, headers in
@@ -331,14 +605,17 @@ struct RealtimeClientConnectionTests {
           return socket
         },
         http: HTTPClient(transport: RecordingTransport()),
-        clock: clock
+        clock: clock,
+        reconnectBackoff: reconnectBackoff
+          ?? .fullJitter(base: reconnectDelay, cap: .seconds(30)),
+        jitter: jitter
       )
     }
 
     /// The next frame for `event` that server `index` receives.
-    func received(_ event: String, on index: Int) async -> RealtimeMessageV2? {
+    func received(_ event: String, on index: Int) async -> RealtimeMessage? {
       for await frame in servers.value[index].events {
-        if case .text(let text) = frame,
+        if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
           message.event == event
         {
@@ -348,7 +625,7 @@ struct RealtimeClientConnectionTests {
       return nil
     }
 
-    func reply(_ message: RealtimeMessageV2, on index: Int) throws {
+    func reply(_ message: RealtimeMessage, on index: Int) throws {
       servers.value[index].send(try RealtimeSerializer().encodeText(message))
     }
   }

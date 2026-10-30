@@ -65,6 +65,7 @@ struct AuthAdminUserSequenceTests {
       configuration: AuthClient.Configuration(
         url: clientURL,
         headers: ["apikey": "supabase.publishable.key"],
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(transport: transport)
       )
@@ -159,6 +160,7 @@ struct AuthAdminUserSequenceTests {
     let sut = AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(transport: transport)
       )

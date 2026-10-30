@@ -29,7 +29,7 @@ final class RealtimeTestHost: Sendable {
   private struct State {
     var sockets: [FakeWebSocket] = []
     var servers: [FakeWebSocket] = []
-    var frames: [RealtimeMessageV2] = []
+    var frames: [RealtimeMessage] = []
     var statuses: [RealtimeClientStatus] = []
     var observers: [Task<Void, Never>] = []
   }
@@ -58,7 +58,8 @@ final class RealtimeTestHost: Sendable {
         let observer = Task {
           let serializer = RealtimeSerializer()
           for await event in server.events {
-            if case .text(let text) = event, let message = try? serializer.decodeText(text) {
+            if case .frame(.text(let text)) = event, let message = try? serializer.decodeText(text)
+            {
               state.withValue { $0.frames.append(message) }
             }
             continuation.yield()
@@ -108,7 +109,7 @@ final class RealtimeTestHost: Sendable {
   var connectCount: Int { state.value.sockets.count }
 
   /// Every text frame the client sent, decoded, across all sockets.
-  var frames: [RealtimeMessageV2] { state.value.frames }
+  var frames: [RealtimeMessage] { state.value.frames }
 
   /// Every client status observed, starting with the one at creation.
   var statuses: [RealtimeClientStatus] { state.value.statuses }
@@ -136,10 +137,10 @@ final class RealtimeTestHost: Sendable {
 
   /// The first frame the client sent that matches `predicate`, waiting for it if needed.
   func receive(
-    where predicate: @escaping @Sendable (RealtimeMessageV2) -> Bool,
+    where predicate: @escaping @Sendable (RealtimeMessage) -> Bool,
     timeout: Duration = .seconds(5),
     sourceLocation: SourceLocation = #_sourceLocation
-  ) async throws -> RealtimeMessageV2 {
+  ) async throws -> RealtimeMessage {
     await waitUntil(
       timeout: timeout, { [state] in state.value.frames.contains(where: predicate) },
       sourceLocation: sourceLocation
@@ -152,7 +153,7 @@ final class RealtimeTestHost: Sendable {
     event: String,
     timeout: Duration = .seconds(5),
     sourceLocation: SourceLocation = #_sourceLocation
-  ) async throws -> RealtimeMessageV2 {
+  ) async throws -> RealtimeMessage {
     try await receive(
       where: { $0.event == event }, timeout: timeout, sourceLocation: sourceLocation)
   }
@@ -160,9 +161,9 @@ final class RealtimeTestHost: Sendable {
   // MARK: Scripting the server
 
   /// Answers `message` from the server with a `phx_reply`.
-  func reply(to message: RealtimeMessageV2, status: PushStatus = .ok, response: JSONObject = [:]) {
+  func reply(to message: RealtimeMessage, status: PushStatus = .ok, response: JSONObject = [:]) {
     server?.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: message.joinRef,
         ref: message.ref,
         topic: message.topic,
@@ -173,7 +174,7 @@ final class RealtimeTestHost: Sendable {
   }
 
   /// Confirms a `phx_join` the way the server does: a `phx_reply` carrying `postgres_changes`.
-  func confirmJoin(_ join: RealtimeMessageV2, postgresChanges: [JSONValue] = []) {
+  func confirmJoin(_ join: RealtimeMessage, postgresChanges: [JSONValue] = []) {
     reply(to: join, response: ["postgres_changes": .array(postgresChanges)])
   }
 }

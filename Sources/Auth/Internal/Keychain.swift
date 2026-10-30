@@ -1,19 +1,25 @@
-#if !os(Windows) && !os(Linux) && !os(Android)
+#if canImport(Security)
   import Foundation
   import Security
 
   struct Keychain {
     let service: String?
     let accessGroup: String?
+    let accessibility: KeychainStorage.Accessibility
+    let synchronizable: Bool
     let useDataProtectionKeychain: Bool
 
     init(
       service: String?,
       accessGroup: String? = nil,
+      accessibility: KeychainStorage.Accessibility = .afterFirstUnlock,
+      synchronizable: Bool = false,
       useDataProtectionKeychain: Bool = false
     ) {
       self.service = service
       self.accessGroup = accessGroup
+      self.accessibility = accessibility
+      self.synchronizable = synchronizable
       self.useDataProtectionKeychain = useDataProtectionKeychain
     }
 
@@ -98,6 +104,9 @@
       if let accessGroup {
         query[kSecAttrAccessGroup as String] = accessGroup
       }
+      if synchronizable {
+        query[kSecAttrSynchronizable as String] = kCFBooleanTrue
+      }
       if useDataProtectionKeychain {
         query[kSecUseDataProtectionKeychain as String] = true
       }
@@ -118,12 +127,13 @@
       #if os(macOS)
         // kSecAttrAccessible does not apply to the legacy file-based Keychain, which is what
         // SecItem targets on macOS by default. Only send it once the data-protection Keychain
-        // is in use. https://developer.apple.com/documentation/security/ksecattraccessible
-        if useDataProtectionKeychain {
-          query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // or iCloud sync is in use.
+        // https://developer.apple.com/documentation/security/ksecattraccessible
+        if useDataProtectionKeychain || synchronizable {
+          query[kSecAttrAccessible as String] = accessibility.secAttrValue
         }
       #else
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        query[kSecAttrAccessible as String] = accessibility.secAttrValue
       #endif
 
       return query
@@ -268,7 +278,7 @@
     }
   }
 
-  /// The Keychain operations ``KeychainLocalStorage`` depends on.
+  /// The Keychain operations ``KeychainLocalStorage`` and ``KeychainStorage`` depend on.
   ///
   /// Exists so the migration logic can be tested without reaching the real Keychain, which is
   /// not available to an SPM test bundle.
@@ -279,4 +289,31 @@
   }
 
   extension Keychain: KeychainProtocol {}
+
+  func mappingKeychainErrors<T>(_ operation: () throws -> T) throws -> T {
+    do {
+      return try operation()
+    } catch let error as KeychainError {
+      switch error.status {
+      case errSecMissingEntitlement:
+        throw AuthError(
+          kind: .storageMisconfigured,
+          message:
+            "The app is missing the Keychain entitlement (errSecMissingEntitlement). Sign it with "
+            + "the keychain-access-groups entitlement, or pass useDataProtectionKeychain: false.",
+          underlyingError: error
+        )
+      case errSecInteractionNotAllowed:
+        throw AuthError(
+          kind: .storageUnavailable,
+          message:
+            "The Keychain item is not accessible yet (errSecInteractionNotAllowed), for example "
+            + "before the first unlock.",
+          underlyingError: error
+        )
+      default:
+        throw error
+      }
+    }
+  }
 #endif

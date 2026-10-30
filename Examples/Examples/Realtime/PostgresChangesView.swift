@@ -86,19 +86,19 @@ struct PostgresChangesView: View {
         let channel = await supabase.channel("postgres-changes-example")
 
         let insertions = await channel.postgresChanges(
-          InsertAction.self,
+          event: .insert,
           schema: "public",
           table: "todos"
         )
 
         let updates = await channel.postgresChanges(
-          UpdateAction.self,
+          event: .update,
           schema: "public",
           table: "todos"
         )
 
         let deletes = await channel.postgresChanges(
-          DeleteAction.self,
+          event: .delete,
           schema: "public",
           table: "todos"
         )
@@ -114,7 +114,7 @@ struct PostgresChangesView: View {
               events.insert(
                 RealtimeEvent(
                   type: "INSERT",
-                  description: insertion.record.description,
+                  description: insertion.record?.values.description ?? "",
                   timestamp: Date()
                 ),
                 at: 0
@@ -129,7 +129,7 @@ struct PostgresChangesView: View {
               events.insert(
                 RealtimeEvent(
                   type: "UPDATE",
-                  description: update.record.description,
+                  description: update.record?.values.description ?? "",
                   timestamp: Date()
                 ),
                 at: 0

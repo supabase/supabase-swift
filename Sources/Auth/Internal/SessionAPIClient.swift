@@ -1,40 +1,52 @@
 import Foundation
-import HTTPTypes
 
-/// ``APIClient`` plus the session bookkeeping the user-facing client needs: `Authorization` from
-/// the stored session, and clearing that session when the server reports it is gone.
+/// Which session a request may sign out when the server says the session it was issued for is
+/// gone.
+enum SessionOwnership: Sendable {
+  /// The request was issued for no particular session, such as sign-in or sign-up, or for a
+  /// token that is not the current session's. A rejection of it says nothing about the current
+  /// session, so it never signs out.
+  case unscoped
+  /// The session the request was issued for, read before the request went out. A rejection
+  /// signs out only while the store still holds exactly this, so a request that outlived a
+  /// sign-out cannot sign out whoever signed in after it.
+  case snapshot(Session)
+}
+
+/// ``APIClient`` plus the session bookkeeping the user-facing client needs: the access token of
+/// the current session, and signing out when the server reports that session is gone.
 struct SessionAPIClient: Sendable {
   let api: APIClient
   let sessionManager: SessionManager
-  let eventEmitter: AuthStateChangeEventEmitter
+  let sessionStore: SessionStore
 
-  /// Sends `request` and returns the response body.
+  /// Sends `request` and decodes its response.
   ///
-  /// `ownership` names the stored session the request is issued for. A response saying that
-  /// session is gone then only clears storage while ``SessionOwnership`` still covers what is
-  /// stored, so a request that outlived a sign-out cannot sign out whoever signed in after it.
-  /// Callers with no session of their own (sign-in, sign-up, `/logout`) leave the default and
-  /// keep the unconditional cleanup they have always had.
-  func execute(
-    _ request: HTTPRequest, body: Data? = nil, for ownership: SessionOwnership = .unscoped
-  ) async throws -> Data {
+  /// An error whose ``AuthError/invalidatesSession`` is `true` commits a sign-out to the store
+  /// that applies only while the store holds the session `ownership` names. Callers with no
+  /// session of their own (sign-in, sign-up) leave the default, and their failures never sign
+  /// out: a banned user's sign-in attempt must not sign out whoever is signed in.
+  func execute<Response>(
+    _ request: AuthRequest<Response>, for ownership: SessionOwnership = .unscoped
+  ) async throws -> Response {
     do {
-      return try await api.execute(request, body: body)
+      return try await api.execute(request)
     } catch let error as AuthError where error.invalidatesSession {
-      if await sessionManager.removeIfUnchanged(ownership) {
-        eventEmitter.emit(.signedOut, session: nil)
+      if case .snapshot(let session) = ownership {
+        try? await sessionStore.commit(
+          .invalidated(SignOutReason(invalidatedBy: error), refreshToken: session.refreshToken)
+        )
       }
       throw error
     }
   }
 
-  @discardableResult
-  func authorizedExecute(_ request: HTTPRequest, body: Data? = nil) async throws -> Data {
+  /// Sends the request `makeRequest` builds with the access token of the current session,
+  /// refreshing the session first when it has expired.
+  func authorizedExecute<Response>(
+    _ makeRequest: (_ accessToken: String) throws -> AuthRequest<Response>
+  ) async throws -> Response {
     let session = try await sessionManager.session()
-
-    var request = request
-    request.headerFields[.authorization] = "Bearer \(session.accessToken)"
-
-    return try await execute(request, body: body, for: .snapshot(session))
+    return try await execute(makeRequest(session.accessToken), for: .snapshot(session))
   }
 }

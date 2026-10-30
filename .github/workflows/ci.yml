@@ -92,7 +92,7 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
@@ -104,6 +104,11 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+      - name: Clear cached coverage inputs
+        # The DerivedData cache can restore profiles and test bundles from an earlier run, even
+        # from another branch. Coverage must come only from what this run builds and tests.
+        if: matrix.command == 'test' && matrix.platform == 'IOS' && matrix.xcode == '26.4'
+        run: rm -rf ~/.derivedData/Debug/Build/ProfileData ~/.derivedData/Debug/Build/Products/Debug-iphonesimulator/*.xctest
       - name: Debug
         if: matrix.skip_debug != '1'
         run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
@@ -151,7 +156,7 @@ jobs:
             ~/.derivedData
             !~/.derivedData/**/ModuleCache.noindex
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-${{ matrix.command }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-${{ matrix.xcode }}-
@@ -193,8 +198,9 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            deriveddata-xcodebuild-${{ matrix.platform }}-${{ hashFiles('**/Package.resolved') }}-
             deriveddata-xcodebuild-${{ matrix.platform }}-
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
@@ -220,9 +226,10 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ matrix.config }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-spm-${{ matrix.config }}-${{ hashFiles('**/Package.resolved') }}-
+            ${{ runner.os }}-spm-${{ matrix.config }}-
       - run: swift build -c ${{ matrix.config }}
       - name: Check compile-failure fixtures
         if: matrix.config == 'debug'
@@ -236,6 +243,9 @@ jobs:
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
+    # Tests read this to skip what the nightly toolchain cannot run yet (SDK-2597).
+    env:
+      SWIFT_NIGHTLY: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     strategy:
       fail-fast: false
       matrix:
@@ -256,19 +266,28 @@ jobs:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.container }}-typegen-
       - name: "Build Swift Package"
         run: swift build --explicit-target-dependency-import-check error
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
       # worker threads and every in-flight test parked on a timer that never fires. The other
       # targets keep the parallel runner.
+      # On nightly, each test step has its own time limit, about twice its usual run time. A
+      # stalled test process then fails the step, which continue-on-error tolerates, instead of
+      # reaching the job limit, where the job is cancelled and CI Success fails (SDK-2597).
       - name: "Test Swift Package"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --skip IntegrationTests --skip RealtimeTests
       - name: "Test RealtimeTests (serial)"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 5 || 30 }}
         run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
         run: swift test --package-path tools/supabase-typegen
 
   integration-tests:
@@ -315,9 +334,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-integration-${{ matrix.name }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-integration-${{ matrix.name }}-${{ hashFiles('**/Package.resolved') }}-
+            ${{ runner.os }}-integration-${{ matrix.name }}-
       - name: "Setup Supabase CLI"
         uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
@@ -386,8 +406,9 @@ jobs:
         with:
           path: ~/.derivedData
           key: |
-            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}
+            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            deriveddata-examples-${{ matrix.scheme }}-${{ hashFiles('**/Package.resolved') }}-
             deriveddata-examples-${{ matrix.scheme }}-
             deriveddata-examples-
       - name: Select Xcode 26.4
@@ -414,7 +435,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Examples/${{ matrix.example }}/.build
-          key: ${{ runner.os }}-spm-${{ matrix.example }}-${{ hashFiles('Examples/${{ matrix.example }}/Package.resolved') }}
+          key: ${{ runner.os }}-spm-${{ matrix.example }}-${{ hashFiles(format('Examples/{0}/Package.resolved', matrix.example)) }}-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-spm-${{ matrix.example }}-
       - name: Build example ${{ matrix.example }}
@@ -447,8 +468,9 @@ jobs:
         with:
           path: .build
           key: |
-            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
           restore-keys: |
+            docs-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-
             docs-${{ runner.os }}-
       - name: Test docs
         run: ./scripts/test-docs.sh

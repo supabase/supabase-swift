@@ -19,7 +19,7 @@ import Testing
 #endif
 
 extension AuthMockerTests {
-  @Suite(.mockerSerialized)
+  @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthMFARecoveryCodesTests {
     let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
@@ -37,6 +37,7 @@ extension AuthMockerTests {
       let configuration = AuthClient.Configuration(
         url: clientURL,
         headers: ["apikey": "supabase.publishable.key"],
+        storageKey: uniqueStorageKey(),
         localStorage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 
@@ -73,7 +74,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let response = try await sut.mfa.recoveryCodes.status()
 
@@ -118,7 +119,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let response = try await sut.mfa.recoveryCodes.generate(friendlyName: "Backup codes")
 
@@ -160,7 +161,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let response = try await sut.mfa.recoveryCodes.generate()
 
@@ -199,7 +200,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let response = try await sut.mfa.recoveryCodes.regenerate()
 
@@ -231,7 +232,7 @@ extension AuthMockerTests {
 
       try await withMainSerialExecutor {
         let sut = makeSUT()
-        sut.dependencies.sessionStorage.store(.valid)
+        try await sut.seedSession(.valid)
 
         let events = LockIsolated([AuthChangeEvent]())
         let sessions = LockIsolated([Session?]())
@@ -247,7 +248,7 @@ extension AuthMockerTests {
 
         expectNoDifference(response.refreshToken, "GGduTeu95GraIXQ56jppkw")
         expectNoDifference(
-          sut.dependencies.sessionStorage.get()?.refreshToken,
+          sut.currentSession?.refreshToken,
           "GGduTeu95GraIXQ56jppkw"
         )
         expectNoDifference(events.value, [.initialSession, .mfaChallengeVerified])
@@ -279,7 +280,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      sut.dependencies.sessionStorage.store(.valid)
+      try await sut.seedSession(.valid)
 
       let id = try await sut.mfa.recoveryCodes.unenroll().id
 

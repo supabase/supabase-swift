@@ -6,31 +6,48 @@
 //
 
 import ConcurrencyExtras
-package import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
+import IssueReporting
 
 #if canImport(FoundationNetworking)
-  package import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The default ``WebSocketTransport``, built on `URLSessionWebSocketTask`.
 ///
 /// Every connection gets its own `URLSession` copied from `configuration`, so process-wide
 /// `URLSession` state never reaches the socket and the session can be invalidated on close.
-/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates.
-package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
+/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates:
+///
+/// ```swift
+/// var options = RealtimeClientOptions()
+/// options.webSocketTransport = URLSessionWebSocketTransport(
+///   configuration: pinnedSession.configuration,
+///   delegate: pinnedSession.delegate
+/// )
+/// ```
+public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
 
-  package init(
+  /// Creates a transport.
+  ///
+  /// - Parameters:
+  ///   - configuration: The configuration each connection's `URLSession` uses. The transport
+  ///     keeps a copy, so later changes to `configuration` do not reach it.
+  ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
+  public init(
     configuration: URLSessionConfiguration = .default,
     delegate: (any URLSessionDelegate)? = nil
   ) {
-    self.configuration = configuration
+    // A copy, because `URLSessionConfiguration` is a mutable class and this type is `Sendable`.
+    self.configuration = configuration.copy() as! URLSessionConfiguration
     self.delegate = delegate
   }
 
-  package func connect(to url: URL, headerFields: HTTPFields) async throws
+  /// Opens a `URLSessionWebSocketTask` and waits for the upgrade to finish.
+  public func connect(to url: URL, headerFields: HTTPFields) async throws
     -> any WebSocketConnection
   {
     guard url.scheme == "ws" || url.scheme == "wss" else {
@@ -97,22 +114,26 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     task.maximumMessageSize = 5_000_000
     (session.delegate as? _Delegate)?.associatedTask.setValue(task)
 
-    let connection = try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
-        handshake.withValue { $0.continuation = continuation }
-        task.resume()
+    do {
+      return try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation {
+          (continuation: CheckedContinuation<URLSessionWebSocketConnection, any Error>) in
+          handshake.withValue { $0.continuation = continuation }
+          task.resume()
+        }
+      } onCancel: {
+        task.cancel()
       }
-    } onCancel: {
-      task.cancel()
+    } catch {
+      // `URLError.cancelled` alone is not a cancellation: a delegate that rejects a pinned
+      // certificate cancels the challenge, and that failure must stay retryable.
+      if Task.isCancelled { throw CancellationError() }
+      throw error
     }
-    return connection
   }
 
   /// Maps a failed handshake to the error `connect` throws.
   static func connectError(task: URLSessionTask, error: (any Error)?) -> any Error {
-    if (error as? URLError)?.code == .cancelled {
-      return CancellationError()
-    }
     if let response = task.response as? HTTPURLResponse, response.statusCode != 101 {
       return RealtimeError.upgradeFailed(status: response.statusCode, underlyingError: error)
     }
@@ -147,6 +168,28 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     default:
       return (1006, nsError.localizedDescription)
     }
+  }
+
+  /// Returns `code` if RFC 6455 §7.4 allows an endpoint to send it, otherwise `nil`.
+  ///
+  /// Pure so it can be tested directly: the caller reports the rejection, and driving
+  /// `reportIssue` from a `@Test` segfaults under `xcodebuild test` (SDK-435).
+  static func validatedCloseCode(_ code: Int?) -> Int? {
+    guard let code else { return nil }
+    let sendable = [1000...1003, 1007...1011, 3000...4999]
+    return sendable.contains { $0.contains(code) } ? code : nil
+  }
+
+  /// Returns `reason` truncated on whole characters to the 123-byte limit of RFC 6455 §5.5.
+  static func validatedCloseReason(_ reason: String?) -> String? {
+    guard let reason, reason.utf8.count > 123 else { return reason }
+
+    var truncated = ""
+    for character in reason {
+      guard truncated.utf8.count + character.utf8.count <= 123 else { break }
+      truncated.append(character)
+    }
+    return truncated
   }
 }
 
@@ -187,10 +230,24 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     guard !isClosed.value else {
       throw RealtimeError(kind: .notConnected, message: "WebSocket is closed.")
     }
-    do {
+    let message: URLSessionWebSocketTask.Message =
       switch frame {
-      case .text(let text): try await task.send(.string(text))
-      case .binary(let data): try await task.send(.data(data))
+      case .text(let text): .string(text)
+      case .binary(let data): .data(data)
+      }
+    do {
+      // The completion-handler form hands the frame to URLSession before this method first
+      // suspends, on the caller's executor. The async form hops to the global pool first, so
+      // two overlapping sends could reach the task in either order.
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        task.send(message) { error in
+          if let error {
+            continuation.resume(throwing: error)
+          } else {
+            continuation.resume()
+          }
+        }
       }
     } catch {
       closeConnection(with: error)
@@ -200,13 +257,37 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     }
   }
 
-  func close(code: WebSocketCloseCode, reason: String?) async {
+  func close(code: WebSocketCloseCode, reason: String?) {
     guard !isClosed.value else { return }
+
+    let validatedCode = URLSessionWebSocketTransport.validatedCloseCode(code.rawValue)
+    if validatedCode == nil {
+      reportIssue(
+        "Invalid close code \(code.rawValue). Must be in 1000...1003, 1007...1011 or 3000...4999. Closing without a code."
+      )
+    }
+
+    let validatedReason = URLSessionWebSocketTransport.validatedCloseReason(reason)
+    if let reason, validatedReason != reason {
+      reportIssue(
+        "Close reason is \(reason.utf8.count) bytes, over the 123-byte limit. Truncating it."
+      )
+    }
+
     // Darwin imports `CloseCode` as a non-exhaustive `NS_ENUM`, so 4001 goes out as 4001.
     // swift-corelibs-foundation makes it a closed Swift enum, so 3000...4999 convert to `nil`
     // there and the frame goes out with no status rather than a wrong one.
-    if let closeCode = URLSessionWebSocketTask.CloseCode(rawValue: code.rawValue) {
-      task.cancel(with: closeCode, reason: reason.map { Data($0.utf8) })
+    let closeCode = validatedCode.flatMap(URLSessionWebSocketTask.CloseCode.init(rawValue:))
+    if let validatedCode, closeCode == nil {
+      reportIssue(
+        """
+        Close code \(validatedCode) is not representable by \
+        `URLSessionWebSocketTask.CloseCode` on this platform. Closing without a code.
+        """
+      )
+    }
+    if let closeCode {
+      task.cancel(with: closeCode, reason: validatedReason.map { Data($0.utf8) })
     } else {
       task.cancel()
     }

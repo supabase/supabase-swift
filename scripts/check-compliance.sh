@@ -14,12 +14,19 @@ if [ -f "$RESOLVED_FILE" ]; then
   trap 'cp "$RESOLVED_BACKUP" "$RESOLVED_FILE"; rm -f "$RESOLVED_BACKUP"' EXIT
 fi
 
+# Same flags as "macOS test flags" in DEVELOPMENT.md: without them the test
+# targets fail to compile on macOS and most modules emit no symbol graph.
+SWIFT_FLAGS=()
+if [[ "$(uname)" == "Darwin" ]]; then
+  SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
+fi
+
 echo "Dumping public symbol graph..." >&2
 find .build -name "*.symbols.json" -delete 2>/dev/null || true
 # A failing exit here isn't necessarily fatal: test targets can fail to
 # extract while library targets already landed first (same rationale as
 # supabase/sdk's own extraction step).
-if ! swift package dump-symbol-graph --minimum-access-level public --skip-synthesized-members >/dev/null; then
+if ! swift package ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} dump-symbol-graph --minimum-access-level public --skip-synthesized-members >/dev/null; then
   echo "⚠️  dump-symbol-graph exited non-zero; results below may be incomplete." >&2
 fi
 

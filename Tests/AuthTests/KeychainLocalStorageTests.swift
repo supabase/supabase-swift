@@ -1,4 +1,4 @@
-#if !os(Windows) && !os(Linux) && !os(Android)
+#if canImport(Security)
   import ConcurrencyExtras
   import Foundation
   import Testing
@@ -170,6 +170,39 @@
       #expect(try storage.retrieve(key: "key") == legacyValue)
       #expect(legacy.items.value["key"] == legacyValue)
       #expect(primary.items.value["key"] == nil)
+    }
+
+    @Test(arguments: [
+      (errSecMissingEntitlement, AuthError.Kind.storageMisconfigured),
+      (errSecInteractionNotAllowed, AuthError.Kind.storageUnavailable),
+    ])
+    func keychainStatusesAnAppHandlesBecomeAuthErrors(status: OSStatus, kind: AuthError.Kind) {
+      let error = KeychainError(code: .init(rawValue: status))
+      let storage = KeychainLocalStorage(
+        keychain: FakeKeychain(readError: error, writeError: error, deleteError: error),
+        legacyKeychains: []
+      )
+
+      for operation in [
+        { _ = try storage.retrieve(key: "key") },
+        { try storage.store(key: "key", value: Data()) },
+        { try storage.remove(key: "key") },
+      ] {
+        let thrown = #expect(throws: AuthError.self) { try operation() }
+        #expect(thrown?.kind == kind)
+        #expect(thrown?.underlyingError is KeychainError)
+      }
+    }
+
+    @Test
+    func legacyProbeThatIsLockedIsStorageUnavailable() {
+      let storage = KeychainLocalStorage(
+        keychain: FakeKeychain(),
+        legacyKeychains: [FakeKeychain(readError: KeychainError.interactionNotAllowed)]
+      )
+
+      let thrown = #expect(throws: AuthError.self) { try storage.retrieve(key: "key") }
+      #expect(thrown?.kind == .storageUnavailable)
     }
   }
 

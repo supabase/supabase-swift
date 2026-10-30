@@ -309,4 +309,64 @@ struct RealtimeJoinConfigTests {
     #expect(jsonObject?["table"] == nil)
     #expect(jsonObject?["filter"] == nil)
   }
+
+  // MARK: - RealtimeChannelConfiguration mapping
+
+  @Test
+  func joinConfigMapsConfiguration() throws {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.isPrivate = true
+    configuration.broadcast.receiveOwnMessages = true
+    configuration.broadcast.acknowledge = true
+    configuration.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1.5), limit: 10)
+    configuration.broadcast.waitForReplication = true
+    configuration.presence.key = "u1"
+
+    let encoded = try JSONObject(
+      RealtimeJoinConfig(configuration, bindings: [], presenceEnabled: false))
+
+    #expect(
+      encoded["broadcast"]
+        == [
+          "self": true, "ack": true, "replay": ["since": 1500, "limit": 10],
+          "replication_ready": true,
+        ])
+    #expect(encoded["presence"] == ["key": "u1", "enabled": false])
+    #expect(encoded["private"] == true)
+    #expect(encoded["postgres_changes_options"] == nil)
+  }
+
+  @Test
+  func nilPresenceKeyEncodesEmptyString() throws {
+    let encoded = try JSONObject(
+      RealtimeJoinConfig(RealtimeChannelConfiguration(), bindings: [], presenceEnabled: true))
+
+    #expect(encoded["presence"] == ["key": "", "enabled": true])
+  }
+
+  @Test
+  func waitForSubscriptionEncodesOptions() throws {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.postgresChanges.waitForSubscription = true
+    configuration.postgresChanges.subscriptionTimeout = .seconds(20)
+    let binding = PostgresJoinConfig(event: .all, schema: "public", table: "t")
+
+    let config = RealtimeJoinConfig(configuration, bindings: [binding], presenceEnabled: false)
+    let encoded = try JSONObject(config)
+
+    #expect(encoded["postgres_changes_options"] == ["wait": true, "timeout": 20000])
+    #expect(config.extraJoinTimeout == .seconds(20))
+
+    let withoutBindings = RealtimeJoinConfig(configuration, bindings: [], presenceEnabled: false)
+    #expect(withoutBindings.extraJoinTimeout == .zero)
+  }
+
+  @Test
+  func defaultConfigurationHasNoExtraJoinTimeout() {
+    let binding = PostgresJoinConfig(event: .all, schema: "public", table: "t")
+    let config = RealtimeJoinConfig(
+      RealtimeChannelConfiguration(), bindings: [binding], presenceEnabled: false)
+
+    #expect(config.extraJoinTimeout == .zero)
+  }
 }

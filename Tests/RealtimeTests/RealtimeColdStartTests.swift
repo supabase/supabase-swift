@@ -16,8 +16,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(100),
-        timeout: .seconds(2),
+        requestTimeout: .seconds(2),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -25,7 +24,8 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))
     )
   }
 
@@ -39,9 +39,9 @@ struct RealtimeColdStartTests {
       let sut = makeClient(socket: socket)
 
       let channel = await sut.channel("library-realtime")
-      let libros = await channel.postgresChanges(AnyAction.self, schema: "library", table: "libros")
+      let libros = await channel.postgresChanges(schema: "library", table: "libros")
       let files = await channel.postgresChanges(
-        AnyAction.self, schema: "library", table: "libro_files")
+        schema: "library", table: "libro_files")
 
       let t1 = Task { for await _ in libros {} }
       let t2 = Task { for await _ in files {} }
@@ -100,8 +100,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -111,7 +110,8 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-rejoin")
@@ -154,8 +154,7 @@ struct RealtimeColdStartTests {
       options: RealtimeClientOptions(
         headers: ["apikey": apiKey],
         heartbeatInterval: .milliseconds(200),
-        reconnectDelay: .milliseconds(50),
-        timeout: .seconds(5),
+        requestTimeout: .seconds(5),
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
@@ -167,10 +166,11 @@ struct RealtimeColdStartTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
-    let heartbeatStatuses = LockIsolated<[HeartbeatStatus]>([])
+    let heartbeatStatuses = LockIsolated<[HeartbeatEvent]>([])
     let heartbeats = await sut.heartbeats()
     let heartbeatTask = Task {
       for await status in heartbeats {
@@ -211,40 +211,39 @@ struct RealtimeColdStartTests {
   }
 }
 
-final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
+final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
   struct MutableState {
     var isClosed: Bool = false
-    var sentMessages: [RealtimeMessageV2] = []
+    var sentMessages: [RealtimeMessage] = []
     var closeCode: Int?
     var closeReason: String?
   }
 
   let mutableState = LockIsolated(MutableState())
   let deliveryQueue = DispatchQueue(label: "AsyncFakeWebSocket.delivery")
-  let events: AsyncStream<LegacyWebSocketEvent>
-  private let eventsContinuation: AsyncStream<LegacyWebSocketEvent>.Continuation
+  let events: AsyncStream<WebSocketEvent>
+  private let eventsContinuation: AsyncStream<WebSocketEvent>.Continuation
 
   init() {
     (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
-  var serverResponder: (@Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void)?
+  var serverResponder: (@Sendable (RealtimeMessage, AsyncFakeWebSocket) -> Void)?
 
   var closeCode: Int? { mutableState.value.closeCode }
   var closeReason: String? { mutableState.value.closeReason }
   var isClosed: Bool { mutableState.value.isClosed }
-  let `protocol`: String = ""
 
-  var sentMessages: [RealtimeMessageV2] { mutableState.value.sentMessages }
+  var sentMessages: [RealtimeMessage] { mutableState.value.sentMessages }
 
   static func realtimeServerResponder()
-    -> @Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void
+    -> @Sendable (RealtimeMessage, AsyncFakeWebSocket) -> Void
   {
     { message, socket in
       switch message.event {
       case "heartbeat":
         socket.reply(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: nil,
             ref: message.ref,
             topic: "phoenix",
@@ -254,7 +253,7 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
         )
       case "phx_join":
         socket.reply(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: message.joinRef,
             ref: message.ref,
             topic: message.topic,
@@ -266,6 +265,19 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
                   ["id": 2, "event": "*", "schema": "library", "table": "libro_files"],
                 ]
               ],
+              "status": "ok",
+            ]
+          )
+        )
+        // A real server follows the reply with "Subscribed to PostgreSQL".
+        socket.reply(
+          RealtimeMessage(
+            joinRef: message.ref,
+            ref: nil,
+            topic: message.topic,
+            event: "system",
+            payload: [
+              "extension": "postgres_changes", "message": "Subscribed to PostgreSQL",
               "status": "ok",
             ]
           )
@@ -289,6 +301,17 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
 
   func send(_ binary: Data) {}
 
+  func send(_ frame: WebSocketFrame) async throws {
+    switch frame {
+    case .text(let text): send(text)
+    case .binary(let data): send(data)
+    }
+  }
+
+  func close(code: WebSocketCloseCode, reason: String?) {
+    close(code: code.rawValue, reason: reason)
+  }
+
   func close(code: Int?, reason: String?) {
     mutableState.withValue {
       guard !$0.isClosed else { return }
@@ -297,27 +320,27 @@ final class AsyncFakeWebSocket: WebSocket, @unchecked Sendable {
       $0.closeReason = reason
     }
     deliveryQueue.async { [weak self] in
-      self?.receiveFromServer(.close(code: code ?? 1005, reason: reason ?? ""))
+      self?.receiveFromServer(.close(code: code, reason: reason))
     }
   }
 
-  func receiveFromServer(_ event: LegacyWebSocketEvent) {
+  func receiveFromServer(_ event: WebSocketEvent) {
     mutableState.withValue {
-      if case .close(let code, let reason) = event {
+      if case .closed(let code, let reason) = event {
         $0.isClosed = true
-        $0.closeCode = code
+        $0.closeCode = code?.rawValue
         $0.closeReason = reason
       }
     }
     eventsContinuation.yield(event)
-    if case .close = event {
+    if case .closed = event {
       eventsContinuation.finish()
     }
   }
 
-  func reply(_ message: RealtimeMessageV2) {
+  func reply(_ message: RealtimeMessage) {
     let serializer = RealtimeSerializer()
     let text = try! serializer.encodeText(message)
-    receiveFromServer(.text(text))
+    receiveFromServer(.frame(.text(text)))
   }
 }

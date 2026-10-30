@@ -6,6 +6,7 @@ Alamofire
 alamofire
 apikey
 Apikey
+appex
 AQAB
 Ascii
 autocapitalization
@@ -30,6 +31,7 @@ Cloudflare
 cloudflare
 conformances
 confirmer
+cooldown
 corelibs
 CREDENTIALW
 dapp
@@ -330,3 +332,7 @@ quicktime
 
 # Release process term from CONTRIBUTING.md.
 hotfixes
+
+# Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
+synchronizable
+Synchronizable

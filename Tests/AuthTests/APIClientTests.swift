@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 15/09/26.
 //
 
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -28,6 +29,7 @@ struct APIClientTests {
     let http = HTTPClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in
@@ -44,53 +46,115 @@ struct APIClientTests {
   }
 
   @Test
-  func nonJSONServerErrorUsesStatusCodeAndDescription() async {
-    let data = Data("<html><body>proxy failure</body></html>".utf8)
-    let error = APIClient.error(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 500)), data: data,
-      decoder: AuthClient.Configuration.jsonDecoder)
+  func tokenRequestIsNotReplayedAfterATimeout() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      attempts.withValue { $0 += 1 }
+      throw URLError(.timedOut)
+    }
 
-    #expect(error.kind == .server)
-    #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
-    #expect(error.errorCode == .unexpectedFailure)
-    #expect(error.response?.body == data)
+    await #expect(throws: AuthError.self) {
+      try await client.execute(authAPI.refreshSession(refreshToken: "refresh-token"))
+    }
+    #expect(attempts.value == 1)
   }
 
   @Test
-  func nonJSONServerErrorWithEmptyBodyPreservesStatusCode() async {
-    let error = APIClient.error(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 503)), data: Data(),
-      decoder: AuthClient.Configuration.jsonDecoder)
+  func otpRequestIsNotReplayed() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      attempts.withValue { $0 += 1 }
+      throw URLError(.timedOut)
+    }
 
-    #expect(error.message == "HTTP 503: \(HTTPURLResponse.localizedString(forStatusCode: 503))")
+    await #expect(throws: AuthError.self) {
+      try await client.execute(
+        authAPI.signInWithOTP(
+          email: "a@b.c", redirectTo: nil, shouldCreateUser: true, userMetadata: [:],
+          captchaToken: nil, pkce: nil))
+    }
+    #expect(attempts.value == 1)
   }
 
   @Test
-  func jsonErrorKeepsServerMessage() async {
-    let error = APIClient.error(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 500)),
-      data: Data(#"{"msg":"Error sending confirmation email"}"#.utf8),
-      decoder: AuthClient.Configuration.jsonDecoder)
+  func tokenRequestIsNotReplayedAfterAServerError() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      attempts.withValue { $0 += 1 }
+      return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), Data())
+    }
 
-    #expect(error.message == "Error sending confirmation email")
+    await #expect(throws: AuthError.self) {
+      try await client.execute(authAPI.refreshSession(refreshToken: "refresh-token"))
+    }
+    #expect(attempts.value == 1)
   }
 
   @Test
-  func nonJSONServerErrorUpperBoundaryPreservesStatusCode() async {
-    let error = APIClient.error(
-      response: HTTPTypes.HTTPResponse(status: .init(code: 599)), data: Data(),
-      decoder: AuthClient.Configuration.jsonDecoder)
+  func tokenRequestIsRetriedAfterAConnectionFailure() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      let attempt = attempts.withValue {
+        $0 += 1
+        return $0
+      }
+      if attempt == 1 { throw URLError(.cannotConnectToHost) }
+      return (HTTPTypes.HTTPResponse(status: .ok), MockData.session)
+    }
 
-    #expect(error.message == "HTTP 599: \(HTTPURLResponse.localizedString(forStatusCode: 599))")
+    let session = try await client.execute(authAPI.refreshSession(refreshToken: "refresh-token"))
+
+    #expect(session.refreshToken == "GGduTeu95GraIXQ56jppkw")
+    #expect(attempts.value == 2)
   }
 
-  @Test(arguments: [400, 499, 600])
-  func nonJSONErrorOutsideServerRangeKeepsExistingFallback(statusCode: Int) async {
-    let error = APIClient.error(
-      response: HTTPTypes.HTTPResponse(status: .init(code: statusCode)),
-      data: Data("<html><body>bad request</body></html>".utf8),
-      decoder: AuthClient.Configuration.jsonDecoder)
+  @Test
+  func getRequestIsStillRetriedAfterATimeout() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      let attempt = attempts.withValue {
+        $0 += 1
+        return $0
+      }
+      if attempt == 1 { throw URLError(.timedOut) }
+      return (HTTPTypes.HTTPResponse(status: .ok), MockData.user)
+    }
 
-    #expect(error.message == "Unexpected response with status code \(statusCode).")
+    _ = try await client.execute(authAPI.user(accessToken: "access-token"))
+
+    #expect(attempts.value == 2)
+  }
+
+  @Test
+  func onlyGetRequestsRetryBeyondConnectionFailures() throws {
+    #expect(try authAPI.refreshSession(refreshToken: "r").retriesOnlyConnectionFailures)
+    #expect(authAPI.signOut(accessToken: "a", scope: .global).retriesOnlyConnectionFailures)
+    #expect(!authAPI.user(accessToken: "a").retriesOnlyConnectionFailures)
+  }
+
+  private let authAPI = AuthAPI(
+    url: URL(string: "http://localhost/auth/v1")!,
+    headers: [:],
+    defaultRedirectURL: nil,
+    encoder: AuthClient.Configuration.jsonEncoder,
+    decoder: AuthClient.Configuration.jsonDecoder
+  )
+
+  private func makeClient(
+    _ respond: @escaping @Sendable (HTTPTypes.HTTPRequest) throws -> (HTTPTypes.HTTPResponse, Data)
+  ) -> APIClient {
+    APIClient(
+      http: HTTPClient(
+        configuration: AuthClient.Configuration(
+          url: URL(string: "http://localhost/auth/v1")!,
+          storageKey: uniqueStorageKey(),
+          localStorage: InMemoryLocalStorage(),
+          http: .init(
+            transport: ClosureTransport { request, _ in
+              let (response, data) = try respond(request)
+              return (response, HTTPBody(data))
+            }),
+          clock: ImmediateClock()
+        )))
   }
 }

@@ -4,8 +4,7 @@ This guide moves an app from supabase-swift v2 (`2.55.4`) to v3. This file cover
 that apply to every module and to `SupabaseClient`; each module has its own file for the rest.
 
 > [!NOTE]
-> v3 is in prerelease (alpha). The Auth and Realtime APIs can still change before the final
-> release.
+> v3 is in prerelease (alpha). The Auth API can still change before the final release.
 
 ## How to migrate
 
@@ -33,7 +32,7 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 | PostgREST | [PostgREST.md](docs/migrations/v3/PostgREST.md) | ready for feedback |
 | Storage | [Storage.md](docs/migrations/v3/Storage.md) | ready for feedback |
 | Functions | [Functions.md](docs/migrations/v3/Functions.md) | ready for feedback |
-| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | still changing |
+| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | ready for feedback |
 
 ## Changes in every module
 
@@ -85,7 +84,7 @@ Naming rules applied across all modules (the module tables list each symbol):
 - A method that only reads a value drops its `get` prefix: `getPublicURL` is `publicURL`.
 - An argument that names an identifier is `id:`: `deleteClient(clientId:)` is
   `deleteClient(id:)`.
-- A Boolean property reads as an assertion: `autoRefreshToken` is `automaticallyRefreshesToken`.
+- A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
@@ -258,13 +257,16 @@ Changes that still compile but behave differently. Check each one by hand.
   sees `Authorization` on these requests; read it in a `ClientTransport`.
 - **Access-token errors fail the request.** If the session refresh or your
   `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
-  request went out with the API key. Only a missing session still falls back to the key.
-- **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
-  `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
-  yourself if you need a separate Realtime logger.
-- **Realtime does not get the global `URLSession`.** Pass the session to
-  `RealtimeClientOptions(session:)` if the WebSocket needs it (for example for certificate
-  pinning).
+  request went out with the API key. Only a missing session still falls back to the key. A
+  refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
+- **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
+  you set in `SupabaseClientOptions(realtime:)`. With `nil`, the default, it uses
+  `GlobalOptions.logger`.
+- **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
+  a Realtime client that already exists. A client built later fetches the current token itself.
+- **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
+  for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
+  `URLSessionWebSocketTransport` built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
   `FunctionsOptions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 
@@ -273,11 +275,12 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
-| `supabase.channel(_:options:)`, `supabase.channels` | same names, `async` |
+| `supabase.channel(_:options:)` | `await supabase.channel(_:configure:)` |
+| `supabase.channels` | same name, `async` |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |
-| `AuthOptions.autoRefreshToken` | `AuthOptions.automaticallyRefreshesToken` |
+| `AuthOptions.autoRefreshToken: Bool` | `AuthOptions.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
@@ -294,7 +297,12 @@ options: .init(global: .init(session: mySession))
 // v3
 options: .init(
   global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
-  realtime: .init(session: mySession)  // only if the WebSocket needs the session
+  // Only if the WebSocket needs the session:
+  realtime: .init(
+    webSocketTransport: URLSessionWebSocketTransport(
+      configuration: mySession.configuration, delegate: mySession.delegate
+    )
+  )
 )
 ```
 

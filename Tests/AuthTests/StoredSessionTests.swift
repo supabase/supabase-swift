@@ -1,157 +1,178 @@
 import ConcurrencyExtras
+import CustomDump
 import Foundation
-import Logging
-import SnapshotTesting
+import HTTPTypes
+import Helpers
 import TestHelpers
 import Testing
 
 @testable import Auth
 
-#if os(Android)
-  private let isAndroid = true
-#else
-  private let isAndroid = false
-#endif
-
+/// The session a client reads from ``AuthClient/Configuration/localStorage`` when it is created.
 @Suite
 struct StoredSessionTests {
+  private let key = uniqueStorageKey()
+
   @Test
-  func get_withCorruptedJSON_returnsNil() throws {
+  func currentSessionRightAfterInitIsTheStoredSession() throws {
     let localStorage = InMemoryLocalStorage()
     try localStorage.store(
-      key: "supabase.auth.token",
-      value: Data("not-valid-json".utf8)
-    )
+      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
 
-    let sut = SessionStorage.live(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: localStorage
-      )
-    )
-    #expect(sut.get() == nil)
+    let sut = makeSUT(localStorage)
+
+    expectNoDifference(sut.currentSession, .valid)
+    expectNoDifference(sut.currentUser, Session.valid.user)
   }
 
-  @Test(
-    .disabled(
-      if: isAndroid, "Disabled for android due to #filePath not existing on emulator"
-    )
-  )
-  func storedSession() throws {
-    let sut = SessionStorage.live(
-      configuration: AuthClient.Configuration(
-        url: URL(string: "http://localhost")!,
-        storageKey: "supabase.auth.token",
-        localStorage: try! DiskTestStorage()
-      )
-    )
-
-    #expect(sut.get() != nil)
-
-    let session = Session(
-      accessToken: "accesstoken",
-      tokenType: "bearer",
-      expiresIn: 120,
-      expiresAt: ISO8601DateFormatter().date(from: "2024-04-01T13:25:07Z")!.timeIntervalSince1970,
-      refreshToken: "refreshtoken",
-      user: User(
-        id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
-        appMetadata: [
-          "provider": "email",
-          "providers": [
-            "email"
-          ],
-        ],
-        userMetadata: [
-          "referrer_id": nil
-        ],
-        audience: "authenticated",
-        confirmationSentAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
-        recoverySentAt: nil,
-        emailChangeSentAt: nil,
-        newEmail: nil,
-        invitedAt: nil,
-        actionLink: nil,
-        email: "johndoe@supabsae.com",
-        phone: "",
-        createdAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
-        confirmedAt: nil,
-        emailConfirmedAt: nil,
-        phoneConfirmedAt: nil,
-        lastSignInAt: nil,
-        role: "authenticated",
-        updatedAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
-        identities: [
-          UserIdentity(
-            id: "859f402d-b3de-4105-a1b9-932836d9193b",
-            identityId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
-            userId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
-            identityData: [
-              "sub": "859f402d-b3de-4105-a1b9-932836d9193b"
-            ],
-            provider: "email",
-            createdAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
-            lastSignInAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!,
-            updatedAt: ISO8601DateFormatter().date(from: "2022-04-09T11:57:01Z")!
-          )
-        ],
-        factors: nil
-      )
-    )
-
-    sut.store(session)
-    #expect(sut.get() != nil)
+  @Test
+  func currentSessionRightAfterInitIsNilWhenNothingIsStored() {
+    #expect(makeSUT(InMemoryLocalStorage()).currentSession == nil)
   }
 
-  private final class DiskTestStorage: AuthLocalStorage {
-    let url: URL
-    let storage: LockIsolated<[String: JSONValue]>
+  @Test
+  func storedSessionLoadsBackUnchanged() async throws {
+    let localStorage = InMemoryLocalStorage()
+    try await makeSUT(localStorage).seedSession(.valid)
 
-    let encoder = JSONEncoder()
-    let decoder = JSONDecoder()
+    // Another project URL, so the client gets its own store and reads storage.
+    let relaunched = makeSUT(localStorage, url: URL(string: "http://127.0.0.1")!)
+    expectNoDifference(relaunched.currentSession, .valid)
+    let stored = try #require(try localStorage.retrieve(key: key))
+    #expect(try PersistedSessionCodec.decode(stored).isCurrentSchema)
+  }
 
-    init() throws {
-      url = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .appendingPathComponent("Resources")
-        .appendingPathComponent("local-storage.json")
+  @Test(arguments: PersistedSessionFixtures.v2Shapes)
+  func rewritesAV2ShapeAsSchema1(fixture: String) throws {
+    let localStorage = InMemoryLocalStorage()
+    try localStorage.store(key: key, value: json(named: fixture))
 
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    expectNoDifference(
+      makeSUT(localStorage).currentSession, PersistedSessionFixtures.expectedSession)
 
-      if !FileManager.default.fileExists(atPath: url.path) {
-        let contents = "{}".data(using: .utf8)
-        FileManager.default.createFile(atPath: url.path, contents: contents)
-      }
+    let stored = try #require(try localStorage.retrieve(key: key))
+    expectNoDifference(
+      String(decoding: stored, as: UTF8.self),
+      String(decoding: json(named: PersistedSessionFixtures.schema1), as: UTF8.self)
+    )
+  }
 
-      let contents = try Data(contentsOf: url)
-      storage = try LockIsolated(decoder.decode([String: JSONValue].self, from: contents))
+  @Test
+  func movesASessionFromTheLegacyKey() throws {
+    let localStorage = InMemoryLocalStorage()
+    try localStorage.store(
+      key: PersistedSessionLoader.legacyKey,
+      value: json(named: "persisted-session-v2-camel-case")
+    )
+
+    expectNoDifference(
+      makeSUT(localStorage).currentSession, PersistedSessionFixtures.expectedSession)
+
+    #expect(try localStorage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
+    let stored = try #require(try localStorage.retrieve(key: key))
+    #expect(try PersistedSessionCodec.decode(stored).isCurrentSchema)
+  }
+
+  @Test
+  func readsStorageOnceAtInit() throws {
+    let localStorage = InMemoryLocalStorage()
+    let sut = makeSUT(localStorage)
+    #expect(sut.currentSession == nil)
+
+    try localStorage.store(
+      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
+
+    #expect(sut.currentSession == nil)
+  }
+
+  @Test
+  func corruptedDataReadsAsNoSessionAndIsRemoved() async throws {
+    let localStorage = InMemoryLocalStorage()
+    try localStorage.store(key: key, value: Data("not-valid-json".utf8))
+
+    let sut = makeSUT(localStorage)
+
+    #expect(sut.currentSession == nil)
+    let error = await #expect(throws: AuthError.self) { try await sut.session }
+    #expect(error?.kind == .sessionMissing)
+    #expect(try localStorage.retrieve(key: key) == nil)
+  }
+
+  @Test
+  func unreadableStorageSurfacesOnSessionInsteadOfSigningOut() async throws {
+    let localStorage = FailingLocalStorage()
+    try localStorage.store(
+      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
+    localStorage.failsReads.setValue(true)
+
+    let sut = makeSUT(localStorage)
+
+    #expect(sut.currentSession == nil)
+    #expect(sut.dependencies.sessionStore.currentStatus == .loading)
+    let error = await #expect(throws: AuthError.self) { try await sut.session }
+    #expect(error?.kind == .storageUnavailable)
+
+    localStorage.failsReads.setValue(false)
+    let session = try await sut.session
+    expectNoDifference(session, .valid)
+  }
+
+  @Test
+  func signInWhoseSessionCannotBeSavedThrows() async throws {
+    let localStorage = FailingLocalStorage()
+    localStorage.failsWrites.setValue(true)
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+    let sut = makeSUT(localStorage, http: .init(transport: transport))
+
+    let error = await #expect(throws: AuthError.self) {
+      try await sut.signIn(email: "user@example.com", password: "secret")
     }
 
-    func store(key: String, value: Data) throws {
-      let json = try decoder.decode(JSONValue.self, from: value)
-      storage.withValue {
-        $0[key] = json
-      }
+    #expect(error?.kind == .storageUnavailable)
+    #expect(sut.currentSession == nil)
+  }
 
-      try saveToDisk()
-    }
+  private func makeSUT(
+    _ localStorage: any AuthLocalStorage,
+    url: URL = URL(string: "http://localhost")!,
+    http: HTTPClientConfiguration = .init()
+  ) -> AuthClient {
+    AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: key,
+        localStorage: localStorage,
+        http: http,
+        autoRefresh: .manual
+      )
+    )
+  }
+}
 
-    func retrieve(key: String) throws -> Data? {
-      guard let json = storage[key] else { return nil }
-      return try encoder.encode(json)
-    }
+/// Throws from every read while `failsReads` is set, as a locked Keychain does, and from every
+/// write while `failsWrites` is set.
+private final class FailingLocalStorage: AuthLocalStorage {
+  private let storage = InMemoryLocalStorage()
+  let failsReads = LockIsolated(false)
+  let failsWrites = LockIsolated(false)
 
-    func remove(key: String) throws {
-      storage.withValue {
-        $0[key] = nil
-      }
-      try saveToDisk()
+  func store(key: String, value: Data) throws {
+    if failsWrites.value {
+      throw AuthError(kind: .storageUnavailable, message: "locked")
     }
+    try storage.store(key: key, value: value)
+  }
 
-    private func saveToDisk() throws {
-      let data = try encoder.encode(storage.value)
-      try data.write(to: url)
+  func retrieve(key: String) throws -> Data? {
+    if failsReads.value {
+      throw AuthError(kind: .storageUnavailable, message: "locked")
     }
+    return try storage.retrieve(key: key)
+  }
+
+  func remove(key: String) throws {
+    try storage.remove(key: key)
   }
 }

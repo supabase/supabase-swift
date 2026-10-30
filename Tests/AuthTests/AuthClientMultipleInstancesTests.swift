@@ -26,6 +26,7 @@ struct AuthClientMultipleInstancesTests {
     let client1 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
+        storageKey: uniqueStorageKey(),
         localStorage: client1Storage
       )
     )
@@ -33,6 +34,7 @@ struct AuthClientMultipleInstancesTests {
     let client2 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
+        storageKey: uniqueStorageKey(),
         localStorage: client2Storage
       )
     )
@@ -50,6 +52,35 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
+  func clientsForOneProjectDoNotShareASession() async throws {
+    let url = URL(string: "http://localhost:54321/auth")!
+    let storageKey = uniqueStorageKey()
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
+    }
+    let signingIn = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: InMemoryLocalStorage(),
+        http: .init(transport: transport)
+      )
+    )
+    let otherRequest = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: url,
+        storageKey: storageKey,
+        localStorage: InMemoryLocalStorage()
+      )
+    )
+
+    try await signingIn.signIn(email: "user@example.com", password: "secret")
+
+    #expect(signingIn.currentSession?.accessToken == Session.valid.accessToken)
+    #expect(otherRequest.currentSession == nil)
+  }
+
+  @Test
   func clientWithNoOtherOwnerDeallocates() async {
     let url = URL(string: "http://localhost:54321/auth")!
 
@@ -58,6 +89,7 @@ struct AuthClientMultipleInstancesTests {
       let owner = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
+          storageKey: uniqueStorageKey(),
           localStorage: InMemoryLocalStorage()
         )
       )
@@ -79,6 +111,7 @@ struct AuthClientMultipleInstancesTests {
     let client = AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost:54321/auth")!,
+        storageKey: uniqueStorageKey(),
         localStorage: InMemoryLocalStorage(),
         http: .init(transport: transport)
       )
@@ -107,7 +140,7 @@ struct AuthClientMultipleInstancesTests {
   @Test
   func oauthServerOutlivesClient() async throws {
     let (oauthServer, transport) = releasedClientSubClient(\.oauthServer)
-    oauthServer.client.dependencies.sessionStorage.store(.valid)
+    try await oauthServer.client.seedSession(.valid)
 
     try await oauthServer.revokeGrant(id: UUID())
 
@@ -119,7 +152,7 @@ struct AuthClientMultipleInstancesTests {
     let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     let (mfa, _) = releasedClientSubClient(
       \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
-    mfa.client.dependencies.sessionStorage.store(.valid)
+    try await mfa.client.seedSession(.valid)
 
     let response = try await mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
 
@@ -130,33 +163,21 @@ struct AuthClientMultipleInstancesTests {
   func deinitStopsAutoRefreshTask() async {
     let url = URL(string: "http://localhost:54321/auth")!
 
-    let sessionManager: SessionManager
+    let autoRefresh: AutoRefreshController
 
     do {
       let client = AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
+          storageKey: uniqueStorageKey(),
           localStorage: InMemoryLocalStorage()
         )
       )
-      sessionManager = client.dependencies.sessionManager
+      autoRefresh = client.dependencies.autoRefresh
 
-      client.startAutoRefresh()
-
-      var didStart = await sessionManager.isAutoRefreshRunning()
-      for _ in 0..<100 where !didStart {
-        try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
-        didStart = await sessionManager.isAutoRefreshRunning()
-      }
-      #expect(didStart)
+      #expect(await waitUntil { await autoRefresh.isRegistered })
     }
 
-    var isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
-    for _ in 0..<100 where isAutoRefreshRunning {
-      try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 10)
-      isAutoRefreshRunning = await sessionManager.isAutoRefreshRunning()
-    }
-
-    #expect(isAutoRefreshRunning == false)
+    #expect(await waitUntil { await !autoRefresh.isRegistered })
   }
 }

@@ -1,227 +1,103 @@
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
 import Logging
-
-/// Which stored session a request may clear when the server says the session it was issued for
-/// is gone.
-enum SessionOwnership: Sendable {
-  /// The request was issued for no particular stored session — sign-in, sign-up, `/logout`.
-  /// Cleanup clears whatever is stored, as it always has.
-  case unscoped
-  /// The stored session the request was issued for, read before the request went out; `nil` when
-  /// storage was empty then. Cleanup clears storage only while it still holds exactly this, so a
-  /// request that outlived a sign-out cannot sign out whoever signed in after it.
-  case snapshot(Session?)
-}
 
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
-  var refreshSession: @Sendable (_ refreshToken: String) async throws -> Session
-  var update: @Sendable (_ session: Session) async -> Void
-  var remove: @Sendable () async -> Void
-  /// Deletes the stored session only while `ownership` still covers it. Returns whether it
-  /// deleted, so the caller emits `.signedOut` for a sign-out that actually happened.
-  var removeIfUnchanged: @Sendable (_ ownership: SessionOwnership) async -> Bool
-
-  var startAutoRefresh: @Sendable () async -> Void
-  var stopAutoRefresh: @Sendable () async -> Void
-
-  /// Whether the auto-refresh loop is currently scheduled.
-  var isAutoRefreshRunning: @Sendable () async -> Bool
+  /// Redeems `refreshToken`, or refreshes the held session when it is `nil`.
+  var refreshSession: @Sendable (_ refreshToken: String?) async throws -> Session
+  var refreshSessionIfNeeded: @Sendable () async throws -> Session?
 }
 
 extension SessionManager {
   static func live(
-    configuration: AuthClient.Configuration,
-    api: APIClient,
-    sessionStorage: SessionStorage,
-    eventEmitter: AuthStateChangeEventEmitter,
-    logger: Logging.Logger
+    policy: AuthClient.AutoRefreshPolicy,
+    sessionStore: SessionStore,
+    logger: Logging.Logger,
+    request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void
   ) -> Self {
     let instance = LiveSessionManager(
-      configuration: configuration,
-      api: api,
-      sessionStorage: sessionStorage,
-      eventEmitter: eventEmitter,
-      logger: logger
+      policy: policy,
+      sessionStore: sessionStore,
+      logger: logger,
+      request: request,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession($0) },
-      update: { await instance.update($0) },
-      remove: { await instance.remove() },
-      removeIfUnchanged: { await instance.removeIfUnchanged(since: $0) },
-      startAutoRefresh: { await instance.startAutoRefreshToken() },
-      stopAutoRefresh: { await instance.stopAutoRefreshToken() },
-      isAutoRefreshRunning: { await instance.isAutoRefreshTokenRunning() }
+      refreshSessionIfNeeded: { try await instance.refreshSessionIfNeeded() }
     )
   }
 }
 
-private actor LiveSessionManager {
-  private let configuration: AuthClient.Configuration
-  private let api: APIClient
-  private let sessionStorage: SessionStorage
-  private let eventEmitter: AuthStateChangeEventEmitter
-  private let logger: Logging.Logger
-
-  private var clock: any Clock<Duration> { configuration.clock }
-
-  private var inFlightRefreshes: [String: Task<Session, any Error>] = [:]
-  private var startAutoRefreshTokenTask: Task<Void, Never>?
-
-  init(
-    configuration: AuthClient.Configuration,
-    api: APIClient,
-    sessionStorage: SessionStorage,
-    eventEmitter: AuthStateChangeEventEmitter,
-    logger: Logging.Logger
-  ) {
-    self.configuration = configuration
-    self.api = api
-    self.sessionStorage = sessionStorage
-    self.eventEmitter = eventEmitter
-    self.logger = logger
-  }
+private struct LiveSessionManager: Sendable {
+  let policy: AuthClient.AutoRefreshPolicy
+  let sessionStore: SessionStore
+  let logger: Logging.Logger
+  let request: @Sendable (_ refreshToken: String) async throws -> Session
+  let beforeRefreshingHeldSession: @Sendable () async -> Void
 
   func session() async throws -> Session {
     try await trace(using: logger) {
-      guard let currentSession = sessionStorage.get() else {
+      if sessionStore.currentStatus == .loading {
+        try await sessionStore.load()
+      }
+
+      if let session = sessionStore.validSession(minimumValidity: defaultExpiryMargin) {
+        return session
+      }
+
+      guard let currentSession = sessionStore.currentSession else {
         logger.debug("session missing")
         throw AuthError.sessionMissing
       }
 
-      if !currentSession.isExpired {
-        return currentSession
+      guard policy != .disabled else {
+        if let session = sessionStore.validSession(minimumValidity: .zero) {
+          return session
+        }
+        logger.debug("session expired, auto refresh disabled")
+        throw AuthError.refreshDisabled
       }
 
       logger.debug("session expired")
-      return try await refreshSession(currentSession.refreshToken)
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
     }
   }
 
-  func refreshSession(_ refreshToken: String) async throws -> Session {
-    let storedAtStart = sessionStorage.get()
+  func refreshSession(_ refreshToken: String?) async throws -> Session {
+    try await trace(using: logger) {
+      if let refreshToken {
+        return try await sessionStore.refresh(refreshToken, using: request)
+      }
+      guard let currentSession = sessionStore.currentSession else {
+        throw AuthError.sessionMissing
+      }
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
+    }
+  }
 
-    let logger: Logging.Logger = {
-      var scopedLogger = self.logger
-      scopedLogger[metadataKey: "refresh_id"] = "\(UUID().uuidString)"
-      return scopedLogger
-    }()
-
-    return try await trace(using: logger) {
-      if let inFlight = inFlightRefreshes[refreshToken] {
-        logger.debug("Refresh already in flight")
-        return try await inFlight.value
+  func refreshSessionIfNeeded() async throws -> Session? {
+    try await trace(using: logger) {
+      if sessionStore.currentStatus == .loading {
+        try await sessionStore.load()
       }
 
-      let refreshTask = Task {
-        logger.debug("Refresh task started")
+      guard let currentSession = sessionStore.currentSession else { return nil }
 
-        defer {
-          inFlightRefreshes[refreshToken] = nil
-          logger.debug("Refresh task ended")
-        }
-
-        let session: Session
-        do {
-          session = try await api.execute(
-            HTTPRequest(
-              method: .post,
-              url: configuration.url.appendingPathComponent("token"),
-              query: [
-                URLQueryItem(name: "grant_type", value: "refresh_token")
-              ]
-            ),
-            body: configuration.resolvedEncoder.encode(
-              UserCredentials(refreshToken: refreshToken)
-            )
-          )
-          .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
-        } catch let error as AuthError where error.invalidatesSession {
-          let owned = storedAtStart?.refreshToken == refreshToken ? storedAtStart : nil
-          if removeIfUnchanged(since: .snapshot(owned)) {
-            eventEmitter.emit(.signedOut, session: nil)
-          }
-          throw error
-        }
-
-        if sessionStorage.changed(since: storedAtStart) {
-          logger.debug("Refresh discarded: the session it started from is no longer stored")
-          throw AuthError.refreshDiscarded
-        }
-
-        update(session)
-        eventEmitter.emit(.tokenRefreshed, session: session)
-
+      let halfLifetime = Duration.seconds(currentSession.expiresIn / 2)
+      let minimumValidity = max(Refresher.refreshLeadTime, halfLifetime)
+      if let session = sessionStore.validSession(minimumValidity: minimumValidity) {
         return session
       }
-      inFlightRefreshes[refreshToken] = refreshTask
-
-      return try await refreshTask.value
+      return try await refreshHeldSession(readWith: currentSession.refreshToken)
     }
   }
 
-  func update(_ session: Session) {
-    sessionStorage.store(session)
-  }
-
-  func remove() {
-    sessionStorage.delete()
-  }
-
-  /// Deletes the stored session, but only while `ownership` still covers it.
-  ///
-  /// The check and the delete are one actor-isolated step with no suspension between them. A
-  /// caller that read storage itself and then awaited `remove()` would leave a window for a
-  /// concurrent sign-in to store its session and have this deletion take it.
-  func removeIfUnchanged(since ownership: SessionOwnership) -> Bool {
-    if case .snapshot(let snapshot) = ownership, sessionStorage.changed(since: snapshot) {
-      return false
-    }
-    sessionStorage.delete()
-    return true
-  }
-
-  func startAutoRefreshToken() {
-    logger.debug("start auto refresh token")
-
-    startAutoRefreshTokenTask?.cancel()
-    startAutoRefreshTokenTask = Task {
-      while !Task.isCancelled {
-        await autoRefreshTokenTick()
-        try? await clock.sleep(for: .seconds(autoRefreshTickDuration))
-      }
-    }
-  }
-
-  func stopAutoRefreshToken() {
-    logger.debug("stop auto refresh token")
-    startAutoRefreshTokenTask?.cancel()
-    startAutoRefreshTokenTask = nil
-  }
-
-  func isAutoRefreshTokenRunning() -> Bool {
-    startAutoRefreshTokenTask != nil
-  }
-
-  private func autoRefreshTokenTick() async {
-    await trace(using: logger) {
-      let now = Date().timeIntervalSince1970
-
-      guard let session = sessionStorage.get() else {
-        return
-      }
-
-      let expiresInTicks = Int((session.expiresAt - now) / autoRefreshTickDuration)
-      logger.debug(
-        "access token expires in \(expiresInTicks) ticks, a tick lasts \(autoRefreshTickDuration)s, refresh threshold is \(autoRefreshTickThreshold) ticks"
-      )
-
-      if expiresInTicks <= autoRefreshTickThreshold {
-        _ = try? await refreshSession(session.refreshToken)
-      }
-    }
+  private func refreshHeldSession(readWith refreshToken: String) async throws -> Session {
+    await beforeRefreshingHeldSession()
+    return try await sessionStore.refreshHeldSession(readWith: refreshToken, using: request)
   }
 }
