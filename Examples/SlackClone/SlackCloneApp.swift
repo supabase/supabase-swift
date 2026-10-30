@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 27/12/23.
 //
 
+import OSLog
+import Supabase
 import SwiftUI
 
 @main
@@ -16,7 +18,13 @@ struct SlackCloneApp: App {
     WindowGroup {
       AppView(model: model)
         .onOpenURL { url in
-          Task { try await supabase.handleRedirect(url) }
+          Task {
+            do {
+              try await supabase.handleRedirect(url)
+            } catch {
+              Logger.main.debug("Failed to handle redirect URL \(url): \(error)")
+            }
+          }
         }
     }
   }

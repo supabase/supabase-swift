@@ -91,7 +91,7 @@ struct SignInWithOAuth: View {
           try await supabase.auth.signInWithOAuth(
             provider,
             options: OAuthOptions(redirectTo: Constants.redirectToURL),
-            presenter: ASWebAuthenticationSessionPresenter(prefersEphemeralWebBrowserSession: true)
+            presenter: ASWebAuthenticationSessionPresenter()
           )
         } catch {
           debug("Failed to sign-in with OAuth flow: \(error)")

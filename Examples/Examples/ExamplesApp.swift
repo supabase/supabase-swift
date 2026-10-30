@@ -58,7 +58,13 @@ struct ExamplesApp: App {
       RootView()
         .environment(AuthController())
         .onOpenURL { url in
-          Task { try await supabase.handleRedirect(url) }
+          Task {
+            do {
+              try await supabase.handleRedirect(url)
+            } catch {
+              debug("Failed to handle redirect URL \(url): \(error)")
+            }
+          }
         }
         .task {
           _ = try? await supabase.storage.resumableUploads.resumeAll()
