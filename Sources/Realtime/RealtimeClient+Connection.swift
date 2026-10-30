@@ -24,7 +24,9 @@ extension RealtimeClient {
   /// core resolves resumes as its effect runs; it continues on this actor, so only once the
   /// whole batch is applied, and it reads the state the batch left.
   func apply(_ event: RealtimeCore.Event) {
-    let effects = core.handle(event, at: CoreTime(elapsed: elapsed(), date: now()))
+    let elapsed = elapsed()
+    let date = startDate.addingTimeInterval(elapsed.timeInterval)
+    let effects = core.handle(event, at: CoreTime(elapsed: elapsed, date: date))
     for effect in effects {
       run(effect)
     }
@@ -60,16 +62,6 @@ extension RealtimeClient {
     case .timerFired(let id, let token):
       guard timers.claimFire(id, token: token) else { return }
       apply(.timerFired(id))
-
-    case .retryTimerFired(let token):
-      guard retryTimer?.token == token else { return }
-      retryTimer = nil
-      apply(.retryTimerFired)
-
-    case .idleTimerFired(let token):
-      guard idleDisconnectTimer?.token == token else { return }
-      idleDisconnectTimer = nil
-      apply(.disconnectRequested(code: nil, reason: nil))
 
     case .tokenFetched(let token, let generation):
       tokenFetchEnded(token, generation: generation)
@@ -164,8 +156,7 @@ extension RealtimeClient {
     case .openSocket:
       openSocket()
 
-    case .installSocket(let conn, _):
-      // The core sends the rejoins itself, so `rejoinChannels` needs nothing here.
+    case .installSocket(let conn):
       stopSocketLoops()
       socket = conn
       outbox = Outbox(connection: conn, serializer: serializer, logger: logger)
@@ -187,32 +178,9 @@ extension RealtimeClient {
       stopSocketLoops()
       connectAttempt?.task.cancel()
       connectAttempt = nil
-      retryTimer?.task.cancel()
-      retryTimer = nil
-      idleDisconnectTimer?.task.cancel()
-      idleDisconnectTimer = nil
       // The `accessToken` call goes on: it is bounded by the request timeout, and the core waits
       // for its `.tokenFetched`.
       timers.cancelAll()
-
-    case .scheduleRetry(let delay):
-      logger.debug("Reconnecting in \(delay)")
-      retryTimer?.task.cancel()
-      let token = nextShellTimerToken()
-      retryTimer = (token, inboxTimer(after: delay, .retryTimerFired(token: token)))
-
-    case .cancelRetry:
-      retryTimer?.task.cancel()
-      retryTimer = nil
-
-    case .scheduleIdleDisconnect(let delay):
-      idleDisconnectTimer?.task.cancel()
-      let token = nextShellTimerToken()
-      idleDisconnectTimer = (token, inboxTimer(after: delay, .idleTimerFired(token: token)))
-
-    case .cancelIdleDisconnect:
-      idleDisconnectTimer?.task.cancel()
-      idleDisconnectTimer = nil
 
     case .send(let message):
       guard let outbox else {
@@ -249,11 +217,7 @@ extension RealtimeClient {
     case .finishChannel(let id):
       // The server closed the channel, which spends it. After `removeChannel(_:)` the state is
       // already gone.
-      guard let state = channelStates.removeValue(forKey: id) else { return }
-      if liveChannels[state.handle.topic] == id {
-        liveChannels[state.handle.topic] = nil
-      }
-      state.finishAll()
+      channelStates.removeValue(forKey: id)?.finishAll()
 
     case .fetchAccessToken(let generation):
       fetchAccessToken(generation: generation)
@@ -280,20 +244,6 @@ extension RealtimeClient {
   func scheduleTimer(_ id: TimerID, after delay: Duration) {
     timers.schedule(id, after: delay, clock: clock) { [inbox] id, token in
       inbox.yield(.timerFired(id, token: token))
-    }
-  }
-
-  private func nextShellTimerToken() -> UInt64 {
-    lastShellTimerToken += 1
-    return lastShellTimerToken
-  }
-
-  /// An edge: sleeps `delay`, then yields `input`.
-  private nonisolated func inboxTimer(after delay: Duration, _ input: Input) -> Task<Void, Never> {
-    // A local, because the existential in `self.clock` is not opened when passed directly.
-    let clock = clock
-    return sleepThenRun(on: clock, after: delay) { [inbox] in
-      inbox.yield(input)
     }
   }
 
@@ -483,11 +433,6 @@ extension RealtimeClient {
   /// `CancellationError` and `RealtimeError` pass through; anything else the transport threw
   /// becomes a `.transport` error.
   static func connectionError(_ error: any Error) -> any Error {
-    switch error {
-    case is CancellationError, is RealtimeError:
-      return error
-    default:
-      return RealtimeError.transport(error.localizedDescription, underlyingError: error)
-    }
+    error is CancellationError ? error : realtimeError(error)
   }
 }

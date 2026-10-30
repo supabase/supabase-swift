@@ -73,10 +73,10 @@ struct ActorOwnedStateTests {
     let server = try #require(servers.value.last)
 
     // Each iteration ends only once the client is gone: its fan-outs finish the streams.
-    _ = await elements(of: clientStatuses)
-    #expect(await elements(of: statuses) == [.unsubscribed])
-    #expect(await elements(of: broadcasts).isEmpty)
-    #expect(await elements(of: changes).isEmpty)
+    _ = await clientStatuses.collect()
+    #expect(await statuses.collect() == [.unsubscribed])
+    #expect(await broadcasts.collect().isEmpty)
+    #expect(await changes.collect().isEmpty)
 
     #expect(channel.client == nil)
     #expect(server.isClosed)
@@ -97,12 +97,12 @@ struct ActorOwnedStateTests {
     try await remove(channel, subscribedWith: host.subscribe(channel), on: host)
 
     // The status stream does not even replay the last status.
-    #expect(await elements(of: channel.statusChanges()).isEmpty)
-    #expect(await elements(of: channel.events()).isEmpty)
-    #expect(await elements(of: channel.broadcasts(event: "*")).isEmpty)
-    #expect(await elements(of: channel.postgresChanges(table: "todos")).isEmpty)
-    #expect(await elements(of: channel.presenceChanges()).isEmpty)
-    #expect(await elements(of: channel.presenceStates()).isEmpty)
+    #expect(await channel.statusChanges().collect().isEmpty)
+    #expect(await channel.events().collect().isEmpty)
+    #expect(await channel.broadcasts(event: "*").collect().isEmpty)
+    #expect(await channel.postgresChanges(table: "todos").collect().isEmpty)
+    #expect(await channel.presenceChanges().collect().isEmpty)
+    #expect(await channel.presenceStates().collect().isEmpty)
   }
 
   @Test
@@ -115,7 +115,7 @@ struct ActorOwnedStateTests {
     host.sendClose(for: join)
 
     // The close finishes the channel's streams, so this ends once the close is applied.
-    #expect(await elements(of: statuses).last == .unsubscribed)
+    #expect(await statuses.collect().last == .unsubscribed)
     #expect(await channel.status == .unsubscribed)
     await expectError(.channelRemoved) { try await channel.subscribe() }
     await expectError(.channelRemoved) {
@@ -172,7 +172,7 @@ struct ActorOwnedStateTests {
     try await remove(subscribed, subscribedWith: join, on: host)
     await host.clock.advance(by: .seconds(6))
     // An idle disconnect, had one been scheduled, has fired into the inbox by now.
-    await host.client.idleDisconnectTimer?.task.value
+    await host.client.timers.task(for: .idleDisconnect)?.value
     await host.client.flushInbox()
 
     #expect(await host.client.status == .connected)
@@ -250,7 +250,7 @@ struct ActorOwnedStateTests {
       }
       await host.client.finishStreams(of: channel)
 
-      if await elements(of: broadcasts).count != 1 { misses += 1 }
+      if await broadcasts.collect().count != 1 { misses += 1 }
     }
     return misses
   }
@@ -270,13 +270,4 @@ struct ActorOwnedStateTests {
       joinRef: nil, ref: nil, topic: topic, event: ChannelEvent.broadcast,
       payload: ["type": "broadcast", "event": .string(event), "payload": [:]])
   }
-}
-
-/// Every element of `stream`, once it ends.
-private func elements<Element: Sendable>(of stream: AsyncStream<Element>) async -> [Element] {
-  var elements: [Element] = []
-  for await element in stream {
-    elements.append(element)
-  }
-  return elements
 }

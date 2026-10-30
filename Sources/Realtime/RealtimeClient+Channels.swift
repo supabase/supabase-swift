@@ -33,41 +33,38 @@ extension RealtimeClient {
   /// The streams below are registered before they return. A spent channel gets a stream that
   /// ends at once.
   func statusChanges(of channel: RealtimeChannel) -> AsyncStream<RealtimeChannelStatus> {
-    guard let state = state(of: channel) else { return .finished }
-    let id = nextStreamID(channel: channel.id)
-    return state.status.subscribe(id, onTermination: onStreamEnd(id))
+    openStream(of: channel, \.status)
   }
 
   func events(of channel: RealtimeChannel) -> AsyncStream<RealtimeChannelEvent> {
-    guard let state = state(of: channel) else { return .finished }
-    let id = nextStreamID(channel: channel.id)
-    return state.events.subscribe(id, onTermination: onStreamEnd(id))
+    openStream(of: channel, \.events)
   }
 
   func broadcasts(
     of channel: RealtimeChannel, event: String
   ) -> AsyncStream<BroadcastMessage> {
-    guard let state = state(of: channel) else { return .finished }
-    let id = nextStreamID(channel: channel.id)
-    return state.broadcasts.subscribe(
-      id, where: { RealtimeChannel.eventMatches(event, $0.event) },
-      onTermination: onStreamEnd(id))
+    openStream(of: channel, \.broadcasts, where: { RealtimeChannel.eventMatches(event, $0.event) })
   }
 
   func presenceChanges(of channel: RealtimeChannel) -> AsyncStream<PresenceChange> {
-    guard let state = state(of: channel), canOpenPresenceStream(on: state) else {
-      return .finished
-    }
-    let id = nextStreamID(channel: channel.id)
-    return state.presenceChanges.subscribe(id, onTermination: onStreamEnd(id))
+    openStream(of: channel, \.presenceChanges, if: canOpenPresenceStream(on:))
   }
 
   func presenceStates(of channel: RealtimeChannel) -> AsyncStream<PresenceState> {
-    guard let state = state(of: channel), canOpenPresenceStream(on: state) else {
-      return .finished
-    }
+    openStream(of: channel, \.presenceStates, if: canOpenPresenceStream(on:))
+  }
+
+  /// Subscribes a new stream to the fan-out `fanout` of `channel`'s state, when the channel is
+  /// not spent and `condition` holds.
+  private func openStream<Element: Sendable>(
+    of channel: RealtimeChannel,
+    _ fanout: KeyPath<ChannelState, Fanout<Element>>,
+    if condition: (ChannelState) -> Bool = { _ in true },
+    where filter: ((Element) -> Bool)? = nil
+  ) -> AsyncStream<Element> {
+    guard let state = state(of: channel), condition(state) else { return .finished }
     let id = nextStreamID(channel: channel.id)
-    return state.presenceStates.subscribe(id, onTermination: onStreamEnd(id))
+    return state[keyPath: fanout].subscribe(id, where: filter, onTermination: onStreamEnd(id))
   }
 
   /// Registers the binding and hands the core the new join payload in the same actor job, so a

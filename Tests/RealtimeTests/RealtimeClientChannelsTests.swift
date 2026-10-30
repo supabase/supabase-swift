@@ -137,10 +137,10 @@ struct RealtimeClientChannelsTests {
     try await client.connect()
 
     await client.removeChannel(client.channel("room"))
-    #expect(await client.idleDisconnectTimer != nil)
+    #expect(await client.timers.task(for: .idleDisconnect) != nil)
 
     _ = await client.channel("x")
-    #expect(await client.idleDisconnectTimer != nil)
+    #expect(await client.timers.task(for: .idleDisconnect) != nil)
 
     await harness.clock.advance(by: .seconds(5))
 
@@ -156,11 +156,11 @@ struct RealtimeClientChannelsTests {
     try await client.connect()
 
     await client.removeChannel(client.channel("room"))
-    #expect(await client.idleDisconnectTimer != nil)
+    #expect(await client.timers.task(for: .idleDisconnect) != nil)
 
     let channel = await client.channel("x")
     try await channel.subscribe()
-    #expect(await client.idleDisconnectTimer == nil)
+    #expect(await client.timers.task(for: .idleDisconnect) == nil)
 
     await harness.clock.advance(by: .seconds(5))
 
@@ -225,11 +225,11 @@ extension RealtimeClient {
 
   /// Marks the core record of `channel` as joined with presence on.
   fileprivate func turnPresenceOn(in channel: RealtimeChannel) {
-    core.channels[channel.id]?.presenceEnabled = true
+    core.channels[channel.id]?.snapshot.presenceEnabled = true
   }
 
   /// Whether the next join of `channel` asks for presence.
   fileprivate func presenceIsOn(in channel: RealtimeChannel) -> Bool? {
-    core.channels[channel.id]?.presenceEnabled
+    core.channels[channel.id]?.snapshot.presenceEnabled
   }
 }

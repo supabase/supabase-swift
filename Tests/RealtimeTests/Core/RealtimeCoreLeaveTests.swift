@@ -213,7 +213,7 @@ struct RealtimeCoreLeaveTests {
   func staleCloseIsIgnored() {
     var harness = Self.subscribed()
     _ = harness.send(.socketClosed(code: 1001, reason: nil))
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     _ = harness.send(.socketOpened(FakeWebSocket.fakes().0))
     _ = harness.send(.frame(Self.reply(ref: "2")))
 
@@ -241,7 +241,7 @@ struct RealtimeCoreLeaveTests {
           .reconnecting(attempt: 1, retryIn: .seconds(1), lastError: .heartbeatTimeout)),
         .closeSocket(socket, code: 1001, reason: "error: heartbeat timeout"),
         .stopSocketLoops,
-        .scheduleRetry(after: .seconds(1)),
+        .schedule(.reconnect, after: .seconds(1)),
         .cancel(.heartbeat),
         .resume(push, .failure(.notConnected)),
         .cancel(.pushTimeout(channel: .room, ref: "7")),
@@ -253,13 +253,13 @@ struct RealtimeCoreLeaveTests {
 
     #expect(
       harness.send(.appForeground) == [
-        .publishClientStatus(.connecting(attempt: 2)), .cancelRetry, .openSocket,
+        .publishClientStatus(.connecting(attempt: 2)), .cancel(.reconnect), .openSocket,
       ])
     let next = FakeWebSocket.fakes().0
     #expect(
       harness.send(.socketOpened(next)) == [
         .publishClientStatus(.connected),
-        .installSocket(next, rejoinChannels: true),
+        .installSocket(next),
         .schedule(.heartbeat, after: .seconds(25)),
         .send(try Self.join(ref: "2")),
         .schedule(.joinTimeout(channel: .room, ref: "2"), after: .seconds(10)),
@@ -280,10 +280,10 @@ struct RealtimeCoreLeaveTests {
     #expect(dropped.last == .publishChannelStatus(.room, .subscribing(attempt: 1)))
     #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
 
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     let next = FakeWebSocket.fakes().0
     let opened = harness.send(.socketOpened(next))
-    #expect(opened.contains(.installSocket(next, rejoinChannels: true)))
+    #expect(opened.contains(.installSocket(next)))
     #expect(opened.contains(.send(try Self.join(ref: "2"))))
     #expect(
       harness.send(.frame(Self.reply(ref: "2"))) == [
@@ -293,8 +293,7 @@ struct RealtimeCoreLeaveTests {
       ])
   }
 
-  /// The core rejoins on reconnect itself, so `installSocket(rejoinChannels: true)` must not
-  /// lead to a second join.
+  /// The core rejoins on reconnect itself, so `installSocket` must not lead to a second join.
   @Test
   func reconnectSendsOneJoinPerChannel() {
     var harness = Self.subscribed()
@@ -304,7 +303,7 @@ struct RealtimeCoreLeaveTests {
         waiter: harness.waiter(), snapshot: Self.noStreams))
     _ = harness.send(.timerFired(.joinTimeout(channel: .other, ref: "2")))
     _ = harness.send(.socketClosed(code: 1001, reason: nil))
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
 
     let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
 
@@ -364,7 +363,7 @@ struct RealtimeCoreLeaveTests {
       ])
     let next = FakeWebSocket.fakes().0
     let opened = harness.send(.socketOpened(next))
-    #expect(opened.contains(.installSocket(next, rejoinChannels: false)))
+    #expect(opened.contains(.installSocket(next)))
     #expect(opened.contains(.send(try Self.join(ref: "2"))))
   }
 
@@ -473,7 +472,7 @@ struct RealtimeCoreLeaveTests {
         .publishChannelStatus(.room, .unsubscribed),
         .cancel(.leaveTimeout(channel: .room, ref: "2")),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
     #expect(harness.core.channels[.room] == nil)
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
@@ -495,7 +494,7 @@ struct RealtimeCoreLeaveTests {
         .resume(w, .success),
         .publishChannelStatus(.room, .unsubscribed),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
     #expect(harness.core.channels[.room] == nil)
   }
@@ -517,7 +516,7 @@ struct RealtimeCoreLeaveTests {
         .publishChannelStatus(.room, .unsubscribed),
         .cancel(.leaveTimeout(channel: .room, ref: "2")),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
     #expect(harness.core.channels[.room] == nil)
   }
@@ -537,7 +536,7 @@ struct RealtimeCoreLeaveTests {
         .publishChannelStatus(.room, .unsubscribed),
         .resume(w2, .success),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
     #expect(harness.core.channels[.room] == nil)
   }
@@ -553,7 +552,7 @@ struct RealtimeCoreLeaveTests {
       harness.send(.removeChannel(channel: .room, waiter: w)) == [
         .resume(w, .success),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
   }
 
@@ -565,7 +564,7 @@ struct RealtimeCoreLeaveTests {
     #expect(
       harness.send(.removeChannel(channel: .room, waiter: w)) == [
         .resume(w, .success),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
   }
 
@@ -633,7 +632,7 @@ struct RealtimeCoreLeaveTests {
 
     let effects = harness.send(.frame(Self.close(joinRef: "1")))
 
-    #expect(effects.last == .scheduleIdleDisconnect(after: .seconds(50)))
+    #expect(effects.last == .schedule(.idleDisconnect, after: .seconds(50)))
     #expect(harness.core.idleDisconnectPending)
   }
 
@@ -650,7 +649,7 @@ struct RealtimeCoreLeaveTests {
 
     let effects = harness.send(.frame(Self.close(joinRef: "1")))
 
-    #expect(!effects.contains(.scheduleIdleDisconnect(after: .seconds(50))))
+    #expect(!effects.contains(.schedule(.idleDisconnect, after: .seconds(50))))
     #expect(effects.last == .finishChannel(.room))
     #expect(!harness.core.idleDisconnectPending)
   }

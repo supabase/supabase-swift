@@ -116,7 +116,7 @@ struct RealtimeCorePushTests {
         == [])
 
     // The next socket carries only the rejoin.
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     let reconnected = harness.send(.socketOpened(FakeWebSocket.fakes().0))
     #expect(
       reconnected.contains { if case .send(let m) = $0 { m.event == "phx_join" } else { false } })

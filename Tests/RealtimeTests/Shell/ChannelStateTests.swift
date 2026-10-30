@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import TestHelpers
 import Testing
 
 @testable import Realtime
@@ -26,10 +27,6 @@ struct ChannelStateTests {
 
   func id(_ rawValue: UInt64) -> StreamID {
     StreamID(rawValue: rawValue, channel: channelID)
-  }
-
-  func collect<Element: Sendable>(_ stream: AsyncStream<Element>) async -> [Element] {
-    await stream.reduce(into: []) { $0.append($1) }
   }
 
   func change(table: String) throws -> PostgresChange {
@@ -95,8 +92,8 @@ struct ChannelStateTests {
     state.deliver(.postgres(PostgresDelivery(change: change, matched: [tableB])))
     state.finishAll()
 
-    #expect(await collect(changesA).isEmpty)
-    #expect(await collect(changesB) == [change])
+    #expect(await changesA.collect().isEmpty)
+    #expect(await changesB.collect() == [change])
   }
 
   @Test
@@ -119,10 +116,10 @@ struct ChannelStateTests {
     state.deliver(.presence(presenceChange, presenceState))
     state.finishAll()
 
-    #expect(await collect(events) == [.resubscribed])
-    #expect(await collect(broadcasts) == [message])
-    #expect(await collect(presenceChanges) == [presenceChange])
-    #expect(await collect(presenceStates) == [PresenceState(), presenceState])
+    #expect(await events.collect() == [.resubscribed])
+    #expect(await broadcasts.collect() == [message])
+    #expect(await presenceChanges.collect() == [presenceChange])
+    #expect(await presenceStates.collect() == [PresenceState(), presenceState])
   }
 
   @Test
@@ -133,11 +130,11 @@ struct ChannelStateTests {
 
     state.finishAll()
 
-    let statuses = await collect(status)
+    let statuses = await status.collect()
     #expect(statuses.count == 1 && statuses[0].isSame(as: .unsubscribed))
-    #expect(await collect(changes).isEmpty)
+    #expect(await changes.collect().isEmpty)
     #expect(state.joinSnapshot.bindings.isEmpty)
-    #expect(await collect(state.addPostgresStream(id(3), tableA, onTermination: {})).isEmpty)
+    #expect(await state.addPostgresStream(id(3), tableA, onTermination: {}).collect().isEmpty)
     #expect(state.joinSnapshot.bindings.isEmpty)
   }
 
@@ -153,12 +150,12 @@ struct ChannelStateTests {
 
     state = nil
 
-    let statuses = await collect(status)
+    let statuses = await status.collect()
     #expect(statuses.count == 1 && statuses[0].isSame(as: .unsubscribed))
-    #expect(await collect(events).isEmpty)
-    #expect(await collect(broadcasts).isEmpty)
-    #expect(await collect(presenceChanges).isEmpty)
-    #expect(await collect(presenceStates) == [PresenceState()])
-    #expect(await collect(changes).isEmpty)
+    #expect(await events.collect().isEmpty)
+    #expect(await broadcasts.collect().isEmpty)
+    #expect(await presenceChanges.collect().isEmpty)
+    #expect(await presenceStates.collect() == [PresenceState()])
+    #expect(await changes.collect().isEmpty)
   }
 }

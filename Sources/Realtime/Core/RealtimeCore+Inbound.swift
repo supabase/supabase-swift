@@ -11,14 +11,14 @@ extension RealtimeCore {
   /// The channel of the topic a wire topic names that is not being removed, if any. A topic has
   /// at most one: a new channel of the topic joins only once the old one is removing.
   func liveChannel(forWireTopic wireTopic: String) -> ChannelID? {
-    channels(forWireTopic: wireTopic).first { channels[$0]?.isRemoving == false }
+    firstChannel(forWireTopic: wireTopic) { !$0.isRemoving }
   }
 
   /// The channel of the topic a wire topic names whose frames carry `joinRef`: the channel of
   /// that join, or of the leave that ends it. With no `joinRef`, the live channel of the topic.
   func channel(forWireTopic wireTopic: String, joinRef: Ref?) -> ChannelID? {
     guard let joinRef else { return liveChannel(forWireTopic: wireTopic) }
-    return channels(forWireTopic: wireTopic).first { channels[$0]?.inboundJoinRef == joinRef }
+    return firstChannel(forWireTopic: wireTopic) { $0.inboundJoinRef == joinRef }
   }
 
   /// The channel of `message`'s topic whose frames carry `joinRef`, as
@@ -33,10 +33,15 @@ extension RealtimeCore {
     return channel
   }
 
-  /// The channels of the topic a wire topic names, in creation order.
-  private func channels(forWireTopic wireTopic: String) -> [ChannelID] {
-    guard let topic = RealtimeChannel.topic(forWireTopic: wireTopic) else { return [] }
-    return channels.filter { $0.value.topic == topic }.keys.sorted()
+  /// The first channel in creation order on `wireTopic` whose record matches `predicate`.
+  private func firstChannel(
+    forWireTopic wireTopic: String, where predicate: (ChannelRecord) -> Bool
+  ) -> ChannelID? {
+    var first: ChannelID?
+    for (id, record) in channels where record.wireTopic == wireTopic && predicate(record) {
+      first = min(first ?? id, id)
+    }
+    return first
   }
 
   /// The topic of `channel`, for log lines. A channel with no record has none.
@@ -51,9 +56,11 @@ extension RealtimeCore {
   mutating func receiveFrame(_ message: RealtimeMessage) -> [Effect] {
     if message.event == ChannelEvent.reply {
       if let ref = message.ref,
-        let channel = channels(forWireTopic: message.topic).first(where: {
-          channels[$0]?.pendingPushes[ref] != nil
-        })
+        let channel = firstChannel(
+          forWireTopic: message.topic,
+          where: {
+            $0.pendingPushes[ref] != nil
+          })
       {
         return receivePushReply(message, ref: ref, on: channel)
       }
@@ -114,18 +121,29 @@ extension RealtimeCore {
   private mutating func receivePresence(_ message: RealtimeMessage, on channel: ChannelID)
     -> [Effect]
   {
-    guard var record = channels[channel] else { return [] }
+    guard let currentJoinRef = channels[channel].map(\.currentJoinRef) else { return [] }
     // Presence for an earlier join carries that join's `join_ref`. Broadcast diffs carry none.
-    if let joinRef = message.joinRef, joinRef != record.currentJoinRef {
+    if let joinRef = message.joinRef, joinRef != currentJoinRef {
       logger.debug("Ignoring presence for stale join_ref \(joinRef) on '\(topic(of: channel))'")
       return []
     }
+    // Mutated in place, so the tracker's storage is not copied for each frame.
     let change =
       message.event == ChannelEvent.presenceState
-      ? record.presence.applyState(message.payload)
-      : record.presence.applyDiff(message.payload)
-    channels[channel] = record
-    guard let change, !change.isEmpty else { return [] }
-    return [.deliver(channel, .presence(change, record.presence.state))]
+      ? channels[channel]?.presence.applyState(message.payload)
+      : channels[channel]?.presence.applyDiff(message.payload)
+    guard let change, !change.isEmpty, let state = channels[channel]?.presence.state else {
+      return []
+    }
+    return [.deliver(channel, .presence(change, state))]
+  }
+}
+
+extension RealtimeMessage {
+  /// The reason an error reply gives: its `response.reason`, or a `response` that is a string,
+  /// or else `default`.
+  func replyReason(default: String) -> String {
+    let response = payload["response"]
+    return response?.objectValue?["reason"]?.stringValue ?? response?.stringValue ?? `default`
   }
 }

@@ -282,7 +282,7 @@ struct RealtimeCoreSubscribeTests {
     #expect(
       harness.send(.socketOpened(socket)) == [
         .publishClientStatus(.connected),
-        .installSocket(socket, rejoinChannels: false),
+        .installSocket(socket),
         .schedule(.heartbeat, after: .seconds(25)),
         .send(try Self.join(ref: "1")),
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
@@ -362,7 +362,7 @@ struct RealtimeCoreSubscribeTests {
     let w = harness.waiter()
     _ = harness.send(.socketClosed(code: 1001, reason: nil))
     _ = harness.send(Self.subscribe(w))
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     _ = harness.send(.socketOpened(FakeWebSocket.fakes().0))
 
     #expect(
@@ -381,7 +381,7 @@ struct RealtimeCoreSubscribeTests {
 
     #expect(
       harness.send(Self.subscribe(harness.waiter())) == [
-        .cancelIdleDisconnect,
+        .cancel(.idleDisconnect),
         .publishChannelStatus(.room, .subscribing(attempt: 1)),
         .send(try Self.join(ref: "1")),
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),

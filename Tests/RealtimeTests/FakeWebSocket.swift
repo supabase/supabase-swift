@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import TestHelpers
 
 @testable import Realtime
 
@@ -32,13 +33,8 @@ final class FakeWebSocket: WebSocketConnection {
   /// The binary frames sent so far, waiting up to `timeout` for the first one: the client's
   /// writer sends a frame after the call that queued it returns.
   func sentBinaryFrames(timeout: Duration = .seconds(5)) async -> [Data] {
-    let deadline = ContinuousClock.now.advanced(by: timeout)
-    var frames = binaryFrames
-    while frames.isEmpty, ContinuousClock.now < deadline {
-      try? await Task.sleep(for: .milliseconds(5))
-      frames = binaryFrames
-    }
-    return frames
+    await waitUntil(timeout: timeout.timeInterval) { !self.binaryFrames.isEmpty }
+    return binaryFrames
   }
 
   private var binaryFrames: [Data] {

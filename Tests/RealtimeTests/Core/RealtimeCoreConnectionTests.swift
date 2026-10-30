@@ -66,19 +66,19 @@ struct RealtimeCoreConnectionTests {
       // An explicit connect() skips the rest of the backoff wait.
       Row(
         from: waiting, .connect(waiter: nil), to: .connecting(attempt: 3),
-        effects: [.publishClientStatus(.connecting(attempt: 3)), .cancelRetry, .openSocket]),
+        effects: [.publishClientStatus(.connecting(attempt: 3)), .cancel(.reconnect), .openSocket]),
 
       // The transport answered.
       Row(
         from: .connecting(attempt: 1), .socketOpened(socket), to: .connected(socket),
         effects: [
-          .publishClientStatus(.connected), .installSocket(socket, rejoinChannels: false),
+          .publishClientStatus(.connected), .installSocket(socket),
           Self.heartbeatEvery,
         ]),
       Row(
         from: .connecting(attempt: 3), .socketOpened(socket), to: .connected(socket),
         effects: [
-          .publishClientStatus(.connected), .installSocket(socket, rejoinChannels: true),
+          .publishClientStatus(.connected), .installSocket(socket),
           Self.heartbeatEvery,
         ]),
       Row(
@@ -103,7 +103,7 @@ struct RealtimeCoreConnectionTests {
         effects: [
           .publishClientStatus(
             .reconnecting(attempt: 3, retryIn: .seconds(3), lastError: Self.unreachable)),
-          .scheduleRetry(after: .seconds(3)),
+          .schedule(.reconnect, after: .seconds(3)),
         ]),
       // A refused upgrade (401/403/404) cannot succeed by retrying.
       Row(
@@ -117,17 +117,18 @@ struct RealtimeCoreConnectionTests {
 
       // The retry timer.
       Row(
-        from: waiting, .retryTimerFired, to: .connecting(attempt: 3),
+        from: waiting, .timerFired(.reconnect), to: .connecting(attempt: 3),
         effects: [.publishClientStatus(.connecting(attempt: 3)), .openSocket]),
       Row(
-        from: .connecting(attempt: 3), .retryTimerFired, to: .connecting(attempt: 3), effects: []),
-      Row(from: .connected(socket), .retryTimerFired, to: .connected(socket), effects: []),
-      Row(from: .disconnected(nil), .retryTimerFired, to: .disconnected(nil), effects: []),
+        from: .connecting(attempt: 3), .timerFired(.reconnect), to: .connecting(attempt: 3),
+        effects: []),
+      Row(from: .connected(socket), .timerFired(.reconnect), to: .connected(socket), effects: []),
+      Row(from: .disconnected(nil), .timerFired(.reconnect), to: .disconnected(nil), effects: []),
 
       // A wake (foreground, network back) only matters while waiting to retry.
       Row(
         from: waiting, .wake, to: .connecting(attempt: 3),
-        effects: [.publishClientStatus(.connecting(attempt: 3)), .cancelRetry, .openSocket]),
+        effects: [.publishClientStatus(.connecting(attempt: 3)), .cancel(.reconnect), .openSocket]),
       Row(from: .connecting(attempt: 1), .wake, to: .connecting(attempt: 1), effects: []),
       Row(from: .connected(socket), .wake, to: .connected(socket), effects: []),
       Row(from: .disconnected(nil), .wake, to: .disconnected(nil), effects: []),
@@ -169,7 +170,7 @@ struct RealtimeCoreConnectionTests {
         effects: [
           .publishClientStatus(
             .reconnecting(attempt: 1, retryIn: .seconds(1), lastError: Self.dropped)),
-          .stopSocketLoops, .scheduleRetry(after: .seconds(1)), .cancel(.heartbeat),
+          .stopSocketLoops, .schedule(.reconnect, after: .seconds(1)), .cancel(.heartbeat),
         ]),
       Row(
         from: .connected(socket), .socketClosed(code: nil, reason: nil),
@@ -181,7 +182,7 @@ struct RealtimeCoreConnectionTests {
             .reconnecting(
               attempt: 1, retryIn: .seconds(1), lastError: .socketClosed(code: nil, reason: nil))
           ),
-          .stopSocketLoops, .scheduleRetry(after: .seconds(1)), .cancel(.heartbeat),
+          .stopSocketLoops, .schedule(.reconnect, after: .seconds(1)), .cancel(.heartbeat),
         ]),
       // Application close codes (4000–4999) signal auth or protocol errors.
       Row(
@@ -199,7 +200,7 @@ struct RealtimeCoreConnectionTests {
             .reconnecting(attempt: 1, retryIn: .seconds(1), lastError: .heartbeatTimeout)),
           .closeSocket(socket, code: 1001, reason: "error: heartbeat timeout"),
           .stopSocketLoops,
-          .scheduleRetry(after: .seconds(1)),
+          .schedule(.reconnect, after: .seconds(1)),
           .cancel(.heartbeat),
         ]),
       Row(
@@ -220,13 +221,13 @@ struct RealtimeCoreConnectionTests {
       // Channels come and go. The first subscribe cancels the idle disconnect (channel tests).
       Row(
         from: .connected(socket), .lastChannelRemoved(disconnectAfter: .seconds(50)),
-        to: .connected(socket), effects: [.scheduleIdleDisconnect(after: .seconds(50))]),
+        to: .connected(socket), effects: [.schedule(.idleDisconnect, after: .seconds(50))]),
       Row(
         from: .connecting(attempt: 1), .lastChannelRemoved(disconnectAfter: .seconds(50)),
-        to: .connecting(attempt: 1), effects: [.scheduleIdleDisconnect(after: .seconds(50))]),
+        to: .connecting(attempt: 1), effects: [.schedule(.idleDisconnect, after: .seconds(50))]),
       Row(
         from: waiting, .lastChannelRemoved(disconnectAfter: .seconds(50)), to: waiting,
-        effects: [.scheduleIdleDisconnect(after: .seconds(50))]),
+        effects: [.schedule(.idleDisconnect, after: .seconds(50))]),
       Row(
         from: .disconnected(nil), .lastChannelRemoved(disconnectAfter: .seconds(50)),
         to: .disconnected(nil), effects: []),
@@ -292,7 +293,7 @@ struct RealtimeCoreConnectionTests {
     #expect(harness.send(.connect(waiter: second)) == [])
     #expect(
       harness.send(.socketOpened(socket)) == [
-        .publishClientStatus(.connected), .installSocket(socket, rejoinChannels: false),
+        .publishClientStatus(.connected), .installSocket(socket),
         Self.heartbeatEvery, .resume(first, .success), .resume(second, .success),
       ])
   }
@@ -310,7 +311,7 @@ struct RealtimeCoreConnectionTests {
       harness.send(.socketOpenFailed(Self.unreachable)) == [
         .publishClientStatus(
           .reconnecting(attempt: 3, retryIn: .seconds(3), lastError: Self.unreachable)),
-        .scheduleRetry(after: .seconds(3)),
+        .schedule(.reconnect, after: .seconds(3)),
         .resume(waiter, .failure(Self.unreachable)),
       ])
   }
@@ -400,7 +401,7 @@ struct RealtimeCoreConnectionTests {
     var harness = CoreHarness.connected()
     _ = harness.send(.timerFired(.heartbeat))
     _ = harness.send(.socketClosed(code: 1001, reason: "going away"))
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     _ = harness.send(.socketOpened(other))
 
     #expect(
@@ -430,7 +431,7 @@ struct RealtimeCoreConnectionTests {
 
     #expect(
       harness.send(.appForeground) == [
-        .publishClientStatus(.connecting(attempt: 2)), .cancelRetry, .openSocket,
+        .publishClientStatus(.connecting(attempt: 2)), .cancel(.reconnect), .openSocket,
       ])
   }
 

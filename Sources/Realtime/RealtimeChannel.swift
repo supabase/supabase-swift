@@ -331,12 +331,6 @@ public final class RealtimeChannel: Sendable, Hashable {
     "realtime:\(topic)"
   }
 
-  /// The topic name for a topic on the WebSocket, or `nil` when it is not a channel topic.
-  static func topic(forWireTopic wireTopic: String) -> String? {
-    guard wireTopic.hasPrefix("realtime:") else { return nil }
-    return String(wireTopic.dropFirst("realtime:".count))
-  }
-
   /// The waits between join attempts after a timeout, a lost connection, or a transient join
   /// error. The last step repeats.
   static let rejoinBackoff = BackoffPolicy.steps([

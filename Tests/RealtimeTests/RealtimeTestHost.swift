@@ -219,13 +219,13 @@ extension RealtimeClient {
   /// The id of the core record for `topic`, if there is one: the live channel's record first,
   /// then any other record of the topic, such as one still leaving.
   private func recordID(for topic: String) -> ChannelID? {
-    if let id = liveChannels[topic], core.channels[id] != nil { return id }
+    if let id = liveChannelState(for: topic)?.handle.id, core.channels[id] != nil { return id }
     return core.channels.first { $0.value.topic == topic }?.key
   }
 
   /// The channel ``channel(_:configure:)`` returns for `topic`, without creating one.
   func liveChannel(for topic: String) -> RealtimeChannel? {
-    liveChannels[topic].flatMap { channelStates[$0]?.handle }
+    liveChannelState(for: topic)?.handle
   }
 
   /// Ends every stream of `channel`, as removing it would, but keeps it registered. A test then
@@ -266,7 +266,7 @@ extension RealtimeClient {
   /// Gives the core a subscribed channel for `topic`, as a confirmed join would, so frames for
   /// it reach the channel's streams without a socket. The client must have a channel for `topic`.
   func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
-    guard let id = liveChannels[topic] else {
+    guard let id = liveChannelState(for: topic)?.handle.id else {
       preconditionFailure("No channel for '\(topic)'")
     }
     var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())
@@ -289,7 +289,7 @@ extension RealtimeClient {
   var connectionError: RealtimeError? { core.connection.error }
 
   /// The ref of the heartbeat the server has not acknowledged yet.
-  var pendingHeartbeatRef: String? { core.heartbeat.pendingRef }
+  var pendingHeartbeatRef: String? { core.pendingHeartbeat?.ref }
 
   /// The ref of the join the core can still confirm, or already confirmed, for `topic`.
   func joinRef(for topic: String) -> String? {

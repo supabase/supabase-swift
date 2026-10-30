@@ -142,7 +142,7 @@ extension RealtimeCore {
       effects.append(
         .send(
           RealtimeMessage(
-            joinRef: joinRef, ref: makeRef(), topic: RealtimeChannel.wireTopic(for: record.topic),
+            joinRef: joinRef, ref: makeRef(), topic: record.wireTopic,
             event: ChannelEvent.accessToken, payload: ["access_token": .string(token)])))
     }
     return effects

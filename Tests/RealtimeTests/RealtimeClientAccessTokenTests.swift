@@ -371,7 +371,9 @@ struct RealtimeClientAccessTokenTests {
 
   /// An `exp` `seconds` after the host client's own now, so the refresh delay is exact.
   private func expiresIn(_ seconds: TimeInterval, on host: RealtimeTestHost) -> TimeInterval {
-    host.client.now().addingTimeInterval(seconds).timeIntervalSince1970
+    let client = host.client
+    return client.startDate.addingTimeInterval(client.elapsed().timeInterval + seconds)
+      .timeIntervalSince1970
   }
 
   private func makeHost(

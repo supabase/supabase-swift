@@ -68,7 +68,7 @@ extension RealtimeCore {
       if let waiter { channels[channel]?.leaveWaiters.append(waiter) }
       logger.debug(
         "Leaving channel '\(topic(of: channel))' (join_ref: \(joinRef), ref: \(leaveRef))")
-      effects.append(.send(leaveMessage(record.topic, joinRef: joinRef, ref: leaveRef)))
+      effects.append(.send(leaveMessage(record.wireTopic, joinRef: joinRef, ref: leaveRef)))
       if case .joining = record.phase {
         effects += endJoin(channel, subscribers: subscribers, pushes: pushes, phase: leaving)
       } else {
@@ -145,13 +145,13 @@ extension RealtimeCore {
 
   /// Sends `phx_leave` for the join `joinRef` on a connected socket.
   mutating func sendLeave(_ channel: ChannelID, joinRef: Ref) -> [Effect] {
-    guard isConnected, let topic = channels[channel]?.topic else { return [] }
-    return [.send(leaveMessage(topic, joinRef: joinRef, ref: makeRef()))]
+    guard isConnected, let wireTopic = channels[channel]?.wireTopic else { return [] }
+    return [.send(leaveMessage(wireTopic, joinRef: joinRef, ref: makeRef()))]
   }
 
-  private func leaveMessage(_ topic: String, joinRef: Ref, ref: Ref) -> RealtimeMessage {
+  private func leaveMessage(_ wireTopic: String, joinRef: Ref, ref: Ref) -> RealtimeMessage {
     RealtimeMessage(
-      joinRef: joinRef, ref: ref, topic: RealtimeChannel.wireTopic(for: topic),
+      joinRef: joinRef, ref: ref, topic: wireTopic,
       event: ChannelEvent.leave, payload: [:])
   }
 
@@ -222,24 +222,21 @@ extension RealtimeCore {
     var effects: [Effect] = []
     for channel in channels.keys.sorted() {
       guard let phase = channels[channel]?.phase else { continue }
+      if case .leaving = phase {
+        effects += leaveEnded(channel, pushes: .notConnected, cancelTimer: true)
+        continue
+      }
+      effects += failPendingPushes(channel, with: .notConnected)
       switch phase {
-      case .joining(_, let attempt, _):
-        effects += failPendingPushes(channel, with: .notConnected)
+      case .joining(_, let attempt, _), .refreshingToken(let attempt):
         effects += waitForNextSocket(channel, attempt: attempt)
       case .waitingToRetry(let attempt, _, _):
-        effects += failPendingPushes(channel, with: .notConnected)
         effects += waitForNextSocket(channel, attempt: attempt + 1)
-      case .refreshingToken(let attempt):
-        effects += failPendingPushes(channel, with: .notConnected)
-        effects += waitForNextSocket(channel, attempt: attempt)
       case .subscribed:
         channels[channel]?.isAutomaticRejoin = true
-        effects += failPendingPushes(channel, with: .notConnected)
         effects += waitForNextSocket(channel, attempt: 1)
-      case .leaving:
-        effects += leaveEnded(channel, pushes: .notConnected, cancelTimer: true)
-      case .unsubscribed, .waitingForSocket, .failed:
-        effects += failPendingPushes(channel, with: .notConnected)
+      case .unsubscribed, .waitingForSocket, .leaving, .failed:
+        break
       }
     }
     return effects
@@ -324,23 +321,5 @@ extension RealtimeCore {
     }
     return transitionConnection(
       .lastChannelRemoved(disconnectAfter: options.disconnectOnEmptyChannelsAfter))
-  }
-}
-
-extension ChannelRecord.Phase {
-  /// The timer this phase of `channel` waits on, if any.
-  fileprivate func timer(for channel: ChannelID) -> TimerID? {
-    switch self {
-    case .joining(let ref, _, .reply):
-      .joinTimeout(channel: channel, ref: ref)
-    case .joining(let ref, _, .postgres):
-      .postgresTimeout(channel: channel, ref: ref)
-    case .waitingToRetry:
-      .rejoin(channel: channel)
-    case .leaving(_, let leaveRef):
-      .leaveTimeout(channel: channel, ref: leaveRef)
-    case .unsubscribed, .waitingForSocket, .refreshingToken, .subscribed, .failed:
-      nil
-    }
   }
 }

@@ -22,7 +22,7 @@ extension RealtimeCore {
     }
     let ref = makeRef()
     let message = RealtimeMessage(
-      joinRef: joinRef, ref: ref, topic: RealtimeChannel.wireTopic(for: record.topic), event: event,
+      joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
       payload: payload)
     guard let waiter else { return [.send(message)] }
     return [.send(message)] + awaitReply(channel, ref: ref, waiter: waiter)
@@ -40,7 +40,7 @@ extension RealtimeCore {
     }
     let ref = makeRef()
     let send = Effect.sendBroadcast(
-      joinRef: joinRef, ref: ref, topic: RealtimeChannel.wireTopic(for: record.topic), event: event,
+      joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
       payload: payload)
     guard record.configuration.broadcast.acknowledge else {
       return [send, .resume(waiter, .success)]
@@ -61,11 +61,7 @@ extension RealtimeCore {
     guard let waiter = channels[channel]?.pendingPushes.removeValue(forKey: ref) else { return [] }
     let outcome: WaiterOutcome
     if status == .error {
-      let response = message.payload["response"]
-      let reason =
-        response?.objectValue?["reason"]?.stringValue
-        ?? response?.stringValue
-        ?? "The server rejected the push."
+      let reason = message.replyReason(default: "The server rejected the push.")
       outcome = .failure(.ackError(reason: reason))
     } else {
       outcome = .success

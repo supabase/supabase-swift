@@ -4,16 +4,13 @@
 //
 
 import ConcurrencyExtras
+import TestHelpers
 import Testing
 
 @testable import Realtime
 
 @Suite(.timeLimit(.minutes(1)))
 struct FanoutTests {
-  func collect(_ stream: AsyncStream<Int>) async -> [Int] {
-    await stream.reduce(into: []) { $0.append($1) }
-  }
-
   func id(_ rawValue: UInt64) -> StreamID {
     StreamID(rawValue: rawValue, channel: nil)
   }
@@ -27,7 +24,7 @@ struct FanoutTests {
     fanout.yield(2)
     fanout.finish()
 
-    #expect(await collect(stream) == [1, 2])
+    #expect(await stream.collect() == [1, 2])
     #expect(fanout.current == nil)
   }
 
@@ -40,7 +37,7 @@ struct FanoutTests {
     fanout.yield(6)
     fanout.finish()
 
-    #expect(await collect(stream) == [5, 6])
+    #expect(await stream.collect() == [5, 6])
     #expect(fanout.current == 6)
   }
 
@@ -51,7 +48,7 @@ struct FanoutTests {
 
     fanout.finish()
 
-    #expect(await collect(stream) == [3])
+    #expect(await stream.collect() == [3])
   }
 
   @Test
@@ -64,8 +61,8 @@ struct FanoutTests {
     let late = fanout.subscribe(id(2), onTermination: {})
     fanout.finish()
 
-    #expect(await collect(early) == [4])
-    #expect(await collect(late) == [4])
+    #expect(await early.collect() == [4])
+    #expect(await late.collect() == [4])
   }
 
   @Test
@@ -77,8 +74,8 @@ struct FanoutTests {
     for value in 1...4 { fanout.yield(value) }
     fanout.finish()
 
-    #expect(await collect(evens) == [2, 4])
-    #expect(await collect(all) == [1, 2, 3, 4])
+    #expect(await evens.collect() == [2, 4])
+    #expect(await all.collect() == [1, 2, 3, 4])
   }
 
   @Test
@@ -90,7 +87,7 @@ struct FanoutTests {
     fanout.yield(3)
     fanout.finish()
 
-    #expect(await collect(stream) == [1, 2])
+    #expect(await stream.collect() == [1, 2])
   }
 
   @Test
@@ -100,8 +97,8 @@ struct FanoutTests {
     let retaining = Fanout<Int>(retaining: 7)
     retaining.finish()
 
-    #expect(await collect(plain.subscribe(id(1), onTermination: {})).isEmpty)
-    #expect(await collect(retaining.subscribe(id(1), onTermination: {})) == [7])
+    #expect(await plain.subscribe(id(1), onTermination: {}).collect().isEmpty)
+    #expect(await retaining.subscribe(id(1), onTermination: {}).collect() == [7])
     #expect(plain.count == 0)
     #expect(retaining.count == 0)
   }
@@ -122,7 +119,7 @@ struct FanoutTests {
     let stream = fanout.subscribe(id(1), onTermination: { terminations.withValue { $0 += 1 } })
 
     fanout.finish()
-    _ = await collect(stream)
+    _ = await stream.collect()
 
     #expect(terminations.value == 0)
   }
@@ -134,7 +131,7 @@ struct FanoutTests {
     let terminations = LockIsolated(0)
 
     let stream = fanout.subscribe(id(1), onTermination: { terminations.withValue { $0 += 1 } })
-    _ = await collect(stream)
+    _ = await stream.collect()
 
     #expect(terminations.value == 0)
   }
@@ -199,6 +196,6 @@ struct FanoutTests {
 
     fanout = nil
 
-    #expect(await collect(stream) == [1])
+    #expect(await stream.collect() == [1])
   }
 }

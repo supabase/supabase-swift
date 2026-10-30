@@ -6,13 +6,6 @@
 import Logging
 
 extension RealtimeCore {
-  /// The heartbeat sent on the current socket that the server has not acknowledged yet.
-  struct HeartbeatState {
-    var pendingRef: Ref?
-    /// When the pending heartbeat was sent, as `CoreTime.elapsed`.
-    var sentAt: Duration?
-  }
-
   mutating func connect(waiter: WaiterID?) -> [Effect] {
     if case .connected = connection {
       return waiter.map { [.resume($0, .success)] } ?? []
@@ -37,7 +30,7 @@ extension RealtimeCore {
     let previous = connection
     let effects = Self.connectionTable(&connection, event, retryDelay: options.retryDelay)
     if case .lastChannelRemoved(let delay) = event,
-      effects.contains(.scheduleIdleDisconnect(after: delay))
+      effects.contains(.schedule(.idleDisconnect, after: delay))
     {
       idleDisconnectPending = true
     }
@@ -45,7 +38,7 @@ extension RealtimeCore {
 
     logger.debug("Connection → \(connection) on \(event)")
     // A heartbeat pending on the old socket can never be acknowledged on the new one.
-    heartbeat = HeartbeatState()
+    pendingHeartbeat = nil
 
     var result: [Effect] = [.publishClientStatus(connection.status)]
     result += effects
@@ -93,7 +86,7 @@ extension RealtimeCore {
     func waitToRetry(after attempt: Int, _ error: RealtimeError) -> Effect {
       let delay = retryDelay(attempt)
       state = .reconnecting(attempt: attempt, retryIn: delay, lastError: error)
-      return .scheduleRetry(after: delay)
+      return .schedule(.reconnect, after: delay)
     }
 
     switch (state, event) {
@@ -104,20 +97,20 @@ extension RealtimeCore {
     case (.reconnecting(let attempt, _, _), .connect),
       (.reconnecting(let attempt, _, _), .wake):
       state = .connecting(attempt: attempt + 1)
-      return [.cancelRetry, .openSocket]
+      return [.cancel(.reconnect), .openSocket]
     case (_, .connect), (_, .wake):
       return []
 
-    case (.reconnecting(let attempt, _, _), .retryTimerFired):
+    case (.reconnecting(let attempt, _, _), .timerFired(.reconnect)):
       state = .connecting(attempt: attempt + 1)
       return [.openSocket]
-    case (_, .retryTimerFired):
+    case (_, .timerFired(.reconnect)):
       return []
 
     // The transport answered.
-    case (.connecting(let attempt), .socketOpened(let conn)):
+    case (.connecting, .socketOpened(let conn)):
       state = .connected(conn)
-      return [.installSocket(conn, rejoinChannels: attempt > 1)]
+      return [.installSocket(conn)]
     case (_, .socketOpened(let conn)):
       // `disconnect()` ran while the handshake was in flight and already moved on.
       return [.closeSocket(conn, code: nil, reason: "Connection cancelled")]
@@ -168,7 +161,7 @@ extension RealtimeCore {
     case (.disconnected, .lastChannelRemoved):
       return []
     case (_, .lastChannelRemoved(let delay)):
-      return [.scheduleIdleDisconnect(after: delay)]
+      return [.schedule(.idleDisconnect, after: delay)]
 
     default:
       return []
@@ -203,16 +196,16 @@ extension RealtimeCore {
 
   /// Sends the next heartbeat, or fails the socket when the previous one was never acknowledged.
   /// A heartbeat also refreshes the token, as `setAuth()` does.
-  mutating func heartbeatTimerFired(at time: CoreTime) -> [Effect] {
+  mutating func heartbeatTimerFired() -> [Effect] {
     guard case .connected = connection else { return [] }
 
-    if heartbeat.pendingRef != nil {
+    if pendingHeartbeat != nil {
       logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
       return [.publishHeartbeat(.timedOut)] + socketWentAway(.socketFailed(.heartbeatTimeout))
     }
 
     let ref = makeRef()
-    heartbeat = HeartbeatState(pendingRef: ref, sentAt: time.elapsed)
+    pendingHeartbeat = (ref, now.elapsed)
     return [
       .send(
         RealtimeMessage(joinRef: nil, ref: ref, topic: "phoenix", event: "heartbeat", payload: [:])
@@ -222,15 +215,14 @@ extension RealtimeCore {
     ] + refreshAccessToken(ignoringInterval: false)
   }
 
-  mutating func receiveHeartbeatReply(_ message: RealtimeMessage, at time: CoreTime) -> [Effect] {
-    guard let ref = message.ref, ref == heartbeat.pendingRef else { return [] }
+  mutating func receiveHeartbeatReply(_ message: RealtimeMessage) -> [Effect] {
+    guard let pending = pendingHeartbeat, message.ref == pending.ref else { return [] }
 
-    let sentAt = heartbeat.sentAt
-    heartbeat = HeartbeatState()
+    pendingHeartbeat = nil
     // Any reply proves the socket is alive, which is all a heartbeat checks.
     if message.status != .ok {
       logger.warning("The server answered the heartbeat with: \(message.payload)")
     }
-    return [.publishHeartbeat(.acknowledged(latency: sentAt.map { time.elapsed - $0 } ?? .zero))]
+    return [.publishHeartbeat(.acknowledged(latency: now.elapsed - pending.sentAt))]
   }
 }

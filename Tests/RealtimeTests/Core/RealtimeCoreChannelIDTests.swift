@@ -165,7 +165,7 @@ extension TimerID {
   /// The channel the timer belongs to, or `nil` for a client timer.
   fileprivate var channel: ChannelID? {
     switch self {
-    case .heartbeat, .tokenRefresh:
+    case .heartbeat, .tokenRefresh, .reconnect, .idleDisconnect:
       nil
     case .joinTimeout(let channel, _), .rejoin(let channel), .postgresTimeout(let channel, _),
       .leaveTimeout(let channel, _), .pushTimeout(let channel, _):

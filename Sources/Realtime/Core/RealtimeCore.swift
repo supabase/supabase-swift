@@ -51,8 +51,6 @@ struct RealtimeCore {
     case socketClosed(code: Int?, reason: String?)
     /// The current socket failed, for example a heartbeat that was never acknowledged.
     case socketFailed(RealtimeError)
-    /// The backoff wait before the next reconnect attempt is over.
-    case retryTimerFired
     /// A hint that the network may be back. Cuts a backoff wait short; ignored otherwise.
     case wake
     /// The last channel was removed; disconnect after `disconnectAfter` unless a channel
@@ -87,21 +85,15 @@ struct RealtimeCore {
     // Connection
     /// Start a connect attempt.
     case openSocket
-    /// Start reading the socket. `rejoinChannels` is `true` after an automatic reconnect. The
-    /// core sends those rejoins itself, so the shell must not join the channels again.
-    case installSocket(any WebSocketConnection, rejoinChannels: Bool)
+    /// Start reading the socket. The core sends the rejoins itself, so the shell must not join
+    /// the channels again.
+    case installSocket(any WebSocketConnection)
     /// Close a socket, either the current one or one that opened too late.
     case closeSocket(any WebSocketConnection, code: Int?, reason: String)
     /// Stop reading the socket that just went away.
     case stopSocketLoops
     /// Cancel every task the client owns, including a connect attempt in flight.
     case cancelAllTasks
-    /// Apply `.retryTimerFired` after `after`.
-    case scheduleRetry(after: Duration)
-    case cancelRetry
-    /// Disconnect after `after`.
-    case scheduleIdleDisconnect(after: Duration)
-    case cancelIdleDisconnect
 
     /// Write a frame to the current socket.
     case send(RealtimeMessage)
@@ -129,16 +121,12 @@ struct RealtimeCore {
     static func == (lhs: Effect, rhs: Effect) -> Bool {
       switch (lhs, rhs) {
       case (.openSocket, .openSocket), (.stopSocketLoops, .stopSocketLoops),
-        (.cancelAllTasks, .cancelAllTasks), (.cancelRetry, .cancelRetry),
-        (.cancelIdleDisconnect, .cancelIdleDisconnect):
+        (.cancelAllTasks, .cancelAllTasks):
         return true
-      case (.installSocket(let a, let ra), .installSocket(let b, let rb)):
-        return a === b && ra == rb
+      case (.installSocket(let a), .installSocket(let b)):
+        return a === b
       case (.closeSocket(let a, let ca, let ra), .closeSocket(let b, let cb, let rb)):
         return a === b && ca == cb && ra == rb
-      case (.scheduleRetry(let a), .scheduleRetry(let b)),
-        (.scheduleIdleDisconnect(let a), .scheduleIdleDisconnect(let b)):
-        return a == b
       case (.send(let a), .send(let b)):
         return a == b
       case (
@@ -195,7 +183,9 @@ struct RealtimeCore {
   var now = CoreTime(elapsed: .zero, date: .distantPast)
   /// The last ref ``makeRef()`` made.
   var lastRef: UInt64 = 0
-  var heartbeat = HeartbeatState()
+  /// The heartbeat sent on the current socket that the server has not acknowledged yet, and
+  /// when it was sent, as `CoreTime.elapsed`.
+  var pendingHeartbeat: (ref: Ref, sentAt: Duration)?
   /// The `connect()` callers waiting for the attempt in flight.
   var connectWaiters: [WaiterID] = []
   /// Whether the socket was connected when the app last went to the background.
@@ -228,16 +218,19 @@ struct RealtimeCore {
       return socketWentAway(event)
     case .disconnectRequested:
       return transitionConnection(event) + disconnectChannels()
-    case .retryTimerFired, .wake, .lastChannelRemoved:
+    case .timerFired(.idleDisconnect):
+      return transitionConnection(.disconnectRequested(code: nil, reason: nil))
+        + disconnectChannels()
+    case .timerFired(.reconnect), .wake, .lastChannelRemoved:
       return transitionConnection(event)
     case .appBackground:
       return enterBackground()
     case .appForeground:
       return enterForeground()
     case .timerFired(.heartbeat):
-      return heartbeatTimerFired(at: time)
+      return heartbeatTimerFired()
     case .frame(let message) where message.topic == "phoenix":
-      return receiveHeartbeatReply(message, at: time)
+      return receiveHeartbeatReply(message)
     case .frame(let message) where message.event == ChannelEvent.system:
       return receiveSystem(message)
     case .frame(let message)

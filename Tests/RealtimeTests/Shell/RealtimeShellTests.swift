@@ -287,7 +287,7 @@ struct RealtimeShellTests {
     host.sendClose(for: join)
     await removal.value
 
-    #expect(await host.client.idleDisconnectTimer == nil)
+    #expect(await host.client.timers.task(for: .idleDisconnect) == nil)
     #expect(await host.client.status == .connected)
   }
 
@@ -419,7 +419,7 @@ struct RealtimeShellTests {
     _ = try await host.receive(event: ChannelEvent.leave)
     host.sendClose(for: join)
     await removal.value
-    #expect(await host.client.idleDisconnectTimer != nil)
+    #expect(await host.client.timers.task(for: .idleDisconnect) != nil)
 
     await expectError(.channelRemoved) { try await channel.subscribe() }
     await expectError(.channelRemoved) {
@@ -439,7 +439,7 @@ struct RealtimeShellTests {
     }
     #expect(statuses.isEmpty)
     // A spent handle never reaches the core, so the idle disconnect stays scheduled.
-    #expect(await host.client.idleDisconnectTimer != nil)
+    #expect(await host.client.timers.task(for: .idleDisconnect) != nil)
     #expect(await !host.client.channels.contains(channel))
   }
 

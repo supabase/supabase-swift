@@ -19,12 +19,11 @@ extension RealtimeCore {
     var effects: [Effect] = []
     if idleDisconnectPending {
       idleDisconnectPending = false
-      effects.append(.cancelIdleDisconnect)
+      effects.append(.cancel(.idleDisconnect))
     }
 
     var record = channels[channel] ?? ChannelRecord(topic: topic, configuration: configuration)
-    record.bindings = snapshot.bindings
-    record.presenceEnabled = snapshot.presenceEnabled
+    record.snapshot = snapshot
     switch record.phase {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -67,7 +66,8 @@ extension RealtimeCore {
     let ref = makeRef()
     record.timedOutJoinRef = nil
     let config = RealtimeJoinConfig(
-      record.configuration, bindings: record.bindings, presenceEnabled: record.presenceEnabled)
+      record.configuration, bindings: record.snapshot.bindings,
+      presenceEnabled: record.snapshot.presenceEnabled)
     record.joinedBindings = config.postgresChanges
     record.joinAccessToken = tokens.token
     // A new join waits for its own first presence state.
@@ -83,7 +83,7 @@ extension RealtimeCore {
       effects.append(
         .send(
           RealtimeMessage(
-            joinRef: ref, ref: ref, topic: RealtimeChannel.wireTopic(for: record.topic),
+            joinRef: ref, ref: ref, topic: record.wireTopic,
             event: ChannelEvent.join, payload: encoded)))
     } else {
       reportIssue(
@@ -169,11 +169,7 @@ extension RealtimeCore {
     if message.status == .ok {
       effects = joinAccepted(message, ref: ref, attempt: attempt, on: channel)
     } else if message.status == .error {
-      let response = message.payload["response"]
-      let reason =
-        response?.objectValue?["reason"]?.stringValue
-        ?? response?.stringValue
-        ?? "The server rejected the join."
+      let reason = message.replyReason(default: "The server rejected the join.")
       logger.debug(
         "Server refused the join for channel '\(topic(of: channel))' (ref: \(ref)): \(reason)")
       effects = joinAttemptFailed(channel, attempt: attempt, error: .joinError(reason: reason))
@@ -248,11 +244,8 @@ extension RealtimeCore {
       logger.error("Channel '\(topic(of: channel))' reported an error: \(reason)")
       var effects: [Effect] = []
       if isPostgresChanges, isForCurrentJoin, record.awaitsPostgresChanges,
-        case .joining(let ref, _, let stage) = record.phase
+        case .joining(let ref, _, _) = record.phase, let timer = record.phase.timer(for: channel)
       {
-        let timer: TimerID =
-          stage == .reply
-          ? .joinTimeout(channel: channel, ref: ref) : .postgresTimeout(channel: channel, ref: ref)
         effects =
           failPostgresChanges(channel, ref: ref, with: .postgresChangesFailed(reason: reason))
           + [.cancel(timer)]
@@ -272,20 +265,10 @@ extension RealtimeCore {
   /// Confirms the current join on a `system` ok, which may come before the join reply, and
   /// stops the timer of the stage it waited in.
   private mutating func confirmJoinBySystem(_ channel: ChannelID) -> [Effect] {
-    switch channels[channel]?.phase {
-    case .joining(let ref, _, .reply)?:
-      return confirmJoin(channel, ref: ref) + [.cancel(.joinTimeout(channel: channel, ref: ref))]
-    case .joining(let ref, _, .postgres)?:
-      return confirmJoin(channel, ref: ref) + [
-        .cancel(.postgresTimeout(channel: channel, ref: ref))
-      ]
-    case .waitingToRetry?:
-      guard let ref = channels[channel]?.timedOutJoinRef else { return [] }
-      return confirmJoin(channel, ref: ref) + [.cancel(.rejoin(channel: channel))]
-    case .unsubscribed?, .waitingForSocket?, .refreshingToken?, .subscribed?, .leaving?,
-      .failed?, nil:
-      return []
-    }
+    guard let record = channels[channel], let ref = record.currentJoinRef,
+      let timer = record.phase.timer(for: channel)
+    else { return [] }
+    return confirmJoin(channel, ref: ref) + [.cancel(timer)]
   }
 
   mutating func postgresTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
@@ -304,8 +287,7 @@ extension RealtimeCore {
 
   mutating func bindingsChanged(_ channel: ChannelID, snapshot: JoinSnapshot) -> [Effect] {
     guard channels[channel] != nil else { return [] }
-    channels[channel]?.bindings = snapshot.bindings
-    channels[channel]?.presenceEnabled = snapshot.presenceEnabled
+    channels[channel]?.snapshot = snapshot
     return rejoinIfBindingsChanged(channel)
   }
 
@@ -319,7 +301,7 @@ extension RealtimeCore {
       case .connected = connection
     else { return [] }
     let joined = Set(record.joinedBindings.map(BindingKey.init))
-    guard record.bindings.contains(where: { !joined.contains(BindingKey($0)) }) else {
+    guard record.snapshot.bindings.contains(where: { !joined.contains(BindingKey($0)) }) else {
       return []
     }
     logger.debug("Rejoining channel '\(topic(of: channel))' to add Postgres changes bindings")

@@ -391,7 +391,7 @@ struct RealtimeCoreTokenTests {
     // The fetch ends while the socket is down: nothing joins.
     #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
 
-    _ = harness.send(.retryTimerFired)
+    _ = harness.send(.timerFired(.reconnect))
     let opened = harness.send(.socketOpened(FakeWebSocket.fakes().0))
     #expect(opened.contains(.send(try Self.join(ref: "1", token: "t1"))))
   }

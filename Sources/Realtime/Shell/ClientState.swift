@@ -15,8 +15,6 @@ enum Input: Sendable {
   case socket(SocketInput, generation: Int)
   case connectEnded(Result<any WebSocketConnection, any Error>, attempt: Int)
   case timerFired(TimerID, token: UInt64)
-  case retryTimerFired(token: UInt64)
-  case idleTimerFired(token: UInt64)
   case tokenFetched(String?, generation: Int)
   case streamEnded(StreamID)
   case waiterCancelled(WaiterID)
@@ -158,25 +156,11 @@ final class Fanout<Element: Sendable> {
 final class ChannelState {
   /// A Postgres stream: its bindings and where its changes go.
   private struct Binding {
-    enum Sink {
-      case changes(AsyncStream<PostgresChange>.Continuation)
-      case signals(AsyncStream<PostgresChangesSignal>.Continuation)
-    }
-
     let id: StreamID
     let configs: [PostgresJoinConfig]
-    let sink: Sink
-
-    func finish() {
-      switch sink {
-      case .changes(let continuation):
-        continuation.onTermination = nil
-        continuation.finish()
-      case .signals(let continuation):
-        continuation.onTermination = nil
-        continuation.finish()
-      }
-    }
+    /// Hands a signal to the stream. A stream of changes only drops the other signals.
+    let yield: (PostgresChangesSignal) -> Void
+    let finish: () -> Void
   }
 
   let handle: RealtimeChannel
@@ -213,14 +197,9 @@ final class ChannelState {
     _ config: PostgresJoinConfig,
     onTermination: @escaping @Sendable () -> Void
   ) -> AsyncStream<PostgresChange> {
-    let (stream, continuation) = AsyncStream.makeStream(of: PostgresChange.self)
-    guard !isSpent else {
-      continuation.finish()
-      return stream
+    addBinding(id, [config], onTermination: onTermination) {
+      if case .change(let change) = $0 { change } else { nil }
     }
-    continuation.onTermination = { _ in onTermination() }
-    postgres.append(Binding(id: id, configs: [config], sink: .changes(continuation)))
-    return stream
   }
 
   /// Registers `configs` and returns one stream of the changes the server matches to any of them,
@@ -231,13 +210,32 @@ final class ChannelState {
     _ configs: [PostgresJoinConfig],
     onTermination: @escaping @Sendable () -> Void
   ) -> AsyncStream<PostgresChangesSignal> {
-    let (stream, continuation) = AsyncStream.makeStream(of: PostgresChangesSignal.self)
+    addBinding(id, configs, onTermination: onTermination) { $0 }
+  }
+
+  /// Registers `configs` for a stream of the signals that `element` maps to a value.
+  private func addBinding<Element>(
+    _ id: StreamID,
+    _ configs: [PostgresJoinConfig],
+    onTermination: @escaping @Sendable () -> Void,
+    element: @escaping (PostgresChangesSignal) -> Element?
+  ) -> AsyncStream<Element> {
+    let (stream, continuation) = AsyncStream.makeStream(of: Element.self)
     guard !isSpent else {
       continuation.finish()
       return stream
     }
     continuation.onTermination = { _ in onTermination() }
-    postgres.append(Binding(id: id, configs: configs, sink: .signals(continuation)))
+    postgres.append(
+      Binding(
+        id: id, configs: configs,
+        yield: { signal in
+          if let value = element(signal) { continuation.yield(value) }
+        },
+        finish: {
+          continuation.onTermination = nil
+          continuation.finish()
+        }))
     return stream
   }
 
@@ -265,10 +263,7 @@ final class ChannelState {
       broadcasts.yield(message)
     case .postgres(let delivery):
       for binding in postgres where binding.configs.contains(where: delivery.matched.contains) {
-        switch binding.sink {
-        case .changes(let continuation): continuation.yield(delivery.change)
-        case .signals(let continuation): continuation.yield(.change(delivery.change))
-        }
+        binding.yield(.change(delivery.change))
       }
     case .presence(let change, let state):
       presenceChanges.yield(change)
@@ -281,7 +276,7 @@ final class ChannelState {
 
   private func yieldSignal(_ signal: PostgresChangesSignal) {
     for binding in postgres {
-      if case .signals(let continuation) = binding.sink { continuation.yield(signal) }
+      binding.yield(signal)
     }
   }
 

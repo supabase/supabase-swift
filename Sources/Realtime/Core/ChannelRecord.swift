@@ -8,14 +8,15 @@
 struct ChannelRecord {
   /// The topic of the channel, without the `realtime:` prefix.
   let topic: String
+  /// The topic on the WebSocket, with the `realtime:` prefix.
+  let wireTopic: String
   let configuration: RealtimeChannelConfiguration
   var phase: Phase = .unsubscribed
   /// Whether the channel joined at least once, so the next join is a rejoin.
   var hasBeenSubscribed = false
-  /// The client's Postgres bindings, in registration order.
-  var bindings: [PostgresJoinConfig] = []
-  /// Whether a presence stream is open, so the join turns presence on.
-  var presenceEnabled = false
+  /// The client's Postgres bindings, in registration order, and whether a presence stream is
+  /// open, so the join turns presence on.
+  var snapshot = JoinSnapshot(bindings: [], presenceEnabled: false)
   /// The bindings the last `phx_join` carried.
   var joinedBindings: [PostgresJoinConfig] = []
   /// The bindings the server echoed in the join reply, with their ids.
@@ -42,6 +43,7 @@ struct ChannelRecord {
 
   init(topic: String, configuration: RealtimeChannelConfiguration) {
     self.topic = topic
+    self.wireTopic = RealtimeChannel.wireTopic(for: topic)
     self.configuration = configuration
   }
 
@@ -141,6 +143,24 @@ struct ChannelRecord {
       default:
         return false
       }
+    }
+  }
+}
+
+extension ChannelRecord.Phase {
+  /// The timer this phase of `channel` waits on, if any.
+  func timer(for channel: ChannelID) -> TimerID? {
+    switch self {
+    case .joining(let ref, _, .reply):
+      .joinTimeout(channel: channel, ref: ref)
+    case .joining(let ref, _, .postgres):
+      .postgresTimeout(channel: channel, ref: ref)
+    case .waitingToRetry:
+      .rejoin(channel: channel)
+    case .leaving(_, let leaveRef):
+      .leaveTimeout(channel: channel, ref: leaveRef)
+    case .unsubscribed, .waitingForSocket, .refreshingToken, .subscribed, .failed:
+      nil
     }
   }
 }

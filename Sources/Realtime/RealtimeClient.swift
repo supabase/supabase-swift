@@ -85,8 +85,8 @@ public actor RealtimeClient {
 
   /// The time since the client was created, on `clock`.
   nonisolated let elapsed: @Sendable () -> Duration
-  /// The wall-clock time, advanced by `clock`, so a `TestClock` also drives token expiry.
-  nonisolated let now: @Sendable () -> Date
+  /// The wall-clock time when the client was created.
+  nonisolated let startDate: Date
 
   enum ConnectionState: Equatable {
     /// Idle or stopped. Carries the error when a failure, not the user, stopped the client.
@@ -157,13 +157,6 @@ public actor RealtimeClient {
   var connectAttempt: (id: Int, task: Task<Void, Never>)?
   /// The id of the latest connect attempt.
   var lastConnectAttempt = 0
-  /// The wait before the next reconnect attempt. Its fire carries `token`, so the fire of a
-  /// wait that was cancelled or replaced is dropped.
-  var retryTimer: (token: UInt64, task: Task<Void, Never>)?
-  /// The wait before the deferred disconnect, stamped as ``retryTimer`` is.
-  var idleDisconnectTimer: (token: UInt64, task: Task<Void, Never>)?
-  /// The token of the latest retry or idle disconnect timer.
-  var lastShellTimerToken: UInt64 = 0
   /// The `accessToken` callback call in flight for fetch `generation`, and the timer that ends
   /// the wait for it after `requestTimeout`. The first of the two to report wins.
   var tokenFetch: (generation: Int, call: Task<Void, Never>, timeout: Task<Void, Never>)?
@@ -177,8 +170,6 @@ public actor RealtimeClient {
   }
   /// Whether ``channelStates`` is empty, for the core's `hasRegisteredChannels` closure.
   private let registeredChannels = RegisteredChannels()
-  /// The channel ``channel(_:configure:)`` returns for each topic.
-  var liveChannels: [String: ChannelID] = [:]
   /// The last ``ChannelID`` issued.
   var lastChannelID: UInt64 = 0
   /// The published client status.
@@ -267,10 +258,8 @@ public actor RealtimeClient {
     self.transport = transport
     self.http = http
     self.clock = clock
-    let elapsed = Self.elapsedTime(on: clock)
-    let start = Date()
-    self.elapsed = elapsed
-    self.now = { start.addingTimeInterval(elapsed().timeInterval) }
+    self.elapsed = Self.elapsedTime(on: clock)
+    self.startDate = Date()
     self.reconnectBackoff = reconnectBackoff
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
@@ -334,8 +323,6 @@ public actor RealtimeClient {
     outbox?.close()
     reader?.cancel()
     connectAttempt?.task.cancel()
-    retryTimer?.task.cancel()
-    idleDisconnectTimer?.task.cancel()
     tokenFetch?.call.cancel()
     tokenFetch?.timeout.cancel()
     timers.cancelAll()
@@ -529,7 +516,7 @@ public actor RealtimeClient {
   func channel(
     _ topic: String, configuration: RealtimeChannelConfiguration
   ) -> RealtimeChannel {
-    if let id = liveChannels[topic], let state = channelStates[id] {
+    if let state = liveChannelState(for: topic) {
       if state.handle.configuration != configuration {
         reportIssue(
           """
@@ -544,8 +531,14 @@ public actor RealtimeClient {
     let id = ChannelID(rawValue: lastChannelID)
     let handle = RealtimeChannel(id: id, topic: topic, configuration: configuration, client: self)
     channelStates[id] = ChannelState(handle: handle)
-    liveChannels[topic] = id
     return handle
+  }
+
+  /// The state of the channel ``channel(_:configure:)`` returns for `topic`. A topic has at most
+  /// one: a channel's state goes when it is removed or spent, and only then does a new channel
+  /// of the topic get one.
+  func liveChannelState(for topic: String) -> ChannelState? {
+    channelStates.values.first { $0.handle.topic == topic }
   }
 
   /// Unsubscribes from and removes a channel, ending every stream opened on it.
@@ -568,9 +561,6 @@ public actor RealtimeClient {
   public func removeChannel(_ channel: RealtimeChannel) async {
     guard let state = state(of: channel) else { return }
     channelStates[channel.id] = nil
-    if liveChannels[channel.topic] == channel.id {
-      liveChannels[channel.topic] = nil
-    }
     state.finishAll()
     try? await wait(evenIfCancelled: true) { [id = channel.id] in
       .removeChannel(channel: id, waiter: $0)

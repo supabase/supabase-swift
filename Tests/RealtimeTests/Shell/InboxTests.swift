@@ -170,9 +170,9 @@ struct InboxTests {
     await host.waitUntil {
       if case .reconnecting = await host.client.status { true } else { false }
     }
-    let token = try #require(await host.client.retryTimer?.token)
+    let token = try #require(await host.client.timers.token(for: .reconnect))
 
-    host.client.inbox.yield(.retryTimerFired(token: token + 1))
+    host.client.inbox.yield(.timerFired(.reconnect, token: token + 1))
     await host.client.flushInbox()
     #expect(
       await {
@@ -180,9 +180,9 @@ struct InboxTests {
       }())
     #expect(host.connectCount == 1)
 
-    host.client.inbox.yield(.retryTimerFired(token: token))
+    host.client.inbox.yield(.timerFired(.reconnect, token: token))
     await host.client.flushInbox()
-    #expect(await host.client.retryTimer == nil)
+    #expect(await host.client.timers.task(for: .reconnect) == nil)
     await host.waitUntil { await host.client.status.isConnected }
     #expect(host.connectCount == 2)
   }
@@ -198,13 +198,13 @@ struct InboxTests {
     _ = try await host.receive(event: ChannelEvent.leave)
     host.sendClose(for: join)
     await removal.value
-    let token = try #require(await host.client.idleDisconnectTimer?.token)
+    let token = try #require(await host.client.timers.token(for: .idleDisconnect))
 
-    host.client.inbox.yield(.idleTimerFired(token: token + 1))
+    host.client.inbox.yield(.timerFired(.idleDisconnect, token: token + 1))
     await host.client.flushInbox()
     #expect(await host.client.status.isConnected)
 
-    host.client.inbox.yield(.idleTimerFired(token: token))
+    host.client.inbox.yield(.timerFired(.idleDisconnect, token: token))
     await host.client.flushInbox()
     #expect(await host.client.status.isSame(as: .disconnected(nil)))
   }

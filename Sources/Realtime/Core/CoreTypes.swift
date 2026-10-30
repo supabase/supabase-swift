@@ -59,6 +59,10 @@ enum TimerID: Hashable, Sendable {
   /// The next heartbeat is due, and the previous one must have been acknowledged.
   case heartbeat
   case tokenRefresh
+  /// The backoff wait before the next reconnect attempt is over.
+  case reconnect
+  /// The wait after the last channel was removed is over: disconnect.
+  case idleDisconnect
   case joinTimeout(channel: ChannelID, ref: Ref)
   case rejoin(channel: ChannelID)
   case postgresTimeout(channel: ChannelID, ref: Ref)

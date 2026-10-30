@@ -59,7 +59,7 @@ struct RealtimeCoreCancellationTests {
     #expect(
       harness.send(.socketOpened(socket)) == [
         .publishClientStatus(.connected),
-        .installSocket(socket, rejoinChannels: false),
+        .installSocket(socket),
         .schedule(.heartbeat, after: .seconds(25)),
       ])
     #expect(harness.core.channels[.room]?.phase == .unsubscribed)
@@ -278,7 +278,7 @@ struct RealtimeCoreCancellationTests {
         .publishChannelStatus(.room, .unsubscribed),
         .cancel(.leaveTimeout(channel: .room, ref: "2")),
         .finishChannel(.room),
-        .scheduleIdleDisconnect(after: .seconds(50)),
+        .schedule(.idleDisconnect, after: .seconds(50)),
       ])
     #expect(harness.core.channels[.room] == nil)
   }
@@ -297,7 +297,7 @@ struct RealtimeCoreCancellationTests {
     #expect(
       harness.send(.socketOpened(socket)) == [
         .publishClientStatus(.connected),
-        .installSocket(socket, rejoinChannels: false),
+        .installSocket(socket),
         .schedule(.heartbeat, after: .seconds(25)),
       ])
   }
