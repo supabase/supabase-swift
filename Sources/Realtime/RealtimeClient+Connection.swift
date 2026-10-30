@@ -185,11 +185,14 @@ extension RealtimeClient {
 
     while !pendingEvents.isEmpty {
       let next = pendingEvents.removeFirst()
+      let previous = connection
       let effects = Self.transition(&connection, next) { [reconnectBackoff, jitter] attempt in
         reconnectBackoff.delay(forAttempt: attempt, random: jitter)
       }
-      options.logger.debug("Connection → \(connection) on \(next)")
-      setStatus(connection.status)
+      logger.debug("Connection → \(connection) on \(next)")
+      if connection != previous {
+        connectionDidChange()
+      }
       for effect in effects {
         run(effect)
       }
@@ -235,7 +238,7 @@ extension RealtimeClient {
 
     case .scheduleRetry(let delay):
       if case .reconnecting(let attempt, _, let error) = connection {
-        options.logger.debug(
+        logger.debug(
           "Reconnect attempt \(attempt + 1) in \(delay) after: \(error.message)")
       }
       tasks.replace([timer(after: delay) { $0.fireRetryTimer() }], at: .connection)
@@ -288,7 +291,7 @@ extension RealtimeClient {
   /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
   /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
   /// automatic reconnect carries on. If
-  /// ``RealtimeClientOptions/defaultConnectOnSubscribe`` is `true` (the default), this is called
+  /// ``RealtimeClientOptions/connectOnSubscribe`` is `true` (the default), this is called
   /// automatically when a channel is subscribed to.
   ///
   /// ```swift
@@ -299,18 +302,18 @@ extension RealtimeClient {
   ///   `CancellationError` when the calling task is cancelled or ``disconnect(code:reason:)``
   ///   interrupts the attempt.
   public func connect() async throws {
-    options.logger.debug("Connecting...")
+    logger.debug("Connecting...")
 
     switch connection {
     case .connected:
-      options.logger.debug("Already connected")
+      logger.debug("Already connected")
 
     case .connecting:
-      options.logger.debug("Connection already in progress, waiting...")
+      logger.debug("Connection already in progress, waiting...")
       try await awaitConnectAttempt()
 
     case .reconnecting, .disconnected:
-      options.logger.debug("Initiating new connection")
+      logger.debug("Initiating new connection")
       apply(.connectRequested)
       try await awaitConnectAttempt()
     }
@@ -319,14 +322,17 @@ extension RealtimeClient {
   /// Closes the WebSocket connection.
   ///
   /// Cancels pending tasks, clears the send buffer, fails every push still waiting for a reply
-  /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected``.
-  /// Channels stay registered; subscribe to them again after the next ``connect()``.
+  /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
+  /// Channels stay registered, and subscribed ones become
+  /// ``RealtimeChannelStatus/unsubscribed``. The next ``connect()`` does not rejoin them; call
+  /// ``RealtimeChannel/subscribe()`` again, and the join emits
+  /// ``RealtimeChannelEvent/resubscribed``.
   ///
   /// - Parameters:
   ///   - code: An optional numeric close code to send to the server.
   ///   - reason: An optional reason string to send to the server.
   public func disconnect(code: Int? = nil, reason: String? = nil) async {
-    options.logger.debug("Closing WebSocket connection")
+    logger.debug("Closing WebSocket connection")
     ref = 0
     sendBuffer = []
     // A developer-initiated disconnect should not be undone on the next foreground event.
@@ -334,7 +340,7 @@ extension RealtimeClient {
 
     apply(.disconnectRequested(code: code, reason: reason))
 
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       await channel.socketDidDisconnect()
     }
   }
@@ -348,7 +354,7 @@ extension RealtimeClient {
   /// Invoked automatically by ``RealtimeLifecycleManager`` when
   /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
-    wasConnectedBeforeBackground = status == .connected
+    wasConnectedBeforeBackground = status.isConnected
   }
 
   /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
@@ -376,10 +382,10 @@ extension RealtimeClient {
       break
     }
 
-    let hadChannels = !channels.isEmpty
+    let hadChannels = !channelsByTopic.isEmpty
     try? await connect()
 
-    if hadChannels, status == .connected {
+    if hadChannels, status.isConnected {
       await rejoinChannels()
     }
   }
@@ -419,7 +425,7 @@ extension RealtimeClient {
     do {
       conn = try await openConnection()
     } catch {
-      options.logger.error("Connection failed: \(error)")
+      logger.error("Connection failed: \(error)")
       if !Task.isCancelled {
         apply(.socketOpenFailed(Self.realtimeError(error)))
       }
@@ -430,13 +436,13 @@ extension RealtimeClient {
     guard case .connected = connection else {
       throw CancellationError()
     }
-    options.logger.debug("Connected to realtime WebSocket")
+    logger.debug("Connected to realtime WebSocket")
   }
 
   /// Asks the transport for a connection. One that opens after the calling task was cancelled
   /// is closed here, since nothing else will ever see it.
   private func openConnection() async throws -> any WebSocketConnection {
-    let conn = try await transport.connect(to: webSocketURL, headerFields: options.headers)
+    let conn = try await transport.connect(to: webSocketURL, headerFields: headers)
     if Task.isCancelled {
       conn.close(code: .normalClosure, reason: "Connection cancelled")
       throw CancellationError()
@@ -445,7 +451,7 @@ extension RealtimeClient {
   }
 
   func rejoinChannels() async {
-    for channel in channels.values {
+    for channel in channelsByTopic.values {
       await channel.resetForReconnect()
       // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
       // and a task that waited for it would keep a released client alive.
@@ -492,21 +498,23 @@ extension RealtimeClient {
 
     if pendingHeartbeatRef != nil {
       // Previous heartbeat was never acknowledged.
-      options.logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      recordHeartbeat(.timeout)
+      logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
+      recordHeartbeat(.timedOut)
       pendingHeartbeatRef = nil
+      pendingHeartbeatSentAt = nil
       apply(.socketFailed(.heartbeatTimeout))
       return
     }
 
     let heartbeatRef = makeRef()
     pendingHeartbeatRef = heartbeatRef
+    pendingHeartbeatSentAt = elapsed()
     recordHeartbeat(.sent)
     // Not awaited: a write stalled on a half-open socket must not hold up the loop, or the
     // next tick never reports the missing acknowledgement.
     Task.immediateIfAvailable {
       await self.push(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: heartbeatRef,
           topic: "phoenix",
@@ -525,7 +533,7 @@ extension RealtimeClient {
   /// healthy connection.
   func handleSocketEvent(_ event: WebSocketEvent, generation: Int) async {
     guard generation == self.generation else {
-      options.logger.debug("Ignoring event from a stale connection: \(event)")
+      logger.debug("Ignoring event from a stale connection: \(event)")
       return
     }
 
@@ -533,55 +541,51 @@ extension RealtimeClient {
     case .frame(.binary(let data)):
       do {
         let broadcast = try serializer.decodeBinary(data)
-        options.logger.debug(
+        logger.debug(
           "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
         )
-        await channels[broadcast.topic]?.handleBinaryBroadcast(broadcast)
+        await channel(forWireTopic: broadcast.topic)?.handleBinaryBroadcast(broadcast)
       } catch {
-        options.logger.error("Failed to decode binary frame: \(error)")
+        logger.error("Failed to decode binary frame: \(error)")
       }
 
     case .frame(.text(let text)):
       do {
         await onMessage(try serializer.decodeText(text))
       } catch {
-        options.logger.error("Failed to decode text frame: \(error)")
+        logger.error("Failed to decode text frame: \(error)")
       }
 
     case .closed(let code, let reason):
-      options.logger.debug(
+      logger.debug(
         "WebSocket closed. Code: \(code?.rawValue.description ?? "<none>"), Reason: \(reason ?? "<none>")"
       )
       apply(.socketClosed(code: code?.rawValue, reason: reason))
     }
   }
 
-  private func onMessage(_ message: RealtimeMessageV2) async {
-    if message.topic == "phoenix", message.event == "phx_reply" {
-      recordHeartbeat(message.status == .ok ? .ok : .error)
-    }
-
+  private func onMessage(_ message: RealtimeMessage) async {
     if let ref = message.ref, ref == pendingHeartbeatRef {
       pendingHeartbeatRef = nil
-      options.logger.debug("heartbeat received")
+      let sentAt = pendingHeartbeatSentAt
+      pendingHeartbeatSentAt = nil
+      // Any reply proves the socket is alive, which is all a heartbeat checks.
+      if message.status != .ok {
+        logger.warning("The server answered the heartbeat with: \(message.payload)")
+      }
+      recordHeartbeat(.acknowledged(latency: sentAt.map { elapsed() - $0 } ?? .zero))
     } else {
-      options.logger.debug("Received event \(message.event) for channel \(message.topic)")
+      logger.debug("Received event \(message.event) for channel \(message.topic)")
     }
 
-    await channels[message.topic]?.onMessage(message)
+    await channel(forWireTopic: message.topic)?.onMessage(message)
+  }
+
+  private func channel(forWireTopic wireTopic: String) -> RealtimeChannel? {
+    RealtimeChannel.topic(forWireTopic: wireTopic).flatMap { channelsByTopic[$0] }
   }
 
   // MARK: Reconnect
-
-  /// Full-jitter exponential backoff: the n-th wait is a random duration in
-  /// `0...min(30s, baseDelay · 2^(n-1))`. Spreading the waits over the whole range keeps
-  /// clients that lost the same server from reconnecting in step. Attempts are unbounded.
-  ///
-  /// `baseDelay` is user-supplied and checked nowhere else, so it is clamped to `0...30s` here.
-  static func reconnectBackoff(baseDelay: Duration) -> BackoffPolicy {
-    let maxDelay: Duration = .seconds(30)
-    return .fullJitter(base: min(max(baseDelay, .zero), maxDelay), cap: maxDelay)
-  }
 
   /// The transport's failure as the error the connection state carries.
   static func realtimeError(_ error: any Error) -> RealtimeError {

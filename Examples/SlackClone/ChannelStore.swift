@@ -24,8 +24,10 @@ final class ChannelStore {
 
       let channel = await supabase.channel("public:channels")
 
-      let insertions = await channel.postgresChanges(InsertAction.self, table: "channels")
-      let deletions = await channel.postgresChanges(DeleteAction.self, table: "channels")
+      let insertions = await channel.postgresChanges(
+        of: Channel.self, event: .insert, table: "channels", decoder: decoder)
+      let deletions = await channel.postgresChanges(
+        of: Channel.self, event: .delete, table: "channels", decoder: decoder)
 
       try await channel.subscribe()
 
@@ -73,9 +75,9 @@ final class ChannelStore {
     return channel
   }
 
-  private func handleInsertedChannel(_ action: InsertAction) {
+  private func handleInsertedChannel(_ change: TypedPostgresChange<Channel>) {
     do {
-      let channel = try action.decodeRecord(decoder: decoder) as Channel
+      let channel = try change.row()
       channels.append(channel)
     } catch {
       dump(error)
@@ -83,8 +85,8 @@ final class ChannelStore {
     }
   }
 
-  private func handleDeletedChannel(_ action: DeleteAction) {
-    guard let id = action.oldRecord["id"]?.intValue else { return }
+  private func handleDeletedChannel(_ change: TypedPostgresChange<Channel>) {
+    guard let id = change.oldRecord?["id"]?.intValue else { return }
     channels.removeAll { $0.id == id }
     messages.removeMessages(for: id)
   }

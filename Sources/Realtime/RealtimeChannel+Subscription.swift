@@ -35,9 +35,16 @@ extension RealtimeChannel {
 
   /// Joins the Realtime topic and suspends until the subscription is confirmed by the server.
   ///
-  /// Open the postgres-change and presence streams before calling this method; they shape the
-  /// join request. Calling it on an already-subscribed channel is a no-op, and a second
+  /// Open the presence streams before calling this method; they shape the join request. A
+  /// Postgres changes stream opened later makes the channel rejoin. Calling it on an already-subscribed channel is a no-op, and a second
   /// concurrent call waits for the first attempt instead of starting another.
+  ///
+  /// When the channel has Postgres changes streams, the method returns only once the server
+  /// reports that those changes are live. If the server reports a failure, or does not report
+  /// within ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``, the channel
+  /// leaves the topic and the method throws without a retry. The same holds for the rejoins the
+  /// SDK starts itself, after a reconnect or for a new Postgres changes stream: the channel ends
+  /// ``RealtimeChannelStatus/failed(_:)``. Watch ``statusChanges()`` and call this method again.
   ///
   /// There is no attempt limit. After a timeout, a lost connection, or a transient join error,
   /// the channel joins again after 1, 2 and 5 s, then every 10 s; after a rate limit it waits
@@ -48,7 +55,8 @@ extension RealtimeChannel {
   ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/ServerCode/unauthorized``
   ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
   ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off, or
-  ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join.
+  ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, or the server
+  ///   could not set up the channel's Postgres changes in time.
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
   ///   channel during the join, and `CancellationError` when the calling task is cancelled.
   public func subscribe() async throws {
@@ -56,7 +64,7 @@ extension RealtimeChannel {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
 
-    case .subscribing(let task):
+    case .subscribing(let task, _):
       logger.debug("Subscribe already in progress for channel '\(topic)', awaiting…")
       try await awaitSharedSubscribe(task)
 
@@ -67,7 +75,7 @@ extension RealtimeChannel {
       // moved the state while this one awaited the unsubscribe.
       try await subscribe()
 
-    case .unsubscribed:
+    case .unsubscribed, .failed:
       logger.debug("Subscribe requested for channel '\(topic)'")
       try await beginSubscribe()
     }
@@ -80,15 +88,21 @@ extension RealtimeChannel {
     // the state while this one waits. After it, the switch and the transition run without a
     // suspension point.
     let socketConnected = await isSocketConnected()
+    // A later subscribe is a new subscription, not a rejoin.
+    hasBeenSubscribed = false
+    deliverPresence(presence.clear())
     switch state {
     case .unsubscribed:
       logger.debug("Unsubscribe no-op for channel '\(topic)': already unsubscribed")
+
+    case .failed:
+      setState(.unsubscribed)
 
     case .unsubscribing(let task):
       logger.debug("Unsubscribe already in progress for channel '\(topic)', awaiting…")
       await task.value
 
-    case .subscribing(let task):
+    case .subscribing(let task, _):
       logger.debug("Cancelling in-flight subscribe to unsubscribe '\(topic)'")
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the channel and will
@@ -120,24 +134,36 @@ extension RealtimeChannel {
     switch state {
     case .subscribed:
       setState(.unsubscribed)
-    case .subscribing(let task):
+    case .subscribing(let task, _):
       task.cancel()
       failJoinWaiter(SubscribeFailure.channelClosed)
       setState(.unsubscribed)
     case .unsubscribing:
       setState(.unsubscribed)
       resumeCloseWaiter()
-    case .unsubscribed:
+    case .unsubscribed, .failed:
       break
     }
   }
 
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
   /// be answered any more, and a subscribe in flight stops instead of connecting again.
+  ///
+  /// The server drops the join with the socket, so a subscribed channel becomes `.unsubscribed`:
+  /// ``subscribe()`` joins it again after the next ``RealtimeClient/connect()``, and that join
+  /// emits ``RealtimeChannelEvent/resubscribed``.
   func socketDidDisconnect() {
     failPendingPushes(with: RealtimeError.notConnected)
-    guard case .subscribing(let task) = state else { return }
-    abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
+    // The client restarts its refs, so the next join can reuse this one.
+    confirmedJoinRef = nil
+    switch state {
+    case .subscribing(let task, _):
+      abortSubscribe(task, with: RealtimeError.disconnectedWhileSubscribing)
+    case .subscribed:
+      break
+    case .unsubscribed, .unsubscribing, .failed:
+      return
+    }
     joinRef = nil
     setState(.unsubscribed)
   }
@@ -150,8 +176,36 @@ extension RealtimeChannel {
     guard case .subscribing = state else { return }
     logger.debug("Server confirmed subscribe for channel '\(topic)'")
     setState(.subscribed)
+    confirmedJoinRef = joinRef
     joinWaiter?.continuation.resume()
     joinWaiter = nil
+    if hasBeenSubscribed {
+      yield(.resubscribed)
+    }
+    hasBeenSubscribed = true
+    // A stream opened while the join was in flight may carry a binding the join did not.
+    rejoinIfBindingsChanged()
+  }
+
+  /// Rejoins a subscribed channel when an open Postgres changes stream has a binding its join
+  /// did not carry, so the server sends those changes too. Closing a stream never rejoins.
+  ///
+  /// The channel leaves the old join and joins again with every open binding. It stays
+  /// ``RealtimeChannelStatus/subscribing(attempt:)`` until the new join is confirmed, then emits
+  /// ``RealtimeChannelEvent/resubscribed``.
+  func rejoinIfBindingsChanged() {
+    guard case .subscribed = state, let oldJoinRef = joinRef else { return }
+    let joined = Set(joinedBindings.map(BindingKey.init))
+    guard clientChanges.contains(where: { !joined.contains(BindingKey($0)) }) else { return }
+    logger.debug("Rejoining channel '\(topic)' to add Postgres changes bindings")
+    // From here, a `phx_close` for the old join is stale.
+    joinRef = nil
+    let task = startSubscribeTask(leaving: oldJoinRef)
+    Task {
+      if case .failure(let error) = await task.result {
+        _ = self.subscribeDidFail(task, with: error)
+      }
+    }
   }
 
   /// Called when the server answers the `phx_join` for `ref` with an error.
@@ -186,10 +240,12 @@ extension RealtimeChannel {
     logger.debug("Server closed channel '\(topic)'")
     joinRef = nil
     failPendingPushes(with: RealtimeError.channelClosedByServer)
-    if case .subscribing(let task) = state {
+    if case .subscribing(let task, _) = state {
       abortSubscribe(task, with: RealtimeError.channelClosedByServer)
+      setState(.failed(RealtimeError.channelClosedByServer))
+    } else {
+      setState(.unsubscribed)
     }
-    setState(.unsubscribed)
     resumeCloseWaiter()
     return true
   }
@@ -236,10 +292,7 @@ extension RealtimeChannel {
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
-    let task = Task<Void, any Error> {
-      try await runSubscribeAttempts()
-    }
-    setState(.subscribing(task))
+    let task = startSubscribeTask()
 
     do {
       // Forward cancellation of the caller's task to the spawned subscribe task. Without this,
@@ -250,30 +303,54 @@ extension RealtimeChannel {
         task.cancel()
       }
     } catch {
-      let abortError = abortedSubscribe?.task == task ? abortedSubscribe?.error : nil
-      if abortError != nil {
-        abortedSubscribe = nil
-      }
+      throw subscribeDidFail(task, with: error)
+    }
+  }
 
-      // If the attempt didn't reach `.subscribed`, make sure observers see `.unsubscribed`. Only
-      // when the state is still this attempt's: a reset or close may have replaced it with a
-      // newer attempt, which owns the state now (issue #1556).
-      if case .subscribing(let current) = state, current == task {
-        joinRef = nil
-        failPendingPushes(with: RealtimeError.notSubscribed)
+  /// Starts the join attempts and moves the channel to `.subscribing`. With `oldJoinRef`, the
+  /// task first leaves that join, so its `phx_leave` goes out before the new `phx_join`.
+  private func startSubscribeTask(leaving oldJoinRef: String? = nil) -> Task<Void, any Error> {
+    let task = Task<Void, any Error> {
+      if let oldJoinRef {
+        await pushLeave(joinRef: oldJoinRef)
+      }
+      try await runSubscribeAttempts()
+    }
+    setState(.subscribing(task, .joining(attempt: 1)))
+    return task
+  }
+
+  /// Moves the state on after the subscribe `task` failed with `error`, and returns the error
+  /// its callers get.
+  private func subscribeDidFail(_ task: Task<Void, any Error>, with error: any Error) -> any Error {
+    let abortError = abortedSubscribe?.task == task ? abortedSubscribe?.error : nil
+    if abortError != nil {
+      abortedSubscribe = nil
+    }
+
+    // If the attempt didn't reach `.subscribed`, move the state on: `.failed` when a retry
+    // cannot help, `.unsubscribed` when the caller cancelled. Only when the state is still
+    // this attempt's: a reset or close may have replaced it with a newer attempt, which owns
+    // the state now (issue #1556).
+    if case .subscribing(let current, _) = state, current == task {
+      joinRef = nil
+      failPendingPushes(with: RealtimeError.notSubscribed)
+      if let failure = error as? RealtimeError {
+        setState(.failed(failure))
+      } else {
         setState(.unsubscribed)
       }
-
-      // The subscribe was aborted by `didReceiveClose()` or `socketDidDisconnect()`, not by the
-      // caller. Depending on how the cancellation is observed, the task can exit with
-      // `CancellationError` or `SubscribeFailure.channelClosed`. Both are consequences of the
-      // abort, so translate unconditionally; a genuine caller-side cancellation never records its
-      // task here and still propagates as `CancellationError`.
-      if let abortError {
-        throw abortError
-      }
-      throw error
     }
+
+    // The subscribe was aborted by `didReceiveClose()` or `socketDidDisconnect()`, not by the
+    // caller. Depending on how the cancellation is observed, the task can exit with
+    // `CancellationError` or `SubscribeFailure.channelClosed`. Both are consequences of the
+    // abort, so translate unconditionally; a genuine caller-side cancellation never records its
+    // task here and still propagates as `CancellationError`.
+    if let abortError {
+      return abortError
+    }
+    return error
   }
 
   /// Runs join attempts until one succeeds, a join error says retrying cannot help, or the task
@@ -287,12 +364,15 @@ extension RealtimeChannel {
       // A late `ok` for a join that timed out confirms it while this loop waits out the backoff.
       if case .subscribed = state { return }
       logger.debug("Subscribe attempt \(attempt) for channel '\(topic)'")
+      setSubscribeProgress(.joining(attempt: attempt))
 
       let delay: Duration
+      let lastError: RealtimeError
       do {
-        try await withTimeout(timeout, clock: clock) {
+        let ref = try await withTimeout(joinTimeout, clock: clock) {
           try await runOneSubscribeAttempt()
         }
+        try await awaitPostgresChangesIfNeeded(for: ref)
         logger.debug("Subscribe succeeded for channel '\(topic)'")
         return
       } catch let error as RealtimeError {
@@ -310,22 +390,36 @@ extension RealtimeChannel {
         case .retry:
           delay = Self.rejoinBackoff.delay(forAttempt: attempt)
         }
-      } catch let error where error is TimeoutError || error is SubscribeFailure {
+        lastError = error
+      } catch is TimeoutError {
+        logger.debug("Subscribe attempt \(attempt) timed out for channel '\(topic)'")
+        delay = Self.rejoinBackoff.delay(forAttempt: attempt)
+        lastError = .joinTimeout
+      } catch let error as SubscribeFailure {
         logger.debug("Subscribe attempt \(attempt) failed for channel '\(topic)': \(error)")
         delay = Self.rejoinBackoff.delay(forAttempt: attempt)
+        lastError = .notConnected
       }
       // One fresh-token rejoin per run of expired-token errors: a token that expires again after
       // other failures gets another one.
       hasRefreshedToken = false
 
       logger.debug("Retrying subscribe for '\(topic)' in \(delay)")
+      setSubscribeProgress(.waiting(attempt: attempt, retryIn: delay, lastError: lastError))
       // A genuine cancellation of this task propagates out of `sleep` as `CancellationError`;
       // the next attempt re-checks the socket itself.
       try await clock.sleep(for: delay)
     }
   }
 
-  private func runOneSubscribeAttempt() async throws {
+  /// Reports the subscribe loop's progress. A loop that was cancelled no longer owns the state.
+  private func setSubscribeProgress(_ progress: SubscribeProgress) {
+    guard !Task.isCancelled, case .subscribing(let task, _) = state else { return }
+    setState(.subscribing(task, progress))
+  }
+
+  /// Sends one `phx_join` and waits for its reply. Returns the join's ref.
+  private func runOneSubscribeAttempt() async throws -> String {
     guard try await ensureSocketConnected() else {
       throw SubscribeFailure.socketNotConnected
     }
@@ -337,13 +431,81 @@ extension RealtimeChannel {
     joinRef = ref
     joinAccessToken = accessToken
     joinFailure = nil
+    joinReplyRef = nil
     await performJoin(ref: ref, accessToken: accessToken)
 
-    // Wait for `didReceiveSubscribedOK`. A close, a reset or cancellation fails the waiter.
+    // Wait for the join reply. A close, a reset or cancellation fails the waiter.
+    try await awaitJoinConfirmation(for: ref, stage: .reply)
+    return ref
+  }
+
+  /// The client-side join timeout. A join that asks the server to wait for its Postgres changes
+  /// gets the server's wait on top.
+  private var joinTimeout: Duration {
+    timeout
+      + RealtimeJoinConfig(
+        configuration, bindings: clientChanges, presenceEnabled: hasPresenceListener
+      ).extraJoinTimeout
+  }
+
+  /// After the join reply, waits for "Subscribed to PostgreSQL" when the join has Postgres
+  /// changes bindings the server has not confirmed yet.
+  ///
+  /// - Throws: A non-retryable ``RealtimeError`` when the server reports a failure or the
+  ///   confirmation does not arrive within ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``.
+  ///   The channel leaves the topic first, so the server drops the half-set-up join.
+  private func awaitPostgresChangesIfNeeded(for ref: String) async throws {
+    // A rejoin may already own the state: its join is not this attempt's to wait for.
+    guard awaitingPostgresChanges, case .subscribing = state, joinRef == ref else { return }
+    do {
+      try await withTimeout(configuration.postgresChanges.subscriptionTimeout, clock: clock) {
+        try await self.awaitJoinConfirmation(for: ref, stage: .postgresChanges)
+      }
+    } catch let error as RealtimeError {
+      if confirmedJoinRef == ref { return }
+      await leaveFailedJoin(ref)
+      throw error
+    } catch is TimeoutError {
+      // The confirmation can land on the actor after the timer fired but before this catch.
+      // The join is live then, and a rejoin it started may already own the state.
+      if confirmedJoinRef == ref { return }
+      await leaveFailedJoin(ref)
+      throw RealtimeError.postgresChangesTimeout
+    } catch is CancellationError {
+      // The server accepted the join, so leave it when the caller cancels. An abort of this
+      // attempt needs no leave: a close already ended the join, and a disconnect would buffer
+      // the frame for the next connection. An abort of an older attempt still in flight does
+      // not count.
+      if !isAbortedSubscribeCurrent {
+        await leaveFailedJoin(ref)
+      }
+      throw CancellationError()
+    }
+  }
+
+  /// Leaves the join `ref` after its Postgres changes failed. The join is dropped before
+  /// `phx_leave` goes out, so a confirmation that lands while it is sent is stale.
+  private var isAbortedSubscribeCurrent: Bool {
+    guard let aborted = abortedSubscribe?.task, case .subscribing(let current, _) = state else {
+      return false
+    }
+    return aborted == current
+  }
+
+  private func leaveFailedJoin(_ ref: String) async {
+    guard joinRef == ref else { return }
+    joinRef = nil
+    awaitingPostgresChanges = false
+    await pushLeave(joinRef: ref)
+  }
+
+  /// Parks until the server sends the confirmation `stage` names for the join `ref`. A close, a
+  /// reset or cancellation fails the wait.
+  private func awaitJoinConfirmation(for ref: String, stage: JoinStage) async throws {
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation {
         (continuation: CheckedContinuation<Void, any Error>) in
-        awaitJoinConfirmation(for: ref, with: continuation)
+        awaitJoinConfirmation(for: ref, stage: stage, with: continuation)
       }
     } onCancel: {
       // Lands on the actor later. Keyed on `ref` so a handler left over from a cancelled attempt
@@ -352,11 +514,11 @@ extension RealtimeChannel {
     }
   }
 
-  /// Parks `continuation` until the server confirms the join for `ref`. Resumes it at once when
-  /// the confirmation or a join error already arrived while `phx_join` was being sent, and fails
-  /// it at once if the join is already gone or the task is already cancelled.
+  /// Parks `continuation` until the server sends the confirmation `stage` names for `ref`.
+  /// Resumes it at once when the confirmation or a join error already arrived, and fails it at
+  /// once if the join is already gone or the task is already cancelled.
   private func awaitJoinConfirmation(
-    for ref: String, with continuation: CheckedContinuation<Void, any Error>
+    for ref: String, stage: JoinStage, with continuation: CheckedContinuation<Void, any Error>
   ) {
     if let failure = joinFailure, failure.ref == ref {
       joinFailure = nil
@@ -364,6 +526,10 @@ extension RealtimeChannel {
       return
     }
     if case .subscribed = state, joinRef == ref {
+      continuation.resume()
+      return
+    }
+    if stage == .reply, joinReplyRef == ref, joinRef == ref {
       continuation.resume()
       return
     }
@@ -375,28 +541,24 @@ extension RealtimeChannel {
       continuation.resume(throwing: CancellationError())
       return
     }
-    joinWaiter = (ref, continuation)
+    joinWaiter = (ref, stage, continuation)
   }
 
-  /// Builds the `phx_join` payload from the config and the open streams, and pushes it.
+  /// Builds the `phx_join` payload from the configuration and the open streams, and pushes it.
   private func performJoin(ref: String, accessToken: String?) async {
     guard let client else { return }
     logger.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
-    var presence = config.presence
-    presence.enabled = hasPresenceListener
-
     let joinConfig = RealtimeJoinConfig(
-      broadcast: config.broadcast,
-      presence: presence,
-      postgresChanges: clientChanges,
-      isPrivate: config.isPrivate
-    )
+      configuration, bindings: clientChanges, presenceEnabled: hasPresenceListener)
+    joinedBindings = joinConfig.postgresChanges
+    awaitingPostgresChanges =
+      !joinConfig.postgresChanges.isEmpty && !configuration.postgresChanges.waitForSubscription
 
     let payload = RealtimeJoinPayload(
       config: joinConfig,
       accessToken: accessToken,
-      version: client.options.headers[.xClientInfo]
+      version: client.headers[.xClientInfo]
     )
 
     guard let encodedPayload = try? JSONObject(payload) else {
@@ -421,10 +583,16 @@ extension RealtimeChannel {
   private func ensureSocketConnected() async throws -> Bool {
     guard let client else { throw RealtimeError.clientReleased }
     let status = await client.status
-    if status == .connected { return true }
-    guard connectOnSubscribe else {
+    switch status {
+    case .connected:
+      return true
+    case .connecting, .reconnecting:
       // The client is connecting, or reconnecting after a drop: wait for it.
-      if status == .connecting { return false }
+      if !connectOnSubscribe { return false }
+    case .disconnected:
+      break
+    }
+    guard connectOnSubscribe else {
       throw RealtimeError.notConnectedToSubscribe
     }
     do {
@@ -434,13 +602,13 @@ extension RealtimeChannel {
     } catch {
       logger.debug("Connect for channel '\(topic)' failed: \(error)")
     }
-    return await client.status == .connected
+    return await client.status.isConnected
   }
 
   /// Socket-status probe: never connects. Used to decide whether `phx_leave` can be delivered
   /// at all.
   private func isSocketConnected() async -> Bool {
-    await client?.status == .connected
+    await client?.status.isConnected ?? false
   }
 
   /// Fails the parked join waiter. With `ref`, only if the parked waiter belongs to that join;
@@ -499,6 +667,32 @@ extension RealtimeChannel {
   }
 }
 
+/// The fields of a Postgres changes binding the server matches on. `PostgresJoinConfig`'s `==`
+/// treats `.all` as matching any event, which would hide a new binding.
+private struct BindingKey: Hashable {
+  let event: PostgresChangeEvent?
+  let schema: String
+  let table: String?
+  let filter: String?
+  let select: [String]?
+
+  init(_ binding: PostgresJoinConfig) {
+    event = binding.event
+    schema = binding.schema
+    table = binding.table
+    filter = binding.filter
+    select = binding.select
+  }
+}
+
+/// The confirmation a join attempt waits for.
+enum JoinStage {
+  /// The `phx_reply` to `phx_join`.
+  case reply
+  /// "Subscribed to PostgreSQL", after the reply, for a join with Postgres changes bindings.
+  case postgresChanges
+}
+
 extension RealtimeError {
   /// The channel is not subscribed, so the push cannot be delivered.
   static let notSubscribed = RealtimeError(
@@ -535,6 +729,28 @@ extension RealtimeError {
     message: "The realtime client was disconnected while the channel was subscribing.",
     isRetryable: false
   )
+
+  /// The server did not report "Subscribed to PostgreSQL" within
+  /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``.
+  static let postgresChangesTimeout = RealtimeError(
+    kind: .timeout,
+    message:
+      "The server did not set up the channel's Postgres changes within the subscription timeout.",
+    isRetryable: false
+  )
+
+  /// The server could not set up the channel's Postgres changes bindings.
+  static func postgresChangesFailed(reason: String) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server could not set up the channel's Postgres changes: \(reason)",
+      isRetryable: false
+    )
+  }
+
+  /// The server did not confirm a `phx_join` within the client's configured timeout.
+  static let joinTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not confirm the join within the timeout.")
 
   /// The socket is not connected, so the push cannot be answered.
   static let notConnected = RealtimeError(

@@ -14,8 +14,7 @@ struct RealtimeReconnectRecoveryTests {
     RealtimeClientOptions(
       headers: ["apikey": apiKey],
       heartbeatInterval: .seconds(10),
-      reconnectDelay: .milliseconds(50),
-      timeout: timeout,
+      requestTimeout: timeout,
       accessToken: { "token" }
     )
   }
@@ -43,7 +42,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-1")
@@ -80,7 +80,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-close")
@@ -92,10 +93,10 @@ struct RealtimeReconnectRecoveryTests {
     #expect(joinRef != nil)
 
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
@@ -103,13 +104,13 @@ struct RealtimeReconnectRecoveryTests {
 
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(await sut.channels[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(await sut.channelsByTopic[channel.topic] != nil, "Stale phx_close removed the channel")
 
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: joinRef,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
@@ -134,7 +135,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-error")
@@ -143,10 +145,10 @@ struct RealtimeReconnectRecoveryTests {
 
     let socket = sockets.value[0]
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )
@@ -156,10 +158,10 @@ struct RealtimeReconnectRecoveryTests {
     #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
 
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )
@@ -184,7 +186,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-leave")

@@ -42,7 +42,7 @@ import Logging
 ///
 /// ### Realtime Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 ///
@@ -89,7 +89,7 @@ public final class SupabaseClient: Sendable {
   let functionsURL: URL
   let clock: any Clock<Duration>
 
-  private let _auth: AuthClient
+  let _auth: AuthClient
 
   /// The Auth client for managing user sessions and authentication.
   ///
@@ -117,7 +117,7 @@ public final class SupabaseClient: Sendable {
       schema: options.db.schema,
       headers: dataHeaders.dictionary,
       logger: options.global.logger,
-      http: authenticatedHTTP(staleTokenRejection: .unauthorized),
+      http: authenticatedHTTP(staleTokenRejection: .postgrest),
       encoder: options.db.encoder,
       decoder: options.db.decoder,
       retryEnabled: options.db.retry
@@ -129,7 +129,7 @@ public final class SupabaseClient: Sendable {
     var configuration = StorageClientConfiguration(
       url: storageURL,
       headers: dataHeaders,
-      http: authenticatedHTTP(staleTokenRejection: .badRequestWithExpiredToken),
+      http: authenticatedHTTP(staleTokenRejection: .storage),
       logger: options.global.logger,
       usesNewHostname: options.storage.usesNewHostname,
       retryEnabled: options.storage.retryEnabled
@@ -259,7 +259,7 @@ public final class SupabaseClient: Sendable {
         middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
         timeout: options.global.http.timeout
       ),
-      autoRefresh: options.auth.autoRefresh,
+      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
@@ -361,19 +361,20 @@ public final class SupabaseClient: Sendable {
 
   /// All active Realtime channels.
   public var channels: [RealtimeChannel] {
-    get async { Array(await realtime.channels.values) }
+    get async { await realtime.channels }
   }
 
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
+  ///     channel that already exists for `name` keeps its configuration.
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) async -> RealtimeChannel {
-    await realtime.channel(name, options: options)
+    await realtime.channel(name, configure: configure)
   }
 
   /// Unsubscribes from and removes a Realtime channel.
@@ -538,7 +539,10 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  /// Pushes the new token to the Realtime client only when it already exists. Building it here
+  /// would install its observers in apps that never use Realtime; a client built later pulls
+  /// the current token itself.
+  func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
       if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
         $0.changedAccessToken != session?.accessToken
@@ -555,7 +559,7 @@ public final class SupabaseClient: Sendable {
       return nil
     }
 
-    if let accessToken {
+    if let accessToken, let realtime = mutableState.realtime {
       await realtime.setAuth(accessToken)
     }
   }
@@ -573,7 +577,7 @@ public final class SupabaseClient: Sendable {
             + (options.functions.http?.middlewares ?? [])
             + [
               TraceContextMiddleware(),
-              bearerMiddleware(staleTokenRejection: .unauthorized) { [supabaseKey] in
+              bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
                 APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
               },
             ],
@@ -587,10 +591,12 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClient {
     var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    // Through `HTTPFields`, so names compare without regard to case and the global headers win.
+    realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
 
-    realtimeOptions.logger = options.global.logger
-    realtimeOptions.logger[metadataKey: "system"] = "realtime"
+    if realtimeOptions.logger == nil {
+      realtimeOptions.logger = options.global.logger
+    }
 
     if realtimeOptions.http.transport == nil {
       realtimeOptions.http = HTTPClientConfiguration(

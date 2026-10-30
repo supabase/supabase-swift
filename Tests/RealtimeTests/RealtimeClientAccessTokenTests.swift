@@ -79,7 +79,7 @@ struct RealtimeClientAccessTokenTests {
     #expect(await hasRefreshTimer(host))
 
     host.server?.close(code: nil, reason: "dropped")
-    await host.waitUntil { host.statuses.last == .connecting }
+    await host.waitUntil { host.statuses.last == .reconnecting }
     #expect(await !hasRefreshTimer(host))
   }
 
@@ -282,7 +282,7 @@ struct RealtimeClientAccessTokenTests {
 
     async let token = client.currentAccessToken()
     await gate.waitForCall()
-    await clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    await clock.advance(by: RealtimeClientOptions.defaultRequestTimeout)
     #expect(await token == nil)
 
     await client.setAuth()
