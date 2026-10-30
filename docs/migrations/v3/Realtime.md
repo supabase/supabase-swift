@@ -33,43 +33,48 @@ Changes that still compile but behave differently. Check each one by hand.
   `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
 - **`disconnect()` unsubscribes every channel.** Subscribed channels become `.unsubscribed` and
   stay registered, but the next `connect()` does not join them again. v2 rejoined them. Call
-  `subscribe()` on each channel after `connect()`.
+  `subscribe()` on each channel after `connect()`. Search for `connect()` calls that follow a
+  `disconnect()`.
 - **A socket drop does not stop `subscribe()`.** A subscribed channel reports `.subscribing`
   until it joins again, with no `.unsubscribed` step, and a `subscribe()` in flight waits for the
   reconnect. After a server close with a code from 4000 to 4999 the client does not reconnect:
   a waiting `subscribe()` throws the close error and the channel becomes `.failed`, and a
-  subscribed channel stays `.subscribing` until you call `connect()`.
+  subscribed channel stays `.subscribing` until you call `connect()`. Search for
+  `.unsubscribed` in code that reads `statusChanges()`.
 - **Cancelling `subscribe()` stops only that call.** While another `subscribe()` call waits for
   the same channel, the join goes on for it. When the last waiting call is cancelled before the
-  join is confirmed, the channel leaves the topic and becomes `.unsubscribed`. v2 stopped the
-  join for every caller when the first one was cancelled. A call from a task that is already
-  cancelled throws `CancellationError` and sends nothing.
+  join is confirmed, the channel rolls back to `.unsubscribed`, and leaves the topic if a join
+  went out. v2 stopped the join for every caller when the first one was cancelled. A call from a
+  task that is already cancelled throws `CancellationError` and sends nothing. Search for
+  `subscribe()` calls in tasks that you cancel.
 - **`unsubscribe()` keeps the channel.** The channel stays in `channels` with its streams open,
   and `subscribe()` joins again on the same instance. v2 dropped the channel from the client
-  when the server confirmed the leave. Because `channel(_:configure:)` returns the existing
-  channel, a new configuration needs `removeChannel(_:)` first. Only `removeChannel(_:)`, or
-  the server closing the channel with `phx_close`, ends the streams.
+  when the server confirmed the leave. Only `removeChannel(_:)`, or the server closing the
+  channel with `phx_close`, ends the streams. Search for `unsubscribe()`.
 - **A removed channel is spent.** After `removeChannel(_:)`, `subscribe()`, `broadcast`,
   `track`, `untrack` and `httpSend` throw `RealtimeError` with `kind == .channelRemoved`, and a
   `subscribe()` in flight throws it too. A channel the server closes with `phx_close` is spent
   the same way; a `subscribe()` in flight then throws `.channelClosedByServer`. `unsubscribe()`
-  returns at once, `status` keeps the last value, and a new stream ends at once. Get a new
-  channel from `channel(_:configure:)`.
+  returns at once and `status` keeps the last value. A new stream ends at once, except
+  `statusChanges()` and `presenceStates()`, which first replay the last value, then end. Get a
+  new channel from `channel(_:configure:)`. Search for `removeChannel(`.
 - **`removeChannel(_:)` also leaves a channel that is joining.** v2 left only a subscribed
   channel. The call returns when the leave ends. A new channel for the same topic waits for that
-  leave before it acts.
+  leave before it acts. Search for `removeChannel(` followed by `channel(` for the same topic.
 - **Channel actions need a live client.** A channel holds its client weakly. After the
   `RealtimeClient` is released, `subscribe()`, `broadcast`, `track`, `untrack` and `httpSend`
   throw `RealtimeError` with `kind == .notConnected` and `isRetryable == false`, and
   `unsubscribe()` returns at once. Keep the client, or the `SupabaseClient`, alive while you use
-  its channels.
+  its channels. Search for `RealtimeClient(` and `SupabaseClient(` in local scopes.
 - **Pushes need a subscribed channel.** `broadcast`, `track` and `untrack` throw `RealtimeError`
   with `kind == .notSubscribed` when the channel is not `.subscribed`, also while the socket
   reconnects. Nothing is queued to send later. v2 sent `track` with only a reported issue, and
   queued frames while the socket was down. Wait for `.subscribed` in `statusChanges()` first.
+  Search for `broadcast(`, `track(` and `untrack(`.
 - **`channel(_:configure:)` does not cancel a scheduled disconnect.** When
   `disconnectOnEmptyChannelsAfter` scheduled a disconnect after the last channel was removed,
   only the first `subscribe()` cancels it. v2 cancelled it when `channel(_:)` made a channel.
+  Search for `disconnectOnEmptyChannelsAfter`.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.
@@ -288,9 +293,9 @@ defer { task.cancel() }
 
 Open `presenceChanges` and `presenceStates` streams before `subscribe()`. They shape the join
 request. Opening one after the join reports an issue and returns an empty stream. A
-`postgresChanges` stream opened after the join makes the channel leave and join again with the new
-binding; the channel emits `.resubscribed` when the new join is confirmed. Presence is sent to the server only when a `presenceChanges()` or `presenceStates()`
-stream is open.
+`postgresChanges` stream opened after the join makes the channel leave and join again with the
+new binding; the channel emits `.resubscribed` when the new join is confirmed. Presence is sent to
+the server only when a `presenceChanges()` or `presenceStates()` stream is open.
 
 ## Broadcast and Postgres change payloads
 
@@ -368,8 +373,8 @@ subscription.
 
 `presenceChanges()` yields a `PresenceChange` per sync: the entries that joined and left, as
 lists by presence key, so a user on two devices has two entries. `presenceStates()` yields the
-whole state after every sync that changes it, and `presenceState` reads it. To show who is online, decode the
-state instead of applying joins and leaves yourself.
+whole state after every sync that changes it, and `presenceState` reads it. To show who is
+online, decode the state instead of applying joins and leaves yourself.
 
 ```swift
 // v2

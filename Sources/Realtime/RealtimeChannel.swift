@@ -103,10 +103,12 @@ public final class RealtimeChannel: Sendable, Hashable {
     sinks.finishAll()
   }
 
+  /// Two channels are equal only when they are the same instance.
   public static func == (lhs: RealtimeChannel, rhs: RealtimeChannel) -> Bool {
     lhs === rhs
   }
 
+  /// Hashes the channel's identity, to match `==`.
   public func hash(into hasher: inout Hasher) {
     hasher.combine(ObjectIdentifier(self))
   }

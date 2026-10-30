@@ -448,11 +448,13 @@ public actor RealtimeClient {
   ///
   /// The channel is removed before the first suspension point: its streams end, and its
   /// actions throw ``RealtimeError/Kind-swift.struct/channelRemoved``, even when the calling
-  /// task is cancelled. Its ``RealtimeChannel/status`` keeps the last value, and a stream opened
-  /// on it later ends at once. A subscribed or joining channel then leaves the topic, and the
-  /// method returns when the leave ends. A new channel for the same topic waits for that leave
-  /// before it acts. After removal, if no channels remain, the client disconnects (or schedules
-  /// a deferred disconnect based on ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
+  /// task is cancelled. Its ``RealtimeChannel/status`` keeps the last value. A stream opened on
+  /// it later ends at once, except ``RealtimeChannel/statusChanges()`` and
+  /// ``RealtimeChannel/presenceStates()``, which first replay the last value, then end. A
+  /// subscribed or joining channel then leaves the topic, and the method returns when the leave
+  /// ends. A new channel for the same topic waits for that leave before it acts. After removal,
+  /// if no channels remain, the client disconnects (or schedules a deferred disconnect based on
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
