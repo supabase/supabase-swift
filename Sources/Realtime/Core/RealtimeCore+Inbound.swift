@@ -21,6 +21,18 @@ extension RealtimeCore {
     return channels(forWireTopic: wireTopic).first { channels[$0]?.inboundJoinRef == joinRef }
   }
 
+  /// The channel of `message`'s topic whose frames carry `joinRef`, as
+  /// ``channel(forWireTopic:joinRef:)``. A frame that matches no channel is logged.
+  func routedChannel(_ message: RealtimeMessage, joinRef: Ref?) -> ChannelID? {
+    guard let channel = channel(forWireTopic: message.topic, joinRef: joinRef) else {
+      logger.debug(
+        "Dropping '\(message.event)' on '\(message.topic)': no channel for join_ref \(joinRef ?? "<none>")"
+      )
+      return nil
+    }
+    return channel
+  }
+
   /// The channels of the topic a wire topic names, in creation order.
   private func channels(forWireTopic wireTopic: String) -> [ChannelID] {
     guard let topic = RealtimeChannel.topic(forWireTopic: wireTopic) else { return [] }

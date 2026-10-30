@@ -161,18 +161,12 @@ extension RealtimeCore {
   /// ``RealtimeError/channelClosedByServer``, a leave is over, and any other join ends.
   /// `phx_close` also finishes the channel's streams and drops the channel, as today's
   /// `client.remove(self)`. The message goes to the channel its `join_ref` names, or to the live
-  /// channel of its topic when it has none. Either message for an older join is ignored.
+  /// channel of its topic when it has none. Either message for an older join matches no channel
+  /// and is dropped.
   mutating func receiveClose(_ message: RealtimeMessage) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: message.topic, joinRef: message.joinRef),
+    guard let channel = routedChannel(message, joinRef: message.joinRef),
       let record = channels[channel]
     else { return [] }
-    let joinRef = record.inboundJoinRef
-    if let closed = message.joinRef, closed != joinRef {
-      logger.debug(
-        "Ignoring \(message.event) for stale join_ref \(closed) on '\(topic(of: channel))' (current: \(joinRef ?? "<none>"))"
-      )
-      return []
-    }
     logger.debug("Server closed channel '\(topic(of: channel))' (\(message.event))")
 
     var effects: [Effect]

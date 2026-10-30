@@ -138,8 +138,7 @@ extension RealtimeCore {
   /// channel of that join. Any other frame is left alone.
   mutating func receiveJoinReply(_ message: RealtimeMessage) -> [Effect] {
     guard message.event == ChannelEvent.reply,
-      let channel = self.channel(
-        forWireTopic: message.topic, joinRef: message.joinRef ?? message.ref),
+      let channel = routedChannel(message, joinRef: message.joinRef ?? message.ref),
       let ref = message.ref,
       let record = channels[channel]
     else { return [] }
@@ -221,7 +220,7 @@ extension RealtimeCore {
   /// PostgreSQL" confirms it. The message goes to the channel its `join_ref` names, or to the
   /// live channel of its topic when it has none.
   mutating func receiveSystem(_ message: RealtimeMessage) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: message.topic, joinRef: message.joinRef),
+    guard let channel = routedChannel(message, joinRef: message.joinRef),
       let record = channels[channel]
     else { return [] }
     let `extension` = message.payload["extension"]?.stringValue
