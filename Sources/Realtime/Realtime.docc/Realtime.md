@@ -75,7 +75,7 @@ recovers on its own. Calls with one result, such as ``RealtimeChannel/subscribe(
 - ``RealtimePostgresIsValue``
 - ``RealtimePostgresFilterValue``
 
-### Presence
+### Presence Tracking
 
 - ``PresenceState``
 - ``PresenceEntry``
