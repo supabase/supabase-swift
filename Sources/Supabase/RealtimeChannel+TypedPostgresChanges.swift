@@ -84,55 +84,83 @@ extension RealtimeChannel {
 extension _PostgrestFilter {
   /// The filter in the grammar of a `postgres_changes` binding: `column=operator.value`
   /// conditions joined by commas, which the server ANDs.
+  ///
+  /// A filter Realtime cannot run is a programmer error, so this traps with the reason.
   var realtimeFilter: String {
-    node.realtimeConditions.joined(separator: ",")
-  }
-}
-
-extension PostgrestFilterNode {
-  fileprivate var realtimeConditions: [String] {
-    switch self {
-    case .and(let children):
-      return children.flatMap(\.realtimeConditions)
-    case .not(.not(let inner)):
-      return inner.realtimeConditions
-    case .not(let inner):
-      return [inner.realtimeCondition(negated: true)]
-    case .comparison, .raw, .or:
-      return [realtimeCondition(negated: false)]
+    do {
+      return try realtimeConditions().joined(separator: ",")
+    } catch {
+      preconditionFailure(error.reason)
     }
   }
 
-  private func realtimeCondition(negated: Bool) -> String {
+  /// The filter's conditions in the `postgres_changes` grammar.
+  ///
+  /// - Throws: ``UnsupportedRealtimeFilter`` naming the first part Realtime cannot run.
+  func realtimeConditions() throws(UnsupportedRealtimeFilter) -> [String] {
+    try node.realtimeConditions()
+  }
+}
+
+/// A part of a typed filter that a `postgres_changes` binding cannot express.
+struct UnsupportedRealtimeFilter: Error {
+  var reason: String
+}
+
+extension PostgrestFilterNode {
+  fileprivate func realtimeConditions() throws(UnsupportedRealtimeFilter) -> [String] {
+    switch self {
+    case .and(let children):
+      var conditions: [String] = []
+      for child in children {
+        conditions += try child.realtimeConditions()
+      }
+      return conditions
+    case .not(.not(let inner)):
+      return try inner.realtimeConditions()
+    case .not(let inner):
+      return [try inner.realtimeCondition(negated: true)]
+    case .comparison, .raw, .or:
+      return [try realtimeCondition(negated: false)]
+    }
+  }
+
+  private func realtimeCondition(negated: Bool) throws(UnsupportedRealtimeFilter) -> String {
     let prefix = negated ? "not." : ""
     switch self {
     case .comparison(let column, let `operator`, let operand):
-      Self.requireRealtimeColumn(column)
-      Self.requireRealtimeOperator(`operator`.token)
+      try Self.requireRealtimeColumn(column)
+      try Self.requireRealtimeOperator(`operator`.token)
       if case .invalid(let reason) = operand {
-        preconditionFailure(reason)
+        throw UnsupportedRealtimeFilter(reason: reason)
       }
       return "\(column)=\(prefix)\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
-      Self.requireRealtimeColumn(column)
+      try Self.requireRealtimeColumn(column)
       var expression = Substring(operand)
       if expression.hasPrefix("not.") {
-        precondition(!negated, "Realtime filters cannot negate `\(column)=\(operand)` again.")
+        guard !negated else {
+          throw UnsupportedRealtimeFilter(
+            reason: "Realtime filters cannot negate `\(column)=\(operand)` again.")
+        }
         expression = expression.dropFirst("not.".count)
       }
-      precondition(
-        expression.contains("."),
-        "The raw Realtime filter `\(column)=\(operand)` is not in the `operator.value` form."
-      )
-      Self.requireRealtimeOperator(String(expression.prefix { $0 != "." }))
+      guard expression.contains(".") else {
+        throw UnsupportedRealtimeFilter(
+          reason:
+            "The raw Realtime filter `\(column)=\(operand)` is not in the `operator.value` form."
+        )
+      }
+      try Self.requireRealtimeOperator(String(expression.prefix { $0 != "." }))
       return "\(column)=\(prefix)\(operand)"
-    case .or:
-      preconditionFailure(
-        "Realtime filters cannot use `||`. Join conditions with `&&`, or open one stream per branch."
+    case .or where !negated:
+      throw UnsupportedRealtimeFilter(
+        reason:
+          "Realtime filters cannot use `||`. Join conditions with `&&`, or open one stream per branch."
       )
-    case .and, .not:
-      preconditionFailure(
-        "Realtime filters cannot negate a group of conditions. Apply `!` to one condition."
+    case .and, .or, .not:
+      throw UnsupportedRealtimeFilter(
+        reason: "Realtime filters cannot negate a group of conditions. Apply `!` to one condition."
       )
     }
   }
@@ -144,21 +172,21 @@ extension PostgrestFilterNode {
     "isdistinct",
   ]
 
-  private static func requireRealtimeOperator(_ token: String) {
-    precondition(
-      realtimeOperators.contains(token),
-      "Realtime filters do not support the `\(token)` operator."
-    )
+  private static func requireRealtimeOperator(_ token: String) throws(UnsupportedRealtimeFilter) {
+    guard realtimeOperators.contains(token) else {
+      throw UnsupportedRealtimeFilter(
+        reason: "Realtime filters do not support the `\(token)` operator.")
+    }
   }
 
-  private static func requireRealtimeColumn(_ column: String) {
-    precondition(
-      !column.contains("->"),
-      "Realtime cannot filter on the JSON path `\(column)`. Filter on a stored column."
-    )
-    precondition(
-      !column.contains("::"),
-      "Realtime cannot filter on the cast `\(column)`. Filter on a stored column."
-    )
+  private static func requireRealtimeColumn(_ column: String) throws(UnsupportedRealtimeFilter) {
+    if column.contains("->") {
+      throw UnsupportedRealtimeFilter(
+        reason: "Realtime cannot filter on the JSON path `\(column)`. Filter on a stored column.")
+    }
+    if column.contains("::") {
+      throw UnsupportedRealtimeFilter(
+        reason: "Realtime cannot filter on the cast `\(column)`. Filter on a stored column.")
+    }
   }
 }

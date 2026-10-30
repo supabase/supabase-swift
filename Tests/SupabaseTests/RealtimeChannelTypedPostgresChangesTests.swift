@@ -15,7 +15,7 @@ import Testing
 /// plugin into this target, and its sources would count as uncovered lines in the coverage report.
 struct RealtimeTodo: _PostgrestRelation, Equatable {
   static let relationName = "todos"
-  static let selectString = "id,title,is_done,priority,due_date,tags"
+  static let selectString = "id,title,is_done,priority,due_date,tags,data"
 
   var id: Int
   var title: String
@@ -23,9 +23,10 @@ struct RealtimeTodo: _PostgrestRelation, Equatable {
   var priority: Int
   var dueDate: Date?
   var tags: [String]?
+  var data: JSONValue?
 
   enum CodingKeys: String, CodingKey {
-    case id, title, priority, tags
+    case id, title, priority, tags, data
     case isDone = "is_done"
     case dueDate = "due_date"
   }
@@ -37,6 +38,7 @@ struct RealtimeTodo: _PostgrestRelation, Equatable {
     let priority = _PostgrestColumn<RealtimeTodo, Int>("priority")
     let dueDate = _PostgrestNullableColumn<RealtimeTodo, Date>("due_date")
     let tags = _PostgrestNullableColumn<RealtimeTodo, [String]>("tags")
+    let data = _PostgrestNullableColumn<RealtimeTodo, JSONValue>("data")
   }
 
   static let columns = Columns()
@@ -87,48 +89,39 @@ struct RealtimeChannelTypedPostgresChangesTests {
     #expect(filter.realtimeFilter == expected)
   }
 
+  static let rejections: [(Filter, String)] = {
+    let c = RealtimeTodo.columns
+    return [
+      (c.id.eq(1) || c.id.eq(2), "cannot use `||`"),
+      (c.id.eq(1) && (c.id.eq(2) || c.id.eq(3)), "cannot use `||`"),
+      (!(c.id.eq(1) && c.id.eq(2)), "cannot negate a group"),
+      (!(c.id.eq(1) || c.id.eq(2)), "cannot negate a group"),
+      (c.tags.contains(["home"]), "do not support the `cs` operator"),
+      (c.title.likeAllOf(["a%"]), "do not support the `like(all)` operator"),
+      (c.data.jsonText("k").eq("x"), "JSON path"),
+      (c.data.eq(.double(.nan)), "has no wire form"),
+      (c.tags.raw("cs.{home}"), "do not support the `cs` operator"),
+      (c.title.raw("eq"), "is not in the `operator.value` form"),
+      (!c.title.raw("not.eq.milk"), "cannot negate `title=not.eq.milk` again"),
+      (Filter.raw("priority::text", "eq.1"), "cast `priority::text`"),
+    ]
+  }()
+
+  @Test(arguments: rejections)
+  func rejectsFiltersRealtimeCannotRun(filter: Filter, reason: String) {
+    #expect {
+      try filter.realtimeConditions()
+    } throws: { error in
+      (error as? UnsupportedRealtimeFilter)?.reason.contains(reason) == true
+    }
+  }
+
   #if os(macOS) || os(Linux)
     @Test
-    func trapsOnAnOrFilter() async {
+    func trapsOnAFilterRealtimeCannotRun() async {
       await #expect(processExitsWith: .failure) {
         let c = RealtimeTodo.columns
         _ = (c.id.eq(1) || c.id.eq(2)).realtimeFilter
-      }
-    }
-
-    @Test
-    func trapsOnANegatedGroup() async {
-      await #expect(processExitsWith: .failure) {
-        let c = RealtimeTodo.columns
-        _ = (!(c.id.eq(1) && c.id.eq(2))).realtimeFilter
-      }
-    }
-
-    @Test
-    func trapsOnAnOperatorRealtimeDoesNotSupport() async {
-      await #expect(processExitsWith: .failure) {
-        _ = RealtimeTodo.columns.tags.contains(["home"]).realtimeFilter
-      }
-    }
-
-    @Test
-    func trapsOnARawOperatorRealtimeDoesNotSupport() async {
-      await #expect(processExitsWith: .failure) {
-        _ = RealtimeTodo.columns.tags.raw("cs.{home}").realtimeFilter
-      }
-    }
-
-    @Test
-    func trapsOnANegatedRawNegation() async {
-      await #expect(processExitsWith: .failure) {
-        _ = (!RealtimeTodo.columns.title.raw("not.eq.milk")).realtimeFilter
-      }
-    }
-
-    @Test
-    func trapsOnARawCastColumn() async {
-      await #expect(processExitsWith: .failure) {
-        _ = _PostgrestFilter<RealtimeTodo>.raw("priority::text", "eq.1").realtimeFilter
       }
     }
   #endif
