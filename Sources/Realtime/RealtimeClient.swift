@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 26/12/23.
 //
 
-import ConcurrencyExtras
 public import Foundation
 internal import HTTPTypes
 import Helpers
@@ -132,10 +131,6 @@ public actor RealtimeClient {
 
   /// The protocol state. Only ``apply(_:)`` hands it events.
   var core: RealtimeCore
-  /// The events waiting for the core while ``apply(_:)`` drains.
-  var pending: [RealtimeCore.Event] = []
-  /// The waiters the batch being drained resolved. They resume once the batch is applied.
-  var resolved: [(WaiterID, WaiterOutcome)] = []
   var waiters = WaiterTable()
   var timers = TimerTable()
   /// The writer for the current socket.
@@ -146,16 +141,25 @@ public actor RealtimeClient {
   /// the close of the socket it stops here, so the frames still queued are written before the
   /// socket closes. Every other stop drops them.
   var stoppedByDisconnect: StoppedSocket?
-  /// Counts socket installs and stops. The reader carries the value it started with, so a frame
-  /// from a socket that has since been replaced is dropped.
+  /// Counts socket installs and stops. The reader stamps its inputs with the value it started
+  /// with, so a frame from a socket that has since been replaced is dropped.
   var generation = 0
   var reader: Task<Void, Never>?
-  /// The connect attempt in flight.
-  var connectAttempt: Task<Void, Never>?
-  var retryTimer: Task<Void, Never>?
-  var idleDisconnectTimer: Task<Void, Never>?
-  /// The `accessToken` callback call in flight.
-  var tokenFetch: Task<Void, Never>?
+  /// The connect attempt in flight. Its result carries `id`, so the result of an attempt that
+  /// was cancelled or replaced is dropped.
+  var connectAttempt: (id: Int, task: Task<Void, Never>)?
+  /// The id of the latest connect attempt.
+  var lastConnectAttempt = 0
+  /// The wait before the next reconnect attempt. Its fire carries `token`, so the fire of a
+  /// wait that was cancelled or replaced is dropped.
+  var retryTimer: (token: UInt64, task: Task<Void, Never>)?
+  /// The wait before the deferred disconnect, stamped as ``retryTimer`` is.
+  var idleDisconnectTimer: (token: UInt64, task: Task<Void, Never>)?
+  /// The token of the latest retry or idle disconnect timer.
+  var lastShellTimerToken: UInt64 = 0
+  /// The `accessToken` callback call in flight for fetch `generation`, and the timer that ends
+  /// the wait for it after `requestTimeout`. The first of the two to report wins.
+  var tokenFetch: (generation: Int, call: Task<Void, Never>, timeout: Task<Void, Never>)?
   /// The callers of ``setAuth(_:)`` that wait for the callback call in flight.
   var tokenFetchWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
   /// The channels ``removeChannel(_:)`` spent while their removal is in flight, by topic. Their
@@ -164,10 +168,16 @@ public actor RealtimeClient {
   /// The actions of a newer channel that wait for the removal on their topic to end, by topic.
   var removalWaiters: [String: [WaiterID]] = [:]
 
-  /// Retains the optional app-lifecycle observer for the client's lifetime.
-  /// Stored as `AnyObject?` so this type remains available on platforms where
-  /// the concrete `RealtimeLifecycleManager` is not compiled.
-  nonisolated(unsafe) var lifecycleManager: (any Sendable & AnyObject)?
+  /// Where every edge of the client hands its input: the socket reader, connect attempts,
+  /// timers, token fetches, task cancellations, and app lifecycle changes. One pump task,
+  /// started in `init`, applies the inputs on the actor in the order they were yielded.
+  nonisolated let inbox: AsyncStream<Input>.Continuation
+
+  #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
+    /// Yields the app lifecycle changes into ``inbox`` when
+    /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+    let lifecycleManager: RealtimeLifecycleManager?
+  #endif
 
   /// The published status and heartbeats, and the channels by their ``RealtimeChannel/topic``.
   /// Only this actor yields into them.
@@ -268,23 +278,36 @@ public actor RealtimeClient {
     let initialToken = headers[.authorization]?.split(separator: " ").last.map(String.init)
     core = RealtimeCore(options: coreOptions, logger: logger, initialToken: initialToken)
 
+    let (inputs, inbox) = AsyncStream.makeStream(of: Input.self, bufferingPolicy: .unbounded)
+    self.inbox = inbox
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      if options.handleAppLifecycle {
-        lifecycleManager = RealtimeLifecycleManager(client: self)
-      }
+      lifecycleManager = options.handleAppLifecycle ? RealtimeLifecycleManager(inbox: inbox) : nil
     #endif
+
+    // The pump. Not stored: it holds the client weakly, so it never keeps it alive, and it ends
+    // when `deinit` finishes the inbox.
+    Task(priority: .medium) { [weak self] in
+      for await input in inputs {
+        guard let self else { return }
+        await self.receive(input)
+      }
+    }
   }
 
   deinit {
+    // No waiter can be parked here: a parked caller runs an isolated method, so it retains the
+    // client. The lifecycle manager removes its observers in its own `deinit`.
+    inbox.finish()
     // Close the live socket: cancelling the tasks alone leaves the underlying WebSocket (and its
     // URLSession) open when a connected client is released without calling `disconnect()`.
     socket?.close(code: .normalClosure, reason: "Client deallocated")
     outbox?.close()
     reader?.cancel()
-    connectAttempt?.cancel()
-    retryTimer?.cancel()
-    idleDisconnectTimer?.cancel()
-    tokenFetch?.cancel()
+    connectAttempt?.task.cancel()
+    retryTimer?.task.cancel()
+    idleDisconnectTimer?.task.cancel()
+    tokenFetch?.call.cancel()
+    tokenFetch?.timeout.cancel()
     timers.cancelAll()
     sinks.finishAll()
   }
@@ -390,8 +413,8 @@ public actor RealtimeClient {
 
   /// Records whether the socket is connected as the app enters the background.
   ///
-  /// Invoked automatically by ``RealtimeLifecycleManager`` when
-  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// Runs when the inbox delivers ``Input/appBackground``, which ``RealtimeLifecycleManager``
+  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
     apply(.appBackground)
   }
@@ -399,8 +422,8 @@ public actor RealtimeClient {
   /// Recovers the connection on app foregrounding when the socket was connected before the app
   /// went to the background and has since gone away.
   ///
-  /// Invoked automatically by ``RealtimeLifecycleManager`` when
-  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// Runs when the inbox delivers ``Input/appForeground``, which ``RealtimeLifecycleManager``
+  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() {
     apply(.appForeground)
   }
@@ -491,7 +514,8 @@ public actor RealtimeClient {
   }
 
   /// Applies `.bindingsChanged` with the Postgres bindings the channel with `id` has now, so
-  /// two fast registrations cannot arrive out of order.
+  /// two fast registrations cannot arrive out of order. Runs when the inbox delivers
+  /// ``Input/bindingsChanged(_:)``.
   func bindingsChanged(_ id: ChannelID) {
     guard let channel = sinks.channel(withID: id) else { return }
     apply(.bindingsChanged(channel: id, snapshot: channel.joinSnapshot))
@@ -548,13 +572,9 @@ public actor RealtimeClient {
           continuation.resume()
         }
       }
-    } onCancel: {
-      Task { await self.stopWaitingForTokenFetch(id) }
+    } onCancel: { [inbox] in
+      inbox.yield(.tokenWaitCancelled(id))
     }
-  }
-
-  private func stopWaitingForTokenFetch(_ id: UUID) {
-    tokenFetchWaiters.removeValue(forKey: id)?.resume()
   }
 
   /// Reads the time since this call on `clock`. A generic function opens the existential, so

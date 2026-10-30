@@ -1011,7 +1011,7 @@ final class RealtimeTests: Sendable {
 extension RealtimeClient {
   fileprivate var messageTask: Task<Void, Never>? { reader }
   fileprivate var heartbeatTask: Task<Void, Never>? { timers.task(for: .heartbeat) }
-  fileprivate var pendingDisconnectTask: Task<Void, Never>? { idleDisconnectTimer }
+  fileprivate var pendingDisconnectTask: Task<Void, Never>? { idleDisconnectTimer?.task }
 }
 
 extension RealtimeMessage {

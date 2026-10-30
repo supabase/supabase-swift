@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 22/04/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 
 #if canImport(UIKit)
@@ -16,33 +15,22 @@ import Foundation
 
 #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
 
-  /// Observes platform app lifecycle notifications and nudges the Realtime client to recover
-  /// its connection when the app returns to the foreground.
+  /// Observes platform app lifecycle notifications and hands them to the Realtime client, which
+  /// recovers its connection when the app returns to the foreground.
   ///
-  /// On backgrounding, the manager tells the client to record whether the socket was connected.
-  /// On foregrounding, it forwards the event to ``RealtimeClient/handleAppForeground()``,
-  /// which reconnects and re-joins channels only if the socket was connected before the app
-  /// backgrounded and has since been torn down. The manager does not proactively disconnect
+  /// On backgrounding, the client records whether the socket was connected. On foregrounding,
+  /// it reconnects and re-joins channels only if the socket was connected before the app
+  /// backgrounded and has since been torn down. The client does not proactively disconnect
   /// on backgrounding — connections often survive short background cycles, and tearing them
   /// down preemptively wastes work during rapid transitions.
-  final class RealtimeLifecycleManager: @unchecked Sendable {
-    private weak var client: RealtimeClient?
-    private var observers: [any NSObjectProtocol] = []
-    private let lock = NSLock()
+  ///
+  /// The client owns the manager, so it is not `Sendable`. Its observers are fixed at init and
+  /// only yield ``Input/appBackground`` and ``Input/appForeground`` into the client's inbox. It
+  /// removes them in its own `deinit`.
+  final class RealtimeLifecycleManager {
+    private let observers: [any NSObjectProtocol]
 
-    init(client: RealtimeClient) {
-      self.client = client
-      setupObservers()
-    }
-
-    deinit {
-      let center = NotificationCenter.default
-      for observer in observers {
-        center.removeObserver(observer)
-      }
-    }
-
-    private func setupObservers() {
+    init(inbox: AsyncStream<Input>.Continuation) {
       let center = NotificationCenter.default
 
       #if canImport(UIKit)
@@ -53,36 +41,21 @@ import Foundation
         let backgroundName = NSApplication.didResignActiveNotification
       #endif
 
-      let foregroundObserver = center.addObserver(
-        forName: foregroundName,
-        object: nil,
-        queue: nil
-      ) { [weak self] _ in
-        self?.handleForeground()
-      }
-
-      let backgroundObserver = center.addObserver(
-        forName: backgroundName,
-        object: nil,
-        queue: nil
-      ) { [weak self] _ in
-        self?.handleBackground()
-      }
-
-      lock.lock()
-      observers.append(foregroundObserver)
-      observers.append(backgroundObserver)
-      lock.unlock()
+      observers = [
+        center.addObserver(forName: foregroundName, object: nil, queue: nil) { _ in
+          inbox.yield(.appForeground)
+        },
+        center.addObserver(forName: backgroundName, object: nil, queue: nil) { _ in
+          inbox.yield(.appBackground)
+        },
+      ]
     }
 
-    private func handleForeground() {
-      guard let client else { return }
-      Task { await client.handleAppForeground() }
-    }
-
-    private func handleBackground() {
-      guard let client else { return }
-      Task { await client.handleAppBackground() }
+    deinit {
+      let center = NotificationCenter.default
+      for observer in observers {
+        center.removeObserver(observer)
+      }
     }
   }
 

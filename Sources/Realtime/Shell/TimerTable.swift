@@ -9,7 +9,7 @@ import Foundation
 /// table, so it needs no lock.
 ///
 /// Every timer has a token. A timer that was replaced or cancelled can still deliver a `fire` that
-/// was already on its way, so the actor checks ``isCurrent(_:token:)`` before it acts on one.
+/// was already on its way, so the actor checks ``claimFire(_:token:)`` before it acts on one.
 struct TimerTable {
   private struct Entry {
     let token: UInt64
@@ -51,14 +51,19 @@ struct TimerTable {
     entries[id]?.token == token
   }
 
+  /// The token of the timer scheduled for `id`, if any.
+  func token(for id: TimerID) -> UInt64? {
+    entries[id]?.token
+  }
+
   /// The task of the timer scheduled for `id`, if any.
   func task(for id: TimerID) -> Task<Void, Never>? {
     entries[id]?.task
   }
 
   /// Returns whether the fire of `token` is the current timer for `id`, and drops that timer:
-  /// a timer fires once. The entry is dropped without a cancel, because the caller runs on the
-  /// timer's own task.
+  /// a timer fires once. The entry is dropped without a cancel, because the timer's task has
+  /// already yielded its fire.
   mutating func claimFire(_ id: TimerID, token: UInt64) -> Bool {
     guard isCurrent(id, token: token) else { return false }
     entries[id] = nil
@@ -68,14 +73,15 @@ struct TimerTable {
 
 /// Starts a task that sleeps until `delay` from now on `clock`, then runs `operation` unless it
 /// was cancelled. The deadline is read here, not inside the task, so a task that starts late
-/// still wakes `delay` after it was scheduled.
+/// still wakes `delay` after it was scheduled. The task is an edge of the client, so it runs at
+/// `.medium` priority.
 func sleepThenRun(
   on clock: some Clock<Duration>,
   after delay: Duration,
   _ operation: @escaping @Sendable () async -> Void
 ) -> Task<Void, Never> {
   let deadline = clock.now.advanced(by: delay)
-  return Task {
+  return Task(priority: .medium) {
     do {
       try await clock.sleep(until: deadline, tolerance: nil)
     } catch {

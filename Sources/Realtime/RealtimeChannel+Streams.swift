@@ -142,9 +142,7 @@ extension RealtimeChannel {
     // Registered first: the client reads the bindings when it applies the change, so a join
     // that read them before this stream existed still learns about it.
     let stream = sinks.postgresChanges(config)
-    if let client {
-      Task { [id] in await client.bindingsChanged(id) }
-    }
+    client?.inbox.yield(.bindingsChanged(id))
     return stream
   }
 

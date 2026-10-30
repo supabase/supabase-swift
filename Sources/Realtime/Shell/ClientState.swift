@@ -20,6 +20,12 @@ enum Input: Sendable {
   case tokenFetched(String?, generation: Int)
   case streamEnded(StreamID)
   case waiterCancelled(WaiterID)
+  /// A caller parked until the removal on `topic` ends was cancelled.
+  case removalWaitCancelled(WaiterID, topic: String)
+  /// A caller of `refreshAccessToken()` waiting for the call in flight was cancelled.
+  case tokenWaitCancelled(UUID)
+  /// The channel `id` opened a Postgres stream, so its join payload changed.
+  case bindingsChanged(ChannelID)
   case appBackground
   case appForeground
   /// Resumes once every earlier input is applied.

@@ -5,7 +5,6 @@
 //  Created by Guilherme Souza on 19/10/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 import Helpers
 import Logging
@@ -20,30 +19,104 @@ struct StoppedSocket {
 }
 
 extension RealtimeClient {
-  /// Hands `event` to the core and runs the effects it returns, in order. An event that arrives
-  /// while a batch is being applied waits in `pending`, so the core never sees two events at
-  /// once. The waiters the batch resolved resume once every effect is applied, so a caller that
-  /// returns from a wait reads the state the batch left.
+  /// Hands `event` to the core and runs the effects it returns, in order. It never suspends, and
+  /// no effect hands the core an event, so the core never sees two events at once. A waiter the
+  /// core resolves resumes as its effect runs; it continues on this actor, so only once the
+  /// whole batch is applied, and it reads the state the batch left.
   func apply(_ event: RealtimeCore.Event) {
-    pending.append(event)
-    guard pending.count == 1 else { return }
-    while let next = pending.first {
-      let effects = core.handle(next, at: CoreTime(elapsed: elapsed(), date: now()))
-      for effect in effects {
-        run(effect)
-      }
-      pending.removeFirst()
-    }
-    let outcomes = resolved
-    resolved = []
-    for (id, outcome) in outcomes {
-      waiters.resume(id, with: outcome)
+    let effects = core.handle(event, at: CoreTime(elapsed: elapsed(), date: now()))
+    for effect in effects {
+      run(effect)
     }
   }
 
+  // MARK: Inbox
+
+  /// Applies one input from an edge. The pump calls this once per input, in the order the edges
+  /// yielded them. An input whose stamp no longer matches, because the work that yielded it was
+  /// replaced or stopped, is dropped.
+  func receive(_ input: Input) {
+    switch input {
+    case .socket(let input, let generation):
+      guard generation == self.generation else {
+        logger.debug("Ignoring event from a stale connection: \(input)")
+        return
+      }
+      switch input {
+      case .frame(let message):
+        apply(.frame(message))
+      case .binaryBroadcast(let broadcast):
+        apply(.binaryBroadcast(broadcast))
+      case .closed(let code, let reason):
+        logger.debug(
+          "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")"
+        )
+        apply(.socketClosed(code: code, reason: reason))
+      }
+
+    case .connectEnded(let result, let attempt):
+      connectAttemptEnded(result, attempt: attempt)
+
+    case .timerFired(let id, let token):
+      guard timers.claimFire(id, token: token) else { return }
+      apply(.timerFired(id))
+
+    case .retryTimerFired(let token):
+      guard retryTimer?.token == token else { return }
+      retryTimer = nil
+      apply(.retryTimerFired)
+
+    case .idleTimerFired(let token):
+      guard idleDisconnectTimer?.token == token else { return }
+      idleDisconnectTimer = nil
+      apply(.disconnectRequested(code: nil, reason: nil))
+
+    case .tokenFetched(let token, let generation):
+      tokenFetchEnded(token, generation: generation)
+
+    case .streamEnded:
+      // No stream yields this yet.
+      break
+
+    case .waiterCancelled(let id):
+      apply(.waiterCancelled(id))
+
+    case .removalWaitCancelled(let id, let topic):
+      removalWaitCancelled(id, topic: topic)
+
+    case .tokenWaitCancelled(let id):
+      tokenFetchWaiters.removeValue(forKey: id)?.resume()
+
+    case .bindingsChanged(let id):
+      bindingsChanged(id)
+
+    case .appBackground:
+      handleAppBackground()
+
+    case .appForeground:
+      handleAppForeground()
+
+    case .flush(let continuation):
+      continuation.resume()
+    }
+  }
+
+  /// Returns once the pump has applied every input yielded before this call.
+  nonisolated func flushInbox() async {
+    await withCheckedContinuation { continuation in
+      if case .terminated = inbox.yield(.flush(continuation)) {
+        continuation.resume()
+      }
+    }
+  }
+
+  // MARK: Waiters
+
   /// Parks the caller until the core resolves the waiter that `make` hands the event. The
-  /// waiter is parked before the event is applied, in one synchronous step, so the core can
-  /// resolve it in the same batch. A cancelled caller throws `CancellationError` at once.
+  /// waiter is parked and the event applied in one actor step, so the core can resolve it in
+  /// the same batch. A cancelled caller throws `CancellationError`: the cancel only yields
+  /// ``Input/waiterCancelled(_:)``, which the pump applies after the current actor job, so it
+  /// never overtakes its own park.
   ///
   /// A caller that is already cancelled throws before the core sees the event, unless
   /// `evenIfCancelled` is set: then the event is applied, and only the wait ends at once.
@@ -59,8 +132,8 @@ extension RealtimeClient {
         waiters.park(id, continuation)
         apply(make(id))
       }
-    } onCancel: {
-      Task { await self.apply(.waiterCancelled(id)) }
+    } onCancel: { [inbox] in
+      inbox.yield(.waiterCancelled(id))
     }
   }
 
@@ -112,8 +185,8 @@ extension RealtimeClient {
       try Task.checkCancellation()
       try await withTaskCancellationHandler {
         try await parkUntilRemovalEnds(id, topic: topic)
-      } onCancel: {
-        Task { await self.removalWaitCancelled(id, topic: topic) }
+      } onCancel: { [inbox] in
+        inbox.yield(.removalWaitCancelled(id, topic: topic))
       }
     }
   }
@@ -140,8 +213,8 @@ extension RealtimeClient {
     }
   }
 
-  /// Runs one effect. It never hands an event to the core directly: tasks apply their events
-  /// later, through ``apply(_:)``.
+  /// Runs one effect. It never hands an event to the core: the tasks it starts yield their
+  /// inputs into the inbox, and the pump applies them later.
   private func run(_ effect: RealtimeCore.Effect) {
     switch effect {
     case .openSocket:
@@ -168,11 +241,11 @@ extension RealtimeClient {
 
     case .cancelAllTasks:
       stopSocketLoops()
-      connectAttempt?.cancel()
+      connectAttempt?.task.cancel()
       connectAttempt = nil
-      retryTimer?.cancel()
+      retryTimer?.task.cancel()
       retryTimer = nil
-      idleDisconnectTimer?.cancel()
+      idleDisconnectTimer?.task.cancel()
       idleDisconnectTimer = nil
       // The `accessToken` call goes on: it is bounded by the request timeout, and the core waits
       // for its `.tokenFetched`.
@@ -180,21 +253,21 @@ extension RealtimeClient {
 
     case .scheduleRetry(let delay):
       logger.debug("Reconnecting in \(delay)")
-      retryTimer?.cancel()
-      retryTimer = shellTimer(after: delay) { $0.apply(.retryTimerFired) }
+      retryTimer?.task.cancel()
+      let token = nextShellTimerToken()
+      retryTimer = (token, inboxTimer(after: delay, .retryTimerFired(token: token)))
 
     case .cancelRetry:
-      retryTimer?.cancel()
+      retryTimer?.task.cancel()
       retryTimer = nil
 
     case .scheduleIdleDisconnect(let delay):
-      idleDisconnectTimer?.cancel()
-      idleDisconnectTimer = shellTimer(after: delay) {
-        $0.apply(.disconnectRequested(code: nil, reason: nil))
-      }
+      idleDisconnectTimer?.task.cancel()
+      let token = nextShellTimerToken()
+      idleDisconnectTimer = (token, inboxTimer(after: delay, .idleTimerFired(token: token)))
 
     case .cancelIdleDisconnect:
-      idleDisconnectTimer?.cancel()
+      idleDisconnectTimer?.task.cancel()
       idleDisconnectTimer = nil
 
     case .send(let message):
@@ -214,7 +287,7 @@ extension RealtimeClient {
       timers.cancel(id)
 
     case .resume(let id, let outcome):
-      resolved.append((id, outcome))
+      waiters.resume(id, with: outcome)
 
     case .publishClientStatus(let status):
       sinks.status.yield(status)
@@ -277,69 +350,67 @@ extension RealtimeClient {
 
   // MARK: Timers
 
-  /// Starts the core's timer `id`, replacing the one already scheduled for `id`.
+  /// Starts the core's timer `id`, replacing the one already scheduled for `id`. Its fire
+  /// yields ``Input/timerFired(_:token:)``.
   func scheduleTimer(_ id: TimerID, after delay: Duration) {
-    timers.schedule(id, after: delay, clock: clock) { [weak self] id, token in
-      await self?.timerFired(id, token: token)
+    timers.schedule(id, after: delay, clock: clock) { [inbox] id, token in
+      inbox.yield(.timerFired(id, token: token))
     }
   }
 
-  /// Applies `.timerFired` for the timer that `token` started, unless it was replaced or
-  /// cancelled since.
-  func timerFired(_ id: TimerID, token: UInt64) {
-    guard timers.claimFire(id, token: token) else { return }
-    apply(.timerFired(id))
+  private func nextShellTimerToken() -> UInt64 {
+    lastShellTimerToken += 1
+    return lastShellTimerToken
   }
 
-  /// Sleeps `delay`, then runs `fire` on the client. The check for cancellation runs on the
-  /// actor, so a timer cancelled after its sleep ended does not fire.
-  ///
-  /// Weak: the sleep must not keep a released client alive until it ends.
-  private func shellTimer(
-    after delay: Duration,
-    fire: @escaping @Sendable (isolated RealtimeClient) -> Void
-  ) -> Task<Void, Never> {
+  /// An edge: sleeps `delay`, then yields `input`.
+  private nonisolated func inboxTimer(after delay: Duration, _ input: Input) -> Task<Void, Never> {
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = clock
-    return sleepThenRun(on: clock, after: delay) { [weak self] in
-      await self?.fireShellTimer(fire)
+    return sleepThenRun(on: clock, after: delay) { [inbox] in
+      inbox.yield(input)
     }
-  }
-
-  private func fireShellTimer(_ fire: @Sendable (isolated RealtimeClient) -> Void) {
-    guard !Task.isCancelled else { return }
-    fire(self)
   }
 
   // MARK: Socket
 
-  /// Starts a connect attempt. It applies `.socketOpened` or `.socketOpenFailed` unless
-  /// `.cancelAllTasks` cancelled it first; a socket that opens too late is closed.
+  /// Starts a connect attempt. Its result is applied unless `.cancelAllTasks` or a newer
+  /// attempt replaced it first; a socket that opens too late is closed.
   private func openSocket() {
-    connectAttempt?.cancel()
-    connectAttempt = Task.detached { [weak self, transport, webSocketURL, headers] in
+    connectAttempt?.task.cancel()
+    lastConnectAttempt += 1
+    let attempt = lastConnectAttempt
+    connectAttempt = (attempt, connect(attempt: attempt))
+  }
+
+  /// An edge: opens a socket and yields ``Input/connectEnded(_:attempt:)``. A socket that opens
+  /// after the client was released is closed.
+  private nonisolated func connect(attempt: Int) -> Task<Void, Never> {
+    Task(priority: .medium) { [inbox, transport, webSocketURL, headers] in
       let result: Result<any WebSocketConnection, any Error>
       do {
         result = .success(try await transport.connect(to: webSocketURL, headerFields: headers))
       } catch {
         result = .failure(error)
       }
-      guard let self else {
-        if case .success(let conn) = result {
-          conn.close(code: .normalClosure, reason: "Client deallocated")
-        }
-        return
+      if case .terminated = inbox.yield(.connectEnded(result, attempt: attempt)),
+        case .success(let conn) = result
+      {
+        conn.close(code: .normalClosure, reason: "Client deallocated")
       }
-      await self.connectAttemptEnded(result)
     }
   }
 
-  /// Runs on the attempt's own task, so `Task.isCancelled` tells whether the attempt was
-  /// cancelled before its outcome got here.
-  private func connectAttemptEnded(_ result: Result<any WebSocketConnection, any Error>) {
+  private func connectAttemptEnded(
+    _ result: Result<any WebSocketConnection, any Error>, attempt: Int
+  ) {
+    let isCurrent = connectAttempt?.id == attempt
+    if isCurrent {
+      connectAttempt = nil
+    }
     switch result {
     case .success(let conn):
-      guard !Task.isCancelled else {
+      guard isCurrent else {
         conn.close(code: .normalClosure, reason: "Connection cancelled")
         return
       }
@@ -347,58 +418,45 @@ extension RealtimeClient {
       apply(.socketOpened(conn))
     case .failure(let error):
       logger.error("Connection failed: \(error)")
-      guard !Task.isCancelled else { return }
+      guard isCurrent else { return }
       apply(.socketOpenFailed(Self.realtimeError(error)))
     }
   }
 
-  /// Reads the socket until it closes or fails.
+  /// An edge: reads the socket until it closes or fails, decodes each event off the actor, and
+  /// yields it stamped with `generation`. A frame that fails to decode is logged and dropped.
   ///
-  /// Detached, and `self` is resolved per event: a loop task isolated to this actor would retain
-  /// it for as long as the socket stays open, so a client released while connected could never
-  /// reach `deinit` and would leak itself, the socket and its `URLSession`.
-  private func listen(
+  /// It holds only the inbox, never the client: a task that retained the client for as long as
+  /// the socket stays open would keep a released client from reaching `deinit`, leaking it, the
+  /// socket, and its `URLSession`.
+  private nonisolated func listen(
     to connection: any WebSocketConnection, generation: Int
   ) -> Task<Void, Never> {
     let events = connection.events
-    return Task.detached { [weak self] in
+    return Task(priority: .medium) { [inbox, serializer, logger] in
       for await event in events {
         if Task.isCancelled { return }
-        guard let self else { return }
-        await self.receive(event, generation: generation)
+        let input: SocketInput
+        switch event {
+        case .frame(.binary(let data)):
+          do {
+            input = .binaryBroadcast(try serializer.decodeBinary(data))
+          } catch {
+            logger.error("Failed to decode binary frame: \(error)")
+            continue
+          }
+        case .frame(.text(let text)):
+          do {
+            input = .frame(try serializer.decodeText(text))
+          } catch {
+            logger.error("Failed to decode text frame: \(error)")
+            continue
+          }
+        case .closed(let code, let reason):
+          input = .closed(code: code?.rawValue, reason: reason)
+        }
+        if case .terminated = inbox.yield(.socket(input, generation: generation)) { return }
       }
-    }
-  }
-
-  /// Applies one event from the socket installed at `generation`. Events from an older socket
-  /// are dropped: a reconnect already replaced it, and its close must not tear down the healthy
-  /// connection.
-  func receive(_ event: WebSocketEvent, generation: Int) {
-    guard generation == self.generation else {
-      logger.debug("Ignoring event from a stale connection: \(event)")
-      return
-    }
-
-    switch event {
-    case .frame(.binary(let data)):
-      do {
-        apply(.binaryBroadcast(try serializer.decodeBinary(data)))
-      } catch {
-        logger.error("Failed to decode binary frame: \(error)")
-      }
-
-    case .frame(.text(let text)):
-      do {
-        apply(.frame(try serializer.decodeText(text)))
-      } catch {
-        logger.error("Failed to decode text frame: \(error)")
-      }
-
-    case .closed(let code, let reason):
-      logger.debug(
-        "WebSocket closed. Code: \(code?.rawValue.description ?? "<none>"), Reason: \(reason ?? "<none>")"
-      )
-      apply(.socketClosed(code: code?.rawValue, reason: reason))
     }
   }
 
@@ -435,93 +493,58 @@ extension RealtimeClient {
 
   // MARK: Access token
 
-  /// Calls the `accessToken` callback and applies `.tokenFetched` once, with `nil` when the call
-  /// fails, times out, or is cancelled. The callers of ``refreshAccessToken()`` resume after it.
+  /// Starts two edges that race to yield ``Input/tokenFetched(_:generation:)``: the
+  /// `accessToken` callback call, which reports `nil` when the call fails, and a timer that
+  /// reports `nil` after `requestTimeout`. The first to arrive for the fetch wins, and the
+  /// actor cancels the other.
   private func fetchAccessToken(generation: Int) {
+    tokenFetch?.call.cancel()
+    tokenFetch?.timeout.cancel()
+    tokenFetch = (
+      generation, callAccessToken(generation: generation),
+      accessTokenTimeout(generation: generation)
+    )
+  }
+
+  private nonisolated func callAccessToken(generation: Int) -> Task<Void, Never> {
     let provider = options.accessToken
-    let timeout = options.requestTimeout
-    let logger = logger
-    // A local, because the existential in `self.clock` is not opened when passed directly.
-    let clock = clock
-    tokenFetch = Task.detached { [weak self] in
-      let token: String?
+    return Task(priority: .medium) { [inbox, logger] in
+      var token: String?
       if let provider {
-        token = await Self.callAccessTokenProvider(
-          provider, timeout: timeout, clock: clock, logger: logger)
-      } else {
-        token = nil
+        do {
+          token = try await provider()
+        } catch {
+          logger.error("Failed to fetch access token: \(error)")
+        }
       }
-      await self?.tokenFetchEnded(token, generation: generation)
+      inbox.yield(.tokenFetched(token, generation: generation))
     }
   }
 
+  private nonisolated func accessTokenTimeout(generation: Int) -> Task<Void, Never> {
+    let timeout = options.requestTimeout
+    // A local, because the existential in `self.clock` is not opened when passed directly.
+    let clock = clock
+    return sleepThenRun(on: clock, after: timeout) { [inbox, logger] in
+      logger.error("The access token callback did not return within \(timeout)")
+      inbox.yield(.tokenFetched(nil, generation: generation))
+    }
+  }
+
+  /// Applies the first result for the fetch in flight and cancels both of its edges, so
+  /// `.tokenFetched` reaches the core once per fetch. The callers of ``refreshAccessToken()``
+  /// resume after it.
   private func tokenFetchEnded(_ token: String?, generation: Int) {
+    guard let fetch = tokenFetch, fetch.generation == generation else { return }
+    // Cleared before the event: the core may start the next fetch while it applies it.
     tokenFetch = nil
+    fetch.call.cancel()
+    fetch.timeout.cancel()
     apply(.tokenFetched(token: token, generation: generation))
     let waiting = tokenFetchWaiters.values
     tokenFetchWaiters = [:]
     for waiter in waiting {
       waiter.resume()
-    }
-  }
-
-  /// Calls `provider` and returns its token, or `nil` when it throws, does not return within
-  /// `timeout`, or the calling task is cancelled. A call that ignores cancellation is left to
-  /// finish on its own and its result is dropped, so it cannot hold up the client. `withTimeout`
-  /// cannot do this: its task group waits for the call to return.
-  private static func callAccessTokenProvider(
-    _ provider: @escaping @Sendable () async throws -> String?,
-    timeout: Duration,
-    clock: some Clock<Duration>,
-    logger: Logger
-  ) async -> String? {
-    let deadline = clock.now.advanced(by: timeout)
-    let pending = LockIsolated<CheckedContinuation<String?, Never>?>(nil)
-    let call = LockIsolated<Task<Void, Never>?>(nil)
-    let timer = LockIsolated<Task<Void, Never>?>(nil)
-    // Returns whether this resumed the caller: only the first of the call, the timer, and the
-    // cancellation does.
-    let finish: @Sendable (String?) -> Bool = { token in
-      pending.withValue { continuation in
-        guard let waiting = continuation else { return false }
-        continuation = nil
-        waiting.resume(returning: token)
-        return true
-      }
-    }
-    return await withTaskCancellationHandler {
-      await withCheckedContinuation { continuation in
-        pending.setValue(continuation)
-        // The timer exists before the call starts, so a call that returns at once can cancel it.
-        timer.setValue(
-          Task {
-            do {
-              try await clock.sleep(until: deadline, tolerance: nil)
-            } catch {
-              return
-            }
-            guard finish(nil) else { return }
-            logger.error("The access token callback did not return within \(timeout)")
-            call.value?.cancel()
-          })
-        call.setValue(
-          Task {
-            let token: String?
-            do {
-              token = try await provider()
-            } catch {
-              logger.error("Failed to fetch access token: \(error)")
-              token = nil
-            }
-            timer.value?.cancel()
-            _ = finish(token)
-          })
-      }
-    } onCancel: {
-      if finish(nil) {
-        timer.value?.cancel()
-        call.value?.cancel()
-      }
     }
   }
 

@@ -3,7 +3,6 @@
 //  Realtime
 //
 
-import ConcurrencyExtras
 import Foundation
 import Logging
 
@@ -23,7 +22,7 @@ final class Outbox: Sendable {
   init(connection: any WebSocketConnection, serializer: RealtimeSerializer, logger: Logger) {
     let (items, continuation) = AsyncStream.makeStream(of: Item.self)
     self.continuation = continuation
-    writer = Task {
+    writer = Task(priority: .medium) {
       for await item in items {
         let frame: WebSocketFrame
         switch item {
@@ -71,25 +70,22 @@ final class Outbox: Sendable {
   /// sent, or once `deadline` ends, whichever comes first: then the frames left are dropped as
   /// with ``close()``. Later calls to ``enqueue(_:)`` do nothing.
   ///
-  /// A send that never returns cannot hold the caller past `deadline`.
+  /// A send that never returns cannot hold the caller past `deadline`, and a cancelled caller
+  /// stops waiting at once.
   func drain(until deadline: Task<Void, Never>) async {
     continuation.finish()
-    let pending = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
-    let finish: @Sendable () -> Void = {
-      pending.withValue { continuation in
-        continuation?.resume()
-        continuation = nil
+    // The first of the two racers to end signals the one slot; no lock picks the winner.
+    let (ended, signal) = AsyncStream.makeStream(
+      of: Void.self, bufferingPolicy: .bufferingNewest(1))
+    for task in [writer, deadline] {
+      Task(priority: .medium) {
+        await task.value
+        signal.yield()
       }
     }
-    await withCheckedContinuation { continuation in
-      pending.setValue(continuation)
-      for task in [writer, deadline] {
-        Task {
-          await task.value
-          finish()
-        }
-      }
-    }
+    var iterator = ended.makeAsyncIterator()
+    _ = await iterator.next()
+    signal.finish()
     writer.cancel()
   }
 }

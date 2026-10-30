@@ -346,17 +346,28 @@ struct RealtimeLifecycleTests {
   }
 
   @Test
-  func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
+  func handleAppLifecycleFalseDoesNotInstallLifecycleManager() async {
     let sut = makeClient(handleAppLifecycle: false)
-    #expect(sut.lifecycleManager == nil)
+    #expect(await !sut.hasLifecycleManager)
   }
 
   #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
     @Test
-    func handleAppLifecycleTrueInstallsLifecycleManager() {
+    func handleAppLifecycleTrueInstallsLifecycleManager() async {
       let sut = makeClient(handleAppLifecycle: true)
-      #expect(sut.lifecycleManager != nil)
+      #expect(await sut.hasLifecycleManager)
       _ = sut
     }
   #endif
+}
+
+extension RealtimeClient {
+  /// Whether the client observes the app lifecycle.
+  fileprivate var hasLifecycleManager: Bool {
+    #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
+      lifecycleManager != nil
+    #else
+      false
+    #endif
+  }
 }

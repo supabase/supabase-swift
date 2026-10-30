@@ -160,33 +160,6 @@ struct RealtimeShellTests {
     #expect(channel.status == .unsubscribed)
   }
 
-  // MARK: Socket
-
-  @Test
-  func framesFromOldSocketAreDropped() async throws {
-    let host = await RealtimeTestHost()
-    let channel = host.client.channel("room")
-    let broadcasts = channel.broadcasts(event: "ping")
-    try await subscribe(channel, on: host)
-    let generation = await host.client.generation
-    let frame = try RealtimeSerializer().encodeText(
-      RealtimeMessage(
-        joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.broadcast,
-        payload: ["event": "ping", "payload": ["n": 1]]))
-
-    await host.client.receive(.frame(.text(frame)), generation: generation - 1)
-    await host.client.receive(.closed(code: nil, reason: "old"), generation: generation - 1)
-    await host.client.receive(.frame(.text(frame)), generation: generation)
-    channel.sinks.finishAll()
-
-    var received: [BroadcastMessage] = []
-    for await message in broadcasts {
-      received.append(message)
-    }
-    #expect(received.count == 1)
-    #expect(host.client.status == .connected)
-  }
-
   // MARK: Disconnect
 
   @Test

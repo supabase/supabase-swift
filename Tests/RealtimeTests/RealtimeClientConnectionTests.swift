@@ -356,9 +356,8 @@ struct RealtimeClientConnectionTests {
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
 
-    await h.client.receive(
-      .close(code: 1001, reason: "late"), generation: staleGeneration
-    )
+    h.client.inbox.yield(.socket(.closed(code: 1001, reason: "late"), generation: staleGeneration))
+    await h.client.flushInbox()
 
     #expect(h.client.status == .connected)
     await h.clock.advance(by: .seconds(60))
