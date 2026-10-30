@@ -388,7 +388,7 @@ actor SessionStore {
 
   func stopAutoRefresh() {
     autoRefreshDriver = nil
-    armRefresher()
+    autoRefreshTask = nil
   }
 
   var isAutoRefreshStarted: Bool {

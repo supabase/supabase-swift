@@ -50,8 +50,16 @@ struct AutoRefreshTests {
         let client = AuthClient(configuration: world.configuration(observesAppLifecycle: true))
         try await client.seedSession(world.issueSession())
 
-        #expect(await waitUntil(timeout: 2) { await client.dependencies.autoRefresh.isRegistered })
-        #expect(mainIsBlocked.value, "The main queue unblocked itself before auto refresh started.")
+        let mainWasBlockedAtRegistration = LockIsolated(false)
+        #expect(
+          await waitUntil(timeout: 2) {
+            guard await client.dependencies.autoRefresh.isRegistered else { return false }
+            mainWasBlockedAtRegistration.setValue(mainIsBlocked.value)
+            return true
+          })
+        #expect(
+          mainWasBlockedAtRegistration.value,
+          "The main queue unblocked itself before auto refresh started.")
       }
     }
   #endif
