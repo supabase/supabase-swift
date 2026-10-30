@@ -803,7 +803,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.signUp(
+      _ = try await sut.signUp(
         email: "example@mail.com",
         password: "the.pass",
         options: SignUpOptions(
@@ -839,7 +839,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.signUp(
+      _ = try await sut.signUp(
         phone: "+1 202-918-2132",
         password: "the.pass",
         options: SignUpOptions(
