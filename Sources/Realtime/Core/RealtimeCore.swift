@@ -30,6 +30,8 @@ struct RealtimeCore {
     var retryDelay: (_ attempt: Int) -> Duration
     /// The wait after join attempt `attempt` failed.
     var rejoinDelay: (_ attempt: Int) -> Duration
+    /// The `version` a join sends: the client's `X-Client-Info` header.
+    var version: String? = nil
   }
 
   enum Event {
@@ -175,6 +177,8 @@ struct RealtimeCore {
   var connectWaiters: [WaiterID] = []
   /// Whether the socket was connected when the app last went to the background.
   var wasConnectedBeforeBackground = false
+  /// Whether an idle disconnect is scheduled, so the next `subscribe` cancels it.
+  var idleDisconnectPending = false
 
   init(options: Options, logger: Logger, initialToken: String?) {
     self.options = options
@@ -192,8 +196,12 @@ struct RealtimeCore {
     switch event {
     case .connect(let waiter):
       return connect(waiter: waiter)
-    case .socketOpened, .socketOpenFailed, .disconnectRequested, .socketClosed, .socketFailed,
-      .retryTimerFired, .wake, .lastChannelRemoved:
+    case .socketOpened, .socketOpenFailed:
+      let previous = connection
+      let effects = transitionConnection(event)
+      return connection == previous ? effects : effects + connectAttemptEnded()
+    case .disconnectRequested, .socketClosed, .socketFailed, .retryTimerFired, .wake,
+      .lastChannelRemoved:
       return transitionConnection(event)
     case .appBackground:
       return enterBackground()
@@ -201,12 +209,22 @@ struct RealtimeCore {
       return enterForeground()
     case .timerFired(.heartbeat):
       return heartbeatTimerFired(at: time)
-    case .frame(let message):
+    case .frame(let message) where message.topic == "phoenix":
       return receiveHeartbeatReply(message, at: time)
+    case .frame(let message):
+      return receiveJoinReply(message)
 
-    // Not handled yet: channel commands, channel frames and timers, tokens, and waiter
+    case .subscribe(let topic, let configuration, let waiter, let snapshot):
+      return subscribe(
+        topic: topic, configuration: configuration, waiter: waiter, snapshot: snapshot)
+    case .timerFired(.joinTimeout(let topic, let ref)):
+      return joinTimedOut(topic, ref: ref)
+    case .timerFired(.rejoin(let topic)):
+      return rejoinTimerFired(topic)
+
+    // Not handled yet: the other channel commands, frames and timers, tokens, and waiter
     // cancellation.
-    case .subscribe, .unsubscribe, .push, .broadcast, .removeChannel, .bindingsChanged,
+    case .unsubscribe, .push, .broadcast, .removeChannel, .bindingsChanged,
       .setAuth, .binaryBroadcast, .timerFired, .tokenFetched, .waiterCancelled:
       return []
     }

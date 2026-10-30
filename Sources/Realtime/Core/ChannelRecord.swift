@@ -12,6 +12,8 @@ struct ChannelRecord {
   var hasBeenSubscribed = false
   /// The client's Postgres bindings, in registration order.
   var bindings: [PostgresJoinConfig] = []
+  /// Whether a presence stream is open, so the join turns presence on.
+  var presenceEnabled = false
   /// The bindings the server echoed in the join reply, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
   var presence = PresenceTracker()

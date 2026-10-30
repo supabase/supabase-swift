@@ -30,10 +30,17 @@ extension RealtimeCore {
       lastRef = 0
       // A disconnect the developer asked for is not undone when the app comes back.
       wasConnectedBeforeBackground = false
+      // `cancelAllTasks` cancels the idle disconnect too.
+      idleDisconnectPending = false
     }
 
     let previous = connection
     let effects = Self.connectionTable(&connection, event, retryDelay: options.retryDelay)
+    if case .lastChannelRemoved(let delay) = event,
+      effects.contains(.scheduleIdleDisconnect(after: delay))
+    {
+      idleDisconnectPending = true
+    }
     guard connection != previous else { return effects }
 
     logger.debug("Connection → \(connection) on \(event)")
