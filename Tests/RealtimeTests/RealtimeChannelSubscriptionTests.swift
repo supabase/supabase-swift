@@ -1155,7 +1155,8 @@ struct RealtimeChannelSubscriptionTests {
 
     await #expect(throws: CancellationError.self) { try await subscription.value }
     #expect(await channel.status == .unsubscribed)
-    #expect(h.sent(ChannelEvent.leave).count == 1)
+    // The leave goes out through the outbox, after `unsubscribe()` returns.
+    #expect(await waitUntil { h.sent(ChannelEvent.leave).count == 1 })
   }
 
   // MARK: - Status stream
