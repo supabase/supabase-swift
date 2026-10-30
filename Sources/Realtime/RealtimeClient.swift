@@ -82,6 +82,7 @@ public actor RealtimeClient {
   /// The executor this client and its channels share.
   nonisolated let isolation = RealtimeExecutor()
 
+  /// The serial executor this client shares with every channel it creates.
   public nonisolated var unownedExecutor: UnownedSerialExecutor {
     isolation.unownedExecutor
   }

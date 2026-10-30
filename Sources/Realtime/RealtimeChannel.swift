@@ -81,6 +81,7 @@ public actor RealtimeChannel {
   /// The client's executor owner, kept so the channel stays on it even after the client is gone.
   private let isolation: RealtimeExecutor
 
+  /// The serial executor of the client that created this channel.
   public nonisolated var unownedExecutor: UnownedSerialExecutor {
     isolation.unownedExecutor
   }
