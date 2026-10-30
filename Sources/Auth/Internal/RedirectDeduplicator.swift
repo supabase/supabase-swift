@@ -31,4 +31,10 @@ actor RedirectDeduplicator<Value: Sendable> {
     }
     return try await task.value
   }
+
+  /// Forgets every stored result, so a later call for any key runs its operation again.
+  func removeAll() {
+    tasks.removeAll()
+    order.removeAll()
+  }
 }

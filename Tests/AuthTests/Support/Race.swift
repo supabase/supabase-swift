@@ -40,11 +40,12 @@ struct Race: Sendable {
   func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
     storage: (any AuthLocalStorage)? = nil,
+    redirectToURL: URL? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
       url: clientURL, autoRefresh: autoRefresh, storage: storage ?? localStorage,
-      beforeRefreshingHeldSession: beforeRefreshingHeldSession)
+      redirectToURL: redirectToURL, beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
@@ -57,6 +58,7 @@ struct Race: Sendable {
     url: URL,
     autoRefresh: AuthClient.AutoRefreshPolicy,
     storage: any AuthLocalStorage,
+    redirectToURL: URL? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     var platform = AuthPlatform.live
@@ -64,6 +66,7 @@ struct Race: Sendable {
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
+        redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: storage,
         http: HTTPClientConfiguration(transport: transport),
@@ -133,6 +136,13 @@ struct Race: Sendable {
     through gate: Gate? = nil, _ response: @escaping @Sendable () throws -> (HTTPResponse, Data)
   ) {
     answerToken("pkce", through: gate) { _ in try response() }
+  }
+
+  /// Answers a code exchange with the response `response` returns for the request body.
+  func answerCodeExchange(
+    _ response: @escaping @Sendable (_ body: String) throws -> (HTTPResponse, Data)
+  ) {
+    answerToken("pkce", through: nil, response)
   }
 
   func answerSignOut() {

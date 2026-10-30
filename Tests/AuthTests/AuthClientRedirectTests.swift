@@ -495,6 +495,225 @@ struct AuthClientRedirectTests {
     #expect(try pendingFlowCount() == 0)
   }
 
+  @Test
+  func anErrorCallbackThrowsAndRemovesTheFlow() async throws {
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in
+      URL(string: "myapp://cb?error=access_denied&error_description=x")!
+    }
+
+    let error = await #expect(throws: AuthError.self) {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    }
+
+    #expect(error?.kind == .oauthFlowFailed)
+    #expect(error?.message == "x")
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func aTransportErrorInThePresentedExchangeKeepsTheFlow() async throws {
+    race.answerCodeExchange { throw URLError(.timedOut) }
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb?code=c")! }
+
+    await #expect {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    } throws: { ($0 as? AuthError)?.kind == .transport }
+
+    #expect(try pendingFlowCount() == 1)
+  }
+
+  @Test
+  func anImplicitCallbackSignsInAndRemovesTheFlow() async throws {
+    race.answerUser(User(fromMockNamed: "user"))
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in
+      URL(
+        string: """
+          myapp://cb#access_token=implicit-access&refresh_token=implicit-refresh\
+          &expires_in=3600&token_type=bearer
+          """
+      )!
+    }
+
+    let session = try await client.signInWithOAuth(.github, presenter: presenter)
+
+    #expect(session.accessToken == "implicit-access")
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func withoutAnIDABadVerifierTriesTheNextNewestFlow() async throws {
+    race.answer(.post, "otp")
+    race.answer(.post, "recover")
+    let client = race.makeClient()
+    try await client.signInWithOTP(email: "user@example.com")
+    let magicLink = try #require(try await client.dependencies.flowStore.newest())
+    try await client.resetPasswordForEmail("user@example.com")
+    let recovery = try #require(try await client.dependencies.flowStore.newest())
+    race.answerCodeExchange { [race] body in
+      guard body.contains(magicLink.verifier) else {
+        return Race.error(
+          .badRequest, code: "bad_code_verifier", message: "code challenge does not match")
+      }
+      return try Race.ok(race.issue("magic"))
+    }
+
+    let result = try await client.handleRedirect(callback)
+
+    #expect(describe(result) == "signedIn magic-access verification: nil")
+    #expect(
+      exchangeBodies() == [
+        exchangeBody(verifier: recovery.verifier), exchangeBody(verifier: magicLink.verifier),
+      ])
+    #expect(try storedFlow(magicLink.id) == nil)
+    #expect(try storedFlow(recovery.id) != nil)
+  }
+
+  @Test
+  func withoutAnIDABadVerifierOnEveryFlowKeepsThemAll() async throws {
+    race.answerCodeExchange { _ in
+      Race.error(.badRequest, code: "bad_code_verifier", message: "code challenge does not match")
+    }
+    let client = race.makeClient()
+    _ = try await client.oauthSignInURL(.github)
+    _ = try await client.oauthSignInURL(.google)
+
+    await #expect {
+      try await client.handleRedirect(callback)
+    } throws: { ($0 as? AuthError)?.errorCode == .badCodeVerifier }
+
+    #expect(race.requestCount(grantType: "pkce") == 2)
+    #expect(try pendingFlowCount() == 2)
+  }
+
+  /// The server checks the code's flow state before the verifier, so these errors do not say which
+  /// flow the code belongs to.
+  @Test(arguments: [ErrorCode.flowStateNotFound, .flowStateExpired])
+  func withoutAnIDAFlowStateErrorKeepsEveryFlow(code: ErrorCode) async throws {
+    race.answerCodeExchange {
+      Race.error(.notFound, code: code.rawValue, message: "invalid flow state")
+    }
+    let client = race.makeClient()
+    _ = try await client.oauthSignInURL(.github)
+    _ = try await client.oauthSignInURL(.google)
+
+    await #expect {
+      try await client.handleRedirect(callback)
+    } throws: { ($0 as? AuthError)?.errorCode == code }
+
+    #expect(race.requestCount(grantType: "pkce") == 1)
+    #expect(try pendingFlowCount() == 2)
+  }
+
+  @Test
+  func withAnIDABadVerifierRemovesThatFlowOnly() async throws {
+    race.answerCodeExchange {
+      Race.error(.badRequest, code: "bad_code_verifier", message: "code challenge does not match")
+    }
+    let client = race.makeClient()
+    let a = try await client.oauthSignInURL(.github).flowID
+    let b = try await client.oauthSignInURL(.google).flowID
+
+    await #expect {
+      try await client.handleRedirect(
+        URL(string: "com.example.app://callback?code=one-time-code&sb_flow_id=\(b.uuidString)")!)
+    } throws: { ($0 as? AuthError)?.errorCode == .badCodeVerifier }
+
+    #expect(race.requestCount(grantType: "pkce") == 1)
+    #expect(try storedFlow(a) != nil)
+    #expect(try storedFlow(b) == nil)
+  }
+
+  @Test
+  func signOutForgetsHandledRedirects() async throws {
+    race.answerUser(User(fromMockNamed: "user"))
+    race.answerSignOut()
+    let client = race.makeClient()
+    let link = URL(
+      string: """
+        com.example.app://callback#access_token=implicit-access&refresh_token=implicit-refresh\
+        &expires_in=3600&token_type=bearer
+        """
+    )!
+    try await client.handleRedirect(link)
+
+    try await client.signOut()
+    #expect(client.currentSession == nil)
+    let result = try await client.handleRedirect(link)
+
+    #expect(describe(result) == "signedIn implicit-access verification: nil")
+    #expect(client.currentSession?.accessToken == "implicit-access")
+    #expect(userRequestCount() == 2)
+  }
+
+  @Test
+  func signUpWithASessionRemovesItsFlow() async throws {
+    race.answer(.post, "signup") { [race] in try Race.ok(race.issue("signed-up")) }
+    let client = race.makeClient()
+
+    let result = try await client.signUp(email: "a@example.com", password: "secret")
+
+    #expect(result.session?.accessToken == "signed-up-access")
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func theConfiguredRedirectURLIsUsedWithoutAPerCallOne() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient(redirectToURL: URL(string: "configured://callback")!)
+    let presenter = ClosurePresenter { [self] url, callbackScheme in
+      #expect(queryItem("redirect_to", in: url) == "configured://callback")
+      #expect(callbackScheme == "configured")
+      return URL(string: "configured://callback?code=c")!
+    }
+
+    try await client.signInWithOAuth(.github, presenter: presenter)
+  }
+
+  @Test
+  func aPerCallRedirectURLWinsOverTheConfiguredOne() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient(redirectToURL: URL(string: "configured://callback")!)
+    let presenter = ClosurePresenter { [self] url, callbackScheme in
+      #expect(queryItem("redirect_to", in: url) == "percall://callback")
+      #expect(callbackScheme == "percall")
+      return URL(string: "percall://callback?code=c")!
+    }
+
+    try await client.signInWithOAuth(
+      .github,
+      options: OAuthOptions(redirectTo: URL(string: "percall://callback")!),
+      presenter: presenter
+    )
+  }
+
+  @Test
+  func theStartedFlowWinsOverTheURLsFlowID() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let other = try await client.oauthSignInURL(.google).flowID
+    let challenge = LockIsolated<String?>(nil)
+    let presenter = ClosurePresenter { [self] url, _ in
+      challenge.setValue(queryItem("code_challenge", in: url))
+      return URL(
+        string: "com.example.app://callback?code=one-time-code&sb_flow_id=\(other.uuidString)")!
+    }
+
+    try await client.signInWithOAuth(.github, presenter: presenter)
+
+    let verifier = try #require(exchangeBodies().first?["code_verifier"])
+    #expect(PKCE.live.generateCodeChallenge(verifier) == challenge.value)
+    #expect(try storedFlow(other) != nil)
+  }
+
+  private func userRequestCount() -> Int {
+    race.transport.requests.filter {
+      $0.head.method == .get && $0.head.url?.path.hasSuffix("/user") == true
+    }.count
+  }
+
   /// Names the session by its access token, so the check does not depend on how the other
   /// session fields survive the JSON round trip through the stub.
   private func describe(_ result: RedirectResult?) -> String {

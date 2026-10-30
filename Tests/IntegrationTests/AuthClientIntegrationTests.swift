@@ -419,6 +419,45 @@ struct AuthClientIntegrationTests {
     #expect(replay == result)
   }
 
+  /// An email link carries no flow ID, so the client tries the newest flow first. The server
+  /// rejects its verifier, and the client must then finish the magic-link flow and keep the
+  /// recovery flow for its own link.
+  ///
+  /// The reset goes to another user: the server keeps one recovery token per user, so a reset for
+  /// the same user makes the magic link itself invalid, before any code exchange.
+  @Test
+  func anEarlierMagicLinkFinishesAfterALaterPasswordReset() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    let otherEmail = mockEmail()
+    let redirectTo = URL(string: "http://localhost:3000")!
+    for address in [email, otherEmail] {
+      try await admin.admin.createUser(
+        attributes: AdminUserAttributes(
+          email: address, confirmsEmail: true, password: mockPassword())
+      )
+    }
+
+    try await authClient.signInWithOTP(email: email, redirectTo: redirectTo)
+    let magicLinkFlow = try #require(try await authClient.dependencies.flowStore.newest())
+    try await authClient.resetPasswordForEmail(otherEmail, redirectTo: redirectTo)
+    let recoveryFlow = try #require(try await authClient.dependencies.flowStore.newest())
+    #expect(recoveryFlow.id != magicLinkFlow.id)
+
+    let magicLink = try await MailCatcher().latestLink(to: email)
+    let location = try await redirectLocation(of: magicLink)
+    let result = try await authClient.handleRedirect(location)
+
+    guard case .signedIn(let session, let verification) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(verification == nil)
+    let pending = try await authClient.dependencies.flowStore.pendingFlows()
+    #expect(pending.map(\.id) == [recoveryFlow.id])
+  }
+
   @Test
   func implicitMagicLinkSignsInThroughHandleRedirect() async throws {
     let admin = Self.makeClient(serviceRole: true)

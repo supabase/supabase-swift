@@ -76,4 +76,23 @@ struct RedirectDeduplicatorTests {
 
     #expect(runs.value == ["a", "b", "c", "a"])
   }
+
+  @Test
+  func removeAllForgetsTheCachedValues() async throws {
+    let deduplicator = RedirectDeduplicator<Int>()
+    let runs = LockIsolated(0)
+    let operation: @Sendable () async throws -> Int = {
+      runs.withValue {
+        $0 += 1
+        return $0
+      }
+    }
+
+    let first = try await deduplicator.value(for: "code", operation)
+    await deduplicator.removeAll()
+    let second = try await deduplicator.value(for: "code", operation)
+
+    #expect(first == 1)
+    #expect(second == 2)
+  }
 }

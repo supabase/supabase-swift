@@ -368,17 +368,22 @@ public final class AuthClient: Sendable {
     password: String,
     options: SignUpOptions = .init()
   ) async throws -> SignUpResult {
-    try await withFlow(.signIn, redirectTo: options.redirectTo) {
-      try await _signUp(
+    try await withFlow(.signIn, redirectTo: options.redirectTo) { started in
+      let result = try await _signUp(
         authAPI.signUp(
           email: email,
           password: password,
           userMetadata: options.userMetadata,
           redirectTo: options.redirectTo,
           captchaToken: options.captchaToken,
-          pkce: $0.challenge
+          pkce: started.challenge
         )
       )
+      if result.session != nil {
+        // No confirmation email was sent, so no code can come back for this flow.
+        await removeFlow(started.flow.id)
+      }
+      return result
     }
   }
 
@@ -640,14 +645,20 @@ public final class AuthClient: Sendable {
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     let (flow, challenge) = try await dependencies.flowStore.start(
       purpose: .signIn, redirectTo: redirectTo)
-    let url = try authAPI.authorizeURL(
-      provider: provider,
-      scopes: options.scopesParameter,
-      redirectTo: redirectTo,
-      queryParams: options.queryParams,
-      pkce: challenge
-    )
-    return (url, flow.id)
+    do {
+      let url = try authAPI.authorizeURL(
+        provider: provider,
+        scopes: options.scopesParameter,
+        redirectTo: redirectTo,
+        queryParams: options.queryParams,
+        pkce: challenge
+      )
+      return (url, flow.id)
+    } catch {
+      // No request was sent, so no code can come back for this flow.
+      await removeFlow(flow.id)
+      throw error
+    }
   }
 
   #if canImport(AuthenticationServices)
@@ -725,10 +736,21 @@ public final class AuthClient: Sendable {
       throw error
     }
 
-    guard case .signedIn(let session, _) = try await handleRedirect(callback, flowID: start.flowID)
-    else {
-      // The flow can never finish: its page is closed and no code came back.
-      try? await dependencies.flowStore.remove(id: start.flowID)
+    // The page is closed, so no other code can come back for this flow. Only an exchange that may
+    // not have reached the server keeps it, so a retry can still finish it.
+    let result: RedirectResult?
+    do {
+      result = try await handleRedirect(callback, flowID: start.flowID)
+    } catch {
+      if !Self.mayHaveReachedServer(error) {
+        await removeFlow(start.flowID)
+      }
+      throw error
+    }
+
+    // A code exchange removed the flow already. Implicit tokens or a non-redirect leave it.
+    await removeFlow(start.flowID)
+    guard case .signedIn(let session, _) = result else {
       throw AuthError.oauthFlowFailed("The callback URL is not an auth redirect.")
     }
     return session
@@ -759,12 +781,12 @@ public final class AuthClient: Sendable {
   ///   - code: The authorization code from the redirect URL.
   ///   - flowID: The ID of the flow that produced `code`, as returned by
   ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)``. When `nil`, the client
-  ///     uses the newest pending flow.
+  ///     tries the pending flows newest first.
   /// - Returns: The new session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
   public func exchangeCodeForSession(_ code: String, flowID: UUID? = nil) async throws -> Session {
-    try await exchange(code: code, flow: pendingFlow(id: flowID))
+    try await exchange(code: code, flowID: flowID).session
   }
 
   /// Returns `true` when `url` is a redirect that ``handleRedirect(_:)`` handles.
@@ -777,9 +799,17 @@ public final class AuthClient: Sendable {
 
   /// Finishes the auth flow that a redirect URL reports, and stores the session.
   ///
-  /// Call it with every URL that opens your app. The client reads the URL's contents to find the
-  /// flow: a PKCE code, tokens from an email link, an error, or an email change that waits for a
-  /// second confirmation.
+  /// Pass the URLs that reach your auth callback. ``isAuthRedirect(_:)`` checks one. The client
+  /// reads the URL's contents to find the flow: a PKCE code, tokens from an email link, an error,
+  /// or an email change that waits for a second confirmation.
+  ///
+  /// A code without a flow ID, such as the code in an email link, can belong to any pending flow.
+  /// The client tries the pending flows newest first, so a link from an earlier email still
+  /// finishes its own flow.
+  ///
+  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
+  /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
+  /// this way. Pass only URLs that reach your own callback.
   ///
   /// The same URL can arrive more than once, for example from both a scene delegate and
   /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
@@ -816,8 +846,7 @@ public final class AuthClient: Sendable {
 
     case .code(let code, let urlFlowID):
       return try await dependencies.redirectDeduplicator.value(for: code) { [self] in
-        let flow = try await pendingFlow(id: flowID ?? urlFlowID)
-        let session = try await exchange(code: code, flow: flow)
+        let (session, flow) = try await exchange(code: code, flowID: flowID ?? urlFlowID)
         return .signedIn(session, verification: flow.purpose.verification)
       }
 
@@ -829,32 +858,55 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// The flow with `id`, or the newest pending flow when `id` is `nil`. Never falls back to
-  /// another flow, so a code is never sent with a verifier that belongs to a different flow.
-  private func pendingFlow(id: UUID?) async throws -> PendingFlowRecord {
-    if let id {
-      guard let flow = try await dependencies.flowStore.flow(id: id) else {
+  /// Exchanges `code` with the flow `flowID` names. Never falls back to another flow.
+  ///
+  /// Without an ID, the code can belong to any pending flow, for example an email link that cannot
+  /// carry an ID. The client tries the flows newest first. A ``ErrorCode/badCodeVerifier``
+  /// rejection means the code belongs to another flow, so the client keeps that flow and tries the
+  /// next one. A rejection that does not name the flow, ``ErrorCode/flowStateNotFound`` or
+  /// ``ErrorCode/flowStateExpired``, keeps every flow and throws.
+  private func exchange(
+    code: String,
+    flowID: UUID?
+  ) async throws -> (session: Session, flow: PendingFlowRecord) {
+    if let flowID {
+      guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
         throw AuthError.oauthFlowFailed(
-          "No pending flow with ID \(id). It finished, expired, or started on another device.")
+          "No pending flow with ID \(flowID). It finished, expired, or started on another device.")
       }
-      return flow
+      return (try await exchange(code: code, flow: flow, guessed: false), flow)
     }
 
-    guard let flow = try await dependencies.flowStore.newest() else {
-      throw AuthError.oauthFlowFailed(
-        "No pending flow for this code. It finished, expired, or started on another device.")
+    let flows = try await dependencies.flowStore.pendingFlows()
+    var rejection: (any Error)?
+    for flow in flows {
+      do {
+        return (try await exchange(code: code, flow: flow, guessed: true), flow)
+      } catch let error as AuthError where error.errorCode == .badCodeVerifier {
+        rejection = error
+      }
     }
-    return flow
+    throw rejection
+      ?? AuthError.oauthFlowFailed(
+        "No pending flow for this code. It finished, expired, or started on another device.")
   }
 
-  private func exchange(code: String, flow: PendingFlowRecord) async throws -> Session {
+  /// `guessed` is `true` when the caller chose `flow` without an ID, so a rejection that does not
+  /// prove the code belongs to `flow` keeps it.
+  private func exchange(
+    code: String,
+    flow: PendingFlowRecord,
+    guessed: Bool
+  ) async throws -> Session {
     let session: Session
     do {
       session = try await api.execute(
         authAPI.exchangeCodeForSession(authCode: code, codeVerifier: flow.verifier))
     } catch {
       // After a transport error the server may not have seen the code, so a retry can still work.
-      if (error as? AuthError)?.response != nil {
+      if let error = error as? AuthError, error.response != nil,
+        !(guessed && Self.keepsAGuessedFlow(error))
+      {
         await removeFlow(flow.id)
       }
       throw error
@@ -863,6 +915,10 @@ public final class AuthClient: Sendable {
     await removeFlow(flow.id)
     try await sessionStore.commit(.signedIn(session, event: flow.purpose.event))
     return session
+  }
+
+  private static func keepsAGuessedFlow(_ error: AuthError) -> Bool {
+    [.badCodeVerifier, .flowStateNotFound, .flowStateExpired].contains(error.errorCode)
   }
 
   /// A failed removal is only logged. The flow cannot be used again, and the TTL drops it.
@@ -947,6 +1003,11 @@ public final class AuthClient: Sendable {
   /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
+    if scope != .others {
+      // A redirect handled before the sign-out must sign in again when it comes back.
+      await dependencies.redirectDeduplicator.removeAll()
+    }
+
     guard let session = currentSession else {
       configuration.logger.warning("signOut called without a session")
       return
