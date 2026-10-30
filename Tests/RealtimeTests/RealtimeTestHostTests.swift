@@ -36,9 +36,11 @@ struct RealtimeTestHostTests {
 
     async let push: Void = channel.track(["name": "ana"] as JSONObject)
     let frame = try await host.receive(event: "presence")
+    #expect(await host.client.pendingPushCount(for: channel.topic) == 1)
     host.reply(to: frame)
 
     try await push
+    #expect(await host.client.pendingPushCount(for: channel.topic) == 0)
   }
 
   @Test

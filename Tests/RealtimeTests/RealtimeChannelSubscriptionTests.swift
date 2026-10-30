@@ -43,6 +43,40 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func aCallerCancelledBeforeItJoinsTheSharedSubscribeThrowsAtOnce() async throws {
+    let h = Harness()
+    let channel = h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      try await channel.subscribe()
+    }
+
+    await #expect(throws: CancellationError.self) { try await second.value }
+    try h.confirm(join)
+    try await first.value
+    #expect(channel.status == .subscribed)
+  }
+
+  @Test
+  func concurrentSubscribesShareOneJoin() async throws {
+    let h = Harness()
+    let channel = h.client.channel("room")
+
+    async let first: Void = channel.subscribe()
+    async let second: Void = channel.subscribe()
+    let join = try #require(await h.received(ChannelEvent.join))
+    try h.confirm(join)
+
+    try await first
+    try await second
+    #expect(channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
   @Test
   func subscribeRetriesAfterTimeoutThenSucceeds() async throws {
     let h = Harness(timeout: .seconds(10))
@@ -677,6 +711,7 @@ struct RealtimeChannelSubscriptionTests {
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .unauthorized)
     #expect(channel.status == .failed)
+    #expect(channel.status.error?.kind == error?.kind)
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -734,6 +769,7 @@ struct RealtimeChannelSubscriptionTests {
     #expect(error?.isRetryable == false)
     #expect(h.connects.value == 1)
     #expect(channel.status == .failed)
+    #expect(channel.status.error?.kind == error?.kind)
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -746,6 +782,7 @@ struct RealtimeChannelSubscriptionTests {
     #expect(error?.isRetryable == false)
     #expect(h.connects.value == 0)
     #expect(channel.status == .failed)
+    #expect(channel.status.error?.kind == error?.kind)
   }
 
   /// A join error with no reason is not one the classifier knows, so the channel rejoins.
@@ -1025,6 +1062,7 @@ struct RealtimeChannelSubscriptionTests {
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .channelClosedByServer)
     #expect(channel.status == .failed)
+    #expect(channel.status.error?.kind == error?.kind)
   }
 
   // MARK: - Reconnect
