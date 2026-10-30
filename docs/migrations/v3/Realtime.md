@@ -46,12 +46,15 @@ Changes that still compile but behave differently. Check each one by hand.
   cancelled throws `CancellationError` and sends nothing.
 - **`unsubscribe()` keeps the channel.** The channel stays in `channels` with its streams open,
   and `subscribe()` joins again on the same instance. v2 dropped the channel from the client
-  when the server closed it. Because `channel(_:configure:)` returns the existing channel, a
-  new configuration needs `removeChannel(_:)` first. Only `removeChannel(_:)` ends the streams.
+  when the server confirmed the leave. Because `channel(_:configure:)` returns the existing
+  channel, a new configuration needs `removeChannel(_:)` first. Only `removeChannel(_:)`, or
+  the server closing the channel with `phx_close`, ends the streams.
 - **A removed channel is spent.** After `removeChannel(_:)`, `subscribe()`, `broadcast`,
   `track`, `untrack` and `httpSend` throw `RealtimeError` with `kind == .channelRemoved`, and a
-  `subscribe()` in flight throws it too. `unsubscribe()` returns at once, `status` keeps the last
-  value, and a new stream ends at once. Get a new channel from `channel(_:configure:)`.
+  `subscribe()` in flight throws it too. A channel the server closes with `phx_close` is spent
+  the same way; a `subscribe()` in flight then throws `.channelClosedByServer`. `unsubscribe()`
+  returns at once, `status` keeps the last value, and a new stream ends at once. Get a new
+  channel from `channel(_:configure:)`.
 - **`removeChannel(_:)` also leaves a channel that is joining.** v2 left only a subscribed
   channel. The call returns when the leave ends. A new channel for the same topic waits for that
   leave before it acts.
@@ -443,8 +446,8 @@ cause when there is one.
 `maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or
 `kind` is `.unauthorized` after the one rejoin with a fresh token.
 
-`.channelRemoved` is new. Every action on a channel that `removeChannel(_:)` removed throws it.
-Get a new channel from `channel(_:configure:)`.
+`.channelRemoved` is new. Every action on a channel that `removeChannel(_:)` removed, or that
+the server closed with `phx_close`, throws it. Get a new channel from `channel(_:configure:)`.
 
 ```swift
 // v2

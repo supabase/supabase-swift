@@ -151,6 +151,12 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// SDK starts itself, after a reconnect or for a new Postgres changes stream: the channel ends
   /// ``RealtimeChannelStatus/failed(_:)``. Watch ``statusChanges()`` and call this method again.
   ///
+  /// When the server closes the channel (`phx_close`), the channel is spent, as after
+  /// ``RealtimeClient/removeChannel(_:)``: a join in flight throws
+  /// ``RealtimeError/Kind-swift.struct/channelClosedByServer``, and calling this method again on
+  /// the same channel throws ``RealtimeError/Kind-swift.struct/channelRemoved``. Get a new
+  /// channel from ``RealtimeClient/channel(_:configure:)``.
+  ///
   /// There is no attempt limit. After a timeout, a lost connection, or a transient join error,
   /// the channel joins again after 1, 2 and 5 s, then every 10 s; after a rate limit it waits
   /// 30 s. An expired token gets one rejoin at once, with a token fetched again from the
@@ -166,7 +172,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   (``RealtimeError/Kind-swift.struct/notConnected``).
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
   ///   channel during the join, ``RealtimeError/Kind-swift.struct/channelRemoved`` when the
-  ///   channel was removed, and `CancellationError` when the calling task is cancelled.
+  ///   channel was removed or the server closed it earlier, and `CancellationError` when the
+  ///   calling task is cancelled.
   public func subscribe() async throws {
     let client = try clientForAction()
     // The snapshot is read on the client, when it applies the event.
