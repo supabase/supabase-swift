@@ -31,6 +31,10 @@ Changes that still compile but behave differently. Check each one by hand.
   While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
 - **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
   `kind == .notConnected` instead of connecting again. Call `connect()`, then subscribe again.
+- **`disconnect()` unsubscribes subscribed channels.** v2 left them `.subscribed`, so a later
+  `subscribe()` did nothing and the channel got no events. Now they become `.unsubscribed`.
+  The next `connect()` does not rejoin them: call `subscribe()` again. The join emits
+  `.resubscribed` on `events()`.
 - **`connect()` during a reconnect tries at once.** It no longer waits for the automatic
   reconnect to finish. If that attempt fails, `connect()` throws and the automatic reconnect
   carries on.

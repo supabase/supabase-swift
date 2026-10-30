@@ -323,7 +323,10 @@ extension RealtimeClient {
   ///
   /// Cancels pending tasks, clears the send buffer, fails every push still waiting for a reply
   /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
-  /// Channels stay registered; subscribe to them again after the next ``connect()``.
+  /// Channels stay registered, and subscribed ones become
+  /// ``RealtimeChannelStatus/unsubscribed``. The next ``connect()`` does not rejoin them; call
+  /// ``RealtimeChannel/subscribe()`` again, and the join emits
+  /// ``RealtimeChannelEvent/resubscribed``.
   ///
   /// - Parameters:
   ///   - code: An optional numeric close code to send to the server.

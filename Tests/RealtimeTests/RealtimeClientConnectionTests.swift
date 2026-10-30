@@ -85,6 +85,33 @@ struct RealtimeClientConnectionTests {
     )
   }
 
+  /// The server drops a channel's join with the socket, so a channel that was subscribed must
+  /// join again after the next `connect()`, and report that it missed events.
+  @Test(.timeLimit(.minutes(1)))
+  func aSubscribedChannelCanSubscribeAgainAfterDisconnectAndConnect() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var events = await channel.events().makeAsyncIterator()
+
+    async let subscribed: Void = channel.subscribe()
+    host.confirmJoin(try await host.receive(event: "phx_join"))
+    try await subscribed
+
+    await host.client.disconnect()
+    #expect(await channel.status == .unsubscribed)
+
+    try await host.client.connect()
+    async let resubscribed: Void = channel.subscribe()
+    await host.waitUntil { host.frames.filter { $0.event == "phx_join" }.count == 2 }
+    let rejoin = try #require(host.frames.filter { $0.event == "phx_join" }.dropFirst().first)
+    host.confirmJoin(rejoin)
+    try await resubscribed
+
+    #expect(await channel.status == .subscribed)
+    #expect(await events.next() == .resubscribed)
+    #expect(host.connectCount == 2)
+  }
+
   @Test
   func disconnectWhileConnectingCancelsTheAttempt() async throws {
     let h = Harness(beforeConnect: { _ in try await Task<Never, Never>.never() })
