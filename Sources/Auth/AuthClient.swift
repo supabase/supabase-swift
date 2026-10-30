@@ -797,11 +797,8 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
-
-    if let type = params["type"], type == "recovery" {
-      try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
-    }
+    let event: AuthEvent = params["type"] == "recovery" ? .passwordRecovery : .signedIn
+    try await sessionStore.commit(.signedIn(session, event: event))
 
     return session
   }
@@ -907,7 +904,8 @@ public final class AuthClient: Sendable {
         type: type,
         redirectTo: redirectTo,
         captchaToken: captchaToken
-      )
+      ),
+      event: Self.verifiedEvent(for: type)
     )
   }
 
@@ -920,7 +918,8 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
-      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken)
+      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken),
+      event: type == .phoneChange ? .userUpdated : .signedIn
     )
   }
 
@@ -930,16 +929,28 @@ public final class AuthClient: Sendable {
     tokenHash: String,
     type: EmailOTPType
   ) async throws -> VerifyOTPResponse {
-    try await _verifyOTP(authAPI.verifyOTP(tokenHash: tokenHash, type: type))
+    try await _verifyOTP(
+      authAPI.verifyOTP(tokenHash: tokenHash, type: type),
+      event: Self.verifiedEvent(for: type)
+    )
+  }
+
+  private static func verifiedEvent(for type: EmailOTPType) -> AuthEvent {
+    switch type {
+    case .recovery: .passwordRecovery
+    case .emailChange: .userUpdated
+    default: .signedIn
+    }
   }
 
   private func _verifyOTP(
-    _ request: AuthRequest<VerifyOTPResponse>
+    _ request: AuthRequest<VerifyOTPResponse>,
+    event: AuthEvent
   ) async throws -> VerifyOTPResponse {
     let response = try await api.execute(request)
 
     if let session = response.session {
-      try await sessionStore.commit(.signedIn(session, event: .signedIn))
+      try await sessionStore.commit(.signedIn(session, event: event))
     }
 
     return response
@@ -1128,8 +1139,17 @@ public final class AuthClient: Sendable {
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
+  ///
+  /// When the identity belongs to the signed-in user, the client removes it from
+  /// ``currentUser`` and emits ``AuthEvent/userUpdated``.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
+
+    // The response carries no user, so drop the identity from the held one. Skip it when another
+    // user signed in while the request was out.
+    guard var user = currentUser, user.id == identity.userId else { return }
+    user.identities?.removeAll { $0.identityId == identity.identityId }
+    try await sessionStore.commit(.userUpdated(user, event: .userUpdated))
   }
 
   /// Sends a reset request to an email address.

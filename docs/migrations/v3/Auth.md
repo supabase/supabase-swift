@@ -161,6 +161,13 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Auth events are delivered asynchronously.** `events()` delivers changes in the order the
   session changed, but your loop can run after the call that caused the change returns. Read
   `auth.status` or `auth.currentSession` for the state right after a call.
+- **OTP and recovery events follow the flow.** `verifyOTP` with type `.recovery` emits
+  `.passwordRecovery`, and with `.emailChange` or `.phoneChange` it emits `.userUpdated`. v2
+  emitted `.signedIn` for all of them. `session(from:)` for a recovery link emits only
+  `.passwordRecovery`; v2 emitted `.signedIn` first. Search for `.signedIn` handlers that expect
+  these flows.
+- **`unlinkIdentity` updates the user.** It removes the identity from `currentUser` and emits
+  `.userUpdated`. v2 emitted nothing and kept the identity in `currentUser`.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.
