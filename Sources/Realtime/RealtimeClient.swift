@@ -359,7 +359,8 @@ public actor RealtimeClient {
   /// next ``connect()`` does not join them again, so call ``RealtimeChannel/subscribe()`` on each.
   ///
   /// The frames already queued, such as broadcasts that returned before this call, are still
-  /// written before the socket closes. The method returns once the socket is closed. The wait
+  /// written before the socket closes. The method returns once the socket is closed; a second call
+  /// made while that happens returns at once. The wait
   /// lasts at most ``RealtimeClientOptions/requestTimeout``; after that, or when the calling task
   /// is cancelled, the frames left are dropped.
   ///

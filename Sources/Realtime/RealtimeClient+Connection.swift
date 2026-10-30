@@ -266,7 +266,7 @@ extension RealtimeClient {
     reader?.cancel()
     reader = nil
     if stoppedByDisconnect != nil {
-      stoppedByDisconnect?.outbox = outbox
+      if let outbox { stoppedByDisconnect?.outbox = outbox }
     } else {
       outbox?.close()
     }
