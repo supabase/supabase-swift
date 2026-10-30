@@ -211,6 +211,11 @@ struct RealtimeClientConnectionTests {
 
     try #require(gates.value[1]).resume()
     await #expect(throws: (any Error).self) { try await stale.value }
+    if staleAttemptSucceeds {
+      // `disconnect()` already failed the stale caller, so its transport call may still run.
+      // Wait for its socket, so the fresh socket comes second.
+      await waitUntil(timeout: 5) { h.sockets.value.count == 1 }
+    }
     try #require(gates.value[2]).resume()
     try await fresh.value
 
@@ -219,7 +224,11 @@ struct RealtimeClientConnectionTests {
     #expect(!current.isClosed)
     if staleAttemptSucceeds {
       #expect(h.sockets.value.count == 2)
-      #expect(h.sockets.value.first?.closeReason == "Connection cancelled")
+      // The client closes the stale socket when its result comes out of the inbox.
+      #expect(
+        await waitUntil(timeout: 5) {
+          h.sockets.value.first?.closeReason == "Connection cancelled"
+        })
     } else {
       #expect(h.sockets.value.count == 1)
     }
