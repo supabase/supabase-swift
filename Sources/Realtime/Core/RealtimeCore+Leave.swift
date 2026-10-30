@@ -160,13 +160,13 @@ extension RealtimeCore {
   /// Applies `phx_close` or `phx_error` for the current join. A join in flight fails with
   /// ``RealtimeError/channelClosedByServer``, a leave is over, and any other join ends.
   /// `phx_close` also finishes the channel's streams and drops the channel, as today's
-  /// `client.remove(self)`. Either message for an older join is ignored.
+  /// `client.remove(self)`. The message goes to the channel its `join_ref` names, or to the live
+  /// channel of its topic when it has none. Either message for an older join is ignored.
   mutating func receiveClose(_ message: RealtimeMessage) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: message.topic),
+    guard let channel = self.channel(forWireTopic: message.topic, joinRef: message.joinRef),
       let record = channels[channel]
     else { return [] }
-    let joinRef: Ref? =
-      if case .leaving(let ref, _) = record.phase { ref } else { record.currentJoinRef }
+    let joinRef = record.inboundJoinRef
     if let closed = message.joinRef, closed != joinRef {
       logger.debug(
         "Ignoring \(message.event) for stale join_ref \(closed) on '\(topic(of: channel))' (current: \(joinRef ?? "<none>"))"

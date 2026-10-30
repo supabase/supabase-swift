@@ -134,11 +134,12 @@ extension RealtimeCore {
     return effects
   }
 
-  /// Applies a reply to the join in flight, or a late `ok` to the join that timed out. Any
-  /// other frame is left alone.
+  /// Applies a reply to the join in flight, or a late `ok` to the join that timed out, on the
+  /// channel of that join. Any other frame is left alone.
   mutating func receiveJoinReply(_ message: RealtimeMessage) -> [Effect] {
     guard message.event == ChannelEvent.reply,
-      let channel = self.channel(forWireTopic: message.topic),
+      let channel = self.channel(
+        forWireTopic: message.topic, joinRef: message.joinRef ?? message.ref),
       let ref = message.ref,
       let record = channels[channel]
     else { return [] }
@@ -217,9 +218,10 @@ extension RealtimeCore {
 
   /// Applies a `system` message: the server's report on the join's Postgres changes or on
   /// replication. While the join waits for its Postgres changes, only "Subscribed to
-  /// PostgreSQL" confirms it.
+  /// PostgreSQL" confirms it. The message goes to the channel its `join_ref` names, or to the
+  /// live channel of its topic when it has none.
   mutating func receiveSystem(_ message: RealtimeMessage) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: message.topic),
+    guard let channel = self.channel(forWireTopic: message.topic, joinRef: message.joinRef),
       let record = channels[channel]
     else { return [] }
     let `extension` = message.payload["extension"]?.stringValue

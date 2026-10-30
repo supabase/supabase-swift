@@ -8,11 +8,23 @@ import Helpers
 import Logging
 
 extension RealtimeCore {
-  /// The channel whose topic a wire topic names, if any. The shell keeps one channel per topic,
-  /// so at most one record matches.
-  func channel(forWireTopic wireTopic: String) -> ChannelID? {
-    guard let topic = RealtimeChannel.topic(forWireTopic: wireTopic) else { return nil }
-    return channels.first { $0.value.topic == topic }?.key
+  /// The channel of the topic a wire topic names that is not being removed, if any. A topic has
+  /// at most one: a new channel of the topic joins only once the old one is removing.
+  func liveChannel(forWireTopic wireTopic: String) -> ChannelID? {
+    channels(forWireTopic: wireTopic).first { channels[$0]?.isRemoving == false }
+  }
+
+  /// The channel of the topic a wire topic names whose frames carry `joinRef`: the channel of
+  /// that join, or of the leave that ends it. With no `joinRef`, the live channel of the topic.
+  func channel(forWireTopic wireTopic: String, joinRef: Ref?) -> ChannelID? {
+    guard let joinRef else { return liveChannel(forWireTopic: wireTopic) }
+    return channels(forWireTopic: wireTopic).first { channels[$0]?.inboundJoinRef == joinRef }
+  }
+
+  /// The channels of the topic a wire topic names, in creation order.
+  private func channels(forWireTopic wireTopic: String) -> [ChannelID] {
+    guard let topic = RealtimeChannel.topic(forWireTopic: wireTopic) else { return [] }
+    return channels.filter { $0.value.topic == topic }.keys.sorted()
   }
 
   /// The topic of `channel`, for log lines. A channel with no record has none.
@@ -20,20 +32,26 @@ extension RealtimeCore {
     channels[channel]?.topic ?? channel.description
   }
 
-  /// Routes a channel frame that is not `system`, `phx_close`, or `phx_error` by its wire
-  /// topic: replies settle a push or a join, and the rest goes to the channel's streams. A frame
-  /// for a topic with no channel, or one that cannot be read, is dropped.
+  /// Routes a channel frame that is not `system`, `phx_close`, or `phx_error`: a reply settles
+  /// the push of its topic that waits for its ref, or else the join its `join_ref` names, and
+  /// the rest goes to the streams of the live channel of its topic. A frame for a topic with
+  /// no live channel, or one that cannot be read, is dropped.
   mutating func receiveFrame(_ message: RealtimeMessage) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: message.topic) else {
+    if message.event == ChannelEvent.reply {
+      if let ref = message.ref,
+        let channel = channels(forWireTopic: message.topic).first(where: {
+          channels[$0]?.pendingPushes[ref] != nil
+        })
+      {
+        return receivePushReply(message, ref: ref, on: channel)
+      }
+      return receiveJoinReply(message)
+    }
+    guard let channel = liveChannel(forWireTopic: message.topic) else {
       logger.debug("Dropping '\(message.event)' for unknown topic '\(message.topic)'")
       return []
     }
     switch message.event {
-    case ChannelEvent.reply:
-      if let ref = message.ref, channels[channel]?.pendingPushes[ref] != nil {
-        return receivePushReply(message, ref: ref, on: channel)
-      }
-      return receiveJoinReply(message)
     case ChannelEvent.broadcast:
       guard let broadcast = BroadcastMessage(message) else {
         logger.debug(
@@ -51,9 +69,9 @@ extension RealtimeCore {
     }
   }
 
-  /// Delivers a binary (kind 4) broadcast frame to the channel of its wire topic.
+  /// Delivers a binary (kind 4) broadcast frame to the live channel of its wire topic.
   mutating func receiveBinaryBroadcast(_ broadcast: DecodedBroadcast) -> [Effect] {
-    guard let channel = self.channel(forWireTopic: broadcast.topic) else {
+    guard let channel = liveChannel(forWireTopic: broadcast.topic) else {
       logger.debug("Dropping a binary broadcast for unknown topic '\(broadcast.topic)'")
       return []
     }

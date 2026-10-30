@@ -237,7 +237,9 @@ struct RealtimeCorePushTests {
     #expect(
       harness.send(
         .frame(
-          Self.reply(ref: "4", status: "error", response: ["reason": .string(denied.message)])))
+          Self.reply(
+            ref: "4", joinRef: "4", status: "error",
+            response: ["reason": .string(denied.message)])))
         == [
           .resume(w, .failure(.notSubscribed)),
           .cancel(.pushTimeout(channel: .room, ref: "2")),
@@ -311,11 +313,13 @@ struct RealtimeCorePushTests {
     RealtimeMessage(joinRef: "1", ref: ref, topic: wireTopic, event: event, payload: payload)
   }
 
+  /// A reply to `ref`. A push reply carries the join ref of the join it was sent on; a join
+  /// reply carries its own ref.
   static func reply(
-    ref: Ref, status: String = "ok", response: JSONObject = [:]
+    ref: Ref, joinRef: Ref = "1", status: String = "ok", response: JSONObject = [:]
   ) -> RealtimeMessage {
     RealtimeMessage(
-      joinRef: "1", ref: ref, topic: wireTopic, event: "phx_reply",
+      joinRef: joinRef, ref: ref, topic: wireTopic, event: "phx_reply",
       payload: ["status": .string(status), "response": .object(response)])
   }
 

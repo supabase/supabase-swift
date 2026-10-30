@@ -57,6 +57,12 @@ struct ChannelRecord {
     }
   }
 
+  /// The join ref the server's frames for this record carry: the join a leave ends, or else
+  /// the current join's.
+  var inboundJoinRef: Ref? {
+    if case .leaving(let joinRef, _) = phase { joinRef } else { currentJoinRef }
+  }
+
   /// Whether the current join waits for "Subscribed to PostgreSQL", so only that message
   /// confirms it.
   var awaitsPostgresChanges: Bool {
