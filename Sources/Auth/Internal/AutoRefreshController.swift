@@ -10,7 +10,6 @@ actor AutoRefreshController {
   }
 
   private let policy: AuthClient.AutoRefreshPolicy
-  private let owner = UUID()
   private let store: SessionStore
   private let driver: Refresher.Driver
   private var state: State
@@ -31,7 +30,7 @@ actor AutoRefreshController {
   var isRegistered: Bool {
     get async {
       await lastApply?.value
-      return await store.isAutoRefreshStarted(by: owner)
+      return await store.isAutoRefreshStarted
     }
   }
 
@@ -66,9 +65,9 @@ actor AutoRefreshController {
     let current = Task {
       await previous?.value
       if state.shouldRun {
-        await store.startAutoRefresh(for: owner, using: driver)
+        await store.startAutoRefresh(using: driver)
       } else {
-        await store.stopAutoRefresh(for: owner)
+        await store.stopAutoRefresh()
       }
     }
     lastApply = current

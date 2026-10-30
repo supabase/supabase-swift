@@ -88,13 +88,17 @@ extension AuthClient {
     /// ``AuthClient/startAutoRefresh()`` and ``AuthClient/stopAutoRefresh()`` yourself, for
     /// example from a SwiftUI `scenePhase` change.
     ///
-    /// Whatever its value, on iOS, iPadOS, tvOS, visionOS, and Mac Catalyst the client reads
-    /// storage again when protected data becomes available, so a session that a locked Keychain
-    /// hid at launch loads once the device unlocks. watchOS, macOS, and other platforms post no
-    /// such notification. There, the client reads storage again only when a call needs the
-    /// session: ``AuthClient/session``, ``AuthClient/refreshSessionIfNeeded()``, a request that
-    /// sends the session's access token, or a new ``AuthClient/onAuthStateChange(_:)`` or
-    /// ``AuthClient/authStateChanges`` subscription.
+    /// Auto refresh follows the app lifecycle only when ``autoRefresh`` is
+    /// ``AuthClient/AutoRefreshPolicy/automatic``. Under another policy the client does not
+    /// refresh on its own, so the lifecycle has nothing to pause or resume.
+    ///
+    /// Whether this is `true` or `false`, and under every ``autoRefresh`` policy, on iOS, iPadOS,
+    /// tvOS, visionOS, and Mac Catalyst the client reads storage again when protected data becomes
+    /// available, so a session that a locked Keychain hid at launch loads once the device unlocks.
+    /// watchOS, macOS, and other platforms post no such notification. There, the client reads
+    /// storage again only when a call needs the session: ``AuthClient/session``,
+    /// ``AuthClient/refreshSessionIfNeeded()``, a request that sends the session's access token, or
+    /// a new ``AuthClient/onAuthStateChange(_:)`` or ``AuthClient/authStateChanges`` subscription.
     public let observesAppLifecycle: Bool
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.

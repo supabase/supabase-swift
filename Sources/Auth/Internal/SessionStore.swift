@@ -152,7 +152,10 @@ actor SessionStore {
   private var refreshFlights: [String: RefreshFlight] = [:]
   private var lastRefreshFailure: RefreshFailure?
   private var refreshWindow = RefreshWindow()
-  private var refresher = Refresher()
+  private var autoRefreshDriver: Refresher.Driver?
+  private var autoRefreshTask: Task<Void, Never>? {
+    didSet { oldValue?.cancel() }
+  }
 
   init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
     self.storage = storage
@@ -182,7 +185,7 @@ actor SessionStore {
   }
 
   deinit {
-    refresher.task?.cancel()
+    autoRefreshTask?.cancel()
     for continuation in published.value.subscribers.values {
       continuation.finish()
     }
@@ -378,31 +381,28 @@ actor SessionStore {
       .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
   }
 
-  func startAutoRefresh(for owner: UUID, using driver: Refresher.Driver) {
-    refresher.add(driver, for: owner)
+  func startAutoRefresh(using driver: Refresher.Driver) {
+    autoRefreshDriver = driver
     armRefresher()
   }
 
-  func stopAutoRefresh(for owner: UUID) {
-    let wasDriving = refresher.activeOwner == owner
-    refresher.remove(owner)
-    if wasDriving {
-      armRefresher()
-    }
+  func stopAutoRefresh() {
+    autoRefreshDriver = nil
+    autoRefreshTask = nil
   }
 
-  func isAutoRefreshStarted(by owner: UUID) -> Bool {
-    refresher.isDriven(by: owner)
+  var isAutoRefreshStarted: Bool {
+    autoRefreshDriver != nil
   }
 
   private func armRefresher() {
-    guard let received = heldSession, let driver = refresher.activeDriver else {
-      refresher.task = nil
+    guard let received = heldSession, let driver = autoRefreshDriver else {
+      autoRefreshTask = nil
       return
     }
     let armedGeneration = generation
     let now = now
-    refresher.task = Task { [weak self] in
+    autoRefreshTask = Task { [weak self] in
       await Refresher.run(for: received, driver: driver, now: now) {
         guard let self else { throw CancellationError() }
         try await self.refreshHeldSessionIgnoringCachedFailure(

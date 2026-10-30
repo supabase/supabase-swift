@@ -18,6 +18,4 @@ struct AuthPlatform: Sendable {
   var lifecycleEvents: @Sendable () async -> AsyncStream<AppLifecycleEvent>
 
   var openURL: @MainActor @Sendable (_ url: URL) throws -> Void
-
-  var makeDefaultLocalStorage: @Sendable () -> any AuthLocalStorage
 }

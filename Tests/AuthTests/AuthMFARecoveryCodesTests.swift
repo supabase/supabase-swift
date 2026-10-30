@@ -19,7 +19,7 @@ import Testing
 #endif
 
 extension AuthMockerTests {
-  @Suite(.mockerSerialized)
+  @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthMFARecoveryCodesTests {
     let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
