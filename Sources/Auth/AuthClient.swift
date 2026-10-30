@@ -645,6 +645,88 @@ public final class AuthClient: Sendable {
     return (url, flow.id)
   }
 
+  #if canImport(AuthenticationServices)
+    /// Signs in with a third-party provider, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthChangeEvent/signedIn``.
+    ///
+    /// ```swift
+    /// try await supabase.auth.signInWithOAuth(
+    ///   .github,
+    ///   options: OAuthOptions(redirectTo: URL(string: "myapp://login-callback"))
+    /// )
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - provider: The third-party provider.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page. The default is
+    ///     ``ASWebAuthenticationSessionPresenter``.
+    /// - Returns: The new session.
+    /// - Throws: The error of `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
+    @discardableResult
+    public func signInWithOAuth(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter = .default
+    ) async throws -> Session {
+      try await present(
+        oauthSignInURL(provider, options: options), options: options, with: presenter)
+    }
+  #else
+    /// Signs in with a third-party provider, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthChangeEvent/signedIn``.
+    ///
+    /// - Parameters:
+    ///   - provider: The third-party provider.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page.
+    /// - Returns: The new session.
+    /// - Throws: The error of `presenter`, or an error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
+    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
+    @discardableResult
+    public func signInWithOAuth(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter
+    ) async throws -> Session {
+      try await present(
+        oauthSignInURL(provider, options: options), options: options, with: presenter)
+    }
+  #endif
+
+  /// Shows `start.url` with `presenter`, then finishes the flow with the callback URL.
+  private func present(
+    _ start: (url: URL, flowID: UUID),
+    options: OAuthOptions,
+    with presenter: some WebAuthPresenter
+  ) async throws -> Session {
+    let callbackScheme = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)?.scheme
+
+    let callback: URL
+    do {
+      callback = try await presenter.authenticate(url: start.url, callbackScheme: callbackScheme)
+    } catch {
+      try? await dependencies.flowStore.remove(id: start.flowID)
+      throw error
+    }
+
+    guard case .signedIn(let session, _) = try await handleRedirect(callback, flowID: start.flowID)
+    else {
+      // The flow can never finish: its page is closed and no code came back.
+      try? await dependencies.flowStore.remove(id: start.flowID)
+      throw AuthError.oauthFlowFailed("The callback URL is not an auth redirect.")
+    }
+    return session
+  }
+
   /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
   /// client-wide ``Configuration/redirectToURL``.
   ///
@@ -1068,6 +1150,57 @@ public final class AuthClient: Sendable {
       return (url, started.flow.id)
     }
   }
+
+  #if canImport(AuthenticationServices)
+    /// Links an OAuth identity to the signed-in user.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthChangeEvent/userUpdated``.
+    ///
+    /// - Parameters:
+    ///   - provider: The provider to link.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page. The default is
+    ///     ``ASWebAuthenticationSessionPresenter``.
+    /// - Returns: The new session.
+    /// - Throws: ``AuthError/sessionMissing`` when no user is signed in, the error of
+    ///   `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the
+    ///   callback URL is not an auth redirect or reports an error. The client removes the flow
+    ///   when `presenter` throws.
+    @discardableResult
+    public func linkIdentity(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter = .default
+    ) async throws -> Session {
+      try await present(
+        linkIdentityURL(provider, options: options), options: options, with: presenter)
+    }
+  #else
+    /// Links an OAuth identity to the signed-in user.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthChangeEvent/userUpdated``.
+    ///
+    /// - Parameters:
+    ///   - provider: The provider to link.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page.
+    /// - Returns: The new session.
+    /// - Throws: ``AuthError/sessionMissing`` when no user is signed in, the error of
+    ///   `presenter`, or an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the
+    ///   callback URL is not an auth redirect or reports an error. The client removes the flow
+    ///   when `presenter` throws.
+    @discardableResult
+    public func linkIdentity(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter
+    ) async throws -> Session {
+      try await present(
+        linkIdentityURL(provider, options: options), options: options, with: presenter)
+    }
+  #endif
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.

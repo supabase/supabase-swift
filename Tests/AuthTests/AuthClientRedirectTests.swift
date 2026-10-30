@@ -397,6 +397,104 @@ struct AuthClientRedirectTests {
 
   // MARK: - Helpers
 
+  @Test
+  func signInWithOAuthRunsThePresenterAndExchangesTheCode() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { url, callbackScheme in
+      #expect(callbackScheme == "myapp")
+      #expect(
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?
+          .queryItems?.contains { $0.name == "code_challenge" } == true)
+      return URL(string: "myapp://cb?code=c")!
+    }
+
+    let events = try await events(on: client) {
+      let session = try await client.signInWithOAuth(
+        .github,
+        options: OAuthOptions(redirectTo: URL(string: "myapp://cb")!),
+        presenter: presenter
+      )
+      #expect(session.accessToken == "exchanged-access")
+    }
+
+    #expect(events == [.signedIn])
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func signInWithOAuthUsesTheFlowItStarted() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let challenge = LockIsolated<String?>(nil)
+    let newer = LockIsolated<UUID?>(nil)
+    let presenter = ClosurePresenter { [self] url, _ in
+      challenge.setValue(queryItem("code_challenge", in: url))
+      // A newer flow, so the newest flow is not the one this call started.
+      let newerFlowID = try await client.oauthSignInURL(.google).flowID
+      newer.setValue(newerFlowID)
+      return callback
+    }
+
+    try await client.signInWithOAuth(.github, presenter: presenter)
+
+    let verifier = try #require(exchangeBodies().first?["code_verifier"])
+    #expect(PKCE.live.generateCodeChallenge(verifier) == challenge.value)
+    #expect(try storedFlow(try #require(newer.value)) != nil)
+    #expect(try pendingFlowCount() == 1)
+  }
+
+  @Test
+  func aCancelledPresenterRethrowsAndRemovesTheFlow() async throws {
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    }
+
+    #expect(try await client.dependencies.flowStore.newest() == nil)
+    #expect(race.requestCount(grantType: "pkce") == 0)
+  }
+
+  @Test
+  func linkIdentityRunsThePresenterAndEmitsUserUpdated() async throws {
+    race.answerIdentityAuthorize(url: URL(string: "https://github.com/login/oauth/authorize")!)
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("linked")) }
+    let client = race.makeClient()
+    try await client.signIn(email: "user@example.com", password: "secret")
+    let presenter = ClosurePresenter { url, callbackScheme in
+      #expect(url == URL(string: "https://github.com/login/oauth/authorize")!)
+      #expect(callbackScheme == "com.example.app")
+      return URL(string: "com.example.app://callback?code=one-time-code")!
+    }
+
+    let events = try await events(on: client) {
+      let session = try await client.linkIdentity(
+        .github,
+        options: OAuthOptions(redirectTo: URL(string: "com.example.app://callback")!),
+        presenter: presenter
+      )
+      #expect(session.accessToken == "linked-access")
+    }
+
+    #expect(events == [.userUpdated])
+  }
+
+  @Test
+  func aCallbackThatIsNotARedirectThrowsAndRemovesTheFlow() async throws {
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in URL(string: "myapp://cb")! }
+
+    let error = await #expect(throws: AuthError.self) {
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    }
+
+    #expect(error?.kind == .oauthFlowFailed)
+    #expect(error?.message == "The callback URL is not an auth redirect.")
+    #expect(try pendingFlowCount() == 0)
+  }
+
   /// Names the session by its access token, so the check does not depend on how the other
   /// session fields survive the JSON round trip through the stub.
   private func describe(_ result: RedirectResult?) -> String {

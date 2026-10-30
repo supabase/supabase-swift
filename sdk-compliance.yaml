@@ -366,8 +366,19 @@ features:
   auth.sign_in.sign_in_with_oauth:
     status: implemented
     symbols:
+      - AuthClient.signInWithOAuth
       - AuthClient.oauthSignInURL
     supporting_symbols:
+      - WebAuthPresenter
+      - WebAuthPresenter.authenticate
+      - WebAuthPresenter.default
+      - ClosurePresenter
+      - ClosurePresenter.init
+      - ClosurePresenter.authenticate
+      - ASWebAuthenticationSessionPresenter
+      - ASWebAuthenticationSessionPresenter.init
+      - ASWebAuthenticationSessionPresenter.authenticate
+      - ASWebAuthenticationSessionPresenter.prefersEphemeralWebBrowserSession
       - OAuthOptions
       - OAuthOptions.init
       - OAuthOptions.scopes
@@ -572,6 +583,7 @@ features:
   auth.identities.link_identity:
     status: implemented
     symbols:
+      - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
       - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
