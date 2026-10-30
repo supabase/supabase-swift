@@ -77,6 +77,27 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingOneSharedSubscribeWaiterKeepsTheOtherWaiting() async throws {
+    let h = Harness()
+    let channel = await h.client.channel("room")
+
+    let first = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let second = Task { try await channel.subscribe() }
+    #expect(await waitUntil { await h.client.subscribeWaiterCount(of: channel) == 2 })
+
+    second.cancel()
+    await #expect(throws: CancellationError.self) { try await second.value }
+    #expect(await h.client.subscribeWaiterCount(of: channel) == 1)
+
+    try h.confirm(join)
+    try await first.value
+    #expect(await channel.status == .subscribed)
+    #expect(h.sent(ChannelEvent.join).count == 1)
+    #expect(h.sent(ChannelEvent.leave).isEmpty)
+  }
+
   @Test
   func subscribeRetriesAfterTimeoutThenSucceeds() async throws {
     let h = Harness(timeout: .seconds(10))
@@ -1368,5 +1389,12 @@ struct RealtimeChannelSubscriptionTests {
       guard case .frame(.text(let text)) = frame else { return nil }
       return try? RealtimeSerializer().decodeText(text)
     }
+  }
+}
+
+extension RealtimeClient {
+  /// The `subscribe()` calls the core holds for `channel`.
+  fileprivate func subscribeWaiterCount(of channel: RealtimeChannel) -> Int {
+    core.channels[channel.id]?.subscribeWaiters.count ?? 0
   }
 }
