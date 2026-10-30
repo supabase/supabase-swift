@@ -189,6 +189,7 @@ struct RealtimeChannelTests {
       case .presenceState: "presenceState"
       case .events: "events"
       case .status: "status"
+      case .postgresSignals: "postgresSignals"
       }
     }
     #expect(

@@ -740,7 +740,7 @@ extension RealtimeError {
   )
 
   /// The server could not set up the channel's Postgres changes bindings.
-  static func postgresChangesFailed(reason: String) -> RealtimeError {
+  package static func postgresChangesFailed(reason: String) -> RealtimeError {
     RealtimeError(
       kind: .server,
       message: "The server could not set up the channel's Postgres changes: \(reason)",
