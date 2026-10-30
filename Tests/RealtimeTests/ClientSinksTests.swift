@@ -72,7 +72,7 @@ struct ClientSinksTests {
     let early = client.heartbeats()
     #expect(client.sinks.heartbeats.current == nil)
 
-    await client.recordHeartbeat(.sent)
+    client.sinks.heartbeats.yield(.sent)
 
     var earlyIterator = early.makeAsyncIterator()
     #expect(await earlyIterator.next() == .sent)
@@ -160,5 +160,5 @@ private final class IdleDisconnectHarness: Sendable {
 }
 
 extension RealtimeClient {
-  fileprivate var idleDisconnectTaskCount: Int { tasks.tasks(at: .idleDisconnect).count }
+  fileprivate var idleDisconnectTaskCount: Int { idleDisconnectTimer == nil ? 0 : 1 }
 }

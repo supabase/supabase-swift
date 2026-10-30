@@ -16,11 +16,6 @@ import Logging
   import FoundationNetworking
 #endif
 
-/// An empty actor is a serial executor. One is created per ``RealtimeClient``; the client and
-/// every channel it creates report its executor as their own, so Swift treats them as a single
-/// isolation domain: hopping between them is free, and the compiler still checks every access.
-actor RealtimeExecutor {}
-
 /// The entry point for Supabase Realtime subscriptions.
 ///
 /// `RealtimeClient` manages the underlying WebSocket connection and routes incoming events to
@@ -39,8 +34,8 @@ actor RealtimeExecutor {}
 /// try await channel.subscribe()
 /// ```
 ///
-/// The client is an actor, and every channel it creates runs on the same executor, so reading
-/// ``status`` from a channel never hops threads.
+/// Reads and stream subscriptions, such as ``status`` and ``channel(_:configure:)``, are
+/// synchronous. Actions that wait for the network, such as ``connect()``, are `async`.
 ///
 /// ## Topics
 /// ### Channels
@@ -76,15 +71,6 @@ public actor RealtimeClient {
   /// A random wait in `0...min(30 s, 1 s · 2^(attempt-1))`.
   static let defaultReconnectBackoff = BackoffPolicy.fullJitter(
     base: .seconds(1), cap: .seconds(30))
-  /// The random source for the backoff jitter. Tests pin it to make the waits exact.
-  nonisolated let jitter: @Sendable (ClosedRange<Double>) -> Double
-
-  /// The executor this client and its channels share.
-  nonisolated let isolation = RealtimeExecutor()
-
-  public nonisolated var unownedExecutor: UnownedSerialExecutor {
-    isolation.unownedExecutor
-  }
 
   /// How long before the token's `exp` the client asks the `accessToken` callback for a new
   /// one. The server closes every channel the moment the token expires.
@@ -93,34 +79,19 @@ public actor RealtimeClient {
   /// leeway, or a callback that fails, is retried at this pace instead of in a tight loop.
   static let accessTokenRefreshInterval: Duration = .seconds(10)
 
-  var tokens = TokenState()
-  /// Whether an `accessToken` callback call is in flight. Concurrent refreshes wait for it.
-  var isFetchingAccessToken = false
-  /// The callers waiting for the call in flight. A cancelled caller is resumed early.
-  var accessTokenWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
-  /// How many `accessToken` callback calls have started.
-  var accessTokenFetchCount = 0
-  /// When the `accessToken` callback was last called, as read from `elapsed`.
-  var lastAccessTokenFetch: Duration?
   /// The time since the client was created, on `clock`.
   nonisolated let elapsed: @Sendable () -> Duration
   /// The wall-clock time, advanced by `clock`, so a `TestClock` also drives token expiry.
   nonisolated let now: @Sendable () -> Date
 
-  var accessToken: String? { tokens.token }
-  var ref = 0
-  var pendingHeartbeatRef: String?
-  /// When the pending heartbeat was sent, as read from `elapsed`.
-  var pendingHeartbeatSentAt: Duration?
-
   enum ConnectionState: Equatable {
     /// Idle or stopped. Carries the error when a failure, not the user, stopped the client.
     case disconnected(RealtimeError?)
-    /// The transport is opening a socket (`connectAttempt`). Attempt 1 is the user's
-    /// `connect()`; later attempts are automatic retries after a drop.
+    /// The transport is opening a socket. Attempt 1 is the user's `connect()`; later attempts
+    /// are automatic retries after a drop.
     case connecting(attempt: Int)
     case connected(any WebSocketConnection)
-    /// Waiting `retryIn` (the timer in `tasks`, at `.connection`) before attempt `attempt + 1`.
+    /// Waiting `retryIn` before attempt `attempt + 1`.
     case reconnecting(attempt: Int, retryIn: Duration, lastError: RealtimeError)
 
     var status: RealtimeClientStatus {
@@ -157,55 +128,44 @@ public actor RealtimeClient {
     }
   }
 
-  /// Only ever written by `apply(_:)`.
-  var connection: ConnectionState = .disconnected(nil)
+  // MARK: Shell state
 
-  /// The `connect()` attempt in flight while `connection` is `.connecting`. Kept outside the
-  /// state so the transition table stays pure and comparable.
-  var connectAttempt: Task<Void, any Error>?
-
-  /// `apply(_:)` re-entrancy guard and the events raised while it was running.
-  var isApplying = false
-  var pendingEvents: [Event] = []
-
-  /// Why an unstructured task exists. Starting a new run of some work replaces the previous
-  /// run at the same location, so nothing has to be cancelled by hand.
-  enum TaskLocation: Hashable {
-    /// The backoff timer before the next reconnect attempt.
-    case connection
-    /// The loop reading frames from the current socket.
-    case socketReader
-    /// The loop sending heartbeats on the current socket.
-    case heartbeat
-    /// The deferred `disconnect()` after the last channel is removed.
-    case idleDisconnect
-    /// The timer that refreshes the access token before it expires.
-    case accessTokenRefresh
-  }
-
-  let tasks = TaskStorage<TaskLocation>()
-
-  /// Counts socket installs and disconnects. The reader and heartbeat loops carry the value they
-  /// were started with, so an event from a socket that has since been replaced is ignored.
+  /// The protocol state. Only ``apply(_:)`` hands it events.
+  var core: RealtimeCore
+  /// The events waiting for the core while ``apply(_:)`` drains.
+  var pending: [RealtimeCore.Event] = []
+  /// The waiters the batch being drained resolved. They resume once the batch is applied.
+  var resolved: [(WaiterID, WaiterOutcome)] = []
+  var waiters = WaiterTable()
+  var timers = TimerTable()
+  /// The writer for the current socket.
+  var outbox: Outbox?
+  /// The current socket, so `deinit` can close it.
+  var socket: (any WebSocketConnection)?
+  /// Counts socket installs and stops. The reader carries the value it started with, so a frame
+  /// from a socket that has since been replaced is dropped.
   var generation = 0
-
-  /// Frames pushed while the socket was not connected, sent in order once it is.
-  var sendBuffer: [WebSocketFrame] = []
+  var reader: Task<Void, Never>?
+  /// The connect attempt in flight.
+  var connectAttempt: Task<Void, Never>?
+  var retryTimer: Task<Void, Never>?
+  var idleDisconnectTimer: Task<Void, Never>?
+  /// The `accessToken` callback call in flight.
+  var tokenFetch: Task<Void, Never>?
+  /// The callers of ``setAuth(_:)`` that wait for the callback call in flight.
+  var tokenFetchWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+  /// The channels ``removeChannel(_:)`` spent while their removal is in flight, by topic. Their
+  /// topic may already map to a newer channel, which must not get their effects.
+  var removedChannels: [String: RealtimeChannel] = [:]
 
   /// Retains the optional app-lifecycle observer for the client's lifetime.
   /// Stored as `AnyObject?` so this type remains available on platforms where
   /// the concrete `RealtimeLifecycleManager` is not compiled.
   nonisolated(unsafe) var lifecycleManager: (any Sendable & AnyObject)?
 
-  /// Whether the socket was `.connected` the last time the app entered the
-  /// background. `handleAppForeground` only attempts recovery when this is
-  /// `true` — otherwise foregrounding a client that was intentionally idle
-  /// would spuriously open a connection.
-  var wasConnectedBeforeBackground = false
-
   /// The published status and heartbeats, and the channels by their ``RealtimeChannel/topic``.
   /// Only this actor yields into them.
-  nonisolated let sinks = ClientSinks()
+  nonisolated let sinks: ClientSinks
 
   /// The current WebSocket connection status.
   public nonisolated var status: RealtimeClientStatus {
@@ -265,9 +225,10 @@ public actor RealtimeClient {
       headers[.xClientInfo] = "realtime-swift/\(version)"
     }
 
+    let logger = Self.logger(for: options)
     self.url = url
     self.options = options
-    self.logger = Self.logger(for: options)
+    self.logger = logger
     self.headers = headers
     self.transport = transport
     self.http = http
@@ -277,16 +238,29 @@ public actor RealtimeClient {
     self.elapsed = elapsed
     self.now = { start.addingTimeInterval(elapsed().timeInterval) }
     self.reconnectBackoff = reconnectBackoff
-    self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: url),
       apikey: headers[.apiKey],
       serverLogLevel: options.serverLogLevel
     )
 
-    if let accessToken = headers[.authorization]?.split(separator: " ").last {
-      _ = tokens.apply(String(accessToken), generation: tokens.beginRefresh())
-    }
+    let sinks = ClientSinks()
+    self.sinks = sinks
+    let coreOptions = RealtimeCore.Options(
+      timeout: options.requestTimeout,
+      heartbeatInterval: options.heartbeatInterval,
+      connectOnSubscribe: options.connectOnSubscribe,
+      disconnectOnEmptyChannelsAfter: options.disconnectOnEmptyChannelsAfter,
+      hasAccessTokenProvider: options.accessToken != nil,
+      accessTokenRefreshInterval: Self.accessTokenRefreshInterval,
+      accessTokenRefreshLeeway: Self.accessTokenRefreshLeeway,
+      retryDelay: { reconnectBackoff.delay(forAttempt: $0, random: jitter) },
+      rejoinDelay: { RealtimeChannel.rejoinBackoff.delay(forAttempt: $0) },
+      version: headers[.xClientInfo],
+      hasRegisteredChannels: { !sinks.channels.isEmpty }
+    )
+    let initialToken = headers[.authorization]?.split(separator: " ").last.map(String.init)
+    core = RealtimeCore(options: coreOptions, logger: logger, initialToken: initialToken)
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
       if options.handleAppLifecycle {
@@ -296,19 +270,16 @@ public actor RealtimeClient {
   }
 
   deinit {
-    // Close the live socket first: cancelling the bookkeeping tasks alone leaves the
-    // underlying WebSocket (and its URLSession) open when a connected client is released
-    // without calling `disconnect()`. `deinit` only runs once no other code can reference the
-    // actor, so reading isolated state here is safe.
-    switch connection {
-    case .connected(let conn):
-      conn.close(code: .normalClosure, reason: "Client deallocated")
-    case .connecting:
-      connectAttempt?.cancel()
-    case .reconnecting, .disconnected:
-      break
-    }
-    // `tasks` cancels its own contents when it is destroyed right after this body.
+    // Close the live socket: cancelling the tasks alone leaves the underlying WebSocket (and its
+    // URLSession) open when a connected client is released without calling `disconnect()`.
+    socket?.close(code: .normalClosure, reason: "Client deallocated")
+    outbox?.close()
+    reader?.cancel()
+    connectAttempt?.cancel()
+    retryTimer?.cancel()
+    idleDisconnectTimer?.cancel()
+    tokenFetch?.cancel()
+    timers.cancelAll()
     sinks.finishAll()
   }
 
@@ -347,17 +318,62 @@ public actor RealtimeClient {
     sinks.heartbeats.subscribe()
   }
 
-  /// Called by `apply(_:)` after `connection` changed.
-  func connectionDidChange() {
-    // Published first: `status` reads the sink, and the refresh timer below checks it.
-    sinks.status.yield(connection.status)
-    // The refresh timer runs only while connected: it stops here on a disconnect and starts
-    // again on every connect and reconnect.
-    scheduleAccessTokenRefresh()
+  // MARK: - Connection
+
+  /// Opens the WebSocket connection and suspends until it is established.
+  ///
+  /// Calling this method when already connected is a no-op, and calling it while a connection
+  /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
+  /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
+  /// automatic reconnect carries on. If
+  /// ``RealtimeClientOptions/connectOnSubscribe`` is `true` (the default), this is called
+  /// automatically when a channel is subscribed to.
+  ///
+  /// ```swift
+  /// try await client.connect()
+  /// ```
+  ///
+  /// - Throws: ``RealtimeError`` with kind `.transport` when the socket could not be opened, or
+  ///   `CancellationError` when the calling task is cancelled or ``disconnect(code:reason:)``
+  ///   interrupts the attempt.
+  public func connect() async throws {
+    logger.debug("Connecting...")
+    do {
+      try await wait { .connect(waiter: $0) }
+    } catch {
+      throw Self.connectionError(error)
+    }
   }
 
-  func recordHeartbeat(_ event: HeartbeatEvent) {
-    sinks.heartbeats.yield(event)
+  /// Closes the WebSocket connection.
+  ///
+  /// Cancels pending tasks, fails every push still waiting for a reply with
+  /// ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
+  /// Channels stay registered; subscribe to them again after the next ``connect()``.
+  ///
+  /// - Parameters:
+  ///   - code: An optional numeric close code to send to the server.
+  ///   - reason: An optional reason string to send to the server.
+  public func disconnect(code: Int? = nil, reason: String? = nil) async {
+    logger.debug("Closing WebSocket connection")
+    apply(.disconnectRequested(code: code, reason: reason))
+  }
+
+  /// Records whether the socket is connected as the app enters the background.
+  ///
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppBackground() {
+    apply(.appBackground)
+  }
+
+  /// Recovers the connection on app foregrounding when the socket was connected before the app
+  /// went to the background and has since gone away.
+  ///
+  /// Invoked automatically by ``RealtimeLifecycleManager`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  func handleAppForeground() {
+    apply(.appForeground)
   }
 
   // MARK: - Channels
@@ -400,46 +416,25 @@ public actor RealtimeClient {
     return channel
   }
 
-  /// Called by ``RealtimeChannel/subscribe()``: a channel that joins cancels a pending idle
-  /// disconnect.
-  func channelWillSubscribe() {
-    apply(.channelAdded)
-  }
-
   /// Unsubscribes from and removes a channel, ending every stream opened on it.
   ///
-  /// If the channel is currently subscribed, it is unsubscribed first. After removal,
-  /// if no channels remain, the client disconnects (or schedules a deferred disconnect
-  /// based on ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
+  /// The channel is removed before the first suspension point: its streams end, and its
+  /// actions throw ``RealtimeError/Kind-swift.struct/channelRemoved``, even when the calling
+  /// task is cancelled. A subscribed channel then leaves the topic. After removal, if no
+  /// channels remain, the client disconnects (or schedules a deferred disconnect based on
+  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
   ///
   /// - Parameter channel: The channel to remove.
   public func removeChannel(_ channel: RealtimeChannel) async {
-    if channel.status.isSubscribed {
-      await channel.unsubscribe()
-    }
-
-    forget(channel)
-    await channel.finishStreams()
-
-    if sinks.channels.isEmpty {
-      logger.debug("No more subscribed channel in socket")
-      if options.disconnectOnEmptyChannelsAfter <= .zero {
-        await disconnect()
-      } else {
-        apply(.lastChannelRemoved(disconnectAfter: options.disconnectOnEmptyChannelsAfter))
-      }
-    }
-  }
-
-  /// Forgets a channel the server closed. The channel ends its own streams.
-  func remove(_ channel: RealtimeChannel) {
-    forget(channel)
-  }
-
-  /// Clears `channel`'s topic only while it still holds `channel`: a newer channel created for
-  /// the same topic after `channel` was removed stays registered.
-  private func forget(_ channel: RealtimeChannel) {
+    guard !channel.sinks.isSpent else { return }
+    let topic = channel.topic
     sinks.removeChannel(channel)
+    channel.sinks.finishAll()
+    removedChannels[topic] = channel
+    try? await wait { .removeChannel(topic: topic, waiter: $0) }
+    if core.channels[topic] == nil, removedChannels[topic] === channel {
+      removedChannels[topic] = nil
+    }
   }
 
   /// Unsubscribes from and removes all channels, then disconnects immediately.
@@ -448,37 +443,34 @@ public actor RealtimeClient {
   /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` and
   /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
-    // Keep the channels routable until they have unsubscribed: each one waits for the server's
-    // `phx_close`, which `onMessage` can only deliver to a channel still in `channels`.
     let removed = sinks.channels
     await withTaskGroup(of: Void.self) { group in
       for channel in removed {
-        group.addTask {
-          if channel.status.isSubscribed {
-            await channel.unsubscribe()
-          }
-          await channel.finishStreams()
-        }
+        group.addTask { await self.removeChannel(channel) }
       }
-      await group.waitForAll()
     }
-    for channel in removed {
-      forget(channel)
-    }
-
     // `disconnect()` also cancels a pending idle disconnect.
     await disconnect()
   }
 
+  /// Applies `.bindingsChanged` with the Postgres bindings the channel for `topic` has now, so
+  /// two fast registrations cannot arrive out of order.
+  func bindingsChanged(_ topic: String) {
+    guard let channel = sinks.channel(for: topic) else { return }
+    apply(.bindingsChanged(topic: topic, snapshot: channel.joinSnapshot))
+  }
+
   // MARK: - Authentication
 
-  /// The token a channel joins with, refreshed from the `accessToken` callback first unless it
-  /// was called within ``accessTokenRefreshInterval``. A join that arrives while a call is in
-  /// flight waits for it: the stored token may be expired, or the key from the `Authorization`
-  /// header.
+  /// The token channels join with.
+  var accessToken: String? { core.tokens.token }
+
+  /// The token an HTTP request sends, refreshed from the `accessToken` callback first unless it
+  /// was called within ``accessTokenRefreshInterval``. A call in flight is waited for: the
+  /// stored token may be expired, or the key from the `Authorization` header.
   func currentAccessToken() async -> String? {
     await refreshAccessToken()
-    return tokens.token
+    return core.tokens.token
   }
 
   /// Updates the JWT access token used for channel authorization and Realtime RLS.
@@ -502,215 +494,30 @@ public actor RealtimeClient {
       await refreshAccessToken()
       return
     }
-    // An unchanged token must not start a new generation: that would discard a newer token from
-    // a callback call in flight.
-    guard token != tokens.token, tokens.apply(token, generation: tokens.beginRefresh()) else {
-      return
-    }
-    scheduleAccessTokenRefresh()
-    await pushAccessToken(token)
+    apply(.setAuth(token: token))
   }
 
-  /// Calls the `accessToken` callback even inside ``accessTokenRefreshInterval``, for a channel
-  /// whose join the server refused because of its token. A call already in flight started
-  /// before the refusal and may return the refused token, so a new call follows it unless
-  /// another caller already started one.
-  func refreshTokenForRejoin() async {
-    let fetchesBefore = accessTokenFetchCount
-    if isFetchingAccessToken {
-      await waitForAccessTokenFetch()
-    }
-    if accessTokenFetchCount == fetchesBefore {
-      await refreshAccessToken(ignoringInterval: true)
-    } else if isFetchingAccessToken {
-      await waitForAccessTokenFetch()
-    }
-  }
-
-  /// Asks the `accessToken` callback for a token and stores it unless a newer token was set
-  /// while the callback ran. A caller that arrives while a call is in flight waits for it
-  /// instead of starting another.
-  func refreshAccessToken(ignoringInterval: Bool = false) async {
-    guard let provider = options.accessToken else { return }
-    if isFetchingAccessToken {
-      return await waitForAccessTokenFetch()
-    }
-    let now = elapsed()
-    if !ignoringInterval, let last = lastAccessTokenFetch,
-      now - last < Self.accessTokenRefreshInterval
-    {
-      return
-    }
-    lastAccessTokenFetch = now
-    isFetchingAccessToken = true
-    accessTokenFetchCount += 1
-
-    let generation = tokens.beginRefresh()
-    let timeout = options.requestTimeout
-    let logger = self.logger
-    // A local, because the existential in `self.clock` is not opened when passed directly.
-    let clock = self.clock
-    // A task of its own, so a cancelled caller does not cancel the call the others wait for.
-    Task.immediateIfAvailable { [weak self] in
-      let token = await Self.callAccessTokenProvider(
-        provider, timeout: timeout, clock: clock, logger: logger)
-      await self?.didFetchAccessToken(token, generation: generation)
-    }
-    await waitForAccessTokenFetch()
-  }
-
-  /// Calls `provider` and returns its token, or `nil` when it throws or does not return within
-  /// `timeout`. A call that ignores cancellation is left to finish on its own and its result is
-  /// dropped, so it cannot hold up the refreshes waiting for it. `withTimeout` cannot do this:
-  /// its task group waits for the call to return.
-  private static func callAccessTokenProvider(
-    _ provider: @escaping @Sendable () async throws -> String?,
-    timeout: Duration,
-    clock: some Clock<Duration>,
-    logger: Logger
-  ) async -> String? {
-    let deadline = clock.now.advanced(by: timeout)
-    let pending = LockIsolated<CheckedContinuation<String?, Never>?>(nil)
-    let call = LockIsolated<Task<Void, Never>?>(nil)
-    // Returns whether this resumed the caller: only the first of the call and the timer does.
-    let finish: @Sendable (String?) -> Bool = { token in
-      pending.withValue { continuation in
-        guard let waiting = continuation else { return false }
-        continuation = nil
-        waiting.resume(returning: token)
-        return true
-      }
-    }
-    return await withCheckedContinuation { continuation in
-      pending.setValue(continuation)
-      // The timer exists before the call starts, so a call that returns at once can cancel it.
-      let timer = Task {
-        do {
-          try await clock.sleep(until: deadline, tolerance: nil)
-        } catch {
-          return
-        }
-        guard finish(nil) else { return }
-        logger.error("The access token callback did not return within \(timeout)")
-        call.value?.cancel()
-      }
-      call.setValue(
-        Task {
-          let token: String?
-          do {
-            token = try await provider()
-          } catch {
-            logger.error("Failed to fetch access token: \(error)")
-            token = nil
-          }
-          timer.cancel()
-          _ = finish(token)
-        })
-    }
-  }
-
-  /// Returns when the callback call in flight has finished, or at once when the caller is
-  /// cancelled.
-  private func waitForAccessTokenFetch() async {
+  /// Asks the `accessToken` callback for a token, then waits for the call in flight, if any. A
+  /// cancelled caller stops waiting at once; the call goes on.
+  func refreshAccessToken() async {
+    apply(.setAuth(token: nil))
+    guard core.tokenFetchInFlight else { return }
     let id = UUID()
     await withTaskCancellationHandler {
       await withCheckedContinuation { continuation in
-        if isFetchingAccessToken, !Task.isCancelled {
-          accessTokenWaiters[id] = continuation
+        if core.tokenFetchInFlight, !Task.isCancelled {
+          tokenFetchWaiters[id] = continuation
         } else {
           continuation.resume()
         }
       }
     } onCancel: {
-      Task { await self.stopWaitingForAccessTokenFetch(id) }
+      Task { await self.stopWaitingForTokenFetch(id) }
     }
   }
 
-  private func stopWaitingForAccessTokenFetch(_ id: UUID) {
-    accessTokenWaiters.removeValue(forKey: id)?.resume()
-  }
-
-  /// Stores the result, then resumes the waiters before the token is sent to channels, so a
-  /// join waiting for it does not also wait for every push.
-  private func didFetchAccessToken(_ token: String?, generation: Int) async {
-    let stored = tokens.apply(token, generation: generation)
-    // Scheduled even when nothing changed, so a callback that failed or returned the same token
-    // is asked again.
-    scheduleAccessTokenRefresh()
-    isFetchingAccessToken = false
-    let waiters = accessTokenWaiters.values
-    accessTokenWaiters = [:]
-    for waiter in waiters {
-      waiter.resume()
-    }
-    if stored, let token = tokens.token {
-      await pushAccessToken(token)
-    }
-  }
-
-  /// Sends `token` to every subscribed channel, and to every channel whose `phx_join` already
-  /// went out with another token. A channel still waiting for a token joins with this one.
-  private func pushAccessToken(_ token: String) async {
-    for channel in sinks.channels {
-      // A newer token was stored while this loop was suspended; its own loop sends it.
-      guard tokens.token == token else { break }
-      switch channel.status {
-      case .subscribed:
-        break
-      case .subscribing, .resubscribing:
-        guard await channel.joinRef != nil, await channel.joinAccessToken != token else {
-          continue
-        }
-      default:
-        continue
-      }
-      logger.debug("Updating auth token for channel \(channel.topic)")
-      await channel.push(ChannelEvent.accessToken, payload: ["access_token": .string(token)])
-    }
-  }
-
-  /// Refreshes ``accessTokenRefreshLeeway`` before the token's `exp`, and never sooner than
-  /// ``accessTokenRefreshInterval`` from now, which the callback would refuse anyway. A new
-  /// token replaces the timer. Without a connection, a callback, or a token with an `exp`, there
-  /// is nothing to schedule: the next join or heartbeat refreshes the token instead.
-  private func scheduleAccessTokenRefresh() {
-    guard options.accessToken != nil, status.isConnected,
-      let due = tokens.refreshDelay(now: now(), leeway: Self.accessTokenRefreshLeeway)
-    else {
-      tasks.cancel(at: .accessTokenRefresh)
-      return
-    }
-    let delay = max(due, Self.accessTokenRefreshInterval)
-    // A local, because the existential in `self.clock` is not opened when passed directly.
-    let clock = self.clock
-    let timer = Self.accessTokenRefreshTimer(on: clock, after: delay, client: self)
-    tasks.replace([timer], at: .accessTokenRefresh)
-  }
-
-  /// The refresh timer's entry point. A client that disconnected since the timer was set has no
-  /// channel to keep alive, so it does not call the callback.
-  func refreshAccessTokenIfConnected() async {
-    guard status.isConnected else { return }
-    await refreshAccessToken()
-  }
-
-  /// The deadline is read here, not inside the task, so a task that starts late still wakes
-  /// `delay` after the token was stored.
-  private static func accessTokenRefreshTimer(
-    on clock: some Clock<Duration>,
-    after delay: Duration,
-    client: RealtimeClient
-  ) -> Task<Void, Never> {
-    let deadline = clock.now.advanced(by: delay)
-    // Detached and weak: the sleep must not keep a released client alive until the token expires.
-    return Task.detached { [weak client] in
-      do {
-        try await clock.sleep(until: deadline, tolerance: nil)
-        await client?.refreshAccessTokenIfConnected()
-      } catch {
-        // Cancelled: a newer token replaced this timer.
-      }
-    }
+  private func stopWaitingForTokenFetch(_ id: UUID) {
+    tokenFetchWaiters.removeValue(forKey: id)?.resume()
   }
 
   /// Reads the time since this call on `clock`. A generic function opens the existential, so
@@ -718,112 +525,6 @@ public actor RealtimeClient {
   private static func elapsedTime(on clock: some Clock<Duration>) -> @Sendable () -> Duration {
     let start = clock.now
     return { start.duration(to: clock.now) }
-  }
-
-  // MARK: - Sending
-
-  /// Sends a message over the WebSocket, or buffers it until the socket connects.
-  func push(_ message: RealtimeMessage) async {
-    do {
-      await send(.text(try serializer.encodeText(message)))
-    } catch {
-      logger.error(
-        """
-        Failed to send message:
-        \(message)
-
-        Error:
-        \(error)
-        """
-      )
-    }
-  }
-
-  /// Push a broadcast message as a binary frame (type 0x03) with a JSON payload.
-  func pushBroadcast(
-    joinRef: String?,
-    ref: String?,
-    topic: String,
-    event: String,
-    jsonPayload: JSONObject
-  ) async {
-    do {
-      await send(
-        .binary(
-          try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: jsonPayload
-          )
-        )
-      )
-    } catch {
-      logBroadcastEncodingFailure(topic: topic, event: event, error: error)
-    }
-  }
-
-  /// Push a broadcast message as a binary frame (type 0x03) with a binary payload.
-  func pushBroadcast(
-    joinRef: String?,
-    ref: String?,
-    topic: String,
-    event: String,
-    binaryPayload: Data
-  ) async {
-    do {
-      await send(
-        .binary(
-          try serializer.encodeBroadcastPush(
-            joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: binaryPayload
-          )
-        )
-      )
-    } catch {
-      logBroadcastEncodingFailure(topic: topic, event: event, error: error)
-    }
-  }
-
-  private func logBroadcastEncodingFailure(topic: String, event: String, error: any Error) {
-    logger.error(
-      """
-      Failed to send binary broadcast:
-      topic=\(topic), event=\(event)
-
-      Error:
-      \(error)
-      """
-    )
-  }
-
-  /// Frames queue behind any still in `sendBuffer`, so a push made while the buffer is being
-  /// flushed cannot overtake it.
-  private func send(_ frame: WebSocketFrame) async {
-    guard case .connected(let conn) = connection, sendBuffer.isEmpty else {
-      sendBuffer.append(frame)
-      return
-    }
-    await send(frame, on: conn)
-  }
-
-  /// Sends the buffered frames in order. Stops if `conn` stops being the current connection;
-  /// the frames left over wait for the next one.
-  func flushSendBuffer(on conn: any WebSocketConnection) async {
-    while !sendBuffer.isEmpty, case .connected(let current) = connection, current === conn {
-      await send(sendBuffer.removeFirst(), on: conn)
-    }
-  }
-
-  /// A failed send closes the connection, and the reader reports that close, so the error is
-  /// only logged here.
-  private func send(_ frame: WebSocketFrame, on conn: any WebSocketConnection) async {
-    do {
-      try await conn.send(frame)
-    } catch {
-      logger.error("Failed to send frame: \(error)")
-    }
-  }
-
-  func makeRef() -> String {
-    ref += 1
-    return ref.description
   }
 
   // MARK: - URLs

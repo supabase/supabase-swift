@@ -85,10 +85,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
       event: "my_event", payload: ["hello": .string("world")] as JSONObject
     )
 
-    let binaryEvents = client.sentEvents.compactMap { event -> Data? in
-      if case .frame(.binary(let data)) = event { return data }
-      return nil
-    }
+    let binaryEvents = await client.sentBinaryFrames()
 
     #expect(!binaryEvents.isEmpty, "Expected at least one binary frame to be sent")
 
@@ -109,10 +106,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let binaryData = Data([0x01, 0x02, 0x03, 0x04])
     try await channel.broadcast(event: "bin_event", data: binaryData)
 
-    let binaryFrames = client.sentEvents.compactMap { event -> Data? in
-      if case .frame(.binary(let data)) = event { return data }
-      return nil
-    }
+    let binaryFrames = await client.sentBinaryFrames()
 
     #expect(!binaryFrames.isEmpty, "Expected at least one binary frame to be sent")
 
@@ -133,7 +127,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
       event: "my_event",
       payload: .json(["count": .integer(99)])
     )
-    await channel.handleBinaryBroadcast(broadcast)
+    await sut.installSubscribedRecord("test")
+    await sut.apply(.binaryBroadcast(broadcast))
 
     let message = await firstBuffered(stream, on: channel)
     #expect(message?.event == "my_event")
@@ -152,7 +147,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
       event: "bin_event",
       payload: .binary(binaryPayload)
     )
-    await channel.handleBinaryBroadcast(broadcast)
+    await sut.installSubscribedRecord("test")
+    await sut.apply(.binaryBroadcast(broadcast))
 
     let message = await firstBuffered(stream, on: channel)
     #expect(message?.event == "bin_event")
@@ -170,7 +166,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
       event: "evt",
       payload: .json(["key": .string("value")])
     )
-    await channel.handleBinaryBroadcast(broadcast)
+    await sut.installSubscribedRecord("test")
+    await sut.apply(.binaryBroadcast(broadcast))
 
     let message = await firstBuffered(stream, on: channel)
     #expect(message?.event == "evt")
@@ -191,7 +188,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
       meta: ["id": "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d", "replayed": true],
       payload: .json(["key": .string("value")])
     )
-    await channel.handleBinaryBroadcast(broadcast)
+    await sut.installSubscribedRecord("test")
+    await sut.apply(.binaryBroadcast(broadcast))
 
     let message = await firstBuffered(stream, on: channel)
     #expect(message?.id == UUID(uuidString: "0b8a1e2c-77c4-4f1b-9d2a-3f5e6a7b8c9d"))
@@ -220,10 +218,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     )
 
     let frame = try #require(
-      client.sentEvents.compactMap { event -> Data? in
-        if case .frame(.binary(let data)) = event { return data }
-        return nil
-      }.last
+      await client.sentBinaryFrames().last
     )
     #expect(frame.range(of: Data(#""user_name":"abc""#.utf8)) != nil)
     #expect(frame.range(of: Data("userName".utf8)) == nil)
@@ -241,10 +236,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
       event: "my_event", payload: ["at": Date(timeIntervalSince1970: 0)])
 
     let frame = try #require(
-      client.sentEvents.compactMap { event -> Data? in
-        if case .frame(.binary(let data)) = event { return data }
-        return nil
-      }.last
+      await client.sentBinaryFrames().last
     )
     #expect(frame.range(of: Data(#""at":"1970-01-01T00:00:00"#.utf8)) != nil)
   }
@@ -417,7 +409,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
   private func firstBuffered<Element: Sendable>(
     _ stream: AsyncStream<Element>, on channel: RealtimeChannel
   ) async -> Element? {
-    await channel.finishStreams()
+    channel.sinks.finishAll()
     return await stream.first { _ in true }
   }
 }

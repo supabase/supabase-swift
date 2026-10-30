@@ -23,7 +23,7 @@ extension RealtimeChannel {
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceChange`` values.
-  public nonisolated func presenceChanges() -> AsyncStream<PresenceChange> {
+  public func presenceChanges() -> AsyncStream<PresenceChange> {
     let stream = sinks.presenceChanges.subscribe()
     return canChangeJoinConfig(for: "presence") ? stream : .finished
   }
@@ -38,7 +38,7 @@ extension RealtimeChannel {
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceState`` values.
-  public nonisolated func presenceStates() -> AsyncStream<PresenceState> {
+  public func presenceStates() -> AsyncStream<PresenceState> {
     let stream = sinks.presenceStates.subscribe()
     return canChangeJoinConfig(for: "presence") ? stream : .finished
   }
@@ -66,7 +66,7 @@ extension RealtimeChannel {
   ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
   ///     `schema` and `table`.
   /// - Returns: An `AsyncStream` of ``PostgresChange`` values.
-  public nonisolated func postgresChanges(
+  public func postgresChanges(
     event: PostgresChangeEvent = .all,
     schema: String = "public",
     table: String? = nil,
@@ -108,7 +108,7 @@ extension RealtimeChannel {
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. Defaults to the decoder the SDK
   ///     uses for server responses.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
-  nonisolated public func postgresChanges<Row: Decodable>(
+  public func postgresChanges<Row: Decodable>(
     of _: Row.Type,
     event: PostgresChangeEvent = .all,
     schema: String = "public",
@@ -124,7 +124,7 @@ extension RealtimeChannel {
       TypedPostgresChanges<Row>(base: changes, decoder: UncheckedSendable(decoder)))
   }
 
-  nonisolated func postgresChanges(
+  func postgresChanges(
     event: PostgresChangeEvent,
     schema: String,
     table: String?,
@@ -139,11 +139,11 @@ extension RealtimeChannel {
       select: select
     )
 
-    // Register before reading the status: either this read sees `.subscribed`, or the confirmation
-    // that publishes it sees the binding.
+    // Registered first: the client reads the bindings when it applies the change, so a join
+    // that read them before this stream existed still learns about it.
     let stream = sinks.postgresChanges(config)
-    if status.isSubscribed {
-      Task { await self.rejoinIfBindingsChanged() }
+    if let client {
+      Task { [topic] in await client.bindingsChanged(topic) }
     }
     return stream
   }
@@ -157,7 +157,7 @@ extension RealtimeChannel {
   /// - Parameter event: The broadcast event name to listen for. Pass `"*"` to receive every
   ///   event.
   /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
-  public nonisolated func broadcasts(event: String) -> AsyncStream<BroadcastMessage> {
+  public func broadcasts(event: String) -> AsyncStream<BroadcastMessage> {
     sinks.broadcasts.subscribe(where: { Self.eventMatches(event, $0.event) })
   }
 
@@ -175,7 +175,7 @@ extension RealtimeChannel {
   ///   }
   /// }
   /// ```
-  public nonisolated func events() -> AsyncStream<RealtimeChannelEvent> {
+  public func events() -> AsyncStream<RealtimeChannelEvent> {
     sinks.events.subscribe()
   }
 
@@ -183,7 +183,7 @@ extension RealtimeChannel {
   ///
   /// Call it after registering the stream: either this read sees the join in progress, or the
   /// join that starts later sees the stream.
-  private nonisolated func canChangeJoinConfig(for feature: String) -> Bool {
+  private func canChangeJoinConfig(for feature: String) -> Bool {
     switch status {
     case .unsubscribed, .unsubscribing, .failed:
       return true

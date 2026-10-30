@@ -1007,13 +1007,11 @@ final class RealtimeTests: Sendable {
   }
 }
 
-/// The loop tasks by their old names, read out of the client's `TaskStorage`.
+/// The loop tasks by their old names, read out of the client's shell.
 extension RealtimeClient {
-  fileprivate var messageTask: Task<Void, Never>? { tasks.tasks(at: .socketReader).first }
-  fileprivate var heartbeatTask: Task<Void, Never>? { tasks.tasks(at: .heartbeat).first }
-  fileprivate var pendingDisconnectTask: Task<Void, Never>? {
-    tasks.tasks(at: .idleDisconnect).first
-  }
+  fileprivate var messageTask: Task<Void, Never>? { reader }
+  fileprivate var heartbeatTask: Task<Void, Never>? { timers.task(for: .heartbeat) }
+  fileprivate var pendingDisconnectTask: Task<Void, Never>? { idleDisconnectTimer }
 }
 
 extension RealtimeMessage {

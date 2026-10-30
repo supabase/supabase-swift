@@ -197,7 +197,8 @@ struct RealtimeReconnectRecoveryTests {
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
     await waitUntil(timeout: 2) { sut.status == .disconnected }
     #expect(sut.status == .disconnected)
-    #expect(channel.status == .subscribed)
+    // The channel waits for the next socket to rejoin.
+    #expect(channel.status == .subscribing)
 
     let start = ContinuousClock.now
     await sut.removeChannel(channel)
@@ -206,7 +207,8 @@ struct RealtimeReconnectRecoveryTests {
       elapsed < .seconds(1.5),
       "removeChannel on a dead socket stalled waiting for phx_close (\(elapsed))"
     )
-    #expect(channel.status == .unsubscribed)
+    // A removed channel keeps its last status.
+    #expect(channel.status == .subscribing)
 
     try await sut.connect()
     #expect(sut.status == .connected)

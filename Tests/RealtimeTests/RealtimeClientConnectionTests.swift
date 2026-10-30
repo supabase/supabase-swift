@@ -356,7 +356,7 @@ struct RealtimeClientConnectionTests {
     #expect(await statuses.next() == .connected)
     #expect(h.connects.value.count == 2)
 
-    await h.client.handleSocketEvent(
+    await h.client.receive(
       .close(code: 1001, reason: "late"), generation: staleGeneration
     )
 
@@ -421,7 +421,7 @@ struct RealtimeClientConnectionTests {
     let stopped = await statuses.next()
     #expect(stopped == .disconnected)
     #expect(stopped?.error?.isRetryable == false)
-    #expect(await h.client.connection.error?.isRetryable == false)
+    #expect(await h.client.connectionError?.isRetryable == false)
     await h.clock.advance(by: .seconds(60))
     #expect(h.connects.value.count == 2)
   }

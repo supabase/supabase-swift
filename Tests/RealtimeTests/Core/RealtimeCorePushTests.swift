@@ -201,6 +201,25 @@ struct RealtimeCorePushTests {
   }
 
   @Test
+  func replyWithoutRefOrStatusIsDropped() {
+    var harness = Self.subscribed()
+    let w = harness.waiter()
+    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    let wireTopic = RealtimeChannel.wireTopic(for: Self.topic)
+
+    let withoutRef = RealtimeMessage(
+      joinRef: "1", ref: nil, topic: wireTopic, event: ChannelEvent.reply,
+      payload: ["status": "ok"])
+    let withoutStatus = RealtimeMessage(
+      joinRef: "1", ref: "2", topic: wireTopic, event: ChannelEvent.reply, payload: [:])
+
+    #expect(harness.send(.frame(withoutRef)) == [])
+    #expect(harness.send(.frame(withoutStatus)) == [])
+    #expect(harness.core.channels[Self.topic]?.pendingPushes == ["2": w])
+    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+  }
+
+  @Test
   func fatalJoinErrorFailsPendingPushes() {
     var harness = Self.subscribed()
     let w = harness.waiter()

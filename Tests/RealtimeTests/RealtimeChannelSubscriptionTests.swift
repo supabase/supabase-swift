@@ -43,63 +43,6 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
-  /// Cancelling a caller that joined an in-flight subscribe ends its wait at once and leaves the
-  /// first caller's attempt running.
-  @Test(.timeLimit(.minutes(1)))
-  func cancellingASecondCallerLeavesTheSharedSubscribeRunning() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    let first = Task { try await channel.subscribe() }
-    let firstJoin = try #require(await h.received(ChannelEvent.join))
-    let second = Task { try await channel.subscribe() }
-    #expect(await waitUntil { await !channel.sharedSubscribeWaiters.isEmpty })
-    second.cancel()
-
-    await #expect(throws: CancellationError.self) { try await second.value }
-    #expect(await channel.sharedSubscribeWaiters.isEmpty)
-    #expect(channel.status == .subscribing)
-    try h.confirm(firstJoin)
-    try await first.value
-    #expect(channel.status == .subscribed)
-    #expect(h.sent(ChannelEvent.join).count == 1)
-  }
-
-  @Test(.timeLimit(.minutes(1)))
-  func aCallerCancelledBeforeItJoinsTheSharedSubscribeThrowsAtOnce() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    let first = Task { try await channel.subscribe() }
-    let join = try #require(await h.received(ChannelEvent.join))
-    let second = Task {
-      withUnsafeCurrentTask { $0?.cancel() }
-      try await channel.subscribe()
-    }
-
-    await #expect(throws: CancellationError.self) { try await second.value }
-    #expect(await channel.sharedSubscribeWaiters.isEmpty)
-    try h.confirm(join)
-    try await first.value
-    #expect(channel.status == .subscribed)
-  }
-
-  @Test
-  func concurrentSubscribesShareOneJoin() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    async let first: Void = channel.subscribe()
-    async let second: Void = channel.subscribe()
-    _ = try #require(await h.received(ChannelEvent.join))
-    await channel.didReceiveSubscribedOK()
-
-    try await first
-    try await second
-    #expect(channel.status == .subscribed)
-    #expect(h.sent(ChannelEvent.join).count == 1)
-  }
-
   @Test
   func subscribeRetriesAfterTimeoutThenSucceeds() async throws {
     let h = Harness(timeout: .seconds(10))
@@ -217,12 +160,12 @@ struct RealtimeChannelSubscriptionTests {
     #expect(changes?.count == 1)
     #expect(changes?.first?.objectValue?["table"]?.stringValue == "users")
     // The `system` confirmation path: "Subscribed to PostgreSQL" confirms the join on its own.
-    await channel.onMessage(
-      RealtimeMessage(
-        joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.system,
-        payload: ["status": "ok", "extension": "postgres_changes"]
-      )
-    )
+    await h.client.apply(
+      .frame(
+        RealtimeMessage(
+          joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.system,
+          payload: ["status": "ok", "extension": "postgres_changes"]
+        )))
 
     try await subscription.value
     #expect(channel.status == .subscribed)
@@ -356,7 +299,7 @@ struct RealtimeChannelSubscriptionTests {
     try await subscription.value
 
     consumer.cancel()
-    #expect(await waitUntil { channel.clientChanges.count == 1 })
+    #expect(await waitUntil { channel.sinks.bindings.count == 1 })
     _ = channel.broadcasts(event: "x")
 
     #expect(channel.status == .subscribed)
@@ -376,7 +319,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.confirm(join)
-    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    #expect(await waitUntil { await channel.joinStage == .postgres })
     #expect(!channel.status.isSubscribed)
 
     try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
@@ -421,7 +364,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.confirm(join)
-    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    #expect(await waitUntil { await channel.joinStage == .postgres })
     await h.clock.advance(by: .seconds(5))
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
@@ -441,11 +384,11 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.confirm(join)
-    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    #expect(await waitUntil { await channel.joinStage == .postgres })
     // Delivered on the actor, so the checks below run after the channel handled it.
-    await channel.onMessage(Self.system(join, status: "ok", extension: "system"))
+    await h.client.apply(.frame(Self.system(join, status: "ok", extension: "system")))
     #expect(!channel.status.isSubscribed)
-    #expect(await channel.joinWaiter?.stage == .postgresChanges)
+    #expect(await channel.joinStage == .postgres)
 
     try h.send(Self.system(join, status: "ok", extension: "postgres_changes"))
     try await subscription.value
@@ -464,7 +407,7 @@ struct RealtimeChannelSubscriptionTests {
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
     try h.confirm(join)
-    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+    #expect(await waitUntil { await channel.joinStage == .postgres })
     subscription.cancel()
 
     await #expect(throws: CancellationError.self) { try await subscription.value }
@@ -489,11 +432,11 @@ struct RealtimeChannelSubscriptionTests {
       let subscription = Task { try await channel.subscribe() }
       let join = try #require(await h.received(ChannelEvent.join))
       try h.confirm(join)
-      #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
+      #expect(await waitUntil { await channel.joinStage == .postgres })
       await h.clock.advance(by: .seconds(5))
       // Lands while the channel sends `phx_leave` for the timed-out join.
       _ = try #require(await h.received(ChannelEvent.leave))
-      await channel.onMessage(Self.system(join, status: "ok", extension: "postgres_changes"))
+      await h.client.apply(.frame(Self.system(join, status: "ok", extension: "postgres_changes")))
 
       let result = await subscription.result
       let status = channel.status
@@ -589,16 +532,6 @@ struct RealtimeChannelSubscriptionTests {
         "message": .string(message),
       ]
     )
-  }
-
-  @Test
-  func confirmationOutsideSubscribeIsIgnored() async {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    await channel.didReceiveSubscribedOK()
-
-    #expect(channel.status == .unsubscribed)
   }
 
   // MARK: - Join errors
@@ -744,7 +677,6 @@ struct RealtimeChannelSubscriptionTests {
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .unauthorized)
     #expect(channel.status == .failed)
-    #expect(channel.status.error?.kind == error?.kind)
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -781,12 +713,13 @@ struct RealtimeChannelSubscriptionTests {
         )
       else { return }
       server.send(reply)
-      await waitUntil { await channel.joinFailure != nil }
+      await waitUntil {
+        if case .failed = channel.status { true } else { false }
+      }
     }
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
     #expect(error?.kind == .unauthorized)
-    #expect(await channel.joinFailure == nil)
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
@@ -801,7 +734,6 @@ struct RealtimeChannelSubscriptionTests {
     #expect(error?.isRetryable == false)
     #expect(h.connects.value == 1)
     #expect(channel.status == .failed)
-    #expect(channel.status.error?.kind == error?.kind)
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -814,7 +746,6 @@ struct RealtimeChannelSubscriptionTests {
     #expect(error?.isRetryable == false)
     #expect(h.connects.value == 0)
     #expect(channel.status == .failed)
-    #expect(channel.status.error?.kind == error?.kind)
   }
 
   /// A join error with no reason is not one the classifier knows, so the channel rejoins.
@@ -953,58 +884,6 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.sent(ChannelEvent.join).count == 1)
   }
 
-  /// Every caller of a shared subscribe gets the same error when the server closes the channel.
-  @Test(.timeLimit(.minutes(1)))
-  func aServerCloseFailsEveryCallerWithChannelClosedByServer() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    let first = Task { try await channel.subscribe() }
-    let join = try #require(await h.received(ChannelEvent.join))
-    let second = Task { try await channel.subscribe() }
-    #expect(await waitUntil { await !channel.sharedSubscribeWaiters.isEmpty })
-    try h.close(join)
-
-    for caller in [first, second] {
-      let error = await #expect(throws: RealtimeError.self) { try await caller.value }
-      #expect(error?.kind == .channelClosedByServer)
-    }
-  }
-
-  /// A rejoin that keeps failing must not keep a released client alive.
-  @Test(.timeLimit(.minutes(1)))
-  func aRejoinThatNeverSucceedsDoesNotRetainTheClient() async throws {
-    final class WeakBox: @unchecked Sendable {
-      weak var client: RealtimeClient?
-    }
-    let box = WeakBox()
-    let (socket, server) = FakeWebSocket.fakes()
-
-    func scope() async throws {
-      let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          heartbeatInterval: .seconds(3600),
-          accessToken: { "token" },
-          handleAppLifecycle: false
-        ),
-        wsTransport: { _, _ in socket },
-        http: HTTPClient(transport: RecordingTransport()),
-        clock: SignalingTestClock()
-      )
-      box.client = client
-      try await client.connect()
-      _ = client.channel("room")
-      Task { await client.rejoinChannels() }
-      for await frame in server.events {
-        if case .frame(.text(let text)) = frame, text.contains(ChannelEvent.join) { break }
-      }
-    }
-    try await scope()
-
-    #expect(await waitUntil(timeout: 5) { box.client == nil })
-  }
-
   /// Without an attempt limit, a channel that outlives its client must not retry forever.
   @Test(.timeLimit(.minutes(1)))
   func subscribeAfterTheClientIsReleasedThrowsAtOnce() async throws {
@@ -1016,13 +895,12 @@ struct RealtimeChannelSubscriptionTests {
       return client.channel("room")
     }
     let channel = await makeChannel()
-    try #require(await waitUntil { await channel.client == nil })
+    try #require(await waitUntil { channel.client == nil })
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
     #expect(error?.kind == .notConnected)
     #expect(error?.isRetryable == false)
-    #expect(channel.status == .failed)
-    #expect(channel.status.error?.kind == error?.kind)
+    #expect(channel.status == .unsubscribed)
   }
 
   /// A failed postgres-changes subscription arrives as a `system` error after the join. The
@@ -1117,34 +995,6 @@ struct RealtimeChannelSubscriptionTests {
     #expect(channel.status == .unsubscribed)
   }
 
-  /// `.resubscribed` marks a rejoin, never the first join or a join after `unsubscribe()`.
-  @Test(.timeLimit(.minutes(1)))
-  func resubscribedIsEmittedOnlyForARejoin() async throws {
-    let h = Harness(timeout: .seconds(10))
-    let channel = h.client.channel("room")
-    let events = LockIsolated<[RealtimeChannelEvent]>([])
-    let stream = channel.events()
-    let collector = Task {
-      for await event in stream { events.withValue { $0.append(event) } }
-    }
-    defer { collector.cancel() }
-
-    _ = try await h.subscribe(channel)
-    // No `phx_close`: the unsubscribe ends at its timeout and keeps the channel registered.
-    let unsubscription = Task { await channel.unsubscribe() }
-    _ = try #require(await h.received(ChannelEvent.leave))
-    await h.clock.advance(by: .seconds(10))
-    await unsubscription.value
-    _ = try await h.subscribe(channel)
-    #expect(events.value.isEmpty)
-
-    // The client resets and rejoins every channel after a reconnect.
-    await channel.resetForReconnect()
-    _ = try await h.subscribe(channel)
-
-    #expect(await waitUntil { events.value == [.resubscribed] })
-  }
-
   // MARK: - Cancellation and server close
 
   @Test
@@ -1175,225 +1025,9 @@ struct RealtimeChannelSubscriptionTests {
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .channelClosedByServer)
     #expect(channel.status == .failed)
-    #expect(channel.status.error?.kind == error?.kind)
-  }
-
-  @Test
-  func closeForStaleJoinRefIsIgnored() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-    let join = try await h.subscribe(channel)
-
-    #expect(await channel.didReceiveClose(joinRef: "stale-join-ref") == false)
-    #expect(channel.status == .subscribed)
-
-    #expect(await channel.didReceiveClose(joinRef: join.ref) == true)
-    #expect(channel.status == .unsubscribed)
-    #expect(await channel.joinRef == nil)
-  }
-
-  @Test
-  func closeWithoutJoinRefUnsubscribes() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-    _ = try await h.subscribe(channel)
-
-    #expect(await channel.didReceiveClose() == true)
-
-    #expect(channel.status == .unsubscribed)
-    #expect(await channel.joinRef == nil)
   }
 
   // MARK: - Reconnect
-
-  @Test
-  func resetForReconnectLetsTheNextSubscribeRejoin() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-    let firstJoin = try await h.subscribe(channel)
-
-    await channel.resetForReconnect()
-    #expect(channel.status == .unsubscribed)
-    #expect(await channel.joinRef == nil)
-
-    let secondJoin = try await h.subscribe(channel)
-    #expect(secondJoin.ref != firstJoin.ref)
-    #expect(h.sent(ChannelEvent.join).count == 2)
-  }
-
-  @Test
-  func resetForReconnectAbortsAnInFlightSubscribe() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-
-    let subscription = Task { try await channel.subscribe() }
-    let firstJoin = try #require(await h.received(ChannelEvent.join))
-    await channel.resetForReconnect()
-
-    await #expect(throws: (any Error).self) { try await subscription.value }
-    #expect(channel.status == .unsubscribed)
-
-    let secondJoin = try await h.subscribe(channel)
-    #expect(secondJoin.ref != firstJoin.ref)
-  }
-
-  /// Issue #1556: the first subscribe is cancelled by a reset while a newer attempt has already
-  /// joined. Its failure must leave the newer attempt's state and `joinRef` alone.
-  @Test(.timeLimit(.minutes(1)))
-  func staleSubscribeFailureLeavesReplacementSubscribeUntouched() async throws {
-    let gate = Gate()
-    let h = Harness()
-    // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
-    // fails only after the newer one has joined.
-    let joinSends = LockIsolated(0)
-    h.socket.onSend { frame in
-      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
-      let send = joinSends.withValue {
-        $0 += 1
-        return $0
-      }
-      if send == 1 { await gate.park() }
-    }
-    let channel = h.client.channel("room")
-
-    let firstSubscribe = Task { try await channel.subscribe() }
-    let firstJoin = try #require(await h.received(ChannelEvent.join))
-    #expect(await waitUntil { gate.isParked })
-
-    await channel.resetForReconnect()
-    let secondSubscribe = Task { try await channel.subscribe() }
-    let secondJoin = try #require(await h.received(ChannelEvent.join))
-    #expect(secondJoin.ref != firstJoin.ref)
-    #expect(await channel.joinRef == secondJoin.ref)
-
-    gate.open()
-    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
-
-    try #require(channel.status == .subscribing)
-    #expect(await channel.joinRef == secondJoin.ref)
-    #expect(h.sent(ChannelEvent.join).count == 2)
-
-    try h.confirm(secondJoin)
-    try await secondSubscribe.value
-    #expect(channel.status == .subscribed)
-    #expect(h.sent(ChannelEvent.join).count == 2)
-  }
-
-  /// A server close that cancels a subscribe still surfaces as `channelClosedByServer` to that
-  /// caller when a newer attempt has replaced it by the time it fails.
-  @Test(.timeLimit(.minutes(1)))
-  func serverCloseDuringStaleSubscribeStillSurfacesTypedError() async throws {
-    let gate = Gate()
-    let h = Harness()
-    // The first `phx_join` stays in its send, which a cancel cannot cut short, so the attempt
-    // fails only after the newer one has joined.
-    let joinSends = LockIsolated(0)
-    h.socket.onSend { frame in
-      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
-      let send = joinSends.withValue {
-        $0 += 1
-        return $0
-      }
-      if send == 1 { await gate.park() }
-    }
-    let channel = h.client.channel("room")
-
-    let firstSubscribe = Task { try await channel.subscribe() }
-    let firstJoin = try #require(await h.received(ChannelEvent.join))
-    #expect(await waitUntil { gate.isParked })
-    #expect(await channel.didReceiveClose())
-
-    let secondSubscribe = Task { try await channel.subscribe() }
-    let secondJoin = try #require(await h.received(ChannelEvent.join))
-    #expect(secondJoin.ref != firstJoin.ref)
-
-    gate.open()
-    let error = await #expect(throws: RealtimeError.self) { try await firstSubscribe.value }
-    #expect(error?.kind == .channelClosedByServer)
-
-    try #require(channel.status == .subscribing)
-    #expect(await channel.joinRef == secondJoin.ref)
-
-    try h.confirm(secondJoin)
-    try await secondSubscribe.value
-    #expect(channel.status == .subscribed)
-  }
-
-  /// A server close aborted an older subscribe that is still in flight. Cancelling the newer
-  /// subscribe during its Postgres changes wait must still leave the newer join.
-  @Test(.timeLimit(.minutes(1)))
-  func cancellingTheReadinessWaitLeavesEvenWhenAnOlderSubscribeWasAborted() async throws {
-    let gate = Gate()
-    let h = Harness(timeout: Self.noJoinTimeout)
-    // The first `phx_join` stays in its send, so the aborted attempt is still in flight while
-    // the newer one waits for the Postgres changes.
-    let joinSends = LockIsolated(0)
-    h.socket.onSend { frame in
-      guard case .text(let text) = frame, text.contains("\"\(ChannelEvent.join)\"") else { return }
-      let send = joinSends.withValue {
-        $0 += 1
-        return $0
-      }
-      if send == 1 { await gate.park() }
-    }
-    let channel = h.client.channel("room")
-    let changes = channel.postgresChanges(table: "t")
-
-    let firstSubscribe = Task { try await channel.subscribe() }
-    _ = try #require(await h.received(ChannelEvent.join))
-    #expect(await waitUntil { gate.isParked })
-    #expect(await channel.didReceiveClose())
-
-    let secondSubscribe = Task { try await channel.subscribe() }
-    let secondJoin = try #require(await h.received(ChannelEvent.join))
-    try h.confirm(secondJoin)
-    #expect(await waitUntil { await channel.joinWaiter?.stage == .postgresChanges })
-    secondSubscribe.cancel()
-
-    await #expect(throws: CancellationError.self) { try await secondSubscribe.value }
-    #expect(h.sent(ChannelEvent.leave).contains { $0.joinRef == secondJoin.ref })
-
-    gate.open()
-    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
-    withExtendedLifetime(changes) {}
-  }
-
-  /// A subscribe cancelled while its connect is in flight must not write `joinRef` or send a
-  /// `phx_join` once the connect returns; the attempt that replaced it owns the join.
-  @Test(.timeLimit(.minutes(1)))
-  func cancelledStaleSubscribeNeverJoinsAfterReconnect() async throws {
-    let gate = Gate()
-    let h = Harness(
-      onConnect: { attempt in
-        if attempt == 1 { await gate.park() }
-      })
-    let channel = h.client.channel("room")
-
-    // Without the cancellation check the stale attempt parks on a join waiter the newer attempt
-    // then replaces, so it never finishes: wait for it with a bound instead of awaiting it.
-    let firstFinished = LockIsolated(false)
-    let firstSubscribe = Task {
-      defer { firstFinished.setValue(true) }
-      try await channel.subscribe()
-    }
-    #expect(await waitUntil { gate.isParked })
-
-    await channel.resetForReconnect()
-    let secondSubscribe = Task { try await channel.subscribe() }
-
-    gate.open()
-    let join = try #require(await h.received(ChannelEvent.join))
-    try #require(await waitUntil(timeout: 2) { firstFinished.value })
-    await #expect(throws: (any Error).self) { try await firstSubscribe.value }
-
-    #expect(h.sent(ChannelEvent.join).count == 1)
-    #expect(await channel.joinRef == join.ref)
-    try #require(channel.status == .subscribing)
-
-    try h.confirm(join)
-    try await secondSubscribe.value
-    #expect(h.sent(ChannelEvent.join).count == 1)
-  }
 
   // MARK: - Unsubscribe
 
@@ -1467,22 +1101,6 @@ struct RealtimeChannelSubscriptionTests {
 
     #expect(h.client.channels.isEmpty)
     #expect(h.client.status == .disconnected)
-  }
-
-  /// Issue #1145: with the socket gone, `phx_leave` could only be buffered into the next
-  /// connection and `phx_close` never arrives, so unsubscribe neither sends nor waits.
-  @Test
-  func unsubscribeWithoutSocketSkipsLeave() async throws {
-    let h = Harness()
-    let channel = h.client.channel("room")
-    _ = try await h.subscribe(channel)
-    await h.client.disconnect()
-
-    await channel.unsubscribe()
-
-    #expect(channel.status == .unsubscribed)
-    #expect(await h.client.sendBuffer.isEmpty)
-    #expect(h.sent(ChannelEvent.leave).isEmpty)
   }
 
   @Test

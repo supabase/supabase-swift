@@ -45,11 +45,8 @@ struct RealtimeClientChannelsTests {
   func channelsDropsAChannelTheServerClosed() async {
     let channel = client.channel("a")
 
-    await channel.onMessage(
-      RealtimeMessage(
-        joinRef: nil, ref: nil, topic: channel.topic, event: ChannelEvent.close, payload: [:]
-      )
-    )
+    await client.installSubscribedRecord("a")
+    await client.apply(.frame(Self.close(channel)))
 
     #expect(client.channels.isEmpty)
   }
@@ -60,11 +57,7 @@ struct RealtimeClientChannelsTests {
     await client.removeChannel(old)
     let new = client.channel("a")
 
-    await old.onMessage(
-      RealtimeMessage(
-        joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
-      )
-    )
+    await client.apply(.frame(Self.close(old)))
 
     #expect(client.channels.count == 1)
     #expect(client.channels.first === new)
@@ -73,11 +66,8 @@ struct RealtimeClientChannelsTests {
   @Test
   func removingAnOldChannelKeepsTheNewChannelWithTheSameTopic() async {
     let old = client.channel("a")
-    await old.onMessage(
-      RealtimeMessage(
-        joinRef: nil, ref: nil, topic: old.topic, event: ChannelEvent.close, payload: [:]
-      )
-    )
+    await client.installSubscribedRecord("a")
+    await client.apply(.frame(Self.close(old)))
     let new = client.channel("a")
 
     await client.removeChannel(old)
@@ -91,5 +81,11 @@ struct RealtimeClientChannelsTests {
     let channel = client.channel("private-room", configure: { $0.isPrivate = true })
 
     #expect(channel.configuration.isPrivate)
+  }
+
+  /// A server `phx_close` for `channel`, without a `join_ref`.
+  private static func close(_ channel: RealtimeChannel) -> RealtimeMessage {
+    RealtimeMessage(
+      joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close, payload: [:])
   }
 }

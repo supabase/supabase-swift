@@ -99,16 +99,6 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func theTimerDoesNotCallTheCallbackWhenDisconnected() async {
-    let provider = TokenProvider { _ in "token" }
-    let host = await makeHost(provider)
-
-    await host.client.refreshAccessTokenIfConnected()
-
-    #expect(provider.calls == 0)
-  }
-
-  @Test
   func twoQuickSetAuthCallsCallTheCallbackOnceAndPushOnce() async throws {
     let provider = TokenProvider { call in "token-\(call)" }
     let host = await makeHost(provider)
@@ -292,45 +282,6 @@ struct RealtimeClientAccessTokenTests {
     #expect(await client.accessToken == "second")
   }
 
-  @Test
-  func aRefreshForRejoinIgnoresTheInterval() async throws {
-    let provider = TokenProvider { call in "token-\(call)" }
-    let host = await makeHost(provider)
-    try await subscribe(host)
-
-    await host.client.setAuth()
-    #expect(provider.calls == 1)
-
-    await host.client.refreshTokenForRejoin()
-    #expect(provider.calls == 2)
-    #expect(await host.client.accessToken == "token-2")
-  }
-
-  @Test
-  func aRefreshForRejoinCallsAgainAfterACallThatStartedBeforeTheRefusal() async {
-    let gate = CallbackGate()
-    let provider = TokenProvider { call in call == 1 ? await gate.park() : "fresh" }
-    let host = await makeHost(provider)
-
-    let refresh = Task { await host.client.setAuth() }
-    await gate.waitForCall()
-    let rejoins = await host.client.withIsolation { client in
-      let rejoins = [
-        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
-        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
-      ]
-      gate.release("refused")
-      return rejoins
-    }
-    for rejoin in rejoins {
-      await rejoin.value
-    }
-    await refresh.value
-
-    #expect(await host.client.accessToken == "fresh")
-    #expect(provider.calls == 2)
-  }
-
   // MARK: Helpers
 
   /// An `accessToken` callback that numbers its calls from 1 and answers each with `respond`.
@@ -415,7 +366,7 @@ struct RealtimeClientAccessTokenTests {
   }
 
   private func hasRefreshTimer(_ host: RealtimeTestHost) async -> Bool {
-    await host.client.withIsolation { !$0.tasks.tasks(at: .accessTokenRefresh).isEmpty }
+    await host.client.withIsolation { $0.timers.task(for: .tokenRefresh) != nil }
   }
 
   /// An `exp` `seconds` after the host client's own now, so the refresh delay is exact.

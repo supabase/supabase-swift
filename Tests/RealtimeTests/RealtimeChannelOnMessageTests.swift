@@ -13,7 +13,8 @@ import Testing
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
-/// Characterization tests for ``RealtimeChannel/onMessage(_:)``.
+/// Characterization tests for the frames a subscribed channel receives: each one goes through
+/// the client's core and shell into the channel's streams.
 /// what reaches the streams.
 @Suite
 struct RealtimeChannelOnMessageTests {
@@ -29,6 +30,7 @@ struct RealtimeChannelOnMessageTests {
     )
     self.client = client
     self.sut = client.channel("public:messages")
+    await client.installSubscribedRecord("public:messages", joinRef: "1")
     let timestamp = Date(timeIntervalSince1970: 1_703_592_000)
     self.commitTimestamp = timestamp
     self.commitTimestampJSON = try JSONValue(timestamp)
@@ -37,7 +39,7 @@ struct RealtimeChannelOnMessageTests {
   func unknownEventDispatchesNothing() async {
     let events = sut.events()
     let broadcasts = sut.broadcasts(event: "*")
-    await sut.onMessage(message(event: "not_a_channel_event"))
+    await deliver(message(event: "not_a_channel_event"))
 
     let receivedEvents = await collect(events)
     #expect(receivedEvents.isEmpty)
@@ -49,7 +51,7 @@ struct RealtimeChannelOnMessageTests {
   func systemOKForPostgresChangesEmitsReady() async {
     let events = sut.events()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.system,
         payload: [
@@ -67,7 +69,7 @@ struct RealtimeChannelOnMessageTests {
   func systemErrorForPostgresChangesEmitsFailedWithTheServerMessage() async {
     let events = sut.events()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.system,
         payload: [
@@ -87,7 +89,7 @@ struct RealtimeChannelOnMessageTests {
   func systemMessagesForReplicationEmitReadyOrFailed() async {
     let events = sut.events()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.system,
         payload: [
@@ -96,7 +98,7 @@ struct RealtimeChannelOnMessageTests {
         ]
       )
     )
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.system,
         payload: ["status": "error", "extension": "system", "message": "Replication not ready"]
@@ -111,108 +113,18 @@ struct RealtimeChannelOnMessageTests {
   func systemMessageWithoutAKnownExtensionEmitsNothing() async {
     let events = sut.events()
 
-    await sut.onMessage(message(event: ChannelEvent.system, payload: ["status": "ok"]))
-    await sut.onMessage(message(event: ChannelEvent.system, payload: ["status": "error"]))
-    await sut.onMessage(message(event: ChannelEvent.system))
+    await deliver(message(event: ChannelEvent.system, payload: ["status": "ok"]))
+    await deliver(message(event: ChannelEvent.system, payload: ["status": "error"]))
+    await deliver(message(event: ChannelEvent.system))
 
     #expect(await collect(events).isEmpty)
-  }
-
-  @Test
-  func replyWithoutRefIsSwallowed() async {
-    await sut.onMessage(message(event: ChannelEvent.reply, payload: ["status": "ok"]))
-
-    #expect(await sut.serverChanges.isEmpty)
-  }
-
-  @Test
-  func replyWithoutStatusIsSwallowed() async {
-    await sut.onMessage(message(event: ChannelEvent.reply, ref: "1"))
-
-    #expect(await sut.serverChanges.isEmpty)
-  }
-
-  @Test
-  func replyWithoutPostgresChangesLeavesServerChangesUntouched() async {
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.reply,
-        payload: ["status": "ok", "response": [:]],
-        ref: "1"
-      )
-    )
-
-    #expect(await sut.serverChanges.isEmpty)
-  }
-
-  @Test
-  func replyToAnotherRefLeavesServerChangesUntouched() async {
-    await sut.setJoinRef("2")
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.reply,
-        payload: [
-          "status": "ok",
-          "response": [
-            "postgres_changes": [
-              ["id": 7, "event": "INSERT", "schema": "public", "table": "messages"]
-            ]
-          ],
-        ],
-        ref: "1"
-      )
-    )
-
-    #expect(await sut.serverChanges.isEmpty)
-  }
-
-  @Test
-  func replyWithPostgresChangesStoresServerChanges() async throws {
-    await sut.setJoinRef("1")
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.reply,
-        payload: [
-          "status": "ok",
-          "response": [
-            "postgres_changes": [
-              ["id": 7, "event": "INSERT", "schema": "public", "table": "messages"]
-            ]
-          ],
-        ],
-        ref: "1"
-      )
-    )
-
-    let change = try #require(await sut.serverChanges.first)
-    #expect(await sut.serverChanges.count == 1)
-    #expect(change.id == 7)
-    #expect(change.event == .insert)
-    #expect(change.schema == "public")
-    #expect(change.table == "messages")
-  }
-
-  @Test
-  func replyWithMalformedPostgresChangesLeavesServerChangesUntouched() async {
-    await sut.onMessage(
-      message(
-        event: ChannelEvent.reply,
-        payload: [
-          "status": "ok",
-          "response": ["postgres_changes": "not-an-array"],
-        ],
-        ref: "1"
-      )
-    )
-
-    #expect(await sut.serverChanges.isEmpty)
   }
 
   @Test
   func postgresChangesWithoutDataIsIgnored() async {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(message(event: ChannelEvent.postgresChanges, payload: ["ids": [1]]))
+    await deliver(message(event: ChannelEvent.postgresChanges, payload: ["ids": [1]]))
 
     let received = await collect(changes)
     #expect(received.isEmpty)
@@ -222,7 +134,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesInsertDispatchesAnInsert() async throws {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       postgresChange([
         "type": "INSERT",
         "record": ["id": 1, "body": "hello"],
@@ -249,7 +161,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesUpdateDispatchesAnUpdateWithBothRecords() async throws {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       postgresChange([
         "type": "UPDATE",
         "record": ["id": 1, "body": "new"],
@@ -268,7 +180,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesUpdateWithoutRecordsHasNilRecords() async throws {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       postgresChange(["type": "UPDATE", "columns": [["name": "body", "type": "text"]]])
     )
 
@@ -282,7 +194,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesDeleteDispatchesADelete() async throws {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       postgresChange([
         "type": "DELETE",
         "old_record": ["id": 1],
@@ -300,7 +212,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesWithUnknownTypeIsDelivered() async throws {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(postgresChange(["type": "TRUNCATE", "columns": []]))
+    await deliver(postgresChange(["type": "TRUNCATE", "columns": []]))
 
     let change = try #require(await collect(changes).first)
     #expect(change.kind == PostgresChange.Kind(rawValue: "TRUNCATE"))
@@ -323,7 +235,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesWithMalformedDataIsSwallowed() async {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.postgresChanges,
         payload: ["ids": [1], "data": ["type": "INSERT"]]
@@ -338,7 +250,7 @@ struct RealtimeChannelOnMessageTests {
   func postgresChangesWithoutIdsMatchesNoCallback() async {
     let changes = await recordPostgresChanges()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.postgresChanges,
         payload: [
@@ -365,13 +277,15 @@ struct RealtimeChannelOnMessageTests {
       let body: String
     }
     let changes = sut.postgresChanges(of: Message.self, table: "messages")
-    await sut.setServerChanges([
-      PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
-    ])
+    await client.setServerChanges(
+      for: "public:messages",
+      [
+        PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
+      ])
 
-    await sut.onMessage(postgresChange(["type": "INSERT", "record": ["id": "not-a-number"]]))
-    await sut.onMessage(postgresChange(["type": "INSERT", "record": ["id": 2, "body": "hi"]]))
-    await sut.onMessage(postgresChange(["type": "DELETE", "old_record": ["id": 2]]))
+    await deliver(postgresChange(["type": "INSERT", "record": ["id": "not-a-number"]]))
+    await deliver(postgresChange(["type": "INSERT", "record": ["id": 2, "body": "hi"]]))
+    await deliver(postgresChange(["type": "DELETE", "old_record": ["id": 2]]))
 
     let received = await collect(changes)
     #expect(received.map(\.kind) == [.insert, .insert, .delete])
@@ -387,7 +301,7 @@ struct RealtimeChannelOnMessageTests {
       of: Message.self, event: .insert, schema: "chat", table: "messages",
       filter: .eq("room", value: 1), select: ["id"])
 
-    let changes = sut.clientChanges
+    let changes = sut.sinks.bindings
     withExtendedLifetime(stream) {}
     #expect(
       changes == [
@@ -402,7 +316,7 @@ struct RealtimeChannelOnMessageTests {
   func broadcastTriggersMatchingBroadcastCallback() async throws {
     let broadcasts = sut.broadcasts(event: "message")
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.broadcast,
         payload: ["type": "broadcast", "event": "message", "payload": ["body": "hi"]]
@@ -423,7 +337,7 @@ struct RealtimeChannelOnMessageTests {
     let broadcasts = sut.broadcasts(event: "Typing")
 
     for event in ["typing", "Typing", "TYPING"] {
-      await sut.onMessage(
+      await deliver(
         message(
           event: ChannelEvent.broadcast,
           payload: ["type": "broadcast", "event": .string(event), "payload": [:]]
@@ -439,7 +353,7 @@ struct RealtimeChannelOnMessageTests {
     let broadcasts = sut.broadcasts(event: "*")
 
     for event in ["a", "B"] {
-      await sut.onMessage(
+      await deliver(
         message(
           event: ChannelEvent.broadcast,
           payload: ["type": "broadcast", "event": .string(event), "payload": [:]]
@@ -454,7 +368,7 @@ struct RealtimeChannelOnMessageTests {
   func broadcastWithoutEventIsSwallowed() async {
     let broadcasts = sut.broadcasts(event: "*")
 
-    await sut.onMessage(
+    await deliver(
       message(event: ChannelEvent.broadcast, payload: ["payload": ["body": "hi"]])
     )
 
@@ -464,21 +378,21 @@ struct RealtimeChannelOnMessageTests {
 
   @Test
   func closeWithoutJoinRefRemovesChannelFromSocket() async {
-    await sut.onMessage(message(event: ChannelEvent.close))
+    await deliver(message(event: ChannelEvent.close))
 
     #expect(client.sinks.channel(for: sut.topic) == nil)
   }
 
   @Test
   func closeForStaleJoinRefDoesNotRemoveChannel() async {
-    await sut.onMessage(message(event: ChannelEvent.close, joinRef: "stale-ref"))
+    await deliver(message(event: ChannelEvent.close, joinRef: "stale-ref"))
 
     #expect(client.sinks.channel(for: sut.topic) != nil)
   }
 
   @Test
   func errorClosesChannelWithoutRemovingItFromSocket() async {
-    await sut.onMessage(message(event: ChannelEvent.error))
+    await deliver(message(event: ChannelEvent.error))
 
     #expect(client.sinks.channel(for: sut.topic) != nil)
     #expect(sut.status == .unsubscribed)
@@ -488,7 +402,7 @@ struct RealtimeChannelOnMessageTests {
   func presenceStateYieldsItsEntriesAsJoins() async throws {
     let changes = sut.presenceChanges()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.presenceState,
         payload: ["user-1": ["metas": [["phx_ref": "ref-1", "name": "ana"]]]]
@@ -504,14 +418,14 @@ struct RealtimeChannelOnMessageTests {
   @Test
   func presenceDiffAfterAStateYieldsJoinsAndLeaves() async throws {
     let changes = sut.presenceChanges()
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.presenceState,
         payload: ["user-2": ["metas": [["phx_ref": "ref-2"]]]]
       )
     )
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.presenceDiff,
         payload: [
@@ -530,8 +444,8 @@ struct RealtimeChannelOnMessageTests {
   func presenceMessagesWithoutChangesYieldNothing() async {
     let changes = sut.presenceChanges()
 
-    await sut.onMessage(message(event: ChannelEvent.presenceState))
-    await sut.onMessage(message(event: ChannelEvent.presenceDiff))
+    await deliver(message(event: ChannelEvent.presenceState))
+    await deliver(message(event: ChannelEvent.presenceDiff))
 
     #expect(await collect(changes).isEmpty)
   }
@@ -540,7 +454,7 @@ struct RealtimeChannelOnMessageTests {
   func malformedPresenceMetasAreSkipped() async {
     let changes = sut.presenceChanges()
 
-    await sut.onMessage(
+    await deliver(
       message(
         event: ChannelEvent.presenceState,
         payload: ["user-1": "not-a-presence", "user-2": ["metas": [["name": "no ref"]]]]
@@ -548,6 +462,11 @@ struct RealtimeChannelOnMessageTests {
     )
 
     #expect(await collect(changes).isEmpty)
+  }
+
+  /// Applies `message` as a frame from the socket.
+  private func deliver(_ message: RealtimeMessage) async {
+    await client.apply(.frame(message))
   }
 
   private func message(
@@ -566,9 +485,9 @@ struct RealtimeChannelOnMessageTests {
   }
 
   /// Ends the channel's streams, then returns everything they had buffered. Every delivery in
-  /// these tests happens synchronously inside `onMessage`, so nothing can arrive later.
+  /// these tests happens synchronously inside `deliver(_:)`, so nothing can arrive later.
   private func collect<Element>(_ stream: AsyncStream<Element>) async -> [Element] {
-    await sut.finishStreams()
+    sut.sinks.finishAll()
     var elements: [Element] = []
     for await element in stream {
       elements.append(element)
@@ -579,9 +498,11 @@ struct RealtimeChannelOnMessageTests {
   /// Opens a postgres stream and records server-change id `1` for it, matching the
   private func recordPostgresChanges() async -> AsyncStream<PostgresChange> {
     let changes = sut.postgresChanges(schema: "public", table: "messages")
-    await sut.setServerChanges([
-      PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
-    ])
+    await client.setServerChanges(
+      for: "public:messages",
+      [
+        PostgresJoinConfig(event: .all, schema: "public", table: "messages", id: 1)
+      ])
     return changes
   }
 
@@ -598,14 +519,8 @@ struct RealtimeChannelOnMessageTests {
   }
 }
 
-extension RealtimeChannel {
-  fileprivate func setServerChanges(_ changes: [PostgresJoinConfig]) {
-    serverChanges = changes
-  }
-}
-
-extension RealtimeChannel {
-  fileprivate func setJoinRef(_ ref: String?) {
-    joinRef = ref
+extension RealtimeClient {
+  fileprivate func setServerChanges(for topic: String, _ changes: [PostgresJoinConfig]) {
+    core.channels[topic]?.serverChanges = changes
   }
 }

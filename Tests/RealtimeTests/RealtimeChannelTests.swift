@@ -47,7 +47,7 @@ struct RealtimeChannelTests {
       select: ["id", "name"]
     )
 
-    let changes = sut.clientChanges
+    let changes = sut.sinks.bindings
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
@@ -192,9 +192,9 @@ struct RealtimeChannelTests {
     #expect(sut.sinks.presenceChanges.subscriberCount == 1)
     #expect(sut.sinks.presenceStates.subscriberCount == 1)
     #expect(sut.sinks.events.subscriberCount == 1)
-    #expect(sut.hasPresenceListener)
+    #expect(sut.sinks.hasPresenceListener)
 
-    let clientChanges = sut.clientChanges
+    let clientChanges = sut.sinks.bindings
     assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
       ▿ 4 elements
@@ -264,7 +264,7 @@ struct RealtimeChannelTests {
     let presence = channel.presenceChanges()
 
     // Verify that the presence listener exists
-    #expect(channel.hasPresenceListener)
+    #expect(channel.sinks.hasPresenceListener)
 
     Task {
       try? await channel.subscribe()

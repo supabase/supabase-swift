@@ -30,15 +30,7 @@ struct TimerTable {
     entries[id]?.task.cancel()
     lastToken += 1
     let token = lastToken
-    let task = Task {
-      do {
-        try await clock.sleep(for: delay)
-      } catch {
-        return
-      }
-      guard !Task.isCancelled else { return }
-      await fire(id, token)
-    }
+    let task = sleepThenRun(on: clock, after: delay) { await fire(id, token) }
     entries[id] = Entry(token: token, task: task)
   }
 
@@ -71,5 +63,25 @@ struct TimerTable {
     guard isCurrent(id, token: token) else { return false }
     entries[id] = nil
     return true
+  }
+}
+
+/// Starts a task that sleeps until `delay` from now on `clock`, then runs `operation` unless it
+/// was cancelled. The deadline is read here, not inside the task, so a task that starts late
+/// still wakes `delay` after it was scheduled.
+func sleepThenRun(
+  on clock: some Clock<Duration>,
+  after delay: Duration,
+  _ operation: @escaping @Sendable () async -> Void
+) -> Task<Void, Never> {
+  let deadline = clock.now.advanced(by: delay)
+  return Task {
+    do {
+      try await clock.sleep(until: deadline, tolerance: nil)
+    } catch {
+      return
+    }
+    guard !Task.isCancelled else { return }
+    await operation()
   }
 }

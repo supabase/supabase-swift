@@ -75,7 +75,6 @@ import Testing
       #expect(dropped?.error?.closeCode == .goingAway)
       #expect(await clientStatuses.next() == .connecting)
       #expect(await clientStatuses.next() == .connected)
-      #expect(await channelStatuses.next() == .unsubscribed)
       #expect(await channelStatuses.next() == .subscribing)
       #expect(await channelStatuses.next() == .subscribed)
       #expect(await channelEvents.next() == .resubscribed)

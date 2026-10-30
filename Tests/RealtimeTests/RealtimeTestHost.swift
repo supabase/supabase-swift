@@ -178,3 +178,48 @@ final class RealtimeTestHost: Sendable {
     reply(to: join, response: ["postgres_changes": .array(postgresChanges)])
   }
 }
+
+extension RealtimeClient {
+  /// Gives the core a subscribed channel for `topic`, as a confirmed join would, so frames for
+  /// it reach the channel's streams without a socket.
+  func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
+    var record = ChannelRecord(configuration: RealtimeChannelConfiguration())
+    record.phase = .subscribed(joinRef: joinRef)
+    record.hasBeenSubscribed = true
+    core.channels[topic] = record
+  }
+
+  /// How many pushes on the channel for `topic` wait for a reply.
+  func pendingPushCount(for topic: String) -> Int {
+    core.channels[topic]?.pendingPushes.count ?? 0
+  }
+
+  /// The error the connection state carries.
+  var connectionError: RealtimeError? { core.connection.error }
+
+  /// The ref of the heartbeat the server has not acknowledged yet.
+  var pendingHeartbeatRef: String? { core.heartbeat.pendingRef }
+
+  /// The ref of the join the core can still confirm, or already confirmed, for `topic`.
+  func joinRef(for topic: String) -> String? {
+    core.channels[topic]?.currentJoinRef
+  }
+
+  /// What the join in flight for `topic` waits for, or `nil` when no join is in flight.
+  func joinStage(for topic: String) -> ChannelRecord.JoinStage? {
+    guard case .joining(_, _, let stage)? = core.channels[topic]?.phase else { return nil }
+    return stage
+  }
+}
+
+extension RealtimeChannel {
+  /// The ref of the join the server can still confirm, or already confirmed.
+  var joinRef: String? {
+    get async { await client?.joinRef(for: topic) }
+  }
+
+  /// What the join in flight waits for, or `nil` when no join is in flight.
+  var joinStage: ChannelRecord.JoinStage? {
+    get async { await client?.joinStage(for: topic) }
+  }
+}

@@ -29,6 +29,24 @@ final class FakeWebSocket: WebSocketConnection {
     mutableState.value.sentEvents
   }
 
+  /// The binary frames sent so far, waiting up to `timeout` for the first one: the client's
+  /// writer sends a frame after the call that queued it returns.
+  func sentBinaryFrames(timeout: Duration = .seconds(5)) async -> [Data] {
+    let deadline = ContinuousClock.now.advanced(by: timeout)
+    var frames = binaryFrames
+    while frames.isEmpty, ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(5))
+      frames = binaryFrames
+    }
+    return frames
+  }
+
+  private var binaryFrames: [Data] {
+    sentEvents.compactMap { event in
+      if case .frame(.binary(let data)) = event { data } else { nil }
+    }
+  }
+
   var receivedEvents: [WebSocketEvent] {
     mutableState.value.receivedEvents
   }

@@ -241,15 +241,16 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
-  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
-  # hangs off; their executors and identity properties are not a capability of their own.
+  # RealtimeClient and RealtimeChannel are the types every realtime.* capability
+  # hangs off; their identity properties are not a capability of their own.
   - SupabaseClient.realtime
   - RealtimeClient
   - RealtimeClient.init
-  - RealtimeClient.unownedExecutor
   - RealtimeChannel
   - RealtimeChannel.topic
   - RealtimeChannel.configuration
+  - RealtimeChannel.==
+  - RealtimeChannel.hash
   - RealtimeChannelConfiguration
   - RealtimeChannelConfiguration.init
   - RealtimeChannelConfiguration.broadcast
@@ -261,7 +262,6 @@ supporting_symbols:
   - RealtimeChannelConfiguration.Presence.init
   - RealtimeChannelConfiguration.PostgresChanges
   - RealtimeChannelConfiguration.PostgresChanges.init
-  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
