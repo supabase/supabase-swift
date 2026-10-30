@@ -5,6 +5,7 @@
 //  Demonstrates email and password authentication with sign up and sign in
 //
 
+import Supabase
 import SwiftUI
 
 struct AuthWithEmailAndPassword: View {
@@ -153,13 +154,13 @@ struct AuthWithEmailAndPassword: View {
       case .signIn:
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
-        let response = try await supabase.auth.signUp(
+        let result = try await supabase.auth.signUp(
           email: email,
           password: password,
-          redirectTo: Constants.redirectToURL
+          options: SignUpOptions(redirectTo: Constants.redirectToURL)
         )
 
-        if case .user = response {
+        if case .confirmationRequired = result {
           actionState = .result(.success(.needsEmailConfirmation))
         }
       }

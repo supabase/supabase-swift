@@ -151,10 +151,10 @@ struct AuthOAuthServerIntegrationTests {
   private func signUpIfNeededOrSignIn(
     email: String,
     password: String
-  ) async throws -> AuthResponse {
+  ) async throws -> SignUpResult {
     do {
       let session = try await authClient.signIn(email: email, password: password)
-      return .session(session)
+      return .signedIn(session)
     } catch {
       return try await authClient.signUp(email: email, password: password)
     }

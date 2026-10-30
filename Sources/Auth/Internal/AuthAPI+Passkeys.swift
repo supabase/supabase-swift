@@ -40,14 +40,14 @@ extension AuthAPI {
   func verifyPasskeyAuthentication(
     challengeId: String,
     credentialResponse: JSONValue
-  ) throws -> AuthRequest<AuthResponse> {
+  ) throws -> AuthRequest<Session> {
     try request(
       .post, "passkeys/authentication/verify",
       body: encodeWebAuthnBody([
         "challenge_id": .string(challengeId),
         "credential": credentialResponse,
       ]),
-      decode: decoding(AuthResponse.self))
+      decode: decoding(Session.self))
   }
 
   func listPasskeys(accessToken: String) -> AuthRequest<[PasskeyListItem]> {

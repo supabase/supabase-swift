@@ -672,15 +672,13 @@ extension AuthMockerTests {
         let updatedSession = try await assertAuthStateChanges(
           sut: sut,
           action: {
-            try await sut.linkIdentityWithIdToken(
-              credentials: OpenIDConnectCredentials(
+            try await sut.linkIdentityWithIDToken(
+              IDTokenCredentials(
                 provider: .apple,
                 idToken: "id-token",
-                accessToken: "access-token",
                 nonce: "nonce",
-                gotrueMetaSecurity: AuthMetaSecurity(
-                  captchaToken: "captcha-token"
-                )
+                accessToken: "access-token",
+                captchaToken: "captcha-token"
               )
             )
           },
@@ -808,9 +806,11 @@ extension AuthMockerTests {
       try await sut.signUp(
         email: "example@mail.com",
         password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "dummy-captcha"
+        options: SignUpOptions(
+          userMetadata: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
       )
     }
 
@@ -842,8 +842,10 @@ extension AuthMockerTests {
       try await sut.signUp(
         phone: "+1 202-918-2132",
         password: "the.pass",
-        data: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: SignUpOptions(
+          userMetadata: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
       )
     }
 
@@ -858,13 +860,37 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.signUp(
+      let result = try await sut.signUp(
         email: "jane@example.com",
         password: "the.pass"
       )
 
-      #expect(response.session == nil)
-      #expect(response.user.email == "jane@example.com")
+      guard case .confirmationRequired(let user) = result else {
+        Issue.record("Expected .confirmationRequired, got \(result)")
+        return
+      }
+      #expect(user.email == "jane@example.com")
+      #expect(sut.currentSession == nil)
+    }
+
+    @Test
+    func signUpWhenSignedInCommitsTheSession() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("signup"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+
+      let sut = makeSUT()
+
+      let result = try await sut.signUp(email: "jane@example.com", password: "the.pass")
+
+      guard case .signedIn(let session) = result else {
+        Issue.record("Expected .signedIn, got \(result)")
+        return
+      }
+      expectNoDifference(sut.currentSession, session)
     }
 
     @Test
@@ -956,15 +982,13 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.signInWithIdToken(
-        credentials: OpenIDConnectCredentials(
+      try await sut.signInWithIDToken(
+        IDTokenCredentials(
           provider: .apple,
           idToken: "id-token",
-          accessToken: "access-token",
           nonce: "nonce",
-          gotrueMetaSecurity: AuthMetaSecurity(
-            captchaToken: "captcha-token"
-          )
+          accessToken: "access-token",
+          captchaToken: "captcha-token"
         )
       )
     }
@@ -995,7 +1019,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       try await sut.signInWithWeb3(
-        credentials: Web3Credentials(
+        Web3Credentials(
           chain: .ethereum,
           message:
             "example.com wants you to sign in with your Ethereum account:\n0x2c7536E3605D9C16a7a3D7b1898e529396a65c23\n\nURI: https://example.com\nVersion: 1\nChain ID: 1\nNonce: abc123\nIssued At: 2026-01-01T00:00:00.000Z",
@@ -1032,7 +1056,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
 
       try await sut.signInWithWeb3(
-        credentials: Web3Credentials(
+        Web3Credentials(
           chain: .solana,
           message:
             "example.com wants you to sign in with your Solana account:\n4Cw1koUQtqybLFem7uqhzMBznMPGARbFS4cjaYbM9RnR\n\nURI: https://example.com\nVersion: 1\nIssued At: 2026-01-01T00:00:00.000Z",
@@ -1064,7 +1088,7 @@ extension AuthMockerTests {
 
       do {
         _ = try await sut.signInWithWeb3(
-          credentials: Web3Credentials(
+          Web3Credentials(
             chain: "bitcoin",
             message: "irrelevant",
             signature: "irrelevant"
@@ -1107,7 +1131,7 @@ extension AuthMockerTests {
         email: "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
+        userMetadata: ["custom_key": .string("custom_value")],
         captchaToken: "dummy-captcha"
       )
     }
@@ -1140,7 +1164,7 @@ extension AuthMockerTests {
       try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
         shouldCreateUser: true,
-        data: ["custom_key": .string("custom_value")],
+        userMetadata: ["custom_key": .string("custom_value")],
         captchaToken: "dummy-captcha"
       )
     }
@@ -1665,7 +1689,7 @@ extension AuthMockerTests {
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
-          data: ["custom_key": .string("custom_value")]
+          userMetadata: ["custom_key": .string("custom_value")]
         )
       )
     }
@@ -2661,10 +2685,7 @@ extension AuthMockerTests {
         ]
       )
 
-      #expect(response.session != nil)
-
-      let stored = sut.currentSession
-      expectNoDifference(stored?.accessToken, response.session?.accessToken)
+      expectNoDifference(sut.currentSession, response)
     }
 
     @Test
@@ -2737,7 +2758,7 @@ extension AuthMockerTests {
           authenticator: authenticator
         )
 
-        #expect(response.session != nil)
+        expectNoDifference(sut.currentSession, response)
         expectNoDifference(
           forwardedOptions.value?.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
       }
