@@ -606,6 +606,7 @@ public final class AuthClient: Sendable {
     -> Session
   {
     let codeVerifier = codeVerifierStorage.get(flowId)
+    let purpose = codeVerifierStorage.purpose(flowId)
 
     if codeVerifier == nil {
       logger.error(
@@ -619,7 +620,8 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.remove(flowId)
 
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
+    let event: AuthEvent = purpose == .recovery ? .passwordRecovery : .signedIn
+    try await sessionStore.commit(.signedIn(session, event: event))
 
     return session
   }
@@ -1188,7 +1190,7 @@ public final class AuthClient: Sendable {
         email,
         redirectTo: redirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: prepareForPKCE(purpose: .recovery).challenge
       )
     )
   }
@@ -1253,14 +1255,16 @@ public final class AuthClient: Sendable {
 
   /// Starts a PKCE flow when the client uses one: stores a new code verifier under a new flow id
   /// and returns the challenge to send.
-  private func prepareForPKCE() -> (challenge: PKCEChallenge?, flowId: String?) {
+  private func prepareForPKCE(
+    purpose: PendingFlowRecord.Purpose = .signIn
+  ) -> (challenge: PKCEChallenge?, flowId: String?) {
     guard configuration.flowType == .pkce else {
       return (nil, nil)
     }
 
     let flowId = UUID().uuidString
     let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier, flowId)
+    codeVerifierStorage.set(codeVerifier, flowId, purpose)
 
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"

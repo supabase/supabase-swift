@@ -164,8 +164,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **OTP and recovery events follow the flow.** `verifyOTP` with type `.recovery` emits
   `.passwordRecovery`. With `.emailChange` or `.phoneChange` it emits `.userUpdated` when the
   same user is signed in, and `.signedIn` otherwise. v2 emitted `.signedIn` for all of them. `session(from:)` for a recovery link emits only
-  `.passwordRecovery`; v2 emitted `.signedIn` first. Search for `.signedIn` handlers that expect
-  these flows.
+  `.passwordRecovery`; v2 emitted `.signedIn` first. With the PKCE flow, the code exchange after
+  `resetPasswordForEmail` also emits `.passwordRecovery`, not `.signedIn`. Search for `.signedIn`
+  handlers that expect these flows.
 - **`unlinkIdentity` updates the user.** It removes the identity from `currentUser`, and its
   provider from `appMetadata["providers"]` when no other identity uses it. Then it emits
   `.userUpdated`. v2 emitted nothing and kept the identity in `currentUser`.

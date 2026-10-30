@@ -506,8 +506,8 @@ extension AuthMockerTests {
 
         let sut = makeSUT()
 
-        sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a")
-        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b")
+        sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a", .signIn)
+        sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b", .signIn)
 
         _ = try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-a")
 
@@ -768,7 +768,7 @@ extension AuthMockerTests {
     func sessionFromURL_withError() async throws {
       let sut = makeSUT()
 
-      sut.dependencies.codeVerifierStorage.set("code-verifier", "test-flow")
+      sut.dependencies.codeVerifierStorage.set("code-verifier", "test-flow", .signIn)
 
       let url = URL(
         string:
@@ -1815,6 +1815,50 @@ extension AuthMockerTests {
         "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
+      )
+    }
+
+    @Test
+    func pkceExchangeAfterResetPasswordForEmailEmitsPasswordRecovery() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("recover"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: Data()]
+      ).register()
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+
+      try await sut.resetPasswordForEmail("example@mail.com")
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.session(from: URL(string: "https://supabase.com?code=12345")!) },
+        expectedEvents: [.initialSession, .passwordRecovery]
+      )
+    }
+
+    @Test
+    func pkceExchangeOfASignInFlowEmitsSignedIn() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: MockData.session]
+      ).register()
+      let sut = makeSUT()
+      sut.dependencies.codeVerifierStorage.set("verifier-a", "flow-a", .recovery)
+      sut.dependencies.codeVerifierStorage.set("verifier-b", "flow-b", .signIn)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.exchangeCodeForSession(authCode: "12345", flowId: "flow-b") },
+        expectedEvents: [.initialSession, .signedIn]
       )
     }
 
