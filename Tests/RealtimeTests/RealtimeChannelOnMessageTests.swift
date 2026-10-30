@@ -399,6 +399,60 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
+  func postgresChangesSignalsDeliverChangesEventsAndStatusesInOrder() async {
+    let filtered = PostgresJoinConfig(
+      event: .all, schema: "public", table: "messages", filter: "room=eq.1")
+    let deletes = PostgresJoinConfig(event: .delete, schema: "public", table: "messages")
+    let signals = await sut.postgresChangesSignals(bindings: [filtered, deletes])
+    #expect(await sut.clientChanges == [filtered, deletes])
+
+    var serverFiltered = filtered
+    serverFiltered.id = 1
+    var serverDeletes = deletes
+    serverDeletes.id = 2
+    await sut.setServerChanges([serverFiltered, serverDeletes])
+
+    await sut.onMessage(postgresChange(["type": "INSERT", "record": ["id": 1]]))
+    await sut.yieldEvent(.resubscribed)
+    await sut.setFailed(.decoding("boom"))
+    await sut.onMessage(
+      message(
+        event: ChannelEvent.postgresChanges,
+        payload: [
+          "ids": [1, 2],
+          "data": [
+            "type": "DELETE", "schema": "public", "table": "messages",
+            "commit_timestamp": commitTimestampJSON, "old_record": ["id": 1],
+          ],
+        ]
+      )
+    )
+
+    let received = await collect(signals)
+    #expect(received.count == 4)
+    guard received.count == 4 else { return }
+    if case .change(let change) = received[0] {
+      #expect(change.kind == .insert)
+    } else {
+      Issue.record("Expected a change, got \(received[0])")
+    }
+    if case .event(let event) = received[1] {
+      #expect(event == .resubscribed)
+    } else {
+      Issue.record("Expected an event, got \(received[1])")
+    }
+    if case .status(.failed) = received[2] {
+    } else {
+      Issue.record("Expected a failed status, got \(received[2])")
+    }
+    if case .change(let change) = received[3] {
+      #expect(change.kind == .delete)
+    } else {
+      Issue.record("Expected a change, got \(received[3])")
+    }
+  }
+
+  @Test
   func broadcastTriggersMatchingBroadcastCallback() async throws {
     let broadcasts = await sut.broadcasts(event: "message")
 
@@ -607,5 +661,13 @@ extension RealtimeChannel {
 extension RealtimeChannel {
   fileprivate func setJoinRef(_ ref: String?) {
     joinRef = ref
+  }
+
+  fileprivate func yieldEvent(_ event: RealtimeChannelEvent) {
+    yield(event)
+  }
+
+  fileprivate func setFailed(_ error: RealtimeError) {
+    setState(.failed(error))
   }
 }

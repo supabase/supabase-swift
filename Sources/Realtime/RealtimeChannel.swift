@@ -210,6 +210,7 @@ public actor RealtimeChannel {
     case presenceState(AsyncStream<PresenceState>.Continuation)
     case events(AsyncStream<RealtimeChannelEvent>.Continuation)
     case status(AsyncStream<RealtimeChannelStatus>.Continuation)
+    case postgresSignals([PostgresJoinConfig], AsyncStream<PostgresChangesSignal>.Continuation)
 
     func finish() {
       switch self {
@@ -219,6 +220,7 @@ public actor RealtimeChannel {
       case .presenceState(let continuation): continuation.finish()
       case .events(let continuation): continuation.finish()
       case .status(let continuation): continuation.finish()
+      case .postgresSignals(_, let continuation): continuation.finish()
       }
     }
   }
@@ -289,8 +291,12 @@ public actor RealtimeChannel {
     if case .subscribing(_, .joining) = newState {
       presence.waitForNextState()
     }
-    for case .status(let continuation) in listeners.map(\.listener) {
-      continuation.yield(newState.status)
+    for listener in listeners.map(\.listener) {
+      switch listener {
+      case .status(let continuation): continuation.yield(newState.status)
+      case .postgresSignals(_, let continuation): continuation.yield(.status(newState.status))
+      default: break
+      }
     }
   }
 
@@ -593,8 +599,12 @@ public actor RealtimeChannel {
   }
 
   func yield(_ event: RealtimeChannelEvent) {
-    for case .events(let continuation) in listeners.map(\.listener) {
-      continuation.yield(event)
+    for listener in listeners.map(\.listener) {
+      switch listener {
+      case .events(let continuation): continuation.yield(event)
+      case .postgresSignals(_, let continuation): continuation.yield(.event(event))
+      default: break
+      }
     }
   }
 
@@ -656,9 +666,15 @@ public actor RealtimeChannel {
     let change = try PostgresChange(payload: data)
 
     let matched = serverChanges.filter { ids.contains($0.id) }
-    for case .postgres(let filter, let continuation) in listeners.map(\.listener)
-    where matched.contains(where: { $0 == filter }) {
-      continuation.yield(change)
+    for listener in listeners.map(\.listener) {
+      switch listener {
+      case .postgres(let binding, let continuation) where matched.contains(binding):
+        continuation.yield(change)
+      case .postgresSignals(let bindings, let continuation)
+      where bindings.contains(where: matched.contains):
+        continuation.yield(.change(change))
+      default: break
+      }
     }
   }
 
@@ -791,7 +807,13 @@ public actor RealtimeChannel {
 
   /// The `postgres_changes` bindings of the open streams, in registration order.
   var clientChanges: [PostgresJoinConfig] {
-    listeners.compactMap { if case .postgres(let config, _) = $0.listener { config } else { nil } }
+    listeners.flatMap { entry -> [PostgresJoinConfig] in
+      switch entry.listener {
+      case .postgres(let config, _): [config]
+      case .postgresSignals(let configs, _): configs
+      default: []
+      }
+    }
   }
 
   /// The topic on the WebSocket for the topic name `topic`.

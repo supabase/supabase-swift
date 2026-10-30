@@ -645,6 +645,52 @@
     }
 
     @Test
+    func streamKeepsTheFilteredRowsInSync() async throws {
+      let client = client
+      let first = UUID().uuidString
+      let second = UUID().uuidString
+      let outside = UUID().uuidString
+      _ = try await client.from("key_value_storage")
+        .insert(["key": first, "value": "before"]).execute()
+
+      let results = LockIsolated<[[KeyValueStorage]]>([])
+      let iteration = Task {
+        for try await rows in client.stream(
+          KeyValueStorage.self, where: { $0.key.in([first, second]) })
+        {
+          results.withValue { $0.append(rows) }
+        }
+      }
+      @Sendable func latest() -> [String: String?] {
+        Dictionary(
+          uniqueKeysWithValues: (results.value.last ?? []).map { ($0.key, $0.value?.stringValue) })
+      }
+
+      #expect(await waitUntil { latest() == [first: "before"] })
+
+      _ = try await client.from("key_value_storage")
+        .insert([["key": outside, "value": "outside"], ["key": second, "value": "added"]])
+        .execute()
+      #expect(await waitUntil { latest() == [first: "before", second: "added"] })
+
+      _ = try await client.from("key_value_storage")
+        .update(["value": "after"]).eq("key", value: first).execute()
+      #expect(await waitUntil { latest() == [first: "after", second: "added"] })
+
+      _ = try await client.from("key_value_storage").delete().eq("key", value: second).execute()
+      #expect(await waitUntil { latest() == [first: "after"] })
+
+      iteration.cancel()
+      #expect(
+        await waitUntil {
+          await !client.realtime.channels.contains { $0.topic.hasPrefix("live:") }
+        }
+      )
+      _ = try await client.from("key_value_storage")
+        .delete().in("key", values: [first, outside]).execute()
+    }
+
+    @Test
     func postgresChangesMultipleSubscriptions() async throws {
       let client = client
       try await withMainSerialExecutor {

@@ -87,6 +87,13 @@ public struct PostgresChange: Sendable, Hashable {
   }
 }
 
+/// An element of `RealtimeChannel.postgresChangesSignals(bindings:)`.
+package enum PostgresChangesSignal: Sendable {
+  case change(PostgresChange)
+  case event(RealtimeChannelEvent)
+  case status(RealtimeChannelStatus)
+}
+
 /// A column of the table a ``PostgresChange`` changed.
 public struct PostgresColumn: Sendable, Hashable {
   /// The column name.

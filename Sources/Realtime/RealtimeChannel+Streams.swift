@@ -150,6 +150,25 @@ extension RealtimeChannel {
     return AsyncStream(changes.map { TypedPostgresChange(raw: $0, decoder: decoder) })
   }
 
+  /// One stream of the changes for `bindings`, the channel events, and the status changes, in
+  /// the order the channel received them.
+  ///
+  /// Separate streams lose that order across each other. A live query needs it: a change
+  /// delivered before ``RealtimeChannelEvent/resubscribed`` is older than the data fetched after
+  /// it, and must not be applied on top of that data.
+  ///
+  /// A change that matches more than one of `bindings` is delivered once.
+  package func postgresChangesSignals(
+    bindings: [PostgresJoinConfig]
+  ) -> AsyncStream<PostgresChangesSignal> {
+    let (stream, continuation) = AsyncStream<PostgresChangesSignal>.makeStream(
+      bufferingPolicy: .unbounded
+    )
+    register(.postgresSignals(bindings, continuation), terminating: continuation)
+    rejoinIfBindingsChanged()
+    return stream
+  }
+
   func postgresChanges(
     event: PostgresChangeEvent,
     schema: String,
