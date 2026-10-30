@@ -180,23 +180,31 @@ final class RealtimeTestHost: Sendable {
 }
 
 extension RealtimeClient {
+  /// The id of the core record for `topic`, if there is one.
+  private func recordID(for topic: String) -> ChannelID? {
+    core.channels.first { $0.value.topic == topic }?.key
+  }
+
   /// Gives the core a subscribed channel for `topic`, as a confirmed join would, so frames for
-  /// it reach the channel's streams without a socket.
+  /// it reach the channel's streams without a socket. The client must have a channel for `topic`.
   func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
-    var record = ChannelRecord(configuration: RealtimeChannelConfiguration())
+    guard let id = sinks.channel(for: topic)?.id else {
+      preconditionFailure("No channel for '\(topic)'")
+    }
+    var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())
     record.phase = .subscribed(joinRef: joinRef)
     record.hasBeenSubscribed = true
-    core.channels[topic] = record
+    core.channels[id] = record
   }
 
   /// Whether the core has a record for `topic`.
   func hasRecord(for topic: String) -> Bool {
-    core.channels[topic] != nil
+    recordID(for: topic) != nil
   }
 
   /// How many pushes on the channel for `topic` wait for a reply.
   func pendingPushCount(for topic: String) -> Int {
-    core.channels[topic]?.pendingPushes.count ?? 0
+    recordID(for: topic).flatMap { core.channels[$0]?.pendingPushes.count } ?? 0
   }
 
   /// The error the connection state carries.
@@ -207,12 +215,14 @@ extension RealtimeClient {
 
   /// The ref of the join the core can still confirm, or already confirmed, for `topic`.
   func joinRef(for topic: String) -> String? {
-    core.channels[topic]?.currentJoinRef
+    recordID(for: topic).flatMap { core.channels[$0]?.currentJoinRef }
   }
 
   /// What the join in flight for `topic` waits for, or `nil` when no join is in flight.
   func joinStage(for topic: String) -> ChannelRecord.JoinStage? {
-    guard case .joining(_, _, let stage)? = core.channels[topic]?.phase else { return nil }
+    guard let id = recordID(for: topic),
+      case .joining(_, _, let stage)? = core.channels[id]?.phase
+    else { return nil }
     return stage
   }
 }

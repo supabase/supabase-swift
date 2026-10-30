@@ -33,13 +33,13 @@ struct RealtimeCoreCancellationTests {
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
         .send(Self.leave(joinRef: "1", ref: "2")),
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .unsubscribed)
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
     #expect(harness.send(.waiterCancelled(w1)) == [])
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
-    #expect(harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1"))) == [])
+    #expect(harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1"))) == [])
   }
 
   @Test
@@ -48,12 +48,12 @@ struct RealtimeCoreCancellationTests {
     let socket = FakeWebSocket.fakes().0
     let w1 = harness.waiter()
     _ = harness.send(Self.subscribe(w1))
-    #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
 
     #expect(
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
-        .publishChannelStatus(Self.topic, .unsubscribed),
+        .publishChannelStatus(.room, .unsubscribed),
       ])
     // The connect the subscribe started goes on, but the channel no longer joins.
     #expect(
@@ -62,7 +62,7 @@ struct RealtimeCoreCancellationTests {
         .installSocket(socket, rejoinChannels: false),
         .schedule(.heartbeat, after: .seconds(25)),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .unsubscribed)
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
   }
 
   @Test
@@ -72,15 +72,15 @@ struct RealtimeCoreCancellationTests {
     var harness = CoreHarness.connected(options: options)
     let w1 = harness.waiter()
     _ = harness.send(Self.subscribe(w1))
-    #expect(harness.core.channels[Self.topic]?.phase == .refreshingToken(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .refreshingToken(attempt: 1))
 
     #expect(
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
-        .publishChannelStatus(Self.topic, .unsubscribed),
+        .publishChannelStatus(.room, .unsubscribed),
       ])
     #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
-    #expect(harness.core.channels[Self.topic]?.phase == .unsubscribed)
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
   }
 
   @Test
@@ -89,21 +89,22 @@ struct RealtimeCoreCancellationTests {
     let w1 = harness.waiter()
     _ = harness.send(
       .subscribe(
-        topic: Self.topic, configuration: RealtimeChannelConfiguration(), waiter: w1,
+        channel: .room, topic: Self.topic, configuration: RealtimeChannelConfiguration(),
+        waiter: w1,
         snapshot: JoinSnapshot(bindings: [Self.messages], presenceEnabled: false)))
     _ = harness.send(.frame(Self.reply(ref: "1")))
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .postgres))
 
     #expect(
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
         .send(Self.leave(joinRef: "1", ref: "2")),
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.postgresTimeout(topic: Self.topic, ref: "1")),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.postgresTimeout(channel: .room, ref: "1")),
       ])
     #expect(harness.send(.frame(Self.system(joinRef: "1"))) == [])
-    #expect(harness.core.channels[Self.topic]?.phase == .unsubscribed)
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
   }
 
   @Test
@@ -111,18 +112,18 @@ struct RealtimeCoreCancellationTests {
     var harness = CoreHarness.connected()
     let w1 = harness.waiter()
     _ = harness.send(Self.subscribe(w1))
-    _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1")))
+    _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
 
     #expect(
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
         .send(Self.leave(joinRef: "1", ref: "2")),
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.rejoin(topic: Self.topic)),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.rejoin(channel: .room)),
       ])
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
-    #expect(harness.send(.timerFired(.rejoin(topic: Self.topic))) == [])
-    #expect(harness.core.channels[Self.topic]?.phase == .unsubscribed)
+    #expect(harness.send(.timerFired(.rejoin(channel: .room))) == [])
+    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
   }
 
   @Test
@@ -131,13 +132,13 @@ struct RealtimeCoreCancellationTests {
     let w1 = harness.waiter()
     _ = harness.send(Self.subscribe(w1))
     _ = harness.send(.frame(Self.refusal(ref: "1")))
-    #expect(harness.core.channels[Self.topic]?.timedOutJoinRef == nil)
+    #expect(harness.core.channels[.room]?.timedOutJoinRef == nil)
 
     #expect(
       harness.send(.waiterCancelled(w1)) == [
         .resume(w1, .cancelled),
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.rejoin(topic: Self.topic)),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.rejoin(channel: .room)),
       ])
   }
 
@@ -151,12 +152,12 @@ struct RealtimeCoreCancellationTests {
 
     #expect(harness.send(.waiterCancelled(w1)) == [.resume(w1, .cancelled)])
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
     #expect(
       harness.send(.frame(Self.reply(ref: "1"))) == [
         .resume(w2, .success),
-        .publishChannelStatus(Self.topic, .subscribed),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .publishChannelStatus(.room, .subscribed),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
       ])
   }
 
@@ -166,7 +167,7 @@ struct RealtimeCoreCancellationTests {
 
     #expect(harness.send(.waiterCancelled(WaiterID(rawValue: 1))) == [])
     #expect(harness.send(.waiterCancelled(WaiterID(rawValue: 99))) == [])
-    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
   @Test
@@ -177,7 +178,7 @@ struct RealtimeCoreCancellationTests {
     _ = harness.send(Self.subscribe(w))
 
     #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
-    #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
   }
 
   @Test
@@ -185,14 +186,14 @@ struct RealtimeCoreCancellationTests {
     var harness = Self.subscribed()
     _ = harness.send(
       .bindingsChanged(
-        topic: Self.topic,
+        channel: .room,
         snapshot: JoinSnapshot(bindings: [Self.messages], presenceEnabled: false)))
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w))
 
     #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "3", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "3", attempt: 1, stage: .reply))
   }
 
   @Test
@@ -206,7 +207,7 @@ struct RealtimeCoreCancellationTests {
     #expect(
       harness.send(.waiterCancelled(w)) == [
         .resume(w, .cancelled),
-        .publishChannelStatus(Self.topic, .unsubscribed),
+        .publishChannelStatus(.room, .unsubscribed),
       ])
   }
 
@@ -215,15 +216,15 @@ struct RealtimeCoreCancellationTests {
     var harness = Self.subscribed()
     let leaver = harness.waiter()
     let subscriber = harness.waiter()
-    _ = harness.send(.unsubscribe(topic: Self.topic, waiter: leaver))
+    _ = harness.send(.unsubscribe(channel: .room, waiter: leaver))
     _ = harness.send(Self.subscribe(subscriber))
 
     #expect(harness.send(.waiterCancelled(subscriber)) == [.resume(subscriber, .cancelled)])
     #expect(
       harness.send(.frame(Self.close(joinRef: "1"))) == [
         .resume(leaver, .success),
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.leaveTimeout(channel: .room, ref: "2")),
       ])
   }
 
@@ -236,16 +237,16 @@ struct RealtimeCoreCancellationTests {
     var harness = Self.subscribed(configuration: configuration)
     let w = harness.waiter()
     _ = harness.send(
-      .broadcast(topic: Self.topic, event: "cursor", payload: .json(["x": 1]), waiter: w))
+      .broadcast(channel: .room, event: "cursor", payload: .json(["x": 1]), waiter: w))
 
     #expect(
       harness.send(.waiterCancelled(w)) == [
         .resume(w, .cancelled),
-        .cancel(.pushTimeout(topic: Self.topic, ref: "2")),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
       ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
     #expect(harness.send(.frame(Self.reply(ref: "2", joinRef: "1"))) == [])
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [])
   }
 
   // MARK: Unsubscribe and removeChannel
@@ -254,14 +255,14 @@ struct RealtimeCoreCancellationTests {
   func cancelledUnsubscribeStillLeaves() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.unsubscribe(topic: Self.topic, waiter: w))
+    _ = harness.send(.unsubscribe(channel: .room, waiter: w))
 
     #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
-    #expect(harness.core.channels[Self.topic]?.phase == .leaving(joinRef: "1", leaveRef: "2"))
+    #expect(harness.core.channels[.room]?.phase == .leaving(joinRef: "1", leaveRef: "2"))
     #expect(
       harness.send(.frame(Self.close(joinRef: "1"))) == [
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.leaveTimeout(channel: .room, ref: "2")),
       ])
   }
 
@@ -269,17 +270,17 @@ struct RealtimeCoreCancellationTests {
   func cancelledRemoveStillRemoves() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.removeChannel(topic: Self.topic, waiter: w))
+    _ = harness.send(.removeChannel(channel: .room, waiter: w))
 
     #expect(harness.send(.waiterCancelled(w)) == [.resume(w, .cancelled)])
     #expect(
       harness.send(.frame(Self.close(joinRef: "1"))) == [
-        .publishChannelStatus(Self.topic, .unsubscribed),
-        .cancel(.leaveTimeout(topic: Self.topic, ref: "2")),
-        .finishChannel(Self.topic),
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.leaveTimeout(channel: .room, ref: "2")),
+        .finishChannel(.room),
         .scheduleIdleDisconnect(after: .seconds(50)),
       ])
-    #expect(harness.core.channels[Self.topic] == nil)
+    #expect(harness.core.channels[.room] == nil)
   }
 
   // MARK: Connect
@@ -305,7 +306,7 @@ struct RealtimeCoreCancellationTests {
 
   static func subscribe(_ waiter: WaiterID) -> Event {
     .subscribe(
-      topic: topic, configuration: RealtimeChannelConfiguration(), waiter: waiter,
+      channel: .room, topic: topic, configuration: RealtimeChannelConfiguration(), waiter: waiter,
       snapshot: noStreams)
   }
 
@@ -314,9 +315,10 @@ struct RealtimeCoreCancellationTests {
     configuration: RealtimeChannelConfiguration = RealtimeChannelConfiguration()
   ) -> CoreHarness {
     var harness = CoreHarness.connected()
+    let room = harness.channel()
     _ = harness.send(
       .subscribe(
-        topic: topic, configuration: configuration, waiter: harness.waiter(),
+        channel: room, topic: topic, configuration: configuration, waiter: harness.waiter(),
         snapshot: noStreams))
     _ = harness.send(.frame(reply(ref: "1")))
     return harness

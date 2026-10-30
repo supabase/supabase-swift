@@ -14,38 +14,50 @@ final class ClientSinks: Sendable {
   /// Retains nothing until the first heartbeat, then replays the latest one.
   let heartbeats = Broadcaster<HeartbeatEvent>(retaining: nil)
 
-  /// The channels by their ``RealtimeChannel/topic``.
-  private let registry = LockIsolated<[String: RealtimeChannel]>([:])
+  private struct Registry {
+    /// The channels by their ``RealtimeChannel/topic``.
+    var channels: [String: RealtimeChannel] = [:]
+    /// The last ``ChannelID`` issued.
+    var lastID: UInt64 = 0
+  }
 
-  /// The channel registered for `topic`, or the one `make` returns, registered under the same
-  /// lock so concurrent callers get one instance.
+  private let registry = LockIsolated(Registry())
+
+  /// The channel registered for `topic`, or the one `make` returns for a new ``ChannelID``,
+  /// registered under the same lock so concurrent callers get one instance.
   func channel(
-    for topic: String, orInsert make: @Sendable () -> RealtimeChannel
+    for topic: String, orInsert make: @Sendable (ChannelID) -> RealtimeChannel
   ) -> RealtimeChannel {
-    registry.withValue { channels in
-      if let channel = channels[topic] { return channel }
-      let channel = make()
-      channels[topic] = channel
+    registry.withValue { registry in
+      if let channel = registry.channels[topic] { return channel }
+      registry.lastID += 1
+      let channel = make(ChannelID(rawValue: registry.lastID))
+      registry.channels[topic] = channel
       return channel
     }
   }
 
   func channel(for topic: String) -> RealtimeChannel? {
-    registry.value[topic]
+    registry.value.channels[topic]
+  }
+
+  /// The registered channel with `id`.
+  func channel(withID id: ChannelID) -> RealtimeChannel? {
+    registry.value.channels.values.first { $0.id == id }
   }
 
   /// Removes `channel` only while its topic still maps to it: a newer channel created for the
   /// same topic after `channel` was removed stays registered.
   func removeChannel(_ channel: RealtimeChannel) {
-    registry.withValue { channels in
-      if channels[channel.topic] === channel {
-        channels[channel.topic] = nil
+    registry.withValue { registry in
+      if registry.channels[channel.topic] === channel {
+        registry.channels[channel.topic] = nil
       }
     }
   }
 
   var channels: [RealtimeChannel] {
-    Array(registry.value.values)
+    Array(registry.value.channels.values)
   }
 
   /// Ends every status and heartbeat stream.

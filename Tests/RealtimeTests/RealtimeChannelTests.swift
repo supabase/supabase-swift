@@ -20,6 +20,7 @@ import Testing
 @Suite
 struct RealtimeChannelTests {
   let sut = RealtimeChannel(
+    id: ChannelID(rawValue: 1),
     topic: "topic",
     configuration: RealtimeChannelConfiguration(),
     client: RealtimeClient(

@@ -431,8 +431,9 @@ public actor RealtimeClient {
     var configuration = RealtimeChannelConfiguration()
     configure(&configuration)
 
-    let channel = sinks.channel(for: topic) { [configuration] in
-      RealtimeChannel(topic: topic, configuration: configuration, client: self, logger: logger)
+    let channel = sinks.channel(for: topic) { [configuration] id in
+      RealtimeChannel(
+        id: id, topic: topic, configuration: configuration, client: self, logger: logger)
     }
     if channel.configuration != configuration {
       reportIssue(
@@ -466,8 +467,8 @@ public actor RealtimeClient {
     // While an older channel of the topic is being removed, the record is that channel's.
     guard removal(blocking: channel) == nil else { return }
     removedChannels[topic] = channel
-    try? await wait(evenIfCancelled: true) { .removeChannel(topic: topic, waiter: $0) }
-    if core.channels[topic] == nil, removedChannels[topic] === channel {
+    try? await wait(evenIfCancelled: true) { .removeChannel(channel: channel.id, waiter: $0) }
+    if core.channels[channel.id] == nil, removedChannels[topic] === channel {
       removedChannels[topic] = nil
       removalEnded(topic)
     }
@@ -489,11 +490,11 @@ public actor RealtimeClient {
     await disconnect()
   }
 
-  /// Applies `.bindingsChanged` with the Postgres bindings the channel for `topic` has now, so
+  /// Applies `.bindingsChanged` with the Postgres bindings the channel with `id` has now, so
   /// two fast registrations cannot arrive out of order.
-  func bindingsChanged(_ topic: String) {
-    guard let channel = sinks.channel(for: topic) else { return }
-    apply(.bindingsChanged(topic: topic, snapshot: channel.joinSnapshot))
+  func bindingsChanged(_ id: ChannelID) {
+    guard let channel = sinks.channel(withID: id) else { return }
+    apply(.bindingsChanged(channel: id, snapshot: channel.joinSnapshot))
   }
 
   // MARK: - Authentication

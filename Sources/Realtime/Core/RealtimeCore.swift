@@ -62,14 +62,16 @@ struct RealtimeCore {
     case appForeground
 
     // Commands
+    /// `topic` is the topic the channel joins. The core reads it when it creates the record.
     case subscribe(
-      topic: String, configuration: RealtimeChannelConfiguration, waiter: WaiterID,
-      snapshot: JoinSnapshot)
-    case unsubscribe(topic: String, waiter: WaiterID)
-    case push(topic: String, event: String, payload: JSONObject, waiter: WaiterID?)
-    case broadcast(topic: String, event: String, payload: BroadcastPushPayload, waiter: WaiterID)
-    case removeChannel(topic: String, waiter: WaiterID)
-    case bindingsChanged(topic: String, snapshot: JoinSnapshot)
+      channel: ChannelID, topic: String, configuration: RealtimeChannelConfiguration,
+      waiter: WaiterID, snapshot: JoinSnapshot)
+    case unsubscribe(channel: ChannelID, waiter: WaiterID)
+    case push(channel: ChannelID, event: String, payload: JSONObject, waiter: WaiterID?)
+    case broadcast(
+      channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID)
+    case removeChannel(channel: ChannelID, waiter: WaiterID)
+    case bindingsChanged(channel: ChannelID, snapshot: JoinSnapshot)
     case setAuth(token: String?)
 
     // Inbound and timers
@@ -112,11 +114,11 @@ struct RealtimeCore {
     case resume(WaiterID, WaiterOutcome)
     case publishClientStatus(RealtimeClientStatus)
     case publishHeartbeat(HeartbeatEvent)
-    /// Publish the status of the channel for a topic.
-    case publishChannelStatus(String, RealtimeChannelStatus)
-    case deliver(String, Delivery)
-    /// End every stream of the channel for a topic.
-    case finishChannel(String)
+    /// Publish the status of a channel.
+    case publishChannelStatus(ChannelID, RealtimeChannelStatus)
+    case deliver(ChannelID, Delivery)
+    /// End every stream of a channel.
+    case finishChannel(ChannelID)
     /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`, which is
     /// unique to this fetch. The shell applies it once, also after `cancelAllTasks`: with `nil`
     /// when the call fails or is cancelled. Until then, no other fetch starts and no waiting
@@ -154,10 +156,10 @@ struct RealtimeCore {
         return a.isSame(as: b)
       case (.publishHeartbeat(let a), .publishHeartbeat(let b)):
         return a == b
-      case (.publishChannelStatus(let ta, let a), .publishChannelStatus(let tb, let b)):
-        return ta == tb && a.isSame(as: b)
-      case (.deliver(let ta, let a), .deliver(let tb, let b)):
-        return ta == tb && a == b
+      case (.publishChannelStatus(let ca, let a), .publishChannelStatus(let cb, let b)):
+        return ca == cb && a.isSame(as: b)
+      case (.deliver(let ca, let a), .deliver(let cb, let b)):
+        return ca == cb && a == b
       case (.finishChannel(let a), .finishChannel(let b)):
         return a == b
       case (.fetchAccessToken(let a), .fetchAccessToken(let b)):
@@ -174,7 +176,7 @@ struct RealtimeCore {
   // Read-only outside the core. Not `private(set)`: the core's extensions in other files write
   // them, and Swift has no setter access level for that.
   var connection: RealtimeClient.ConnectionState = .disconnected(nil)
-  var channels: [String: ChannelRecord] = [:]
+  var channels: [ChannelID: ChannelRecord] = [:]
 
   var tokens = TokenState()
   /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.
@@ -246,29 +248,30 @@ struct RealtimeCore {
     case .binaryBroadcast(let broadcast):
       return receiveBinaryBroadcast(broadcast)
 
-    case .subscribe(let topic, let configuration, let waiter, let snapshot):
+    case .subscribe(let channel, let topic, let configuration, let waiter, let snapshot):
       return subscribe(
-        topic: topic, configuration: configuration, waiter: waiter, snapshot: snapshot)
-    case .timerFired(.joinTimeout(let topic, let ref)):
-      return joinTimedOut(topic, ref: ref)
-    case .timerFired(.rejoin(let topic)):
-      return rejoinTimerFired(topic)
-    case .timerFired(.postgresTimeout(let topic, let ref)):
-      return postgresTimedOut(topic, ref: ref)
-    case .bindingsChanged(let topic, let snapshot):
-      return bindingsChanged(topic, snapshot: snapshot)
-    case .unsubscribe(let topic, let waiter):
-      return unsubscribe(topic, waiter: waiter)
-    case .timerFired(.leaveTimeout(let topic, let ref)):
-      return leaveTimedOut(topic, ref: ref)
-    case .removeChannel(let topic, let waiter):
-      return removeChannel(topic, waiter: waiter)
-    case .push(let topic, let event, let payload, let waiter):
-      return push(topic, event: event, payload: payload, waiter: waiter)
-    case .broadcast(let topic, let event, let payload, let waiter):
-      return broadcast(topic, event: event, payload: payload, waiter: waiter)
-    case .timerFired(.pushTimeout(let topic, let ref)):
-      return pushTimedOut(topic, ref: ref)
+        channel: channel, topic: topic, configuration: configuration, waiter: waiter,
+        snapshot: snapshot)
+    case .timerFired(.joinTimeout(let channel, let ref)):
+      return joinTimedOut(channel, ref: ref)
+    case .timerFired(.rejoin(let channel)):
+      return rejoinTimerFired(channel)
+    case .timerFired(.postgresTimeout(let channel, let ref)):
+      return postgresTimedOut(channel, ref: ref)
+    case .bindingsChanged(let channel, let snapshot):
+      return bindingsChanged(channel, snapshot: snapshot)
+    case .unsubscribe(let channel, let waiter):
+      return unsubscribe(channel, waiter: waiter)
+    case .timerFired(.leaveTimeout(let channel, let ref)):
+      return leaveTimedOut(channel, ref: ref)
+    case .removeChannel(let channel, let waiter):
+      return removeChannel(channel, waiter: waiter)
+    case .push(let channel, let event, let payload, let waiter):
+      return push(channel, event: event, payload: payload, waiter: waiter)
+    case .broadcast(let channel, let event, let payload, let waiter):
+      return broadcast(channel, event: event, payload: payload, waiter: waiter)
+    case .timerFired(.pushTimeout(let channel, let ref)):
+      return pushTimedOut(channel, ref: ref)
 
     case .setAuth(let token):
       return setAuth(token)
@@ -290,18 +293,18 @@ struct RealtimeCore {
       connectWaiters.remove(at: index)
       return [.resume(waiter, .cancelled)]
     }
-    for (topic, record) in channels {
+    for (channel, record) in channels {
       if let ref = record.pendingPushes.first(where: { $0.value == waiter })?.key {
-        channels[topic]?.pendingPushes[ref] = nil
-        return [.resume(waiter, .cancelled), .cancel(.pushTimeout(topic: topic, ref: ref))]
+        channels[channel]?.pendingPushes[ref] = nil
+        return [.resume(waiter, .cancelled), .cancel(.pushTimeout(channel: channel, ref: ref))]
       }
       if let index = record.leaveWaiters.firstIndex(of: waiter) {
-        channels[topic]?.leaveWaiters.remove(at: index)
+        channels[channel]?.leaveWaiters.remove(at: index)
         return [.resume(waiter, .cancelled)]
       }
       if let index = record.subscribeWaiters.firstIndex(of: waiter) {
-        channels[topic]?.subscribeWaiters.remove(at: index)
-        return [.resume(waiter, .cancelled)] + rollBackJoinWithoutCallers(topic)
+        channels[channel]?.subscribeWaiters.remove(at: index)
+        return [.resume(waiter, .cancelled)] + rollBackJoinWithoutCallers(channel)
       }
     }
     return []

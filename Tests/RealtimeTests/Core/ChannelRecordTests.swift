@@ -37,8 +37,9 @@ struct ChannelRecordTests {
 
   @Test
   func newRecordIsUnsubscribed() {
-    let record = ChannelRecord(configuration: RealtimeChannelConfiguration())
+    let record = ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration())
 
+    #expect(record.topic == "room")
     #expect(record.phase == .unsubscribed)
     #expect(!record.hasBeenSubscribed)
   }

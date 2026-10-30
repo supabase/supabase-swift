@@ -521,6 +521,7 @@ struct RealtimeChannelOnMessageTests {
 
 extension RealtimeClient {
   fileprivate func setServerChanges(for topic: String, _ changes: [PostgresJoinConfig]) {
-    core.channels[topic]?.serverChanges = changes
+    guard let id = core.channels.first(where: { $0.value.topic == topic })?.key else { return }
+    core.channels[id]?.serverChanges = changes
   }
 }

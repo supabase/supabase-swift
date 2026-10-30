@@ -14,6 +14,18 @@ struct WaiterID: Hashable, Sendable {
   let rawValue: UInt64
 }
 
+/// The identity of one channel record in the core. The shell issues it when it creates a channel
+/// handle, and every command and effect for the channel carries it.
+struct ChannelID: Hashable, Comparable, Sendable, CustomStringConvertible {
+  let rawValue: UInt64
+
+  var description: String { "channel#\(rawValue)" }
+
+  static func < (lhs: ChannelID, rhs: ChannelID) -> Bool {
+    lhs.rawValue < rhs.rawValue
+  }
+}
+
 /// When an event happens. The core has no clock, so the shell passes the time in.
 struct CoreTime: Sendable {
   /// The time since the client was created.
@@ -47,11 +59,11 @@ enum TimerID: Hashable, Sendable {
   /// The next heartbeat is due, and the previous one must have been acknowledged.
   case heartbeat
   case tokenRefresh
-  case joinTimeout(topic: String, ref: Ref)
-  case rejoin(topic: String)
-  case postgresTimeout(topic: String, ref: Ref)
-  case leaveTimeout(topic: String, ref: Ref)
-  case pushTimeout(topic: String, ref: Ref)
+  case joinTimeout(channel: ChannelID, ref: Ref)
+  case rejoin(channel: ChannelID)
+  case postgresTimeout(channel: ChannelID, ref: Ref)
+  case leaveTimeout(channel: ChannelID, ref: Ref)
+  case pushTimeout(channel: ChannelID, ref: Ref)
 }
 
 /// One element for the streams of a channel's sinks.

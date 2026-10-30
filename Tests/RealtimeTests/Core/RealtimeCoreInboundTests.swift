@@ -34,7 +34,7 @@ struct RealtimeCoreInboundTests {
     let broadcast = try #require(BroadcastMessage(frame))
     #expect(broadcast.event == "cursor")
 
-    #expect(harness.send(.frame(frame)) == [.deliver(Self.topic, .broadcast(broadcast))])
+    #expect(harness.send(.frame(frame)) == [.deliver(.room, .broadcast(broadcast))])
   }
 
   @Test
@@ -45,7 +45,7 @@ struct RealtimeCoreInboundTests {
 
     #expect(
       harness.send(.binaryBroadcast(decoded)) == [
-        .deliver(Self.topic, .broadcast(BroadcastMessage(decoded)))
+        .deliver(.room, .broadcast(BroadcastMessage(decoded)))
       ])
     #expect(
       harness.send(
@@ -61,7 +61,7 @@ struct RealtimeCoreInboundTests {
     var harness = CoreHarness.connected()
     _ = harness.send(
       .subscribe(
-        topic: Self.topic, configuration: configuration, waiter: harness.waiter(),
+        channel: .room, topic: Self.topic, configuration: configuration, waiter: harness.waiter(),
         snapshot: JoinSnapshot(bindings: [Self.messages, Self.users], presenceEnabled: false)))
     _ = harness.send(
       .frame(
@@ -73,7 +73,7 @@ struct RealtimeCoreInboundTests {
               ["event": "*", "schema": "public", "table": "users", "id": 8],
             ]
           ])))
-    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
     let data: JSONObject = [
       "type": "INSERT", "schema": "public", "table": "messages",
       "commit_timestamp": "2026-10-29T10:00:00.000Z", "columns": [], "errors": .null,
@@ -84,7 +84,7 @@ struct RealtimeCoreInboundTests {
       .frame(Self.frame(event: "postgres_changes", payload: ["ids": [7], "data": .object(data)])))
 
     let change = try PostgresChange(payload: data)
-    guard case .deliver(Self.topic, .postgres(let delivery))? = effects.first, effects.count == 1
+    guard case .deliver(.room, .postgres(let delivery))? = effects.first, effects.count == 1
     else {
       Issue.record("Expected one Postgres delivery, got \(effects)")
       return
@@ -109,16 +109,16 @@ struct RealtimeCoreInboundTests {
     #expect(Set(stateChange.joins.keys) == ["alice", "bob"])
     #expect(
       harness.send(.frame(Self.frame(event: "presence_state", payload: Self.aliceState))) == [
-        .deliver(Self.topic, .presence(stateChange, expected.state))
+        .deliver(.room, .presence(stateChange, expected.state))
       ])
 
     let applied = expected.applyDiff(Self.aliceLeaves)
     let leave = try #require(applied)
     #expect(
       harness.send(.frame(Self.frame(event: "presence_diff", payload: Self.aliceLeaves))) == [
-        .deliver(Self.topic, .presence(leave, expected.state))
+        .deliver(.room, .presence(leave, expected.state))
       ])
-    #expect(harness.core.channels[Self.topic]?.presence.state == expected.state)
+    #expect(harness.core.channels[.room]?.presence.state == expected.state)
   }
 
   @Test
@@ -129,7 +129,7 @@ struct RealtimeCoreInboundTests {
       harness.send(
         .frame(Self.frame(joinRef: "9", event: "presence_state", payload: Self.aliceState)))
         == [])
-    #expect(harness.core.channels[Self.topic]?.presence.state == PresenceState())
+    #expect(harness.core.channels[.room]?.presence.state == PresenceState())
 
     _ = harness.send(.frame(Self.frame(event: "presence_state", payload: Self.aliceState)))
     #expect(
@@ -140,7 +140,7 @@ struct RealtimeCoreInboundTests {
       .frame(Self.frame(joinRef: nil, event: "presence_diff", payload: Self.bobJoins)))
     #expect(applied.count == 1)
     #expect(
-      harness.core.channels[Self.topic]?.presence.state.entries.keys.sorted() == ["alice", "bob"])
+      harness.core.channels[.room]?.presence.state.entries.keys.sorted() == ["alice", "bob"])
   }
 
   @Test
@@ -169,7 +169,7 @@ struct RealtimeCoreInboundTests {
     var harness = CoreHarness.connected(logger: logger)
     _ = harness.send(
       .subscribe(
-        topic: Self.topic, configuration: RealtimeChannelConfiguration(),
+        channel: .room, topic: Self.topic, configuration: RealtimeChannelConfiguration(),
         waiter: harness.waiter(), snapshot: Self.noStreams))
     _ = harness.send(.frame(Self.reply(ref: "1")))
     logs.setValue([])
@@ -200,9 +200,11 @@ struct RealtimeCoreInboundTests {
   /// A connected harness whose channel joined with ref `"1"`. It used waiter id 1.
   static func subscribed(presence: Bool = false) -> CoreHarness {
     var harness = CoreHarness.connected()
+    let room = harness.channel()
     _ = harness.send(
       .subscribe(
-        topic: topic, configuration: RealtimeChannelConfiguration(), waiter: harness.waiter(),
+        channel: room, topic: topic, configuration: RealtimeChannelConfiguration(),
+        waiter: harness.waiter(),
         snapshot: JoinSnapshot(bindings: [], presenceEnabled: presence)))
     _ = harness.send(.frame(reply(ref: "1")))
     return harness

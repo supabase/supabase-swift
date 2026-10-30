@@ -57,8 +57,8 @@ struct TimerTableTests {
       var iterator = fired.stream.makeAsyncIterator()
       #expect(await iterator.next()?.id == .tokenRefresh)
       await Task.megaYield()
-      fired.continuation.yield(Fired(id: .rejoin(topic: "marker"), token: 0))
-      #expect(await iterator.next()?.id == .rejoin(topic: "marker"))
+      fired.continuation.yield(Fired(id: .rejoin(channel: ChannelID(rawValue: 1)), token: 0))
+      #expect(await iterator.next()?.id == .rejoin(channel: ChannelID(rawValue: 1)))
       await clock.advance(by: .seconds(5))
       #expect(await iterator.next()?.id == .heartbeat)
     }
@@ -148,7 +148,7 @@ struct TimerTableTests {
     await withMainSerialExecutor {
       var table = TimerTable()
       schedule(&table, .heartbeat)
-      schedule(&table, .rejoin(topic: "a"))
+      schedule(&table, .rejoin(channel: ChannelID(rawValue: 1)))
       await Task.megaYield()
 
       table.cancelAll()
@@ -160,7 +160,8 @@ struct TimerTableTests {
       #expect(await iterator.next() == nil)
       for token in 0...3 {
         #expect(table.isCurrent(.heartbeat, token: UInt64(token)) == false)
-        #expect(table.isCurrent(.rejoin(topic: "a"), token: UInt64(token)) == false)
+        #expect(
+          table.isCurrent(.rejoin(channel: ChannelID(rawValue: 1)), token: UInt64(token)) == false)
       }
     }
   }

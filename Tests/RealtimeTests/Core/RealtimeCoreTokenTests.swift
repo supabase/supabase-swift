@@ -37,19 +37,19 @@ struct RealtimeCoreTokenTests {
 
     #expect(
       harness.send(Self.subscribe(harness.waiter())) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 1)),
+        .publishChannelStatus(.room, .subscribing(attempt: 1)),
         .fetchAccessToken(generation: 1),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .refreshingToken(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .refreshingToken(attempt: 1))
 
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 1)) == [
         .send(try Self.join(ref: "1", token: "t1")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "1"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
-    #expect(harness.core.channels[Self.topic]?.joinAccessToken == "t1")
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
+    #expect(harness.core.channels[.room]?.joinAccessToken == "t1")
   }
 
   @Test
@@ -58,30 +58,33 @@ struct RealtimeCoreTokenTests {
 
     #expect(
       harness.send(Self.subscribe(harness.waiter())) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 1)),
+        .publishChannelStatus(.room, .subscribing(attempt: 1)),
         .send(try Self.join(ref: "1", token: "t0")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "1"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
   }
 
   @Test
   func joinSkipsFetchWithinRefreshInterval() throws {
     var harness = CoreHarness.connected(options: Self.withProvider)
-    _ = harness.send(Self.subscribe(harness.waiter(), topic: "a"))
+    let a = harness.channel()
+    let b = harness.channel()
+    let c = harness.channel()
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: a, topic: "a"))
     _ = harness.send(.tokenFetched(token: "t1", generation: 1))
 
     harness.advance(by: .seconds(9))
     #expect(
-      harness.send(Self.subscribe(harness.waiter(), topic: "b")) == [
-        .publishChannelStatus("b", .subscribing(attempt: 1)),
+      harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b")) == [
+        .publishChannelStatus(b, .subscribing(attempt: 1)),
         .send(try Self.join(ref: "2", token: "t1", topic: "b")),
-        .schedule(.joinTimeout(topic: "b", ref: "2"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: b, ref: "2"), after: .seconds(10)),
       ])
 
     harness.advance(by: .seconds(1))
     #expect(
-      harness.send(Self.subscribe(harness.waiter(), topic: "c")) == [
-        .publishChannelStatus("c", .subscribing(attempt: 1)),
+      harness.send(Self.subscribe(harness.waiter(), channel: c, topic: "c")) == [
+        .publishChannelStatus(c, .subscribing(attempt: 1)),
         .fetchAccessToken(generation: 2),
       ])
   }
@@ -96,7 +99,7 @@ struct RealtimeCoreTokenTests {
     #expect(
       harness.send(.tokenFetched(token: nil, generation: 1)) == [
         .send(try Self.join(ref: "1", token: "t0")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "1"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(harness.core.tokens.token == "t0")
   }
@@ -104,24 +107,26 @@ struct RealtimeCoreTokenTests {
   @Test
   func twoJoinsShareOneFetch() throws {
     var harness = CoreHarness.connected(options: Self.withProvider)
+    let a = harness.channel()
+    let b = harness.channel()
 
     #expect(
-      harness.send(Self.subscribe(harness.waiter(), topic: "a")) == [
-        .publishChannelStatus("a", .subscribing(attempt: 1)),
+      harness.send(Self.subscribe(harness.waiter(), channel: a, topic: "a")) == [
+        .publishChannelStatus(a, .subscribing(attempt: 1)),
         .fetchAccessToken(generation: 1),
       ])
     #expect(
-      harness.send(Self.subscribe(harness.waiter(), topic: "b")) == [
-        .publishChannelStatus("b", .subscribing(attempt: 1))
+      harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b")) == [
+        .publishChannelStatus(b, .subscribing(attempt: 1))
       ])
-    #expect(harness.core.channels["b"]?.phase == .refreshingToken(attempt: 1))
+    #expect(harness.core.channels[b]?.phase == .refreshingToken(attempt: 1))
 
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 1)) == [
         .send(try Self.join(ref: "1", token: "t1", topic: "a")),
-        .schedule(.joinTimeout(topic: "a", ref: "1"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: a, ref: "1"), after: .seconds(10)),
         .send(try Self.join(ref: "2", token: "t1", topic: "b")),
-        .schedule(.joinTimeout(topic: "b", ref: "2"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: b, ref: "2"), after: .seconds(10)),
       ])
   }
 
@@ -137,27 +142,27 @@ struct RealtimeCoreTokenTests {
     // Inside the refresh interval: the refused token must be replaced anyway.
     #expect(
       harness.send(.frame(Self.reply(ref: "1", error: Self.expired))) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 2)),
+        .publishChannelStatus(.room, .subscribing(attempt: 2)),
         .fetchAccessToken(generation: 2),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .refreshingToken(attempt: 2))
+    #expect(harness.core.channels[.room]?.phase == .refreshingToken(attempt: 2))
 
     #expect(
       harness.send(.tokenFetched(token: "t2", generation: 2)) == [
         .send(try Self.join(ref: "2", token: "t2")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "2"), after: .seconds(10)),
       ])
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "2", attempt: 2, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "2", attempt: 2, stage: .reply))
 
     #expect(
       harness.send(.frame(Self.reply(ref: "2", error: Self.expired))) == [
         .resume(w, .failure(Self.expired)),
-        .publishChannelStatus(Self.topic, .failed(Self.expired)),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "2")),
+        .publishChannelStatus(.room, .failed(Self.expired)),
+        .cancel(.joinTimeout(channel: .room, ref: "2")),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .failed(Self.expired))
+    #expect(harness.core.channels[.room]?.phase == .failed(Self.expired))
   }
 
   /// The one fresh-token rejoin is per run of expired-token errors: a token that expires again
@@ -170,13 +175,13 @@ struct RealtimeCoreTokenTests {
     _ = harness.send(.frame(Self.reply(ref: "1", error: Self.expired)))
     _ = harness.send(.tokenFetched(token: "t2", generation: 2))
     _ = harness.send(.frame(Self.reply(ref: "2", error: Self.transient)))
-    _ = harness.send(.timerFired(.rejoin(topic: Self.topic)))
+    _ = harness.send(.timerFired(.rejoin(channel: .room)))
 
     #expect(
       harness.send(.frame(Self.reply(ref: "3", error: Self.expired))) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 4)),
+        .publishChannelStatus(.room, .subscribing(attempt: 4)),
         .fetchAccessToken(generation: 3),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "3")),
+        .cancel(.joinTimeout(channel: .room, ref: "3")),
       ])
   }
 
@@ -192,17 +197,17 @@ struct RealtimeCoreTokenTests {
 
     #expect(
       harness.send(.frame(Self.reply(ref: "1", error: Self.expired))) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 2)),
-        .cancel(.joinTimeout(topic: Self.topic, ref: "1")),
+        .publishChannelStatus(.room, .subscribing(attempt: 2)),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
       ])
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 2)) == [.fetchAccessToken(generation: 3)])
-    #expect(harness.core.channels[Self.topic]?.phase == .refreshingToken(attempt: 2))
+    #expect(harness.core.channels[.room]?.phase == .refreshingToken(attempt: 2))
 
     #expect(
       harness.send(.tokenFetched(token: "t3", generation: 3)) == [
         .send(try Self.join(ref: "2", token: "t3")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "2"), after: .seconds(10)),
       ])
   }
 
@@ -213,19 +218,22 @@ struct RealtimeCoreTokenTests {
   @Test
   func newTokenIsPushedToSubscribedAndJoiningChannels() throws {
     var harness = CoreHarness.connected(options: Self.withProvider, initialToken: "t0")
-    _ = harness.send(Self.subscribe(harness.waiter(), topic: "a"))
+    let a = harness.channel()
+    let b = harness.channel()
+    let c = harness.channel()
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: a, topic: "a"))
     _ = harness.send(.tokenFetched(token: nil, generation: 1))
     _ = harness.send(.frame(Self.reply(ref: "1", topic: "a")))
     harness.advance(by: .seconds(5))
-    _ = harness.send(Self.subscribe(harness.waiter(), topic: "b"))
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b"))
     harness.advance(by: .seconds(5))
-    _ = harness.send(Self.subscribe(harness.waiter(), topic: "c"))
-    #expect(harness.core.channels["b"]?.joinAccessToken == "t0")
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: c, topic: "c"))
+    #expect(harness.core.channels[b]?.joinAccessToken == "t0")
 
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 2)) == [
         .send(try Self.join(ref: "3", token: "t1", topic: "c")),
-        .schedule(.joinTimeout(topic: "c", ref: "3"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: c, ref: "3"), after: .seconds(10)),
         .send(Self.accessToken("t1", joinRef: "1", ref: "4", topic: "a")),
         .send(Self.accessToken("t1", joinRef: "2", ref: "5", topic: "b")),
       ])
@@ -256,7 +264,7 @@ struct RealtimeCoreTokenTests {
     #expect(
       harness.send(.tokenFetched(token: "t1", generation: 1)) == [
         .send(try Self.join(ref: "1", token: "t2")),
-        .schedule(.joinTimeout(topic: Self.topic, ref: "1"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(harness.core.tokens.token == "t2")
     #expect(harness.core.tokenFetchInFlight == false)
@@ -270,23 +278,25 @@ struct RealtimeCoreTokenTests {
   @Test
   func duplicateFetchResultWhileANewerFetchRunsIsIgnored() throws {
     var harness = CoreHarness.connected(options: Self.withProvider)
-    _ = harness.send(Self.subscribe(harness.waiter(), topic: "a"))
+    let a = harness.channel()
+    let b = harness.channel()
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: a, topic: "a"))
     _ = harness.send(.tokenFetched(token: "t1", generation: 1))
     harness.advance(by: .seconds(10))
     #expect(
-      harness.send(Self.subscribe(harness.waiter(), topic: "b")) == [
-        .publishChannelStatus("b", .subscribing(attempt: 1)),
+      harness.send(Self.subscribe(harness.waiter(), channel: b, topic: "b")) == [
+        .publishChannelStatus(b, .subscribing(attempt: 1)),
         .fetchAccessToken(generation: 2),
       ])
 
     #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
-    #expect(harness.core.channels["b"]?.phase == .refreshingToken(attempt: 1))
+    #expect(harness.core.channels[b]?.phase == .refreshingToken(attempt: 1))
     #expect(harness.core.tokenFetchGeneration == 2)
 
     #expect(
       harness.send(.tokenFetched(token: "t2", generation: 2)) == [
         .send(try Self.join(ref: "2", token: "t2", topic: "b")),
-        .schedule(.joinTimeout(topic: "b", ref: "2"), after: .seconds(10)),
+        .schedule(.joinTimeout(channel: b, ref: "2"), after: .seconds(10)),
         .send(Self.accessToken("t2", joinRef: "1", ref: "3", topic: "a")),
       ])
     #expect(harness.core.tokens.token == "t2")
@@ -377,7 +387,7 @@ struct RealtimeCoreTokenTests {
     _ = harness.send(Self.subscribe(harness.waiter()))
 
     _ = harness.send(.socketClosed(code: 1006, reason: nil))
-    #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
     // The fetch ends while the socket is down: nothing joins.
     #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
 
@@ -399,38 +409,40 @@ struct RealtimeCoreTokenTests {
     #expect(
       Array(effects.suffix(2)) == [
         .resume(w, .failure(closed)),
-        .publishChannelStatus(Self.topic, .failed(closed)),
+        .publishChannelStatus(.room, .failed(closed)),
       ])
-    #expect(harness.core.channels[Self.topic]?.phase == .failed(closed))
+    #expect(harness.core.channels[.room]?.phase == .failed(closed))
   }
 
   @Test
   func unsubscribeOrRemoveWhileRefreshingSendsNoJoinLater() {
     var harness = CoreHarness.connected(options: Self.withProvider)
+    let a = harness.channel()
+    let b = harness.channel()
     let wa = harness.waiter()
     let wb = harness.waiter()
-    _ = harness.send(Self.subscribe(wa, topic: "a"))
-    _ = harness.send(Self.subscribe(wb, topic: "b"))
+    _ = harness.send(Self.subscribe(wa, channel: a, topic: "a"))
+    _ = harness.send(Self.subscribe(wb, channel: b, topic: "b"))
 
     let unsubscribe = harness.waiter()
     #expect(
-      harness.send(.unsubscribe(topic: "a", waiter: unsubscribe)) == [
+      harness.send(.unsubscribe(channel: a, waiter: unsubscribe)) == [
         .resume(wa, .cancelled),
-        .publishChannelStatus("a", .unsubscribed),
+        .publishChannelStatus(a, .unsubscribed),
         .resume(unsubscribe, .success),
       ])
     let remove = harness.waiter()
     #expect(
-      harness.send(.removeChannel(topic: "b", waiter: remove)) == [
+      harness.send(.removeChannel(channel: b, waiter: remove)) == [
         .resume(wb, .failure(.channelRemoved)),
-        .publishChannelStatus("b", .unsubscribed),
+        .publishChannelStatus(b, .unsubscribed),
         .resume(remove, .success),
-        .finishChannel("b"),
+        .finishChannel(b),
       ])
 
     #expect(harness.send(.tokenFetched(token: "t1", generation: 1)) == [])
-    #expect(harness.core.channels["a"]?.phase == .unsubscribed)
-    #expect(harness.core.channels["b"] == nil)
+    #expect(harness.core.channels[a]?.phase == .unsubscribed)
+    #expect(harness.core.channels[b] == nil)
   }
 
   /// A channel waiting for a token has no join the server knows: the first join was not sent
@@ -442,10 +454,10 @@ struct RealtimeCoreTokenTests {
     _ = harness.send(Self.subscribe(harness.waiter(), presence: true))
     _ = harness.send(.tokenFetched(token: "t1", generation: 1))
     _ = harness.send(.frame(Self.reply(ref: "1", error: Self.expired)))
-    #expect(harness.core.channels[Self.topic]?.currentJoinRef == nil)
+    #expect(harness.core.channels[.room]?.currentJoinRef == nil)
 
     #expect(harness.send(.frame(Self.presenceState(joinRef: "1"))) == [])
-    #expect(harness.core.channels[Self.topic]?.presence.state == PresenceState())
+    #expect(harness.core.channels[.room]?.presence.state == PresenceState())
 
     _ = harness.send(.tokenFetched(token: "t2", generation: 2))
     #expect(harness.send(.frame(Self.presenceState(joinRef: "2"))).count == 1)
@@ -456,26 +468,26 @@ struct RealtimeCoreTokenTests {
     var harness = CoreHarness.connected(options: Self.withProvider)
     _ = harness.send(Self.subscribe(harness.waiter()))
     _ = harness.send(.tokenFetched(token: "t1", generation: 1))
-    _ = harness.send(.timerFired(.joinTimeout(topic: Self.topic, ref: "1")))
-    #expect(harness.core.channels[Self.topic]?.currentJoinRef == "1")
+    _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
+    #expect(harness.core.channels[.room]?.currentJoinRef == "1")
 
     harness.advance(by: .seconds(10))
     #expect(
-      harness.send(.timerFired(.rejoin(topic: Self.topic))) == [
-        .publishChannelStatus(Self.topic, .subscribing(attempt: 2)),
+      harness.send(.timerFired(.rejoin(channel: .room))) == [
+        .publishChannelStatus(.room, .subscribing(attempt: 2)),
         .fetchAccessToken(generation: 2),
       ])
-    #expect(harness.core.channels[Self.topic]?.currentJoinRef == nil)
+    #expect(harness.core.channels[.room]?.currentJoinRef == nil)
     #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
   }
 
   // MARK: Helpers
 
   static func subscribe(
-    _ waiter: WaiterID, topic: String = topic, presence: Bool = false
+    _ waiter: WaiterID, channel: ChannelID = .room, topic: String = topic, presence: Bool = false
   ) -> Event {
     .subscribe(
-      topic: topic, configuration: RealtimeChannelConfiguration(), waiter: waiter,
+      channel: channel, topic: topic, configuration: RealtimeChannelConfiguration(), waiter: waiter,
       snapshot: JoinSnapshot(bindings: [], presenceEnabled: presence))
   }
 

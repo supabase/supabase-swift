@@ -143,7 +143,7 @@ extension RealtimeChannel {
     // that read them before this stream existed still learns about it.
     let stream = sinks.postgresChanges(config)
     if let client {
-      Task { [topic] in await client.bindingsChanged(topic) }
+      Task { [id] in await client.bindingsChanged(id) }
     }
     return stream
   }

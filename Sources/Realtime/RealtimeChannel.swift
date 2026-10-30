@@ -71,6 +71,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The SDK adds the `realtime:` prefix the server expects on the WebSocket only.
   public let topic: String
 
+  /// The identity of the channel in the core. The client issues it when it creates the channel.
+  let id: ChannelID
+
   /// The topic on the WebSocket: ``topic`` with the `realtime:` prefix.
   let wireTopic: String
 
@@ -87,11 +90,13 @@ public final class RealtimeChannel: Sendable, Hashable {
   let sinks = ChannelSinks()
 
   init(
+    id: ChannelID,
     topic: String,
     configuration: RealtimeChannelConfiguration,
     client: RealtimeClient,
     logger: Logging.Logger
   ) {
+    self.id = id
     self.topic = topic
     self.wireTopic = Self.wireTopic(for: topic)
     self.configuration = configuration
@@ -181,7 +186,8 @@ public final class RealtimeChannel: Sendable, Hashable {
     // The snapshot is read on the client, when it applies the event.
     try await client.wait(on: self) { [self] waiter in
       .subscribe(
-        topic: topic, configuration: configuration, waiter: waiter, snapshot: joinSnapshot)
+        channel: id, topic: topic, configuration: configuration, waiter: waiter,
+        snapshot: joinSnapshot)
     }
   }
 
@@ -198,8 +204,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// On a removed channel, or one whose client was released, the method returns at once.
   public func unsubscribe() async {
     guard let client = try? clientForAction() else { return }
-    try? await client.wait(on: self, evenIfCancelled: true) { [topic] in
-      .unsubscribe(topic: topic, waiter: $0)
+    try? await client.wait(on: self, evenIfCancelled: true) { [id] in
+      .unsubscribe(channel: id, waiter: $0)
     }
   }
 
@@ -252,8 +258,8 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   private func broadcast(event: String, payload: BroadcastPushPayload) async throws {
     let client = try clientForAction()
-    try await client.wait(on: self) { [topic] in
-      .broadcast(topic: topic, event: event, payload: payload, waiter: $0)
+    try await client.wait(on: self) { [id] in
+      .broadcast(channel: id, event: event, payload: payload, waiter: $0)
     }
   }
 
@@ -307,8 +313,8 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   private func pushPresence(_ payload: JSONObject) async throws {
     let client = try clientForAction()
-    try await client.wait(on: self) { [topic] in
-      .push(topic: topic, event: ChannelEvent.presence, payload: payload, waiter: $0)
+    try await client.wait(on: self) { [id] in
+      .push(channel: id, event: ChannelEvent.presence, payload: payload, waiter: $0)
     }
   }
 

@@ -83,7 +83,7 @@ extension RealtimeClient {
   /// the old record.
   func removal(blocking channel: RealtimeChannel) -> RealtimeChannel? {
     guard let removing = removedChannels[channel.topic], removing !== channel else { return nil }
-    guard core.channels[channel.topic] != nil else {
+    guard core.channels[removing.id] != nil else {
       // The removal is over; its `removeChannel(_:)` has not resumed yet.
       removedChannels[channel.topic] = nil
       removalEnded(channel.topic)
@@ -222,11 +222,11 @@ extension RealtimeClient {
     case .publishHeartbeat(let event):
       sinks.heartbeats.yield(event)
 
-    case .publishChannelStatus(let topic, let status):
-      channel(for: topic)?.sinks.status.yield(status)
+    case .publishChannelStatus(let id, let status):
+      channel(withID: id)?.sinks.status.yield(status)
 
-    case .deliver(let topic, let delivery):
-      guard let sinks = channel(for: topic)?.sinks else { return }
+    case .deliver(let id, let delivery):
+      guard let sinks = channel(withID: id)?.sinks else { return }
       switch delivery {
       case .broadcast(let message):
         sinks.broadcasts.yield(message)
@@ -239,14 +239,15 @@ extension RealtimeClient {
         sinks.events.yield(event)
       }
 
-    case .finishChannel(let topic):
-      if removedChannels.removeValue(forKey: topic) != nil {
+    case .finishChannel(let id):
+      if let removed = removedChannels.first(where: { $0.value.id == id })?.value {
         // `removeChannel(_:)` already spent it.
-        removalEnded(topic)
+        removedChannels[removed.topic] = nil
+        removalEnded(removed.topic)
         return
       }
       // The server closed the channel.
-      guard let channel = sinks.channel(for: topic) else { return }
+      guard let channel = sinks.channel(withID: id) else { return }
       sinks.removeChannel(channel)
       channel.sinks.finishAll()
 
@@ -255,10 +256,10 @@ extension RealtimeClient {
     }
   }
 
-  /// The channel that gets the effects for `topic`. A channel being removed keeps its topic
-  /// until the core drops it, even when a newer channel took the topic in the registry.
-  private func channel(for topic: String) -> RealtimeChannel? {
-    removedChannels[topic] ?? sinks.channel(for: topic)
+  /// The channel that gets the effects for `id`: a registered channel, or one being removed
+  /// until the core drops it, even when a newer channel took its topic in the registry.
+  private func channel(withID id: ChannelID) -> RealtimeChannel? {
+    removedChannels.values.first { $0.id == id } ?? sinks.channel(withID: id)
   }
 
   private func stopSocketLoops() {

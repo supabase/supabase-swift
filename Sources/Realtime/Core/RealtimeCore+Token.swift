@@ -69,9 +69,9 @@ extension RealtimeCore {
       }
     }
     if !tokenFetchInFlight {
-      for topic in waiting {
-        guard case .refreshingToken(let attempt)? = channels[topic]?.phase else { continue }
-        effects += pushJoin(topic, attempt: attempt)
+      for channel in waiting {
+        guard case .refreshingToken(let attempt)? = channels[channel]?.phase else { continue }
+        effects += pushJoin(channel, attempt: attempt)
       }
     }
     if stored, let token = tokens.token {
@@ -83,23 +83,23 @@ extension RealtimeCore {
   /// Rejoins a channel whose join the server refused for an expired token, with a token the
   /// callback returns after the refusal. A call in flight started before it, so another call
   /// follows that one.
-  mutating func rejoinWithFreshToken(_ topic: String, attempt: Int) -> [Effect] {
-    channels[topic]?.hasRefreshedExpiredToken = true
+  mutating func rejoinWithFreshToken(_ channel: ChannelID, attempt: Int) -> [Effect] {
+    channels[channel]?.hasRefreshedExpiredToken = true
     guard options.hasAccessTokenProvider else {
-      return sendJoin(topic, attempt: attempt)
+      return sendJoin(channel, attempt: attempt)
     }
     if tokenFetchInFlight {
       tokenRefetchQueued = true
-      return waitForToken(topic, attempt: attempt)
+      return waitForToken(channel, attempt: attempt)
     }
-    return waitForToken(topic, attempt: attempt) + refreshAccessToken(ignoringInterval: true)
+    return waitForToken(channel, attempt: attempt) + refreshAccessToken(ignoringInterval: true)
   }
 
   /// Parks join attempt `attempt` until the callback call in flight returns.
-  mutating func waitForToken(_ topic: String, attempt: Int) -> [Effect] {
+  mutating func waitForToken(_ channel: ChannelID, attempt: Int) -> [Effect] {
     // The join after the token replaces any older join.
-    channels[topic]?.timedOutJoinRef = nil
-    return setPhase(.refreshingToken(attempt: attempt), for: topic)
+    channels[channel]?.timedOutJoinRef = nil
+    return setPhase(.refreshingToken(attempt: attempt), for: channel)
   }
 
   mutating func tokenRefreshTimerFired() -> [Effect] {
@@ -134,15 +134,15 @@ extension RealtimeCore {
   private mutating func pushAccessToken(_ token: String) -> [Effect] {
     guard isConnected else { return [] }
     var effects: [Effect] = []
-    for topic in channels.keys.sorted() {
-      guard let record = channels[topic], let joinRef = record.currentJoinRef else { continue }
+    for channel in channels.keys.sorted() {
+      guard let record = channels[channel], let joinRef = record.currentJoinRef else { continue }
       let isSubscribed = if case .subscribed = record.phase { true } else { false }
       guard isSubscribed || record.joinAccessToken != token else { continue }
-      logger.debug("Updating auth token for channel '\(topic)'")
+      logger.debug("Updating auth token for channel '\(topic(of: channel))'")
       effects.append(
         .send(
           RealtimeMessage(
-            joinRef: joinRef, ref: makeRef(), topic: RealtimeChannel.wireTopic(for: topic),
+            joinRef: joinRef, ref: makeRef(), topic: RealtimeChannel.wireTopic(for: record.topic),
             event: ChannelEvent.accessToken, payload: ["access_token": .string(token)])))
     }
     return effects

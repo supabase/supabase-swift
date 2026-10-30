@@ -31,18 +31,18 @@ struct RealtimeCorePushTests {
     let w = harness.waiter()
 
     #expect(
-      harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+      harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
         == [
           .send(Self.message(ref: "2", event: "presence", payload: Self.track)),
-          .schedule(.pushTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+          .schedule(.pushTimeout(channel: .room, ref: "2"), after: .seconds(10)),
         ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes == ["2": w])
+    #expect(harness.core.channels[.room]?.pendingPushes == ["2": w])
 
     // Without a waiter the push is fire-and-forget.
     #expect(
-      harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: nil))
+      harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: nil))
         == [.send(Self.message(ref: "3", event: "presence", payload: Self.track))])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes == ["2": w])
+    #expect(harness.core.channels[.room]?.pendingPushes == ["2": w])
   }
 
   @Test
@@ -51,13 +51,13 @@ struct RealtimeCorePushTests {
     let w = harness.waiter()
 
     #expect(
-      harness.send(.broadcast(topic: Self.topic, event: "cursor", payload: Self.cursor, waiter: w))
+      harness.send(.broadcast(channel: .room, event: "cursor", payload: Self.cursor, waiter: w))
         == [
           .sendBroadcast(
             joinRef: "1", ref: "2", topic: Self.wireTopic, event: "cursor", payload: Self.cursor),
           .resume(w, .success),
         ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
   }
 
   @Test
@@ -70,11 +70,11 @@ struct RealtimeCorePushTests {
     // The join is still in flight.
     #expect(
       harness.send(
-        .broadcast(topic: Self.topic, event: "cursor", payload: Self.cursor, waiter: broadcaster))
+        .broadcast(channel: .room, event: "cursor", payload: Self.cursor, waiter: broadcaster))
         == [.resume(broadcaster, .failure(.notSubscribed))])
     #expect(
       harness.send(
-        .broadcast(topic: "other", event: "cursor", payload: Self.cursor, waiter: other))
+        .broadcast(channel: .other, event: "cursor", payload: Self.cursor, waiter: other))
         == [.resume(other, .failure(.notSubscribed))])
   }
 
@@ -86,33 +86,33 @@ struct RealtimeCorePushTests {
 
     #expect(
       harness.send(
-        .push(topic: Self.topic, event: "presence", payload: Self.track, waiter: tracker))
+        .push(channel: .room, event: "presence", payload: Self.track, waiter: tracker))
         == [.resume(tracker, .failure(.notSubscribed))])
 
     // Nothing was kept: the join's confirmation sends no presence frame.
     let confirmed = harness.send(.frame(Self.reply(ref: "1")))
     #expect(!confirmed.contains { Self.isUserPush($0) })
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
   }
 
   @Test
   func noSendWhileDisconnected() {
     var harness = Self.subscribed()
     _ = harness.send(.socketFailed(.heartbeatTimeout))
-    #expect(harness.core.channels[Self.topic]?.phase == .waitingForSocket(attempt: 1))
+    #expect(harness.core.channels[.room]?.phase == .waitingForSocket(attempt: 1))
     let broadcaster = harness.waiter()
     let tracker = harness.waiter()
 
     #expect(
       harness.send(
-        .broadcast(topic: Self.topic, event: "cursor", payload: Self.cursor, waiter: broadcaster))
+        .broadcast(channel: .room, event: "cursor", payload: Self.cursor, waiter: broadcaster))
         == [.resume(broadcaster, .failure(.notSubscribed))])
     #expect(
       harness.send(
-        .push(topic: Self.topic, event: "presence", payload: Self.track, waiter: tracker))
+        .push(channel: .room, event: "presence", payload: Self.track, waiter: tracker))
         == [.resume(tracker, .failure(.notSubscribed))])
     #expect(
-      harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: nil))
+      harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: nil))
         == [])
 
     // The next socket carries only the rejoin.
@@ -129,21 +129,21 @@ struct RealtimeCorePushTests {
     let w = harness.waiter()
 
     #expect(
-      harness.send(.broadcast(topic: Self.topic, event: "cursor", payload: Self.cursor, waiter: w))
+      harness.send(.broadcast(channel: .room, event: "cursor", payload: Self.cursor, waiter: w))
         == [
           .sendBroadcast(
             joinRef: "1", ref: "2", topic: Self.wireTopic, event: "cursor", payload: Self.cursor),
-          .schedule(.pushTimeout(topic: Self.topic, ref: "2"), after: .seconds(10)),
+          .schedule(.pushTimeout(channel: .room, ref: "2"), after: .seconds(10)),
         ])
 
     #expect(
       harness.send(.frame(Self.reply(ref: "2"))) == [
         .resume(w, .success),
-        .cancel(.pushTimeout(topic: Self.topic, ref: "2")),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
       ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
     // The push is settled, so its timer is stale.
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [])
   }
 
   @Test(arguments: [
@@ -154,7 +154,7 @@ struct RealtimeCorePushTests {
     var harness = Self.subscribed(configuration: Self.acknowledged)
     let w = harness.waiter()
     _ = harness.send(
-      .broadcast(topic: Self.topic, event: "cursor", payload: Self.cursor, waiter: w))
+      .broadcast(channel: .room, event: "cursor", payload: Self.cursor, waiter: w))
 
     let effects = harness.send(
       .frame(Self.reply(ref: "2", status: "error", response: ["reason": .string(reason)])))
@@ -162,7 +162,7 @@ struct RealtimeCorePushTests {
     #expect(
       effects == [
         .resume(w, .failure(.ackError(reason: reason))),
-        .cancel(.pushTimeout(topic: Self.topic, ref: "2")),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
       ])
     guard case .resume(_, .failure(let error))? = effects.first else {
       Issue.record("Expected a failed push, got \(effects)")
@@ -175,36 +175,36 @@ struct RealtimeCorePushTests {
   func pushTimeoutFails() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
 
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "9"))) == [])
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "9"))) == [])
     #expect(
-      harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [
+      harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [
         .resume(w, .failure(.pushTimeout))
       ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
     // A late reply finds nothing to settle.
     #expect(harness.send(.frame(Self.reply(ref: "2"))) == [])
-    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
   @Test
   func replyForUnknownRefIsDropped() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
 
     #expect(harness.send(.frame(Self.reply(ref: "9"))) == [])
     #expect(harness.send(.frame(Self.reply(ref: "9", status: "error"))) == [])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes == ["2": w])
-    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.core.channels[.room]?.pendingPushes == ["2": w])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
   @Test
   func replyWithoutRefOrStatusIsDropped() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
     let wireTopic = RealtimeChannel.wireTopic(for: Self.topic)
 
     let withoutRef = RealtimeMessage(
@@ -215,22 +215,22 @@ struct RealtimeCorePushTests {
 
     #expect(harness.send(.frame(withoutRef)) == [])
     #expect(harness.send(.frame(withoutStatus)) == [])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes == ["2": w])
-    #expect(harness.core.channels[Self.topic]?.phase == .subscribed(joinRef: "1"))
+    #expect(harness.core.channels[.room]?.pendingPushes == ["2": w])
+    #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
   @Test
   func fatalJoinErrorFailsPendingPushes() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
     // A new binding rejoins: leave with ref "3", join with ref "4". The push still waits.
     let messages = PostgresJoinConfig(event: .insert, schema: "public", table: "messages")
     _ = harness.send(
       .bindingsChanged(
-        topic: Self.topic, snapshot: JoinSnapshot(bindings: [messages], presenceEnabled: false)))
+        channel: .room, snapshot: JoinSnapshot(bindings: [messages], presenceEnabled: false)))
     #expect(
-      harness.core.channels[Self.topic]?.phase == .joining(ref: "4", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "4", attempt: 1, stage: .reply))
 
     let denied = RealtimeError.joinError(
       reason: "Unauthorized: You do not have permissions to read from this Channel topic: room")
@@ -240,43 +240,43 @@ struct RealtimeCorePushTests {
           Self.reply(ref: "4", status: "error", response: ["reason": .string(denied.message)])))
         == [
           .resume(w, .failure(.notSubscribed)),
-          .cancel(.pushTimeout(topic: Self.topic, ref: "2")),
-          .publishChannelStatus(Self.topic, .failed(denied)),
-          .cancel(.joinTimeout(topic: Self.topic, ref: "4")),
+          .cancel(.pushTimeout(channel: .room, ref: "2")),
+          .publishChannelStatus(.room, .failed(denied)),
+          .cancel(.joinTimeout(channel: .room, ref: "4")),
         ])
-    #expect(harness.core.channels[Self.topic]?.pendingPushes.isEmpty == true)
+    #expect(harness.core.channels[.room]?.pendingPushes.isEmpty == true)
   }
 
   @Test
   func stalePushTimeoutAfterSocketDropDoesNothing() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
 
     let dropped = harness.send(.socketFailed(.heartbeatTimeout))
     #expect(dropped.contains(.resume(w, .failure(.notConnected))))
-    #expect(dropped.contains(.cancel(.pushTimeout(topic: Self.topic, ref: "2"))))
+    #expect(dropped.contains(.cancel(.pushTimeout(channel: .room, ref: "2"))))
 
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [])
   }
 
   @Test
   func stalePushTimeoutAfterRemoveDoesNothing() {
     var harness = Self.subscribed()
     let w = harness.waiter()
-    _ = harness.send(.push(topic: Self.topic, event: "presence", payload: Self.track, waiter: w))
+    _ = harness.send(.push(channel: .room, event: "presence", payload: Self.track, waiter: w))
 
-    let removed = harness.send(.removeChannel(topic: Self.topic, waiter: harness.waiter()))
+    let removed = harness.send(.removeChannel(channel: .room, waiter: harness.waiter()))
     #expect(
       Array(removed.prefix(2)) == [
         .resume(w, .failure(.channelRemoved)),
-        .cancel(.pushTimeout(topic: Self.topic, ref: "2")),
+        .cancel(.pushTimeout(channel: .room, ref: "2")),
       ])
 
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [])
     _ = harness.send(.frame(Self.close(joinRef: "1")))
-    #expect(harness.core.channels[Self.topic] == nil)
-    #expect(harness.send(.timerFired(.pushTimeout(topic: Self.topic, ref: "2"))) == [])
+    #expect(harness.core.channels[.room] == nil)
+    #expect(harness.send(.timerFired(.pushTimeout(channel: .room, ref: "2"))) == [])
   }
 
   // MARK: Helpers
@@ -288,11 +288,12 @@ struct RealtimeCorePushTests {
   }
 
   static func subscribe(
-    _ waiter: WaiterID,
+    _ waiter: WaiterID, channel: ChannelID = .room,
     configuration: RealtimeChannelConfiguration = RealtimeChannelConfiguration()
   ) -> Event {
     .subscribe(
-      topic: topic, configuration: configuration, waiter: waiter, snapshot: noStreams)
+      channel: channel, topic: topic, configuration: configuration, waiter: waiter,
+      snapshot: noStreams)
   }
 
   /// A connected harness whose channel joined with ref `"1"`. It used waiter id 1.
@@ -300,7 +301,8 @@ struct RealtimeCorePushTests {
     configuration: RealtimeChannelConfiguration = RealtimeChannelConfiguration()
   ) -> CoreHarness {
     var harness = CoreHarness.connected()
-    _ = harness.send(subscribe(harness.waiter(), configuration: configuration))
+    let room = harness.channel()
+    _ = harness.send(subscribe(harness.waiter(), channel: room, configuration: configuration))
     _ = harness.send(.frame(reply(ref: "1")))
     return harness
   }

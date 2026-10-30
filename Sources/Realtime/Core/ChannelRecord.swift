@@ -4,8 +4,10 @@
 //
 
 /// What the core knows about one channel. ``RealtimeCore`` creates it on the first command for a
-/// topic, and `removeChannel` deletes it.
+/// channel id, and `removeChannel` deletes it.
 struct ChannelRecord {
+  /// The topic of the channel, without the `realtime:` prefix.
+  let topic: String
   let configuration: RealtimeChannelConfiguration
   var phase: Phase = .unsubscribed
   /// Whether the channel joined at least once, so the next join is a rejoin.
@@ -38,7 +40,8 @@ struct ChannelRecord {
   /// The pushes that wait for a reply, by ref.
   var pendingPushes: [Ref: WaiterID] = [:]
 
-  init(configuration: RealtimeChannelConfiguration) {
+  init(topic: String, configuration: RealtimeChannelConfiguration) {
+    self.topic = topic
     self.configuration = configuration
   }
 

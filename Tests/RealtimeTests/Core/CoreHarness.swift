@@ -16,6 +16,7 @@ struct CoreHarness {
   /// The socket ``connected(options:)`` opened, or `nil` for a harness that never connected.
   var socket: FakeWebSocket?
   private var lastWaiter: UInt64 = 0
+  private var lastChannel: UInt64 = 0
 
   init(
     options: RealtimeCore.Options = .test, initialToken: String? = nil, logger: Logger = .silent
@@ -51,6 +52,20 @@ struct CoreHarness {
     lastWaiter += 1
     return WaiterID(rawValue: lastWaiter)
   }
+
+  /// A fresh channel id: 1, 2, 3…
+  mutating func channel() -> ChannelID {
+    lastChannel += 1
+    return ChannelID(rawValue: lastChannel)
+  }
+}
+
+extension ChannelID {
+  /// The id of the channel a single-channel test works on: the first one ``CoreHarness/channel()``
+  /// hands out.
+  static let room = ChannelID(rawValue: 1)
+  /// The second id ``CoreHarness/channel()`` hands out, for a test that adds a channel to `room`.
+  static let other = ChannelID(rawValue: 2)
 }
 
 extension RealtimeCore.Options {

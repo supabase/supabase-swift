@@ -73,7 +73,7 @@ struct RealtimeShellTests {
     let channel = host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
-    let timeout = TimerID.joinTimeout(topic: "room", ref: join.ref ?? "")
+    let timeout = TimerID.joinTimeout(channel: channel.id, ref: join.ref ?? "")
     let first = await host.client.timers.task(for: timeout)
 
     // Replaces the join timeout, so its first deadline, at 10 s, is stale.
