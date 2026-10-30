@@ -155,7 +155,6 @@ Changes that still compile but behave differently. Check each one by hand.
   old one. In v3 each flow has its own verifier, and an earlier flow can still finish. Pass the
   `flowID` from `oauthSignInURL` or `linkIdentityURL` to `exchangeCodeForSession` to pick one.
   Without it, the newest flow wins.
-
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
   session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
@@ -219,7 +218,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
-| `getLinkIdentityURL` returns `OAuthResponse` (`provider`, `url`); `getOAuthSignInURL` returns `URL` | `oauthSignInURL` and `linkIdentityURL` return the tuple `(url: URL, flowID: UUID)` |
+| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
+| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
 | `exchangeCodeForSession(authCode:)` | `exchangeCodeForSession(_:flowID:)`, `flowID` is an optional `UUID` |
 | `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
@@ -255,8 +255,9 @@ MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you sto
 
 ## OAuth has one entry point
 
-v2 had `signInWithOAuth` with a `configure:` closure for `ASWebAuthenticationSession`,
-`getOAuthSignInURL`, and two `linkIdentity` overloads. v3 has three calls: `signInWithOAuth(_:options:presenter:)`, `oauthSignInURL(_:options:)`, and
+v2 had `signInWithOAuth` with a `launchFlow:` closure, `signInWithOAuth` with a `configure:`
+closure for `ASWebAuthenticationSession`, `getOAuthSignInURL`, and two `linkIdentity` overloads.
+v3 starts a flow with `signInWithOAuth(_:options:presenter:)`, `oauthSignInURL(_:options:)`, or
 `linkIdentity(_:options:presenter:)`. The provider is unlabeled. `scopes`, `redirectTo` and
 `queryParams` move into `OAuthOptions`; `scopes` is an array and `queryParams` is `queryItems`.
 `presenter` shows the provider page. The default on Apple platforms is
@@ -281,17 +282,20 @@ try await supabase.auth.signInWithOAuth(
 )
 ```
 
-## `configure:` is `ASWebAuthenticationSessionPresenter`
+## `configure:` and `launchFlow:` are presenters
 
 The `configure:` closure that customized the `ASWebAuthenticationSession` is gone. Set
 `prefersEphemeralWebBrowserSession` on the presenter. To control the session fully, or to open the
-page another way, pass a `ClosurePresenter`. It gets the URL and the callback scheme, and returns
-the callback URL.
+page another way, pass a `ClosurePresenter`. It replaces the `launchFlow:` closure: it gets the
+URL and the callback scheme, and returns the callback URL.
 
 ```swift
 // v2
 try await supabase.auth.signInWithOAuth(provider: .github) { session in
   session.prefersEphemeralWebBrowserSession = true
+}
+try await supabase.auth.signInWithOAuth(provider: .github) { url in
+  try await myBrowser.open(url)
 }
 // v3
 try await supabase.auth.signInWithOAuth(
@@ -319,12 +323,12 @@ nothing. v3 runs the whole flow with a presenter, like `signInWithOAuth`, and re
 try await supabase.auth.linkIdentity(provider: .google, redirectTo: callback) { url in
   UIApplication.shared.open(url)
 }
-let response = try await supabase.auth.linkIdentityURL(provider: .google)
+let response = try await supabase.auth.getLinkIdentityURL(provider: .google)
 open(response.url)
 // v3
 let session = try await supabase.auth.linkIdentity(
   .google, options: OAuthOptions(redirectTo: callback))
-let (url, flowID) = try await supabase.auth.linkIdentityURL(.google)
+let (url, _) = try await supabase.auth.linkIdentityURL(.google)
 open(url)
 ```
 
