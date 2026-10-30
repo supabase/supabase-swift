@@ -113,5 +113,3 @@ yarn-error.log*
 
 # superpowers scratch docs (design specs/plans, not project documentation)
 /docs/superpowers/
-# Verification runs and evidence (.claude/skills/verify-supabase-swift)
-/.verify/
