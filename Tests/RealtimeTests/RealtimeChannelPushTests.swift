@@ -198,7 +198,7 @@ struct RealtimeChannelPushTests {
     let push = Task { try await channel.track(["online": true] as JSONObject) }
     _ = try #require(await h.received(ChannelEvent.presence))
     try h.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close,
         payload: [:]
       )
@@ -235,7 +235,7 @@ struct RealtimeChannelPushTests {
     }
 
     /// The next frame for `event` the server receives.
-    func received(_ event: String) async -> RealtimeMessageV2? {
+    func received(_ event: String) async -> RealtimeMessage? {
       for await frame in server.events {
         if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
@@ -247,21 +247,21 @@ struct RealtimeChannelPushTests {
       return nil
     }
 
-    func reply(_ message: RealtimeMessageV2) throws {
+    func reply(_ message: RealtimeMessage) throws {
       server.send(try RealtimeSerializer().encodeText(message))
     }
 
     func pushReply(
-      to frame: RealtimeMessageV2, join: RealtimeMessageV2, payload: JSONObject
-    ) -> RealtimeMessageV2 {
-      RealtimeMessageV2(
+      to frame: RealtimeMessage, join: RealtimeMessage, payload: JSONObject
+    ) -> RealtimeMessage {
+      RealtimeMessage(
         joinRef: join.ref, ref: frame.ref, topic: frame.topic, event: ChannelEvent.reply,
         payload: payload
       )
     }
 
     /// Subscribes `channel`, answering its `phx_join` the way the server does. Returns the join.
-    func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessageV2 {
+    func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessage {
       async let subscription: Void = channel.subscribe()
       let join = try #require(await received(ChannelEvent.join))
       try reply(

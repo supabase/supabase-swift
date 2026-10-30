@@ -768,7 +768,7 @@ public actor RealtimeClient {
   // MARK: - Sending
 
   /// Sends a message over the WebSocket, or buffers it until the socket connects.
-  func push(_ message: RealtimeMessageV2) async {
+  func push(_ message: RealtimeMessage) async {
     do {
       await send(.text(try serializer.encodeText(message)))
     } catch {

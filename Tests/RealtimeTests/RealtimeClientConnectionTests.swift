@@ -193,7 +193,7 @@ struct RealtimeClientConnectionTests {
     #expect(heartbeat.topic == "phoenix")
     await h.clock.advance(by: .seconds(3))
     try h.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: heartbeat.ref, topic: "phoenix", event: ChannelEvent.reply,
         payload: ["status": "ok", "response": [:]]
       ),
@@ -213,7 +213,7 @@ struct RealtimeClientConnectionTests {
     #expect(await beats.next() == .sent)
     let heartbeat = try #require(await h.received("heartbeat", on: 0))
     try h.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: heartbeat.ref, topic: "phoenix", event: ChannelEvent.reply,
         payload: ["status": "error", "response": [:]]
       ),
@@ -549,7 +549,7 @@ struct RealtimeClientConnectionTests {
     }
 
     /// The next frame for `event` that server `index` receives.
-    func received(_ event: String, on index: Int) async -> RealtimeMessageV2? {
+    func received(_ event: String, on index: Int) async -> RealtimeMessage? {
       for await frame in servers.value[index].events {
         if case .frame(.text(let text)) = frame,
           let message = try? RealtimeSerializer().decodeText(text),
@@ -561,7 +561,7 @@ struct RealtimeClientConnectionTests {
       return nil
     }
 
-    func reply(_ message: RealtimeMessageV2, on index: Int) throws {
+    func reply(_ message: RealtimeMessage, on index: Int) throws {
       servers.value[index].send(try RealtimeSerializer().encodeText(message))
     }
   }

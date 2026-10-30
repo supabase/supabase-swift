@@ -108,7 +108,7 @@ import Testing
       let joins = LockIsolated(0)
       server.onMessage = { data in
         let serializer = RealtimeSerializer()
-        func send(_ reply: RealtimeMessageV2) {
+        func send(_ reply: RealtimeMessage) {
           if let text = try? serializer.encodeText(reply) {
             server.send(text: text)
           }
@@ -121,7 +121,7 @@ import Testing
           case "phx_join":
             joins.withValue { $0 += 1 }
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: message.joinRef, ref: message.ref, topic: message.topic,
                 event: "phx_reply",
                 payload: ["status": "ok", "response": ["postgres_changes": []]]
@@ -129,14 +129,14 @@ import Testing
             )
           case "heartbeat":
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: nil, ref: message.ref, topic: "phoenix", event: "phx_reply",
                 payload: ["status": "ok", "response": [:]]
               )
             )
           case "broadcast":
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: nil, ref: nil, topic: message.topic, event: "broadcast",
                 payload: message.payload
               )
@@ -146,7 +146,7 @@ import Testing
           }
         } else if let push = Self.parseBroadcastPush(data) {
           send(
-            RealtimeMessageV2(
+            RealtimeMessage(
               joinRef: nil, ref: nil, topic: push.topic, event: "broadcast",
               payload: [
                 "type": "broadcast", "event": .string(push.event), "payload": .object(push.payload),

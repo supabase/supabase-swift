@@ -119,7 +119,7 @@ struct RealtimeChannelPresenceTests {
     async let left: Void = channel.unsubscribe()
     _ = try await host.receive(event: ChannelEvent.leave)
     host.server?.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: join.ref, ref: nil, topic: channel.wireTopic, event: ChannelEvent.close,
         payload: [:]
       )
@@ -165,7 +165,7 @@ struct RealtimeChannelPresenceTests {
   @discardableResult
   private func subscribe(
     _ channel: RealtimeChannel, on host: RealtimeTestHost
-  ) async throws -> RealtimeMessageV2 {
+  ) async throws -> RealtimeMessage {
     async let subscribed: Void = channel.subscribe()
     let join = try await host.receive(event: ChannelEvent.join)
     host.confirmJoin(join)
@@ -175,7 +175,7 @@ struct RealtimeChannelPresenceTests {
 
   /// Closes the socket from the server side, lets the client reconnect, and confirms the rejoin.
   private func dropSocketAndRejoin(
-    _ channel: RealtimeChannel, after join: RealtimeMessageV2, on host: RealtimeTestHost
+    _ channel: RealtimeChannel, after join: RealtimeMessage, on host: RealtimeTestHost
   ) async throws {
     var statuses = await channel.statusChanges().makeAsyncIterator()
     #expect(await statuses.next() == .subscribed)
@@ -197,7 +197,7 @@ struct RealtimeChannelPresenceTests {
     host: RealtimeTestHost
   ) {
     host.server?.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: joinRef, ref: nil, topic: channel.wireTopic, event: ChannelEvent.presenceState,
         payload: state
       )
@@ -209,7 +209,7 @@ struct RealtimeChannelPresenceTests {
     host: RealtimeTestHost
   ) {
     host.server?.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil, ref: nil, topic: channel.wireTopic, event: ChannelEvent.presenceDiff,
         payload: ["joins": .object(joins), "leaves": .object(leaves)]
       )

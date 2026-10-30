@@ -18,8 +18,8 @@ struct BroadcastMessageTests {
     let a: Int
   }
 
-  private func text(_ payload: JSONObject, event: String = "broadcast") -> RealtimeMessageV2 {
-    RealtimeMessageV2(
+  private func text(_ payload: JSONObject, event: String = "broadcast") -> RealtimeMessage {
+    RealtimeMessage(
       joinRef: nil, ref: nil, topic: "realtime:room", event: event, payload: payload)
   }
 

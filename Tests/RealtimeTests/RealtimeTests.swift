@@ -106,7 +106,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -209,7 +209,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -323,7 +323,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -377,7 +377,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -428,7 +428,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -482,7 +482,7 @@ final class RealtimeTests: Sendable {
           if msg.event == "heartbeat" {
             heartbeatCount.withValue { $0 += 1 }
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -598,7 +598,7 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -744,14 +744,14 @@ final class RealtimeTests: Sendable {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef, ref: msg.ref, topic: "phoenix",
                 event: "phx_reply", payload: ["response": [:]]
               )
             )
           } else if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef, ref: msg.ref, topic: msg.topic,
                 event: "phx_reply",
                 payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
@@ -998,9 +998,9 @@ extension RealtimeClient {
   }
 }
 
-extension RealtimeMessageV2 {
+extension RealtimeMessage {
   /// The server's confirmation of `join`.
-  static func messagesSubscribed(to join: RealtimeMessageV2) -> Self {
+  static func messagesSubscribed(to join: RealtimeMessage) -> Self {
     Self(
       joinRef: join.ref,
       ref: join.ref,
@@ -1021,7 +1021,7 @@ extension RealtimeMessageV2 {
 
   /// The server's "Subscribed to PostgreSQL" message, sent once the join's Postgres changes
   /// bindings are live.
-  static func postgresChangesReady(for join: RealtimeMessageV2) -> Self {
+  static func postgresChangesReady(for join: RealtimeMessage) -> Self {
     Self(
       joinRef: join.ref,
       ref: nil,
@@ -1035,7 +1035,7 @@ extension RealtimeMessageV2 {
 }
 
 extension FakeWebSocket {
-  func send(_ message: RealtimeMessageV2) {
+  func send(_ message: RealtimeMessage) {
     let serializer = RealtimeSerializer()
     try! self.send(serializer.encodeText(message))
   }
@@ -1060,7 +1060,7 @@ extension WebSocketEvent {
     }
   }
 
-  var realtimeMessage: RealtimeMessageV2? {
+  var realtimeMessage: RealtimeMessage? {
     guard case .frame(.text(let text)) = self else { return nil }
     let serializer = RealtimeSerializer()
     return try? serializer.decodeText(text)

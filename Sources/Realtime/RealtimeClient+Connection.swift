@@ -511,7 +511,7 @@ extension RealtimeClient {
     // next tick never reports the missing acknowledgement.
     Task.immediateIfAvailable {
       await self.push(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: heartbeatRef,
           topic: "phoenix",
@@ -561,7 +561,7 @@ extension RealtimeClient {
     }
   }
 
-  private func onMessage(_ message: RealtimeMessageV2) async {
+  private func onMessage(_ message: RealtimeMessage) async {
     if let ref = message.ref, ref == pendingHeartbeatRef {
       pendingHeartbeatRef = nil
       let sentAt = pendingHeartbeatSentAt

@@ -214,7 +214,7 @@ struct RealtimeColdStartTests {
 final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
   struct MutableState {
     var isClosed: Bool = false
-    var sentMessages: [RealtimeMessageV2] = []
+    var sentMessages: [RealtimeMessage] = []
     var closeCode: Int?
     var closeReason: String?
   }
@@ -228,22 +228,22 @@ final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
     (events, eventsContinuation) = AsyncStream.makeStream()
   }
 
-  var serverResponder: (@Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void)?
+  var serverResponder: (@Sendable (RealtimeMessage, AsyncFakeWebSocket) -> Void)?
 
   var closeCode: Int? { mutableState.value.closeCode }
   var closeReason: String? { mutableState.value.closeReason }
   var isClosed: Bool { mutableState.value.isClosed }
 
-  var sentMessages: [RealtimeMessageV2] { mutableState.value.sentMessages }
+  var sentMessages: [RealtimeMessage] { mutableState.value.sentMessages }
 
   static func realtimeServerResponder()
-    -> @Sendable (RealtimeMessageV2, AsyncFakeWebSocket) -> Void
+    -> @Sendable (RealtimeMessage, AsyncFakeWebSocket) -> Void
   {
     { message, socket in
       switch message.event {
       case "heartbeat":
         socket.reply(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: nil,
             ref: message.ref,
             topic: "phoenix",
@@ -253,7 +253,7 @@ final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
         )
       case "phx_join":
         socket.reply(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: message.joinRef,
             ref: message.ref,
             topic: message.topic,
@@ -271,7 +271,7 @@ final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
         )
         // A real server follows the reply with "Subscribed to PostgreSQL".
         socket.reply(
-          RealtimeMessageV2(
+          RealtimeMessage(
             joinRef: message.ref,
             ref: nil,
             topic: message.topic,
@@ -338,7 +338,7 @@ final class AsyncFakeWebSocket: WebSocketConnection, @unchecked Sendable {
     }
   }
 
-  func reply(_ message: RealtimeMessageV2) {
+  func reply(_ message: RealtimeMessage) {
     let serializer = RealtimeSerializer()
     let text = try! serializer.encodeText(message)
     receiveFromServer(.frame(.text(text)))

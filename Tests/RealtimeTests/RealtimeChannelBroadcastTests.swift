@@ -46,7 +46,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
         if msg.event == "heartbeat" {
           server.send(
-            RealtimeMessageV2(
+            RealtimeMessage(
               joinRef: msg.joinRef,
               ref: msg.ref,
               topic: "phoenix",
@@ -56,7 +56,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
           )
         } else if msg.event == "phx_join" {
           server.send(
-            RealtimeMessageV2(
+            RealtimeMessage(
               joinRef: msg.joinRef,
               ref: msg.ref,
               topic: topic,
