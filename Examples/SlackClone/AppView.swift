@@ -27,7 +27,7 @@ final class AppViewModel {
         self.session = session
 
         if session == nil {
-          for subscription in await supabase.channels {
+          for subscription in supabase.channels {
             await subscription.unsubscribe()
           }
         }
@@ -35,7 +35,7 @@ final class AppViewModel {
     }
 
     Task {
-      for await status in await supabase.realtime.statusChanges() {
+      for await status in supabase.realtime.statusChanges() {
         realtimeConnectionStatus = status
       }
     }

@@ -74,9 +74,9 @@ struct TodoRealtimeView: View {
   }
 
   func subscribeToChanges() async {
-    let channel = await supabase.channel("live-todos")
+    let channel = supabase.channel("live-todos")
 
-    let insertions = await channel.postgresChanges(
+    let insertions = channel.postgresChanges(
       of: Todo.self,
       event: .insert,
       schema: "public",
@@ -84,7 +84,7 @@ struct TodoRealtimeView: View {
       decoder: PostgrestClient.Configuration.jsonDecoder
     )
 
-    let updates = await channel.postgresChanges(
+    let updates = channel.postgresChanges(
       of: Todo.self,
       event: .update,
       schema: "public",
@@ -92,7 +92,7 @@ struct TodoRealtimeView: View {
       decoder: PostgrestClient.Configuration.jsonDecoder
     )
 
-    let deletes = await channel.postgresChanges(
+    let deletes = channel.postgresChanges(
       of: Todo.self,
       event: .delete,
       schema: "public",

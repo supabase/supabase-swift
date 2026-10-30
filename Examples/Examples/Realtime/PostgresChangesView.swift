@@ -83,21 +83,21 @@ struct PostgresChangesView: View {
   func subscribe() {
     Task {
       do {
-        let channel = await supabase.channel("postgres-changes-example")
+        let channel = supabase.channel("postgres-changes-example")
 
-        let insertions = await channel.postgresChanges(
+        let insertions = channel.postgresChanges(
           event: .insert,
           schema: "public",
           table: "todos"
         )
 
-        let updates = await channel.postgresChanges(
+        let updates = channel.postgresChanges(
           event: .update,
           schema: "public",
           table: "todos"
         )
 
-        let deletes = await channel.postgresChanges(
+        let deletes = channel.postgresChanges(
           event: .delete,
           schema: "public",
           table: "todos"
