@@ -58,6 +58,14 @@ package struct MockerSerializedTrait: SuiteTrait, TestScoping {
     performing function: @Sendable () async throws -> Void
   ) async throws {
     try await MockerGate.shared.withLock {
+      // Discard anything left over from a suite that does not use this trait, so a stale
+      // expectation cannot be blamed on this one.
+      _ = PendingRequestSnapshotStore.shared.drain()
+      // `Mock.snapshotRequest` cannot compare inside Mocker's request handler: that runs on the
+      // URL-loading queue, where Swift Testing has no current test, so a recorded issue is dropped
+      // and the assertion passes whatever the request was. Comparing here instead puts it back on
+      // the task running the suite, where a mismatch is reported.
+      defer { assertDeferredRequestSnapshots() }
       try await function()
     }
   }
