@@ -1482,7 +1482,7 @@ public final class AuthClient: Sendable {
     }
 
     guard
-      let signingKey = try await signingKey(for: decodedJWT, options: options),
+      let signingKey = try await signingKey(for: claims.header, options: options),
       let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
       _ = try await user(jwt: jwt)
@@ -1495,14 +1495,11 @@ public final class AuthClient: Sendable {
     return claims
   }
 
-  private func signingKey(for jwt: DecodedJWT, options: ClaimsOptions) async throws -> JWK? {
-    guard
-      let alg = jwt.header["alg"] as? String, !alg.hasPrefix("HS"),
-      let kid = jwt.header["kid"] as? String
-    else {
+  private func signingKey(for header: JWTHeader, options: ClaimsOptions) async throws -> JWK? {
+    guard !header.alg.hasPrefix("HS"), let kid = header.kid else {
       return nil
     }
-    if let key = options.jwks?.keys.first(where: { $0.kid == kid }) {
+    if let key = options.jwks?.key(for: kid) {
       return key
     }
     return try await jwksCache.key(for: kid)

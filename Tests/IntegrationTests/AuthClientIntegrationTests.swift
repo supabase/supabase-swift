@@ -634,7 +634,7 @@ struct AuthClientIntegrationTests {
   func wellKnownJWKSServesES256Key() async throws {
     let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
     let (data, _) = try await URLSession.shared.data(from: url)
-    let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
+    let jwks = try JSONDecoder().decode(JWKS.self, from: data)
 
     let jwk = try #require(jwks.keys.first { $0.alg == "ES256" })
     expectNoDifference(jwk.kty, "EC")

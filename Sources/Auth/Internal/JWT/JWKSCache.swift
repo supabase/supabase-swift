@@ -84,7 +84,7 @@ actor JWKSCache {
 }
 
 extension JWKS {
-  fileprivate func key(for kid: String) -> JWK? {
+  func key(for kid: String) -> JWK? {
     keys.first { $0.kid == kid }
   }
 }

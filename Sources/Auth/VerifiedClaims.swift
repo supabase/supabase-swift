@@ -134,14 +134,14 @@ public struct ClaimsOptions: Sendable, Hashable {
   /// It applies only to tokens that the client verifies on the device. The Auth server rejects an
   /// expired token that it verifies, so ``AuthClient/claims(jwt:options:)`` still throws for that
   /// token.
-  public var allowsExpired: Bool = false
+  public var allowsExpired: Bool
 
   /// A key set to verify the token with. It takes precedence over the key set that the client
   /// fetches from the Auth server.
   ///
   /// The client checks this key set first. When it has no key with the token's `kid`, the client
   /// uses the key set from the Auth server.
-  public var jwks: JWKS? = nil
+  public var jwks: JWKS?
 
   /// Creates claims options.
   ///
