@@ -646,6 +646,9 @@ features:
     status: implemented
     symbols:
       - AuthClient.identities
+    supporting_symbols:
+      - UserIdentity.providerUserID
+      - UserIdentity.userID
 
   auth.mfa.enroll:
     status: implemented
