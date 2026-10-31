@@ -232,7 +232,8 @@ actor SessionStore {
   /// A ``Transition/signedOut(_:event:)`` commit cancels every running refresh.
   ///
   /// A failed refresh keeps the session, unless the server rejected `refreshToken` and the held
-  /// session for it is expired. A fresh or a cached rejection then signs out before it throws.
+  /// session for it is expired. A fresh or a cached rejection then signs out before it throws,
+  /// unless storage holds a session with another refresh token: the store adopts that one.
   ///
   /// - Parameter request: Sends the refresh request. Called only when no refresh of
   ///   `refreshToken` runs.
@@ -343,8 +344,32 @@ actor SessionStore {
     {
       return
     }
-    try? await commit(
-      .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
+    let reason = SignOutReason(invalidatedBy: error)
+    try? await serialized {
+      try await self.invalidateUnlessStorageHoldsANewerSession(reason, refreshToken: refreshToken)
+    }
+  }
+
+  /// Another store over the same storage key may have redeemed `refreshToken` first and saved the
+  /// session it got. Removing storage would sign that store out at the next launch, so when storage
+  /// holds a session with another refresh token, this store adopts it instead of signing out.
+  ///
+  /// A storage read error changes nothing, as a failed write does. The rejection stays cached, so
+  /// the next refresh of `refreshToken` tries the sign-out again.
+  private func invalidateUnlessStorageHoldsANewerSession(
+    _ reason: SignOutReason, refreshToken: String
+  ) async throws {
+    guard let held = currentSession, held.refreshToken == refreshToken else { return }
+    if let data = try await storage.load(key: key),
+      let stored = try? PersistedSessionCodec.decode(data).session,
+      stored.session.refreshToken != refreshToken
+    {
+      let event: AuthEvent =
+        stored.session.user.id == held.user.id ? .tokenRefreshed : .signedIn
+      update(to: .signedIn(stored), event: event)
+      return
+    }
+    try await apply(.invalidated(reason, refreshToken: refreshToken))
   }
 
   func startAutoRefresh(using driver: Refresher.Driver) {
