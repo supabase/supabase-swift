@@ -307,14 +307,27 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
           userMetadata: ["custom_key": .string("custom_value")]
         )
+      )
+    }
+  }
+
+  @Test
+  func updateUserWithCurrentPassword() async throws {
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    await assert {
+      try await sut.updateUser(
+        UserAttributes(password: "new-pass", currentPassword: "old-pass")
       )
     }
   }
@@ -768,8 +781,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.linkIdentityWithIDToken(
-        IDTokenCredentials(
+      try await sut.linkIdentity(
+        idToken: IDTokenCredentials(
           provider: .google,
           idToken: "id-token",
           nonce: "nonce"

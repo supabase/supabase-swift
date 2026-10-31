@@ -556,7 +556,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func linkIdentityWithIdToken() async throws {
+    func linkIdentityWithIDTokenEmitsUserUpdated() async throws {
       try await withMainSerialExecutor {
         Mock(
           url: clientURL.appendingPathComponent("token"),
@@ -587,8 +587,8 @@ extension AuthMockerTests {
         let updatedSession = try await assertAuthStateChanges(
           sut: sut,
           action: {
-            try await sut.linkIdentityWithIDToken(
-              IDTokenCredentials(
+            try await sut.linkIdentity(
+              idToken: IDTokenCredentials(
                 provider: .apple,
                 idToken: "id-token",
                 nonce: "nonce",
@@ -1454,8 +1454,8 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
@@ -1579,7 +1579,7 @@ extension AuthMockerTests {
       try await sut.seedSession(.valid)
       let flows = sut.dependencies.flowStore
 
-      try await sut.update(user: UserAttributes(email: "new@example.com"))
+      try await sut.updateUser(UserAttributes(email: "new@example.com"))
       #expect(try await flows.pendingFlows().first?.purpose == .emailChange)
 
       try await sut.resend(email: "example@mail.com", type: .signup)
@@ -1893,6 +1893,61 @@ extension AuthMockerTests {
       )
 
       expectNoDifference(sut.currentUser, Session.valid.user)
+    }
+
+    @Test
+    func identitiesReturnsEmptyWhenNull() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            {
+              "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+              "aud": "authenticated",
+              "identities": null,
+              "created_at": "2022-04-09T11:23:45.874827Z",
+              "updated_at": "2022-04-09T11:57:01.720803Z"
+            }
+            """.utf8
+          )
+        ]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+
+      let identities = try await sut.identities()
+
+      #expect(identities.isEmpty)
+    }
+
+    @Test
+    func updateUserMergesIntoCurrentSession() async throws {
+      let race = Race()
+      let gate = Gate()
+      race.answerSignIn { _ in race.issue("signed-in") }
+      race.answerRefresh { try Race.ok(race.issue("refreshed")) }
+      race.answerUserUpdate(through: gate, with: Race.user(nickname: "updated"))
+      let client = race.makeClient()
+      var events = client.events().makeAsyncIterator()
+      #expect(await events.next()?.event == .initialSession)
+      try await client.signIn(email: "a@example.com", password: "secret")
+      #expect(await events.next()?.event == .signedIn)
+
+      let update = Task {
+        try await client.updateUser(UserAttributes(userMetadata: ["nickname": "updated"]))
+      }
+      await gate.arrivals(1)
+      try await client.refreshSession()
+      #expect(await events.next()?.event == .tokenRefreshed)
+      gate.open()
+      let returnedUser = try await update.value
+
+      #expect(await events.next()?.event == .userUpdated)
+      #expect(returnedUser.userMetadata["nickname"] == "updated")
+      #expect(client.currentSession?.accessToken == "refreshed-access")
+      expectNoDifference(client.currentSession?.user, returnedUser)
     }
 
     @Test
