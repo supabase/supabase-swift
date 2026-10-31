@@ -18,9 +18,10 @@ public import Foundation
     /// entitlement must list `webcredentials:<rp.id>`.
     ///
     /// When the ceremony or the verification fails, the server keeps the new factor as
-    /// unverified, and its name blocks a new enrollment with the same name. Find it with
-    /// ``listFactors()``, then finish it with ``verifyWebAuthn(factorID:anchor:)`` or remove it
-    /// with ``unenroll(params:)``.
+    /// unverified, and its name blocks a new enrollment with the same name. Find it in the
+    /// `factors` of ``AuthClient/user(jwt:)``, which fetches the user from the server, then finish
+    /// it with ``verifyWebAuthn(factorID:anchor:)`` or remove it with ``unenroll(params:)``.
+    /// ``listFactors()`` reads the stored session, so it does not show the new factor.
     ///
     /// - Parameters:
     ///   - friendlyName: A name for the factor.
