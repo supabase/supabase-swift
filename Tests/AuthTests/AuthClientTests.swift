@@ -3422,14 +3422,10 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.iss == "http://localhost:54321/auth/v1")
-      if case .string(let aud) = result.claims.aud {
-        #expect(aud == "authenticated")
-      } else {
-        Issue.record("Expected string audience")
-      }
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.issuer == "http://localhost:54321/auth/v1")
+      #expect(result.audience == ["authenticated"])
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "HS256")
       #expect(result.header.kid == nil)
     }
@@ -3457,8 +3453,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims()
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
     }
 
     @Test
@@ -3482,11 +3478,11 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: jwt,
-        options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+        options: ClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
       )
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "ES256")
       #expect(result.header.kid == "es256-test-kid")
     }
@@ -3525,11 +3521,11 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: jwt,
-        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+        options: ClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
       )
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "ES256")
     }
 
@@ -3568,10 +3564,10 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: jwt,
-        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+        options: ClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
       )
 
-      #expect(result.claims.sub == "1234567890")
+      #expect(result.subject == "1234567890")
       #expect(result.header.alg == "RS256")
     }
 
@@ -3603,7 +3599,7 @@ extension AuthMockerTests {
       let error = await #expect(throws: AuthError.self) {
         _ = try await sut.claims(
           jwt: tamperedJWT,
-          options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+          options: ClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
         )
       }
       #expect(error?.kind == .jwtVerificationFailed)
@@ -3629,8 +3625,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
     }
 
     @Test
@@ -3673,8 +3669,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
     }
 
     @Test
@@ -3696,8 +3692,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "987654321")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "987654321")
+      #expect(result.role == "authenticated")
     }
 
     @Test
@@ -3768,11 +3764,11 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: expiredJWT,
-        options: GetClaimsOptions(allowsExpired: true)
+        options: ClaimsOptions(allowsExpired: true)
       )
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.exp == 1_516_239_022)
+      #expect(result.subject == "1234567890")
+      #expect(result.expiresAt.timeIntervalSince1970 == 1_516_239_022)
     }
 
     @Test
@@ -3821,20 +3817,16 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.iss == "http://localhost:54321/auth/v1")
-      if case .string(let aud) = result.claims.aud {
-        #expect(aud == "authenticated")
-      } else {
-        Issue.record("Expected string audience")
-      }
-      #expect(result.claims.exp == 9_999_999_999)
-      #expect(result.claims.iat == 1_516_239_022)
-      #expect(result.claims.nbf == 1_516_239_022)
-      #expect(result.claims.jti == "test-jti")
-      #expect(result.claims.role == "authenticated")
-      #expect(result.claims.email == "test@example.com")
-      #expect(result.claims.phone == "+1234567890")
+      #expect(result.subject == "1234567890")
+      #expect(result.issuer == "http://localhost:54321/auth/v1")
+      #expect(result.audience == ["authenticated"])
+      #expect(result.expiresAt.timeIntervalSince1970 == 9_999_999_999)
+      #expect(result.issuedAt?.timeIntervalSince1970 == 1_516_239_022)
+      #expect(result.additionalClaims["nbf"] == 1_516_239_022)
+      #expect(result.additionalClaims["jti"] == "test-jti")
+      #expect(result.role == "authenticated")
+      #expect(result.email == "test@example.com")
+      #expect(result.phone == "+1234567890")
     }
 
     @Test
@@ -3856,8 +3848,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.aud != nil)
+      #expect(result.subject == "1234567890")
+      #expect(result.audience == ["authenticated", "service-role"])
     }
 
     @Test
