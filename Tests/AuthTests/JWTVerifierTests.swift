@@ -1,6 +1,7 @@
 import Crypto
 import Foundation
 import Testing
+import _CryptoExtras
 
 @testable import Auth
 @testable import Helpers
@@ -36,6 +37,8 @@ struct ES256TestSigner {
 struct JWTVerifierTests {
   private let header = #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#
   private let payload = #"{"sub":"1234567890","role":"authenticated"}"#
+  private let rs256Header = ["alg": "RS256", "kid": "rs256-test-kid", "typ": "JWT"]
+  private let rs256Payload = ["sub": "1234567890", "role": "authenticated"]
 
   @Test
   func rs256ValidSignatureVerifies() throws {
@@ -63,6 +66,74 @@ struct JWTVerifierTests {
       Data(payloadJSON.replacingOccurrences(of: "1234567890", with: "1234567891").utf8))
     let decoded = try #require(JWT.decode("\(parts[0]).\(tamperedPayload).\(parts[2])"))
 
+    #expect(JWTVerifier.verify(decoded, with: signer.jwk) == false)
+  }
+
+  @Test
+  func rs256SignatureFromAnotherKeyFails() throws {
+    let jwt = RS256TestSigner().sign(header: rs256Header, payload: rs256Payload)
+    let decoded = try #require(JWT.decode(jwt))
+
+    #expect(JWTVerifier.verify(decoded, with: RS256TestSigner().jwk) == false)
+  }
+
+  @Test
+  func rs256TruncatedSignatureFails() throws {
+    let signer = RS256TestSigner()
+    let parts = signer.sign(header: rs256Header, payload: rs256Payload).split(separator: ".")
+    let signature = try #require(Base64URL.decode(String(parts[2])))
+    let truncated = Base64URL.encode(signature.dropLast())
+    let decoded = try #require(JWT.decode("\(parts[0]).\(parts[1]).\(truncated)"))
+
+    #expect(JWTVerifier.verify(decoded, with: signer.jwk) == false)
+  }
+
+  @Test
+  func rs256WrongLengthSignatureFails() throws {
+    let signer = RS256TestSigner()
+    let parts = signer.sign(header: rs256Header, payload: rs256Payload).split(separator: ".")
+    let shortSignature = Base64URL.encode(Data([0x00, 0x01, 0x02, 0x03]))
+    let decoded = try #require(JWT.decode("\(parts[0]).\(parts[1]).\(shortSignature)"))
+
+    #expect(JWTVerifier.verify(decoded, with: signer.jwk) == false)
+  }
+
+  @Test(
+    arguments: [
+      (n: nil, e: "valid"),
+      (n: "valid", e: nil),
+      (n: "!!!", e: "valid"),
+      (n: "valid", e: "!!!"),
+    ] as [(n: String?, e: String?)])
+  func rs256MissingOrInvalidKeyPartsFailClosed(n: String?, e: String?) throws {
+    let signer = RS256TestSigner()
+    let base = signer.jwk
+    let jwk = JWK(
+      kty: base.kty,
+      keyOps: base.keyOps,
+      alg: base.alg,
+      kid: base.kid,
+      n: n == "valid" ? base.n : n,
+      e: e == "valid" ? base.e : e,
+      crv: nil,
+      x: nil,
+      y: nil,
+      k: nil
+    )
+    let decoded = try #require(
+      JWT.decode(signer.sign(header: rs256Header, payload: rs256Payload)))
+
+    #expect(jwk.rsaPublicKey == nil)
+    #expect(JWTVerifier.verify(decoded, with: jwk) == false)
+  }
+
+  @Test
+  func rs256KeyUnder2048BitsFailsClosed() throws {
+    let signer = RS256TestSigner(keySize: _RSA.Signing.KeySize(bitCount: 1024))
+    let decoded = try #require(
+      JWT.decode(signer.sign(header: rs256Header, payload: rs256Payload)))
+
+    #expect(signer.jwk.rsaPublicKey == nil)
     #expect(JWTVerifier.verify(decoded, with: signer.jwk) == false)
   }
 

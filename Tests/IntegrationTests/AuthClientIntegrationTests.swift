@@ -670,7 +670,7 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func getClaimsRejectsTamperedLiveES256Token() async throws {
+  func claimsRejectsTamperedPayload() async throws {
     let session = try #require(
       try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
     )
@@ -693,7 +693,7 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func claimsRejectsTamperedToken() async throws {
+  func claimsRejectsTamperedSignature() async throws {
     let session = try #require(
       try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
     )
@@ -708,6 +708,7 @@ struct AuthClientIntegrationTests {
       _ = try await authClient.claims(jwt: tamperedJWT)
     }
     #expect(error?.kind == .jwtVerificationFailed)
+    #expect(error?.message == "Invalid JWT signature")
   }
 
   @Test

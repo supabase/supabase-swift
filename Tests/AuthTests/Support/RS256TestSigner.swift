@@ -8,8 +8,8 @@ struct RS256TestSigner {
   let jwk: JWK
   private let privateKey: _RSA.Signing.PrivateKey
 
-  init() {
-    let privateKey = try! _RSA.Signing.PrivateKey(keySize: .bits2048)
+  init(keySize: _RSA.Signing.KeySize = .bits2048) {
+    let privateKey = try! _RSA.Signing.PrivateKey(unsafeKeySize: keySize)
     let primitives = try! privateKey.publicKey.getKeyPrimitives()
     self.privateKey = privateKey
     jwk = JWK(

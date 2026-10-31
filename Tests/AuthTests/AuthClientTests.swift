@@ -3604,6 +3604,7 @@ extension AuthMockerTests {
       let refreshError = await #expect(throws: AuthError.self) {
         _ = try await sut.claims()
       }
+      #expect(refreshError?.kind == .sessionInvalidated)
       #expect(refreshError?.errorCode == .refreshTokenNotFound)
 
       let signedOutError = await #expect(throws: AuthError.self) {
