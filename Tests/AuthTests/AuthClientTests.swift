@@ -2987,6 +2987,88 @@ extension AuthMockerTests {
     }
 
     @Test
+    func removeSessionAndSignoutIfUserBannedErrorReturnedOnRefresh() async throws {
+      let sut = makeSUT(emitLocalSessionAsInitialSession: true)
+
+      Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "refresh_token")
+        ]),
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "user_banned",
+              "message": "Invalid Refresh Token: User Banned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.session
+            Issue.record("Expected failure")
+          } catch {
+            #expect(error as? AuthError == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession, .signedOut]
+      )
+
+      #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+    }
+
+    @Test
+    func bannedSignInKeepsTheStoredSessionAndSurfacesTheErrorCode() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "password")
+        ]),
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "user_banned",
+              "message": "User is banned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            try await sut.signIn(email: "banned@example.com", password: "the.pass")
+            Issue.record("Expected failure")
+          } catch let AuthError.api(_, errorCode, _, _) {
+            #expect(errorCode == .userBanned)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(
+        Dependencies[sut.clientID].sessionStorage.get()?.refreshToken
+          == Session.validSession.refreshToken)
+    }
+
+    @Test
     func
       removeSessionAndSignoutIfRefreshTokenNotFoundErrorReturned_withEmitLocalSessionAsInitialSession()
       async throws
