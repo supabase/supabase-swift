@@ -1457,13 +1457,13 @@ public final class AuthClient: Sendable {
   ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
   ///   - options: Various additional options that allow you to customize the behavior of this method.
   ///
-  /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
+  /// - Returns: The verified claims, with the token's header and signature.
   ///
   /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
   public func claims(
     jwt: String? = nil,
-    options: GetClaimsOptions = GetClaimsOptions()
-  ) async throws -> JWTClaimsResponse {
+    options: ClaimsOptions = ClaimsOptions()
+  ) async throws -> VerifiedClaims {
     let token: String
     if let jwt {
       token = jwt
@@ -1502,30 +1502,13 @@ public final class AuthClient: Sendable {
       let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
       _ = try await user(jwt: token)
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      return try VerifiedClaims(decodedJWT)
     }
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
 
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
-
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+    return try VerifiedClaims(decodedJWT)
   }
 }

@@ -235,7 +235,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
 | `AuthClient.Configuration.flowType`, `AuthOptions.flowType`, `AuthFlowType`, `defaultFlowType` | removed; see below |
 | `AuthClient.getClaims(jwt:options:)` | `AuthClient.claims(jwt:options:)` |
-| `GetClaimsOptions.allowExpired` | `GetClaimsOptions.allowsExpired` |
+| `GetClaimsOptions`, `GetClaimsOptions(allowExpired:jwks:)` | `ClaimsOptions`, `ClaimsOptions(allowsExpired:jwks:)` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
@@ -247,7 +247,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
 | `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
-| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
+| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
 | `Provider`: `Codable` | no `Codable` conformance |
@@ -470,6 +470,28 @@ case .session(let session):
 case .emailChangeConfirmationPending(let confirmation):
   print(confirmation.message, confirmation.code)
 }
+```
+
+## `JWTClaimsResponse` and `JWTClaims` are `VerifiedClaims`
+
+`claims(jwt:options:)` returns `VerifiedClaims` instead of `JWTClaimsResponse`. The claims are
+top-level properties with full names, and `header` and `signature` stay. `sub` and `exp` are
+required, so `subject` and `expiresAt` are not optional, and a token without them fails
+verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, and `AudienceClaim` is
+gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
+their typed properties. `nbf`, `jti`, and every other claim are in `additionalClaims`.
+
+```swift
+// v2
+let response = try await supabase.auth.getClaims()
+let userID = response.claims.sub
+let sessionID = response.claims.sessionId
+let expiresAt = response.claims.exp.map(Date.init(timeIntervalSince1970:))
+// v3
+let claims = try await supabase.auth.claims()
+let userID = claims.subject
+let sessionID = claims.sessionID
+let expiresAt = claims.expiresAt
 ```
 
 ## `emitLocalSessionAsInitialSession` is removed
