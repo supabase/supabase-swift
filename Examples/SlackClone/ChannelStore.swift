@@ -47,7 +47,7 @@ final class ChannelStore {
 
   func addChannel(_ name: String) async {
     do {
-      let userId = try await supabase.auth.session.user.id
+      let userId = try await supabase.auth.session().user.id
       let channel = AddChannel(slug: name, createdBy: userId)
       try await supabase
         .from("channels")

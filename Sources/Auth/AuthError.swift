@@ -290,7 +290,7 @@ public struct AuthError: SupabaseError {
     public static let excessiveRefresh: Kind = "excessiveRefresh"
     /// The session is expired, and ``AuthClient/Configuration/autoRefresh`` is
     /// ``AuthClient/AutoRefreshPolicy/disabled``, so the client did not refresh it. Let the app
-    /// that owns the session refresh it, or call ``AuthClient/refreshSession(refreshToken:)``.
+    /// that owns the session refresh it, or call ``AuthClient/refreshSession()``.
     public static let refreshDisabled: Kind = "refreshDisabled"
     /// A redirect-based sign-in (OAuth, magic link, PKCE or implicit flow) could not start or
     /// finish. Either no redirect URL with a scheme is configured, the redirect URL carried an
@@ -407,6 +407,18 @@ extension AuthError.Kind {
 extension AuthError {
   var invalidatesSession: Bool {
     kind == .sessionInvalidated
+  }
+
+  /// Whether a refresh rejection means the session can never be refreshed again, so nothing is
+  /// left to revoke. Narrower than ``invalidatesSession``: with refresh token rotation off,
+  /// `refresh_token_already_used` fails only this request and leaves the session alive.
+  var endsSessionForGood: Bool {
+    [.refreshTokenNotFound, .sessionNotFound, .sessionExpired].contains(errorCode)
+  }
+
+  /// Whether the server answered with a 4xx status.
+  var isClientError: Bool {
+    response.map { 400..<500 ~= $0.statusCode } ?? false
   }
 
   static let excessiveRefresh = AuthError(

@@ -78,7 +78,7 @@ struct SessionLifecycleRaceTests {
 
     func run(on client: AuthClient) async throws -> Session? {
       switch self {
-      case .session: try await client.session
+      case .session: try await client.session()
       case .refreshSessionIfNeeded: try await client.refreshSessionIfNeeded()
       case .refreshSession: try await client.refreshSession()
       }
@@ -107,7 +107,7 @@ struct SessionLifecycleRaceTests {
 
     async let heldSession = call.run(on: client)
     await readTheExpiredToken.arrivals(1)
-    let racingSession = try await client.session
+    let racingSession = try await client.session()
     readTheExpiredToken.open()
 
     #expect(racingSession.accessToken == "refreshed-access")
@@ -203,12 +203,12 @@ struct SessionLifecycleRaceTests {
     var events = client.events().makeAsyncIterator()
 
     for _ in 0..<2 {
-      let error = await #expect(throws: AuthError.self) { try await client.session }
+      let error = await #expect(throws: AuthError.self) { try await client.session() }
       #expect(error?.kind == .storageUnavailable)
       #expect(client.currentSession == nil)
     }
     storage.isLocked.setValue(false)
-    let session = try await client.session
+    let session = try await client.session()
     #expect(session.accessToken == "stored-access")
 
     let initial = await events.next()
@@ -234,12 +234,12 @@ struct SessionLifecycleRaceTests {
       let due = Double(lifetime) * Self.refreshAfter
       await race.waitForTheScheduledRefresh()
       await race.advance(to: due - 1, grace: .zero)
-      _ = try await client.session
+      _ = try await client.session()
       #expect(race.refreshRequestCount == lifetime - 1)
 
       await race.advance(to: due)
       #expect(await events.next()?.event == .tokenRefreshed)
-      _ = try await client.session
+      _ = try await client.session()
       #expect(race.refreshRequestCount == lifetime)
     }
   }
@@ -263,7 +263,7 @@ struct SessionLifecycleRaceTests {
 
     #expect(error?.kind == .sessionInvalidated)
     #expect(client.currentSession?.accessToken == "signed-in-access")
-    let session = try await client.session
+    let session = try await client.session()
     #expect(session.accessToken == "signed-in-access")
     #expect(race.relaunch().currentSession?.accessToken == "signed-in-access")
     try await client.signIn(email: "a@example.com", password: "secret")

@@ -148,8 +148,11 @@ struct RequestsTests {
   @Test
   func refreshSession() async {
     let sut = makeSUT()
+    var session = Session.valid
+    session.refreshToken = "refresh-token"
+    try? await sut.seedSession(session)
     await assert {
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      try await sut.refreshSession()
     }
   }
 
@@ -204,7 +207,7 @@ struct RequestsTests {
   }
 
   @Test
-  func setSessionWithAFutureExpirationDate() async throws {
+  func importSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -212,29 +215,29 @@ struct RequestsTests {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func setSessionWithAExpiredToken() async throws {
+  func importSessionWithAnExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func signOut() async throws {
+  func signOutWithGlobalScope() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.signOut()
+      try await sut.signOut(scope: .global)
     }
   }
 

@@ -29,10 +29,16 @@ actor SessionStore {
     /// Signs out with ``AuthEvent/signedOut``, but only while the store holds the session
     /// whose refresh token is `refreshToken`.
     ///
-    /// A request that failed because its session is gone must not sign out whoever signed in
-    /// after the request went out. When the store holds another session or none, the commit
-    /// changes nothing and does not throw.
+    /// A request that ended its session must not sign out whoever signed in after the request
+    /// went out. When the store holds another session or none, the commit changes nothing and does
+    /// not throw.
     case invalidated(SignOutReason, refreshToken: String)
+    /// Signs out with ``AuthEvent/signedOut`` while the store holds the session whose refresh
+    /// token was `refreshToken`, or a refresh of it, or holds none when `refreshToken` is `nil`.
+    ///
+    /// A server that ended a session also ended the refreshes of it, but not a session signed in
+    /// after the request went out. Otherwise the commit changes nothing and does not throw.
+    case revoked(SignOutReason, refreshToken: String?)
     /// Removes the identity `identityID` from the held user with ``AuthEvent/userUpdated``, but
     /// only while the held user is `userID`. Otherwise the commit changes nothing and does not
     /// throw, so a sign-out or sign-in that lands first keeps its own user.
@@ -65,6 +71,8 @@ actor SessionStore {
   private struct RefreshFlight {
     let id: UUID
     let task: Task<Session, any Error>
+    /// The reason of each caller that waits for the refresh, in the order they asked.
+    var signOutReasons: [RejectionReason]
   }
 
   private struct RefreshFailure {
@@ -94,6 +102,14 @@ actor SessionStore {
 
   private static let refreshFailureCooldown: TimeInterval = 60
 
+  /// Why a rejected refresh of the held, expired session signs out, or `nil` to keep it.
+  typealias RejectionReason = @Sendable (AuthError) -> SignOutReason?
+
+  /// Signs out when the server rejected the session itself.
+  static let rejectedSession: RejectionReason = {
+    $0.invalidatesSession ? SignOutReason(invalidatedBy: $0) : nil
+  }
+
   /// Grows by one on every state change, so tests can tell that a commit changed nothing, and the
   /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
@@ -104,6 +120,8 @@ actor SessionStore {
   private let published: LockIsolated<Published>
   private var lastOperation: Task<Void, any Error>?
   private var refreshFlights: [String: RefreshFlight] = [:]
+  /// The refresh tokens that refreshes of the held session replaced since it was signed in.
+  private var replacedRefreshTokens: Set<String> = []
   private var lastRefreshFailure: RefreshFailure?
   private var refreshWindow = RefreshWindow()
   private var autoRefreshDriver: Refresher.Driver?
@@ -165,6 +183,12 @@ actor SessionStore {
     return received
   }
 
+  /// The number of callers that wait for the running refresh of `refreshToken`, so tests can tell
+  /// that a caller joined it.
+  func refreshCallerCount(for refreshToken: String) -> Int {
+    refreshFlights[refreshToken]?.signOutReasons.count ?? 0
+  }
+
   /// The number of live ``changes()`` streams, so tests can tell a released stream from a leak.
   nonisolated var subscriberCount: Int {
     published.value.subscribers.count
@@ -224,6 +248,17 @@ actor SessionStore {
     try await serialized { try await self.apply(transition) }
   }
 
+  /// Commits ``Transition/signedOut(_:event:)`` and returns the session it removed, read in the
+  /// same operation, so no commit can land between the read and the sign-out.
+  func signOut(_ reason: SignOutReason) async throws -> ReceivedSession? {
+    let removed = LockIsolated<ReceivedSession?>(nil)
+    try await serialized {
+      removed.setValue(self.heldSession)
+      try await self.apply(.signedOut(reason, event: .signedOut))
+    }
+    return removed.value
+  }
+
   /// Redeems `refreshToken` once, however many callers ask at the same time, and commits the
   /// refreshed session.
   ///
@@ -234,8 +269,12 @@ actor SessionStore {
   /// A failed refresh keeps the session, unless the server rejected `refreshToken` and the held
   /// session for it is expired. A fresh or a cached rejection then signs out before it throws.
   ///
-  /// - Parameter request: Sends the refresh request. Called only when no refresh of
-  ///   `refreshToken` runs.
+  /// - Parameters:
+  ///   - request: Sends the refresh request. Called only when no refresh of `refreshToken` runs.
+  ///   - signOutReason: Why a rejection signs out, or `nil` to keep the session. Every caller of
+  ///     one refresh gives a reason. The rejection signs out with ``SignOutReason/userInitiated``
+  ///     when any of them gives it, and otherwise with the reason of the first caller that signs
+  ///     out.
   /// - Throws: The error of the last failed refresh, without a new request, when that refresh
   ///   redeemed `refreshToken` less than 60 seconds ago and no commit other than a
   ///   ``Transition/invalidated(_:refreshToken:)`` followed it.
@@ -243,45 +282,68 @@ actor SessionStore {
   ///   seconds.
   func refresh(
     _ refreshToken: String,
-    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
+    signOutReason: @escaping RejectionReason = rejectedSession
   ) async throws -> Session {
     if let flight = refreshFlights[refreshToken] {
-      return try await Self.value(of: flight.task)
+      refreshFlights[refreshToken]?.signOutReasons.append(signOutReason)
+      do {
+        return try await Self.value(of: flight.task)
+      } catch {
+        await signOutIfRejectedAndExpired(
+          by: error, refreshToken: refreshToken, reason: signOutReason)
+        throw error
+      }
     }
     if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
       (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince(failure.date))
     {
-      await signOutIfRejectedAndExpired(by: failure.error, refreshToken: refreshToken)
+      await signOutIfRejectedAndExpired(
+        by: failure.error, refreshToken: refreshToken, reason: signOutReason)
       throw failure.error
     }
-    return try await Self.value(of: startRefresh(refreshToken, using: request))
+    return try await Self.value(
+      of: startRefresh(refreshToken, using: request, signOutReason: signOutReason))
   }
 
   /// Refreshes the held session, whose refresh token was `refreshToken` when the caller read it,
-  /// as ``refresh(_:using:)`` does.
+  /// as ``refresh(_:using:signOutReason:)`` does.
   ///
   /// Sends only the refresh token the store holds now. When a commit replaced `refreshToken`
   /// after the caller's read, that commit redeemed or dropped it, so sending it again would reuse
   /// a rotated token. The store then returns the held session without a request while it is
   /// valid, and refreshes the held token when it is not.
   ///
-  /// - Throws: ``AuthError/sessionMissing`` when the store holds no session.
+  /// - Parameter requiringSameSession: Whether the held session must be the one the caller read,
+  ///   or a refresh of it. A caller that acts on that one session, such as a sign-out, sets it, so
+  ///   a sign-in that landed since never hands it another session.
+  /// - Throws: ``AuthError/sessionMissing`` when the store holds no session, or another session
+  ///   than the one the caller read while `requiringSameSession` is `true`.
   func refreshHeldSession(
     readWith refreshToken: String,
-    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+    requiringSameSession: Bool = false,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
+    signOutReason: @escaping RejectionReason = rejectedSession
   ) async throws -> Session {
     guard let held = heldSession else { throw AuthError.sessionMissing }
+    if requiringSameSession, held.session.refreshToken != refreshToken,
+      !replacedRefreshTokens.contains(refreshToken)
+    {
+      throw AuthError.sessionMissing
+    }
     if held.session.refreshToken != refreshToken,
       !held.isExpired(at: now(), leeway: defaultExpiryMargin)
     {
       return held.session
     }
-    return try await refresh(held.session.refreshToken, using: request)
+    return try await refresh(
+      held.session.refreshToken, using: request, signOutReason: signOutReason)
   }
 
   private func startRefresh(
     _ refreshToken: String,
-    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
+    signOutReason: @escaping RejectionReason
   ) throws -> Task<Session, any Error> {
     guard refreshWindow.admit(at: now()) else { throw AuthError.excessiveRefresh }
 
@@ -304,7 +366,9 @@ actor SessionStore {
         // such as `URLError.cancelled` from a response body.
         if Task.isCancelled { throw CancellationError() }
         if refreshesHeldSession {
-          await signOutIfRejectedAndExpired(by: error, refreshToken: refreshToken)
+          let reasons = refreshFlights[refreshToken]?.signOutReasons ?? [signOutReason]
+          await signOutIfRejectedAndExpired(
+            by: error, refreshToken: refreshToken, reason: Self.combining(reasons))
         }
         if !(error is CancellationError) {
           lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
@@ -318,7 +382,8 @@ actor SessionStore {
       }
       return session
     }
-    refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
+    refreshFlights[refreshToken] = RefreshFlight(
+      id: id, task: task, signOutReasons: [signOutReason])
     return task
   }
 
@@ -336,15 +401,25 @@ actor SessionStore {
     try await apply(.refreshed(session, replacing: heldRefreshToken))
   }
 
-  private func signOutIfRejectedAndExpired(by error: any Error, refreshToken: String) async {
-    guard let error = error as? AuthError, error.invalidatesSession else { return }
+  /// Combines the reasons of the callers of one refresh. A sign-out that the user asked for
+  /// names the cause better than the rejection does.
+  private static func combining(_ reasons: [RejectionReason]) -> RejectionReason {
+    { error in
+      let candidates = reasons.compactMap { $0(error) }
+      return candidates.contains(.userInitiated) ? .userInitiated : candidates.first
+    }
+  }
+
+  private func signOutIfRejectedAndExpired(
+    by error: any Error, refreshToken: String, reason: RejectionReason
+  ) async {
+    guard let error = error as? AuthError, let reason = reason(error) else { return }
     if let held = heldSession, held.session.refreshToken == refreshToken,
       !held.isExpired(at: now(), leeway: defaultExpiryMargin)
     {
       return
     }
-    try? await commit(
-      .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
+    try? await commit(.invalidated(reason, refreshToken: refreshToken))
   }
 
   func startAutoRefresh(using driver: Refresher.Driver) {
@@ -385,7 +460,8 @@ actor SessionStore {
       throw CancellationError()
     }
     let flight =
-      try refreshFlights[refreshToken]?.task ?? startRefresh(refreshToken, using: request)
+      try refreshFlights[refreshToken]?.task
+      ?? startRefresh(refreshToken, using: request, signOutReason: Self.rejectedSession)
     _ = try await Self.value(of: flight)
   }
 
@@ -477,6 +553,14 @@ actor SessionStore {
       next = .signedOut(reason)
       event = .signedOut
 
+    case .revoked(let reason, let refreshToken):
+      let held = currentSession?.refreshToken
+      guard held == refreshToken || refreshToken.map(replacedRefreshTokens.contains) == true else {
+        return
+      }
+      next = .signedOut(reason)
+      event = .signedOut
+
     case .identityUnlinked(let identityID, let userID):
       guard case .signedIn(var current) = published.value.state, current.session.user.id == userID
       else { return }
@@ -502,6 +586,14 @@ actor SessionStore {
       break
     default:
       lastRefreshFailure = nil
+    }
+    switch transition {
+    case .refreshed(_, let replacedRefreshToken):
+      if let replacedRefreshToken { replacedRefreshTokens.insert(replacedRefreshToken) }
+    case .userUpdated, .identityUnlinked:
+      break
+    default:
+      replacedRefreshTokens = []
     }
 
     if case .signedOut = transition {

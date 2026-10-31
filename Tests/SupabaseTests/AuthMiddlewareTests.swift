@@ -394,7 +394,8 @@ struct AuthMiddlewareTests {
       next: { [http] in try await http.send($0, body: $1) }
     )
     await retryReadTheToken.arrivals(1)
-    try await auth.refreshSession(refreshToken: "refresh-1")
+    _ = try await auth.dependencies.sessionStore.refresh(
+      "refresh-1", using: auth.dependencies.refreshRequest)
     retryReadTheToken.open()
     #expect(try await response.0.status == .ok)
 

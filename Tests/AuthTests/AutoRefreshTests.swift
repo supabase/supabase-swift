@@ -212,7 +212,7 @@ struct AutoRefreshTests {
 
     await world.advance(to: Self.lifetime)
     #expect(await world.refreshCount(settledAt: 0) == 0)
-    _ = try await client.session
+    _ = try await client.session()
     #expect(await world.refreshCount(settledAt: 1) == 1)
   }
 
@@ -223,11 +223,11 @@ struct AutoRefreshTests {
     try await client.seedSession(world.issueSession())
 
     await world.advance(to: Self.lifetime - 10)
-    _ = try await client.session
+    _ = try await client.session()
     #expect(await world.refreshCount(settledAt: 0) == 0)
 
     await world.advance(to: Self.lifetime + 1)
-    let error = await #expect(throws: AuthError.self) { try await client.session }
+    let error = await #expect(throws: AuthError.self) { try await client.session() }
     #expect(error?.kind == .refreshDisabled)
     #expect(await world.refreshCount(settledAt: 0) == 0)
 

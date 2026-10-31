@@ -65,7 +65,6 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``initialization()``
 /// - ``currentSession``
 /// - ``currentUser``
-/// - ``session``
 ///
 /// ### Signing up
 /// - ``signUp(email:password:options:)``
@@ -88,10 +87,11 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
 ///
 /// ### Session management
+/// - ``session()``
 /// - ``exchangeCodeForSession(authCode:flowId:)``
 /// - ``session(from:)``
-/// - ``setSession(accessToken:refreshToken:)``
-/// - ``refreshSession(refreshToken:)``
+/// - ``importSession(accessToken:refreshToken:)``
+/// - ``refreshSession()``
 /// - ``refreshSessionIfNeeded()``
 /// - ``startAutoRefresh()``
 /// - ``stopAutoRefresh()``
@@ -158,7 +158,8 @@ public final class AuthClient: Sendable {
 
   private let lifecycleTask: Task<Void, Never>
 
-  /// Returns the session, refreshing it if necessary.
+  /// Returns the session, refreshing it first when its access token expires in less than 30
+  /// seconds.
   ///
   /// Throws an error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no session is
   /// stored, and of kind ``AuthError/Kind-swift.struct/sessionInvalidated`` when the server
@@ -172,10 +173,8 @@ public final class AuthClient: Sendable {
   /// available. On watchOS and macOS, only those calls read storage again. A missing Keychain
   /// entitlement throws an error of kind
   /// ``AuthError/Kind-swift.struct/storageMisconfigured``.
-  public var session: Session {
-    get async throws {
-      try await sessionManager.session()
-    }
+  public func session() async throws -> Session {
+    try await sessionManager.session()
   }
 
   /// Whether a user is signed in, as the client knows it in memory.
@@ -188,7 +187,8 @@ public final class AuthClient: Sendable {
 
   /// Returns the current session, if any.
   ///
-  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
+  /// Reading it does no I/O, so the session may be expired. Use ``session()`` for
+  /// a session that is valid.
   public var currentSession: Session? {
     sessionStore.currentSession
   }
@@ -853,37 +853,38 @@ public final class AuthClient: Sendable {
     return try await exchangeCodeForSession(authCode: code, flowId: flowId)
   }
 
-  /// Sets the session data from the current session. If the current session is expired, setSession
-  /// will take care of refreshing it to obtain a new session.
+  /// Signs in with a session your app got outside this client, such as tokens that a tvOS app
+  /// receives from a sign-in on another device.
   ///
-  /// If the refresh token is invalid and the current session has expired, an error will be thrown.
-  /// This method will use the exp claim defined in the access token.
+  /// The client reads the expiry from the access token. When the token has expired, it redeems
+  /// `refreshToken` for a new session. Otherwise it fetches the user with the access token. Then
+  /// it stores the session and emits ``AuthEvent/signedIn`` once. When a request fails, the
+  /// stored session stays as it was.
+  ///
   /// - Parameters:
-  ///   - accessToken: The current access token.
-  ///   - refreshToken: The current refresh token.
-  /// - Returns: A new valid session.
+  ///   - accessToken: The access token of the session.
+  ///   - refreshToken: The refresh token of the session.
+  /// - Returns: The stored session.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when
+  ///   `accessToken` is not a JWT with an `exp` claim.
   @discardableResult
-  public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
-    let now = date()
-    var expiresAt = now
-    var hasExpired = true
-    var session: Session
-
-    let jwt = JWT.decodePayload(accessToken)
-    if let exp = jwt?["exp"] as? TimeInterval {
-      expiresAt = Date(timeIntervalSince1970: exp)
-      hasExpired = expiresAt <= now
+  public func importSession(accessToken: String, refreshToken: String) async throws -> Session {
+    guard let exp = JWT.decodePayload(accessToken)?["exp"] as? TimeInterval else {
+      throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if hasExpired {
-      session = try await refreshSession(refreshToken: refreshToken)
+    let now = date()
+    let expiresAt = Date(timeIntervalSince1970: exp)
+    let session: Session
+    if expiresAt <= now {
+      session = try await dependencies.refreshRequest(refreshToken)
     } else {
-      let user = try await user(jwt: accessToken)
+      let user = try await api.execute(authAPI.user(accessToken: accessToken))
       session = Session(
         accessToken: accessToken,
         tokenType: "bearer",
         expiresIn: expiresAt.timeIntervalSince(now),
-        expiresAt: expiresAt.timeIntervalSince1970,
+        expiresAt: exp,
         refreshToken: refreshToken,
         user: user
       )
@@ -893,29 +894,108 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Signs out the current user, if there is a logged in user.
+  /// Ends the sessions that `scope` names.
   ///
-  /// If using ``SignOutScope/others`` scope, no ``AuthEvent/signedOut`` event is fired.
-  /// - Parameter scope: Specifies which sessions should be logged out.
-  public func signOut(scope: SignOutScope = .global) async throws {
-    guard let session = currentSession else {
-      configuration.logger.warning("signOut called without a session")
-      return
+  /// - ``SignOutScope/local``, the default, signs out this device. The client removes the
+  ///   session, clears every pending PKCE flow, and emits ``AuthEvent/signedOut`` with
+  ///   ``SignOutReason/userInitiated`` before it asks the server to revoke the session. So the
+  ///   device is signed out whatever the server answers. An error means that the server did not
+  ///   revoke the refresh token, which then stays valid until it expires.
+  /// - ``SignOutScope/global`` ends every session of the user. The client removes the session
+  ///   only after the server ended them. When the request fails, the session stays, so you can
+  ///   retry or sign out with `.local`. When the server rejects the refresh of an expired session,
+  ///   the client signs out with ``SignOutReason/userInitiated`` and throws. When another sign-in
+  ///   replaces the session during that refresh, the client keeps the new session and throws.
+  /// - ``SignOutScope/others`` ends every other session of the user. This session stays, and the
+  ///   client emits no ``AuthEvent/signedOut``. The client first refreshes an expired session, as
+  ///   ``refreshSession()`` does, under every ``AutoRefreshPolicy``. When the server rejects that
+  ///   refresh, the client signs out with ``SignOutReason/sessionExpired`` and throws.
+  ///
+  /// When no session is stored, `.local` and `.global` still clear the local auth state and emit
+  /// ``AuthEvent/signedOut``. A sign-out ends refresh tokens only: an access token stays valid
+  /// until it expires.
+  ///
+  /// - Parameter scope: Which sessions to end.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/sessionMissing`` for `.others` when
+  ///   no session is stored, or when another sign-in replaced the session during its refresh.
+  public func signOut(scope: SignOutScope = .local) async throws {
+    if status == .loading {
+      try await sessionStore.load()
     }
 
-    if scope != .others {
-      try await sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+    switch scope {
+    case .local: try await signOutLocally()
+    case .global: try await signOutGlobally()
+    case .others: try await signOutOthers()
+    }
+  }
+
+  private func signOutLocally() async throws {
+    codeVerifierStorage.removeAll()
+    guard let removed = try await sessionStore.signOut(.userInitiated) else { return }
+
+    var accessToken = removed.session.accessToken
+    if removed.isExpired(at: date(), leeway: defaultExpiryMargin) {
+      do {
+        accessToken = try await dependencies.refreshRequest(removed.session.refreshToken)
+          .accessToken
+      } catch let error as AuthError where error.endsSessionForGood {
+        return
+      }
+    }
+    try await logout(accessToken: accessToken, scope: .local)
+  }
+
+  private func signOutGlobally() async throws {
+    guard let held = currentSession else {
+      return try await removeSession(refreshToken: nil)
     }
 
+    var session = held
+    if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
+      do {
+        session = try await sessionStore.refreshHeldSession(
+          readWith: held.refreshToken,
+          requiringSameSession: true,
+          using: dependencies.refreshRequest,
+          signOutReason: { $0.isClientError ? .userInitiated : nil }
+        )
+      } catch let error as AuthError where error.isClientError {
+        codeVerifierStorage.removeAll()
+        throw error
+      } catch  where currentSession == nil && !Task.isCancelled {
+        // Another sign-out landed during the refresh, so no session is left to revoke.
+        return try await removeSession(refreshToken: nil)
+      }
+    }
+
+    try await logout(accessToken: session.accessToken, scope: .global)
+    try await removeSession(refreshToken: session.refreshToken)
+  }
+
+  private func signOutOthers() async throws {
+    guard var session = currentSession else { throw AuthError.sessionMissing }
+    if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
+      session = try await sessionStore.refreshHeldSession(
+        readWith: session.refreshToken, requiringSameSession: true,
+        using: dependencies.refreshRequest)
+    }
+    try await logout(accessToken: session.accessToken, scope: .others)
+  }
+
+  /// Signs out while the store holds the session whose refresh token was `refreshToken`, or a
+  /// refresh of it, or holds none when `refreshToken` is `nil`. A sign-in that landed during the
+  /// request stays.
+  private func removeSession(refreshToken: String?) async throws {
+    codeVerifierStorage.removeAll()
+    try await sessionStore.commit(.revoked(.userInitiated, refreshToken: refreshToken))
+  }
+
+  /// Sends `POST /logout`. Each scope decides what happens to the local session.
+  private func logout(accessToken: String, scope: SignOutScope) async throws {
     do {
-      try await api.execute(
-        authAPI.signOut(accessToken: session.accessToken, scope: scope),
-        for: .snapshot(session)
-      )
-    } catch let error as AuthError
-      where error.kind == .sessionInvalidated
-      || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
-    {}
+      try await api.execute(authAPI.signOut(accessToken: accessToken, scope: scope))
+    } catch let error as AuthError where error.meansNothingLeftToRevoke(for: scope) {}
   }
 
   /// Log in an user given a User supplied OTP received via email.
@@ -1076,7 +1156,7 @@ public final class AuthClient: Sendable {
   @discardableResult
   public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
-      authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
+      authAPI.signInWithIDToken(credentials: credentials, linkingTo: session().accessToken)
     )
 
     try await sessionStore.commit(.signedIn(session, event: .userUpdated))
@@ -1198,17 +1278,17 @@ public final class AuthClient: Sendable {
     )
   }
 
-  /// Refresh and return a session, regardless of expiry status.
-  /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
-  /// none is provided then this method refreshes the current session. When a concurrent refresh or
-  /// sign-in replaced the current session during this call, and the new session is still valid,
-  /// this method returns the new session without a request.
+  /// Refreshes the session, whatever its expiry, and returns it.
+  ///
+  /// When a concurrent refresh or sign-in replaced the session during this call, and the new
+  /// session is still valid, this method returns the new session without a request. To sign in
+  /// with tokens from elsewhere, use ``importSession(accessToken:refreshToken:)``.
+  ///
   /// - Returns: A new session, or the valid session that replaced the current one.
-  /// - Throws: ``AuthError/sessionMissing`` when no `refreshToken` is given and there is no
-  ///   current session.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored.
   @discardableResult
-  public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    try await sessionManager.refreshSession(refreshToken)
+  public func refreshSession() async throws -> Session {
+    try await sessionManager.refreshSession()
   }
 
   /// Refreshes the session when less than half of its lifetime is left, and returns it.
@@ -1331,7 +1411,8 @@ public final class AuthClient: Sendable {
   /// verify the JWT.
   ///
   /// - Parameters:
-  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
+  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from
+  ///     ``session()``.
   ///   - options: Various additional options that allow you to customize the behavior of this method.
   ///
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
@@ -1345,10 +1426,7 @@ public final class AuthClient: Sendable {
     if let jwt {
       token = jwt
     } else {
-      guard let session = try? await session else {
-        throw AuthError.sessionMissing
-      }
-      token = session.accessToken
+      token = try await session().accessToken
     }
 
     guard let decodedJWT = JWT.decode(token) else {
@@ -1406,5 +1484,13 @@ public final class AuthClient: Sendable {
     )
 
     return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+  }
+}
+
+extension AuthError {
+  /// Whether a logout answer means the server has nothing left to revoke for `scope`.
+  fileprivate func meansNothingLeftToRevoke(for scope: SignOutScope) -> Bool {
+    guard response?.statusCode == 403 else { return false }
+    return errorCode == .userNotFound || (scope == .local && errorCode == .sessionNotFound)
   }
 }

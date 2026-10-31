@@ -98,269 +98,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func signOut() async throws {
-      try await withMainSerialExecutor {
-        let sut = makeSUT()
-
-        Mock(
-          url: clientURL.appendingPathComponent("logout"),
-          ignoreQuery: true,
-          statusCode: 200,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut() },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.dependencies.sessionStore.currentStatus == .signedOut(.userInitiated))
-        do {
-          _ = try await sut.session
-        } catch {
-          #expect((error as? AuthError)?.kind == .sessionMissing)
-        }
-      }
-    }
-
-    @Test
-    func signOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "others")
-          ]),
-          statusCode: 200,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=others"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        try await sut.seedSession(.valid)
-
-        try await sut.signOut(scope: .others)
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(!(sessionRemoved))
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIfUserIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 404,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [.valid, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 401,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [validSession, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIf403Returned() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 403,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [validSession, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldSucceedIfSessionIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        sessionNotFoundMock(scope: "global").register()
-
-        let sut = makeSUT()
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut() },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.currentSession == nil)
-      }
-    }
-
-    @Test
-    func signOutWithOthersScopeShouldRemoveSessionIfSessionIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        sessionNotFoundMock(scope: "others").register()
-
-        let sut = makeSUT()
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut(scope: .others) },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.currentSession == nil)
-      }
-    }
-
-    @Test
-    func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
+    func globalSignOutKeepsASessionSignedInWhileLoggingOut() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
 
@@ -368,7 +106,12 @@ extension AuthMockerTests {
         nextSession.accessToken = "next-access-token"
         nextSession.refreshToken = "next-refresh-token"
 
-        var mock = sessionNotFoundMock(scope: "global")
+        var mock = Mock(
+          url: clientURL.appendingPathComponent("logout"),
+          ignoreQuery: true,
+          statusCode: 204,
+          data: [.post: Data()]
+        )
         mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
           let signedIn = DispatchSemaphore(value: 0)
           Task {
@@ -381,7 +124,7 @@ extension AuthMockerTests {
 
         try await sut.seedSession(.valid)
 
-        try await sut.signOut()
+        try await sut.signOut(scope: .global)
 
         expectNoDifference(sut.currentSession, nextSession)
       }
@@ -1285,7 +1028,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      var session = Session.valid
+      session.refreshToken = "refresh-token"
+      try await sut.seedSession(session)
+      try await sut.refreshSession()
     }
 
     #if !os(Linux) && !os(Windows) && !os(Android)
@@ -1541,7 +1287,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func setSessionWithAFutureExpirationDate() async throws {
+    func importSessionWithAFutureExpirationDate() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),
         statusCode: 200,
@@ -1565,11 +1311,11 @@ extension AuthMockerTests {
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
 
     @Test
-    func setSessionWithAExpiredToken() async throws {
+    func importSessionWithAnExpiredToken() async throws {
       Mock(
         url: clientURL.appendingPathComponent("token"),
         ignoreQuery: true,
@@ -1596,7 +1342,7 @@ extension AuthMockerTests {
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
 
     @Test
@@ -3635,7 +3381,9 @@ extension AuthMockerTests {
     }
 
     @Test
-    func setSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+    func importSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned()
+      async throws
+    {
       let sut = makeSUT()
 
       Mock(
@@ -3663,7 +3411,7 @@ extension AuthMockerTests {
         sut: sut,
         action: {
           do {
-            _ = try await sut.setSession(
+            _ = try await sut.importSession(
               accessToken: accessToken, refreshToken: "dummy-refresh-token")
             Issue.record("Expected failure")
           } catch {
@@ -3750,7 +3498,7 @@ extension AuthMockerTests {
         sut: sut,
         action: {
           do {
-            _ = try await sut.session
+            _ = try await sut.session()
             Issue.record("Expected failure")
           } catch {
             // `.initialSession` starts a background refresh of the expired session. If it
@@ -3785,7 +3533,7 @@ extension AuthMockerTests {
       try await assertAuthStateChanges(
         sut: sut,
         action: {
-          _ = try await sut.session
+          _ = try await sut.session()
         },
         expectedEvents: expectedEvents
       )
@@ -4320,28 +4068,6 @@ extension AuthMockerTests {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
-    }
-
-    private func sessionNotFoundMock(scope: String) -> Mock {
-      Mock(
-        url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-          URLQueryItem(name: "scope", value: scope)
-        ]),
-        statusCode: 403,
-        data: [
-          .post: Data(
-            """
-            {
-              "code": "session_not_found",
-              "message": "Session from session_id claim in JWT does not exist"
-            }
-            """.utf8
-          )
-        ],
-        additionalHeaders: [
-          "X-Supabase-Api-Version": "2024-01-01"
-        ]
-      )
     }
 
     private func makeSUT(
