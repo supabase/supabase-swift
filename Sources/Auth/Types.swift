@@ -1055,8 +1055,34 @@ public enum AuthFlowType: Sendable {
   case pkce
 }
 
-/// The string type used to identify an MFA factor type (e.g. `"totp"`, `"phone"`, `"webauthn"`).
-public typealias FactorType = String
+/// The kind of an MFA factor.
+public struct FactorType: RawRepresentable, Codable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates a ``FactorType`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates a ``FactorType`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// A time-based one-time password from an authenticator app.
+  public static let totp: FactorType = "totp"
+
+  /// A one-time code sent to a phone by SMS or WhatsApp.
+  public static let phone: FactorType = "phone"
+
+  /// A WebAuthn credential, such as a passkey or a security key.
+  public static let webAuthn: FactorType = "webauthn"
+
+  /// A set of single-use recovery codes. See ``AuthMFA/recoveryCodes``.
+  public static let recoveryCode: FactorType = "recovery_code"
+}
 
 /// The enrollment status of an MFA factor.
 public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
@@ -1089,7 +1115,7 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// Friendly name of the factor, useful to disambiguate between multiple factors.
   public let friendlyName: String?
 
-  /// Type of factor. `totp` and `phone` supported with this version.
+  /// Type of factor.
   public let factorType: FactorType
 
   /// Factor's status.
@@ -1102,245 +1128,121 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
   public let updatedAt: Date
 }
 
-/// The protocol that MFA enrollment parameter types must conform to.
-public protocol MFAEnrollParamsType: Encodable, Hashable, Sendable {
-  /// The factor type identifier (e.g. `"totp"`, `"phone"`, `"webauthn"`).
-  var factorType: FactorType { get }
-}
+/// The body of `POST /factors`. Each `enroll` method of ``AuthMFA`` fills the fields of its factor
+/// type; the encoder omits the rest.
+struct MFAEnrollParams: Encodable, Sendable {
+  let factorType: FactorType
+  var friendlyName: String?
+  var issuer: String?
+  var phone: String?
 
-/// Parameters for enrolling a TOTP (Time-based One-Time Password) MFA factor.
-public struct MFATotpEnrollParams: MFAEnrollParamsType {
-  /// The factor type, always `"totp"`.
-  public let factorType: FactorType = "totp"
+  static func totp(issuer: String? = nil, friendlyName: String? = nil) -> Self {
+    MFAEnrollParams(factorType: .totp, friendlyName: friendlyName, issuer: issuer)
+  }
 
-  /// Domain which the user is enrolled with.
-  public let issuer: String?
+  static func phone(_ phone: String, friendlyName: String? = nil) -> Self {
+    MFAEnrollParams(factorType: .phone, friendlyName: friendlyName, phone: phone)
+  }
 
-  /// Human readable name assigned to the factor.
-  public let friendlyName: String?
-
-  /// Creates TOTP enrollment parameters.
-  ///
-  /// - Parameters:
-  ///   - issuer: The issuer domain shown in authenticator apps.
-  ///   - friendlyName: A human-readable label for the factor.
-  public init(issuer: String? = nil, friendlyName: String? = nil) {
-    self.issuer = issuer
-    self.friendlyName = friendlyName
+  static func webAuthn(friendlyName: String? = nil) -> Self {
+    MFAEnrollParams(factorType: .webAuthn, friendlyName: friendlyName)
   }
 }
 
-extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
-  /// Creates parameters for enrolling a TOTP factor.
-  ///
-  /// - Parameters:
-  ///   - issuer: The issuer domain shown in authenticator apps.
-  ///   - friendlyName: A human-readable label for the factor.
-  public static func totp(issuer: String? = nil, friendlyName: String? = nil) -> Self {
-    MFATotpEnrollParams(issuer: issuer, friendlyName: friendlyName)
+/// A TOTP factor created by ``AuthMFA/enrollTOTP(issuer:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters a code from their authenticator app in
+/// ``AuthMFA/challengeAndVerify(factorID:code:)``.
+public struct TOTPEnrollment: Identifiable, Hashable, Sendable {
+  /// ID of the new factor.
+  public let id: UUID
+
+  /// Friendly name of the factor, useful to tell several factors apart.
+  public let friendlyName: String?
+
+  /// A QR code that encodes ``uri``, as an SVG document. Display it by prefixing
+  /// `data:image/svg+xml;utf-8,`. Avoid logging this value.
+  public let qrCode: String
+
+  /// The TOTP secret, also encoded in the QR code. Show it in a password-style field for users who
+  /// cannot scan the QR code. Avoid logging this value.
+  public let secret: String
+
+  /// The `otpauth://` URI encoded in the QR code. Avoid logging this value.
+  public let uri: String
+}
+
+extension TOTPEnrollment: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case id, friendlyName, totp
+  }
+
+  private struct TOTP: Decodable {
+    let qrCode: String
+    let secret: String
+    let uri: String
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let totp = try container.decode(TOTP.self, forKey: .totp)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      friendlyName: try container.decodeIfPresent(String.self, forKey: .friendlyName),
+      qrCode: totp.qrCode,
+      secret: totp.secret,
+      uri: totp.uri
+    )
   }
 }
 
-/// Parameters for enrolling a phone (SMS/WhatsApp) MFA factor.
-public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
-  /// The factor type, always `"phone"`.
-  public let factorType: FactorType = "phone"
+/// A phone factor created by ``AuthMFA/enrollPhone(_:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters the code from
+/// ``AuthMFA/challenge(factorID:channel:)`` in ``AuthMFA/verify(factorID:challengeID:code:)``.
+public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
+  /// ID of the new factor.
+  public let id: UUID
 
-  /// Human readable name assigned to the factor.
+  /// Friendly name of the factor, useful to tell several factors apart.
   public let friendlyName: String?
 
-  /// Phone number to be enrolled. Number should conform to E.164 standard.
+  /// The phone number of the factor, in E.164 format.
   public let phone: String
-
-  /// Creates phone enrollment parameters.
-  ///
-  /// - Parameters:
-  ///   - friendlyName: A human-readable label for the factor.
-  ///   - phone: The phone number in E.164 format.
-  public init(friendlyName: String? = nil, phone: String) {
-    self.friendlyName = friendlyName
-    self.phone = phone
-  }
 }
 
-extension MFAEnrollParamsType where Self == MFAPhoneEnrollParams {
-  /// Creates parameters for enrolling a phone factor.
-  ///
-  /// - Parameters:
-  ///   - friendlyName: A human-readable label for the factor.
-  ///   - phone: The phone number in E.164 format.
-  public static func phone(friendlyName: String? = nil, phone: String) -> Self {
-    MFAPhoneEnrollParams(friendlyName: friendlyName, phone: phone)
-  }
-}
-
-/// The response returned after successfully enrolling a new MFA factor.
-public struct AuthMFAEnrollResponse: Decodable, Hashable, Sendable {
-  /// ID of the factor that was just enrolled (in an unverified state).
+/// A challenge created by ``AuthMFA/challenge(factorID:channel:)``.
+public struct MFAChallenge: Identifiable, Hashable, Sendable {
+  /// ID of the challenge. Pass it to ``AuthMFA/verify(factorID:challengeID:code:)``.
   public let id: UUID
 
-  /// Type of MFA factor.
-  public let type: FactorType
+  /// The type of the factor that was challenged.
+  public let factorType: FactorType
 
-  /// TOTP enrollment information. Available only if the ``type`` is `totp`.
-  public var totp: TOTP?
+  /// The time after which the challenge can no longer be verified.
+  public let expiresAt: Date
 
-  /// Friendly name of the factor, useful to disambiguate between multiple factors.
-  public var friendlyName: String?
-
-  /// Phone number of the MFA factor in E.164 format. Used to send messages. Available only if the ``type`` is `phone`.
-  public var phone: String?
-
-  /// TOTP-specific enrollment data, including the QR code and shared secret.
-  public struct TOTP: Decodable, Hashable, Sendable {
-    /// Contains a QR code encoding the authenticator URI. You can convert it to a URL by prepending
-    /// `data:image/svg+xml;utf-8,` to the value. Avoid logging this value to the console.
-    public var qrCode: String
-
-    /// The TOTP secret (also encoded in the QR code). Show this secret in a password-style field to
-    /// the user, in case they are unable to scan the QR code. Avoid logging this value to the
-    /// console.
-    public let secret: String
-
-    /// The authenticator URI encoded within the QR code, should you need to use it. Avoid logging
-    /// this value to the console.
-    public let uri: String
-  }
-}
-
-/// Parameters for creating an MFA challenge.
-public struct MFAChallengeParams: Encodable, Hashable {
-  /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
-  public let factorId: UUID
-
-  /// Messaging channel to use (e.g. `whatsapp` or `sms`). Only relevant for phone factors.
-  public let channel: MessagingChannel?
-
-  /// Relying-party options. Only relevant for WebAuthn factors.
-  @_spi(Experimental) public let webAuthn: WebAuthnChallengeOptions?
-
-  /// Creates challenge parameters for a TOTP or phone factor.
-  ///
-  /// - Parameters:
-  ///   - factorId: The factor ID to challenge.
-  ///   - channel: The messaging channel for phone factors.
-  public init(factorId: UUID, channel: MessagingChannel? = nil) {
-    self.factorId = factorId
-    self.channel = channel
-    self.webAuthn = nil
-  }
-
-  /// Creates challenge parameters including WebAuthn relying-party options.
-  ///
-  /// - Parameters:
-  ///   - factorId: The factor ID to challenge.
-  ///   - channel: The messaging channel for phone factors.
-  ///   - webAuthn: WebAuthn-specific options.
-  @_spi(Experimental)
-  public init(
-    factorId: UUID,
-    channel: MessagingChannel? = nil,
-    webAuthn: WebAuthnChallengeOptions?
-  ) {
-    self.factorId = factorId
-    self.channel = channel
-    self.webAuthn = webAuthn
-  }
-}
-
-/// Parameters for verifying an MFA challenge.
-public struct MFAVerifyParams: Encodable, Hashable {
-  /// ID of the factor being verified. Returned in ``AuthMFA/enroll(params:)``.
-  public let factorId: UUID
-
-  /// ID of the challenge being verified. Returned in challenge().
-  public let challengeId: UUID
-
-  /// Verification code provided by the user. Used for `totp` and `phone` factors; empty for
-  /// `webauthn` factors (which use `credentialResponse` instead).
-  public let code: String
-
-  /// The W3C credential (assertion) response produced by the authenticator. Used for `webauthn`
-  /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
-  @_spi(Experimental) public let credentialResponse: JSONValue?
-
-  /// Verifies a `totp` or `phone` factor using a user-provided code.
-  ///
-  /// - Parameters:
-  ///   - factorId: The factor ID being verified.
-  ///   - challengeId: The challenge ID being verified.
-  ///   - code: The verification code from the authenticator app or SMS.
-  public init(factorId: UUID, challengeId: UUID, code: String) {
-    self.factorId = factorId
-    self.challengeId = challengeId
-    self.code = code
-    self.credentialResponse = nil
-  }
-
-  /// Verifies a `webauthn` factor using the credential response produced by the authenticator.
-  ///
-  /// - Parameters:
-  ///   - factorId: The factor ID being verified.
-  ///   - challengeId: The challenge ID being verified.
-  ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
-  @_spi(Experimental)
-  public init(factorId: UUID, challengeId: UUID, credentialResponse: JSONValue) {
-    self.factorId = factorId
-    self.challengeId = challengeId
-    self.code = ""
-    self.credentialResponse = credentialResponse
-  }
-}
-
-/// Parameters for unenrolling an MFA factor.
-public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to unenroll. Returned in ``AuthMFA/enroll(params:)``.
-  public let factorId: UUID
-
-  /// Creates unenroll parameters.
-  ///
-  /// - Parameter factorId: The factor ID to unenroll.
-  public init(factorId: UUID) {
-    self.factorId = factorId
-  }
-}
-
-/// Parameters for the combined challenge-and-verify operation.
-public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
-  /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
-  public let factorId: UUID
-
-  /// Verification code provided by the user.
-  public let code: String
-
-  /// Creates challenge-and-verify parameters.
-  ///
-  /// - Parameters:
-  ///   - factorId: The factor ID to challenge and verify.
-  ///   - code: The verification code from the user.
-  public init(factorId: UUID, code: String) {
-    self.factorId = factorId
-    self.code = code
-  }
-}
-
-/// The response returned after creating an MFA challenge.
-public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
-  /// ID of the newly created challenge.
-  public let id: UUID
-
-  /// Factor type which generated the challenge.
-  public let type: FactorType
-
-  /// Timestamp in UNIX seconds when this challenge will no longer be usable.
-  public let expiresAt: TimeInterval
-
-  /// WebAuthn credential options. Present only when ``type`` is `webauthn`.
+  /// WebAuthn credential options. Present only when ``factorType`` is ``FactorType/webAuthn``.
   @_spi(Experimental) public var webauthn: WebAuthnChallengeResponseData? = nil
 }
 
-/// A type alias that maps an MFA verify response to a ``Session``.
-public typealias AuthMFAVerifyResponse = Session
+extension MFAChallenge: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case id, type, expiresAt, webauthn
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      factorType: try container.decode(FactorType.self, forKey: .type),
+      expiresAt: Date(
+        timeIntervalSince1970: try container.decode(TimeInterval.self, forKey: .expiresAt)),
+      webauthn: try container.decodeIfPresent(
+        WebAuthnChallengeResponseData.self, forKey: .webauthn)
+    )
+  }
+}
 
 /// The response returned after successfully unenrolling an MFA factor.
 public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
@@ -1378,36 +1280,118 @@ public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendabl
   public let codes: [String]
 }
 
-/// The response returned by ``AuthMFA/listFactors()``.
-public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
-  /// All available factors (verified and unverified).
-  public let all: [Factor]
+/// The user's MFA factors, returned by ``AuthMFA/factors()``.
+public struct MFAFactors: Hashable, Sendable {
+  /// Factors the user has verified. Only these count toward reaching `aal2`.
+  ///
+  /// It includes the user's ``FactorType/recoveryCode`` factor, which cannot be challenged. Filter
+  /// on ``Factor/factorType`` to pick a factor to verify.
+  public let verified: [Factor]
 
-  /// Only verified TOTP factors. (A subset of `all`.)
-  public let totp: [Factor]
+  /// Factors the user has enrolled but not verified yet.
+  public let unverified: [Factor]
 
-  /// Only verified phone factors. (A subset of `all`.)
-  public let phone: [Factor]
-
-  /// Only verified WebAuthn (passkey) factors. (A subset of `all`.)
-  @_spi(Experimental) public let webauthn: [Factor]
+  /// Every factor: ``verified`` first, then ``unverified``.
+  public var all: [Factor] { verified + unverified }
 }
 
-/// A string representing an Authenticator Assurance Level (`aal1` or `aal2`).
-public typealias AuthenticatorAssuranceLevels = String
+extension MFAFactors {
+  /// Splits `factors` by status. A status other than ``FactorStatus/verified`` counts as
+  /// unverified, because only a verified factor can raise the assurance level.
+  init(_ factors: [Factor]) {
+    self.init(
+      verified: factors.filter { $0.status == .verified },
+      unverified: factors.filter { $0.status != .verified }
+    )
+  }
+}
 
-/// An authentication method reference (AMR) entry.
-///
-/// An entry designates what method was used by the user to verify their identity and at what time.
-public struct AMREntry: Decodable, Hashable, Sendable {
-  /// Authentication method name.
-  public let method: Method
+/// An Authenticator Assurance Level (AAL), the `aal` claim of an access token.
+public struct AuthenticatorAssuranceLevel: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
 
-  /// Timestamp when the method was successfully used.
-  public let timestamp: TimeInterval
+  /// Creates an ``AuthenticatorAssuranceLevel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
 
-  /// The string type used for authentication method names.
-  public typealias Method = String
+  /// Creates an ``AuthenticatorAssuranceLevel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The user proved one factor, such as a password, a one-time code, or an OAuth sign-in.
+  public static let aal1: AuthenticatorAssuranceLevel = "aal1"
+
+  /// The user also verified a second factor.
+  public static let aal2: AuthenticatorAssuranceLevel = "aal2"
+}
+
+/// A method the user verified their identity with, the `method` of an access token's `amr` entry.
+public struct AuthenticationMethod: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  public let rawValue: String
+
+  /// Creates an ``AuthenticationMethod`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates an ``AuthenticationMethod`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// Sign-in with an OAuth provider.
+  public static let oauth: AuthenticationMethod = "oauth"
+  /// Sign-in with a password.
+  public static let password: AuthenticationMethod = "password"
+  /// Sign-in with a one-time password sent by email or phone.
+  public static let otp: AuthenticationMethod = "otp"
+  /// Verification of a TOTP factor.
+  public static let totp: AuthenticationMethod = "totp"
+  /// Sign-in through a password recovery link.
+  public static let recovery: AuthenticationMethod = "recovery"
+  /// Sign-in through an invite link.
+  public static let invite: AuthenticationMethod = "invite"
+  /// Sign-in with SAML single sign-on.
+  public static let ssoSAML: AuthenticationMethod = "sso/saml"
+  /// Sign-in with a magic link.
+  public static let magicLink: AuthenticationMethod = "magiclink"
+  /// Sign-in through an email sign-up confirmation link.
+  public static let emailSignup: AuthenticationMethod = "email/signup"
+  /// Sign-in through an email change confirmation link.
+  public static let emailChange: AuthenticationMethod = "email_change"
+  /// A session refresh.
+  public static let tokenRefresh: AuthenticationMethod = "token_refresh"
+  /// Anonymous sign-in.
+  public static let anonymous: AuthenticationMethod = "anonymous"
+  /// Verification of a phone factor.
+  public static let mfaPhone: AuthenticationMethod = "mfa/phone"
+  /// Verification of a WebAuthn factor.
+  public static let mfaWebAuthn: AuthenticationMethod = "mfa/webauthn"
+  /// Verification of a recovery code.
+  public static let mfaRecoveryCode: AuthenticationMethod = "mfa/recovery_code"
+  /// Sign-in with a Web3 wallet.
+  public static let web3: AuthenticationMethod = "web3"
+  /// Sign-in through the OAuth 2.1 server's authorization code grant.
+  public static let oauthProviderAuthorizationCode: AuthenticationMethod =
+    "oauth_provider/authorization_code"
+  /// Sign-in with a passkey.
+  public static let passkey: AuthenticationMethod = "passkey"
+}
+
+/// An authentication method reference (AMR) entry: a method the user verified their identity
+/// with, and when.
+public struct AMREntry: Hashable, Sendable {
+  /// The method the user verified their identity with.
+  public let method: AuthenticationMethod
+
+  /// When the user verified their identity with ``method``.
+  public let timestamp: Date
 }
 
 extension AMREntry {
@@ -1415,36 +1399,39 @@ extension AMREntry {
   /// string of RFC 8176 that a custom access token hook can emit. A bare string carries no time, so
   /// it takes the token's `iat`.
   init?(value: Any, issuedAt: TimeInterval?) {
-    if let method = value as? Method {
+    if let method = value as? String {
       guard let issuedAt else { return nil }
-      self.method = method
-      self.timestamp = issuedAt
+      self.init(
+        method: AuthenticationMethod(rawValue: method),
+        timestamp: Date(timeIntervalSince1970: issuedAt))
       return
     }
 
     guard let dict = value as? [String: Any],
-      let method = dict["method"] as? Method,
+      let method = dict["method"] as? String,
       let timestamp = dict["timestamp"] as? TimeInterval
     else {
       return nil
     }
 
-    self.method = method
-    self.timestamp = timestamp
+    self.init(
+      method: AuthenticationMethod(rawValue: method),
+      timestamp: Date(timeIntervalSince1970: timestamp)
+    )
   }
 }
 
-/// The response returned by ``AuthMFA/authenticatorAssuranceLevel()``.
-public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
-  /// Current AAL level of the session.
-  public let currentLevel: AuthenticatorAssuranceLevels?
+/// The assurance level of the current session, returned by ``AuthMFA/assuranceLevel()``.
+public struct AssuranceLevelInfo: Hashable, Sendable {
+  /// The assurance level of the current access token. `nil` when the token has no `aal` claim.
+  public let currentLevel: AuthenticatorAssuranceLevel?
 
-  /// Next possible AAL level for the session. If the next level is higher than the current one, the
-  /// user should go through MFA.
-  public let nextLevel: AuthenticatorAssuranceLevels?
+  /// The highest level the user can reach. When it is above ``currentLevel``, ask the user to
+  /// verify a factor.
+  public let nextLevel: AuthenticatorAssuranceLevel?
 
-  /// A list of all authentication methods attached to this session. Use the information here to
-  /// detect the last time a user verified a factor, for example if implementing a step-up scenario.
+  /// The methods attached to the session, most recent first. Use them to find when the user last
+  /// verified a factor, for example in a step-up flow.
   public let currentAuthenticationMethods: [AMREntry]
 }
 

@@ -219,14 +219,54 @@ struct TypesTests {
 
     #expect(
       AMREntry(value: object, issuedAt: 1_700_000_000)
-        == AMREntry(method: "totp", timestamp: 1_700_000_100)
+        == AMREntry(method: .totp, timestamp: Date(timeIntervalSince1970: 1_700_000_100))
     )
     #expect(
       AMREntry(value: "pwd", issuedAt: 1_700_000_000)
-        == AMREntry(method: "pwd", timestamp: 1_700_000_000)
+        == AMREntry(method: "pwd", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
     )
     #expect(AMREntry(value: "pwd", issuedAt: nil) == nil)
     #expect(AMREntry(value: 42, issuedAt: 1_700_000_000) == nil)
+  }
+
+  @Test
+  func factorTypeDecodesKnownAndUnknownValues() throws {
+    let decoded = try AuthClient.Configuration.jsonDecoder.decode(
+      [FactorType].self, from: Data(#"["totp","phone","webauthn","recovery_code","sms_v2"]"#.utf8))
+
+    #expect(decoded == [.totp, .phone, .webAuthn, .recoveryCode, "sms_v2"])
+    #expect(
+      try AuthClient.Configuration.jsonEncoder.encode(FactorType.recoveryCode)
+        == Data(#""recovery_code""#.utf8))
+  }
+
+  @Test
+  func authenticationMethodWireValues() {
+    let methods: [AuthenticationMethod] = [
+      .oauth, .password, .otp, .totp, .recovery, .invite, .ssoSAML, .magicLink, .emailSignup,
+      .emailChange, .tokenRefresh, .anonymous, .mfaPhone, .mfaWebAuthn, .mfaRecoveryCode, .web3,
+      .oauthProviderAuthorizationCode, .passkey,
+    ]
+
+    #expect(
+      methods.map(\.rawValue) == [
+        "oauth", "password", "otp", "totp", "recovery", "invite", "sso/saml", "magiclink",
+        "email/signup", "email_change", "token_refresh", "anonymous", "mfa/phone", "mfa/webauthn",
+        "mfa/recovery_code", "web3", "oauth_provider/authorization_code", "passkey",
+      ])
+  }
+
+  @Test
+  func mfaChallengeDecodesExpiresAtFromUnixSeconds() throws {
+    let challenge = try AuthClient.Configuration.jsonDecoder.decode(
+      MFAChallenge.self,
+      from: Data(
+        #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"totp","expires_at":1700000000}"#.utf8
+      )
+    )
+
+    #expect(challenge.expiresAt == Date(timeIntervalSince1970: 1_700_000_000))
+    #expect(challenge.factorType == .totp)
   }
 
   private func decodeUser(_ fields: String) throws -> User {
