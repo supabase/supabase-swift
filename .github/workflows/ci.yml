@@ -235,8 +235,11 @@ jobs:
         if: matrix.config == 'debug'
         run: ./scripts/check-compile-failures.sh debug
 
+  # Each suite runs in its own job so the slow ones overlap instead of queueing behind one
+  # another. The nightly toolchain only runs outside pull requests: it is allowed to fail, so
+  # on a PR it would hold a runner for the longest leg without gating anything.
   linux:
-    name: Linux (${{ matrix.container }})
+    name: Linux (${{ matrix.container }}, ${{ matrix.suite }})
     needs: changes
     if: needs.changes.outputs.package == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
@@ -251,8 +254,8 @@ jobs:
       matrix:
         # The stable releases live under the `swift` image; nightly snapshots are only
         # published under `swiftlang/swift` (there is no `swift:nightly`).
-        container:
-          ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
+        container: ${{ fromJSON(github.event_name == 'pull_request' && '["swift:6.2-noble", "swift:6.3-noble"]' || '["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]') }}
+        suite: [package, opentelemetry, typegen]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Official Swift images run as root, so files the container writes into the
@@ -260,33 +263,41 @@ jobs:
       # action's post-step (it stats the workspace from the runner's own, non-root
       # context), so this key can't depend on hashFiles('**/Package.resolved') the way
       # the uncontainerized jobs' keys do.
+      #
+      # Blacksmith's sticky disks mount on the host after the job container starts, so the
+      # container cannot see them. This job keeps actions/cache.
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen-${{ github.sha }}
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-${{ matrix.container }}-typegen-
-      - name: "Build Swift Package"
-        run: swift build --explicit-target-dependency-import-check error
+            ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
       # worker threads and every in-flight test parked on a timer that never fires. The other
       # targets keep the parallel runner.
       # On nightly, each test step has its own time limit, about twice its usual run time. A
       # stalled test process then fails the step, which continue-on-error tolerates, instead of
       # reaching the job limit, where the job is cancelled and CI Success fails (SDK-2597).
+      - name: "Build Swift Package"
+        if: matrix.suite == 'package'
+        run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
+        if: matrix.suite == 'package'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --skip IntegrationTests --skip RealtimeTests
       - name: "Test RealtimeTests (serial)"
+        if: matrix.suite == 'package'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 5 || 30 }}
         run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
+        if: matrix.suite == 'opentelemetry'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"
+        if: matrix.suite == 'typegen'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
         run: swift test --package-path tools/supabase-typegen
 
@@ -330,7 +341,17 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
           echo "SUPABASE_EXPERIMENTAL_STACK=1" >> "$GITHUB_ENV"
+      # Linux runs on the host, not in a container, so it can use a sticky disk: the build
+      # directory stays on the runner's disk instead of being zipped and uploaded each run.
+      # Sticky disks are Linux-only, so macOS keeps actions/cache.
+      - name: "Mount Swift build disk"
+        if: runner.os == 'Linux'
+        uses: useblacksmith/stickydisk@b6cb58d1d31d6d32a25248fab12493d831f7bd48 # v1.7.2
+        with:
+          key: ${{ github.repository }}-integration-${{ matrix.name }}
+          path: .build
       - name: "Cache Swift Package"
+        if: runner.os != 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
