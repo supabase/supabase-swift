@@ -1499,7 +1499,7 @@ public final class AuthClient: Sendable {
 
     guard
       let signingKey,
-      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
+      let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
       _ = try await user(jwt: token)
       let claims = try configuration.resolvedDecoder.decode(
@@ -1512,8 +1512,6 @@ public final class AuthClient: Sendable {
       )
       return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
     }
-
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")

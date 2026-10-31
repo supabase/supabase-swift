@@ -3534,7 +3534,9 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldNotVerify() async throws {
+    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldVerifyWithJWKAlgorithm()
+      async throws
+    {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"RS256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3554,26 +3556,23 @@ extension AuthMockerTests {
         k: key.k
       )
 
-      let user = User(fromMockNamed: "user")
-
       Mock(
         url: clientURL.appendingPathComponent("user"),
         ignoreQuery: true,
         contentType: .json,
-        statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+        statusCode: 401,
+        data: [.get: Data()]
       ).register()
 
       let sut = makeSUT()
 
-      let error = await #expect(throws: AuthError.self) {
-        _ = try await sut.claims(
-          jwt: jwt,
-          options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
-        )
-      }
-      #expect(error?.kind == .jwtVerificationFailed)
-      #expect(error?.message == "Invalid JWT signature")
+      let result = try await sut.claims(
+        jwt: jwt,
+        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+      )
+
+      #expect(result.claims.sub == "1234567890")
+      #expect(result.header.alg == "RS256")
     }
 
     @Test
