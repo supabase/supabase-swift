@@ -445,6 +445,38 @@ extension StorageMockerTests {
     }
 
     @Test
+    func createSignedURL_emptyTransformIsNotSent() async throws {
+      let body = LockIsolated(Data())
+      let storage = SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          session: StorageHTTPSession(
+            fetch: { request in
+              body.setValue(request.httpBody ?? Data())
+              return (
+                Data(#"{"signedURL":"object/sign/bucket/file.txt?token=abc.def.ghi"}"#.utf8),
+                HTTPURLResponse(
+                  url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+                )!
+              )
+            },
+            upload: { _, _ in fatalError() }
+          ),
+          logger: nil
+        )
+      )
+
+      _ = try await storage.from("bucket").createSignedURL(
+        path: "file.txt",
+        expiresIn: 3600,
+        transform: TransformOptions()
+      )
+
+      #expect(String(decoding: body.value, as: UTF8.self) == #"{"expiresIn":3600}"#)
+    }
+
+    @Test
     func createSignedURLs() async throws {
       let storage = makeSUT()
 
