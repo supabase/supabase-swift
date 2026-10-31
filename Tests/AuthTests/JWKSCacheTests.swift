@@ -220,12 +220,15 @@ struct JWKSCacheTests {
   }
 
   @Test
-  func failedFetchIsNotCached() async throws {
+  func sharedFailureReachesEveryWaiterAndIsNotCached() async throws {
     let gate = Gate()
-    let failing = LockIsolated(true)
     let fixture = Fixture(
-      gate: { _ in await gate.wait() },
-      failure: { _ in failing.value }
+      gate: { count in
+        if count == 1 {
+          await gate.wait()
+        }
+      },
+      failure: { $0 == 1 }
     )
     let started = LockIsolated(0)
 
@@ -248,10 +251,44 @@ struct JWKSCacheTests {
         #expect(threw)
       }
     }
-    let failedFetches = fixture.fetchCount.value
+    #expect(fixture.fetchCount.value == 1)
 
-    failing.setValue(false)
     #expect(try await fixture.cache.key(for: "k1") == Self.k1)
-    #expect(fixture.fetchCount.value == failedFetches + 1)
+    #expect(fixture.fetchCount.value == 2)
+  }
+
+  @Test
+  func cancelledWaiterLeavesSharedFetchRunning() async throws {
+    let gate = Gate()
+    let fixture = Fixture(gate: { _ in await gate.wait() })
+    let started = LockIsolated(0)
+    let cancelledReturned = LockIsolated(false)
+
+    let cancelled = Task {
+      started.withValue { $0 += 1 }
+      defer { cancelledReturned.setValue(true) }
+      return try await fixture.cache.key(for: "k1")
+    }
+    let waiting = Task {
+      started.withValue { $0 += 1 }
+      return try await fixture.cache.key(for: "k1")
+    }
+    await Self.waitUntil { started.value == 2 && fixture.fetchCount.value >= 1 }
+
+    cancelled.cancel()
+    let deadline = ContinuousClock.now + .seconds(5)
+    while !cancelledReturned.value, ContinuousClock.now < deadline {
+      await Task.yield()
+    }
+    #expect(cancelledReturned.value, "The cancelled caller waited for the shared fetch.")
+
+    gate.open()
+    await #expect(throws: CancellationError.self) {
+      try await cancelled.value
+    }
+    #expect(try await waiting.value == Self.k1)
+    #expect(fixture.fetchCount.value == 1)
+    #expect(try await fixture.cache.key(for: "k1") == Self.k1)
+    #expect(fixture.fetchCount.value == 1)
   }
 }
