@@ -576,10 +576,11 @@ features:
   auth.session.update_user:
     status: implemented
     symbols:
-      - AuthClient.update
+      - AuthClient.updateUser
     supporting_symbols:
       - UserAttributes
       - UserAttributes.userMetadata
+      - UserAttributes.currentPassword
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -637,7 +638,6 @@ features:
     symbols:
       - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
-      - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
     status: implemented
     symbols:
@@ -645,7 +645,7 @@ features:
   auth.identities.list_identities:
     status: implemented
     symbols:
-      - AuthClient.userIdentities
+      - AuthClient.identities
 
   auth.mfa.enroll:
     status: implemented

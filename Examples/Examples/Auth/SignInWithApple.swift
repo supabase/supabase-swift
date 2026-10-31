@@ -76,8 +76,8 @@ struct SignInWithApple: View {
       // fullName is provided only in the first time (account creation),
       // so checking if it is non-nil to not erase data on login.
       if let fullName {
-        _ = try? await supabase.auth.update(
-          user: UserAttributes(userMetadata: ["full_name": .string(fullName)]))
+        _ = try? await supabase.auth.updateUser(
+          UserAttributes(userMetadata: ["full_name": .string(fullName)]))
       }
     }
     actionState = .result(result)

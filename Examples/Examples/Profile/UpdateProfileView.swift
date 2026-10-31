@@ -242,7 +242,7 @@ struct UpdateProfileView: View {
     actionState = .inFlight
 
     do {
-      try await supabase.auth.update(user: attributes, redirectTo: Constants.redirectToURL)
+      try await supabase.auth.updateUser(attributes, redirectTo: Constants.redirectToURL)
 
       var messages: [String] = []
       if emailChanged {

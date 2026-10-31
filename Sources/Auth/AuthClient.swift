@@ -83,8 +83,10 @@ typealias AuthClientID = Int
 /// - ``signOut(scope:)``
 ///
 /// ### User management
+/// - ``user()``
 /// - ``user(jwt:)``
-/// - ``update(user:redirectTo:)``
+/// - ``updateUser(_:redirectTo:)``
+/// - ``UserAttributes``
 /// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
 /// - ``verifyOTP(phone:token:type:captchaToken:)``
 /// - ``verifyOTP(tokenHash:type:)``
@@ -94,9 +96,9 @@ typealias AuthClientID = Int
 /// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
 ///
 /// ### Identities
-/// - ``userIdentities()``
+/// - ``identities()``
 /// - ``linkIdentity(_:options:presenter:)``
-/// - ``linkIdentityWithIDToken(_:)``
+/// - ``linkIdentity(idToken:)``
 /// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``
 ///
@@ -175,7 +177,7 @@ public final class AuthClient: Sendable {
 
   /// Returns the current user, if any.
   ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  /// The user returned by this property may be outdated. Use ``user()`` to fetch an up-to-date user.
   public var currentUser: User? {
     currentSession?.user
   }
@@ -1128,18 +1130,30 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
 
-  /// Gets the current user details if there is an existing session.
-  /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
-  /// attempt to get the jwt from the current session.
+  /// Fetches the signed-in user from the Auth server.
   ///
-  /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
-  public func user(jwt: String? = nil) async throws -> User {
-    if let jwt {
-      return try await api.execute(
-        authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
-    }
+  /// The client sends the access token of the current session. It refreshes the session first
+  /// when the access token has expired. Use this method when you need the latest user data. For a
+  /// value without a request, read ``currentUser``.
+  ///
+  /// - Returns: The signed-in user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  }
 
-    return try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  /// Fetches the user that an access token belongs to.
+  ///
+  /// The client sends `jwt` as is. It does not refresh it. When `jwt` is the access token of the
+  /// current session and the Auth server reports that its session no longer exists, the client
+  /// signs out.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Returns: The user that `jwt` belongs to.
+  public func user(jwt: String) async throws -> User {
+    try await api.execute(
+      authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
@@ -1147,41 +1161,67 @@ public final class AuthClient: Sendable {
     return .snapshot(stored)
   }
 
-  /// Updates user data, if there is a logged in user.
+  /// Updates the signed-in user.
+  ///
+  /// The client merges the returned user into the current session and emits
+  /// ``AuthEvent/userUpdated``. It keeps the tokens of the current session, also when a refresh
+  /// rotates them while the request is in flight.
+  ///
+  /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
+  /// the current password for that change. When `attributes` changes the email, the client starts
+  /// an email change flow. Pass the redirect URL that comes back to ``handleRedirect(_:)``.
+  ///
+  /// - Parameters:
+  ///   - attributes: The values to change.
+  ///   - redirectTo: The URL that the confirmation link of an email change opens.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    guard user.email != nil else {
-      return try await updateUser(user, redirectTo: redirectTo, pkce: nil)
+  public func updateUser(
+    _ attributes: UserAttributes,
+    redirectTo: URL? = nil
+  ) async throws -> User {
+    guard attributes.email != nil else {
+      return try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: nil)
     }
     return try await withFlow(.emailChange, redirectTo: redirectTo) {
-      try await updateUser(user, redirectTo: redirectTo, pkce: $0.challenge)
+      try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: $0.challenge)
     }
   }
 
-  private func updateUser(
-    _ user: UserAttributes,
+  private func sendUserUpdate(
+    _ attributes: UserAttributes,
     redirectTo: URL?,
     pkce: PKCEChallenge?
   ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
-      try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+      try authAPI.updateUser(attributes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
     try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser
   }
 
-  /// Gets all the identities linked to a user.
-  public func userIdentities() async throws -> [UserIdentity] {
+  /// Fetches the identities linked to the signed-in user.
+  ///
+  /// The client sends a request through ``user()``.
+  ///
+  /// - Returns: The linked identities. Empty when the server sends none.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
-  /// Links an identity to the current user with an ID token that a third-party identity provider
-  /// issued.
+  /// Links an identity to the signed-in user with an ID token that a third-party identity
+  /// provider issued.
+  ///
+  /// The client stores the returned session and emits ``AuthEvent/userUpdated``.
   ///
   /// - Parameter credentials: The ID token and the values the server needs to check it.
-  /// - Returns: The updated session.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
       authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
     )

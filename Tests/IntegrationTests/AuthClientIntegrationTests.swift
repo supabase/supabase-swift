@@ -210,7 +210,8 @@ struct AuthClientIntegrationTests {
       password: mockPassword()
     )
 
-    let user = try await authClient.user(jwt: firstUserSession?.accessToken)
+    let accessToken = try #require(firstUserSession?.accessToken)
+    let user = try await authClient.user(jwt: accessToken)
 
     #expect(user.id == firstUserSession?.user.id)
     #expect(user.id != secondUserSession.user.id)
@@ -221,16 +222,16 @@ struct AuthClientIntegrationTests {
     try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      let updatedUser = try await authClient.update(
-        user: .init(userMetadata: ["test": .integer(42)]))
+      let updatedUser = try await authClient.updateUser(
+        .init(userMetadata: ["test": .integer(42)]))
       #expect(updatedUser.userMetadata["test"] == 42)
     }
   }
 
   @Test
-  func userIdentities() async throws {
+  func identities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-    let identities = try await authClient.userIdentities()
+    let identities = try await authClient.identities()
     expectNoDifference(
       session.user.identities?.map(\.id) ?? [],
       identities.map(\.id)
@@ -295,7 +296,7 @@ struct AuthClientIntegrationTests {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
-      let user = try await authClient.update(user: UserAttributes(email: email))
+      let user = try await authClient.updateUser(UserAttributes(email: email))
 
       #expect(user.email == email)
     }

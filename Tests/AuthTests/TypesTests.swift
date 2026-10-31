@@ -273,6 +273,24 @@ struct TypesTests {
     #expect(AMREntry(value: 42, issuedAt: 1_700_000_000) == nil)
   }
 
+  @Test
+  func userMetadataAsDecodesTypedValue() throws {
+    struct Meta: Decodable {
+      let display_name: String
+      let age: Int
+    }
+    struct WrongShape: Decodable {
+      let age: String
+    }
+    let user = try decodeUser(#""user_metadata": {"display_name": "Ada", "age": 36}"#)
+
+    let meta = try user.userMetadata(as: Meta.self)
+
+    #expect(meta.display_name == "Ada")
+    #expect(meta.age == 36)
+    #expect(throws: DecodingError.self) { try user.userMetadata(as: WrongShape.self) }
+  }
+
   private func decodeUser(_ fields: String) throws -> User {
     let json = """
       {

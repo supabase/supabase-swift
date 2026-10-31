@@ -382,6 +382,33 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
+extension User {
+  /// Decodes ``userMetadata`` into a type of your own.
+  ///
+  /// This method encodes ``userMetadata`` to JSON and decodes it with a plain `JSONDecoder`. The
+  /// decoder uses the keys as stored. It does not convert snake case keys, so name the properties
+  /// of `T` after the stored keys, or give `T` its own coding keys.
+  ///
+  /// ```swift
+  /// struct Profile: Decodable {
+  ///   let displayName: String
+  ///
+  ///   enum CodingKeys: String, CodingKey {
+  ///     case displayName = "display_name"
+  ///   }
+  /// }
+  ///
+  /// let profile = try user.userMetadata(as: Profile.self)
+  /// ```
+  ///
+  /// - Parameter type: The type to decode.
+  /// - Returns: The decoded metadata.
+  /// - Throws: `DecodingError` when the metadata does not match `T`.
+  public func userMetadata<T: Decodable>(as type: T.Type = T.self) throws -> T {
+    try JSONDecoder().decode(T.self, from: JSONEncoder().encode(userMetadata))
+  }
+}
+
 /// A third-party identity linked to a ``User``.
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   /// The Supabase identity UUID. Pass the identity to ``AuthClient/unlinkIdentity(_:)`` to remove
@@ -888,6 +915,12 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   /// The user's password.
   public var password: String?
 
+  /// The user's current password.
+  ///
+  /// Set it with ``password`` when the project requires the current password to change the
+  /// password.
+  public var currentPassword: String?
+
   /// The nonce sent for reauthentication if the user's password is to be updated.
   ///
   /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
@@ -901,7 +934,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   var codeChallengeMethod: String?
 
   private enum CodingKeys: String, CodingKey {
-    case email, phone, password, nonce, codeChallenge, codeChallengeMethod
+    case email, phone, password, currentPassword, nonce, codeChallenge, codeChallengeMethod
     case userMetadata = "data"
   }
 
@@ -911,18 +944,22 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   ///   - email: New email address.
   ///   - phone: New phone number.
   ///   - password: New password.
+  ///   - currentPassword: Current password, required when the project requires it to change the
+  ///     password.
   ///   - nonce: Reauthentication nonce, required when updating the password.
   ///   - userMetadata: Data to merge into the user's metadata.
   public init(
     email: String? = nil,
     phone: String? = nil,
     password: String? = nil,
+    currentPassword: String? = nil,
     nonce: String? = nil,
     userMetadata: JSONObject? = nil
   ) {
     self.email = email
     self.phone = phone
     self.password = password
+    self.currentPassword = currentPassword
     self.nonce = nonce
     self.userMetadata = userMetadata
   }

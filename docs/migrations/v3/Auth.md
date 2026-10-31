@@ -182,7 +182,7 @@ Changes that still compile but behave differently. Check each one by hand.
   same user is signed in, and `.signedIn` otherwise. v2 emitted `.signedIn` for all of them. `session(from:)` for a recovery link emits only
   `.passwordRecovery`; v2 emitted `.signedIn` first. With the PKCE flow, the code exchange after
   `resetPasswordForEmail` also emits `.passwordRecovery`, not `.signedIn`. The exchange after an
-  email change (`update(user:)` with an email, or `resend(type: .emailChange)`) follows the
+  email change (`updateUser(_:redirectTo:)` with an email, or `resend(type: .emailChange)`) follows the
   `verifyOTP` rule above. Search for `.signedIn`
   handlers that expect these flows.
 - **`unlinkIdentity` updates the user.** It removes the identity from `currentUser`, and its
@@ -223,7 +223,11 @@ Changes that still compile but behave differently. Check each one by hand.
 | `public actor AuthClient` | `public final class AuthClient: Sendable` |
 | `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthError` |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
-| `signInWithIdToken(credentials:)`, `linkIdentityWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `linkIdentityWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `signInWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `linkIdentityWithIdToken(credentials:)` | `linkIdentity(idToken:)` |
+| `user(jwt: String? = nil)` | `user()` for the signed-in user, `user(jwt:)` with a token; `jwt` is a `String`, not a `String?` |
+| `update(user:redirectTo:)` | `updateUser(_:redirectTo:)` |
+| `userIdentities()` | `identities()` |
 | `OpenIDConnectCredentials(provider:idToken:accessToken:nonce:gotrueMetaSecurity:)` | `IDTokenCredentials(provider:idToken:nonce:accessToken:captchaToken:)` |
 | `OpenIDConnectCredentials.Provider` | `Provider` |
 | `Web3Credentials.gotrueMetaSecurity` | `Web3Credentials.captchaToken` |

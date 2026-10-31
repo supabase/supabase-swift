@@ -28,7 +28,7 @@ struct UserIdentityList: View {
 
   var body: some View {
     ActionStateView(state: $identities) {
-      try await supabase.auth.userIdentities()
+      try await supabase.auth.identities()
     } content: { identities in
       List {
         Section {
@@ -148,7 +148,7 @@ struct UserIdentityList: View {
           CodeExample(
             code: """
               // Get all linked identities
-              let identities = try await supabase.auth.userIdentities()
+              let identities = try await supabase.auth.identities()
 
               for identity in identities {
                 print("Provider:", identity.provider.rawValue)
@@ -163,8 +163,8 @@ struct UserIdentityList: View {
               try await supabase.auth.linkIdentity(.google)
 
               // For Apple, use OIDC flow
-              try await supabase.auth.linkIdentityWithIDToken(
-                IDTokenCredentials(
+              try await supabase.auth.linkIdentity(
+                idToken: IDTokenCredentials(
                   provider: .apple,
                   idToken: appleIDToken
                 )
@@ -337,8 +337,8 @@ struct UserIdentityList: View {
       return
     }
 
-    try await supabase.auth.linkIdentityWithIDToken(
-      IDTokenCredentials(
+    try await supabase.auth.linkIdentity(
+      idToken: IDTokenCredentials(
         provider: .apple,
         idToken: identityToken
       )
