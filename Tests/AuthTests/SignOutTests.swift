@@ -279,23 +279,23 @@ import Testing
     expectNoDifference(sut.status, .signedOut(.userInitiated))
   }
 
-  @Test
-  func globalSignsOutWhenARefreshItJoinsIsRejected() async throws {
+  @Test(arguments: ["validation_failed", "refresh_token_not_found"])
+  func globalSignsOutAsUserInitiatedWhenARefreshItJoinsIsRejected(errorCode: String) async throws {
     let (release, releaseContinuation) = AsyncStream<Void>.makeStream()
-    let refreshStarted = LockIsolated(false)
     http.respond(when: isTokenRequest) { _, _ in
-      refreshStarted.setValue(true)
       _ = await release.first { _ in true }
-      return errorResponse(.badRequest, "validation_failed")
+      return errorResponse(.badRequest, errorCode)
     }
     try await sut.seedSession(.expired)
+    let store = sut.dependencies.sessionStore
 
     let refresh = Task { [sut] in try await sut.refreshSession() }
-    try await withTimeout(.seconds(5)) {
-      while !refreshStarted.value { await Task.yield() }
-    }
     let signOut = Task { [sut] in try await sut.signOut(scope: .global) }
-    try await Task.sleep(for: .milliseconds(100))
+    try await withTimeout(.seconds(5)) {
+      while await store.refreshCallerCount(for: Session.expired.refreshToken) < 2 {
+        await Task.yield()
+      }
+    }
     releaseContinuation.yield()
     _ = await refresh.result
 

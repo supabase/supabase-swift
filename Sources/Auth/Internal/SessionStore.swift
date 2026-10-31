@@ -71,6 +71,8 @@ actor SessionStore {
   private struct RefreshFlight {
     let id: UUID
     let task: Task<Session, any Error>
+    /// The reason of each caller that waits for the refresh, in the order they asked.
+    var signOutReasons: [RejectionReason]
   }
 
   private struct RefreshFailure {
@@ -181,6 +183,12 @@ actor SessionStore {
     return received
   }
 
+  /// The number of callers that wait for the running refresh of `refreshToken`, so tests can tell
+  /// that a caller joined it.
+  func refreshCallerCount(for refreshToken: String) -> Int {
+    refreshFlights[refreshToken]?.signOutReasons.count ?? 0
+  }
+
   /// The number of live ``changes()`` streams, so tests can tell a released stream from a leak.
   nonisolated var subscriberCount: Int {
     published.value.subscribers.count
@@ -263,9 +271,10 @@ actor SessionStore {
   ///
   /// - Parameters:
   ///   - request: Sends the refresh request. Called only when no refresh of `refreshToken` runs.
-  ///   - signOutReason: Why a rejection signs out, or `nil` to keep the session. A caller that
-  ///     joins a refresh already running gets that refresh's reason, and its own when that refresh
-  ///     kept the session.
+  ///   - signOutReason: Why a rejection signs out, or `nil` to keep the session. Every caller of
+  ///     one refresh gives a reason. The rejection signs out with ``SignOutReason/userInitiated``
+  ///     when any of them gives it, and otherwise with the reason of the first caller that signs
+  ///     out.
   /// - Throws: The error of the last failed refresh, without a new request, when that refresh
   ///   redeemed `refreshToken` less than 60 seconds ago and no commit other than a
   ///   ``Transition/invalidated(_:refreshToken:)`` followed it.
@@ -277,6 +286,7 @@ actor SessionStore {
     signOutReason: @escaping RejectionReason = rejectedSession
   ) async throws -> Session {
     if let flight = refreshFlights[refreshToken] {
+      refreshFlights[refreshToken]?.signOutReasons.append(signOutReason)
       do {
         return try await Self.value(of: flight.task)
       } catch {
@@ -346,8 +356,9 @@ actor SessionStore {
         // such as `URLError.cancelled` from a response body.
         if Task.isCancelled { throw CancellationError() }
         if refreshesHeldSession {
+          let reasons = refreshFlights[refreshToken]?.signOutReasons ?? [signOutReason]
           await signOutIfRejectedAndExpired(
-            by: error, refreshToken: refreshToken, reason: signOutReason)
+            by: error, refreshToken: refreshToken, reason: Self.combining(reasons))
         }
         if !(error is CancellationError) {
           lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
@@ -361,7 +372,8 @@ actor SessionStore {
       }
       return session
     }
-    refreshFlights[refreshToken] = RefreshFlight(id: id, task: task)
+    refreshFlights[refreshToken] = RefreshFlight(
+      id: id, task: task, signOutReasons: [signOutReason])
     return task
   }
 
@@ -377,6 +389,15 @@ actor SessionStore {
       session.user = held.user
     }
     try await apply(.refreshed(session, replacing: heldRefreshToken))
+  }
+
+  /// Combines the reasons of the callers of one refresh. A sign-out that the user asked for
+  /// names the cause better than the rejection does.
+  private static func combining(_ reasons: [RejectionReason]) -> RejectionReason {
+    { error in
+      let candidates = reasons.compactMap { $0(error) }
+      return candidates.contains(.userInitiated) ? .userInitiated : candidates.first
+    }
   }
 
   private func signOutIfRejectedAndExpired(
