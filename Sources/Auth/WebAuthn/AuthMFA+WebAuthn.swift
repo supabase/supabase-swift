@@ -15,8 +15,12 @@ public import Foundation
     /// system passkey sheet, and verifies the new credential.
     ///
     /// The relying party is the `rp.id` the server returns, so the app's Associated Domains
-    /// entitlement must list `webcredentials:<rp.id>`. When the ceremony or the verification
-    /// fails, the new factor is unenrolled, so a retry with the same name succeeds.
+    /// entitlement must list `webcredentials:<rp.id>`.
+    ///
+    /// When the ceremony or the verification fails, the server keeps the new factor as
+    /// unverified, and its name blocks a new enrollment with the same name. Find it with
+    /// ``listFactors()``, then finish it with ``verifyWebAuthn(factorID:anchor:)`` or remove it
+    /// with ``unenroll(params:)``.
     ///
     /// - Parameters:
     ///   - friendlyName: A name for the factor.
@@ -42,18 +46,8 @@ public import Foundation
       authenticator: WebAuthnAuthenticator
     ) async throws -> Session {
       let factor = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      do {
-        return try await verifyWebAuthn(
-          factorID: factor.id, anchor: anchor, authenticator: authenticator)
-      } catch {
-        // The server keeps an unverified factor that has a challenge, and its name blocks the
-        // next enrollment. A new task runs the cleanup even when this one is cancelled.
-        let factorID = factor.id
-        await Task { [self] in
-          _ = try? await unenroll(params: MFAUnenrollParams(factorId: factorID))
-        }.value
-        throw error
-      }
+      return try await verifyWebAuthn(
+        factorID: factor.id, anchor: anchor, authenticator: authenticator)
     }
 
     /// Verifies a WebAuthn factor: requests a challenge, shows the system passkey sheet, and

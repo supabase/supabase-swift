@@ -3228,54 +3228,6 @@ extension AuthMockerTests {
 
       @Test
       @MainActor
-      func mfaEnrollWebAuthnRemovesTheFactorWhenTheCeremonyFails() async throws {
-        Mock(
-          url: clientURL.appendingPathComponent("factors"),
-          statusCode: 200,
-          data: [
-            .post: Data(#"{"id":"00000000-0000-0000-0000-000000000001","type":"webauthn"}"#.utf8)
-          ]
-        )
-        .register()
-        Mock(
-          url: clientURL.appendingPathComponent(
-            "factors/00000000-0000-0000-0000-000000000001/challenge"),
-          statusCode: 200,
-          data: [
-            .post: Data(
-              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
-                .utf8)
-          ]
-        )
-        .register()
-        let unenrolled = LockIsolated(false)
-        var unenroll = Mock(
-          url: clientURL.appendingPathComponent("factors/00000000-0000-0000-0000-000000000001"),
-          statusCode: 200,
-          data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8)]
-        )
-        // `@Sendable` keeps the callback off the main actor: Mocker runs it on the URL loading
-        // thread.
-        unenroll.onRequestHandler = OnRequestHandler(requestCallback: { @Sendable _ in
-          unenrolled.setValue(true)
-        })
-        unenroll.register()
-
-        let sut = makeSUT()
-        try await sut.seedSession(.valid)
-
-        await #expect(throws: CancellationError.self) {
-          try await sut.mfa.enrollWebAuthn(
-            friendlyName: nil,
-            anchor: nil,
-            authenticator: .fake(register: { _, _ in throw CancellationError() })
-          )
-        }
-        #expect(unenrolled.value)
-      }
-
-      @Test
-      @MainActor
       func mfaVerifyWebAuthnThrowsDecodingWhenPublicKeyIsMissing() async throws {
         Mock(
           url: clientURL.appendingPathComponent(
