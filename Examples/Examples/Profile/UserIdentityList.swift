@@ -22,13 +22,13 @@ struct UserIdentityList: View {
     let identities = identities.success ?? []
 
     return knownProviders.filter { provider in
-      !identities.contains(where: { $0.provider == provider.rawValue })
+      !identities.contains(where: { $0.provider == provider })
     }
   }
 
   var body: some View {
     ActionStateView(state: $identities) {
-      try await supabase.auth.userIdentities()
+      try await supabase.auth.identities()
     } content: { identities in
       List {
         Section {
@@ -72,16 +72,16 @@ struct UserIdentityList: View {
             ForEach(identities) { identity in
               VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                  Image(systemName: iconForProvider(identity.provider))
+                  Image(systemName: iconForProvider(identity.provider.rawValue))
                     .font(.title2)
                     .foregroundColor(.accentColor)
                     .frame(width: 40)
 
                   VStack(alignment: .leading, spacing: 4) {
-                    Text(identity.provider.capitalized)
+                    Text(identity.provider.rawValue.capitalized)
                       .font(.headline)
 
-                    if let email = identity.identityData?["email"]?.stringValue {
+                    if let email = identity.identityData["email"]?.stringValue {
                       Text(email)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -101,9 +101,9 @@ struct UserIdentityList: View {
                   Spacer()
                 }
 
-                if let identityData = identity.identityData {
+                if !identity.identityData.isEmpty {
                   DisclosureGroup("Identity Data") {
-                    JSONValueView(value: .object(identityData))
+                    JSONValueView(value: .object(identity.identityData))
                       .font(.system(.caption, design: .monospaced))
                   }
                   .font(.caption)
@@ -148,11 +148,11 @@ struct UserIdentityList: View {
           CodeExample(
             code: """
               // Get all linked identities
-              let identities = try await supabase.auth.userIdentities()
+              let identities = try await supabase.auth.identities()
 
               for identity in identities {
-                print("Provider:", identity.provider)
-                print("Email:", identity.identityData?["email"])
+                print("Provider:", identity.provider.rawValue)
+                print("Email:", identity.identityData["email"])
               }
               """
           )
@@ -163,8 +163,8 @@ struct UserIdentityList: View {
               try await supabase.auth.linkIdentity(.google)
 
               // For Apple, use OIDC flow
-              try await supabase.auth.linkIdentityWithIDToken(
-                IDTokenCredentials(
+              try await supabase.auth.linkIdentity(
+                idToken: IDTokenCredentials(
                   provider: .apple,
                   idToken: appleIDToken
                 )
@@ -337,8 +337,8 @@ struct UserIdentityList: View {
       return
     }
 
-    try await supabase.auth.linkIdentityWithIDToken(
-      IDTokenCredentials(
+    try await supabase.auth.linkIdentity(
+      idToken: IDTokenCredentials(
         provider: .apple,
         idToken: identityToken
       )

@@ -556,7 +556,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func linkIdentityWithIdToken() async throws {
+    func linkIdentityIDTokenEmitsUserUpdated() async throws {
       try await withMainSerialExecutor {
         Mock(
           url: clientURL.appendingPathComponent("token"),
@@ -587,8 +587,8 @@ extension AuthMockerTests {
         let updatedSession = try await assertAuthStateChanges(
           sut: sut,
           action: {
-            try await sut.linkIdentityWithIDToken(
-              IDTokenCredentials(
+            try await sut.linkIdentity(
+              idToken: IDTokenCredentials(
                 provider: .apple,
                 idToken: "id-token",
                 nonce: "nonce",
@@ -1454,8 +1454,8 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
@@ -1579,7 +1579,7 @@ extension AuthMockerTests {
       try await sut.seedSession(.valid)
       let flows = sut.dependencies.flowStore
 
-      try await sut.update(user: UserAttributes(email: "new@example.com"))
+      try await sut.updateUser(UserAttributes(email: "new@example.com"))
       #expect(try await flows.pendingFlows().first?.purpose == .emailChange)
 
       try await sut.resend(email: "example@mail.com", type: .signup)
@@ -1842,11 +1842,10 @@ extension AuthMockerTests {
 
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: identityId,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: identityId,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
@@ -1859,7 +1858,7 @@ extension AuthMockerTests {
       let identities = try #require(Session.valid.user.identities)
       let unlinked = identities[0]
       Mock(
-        url: clientURL.appendingPathComponent("user/identities/\(unlinked.identityId.uuidString)"),
+        url: clientURL.appendingPathComponent("user/identities/\(unlinked.id.uuidString)"),
         statusCode: 200,
         data: [.delete: Data("{}".utf8)]
       ).register()
@@ -1878,9 +1877,9 @@ extension AuthMockerTests {
     @Test
     func unlinkIdentityOfAnotherUserEmitsNothing() async throws {
       var identity = try #require(Session.valid.user.identities?.first)
-      identity.userId = UUID()
+      identity.userID = UUID()
       Mock(
-        url: clientURL.appendingPathComponent("user/identities/\(identity.identityId.uuidString)"),
+        url: clientURL.appendingPathComponent("user/identities/\(identity.id.uuidString)"),
         statusCode: 200,
         data: [.delete: Data("{}".utf8)]
       ).register()
@@ -1894,6 +1893,61 @@ extension AuthMockerTests {
       )
 
       expectNoDifference(sut.currentUser, Session.valid.user)
+    }
+
+    @Test
+    func identitiesReturnsEmptyWhenNull() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [
+          .get: Data(
+            """
+            {
+              "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+              "aud": "authenticated",
+              "identities": null,
+              "created_at": "2022-04-09T11:23:45.874827Z",
+              "updated_at": "2022-04-09T11:57:01.720803Z"
+            }
+            """.utf8
+          )
+        ]
+      ).register()
+      let sut = makeSUT()
+      try await sut.seedSession(.valid)
+
+      let identities = try await sut.identities()
+
+      #expect(identities.isEmpty)
+    }
+
+    @Test
+    func updateUserMergesIntoCurrentSession() async throws {
+      let race = Race()
+      let gate = Gate()
+      race.answerSignIn { _ in race.issue("signed-in") }
+      race.answerRefresh { try Race.ok(race.issue("refreshed")) }
+      race.answerUserUpdate(through: gate, with: Race.user(nickname: "updated"))
+      let client = race.makeClient()
+      var events = client.events().makeAsyncIterator()
+      #expect(await events.next()?.event == .initialSession)
+      try await client.signIn(email: "a@example.com", password: "secret")
+      #expect(await events.next()?.event == .signedIn)
+
+      let update = Task {
+        try await client.updateUser(UserAttributes(userMetadata: ["nickname": "updated"]))
+      }
+      await gate.arrivals(1)
+      try await client.refreshSession()
+      #expect(await events.next()?.event == .tokenRefreshed)
+      gate.open()
+      let returnedUser = try await update.value
+
+      #expect(await events.next()?.event == .userUpdated)
+      #expect(returnedUser.userMetadata["nickname"] == "updated")
+      #expect(client.currentSession?.accessToken == "refreshed-access")
+      expectNoDifference(client.currentSession?.user, returnedUser)
     }
 
     @Test
@@ -3404,38 +3458,182 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withHS256JWT_shouldFallbackAndReturnClaims() async throws {
-      let jwt =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
-
-      let user = User(fromMockNamed: "user")
-
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        ignoreQuery: true,
-        contentType: .json,
-        statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-      ).register()
+    func claimsVerifiesLocallyWithoutUserRequest() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
+      )
+      let jwksRequests = try mockJWKS(signer.jwk)
 
       let sut = makeSUT()
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.iss == "http://localhost:54321/auth/v1")
-      if case .string(let aud) = result.claims.aud {
-        #expect(aud == "authenticated")
-      } else {
-        Issue.record("Expected string audience")
+      #expect(result.subject == "1234567890")
+      #expect(result.header.kid == "es256-test-kid")
+      #expect(jwksRequests.value == 1)
+    }
+
+    @Test
+    func claimsCachesJWKSAcrossCalls() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999}"#
+      )
+      let jwksRequests = try mockJWKS(signer.jwk)
+
+      let sut = makeSUT()
+
+      _ = try await sut.claims(jwt: jwt)
+      _ = try await sut.claims(jwt: jwt)
+
+      #expect(jwksRequests.value == 1)
+    }
+
+    @Test
+    func twoClientsDoNotShareJWKS() async throws {
+      let otherURL = URL(string: "http://other-project.localhost/auth/v1")!
+      let storageKey = uniqueStorageKey()
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999}"#
+      )
+      let firstRequests = try mockJWKS(signer.jwk)
+      let secondRequests = try mockJWKS(signer.jwk, url: otherURL)
+
+      let first = makeSUT(storageKey: storageKey)
+      let second = makeSUT(url: otherURL, storageKey: storageKey)
+
+      _ = try await first.claims(jwt: jwt)
+      _ = try await second.claims(jwt: jwt)
+
+      #expect(firstRequests.value == 1)
+      #expect(secondRequests.value == 1)
+    }
+
+    @Test
+    func claimsFallsBackWhenKidUnknown() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"rotated-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890","exp":9999999999}"#
+      )
+      let jwksRequests = try mockJWKS(signer.jwk)
+      let userRequests = try mockUser()
+
+      let sut = makeSUT()
+
+      let result = try await sut.claims(jwt: jwt)
+
+      #expect(result.subject == "1234567890")
+      #expect(jwksRequests.value == 1)
+      #expect(userRequests.value == 1)
+    }
+
+    @Test
+    func claimsRejectsMissingExp() async throws {
+      let signer = ES256TestSigner()
+      let jwt = try signer.sign(
+        header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
+        payload: #"{"sub":"1234567890"}"#
+      )
+      let jwksRequests = try mockJWKS(signer.jwk)
+      let userRequests = try mockUser()
+
+      let sut = makeSUT()
+
+      let error = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims(jwt: jwt, options: ClaimsOptions(allowsExpired: true))
       }
-      #expect(result.claims.role == "authenticated")
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(jwksRequests.value == 0)
+      #expect(userRequests.value == 0)
+    }
+
+    @Test
+    func claimsRejectsExpiredUnlessAllowed() async throws {
+      let expiredJWT =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
+      let userRequests = try mockUser()
+
+      let sut = makeSUT()
+
+      let error = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims(jwt: expiredJWT)
+      }
+      #expect(error?.kind == .jwtVerificationFailed)
+      #expect(error?.message == "JWT has expired")
+      #expect(userRequests.value == 0)
+
+      let result = try await sut.claims(
+        jwt: expiredJWT,
+        options: ClaimsOptions(allowsExpired: true)
+      )
+
+      #expect(result.subject == "1234567890")
+      #expect(result.expiresAt.timeIntervalSince1970 == 1_516_239_022)
+      #expect(userRequests.value == 1)
+    }
+
+    @Test
+    func claimsPropagatesRefreshError() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "refresh_token")
+        ]),
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "refresh_token_not_found",
+              "message": "Invalid Refresh Token: Refresh Token Not Found"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      let sut = makeSUT()
+      try await sut.seedSession(.expired)
+
+      let refreshError = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims()
+      }
+      #expect(refreshError?.kind == .sessionInvalidated)
+      #expect(refreshError?.errorCode == .refreshTokenNotFound)
+
+      let signedOutError = await #expect(throws: AuthError.self) {
+        _ = try await sut.claims()
+      }
+      #expect(signedOutError?.kind == .sessionMissing)
+    }
+
+    @Test
+    func claimsFallsBackToUserForHS256() async throws {
+      let jwt =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
+      let userRequests = try mockUser()
+
+      let sut = makeSUT()
+
+      let result = try await sut.claims(jwt: jwt)
+
+      #expect(userRequests.value == 1)
+      #expect(result.subject == "1234567890")
+      #expect(result.issuer == "http://localhost:54321/auth/v1")
+      #expect(result.audience == ["authenticated"])
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "HS256")
       #expect(result.header.kid == nil)
     }
 
     @Test
-    func getClaims_withoutJWT_shouldUseSessionAccessToken() async throws {
+    func claims_withoutJWT_shouldUseSessionAccessToken() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3457,12 +3655,12 @@ extension AuthMockerTests {
 
       let result = try await sut.claims()
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
     }
 
     @Test
-    func getClaims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
+    func claims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3482,17 +3680,17 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: jwt,
-        options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+        options: ClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
       )
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "ES256")
       #expect(result.header.kid == "es256-test-kid")
     }
 
     @Test
-    func getClaims_withJWKMissingAlg_shouldVerifyLocally() async throws {
+    func claims_withJWKMissingAlg_shouldVerifyLocally() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3525,16 +3723,18 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(
         jwt: jwt,
-        options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+        options: ClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
       )
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
       #expect(result.header.alg == "ES256")
     }
 
     @Test
-    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldNotVerify() async throws {
+    func claims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldVerifyWithJWKAlgorithm()
+      async throws
+    {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"RS256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3554,30 +3754,27 @@ extension AuthMockerTests {
         k: key.k
       )
 
-      let user = User(fromMockNamed: "user")
-
       Mock(
         url: clientURL.appendingPathComponent("user"),
         ignoreQuery: true,
         contentType: .json,
-        statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
+        statusCode: 401,
+        data: [.get: Data()]
       ).register()
 
       let sut = makeSUT()
 
-      let error = await #expect(throws: AuthError.self) {
-        _ = try await sut.claims(
-          jwt: jwt,
-          options: GetClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
-        )
-      }
-      #expect(error?.kind == .jwtVerificationFailed)
-      #expect(error?.message == "Invalid JWT signature")
+      let result = try await sut.claims(
+        jwt: jwt,
+        options: ClaimsOptions(jwks: JWKS(keys: [keyWithoutAlg]))
+      )
+
+      #expect(result.subject == "1234567890")
+      #expect(result.header.alg == "RS256")
     }
 
     @Test
-    func getClaims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
+    func claims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3604,7 +3801,7 @@ extension AuthMockerTests {
       let error = await #expect(throws: AuthError.self) {
         _ = try await sut.claims(
           jwt: tamperedJWT,
-          options: GetClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
+          options: ClaimsOptions(jwks: JWKS(keys: [signer.jwk]))
         )
       }
       #expect(error?.kind == .jwtVerificationFailed)
@@ -3612,7 +3809,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withES256JWT_shouldFallbackToServerVerification() async throws {
+    func claims_withES256JWT_shouldFallbackToServerVerification() async throws {
       let jwt =
         "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
@@ -3630,56 +3827,12 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "1234567890")
+      #expect(result.role == "authenticated")
     }
 
     @Test
-    func getClaims_withRS256JWT_whenJWKNotFound_shouldFallbackToServerVerification() async throws {
-      let jwt =
-        "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
-
-      let jwksDict: [String: Any] = [
-        "keys": [
-          [
-            "kty": "RSA",
-            "kid": "different-kid",
-            "alg": "RS256",
-            "n": "modulus",
-            "e": "AQAB",
-          ]
-        ]
-      ]
-      let jwksData = try JSONSerialization.data(withJSONObject: jwksDict)
-
-      Mock(
-        url: clientURL.appendingPathComponent(".well-known/jwks.json"),
-        ignoreQuery: true,
-        contentType: .json,
-        statusCode: 200,
-        data: [.get: jwksData]
-      ).register()
-
-      let user = User(fromMockNamed: "user")
-
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        ignoreQuery: true,
-        contentType: .json,
-        statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-      ).register()
-
-      let sut = makeSUT()
-
-      let result = try await sut.claims(jwt: jwt)
-
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.role == "authenticated")
-    }
-
-    @Test
-    func getClaims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
+    func claims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
 
@@ -3697,26 +3850,12 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "987654321")
-      #expect(result.claims.role == "authenticated")
+      #expect(result.subject == "987654321")
+      #expect(result.role == "authenticated")
     }
 
     @Test
-    func getClaims_withoutJWTAndNoSession_shouldThrowSessionMissing() async throws {
-      let sut = makeSUT()
-
-      do {
-        _ = try await sut.claims()
-        Issue.record("Expected sessionMissing error")
-      } catch let error as AuthError {
-        #expect(error.kind == .sessionMissing)
-      } catch {
-        Issue.record("Expected AuthError, got \(error)")
-      }
-    }
-
-    @Test
-    func getClaims_withInvalidJWTStructure_shouldThrowJWTVerificationFailed() async throws {
+    func claims_withInvalidJWTStructure_shouldThrowJWTVerificationFailed() async throws {
       let invalidJWT = "invalid.jwt.token"
 
       let sut = makeSUT()
@@ -3733,51 +3872,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withExpiredJWT_shouldThrowJWTVerificationFailed() async throws {
-      let expiredJWT =
-        "eyJhbGciOiJFUzI1NiIsImtpZCI6InRlc3Qta2lkIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.MEYCIQDmtLy0PF_lR7rJQHyKLmJKp1xFKECfVvGTBcXiVnz0jAIhAOoXZJ3kHSA2MqL1XhcUy8dWOZCr6zWCN_FXsP8qKfPR"
-
-      let sut = makeSUT()
-
-      do {
-        _ = try await sut.claims(jwt: expiredJWT)
-        Issue.record("Expected jwtVerificationFailed error")
-      } catch let error as AuthError {
-        #expect(error.kind == .jwtVerificationFailed)
-        #expect(error.message == "JWT has expired")
-      } catch {
-        Issue.record("Expected AuthError, got \(error)")
-      }
-    }
-
-    @Test
-    func getClaims_withExpiredJWTAndAllowExpired_shouldReturnClaims() async throws {
-      let expiredJWT =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
-
-      let user = User(fromMockNamed: "user")
-
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        ignoreQuery: true,
-        contentType: .json,
-        statusCode: 200,
-        data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-      ).register()
-
-      let sut = makeSUT()
-
-      let result = try await sut.claims(
-        jwt: expiredJWT,
-        options: GetClaimsOptions(allowsExpired: true)
-      )
-
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.exp == 1_516_239_022)
-    }
-
-    @Test
-    func getClaims_whenServerRejectsJWT_shouldThrowError() async throws {
+    func claims_whenServerRejectsJWT_shouldThrowError() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3804,7 +3899,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withComplexClaims_shouldDecodeAllFields() async throws {
+    func claims_withComplexClaims_shouldDecodeAllFields() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
 
@@ -3822,24 +3917,20 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.iss == "http://localhost:54321/auth/v1")
-      if case .string(let aud) = result.claims.aud {
-        #expect(aud == "authenticated")
-      } else {
-        Issue.record("Expected string audience")
-      }
-      #expect(result.claims.exp == 9_999_999_999)
-      #expect(result.claims.iat == 1_516_239_022)
-      #expect(result.claims.nbf == 1_516_239_022)
-      #expect(result.claims.jti == "test-jti")
-      #expect(result.claims.role == "authenticated")
-      #expect(result.claims.email == "test@example.com")
-      #expect(result.claims.phone == "+1234567890")
+      #expect(result.subject == "1234567890")
+      #expect(result.issuer == "http://localhost:54321/auth/v1")
+      #expect(result.audience == ["authenticated"])
+      #expect(result.expiresAt.timeIntervalSince1970 == 9_999_999_999)
+      #expect(result.issuedAt?.timeIntervalSince1970 == 1_516_239_022)
+      #expect(result.additionalClaims["nbf"] == 1_516_239_022)
+      #expect(result.additionalClaims["jti"] == "test-jti")
+      #expect(result.role == "authenticated")
+      #expect(result.email == "test@example.com")
+      #expect(result.phone == "+1234567890")
     }
 
     @Test
-    func getClaims_withArrayAudience_shouldDecodeCorrectly() async throws {
+    func claims_withArrayAudience_shouldDecodeCorrectly() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
 
@@ -3857,8 +3948,8 @@ extension AuthMockerTests {
 
       let result = try await sut.claims(jwt: jwt)
 
-      #expect(result.claims.sub == "1234567890")
-      #expect(result.claims.aud != nil)
+      #expect(result.subject == "1234567890")
+      #expect(result.audience == ["authenticated", "service-role"])
     }
 
     @Test
@@ -3956,7 +4047,43 @@ extension AuthMockerTests {
       )
     }
 
+    private func mockJWKS(_ key: JWK, url: URL = clientURL) throws -> LockIsolated<Int> {
+      let fields: [String: String?] = [
+        "kty": key.kty, "alg": key.alg, "kid": key.kid, "crv": key.crv, "x": key.x, "y": key.y,
+      ]
+      let data = try JSONSerialization.data(
+        withJSONObject: ["keys": [fields.compactMapValues { $0 }]]
+      )
+      return countingMock(url: url.appendingPathComponent(".well-known/jwks.json"), data: data)
+    }
+
+    private func mockUser() throws -> LockIsolated<Int> {
+      let user = User(fromMockNamed: "user")
+      return countingMock(
+        url: clientURL.appendingPathComponent("user"),
+        data: try AuthClient.Configuration.jsonEncoder.encode(user)
+      )
+    }
+
+    private func countingMock(url: URL, data: Data) -> LockIsolated<Int> {
+      let requests = LockIsolated(0)
+      var mock = Mock(
+        url: url,
+        ignoreQuery: true,
+        contentType: .json,
+        statusCode: 200,
+        data: [.get: data]
+      )
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        requests.withValue { $0 += 1 }
+      })
+      mock.register()
+      return requests
+    }
+
     private func makeSUT(
+      url: URL = clientURL,
+      storageKey: String = uniqueStorageKey(),
       date: @escaping @Sendable () -> Date = { Date() },
       platform: AuthPlatform = .live
     ) -> AuthClient {
@@ -3965,12 +4092,12 @@ extension AuthMockerTests {
       let session = URLSession(configuration: sessionConfiguration)
 
       let configuration = AuthClient.Configuration(
-        url: clientURL,
+        url: url,
         headers: [
           "apikey":
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
         ],
-        storageKey: uniqueStorageKey(),
+        storageKey: storageKey,
         localStorage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 

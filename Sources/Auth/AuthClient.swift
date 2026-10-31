@@ -9,32 +9,6 @@ import Logging
 
 typealias AuthClientID = Int
 
-private let jwksTTL: TimeInterval = 10 * 60
-
-private struct CachedJWKS {
-  let jwks: JWKS
-  let cachedAt: Date
-}
-
-/// Global JWKS cache shared across all clients with the same storage key.
-/// This is especially useful for shared-memory execution environments such as
-/// AWS Lambda or serverless functions. Regardless of how many clients are created,
-/// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up claims() with asymmetric JWTs.
-private actor GlobalJWKSCache {
-  private var cache: [String: CachedJWKS] = [:]
-
-  func get(for key: String) -> CachedJWKS? {
-    cache[key]
-  }
-
-  func set(_ value: CachedJWKS, for key: String) {
-    cache[key] = value
-  }
-}
-
-private let globalJWKSCache = GlobalJWKSCache()
-
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
@@ -109,8 +83,10 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signOut(scope:)``
 ///
 /// ### User management
+/// - ``user()``
 /// - ``user(jwt:)``
-/// - ``update(user:redirectTo:)``
+/// - ``updateUser(_:redirectTo:)``
+/// - ``UserAttributes``
 /// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
 /// - ``verifyOTP(phone:token:type:captchaToken:)``
 /// - ``verifyOTP(tokenHash:type:)``
@@ -120,13 +96,14 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
 ///
 /// ### Identities
-/// - ``userIdentities()``
+/// - ``identities()``
 /// - ``linkIdentity(_:options:presenter:)``
-/// - ``linkIdentityWithIDToken(_:)``
+/// - ``linkIdentity(idToken:)``
 /// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
+/// - ``claims(options:)``
 /// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
@@ -146,6 +123,8 @@ public final class AuthClient: Sendable {
   let clientID: AuthClientID
 
   let dependencies: Dependencies
+
+  private let jwksCache: JWKSCache
 
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
@@ -198,7 +177,7 @@ public final class AuthClient: Sendable {
 
   /// Returns the current user, if any.
   ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  /// The user returned by this property may be outdated. Use ``user()`` to fetch an up-to-date user.
   public var currentUser: User? {
     currentSession?.user
   }
@@ -256,6 +235,12 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    jwksCache = JWKSCache(
+      fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
+        try await api.execute(authAPI.jwks())
+      },
+      now: date
+    )
     Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
@@ -1145,18 +1130,31 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
 
-  /// Gets the current user details if there is an existing session.
-  /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
-  /// attempt to get the jwt from the current session.
+  /// Fetches the signed-in user from the Auth server.
   ///
-  /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
-  public func user(jwt: String? = nil) async throws -> User {
-    if let jwt {
-      return try await api.execute(
-        authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
-    }
+  /// The client sends the access token of the current session. It refreshes the session first
+  /// when the access token has expired. Use this method when you need the latest user data. For a
+  /// value without a request, read ``currentUser``.
+  ///
+  /// - Returns: The signed-in user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  }
 
-    return try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  /// Fetches the user that an access token belongs to.
+  ///
+  /// The client sends `jwt` as is. It does not refresh it. When `jwt` is the access token of the
+  /// current session and the Auth server reports that its session no longer exists, the client
+  /// signs out.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Returns: The user that `jwt` belongs to.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
+  public func user(jwt: String) async throws -> User {
+    try await api.execute(
+      authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
@@ -1164,41 +1162,69 @@ public final class AuthClient: Sendable {
     return .snapshot(stored)
   }
 
-  /// Updates user data, if there is a logged in user.
+  /// Updates the signed-in user.
+  ///
+  /// The client merges the returned user into the current session and emits
+  /// ``AuthEvent/userUpdated``. It keeps the tokens of the current session, also when a refresh
+  /// rotates them while the request is in flight.
+  ///
+  /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
+  /// the current password for that change. When `attributes` changes the email, the client starts
+  /// an email change flow. Pass the redirect URL that comes back to ``handleRedirect(_:)``.
+  ///
+  /// - Parameters:
+  ///   - attributes: The values to change.
+  ///   - redirectTo: The URL that the confirmation link of an email change opens.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    guard user.email != nil else {
-      return try await updateUser(user, redirectTo: redirectTo, pkce: nil)
+  public func updateUser(
+    _ attributes: UserAttributes,
+    redirectTo: URL? = nil
+  ) async throws -> User {
+    guard attributes.email != nil else {
+      return try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: nil)
     }
     return try await withFlow(.emailChange, redirectTo: redirectTo) {
-      try await updateUser(user, redirectTo: redirectTo, pkce: $0.challenge)
+      try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: $0.challenge)
     }
   }
 
-  private func updateUser(
-    _ user: UserAttributes,
+  private func sendUserUpdate(
+    _ attributes: UserAttributes,
     redirectTo: URL?,
     pkce: PKCEChallenge?
   ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
-      try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+      try authAPI.updateUser(attributes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
     try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser
   }
 
-  /// Gets all the identities linked to a user.
-  public func userIdentities() async throws -> [UserIdentity] {
+  /// Fetches the identities linked to the signed-in user.
+  ///
+  /// The client sends a request through ``user()``.
+  ///
+  /// - Returns: The linked identities. Empty when the server sends none.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
-  /// Links an identity to the current user with an ID token that a third-party identity provider
-  /// issued.
+  /// Links an identity to the signed-in user with an ID token that a third-party identity
+  /// provider issued.
+  ///
+  /// The client stores the returned session and emits ``AuthEvent/userUpdated``.
   ///
   /// - Parameter credentials: The ID token and the values the server needs to check it.
-  /// - Returns: The updated session.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
       authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
     )
@@ -1299,7 +1325,7 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     // The response carries no user, so the store drops the identity from the held one.
     try await sessionStore.commit(
-      .identityUnlinked(identity.identityId, userID: identity.userId))
+      .identityUnlinked(identity.id, userID: identity.userID))
   }
 
   /// Sends a reset request to an email address.
@@ -1411,123 +1437,71 @@ public final class AuthClient: Sendable {
       || error.underlyingError is URLError
   }
 
-  /// Fetches a JWK from the JWKS endpoint with caching
-  /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
-  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
-      return jwk
-    }
-
-    let now = date()
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-
-    if let cached = await globalJWKSCache.get(for: storageKey),
-      let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
-    {
-      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
-        return jwk
-      }
-    }
-
-    let fetchedJWKS = try await api.execute(authAPI.jwks())
-
-    guard !fetchedJWKS.keys.isEmpty else {
-      return nil
-    }
-
-    await globalJWKSCache.set(
-      CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
-      for: storageKey
-    )
-
-    return fetchedJWKS.keys.first(where: { $0.kid == kid })
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The token comes from ``session``, so an expired session is refreshed first. The token is
+  /// then verified as ``claims(jwt:options:)`` describes.
+  ///
+  /// - Parameter options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: Every error that ``session`` throws, unchanged: for example, an error of kind
+  ///   ``AuthError/Kind-swift.struct/sessionMissing`` when no user is signed in, or the refresh
+  ///   error when the server rejects the refresh. An error of kind
+  ///   ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when verification fails.
+  public func claims(options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    try await claims(jwt: session.accessToken, options: options)
   }
 
-  /// Extracts the JWT claims present in the access token by first verifying the
-  /// JWT against the server's JSON Web Key Set endpoint `/.well-known/jwks.json`
-  /// which is often cached, resulting in significantly faster responses. Prefer
-  /// this method over ``user(jwt:)`` which always sends a request to the Auth
-  /// server for each JWT.
+  /// Verifies a JSON Web Token and returns its claims.
   ///
-  /// If the project is not using an asymmetric JWT signing key (like ECC or RSA)
-  /// it always sends a request to the Auth server (similar to ``user(jwt:)``) to
-  /// verify the JWT.
+  /// A token signed with an asymmetric key, such as ES256 or RS256, that names its key in the
+  /// `kid` header is verified on the device against the project's JSON Web Key Set at
+  /// `/.well-known/jwks.json`. Each client caches the key set for 10 minutes, so most calls send
+  /// no request. Prefer this method over ``user(jwt:)``, which sends a request for each token.
+  ///
+  /// The Auth server verifies every other token through ``user(jwt:)``: a token signed with a
+  /// symmetric key (HS256), a token without a `kid`, and a token whose key the client cannot find.
   ///
   /// - Parameters:
-  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
-  ///   - options: Various additional options that allow you to customize the behavior of this method.
-  ///
-  /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
-  ///
-  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func claims(
-    jwt: String? = nil,
-    options: GetClaimsOptions = GetClaimsOptions()
-  ) async throws -> JWTClaimsResponse {
-    let token: String
-    if let jwt {
-      token = jwt
-    } else {
-      guard let session = try? await session else {
-        throw AuthError.sessionMissing
-      }
-      token = session.accessToken
-    }
-
-    guard let decodedJWT = JWT.decode(token) else {
+  ///   - jwt: The token to verify.
+  ///   - options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when the
+  ///   token is malformed, has no `exp` or `sub` claim, has expired (unless
+  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The client checks
+  ///   the structure and the `exp` and `sub` claims before it sends any request. The error of
+  ///   ``user(jwt:)`` when the Auth server rejects the token.
+  public func claims(jwt: String, options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    guard let decodedJWT = JWT.decode(jwt) else {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if !options.allowsExpired {
-      if let exp = decodedJWT.payload["exp"] as? TimeInterval {
-        let now = date().timeIntervalSince1970
-        if exp <= now {
-          throw AuthError.jwtVerificationFailed("JWT has expired")
-        }
-      }
-    }
-
-    let alg = decodedJWT.header["alg"] as? String
-    let kid = decodedJWT.header["kid"] as? String
-
-    let signingKey: JWK?
-    if let alg, !alg.hasPrefix("HS"), let kid {
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
-    } else {
-      signingKey = nil
+    let claims = try VerifiedClaims(decodedJWT)
+    if !options.allowsExpired, claims.expiresAt <= date() {
+      throw AuthError.jwtVerificationFailed("JWT has expired")
     }
 
     guard
-      let signingKey,
-      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
+      let signingKey = try await signingKey(for: claims.header, options: options),
+      let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
-      _ = try await user(jwt: token)
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      _ = try await user(jwt: jwt)
+      return claims
     }
-
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
+    return claims
+  }
 
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
-
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+  private func signingKey(for header: JWTHeader, options: ClaimsOptions) async throws -> JWK? {
+    guard !header.alg.hasPrefix("HS"), let kid = header.kid else {
+      return nil
+    }
+    if let key = options.jwks?.key(for: kid) {
+      return key
+    }
+    return try await jwksCache.key(for: kid)
   }
 }

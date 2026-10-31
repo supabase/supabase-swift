@@ -67,7 +67,7 @@ struct HomeView: View {
         Button("Update password") {
           Task {
             do {
-              try await supabase.auth.update(user: UserAttributes(password: password))
+              try await supabase.auth.updateUser(UserAttributes(password: password))
               dismiss()
             } catch {}
           }

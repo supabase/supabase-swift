@@ -596,12 +596,14 @@ extension AuthAPI {
 
   func unlinkIdentity(_ identity: UserIdentity, accessToken: String) -> AuthRequest<Void> {
     request(
-      .delete, "user/identities/\(identity.identityId)", authorization: bearer(accessToken),
+      .delete, "user/identities/\(identity.id)", authorization: bearer(accessToken),
       decode: ignoringBody)
   }
 
   func jwks() -> AuthRequest<JWKS> {
-    request(.get, ".well-known/jwks.json", decode: decoding(JWKS.self))
+    request(.get, ".well-known/jwks.json") { _, data in
+      try data.decoded(as: JWKS.self, decoder: JSONDecoder())
+    }
   }
 }
 

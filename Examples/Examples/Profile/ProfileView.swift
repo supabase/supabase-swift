@@ -173,7 +173,7 @@ struct ProfileView: View {
                       await unlinkIdentity(identity)
                     }
                   } label: {
-                    Label("Unlink \(identity.provider)", systemImage: "link.badge.minus")
+                    Label("Unlink \(identity.provider.rawValue)", systemImage: "link.badge.minus")
                   }
                 }
               } label: {

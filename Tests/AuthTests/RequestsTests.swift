@@ -307,14 +307,27 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
           userMetadata: ["custom_key": .string("custom_value")]
         )
+      )
+    }
+  }
+
+  @Test
+  func updateUserWithCurrentPassword() async throws {
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    await assert {
+      try await sut.updateUser(
+        UserAttributes(password: "new-pass", currentPassword: "old-pass")
       )
     }
   }
@@ -409,11 +422,10 @@ struct RequestsTests {
     await assert {
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
@@ -769,8 +781,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.linkIdentityWithIDToken(
-        IDTokenCredentials(
+      try await sut.linkIdentity(
+        idToken: IDTokenCredentials(
           provider: .google,
           idToken: "id-token",
           nonce: "nonce"
@@ -782,9 +794,9 @@ struct RequestsTests {
   @Test
   func fetchJWKS() async {
     let sut = makeSUT()
-    // RS256 header with a key id no cached key set holds, so the keys are fetched.
+    // RS256 header with a key id, so the client fetches the key set.
     let jwt =
-      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJleHAiOjQ4NTIxNjM1OTN9.c2ln"
+      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJzdWIiOiJyZXF1ZXN0cy10ZXN0cyIsImV4cCI6NDg1MjE2MzU5M30.c2ln"
 
     await assert {
       _ = try await sut.claims(jwt: jwt)

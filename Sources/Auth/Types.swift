@@ -382,22 +382,51 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   }
 }
 
+extension User {
+  /// Decodes ``userMetadata`` into a type of your own.
+  ///
+  /// This method encodes ``userMetadata`` to JSON and decodes it with a plain `JSONDecoder`. The
+  /// decoder uses the keys as stored. It does not convert snake case keys, so name the properties
+  /// of `T` after the stored keys, or give `T` its own coding keys.
+  ///
+  /// ```swift
+  /// struct Profile: Decodable {
+  ///   let displayName: String
+  ///
+  ///   enum CodingKeys: String, CodingKey {
+  ///     case displayName = "display_name"
+  ///   }
+  /// }
+  ///
+  /// let profile = try user.userMetadata(as: Profile.self)
+  /// ```
+  ///
+  /// - Parameter type: The type to decode.
+  /// - Returns: The decoded metadata.
+  /// - Throws: `DecodingError` when the metadata does not match `T`.
+  public func userMetadata<T: Decodable>(as type: T.Type = T.self) throws -> T {
+    try JSONDecoder().decode(T.self, from: JSONEncoder().encode(userMetadata))
+  }
+}
+
 /// A third-party identity linked to a ``User``.
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
-  /// Provider-specific identifier of this identity.
-  public var id: String
+  /// The Supabase identity UUID. Pass the identity to ``AuthClient/unlinkIdentity(_:)`` to remove
+  /// it.
+  public var id: UUID
 
-  /// Unique identifier of the identity record within Supabase.
-  public var identityId: UUID
+  /// The user's identifier at the provider, such as the `sub` claim of the provider's ID token.
+  public var providerUserID: String
 
   /// The user this identity belongs to.
-  public var userId: UUID
+  public var userID: UUID
 
-  /// Provider-specific identity data returned by the third-party.
-  public var identityData: [String: JSONValue]?
+  /// The provider of this identity.
+  public var provider: Provider
 
-  /// The name of the provider (e.g. `google`, `github`).
-  public var provider: String
+  /// Provider-specific identity data returned by the third party. Empty when the server sends
+  /// none.
+  public var identityData: JSONObject
 
   /// Timestamp when this identity was created.
   public var createdAt: Date?
@@ -411,40 +440,42 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   /// Creates a new user identity value.
   ///
   /// - Parameters:
-  ///   - id: The provider-specific identity ID.
-  ///   - identityId: The Supabase identity UUID.
-  ///   - userId: The owning user's UUID.
+  ///   - id: The Supabase identity UUID.
+  ///   - providerUserID: The user's identifier at the provider.
+  ///   - userID: The owning user's UUID.
+  ///   - provider: The provider of the identity.
   ///   - identityData: Provider-specific identity data.
-  ///   - provider: The provider name.
   ///   - createdAt: Timestamp the identity was created.
   ///   - lastSignInAt: Timestamp of the last sign-in via this identity.
   ///   - updatedAt: Timestamp the identity was last updated.
   public init(
-    id: String,
-    identityId: UUID,
-    userId: UUID,
-    identityData: [String: JSONValue],
-    provider: String,
-    createdAt: Date?,
-    lastSignInAt: Date?,
-    updatedAt: Date?
+    id: UUID,
+    providerUserID: String,
+    userID: UUID,
+    provider: Provider,
+    identityData: JSONObject = [:],
+    createdAt: Date? = nil,
+    lastSignInAt: Date? = nil,
+    updatedAt: Date? = nil
   ) {
     self.id = id
-    self.identityId = identityId
-    self.userId = userId
-    self.identityData = identityData
+    self.providerUserID = providerUserID
+    self.userID = userID
     self.provider = provider
+    self.identityData = identityData
     self.createdAt = createdAt
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
   }
 
-  enum CodingKeys: CodingKey {
-    case id
-    case identityId
-    case userId
-    case identityData
+  // Raw values are the names after `convertFromSnakeCase`, so `identity_id` maps to `id` and the
+  // wire `id` maps to `providerUserID`.
+  enum CodingKeys: String, CodingKey {
+    case id = "identityId"
+    case providerUserID = "id"
+    case userID = "userId"
     case provider
+    case identityData
     case createdAt
     case lastSignInAt
     case updatedAt
@@ -453,32 +484,22 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
-    id = try container.decode(String.self, forKey: .id)
-    identityId = try container.decode(UUID.self, forKey: .identityId)
-    userId = try container.decode(UUID.self, forKey: .userId)
-    identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
-    provider = try container.decode(String.self, forKey: .provider)
+    id = try container.decode(UUID.self, forKey: .id)
+    providerUserID = try container.decode(String.self, forKey: .providerUserID)
+    userID = try container.decode(UUID.self, forKey: .userID)
+    provider = try container.decode(Provider.self, forKey: .provider)
+    // GoTrue omits `identity_data` when it is empty.
+    identityData = try container.decodeIfPresent(JSONObject.self, forKey: .identityData) ?? [:]
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
     updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
   }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-
-    try container.encode(id, forKey: .id)
-    try container.encode(identityId, forKey: .identityId)
-    try container.encode(userId, forKey: .userId)
-    try container.encodeIfPresent(identityData, forKey: .identityData)
-    try container.encode(provider, forKey: .provider)
-    try container.encodeIfPresent(createdAt, forKey: .createdAt)
-    try container.encodeIfPresent(lastSignInAt, forKey: .lastSignInAt)
-    try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
-  }
 }
 
 /// One of the providers supported by Auth.
-public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+///
+/// A provider encodes and decodes as its ``rawValue`` string.
+public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
   /// Creates a ``Provider`` from a raw string value.
@@ -894,6 +915,12 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   /// The user's password.
   public var password: String?
 
+  /// The user's current password.
+  ///
+  /// Set it with ``password`` when the project requires the current password to change the
+  /// password.
+  public var currentPassword: String?
+
   /// The nonce sent for reauthentication if the user's password is to be updated.
   ///
   /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
@@ -907,7 +934,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   var codeChallengeMethod: String?
 
   private enum CodingKeys: String, CodingKey {
-    case email, phone, password, nonce, codeChallenge, codeChallengeMethod
+    case email, phone, password, currentPassword, nonce, codeChallenge, codeChallengeMethod
     case userMetadata = "data"
   }
 
@@ -917,18 +944,22 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   ///   - email: New email address.
   ///   - phone: New phone number.
   ///   - password: New password.
+  ///   - currentPassword: Current password, required when the project requires it to change the
+  ///     password.
   ///   - nonce: Reauthentication nonce, required when updating the password.
   ///   - userMetadata: Data to merge into the user's metadata.
   public init(
     email: String? = nil,
     phone: String? = nil,
     password: String? = nil,
+    currentPassword: String? = nil,
     nonce: String? = nil,
     userMetadata: JSONObject? = nil
   ) {
     self.email = email
     self.phone = phone
     self.password = password
+    self.currentPassword = currentPassword
     self.nonce = nonce
     self.userMetadata = userMetadata
   }
@@ -2227,6 +2258,8 @@ public struct JWK: Decodable, Hashable, Sendable {
   /// Symmetric key value (base64url-encoded).
   public let k: String?
 
+  /// The wire names of RFC 7517. Decode with a plain `JSONDecoder`: a `.convertFromSnakeCase`
+  /// strategy would turn `key_ops` into `keyOps` before the match.
   enum CodingKeys: String, CodingKey {
     case kty
     case keyOps = "key_ops"
@@ -2257,168 +2290,4 @@ public struct JWTHeader: Decodable, Hashable, Sendable {
 
   /// Token type (typically `"JWT"`).
   public let typ: String?
-}
-
-/// The decoded claims from a JSON Web Token.
-public struct JWTClaims: Decodable, Hashable, Sendable {
-  /// Issuer (`iss` claim).
-  public let iss: String?
-
-  /// Subject (`sub` claim) — typically the user's UUID.
-  public let sub: String?
-
-  /// Audience (`aud` claim) — can be a single string or an array of strings.
-  public let aud: AudienceClaim?
-
-  /// Expiration time (`exp` claim) as a UNIX timestamp.
-  public let exp: TimeInterval?
-
-  /// Issued-at time (`iat` claim) as a UNIX timestamp.
-  public let iat: TimeInterval?
-
-  /// Not-before time (`nbf` claim) as a UNIX timestamp.
-  public let nbf: TimeInterval?
-
-  /// JWT ID (`jti` claim).
-  public let jti: String?
-
-  /// Role claim.
-  public let role: String?
-
-  /// Authenticator Assurance Level (`aal` claim).
-  public let aal: String?
-
-  /// Session ID.
-  public let sessionId: String?
-
-  /// Email claim.
-  public let email: String?
-
-  /// Phone claim.
-  public let phone: String?
-
-  /// Application metadata.
-  public let appMetadata: [String: JSONValue]?
-
-  /// User metadata.
-  public let userMetadata: [String: JSONValue]?
-
-  /// Any claims not recognized by the standard set of `CodingKeys`.
-  public var additionalClaims: [String: JSONValue] = [:]
-
-  enum CodingKeys: String, CodingKey {
-    case iss
-    case sub
-    case aud
-    case exp
-    case iat
-    case nbf
-    case jti
-    case role
-    case aal
-    case sessionId = "session_id"
-    case email
-    case phone
-    case appMetadata = "app_metadata"
-    case userMetadata = "user_metadata"
-  }
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    iss = try container.decodeIfPresent(String.self, forKey: .iss)
-    sub = try container.decodeIfPresent(String.self, forKey: .sub)
-    aud = try container.decodeIfPresent(AudienceClaim.self, forKey: .aud)
-    exp = try container.decodeIfPresent(TimeInterval.self, forKey: .exp)
-    iat = try container.decodeIfPresent(TimeInterval.self, forKey: .iat)
-    nbf = try container.decodeIfPresent(TimeInterval.self, forKey: .nbf)
-    jti = try container.decodeIfPresent(String.self, forKey: .jti)
-    role = try container.decodeIfPresent(String.self, forKey: .role)
-    aal = try container.decodeIfPresent(String.self, forKey: .aal)
-    sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
-    email = try container.decodeIfPresent(String.self, forKey: .email)
-    phone = try container.decodeIfPresent(String.self, forKey: .phone)
-    appMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata)
-    userMetadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata)
-
-    let allKeys = try decoder.container(keyedBy: AnyCodingKey.self)
-    var additional: [String: JSONValue] = [:]
-    for key in allKeys.allKeys where CodingKeys(stringValue: key.stringValue) == nil {
-      if let value = try? allKeys.decode(JSONValue.self, forKey: key) {
-        additional[key.stringValue] = value
-      }
-    }
-    additionalClaims = additional
-  }
-}
-
-/// A JWT `aud` (audience) claim that may be either a single string or an array of strings.
-public enum AudienceClaim: Decodable, Hashable, Sendable {
-  /// A single audience string.
-  case string(String)
-
-  /// Multiple audience strings.
-  case array([String])
-
-  public init(from decoder: any Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    if let string = try? container.decode(String.self) {
-      self = .string(string)
-    } else if let array = try? container.decode([String].self) {
-      self = .array(array)
-    } else {
-      throw DecodingError.typeMismatch(
-        AudienceClaim.self,
-        DecodingError.Context(
-          codingPath: decoder.codingPath,
-          debugDescription: "Expected String or [String] for audience claim"
-        )
-      )
-    }
-  }
-}
-
-private struct AnyCodingKey: CodingKey {
-  var stringValue: String
-  var intValue: Int?
-
-  init?(stringValue: String) {
-    self.stringValue = stringValue
-    intValue = nil
-  }
-
-  init?(intValue: Int) {
-    stringValue = "\(intValue)"
-    self.intValue = intValue
-  }
-}
-
-/// The result returned by ``AuthClient/claims(jwt:options:)``.
-public struct JWTClaimsResponse: Sendable {
-  /// The decoded JWT claims.
-  public let claims: JWTClaims
-
-  /// The decoded JWT header.
-  public let header: JWTHeader
-
-  /// The raw JWT signature bytes.
-  public let signature: Data
-}
-
-/// Options for ``AuthClient/claims(jwt:options:)``.
-public struct GetClaimsOptions: Sendable {
-  /// When `true`, the `exp` claim is not validated against the current time, allowing expired tokens to be decoded.
-  public let allowsExpired: Bool
-
-  /// When set, this JSON Web Key Set takes precedence over any cached JWKS from the server.
-  public let jwks: JWKS?
-
-  /// Creates claim-decoding options.
-  ///
-  /// - Parameters:
-  ///   - allowsExpired: Pass `true` to skip expiration validation.
-  ///   - jwks: An explicit JWKS to use instead of the cached server JWKS.
-  public init(allowsExpired: Bool = false, jwks: JWKS? = nil) {
-    self.allowsExpired = allowsExpired
-    self.jwks = jwks
-  }
 }

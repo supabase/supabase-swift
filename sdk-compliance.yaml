@@ -530,6 +530,29 @@ features:
     status: implemented
     symbols:
       - AuthClient.claims
+    supporting_symbols:
+      - ClaimsOptions
+      - ClaimsOptions.allowsExpired
+      - ClaimsOptions.init
+      - ClaimsOptions.jwks
+      - VerifiedClaims
+      - VerifiedClaims.additionalClaims
+      - VerifiedClaims.amr
+      - VerifiedClaims.appMetadata
+      - VerifiedClaims.assuranceLevel
+      - VerifiedClaims.audience
+      - VerifiedClaims.email
+      - VerifiedClaims.expiresAt
+      - VerifiedClaims.header
+      - VerifiedClaims.isAnonymous
+      - VerifiedClaims.issuedAt
+      - VerifiedClaims.issuer
+      - VerifiedClaims.phone
+      - VerifiedClaims.role
+      - VerifiedClaims.sessionID
+      - VerifiedClaims.signature
+      - VerifiedClaims.subject
+      - VerifiedClaims.userMetadata
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -553,10 +576,11 @@ features:
   auth.session.update_user:
     status: implemented
     symbols:
-      - AuthClient.update
+      - AuthClient.updateUser
     supporting_symbols:
       - UserAttributes
       - UserAttributes.userMetadata
+      - UserAttributes.currentPassword
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -614,7 +638,6 @@ features:
     symbols:
       - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
-      - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
     status: implemented
     symbols:
@@ -622,7 +645,10 @@ features:
   auth.identities.list_identities:
     status: implemented
     symbols:
-      - AuthClient.userIdentities
+      - AuthClient.identities
+    supporting_symbols:
+      - UserIdentity.providerUserID
+      - UserIdentity.userID
 
   auth.mfa.enroll:
     status: implemented

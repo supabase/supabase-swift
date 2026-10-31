@@ -20,7 +20,7 @@ struct SessionStoreTests {
     _ = await changes.next()
 
     try await store.commit(
-      .identityUnlinked(identities[0].identityId, userID: Session.valid.user.id))
+      .identityUnlinked(identities[0].id, userID: Session.valid.user.id))
 
     #expect(await changes.next()?.event == .userUpdated)
     #expect(store.currentSession?.user.identities == Array(identities.dropFirst()))
@@ -32,17 +32,17 @@ struct SessionStoreTests {
     var session = Session.valid
     var github = try #require(session.user.identities?.last)
     session.user.appMetadata["providers"] = ["email", "github"]
-    github.identityId = UUID()
+    github.id = UUID()
     session.user.identities?.append(github)
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
     try await store.load()
     try await store.commit(.signedIn(session, event: .signedIn))
 
-    try await store.commit(.identityUnlinked(github.identityId, userID: session.user.id))
+    try await store.commit(.identityUnlinked(github.id, userID: session.user.id))
     #expect(store.currentSession?.user.appMetadata["providers"] == ["email", "github"])
 
     let lastGitHub = try #require(session.user.identities?[1])
-    try await store.commit(.identityUnlinked(lastGitHub.identityId, userID: session.user.id))
+    try await store.commit(.identityUnlinked(lastGitHub.id, userID: session.user.id))
     #expect(store.currentSession?.user.appMetadata["providers"] == ["email"])
     #expect(store.currentSession?.user.identities?.map(\.provider) == ["email"])
   }
@@ -85,12 +85,12 @@ struct SessionStoreTests {
     let identity = try #require(Session.valid.user.identities?.first)
 
     let signedOut = await store.generation
-    try await store.commit(.identityUnlinked(identity.identityId, userID: Session.valid.user.id))
+    try await store.commit(.identityUnlinked(identity.id, userID: Session.valid.user.id))
     #expect(await store.generation == signedOut)
 
     try await store.commit(.signedIn(.valid, event: .signedIn))
     let signedIn = await store.generation
-    try await store.commit(.identityUnlinked(identity.identityId, userID: UUID()))
+    try await store.commit(.identityUnlinked(identity.id, userID: UUID()))
     #expect(await store.generation == signedIn)
     #expect(store.currentSession == .valid)
   }
