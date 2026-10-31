@@ -1,6 +1,6 @@
 import Crypto
-import CryptoExtras
 import Foundation
+import CryptoExtras
 import Helpers
 
 enum JWTVerifier {
@@ -56,11 +56,20 @@ extension JWK {
       let n,
       let modulus = Base64URL.decode(n),
       let e,
-      let exponent = Base64URL.decode(e)
+      let exponent = Base64URL.decode(e),
+      // swift-crypto enforces this floor in `init(n:e:)` only from 4.5.2; the package allows 4.0.0.
+      Self.bitLength(of: modulus) >= 2048
     else {
       return nil
     }
 
     return try? _RSA.Signing.PublicKey(n: modulus, e: exponent)
+  }
+
+  private static func bitLength(of bytes: Data) -> Int {
+    guard let first = bytes.firstIndex(where: { $0 != 0 }) else {
+      return 0
+    }
+    return (bytes.endIndex - first) * 8 - bytes[first].leadingZeroBitCount
   }
 }
