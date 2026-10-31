@@ -1,7 +1,8 @@
 public import Foundation
 import Helpers
 
-/// The claims of a JSON Web Token that ``AuthClient/claims(jwt:options:)`` verified.
+/// The claims of a JSON Web Token that ``AuthClient/claims(options:)`` or
+/// ``AuthClient/claims(jwt:options:)`` verified.
 ///
 /// Registered and Supabase claims have typed properties. Every other claim, such as one that a
 /// custom access token hook adds, is in ``additionalClaims``.
@@ -125,7 +126,7 @@ extension VerifiedClaims {
   }
 }
 
-/// Options for ``AuthClient/claims(jwt:options:)``.
+/// Options for ``AuthClient/claims(options:)`` and ``AuthClient/claims(jwt:options:)``.
 public struct ClaimsOptions: Sendable, Hashable {
   /// Whether to return the claims of an expired token. When `false`, an expired token fails
   /// verification.
