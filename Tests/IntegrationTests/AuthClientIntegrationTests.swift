@@ -643,7 +643,7 @@ struct AuthClientIntegrationTests {
     expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
     expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
 
-    expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
+    expectNoDifference(JWTVerifier.algorithm(for: jwk), .es256)
     #expect(jwk.p256PublicKey != nil)
   }
 
