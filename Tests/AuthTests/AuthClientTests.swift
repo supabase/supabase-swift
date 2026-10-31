@@ -3214,7 +3214,7 @@ extension AuthMockerTests {
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        try await sut.mfa.verifyWebAuthn(
+        _ = try await sut.mfa.verifyWebAuthn(
           factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           anchor: nil,
           authenticator: .fake(register: { _, _ in ["id": "cred"] })
@@ -3254,7 +3254,9 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8)]
         )
-        unenroll.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        // `@Sendable` keeps the callback off the main actor: Mocker runs it on the URL loading
+        // thread.
+        unenroll.onRequestHandler = OnRequestHandler(requestCallback: { @Sendable _ in
           unenrolled.setValue(true)
         })
         unenroll.register()

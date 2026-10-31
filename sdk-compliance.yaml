@@ -628,6 +628,8 @@ features:
     status: implemented
     symbols:
       - AuthMFA.verify
+    supporting_symbols:
+      - MFAVerifyParams.encode
   auth.mfa.unenroll:
     status: implemented
     symbols:
