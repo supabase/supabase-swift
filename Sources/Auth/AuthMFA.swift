@@ -1,167 +1,263 @@
-import Foundation
+public import Foundation
 
 /// Contains the full multi-factor authentication API.
 ///
 /// Access this namespace via ``AuthClient/mfa``.
 ///
+/// ```swift
+/// let enrollment = try await client.auth.mfa.enrollTOTP(friendlyName: "My phone")
+/// // Show enrollment.qrCode, then ask the user for the code from their authenticator app.
+/// try await client.auth.mfa.challengeAndVerify(factorID: enrollment.id, code: code)
+/// ```
+///
 /// ## Topics
 ///
 /// ### Enrolling factors
-/// - ``enroll(params:)``
-/// - ``unenroll(params:)``
+/// - ``enrollTOTP(issuer:friendlyName:)``
+/// - ``enrollPhone(_:friendlyName:)``
+/// - ``unenroll(factorID:)``
 ///
 /// ### Verifying factors
-/// - ``challenge(params:)``
-/// - ``verify(params:)``
-/// - ``challengeAndVerify(params:)``
+/// - ``challenge(factorID:channel:)``
+/// - ``verify(factorID:challengeID:code:)``
+/// - ``challengeAndVerify(factorID:code:)``
 ///
-/// ### Listing factors
-/// - ``listFactors()``
-/// - ``authenticatorAssuranceLevel()``
+/// ### Inspecting factors and the session
+/// - ``factors()``
+/// - ``assuranceLevel()``
 ///
 /// ### Recovery codes
 /// - ``recoveryCodes``
 public struct AuthMFA: Sendable {
-  /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
-  /// value kept past its call site keeps the client alive instead of dangling.
-  let client: AuthClient
-
-  var api: SessionAPIClient { client.dependencies.sessionAPI }
-  var authAPI: AuthAPI { client.dependencies.authAPI }
-  var sessionManager: SessionManager { client.dependencies.sessionManager }
-  var sessionStore: SessionStore { client.dependencies.sessionStore }
+  let dependencies: Dependencies
 
   /// Contains all recovery code methods.
-  public var recoveryCodes: AuthMFARecoveryCodes {
-    AuthMFARecoveryCodes(client: client)
+  public let recoveryCodes: AuthMFARecoveryCodes
+
+  init(dependencies: Dependencies) {
+    self.dependencies = dependencies
+    self.recoveryCodes = AuthMFARecoveryCodes(dependencies: dependencies)
   }
 
-  /// Starts the enrollment process for a new Multi-Factor Authentication (MFA) factor. This method
-  /// creates a new `unverified` factor.
-  /// To verify a factor, present the QR code or secret to the user and ask them to add it to their
-  /// authenticator app.
-  /// The user has to enter the code from their authenticator app to verify it.
+  private var api: SessionAPIClient { dependencies.sessionAPI }
+  private var authAPI: AuthAPI { dependencies.authAPI }
+  private var sessionManager: SessionManager { dependencies.sessionManager }
+  private var sessionStore: SessionStore { dependencies.sessionStore }
+
+  /// Enrolls a new, `unverified` TOTP factor.
   ///
-  /// Upon verifying a factor, all other sessions are logged out and the current session's
-  /// authenticator level is promoted to `aal2`.
+  /// Show ``TOTPEnrollment/qrCode`` or ``TOTPEnrollment/secret`` to the user and ask them to add
+  /// it to their authenticator app. Then pass the code the app shows to
+  /// ``challengeAndVerify(factorID:code:)`` to verify the factor.
   ///
-  /// - Parameter params: The parameters for enrolling a new MFA factor.
-  /// - Returns: An authentication response after enrolling the factor.
-  public func enroll(params: any MFAEnrollParamsType) async throws -> AuthMFAEnrollResponse {
-    try await api.authorizedExecute { try authAPI.enrollFactor(params, accessToken: $0) }
+  /// - Parameters:
+  ///   - issuer: The domain the user enrolls with, shown in the authenticator app.
+  ///   - friendlyName: A name that tells the factor apart from the user's other factors.
+  /// - Returns: The new factor and the data the authenticator app needs.
+  public func enrollTOTP(
+    issuer: String? = nil,
+    friendlyName: String? = nil
+  ) async throws -> TOTPEnrollment {
+    try await api.authorizedExecute {
+      try authAPI.enrollFactor(
+        .totp(issuer: issuer, friendlyName: friendlyName), decoding: TOTPEnrollment.self,
+        accessToken: $0)
+    }
   }
 
-  /// Prepares a challenge used to verify that a user has access to a MFA factor.
+  /// Enrolls a new, `unverified` phone factor.
   ///
-  /// - Parameter params: The parameters for creating a challenge.
-  /// - Returns: An authentication response with the challenge information.
-  public func challenge(params: MFAChallengeParams) async throws -> AuthMFAChallengeResponse {
-    try await api.authorizedExecute { try authAPI.challengeFactor(params, accessToken: $0) }
+  /// Call ``challenge(factorID:channel:)`` to send a code to the phone, then pass that code to
+  /// ``verify(factorID:challengeID:code:)`` to verify the factor.
+  ///
+  /// - Parameters:
+  ///   - phone: The phone number, in E.164 format.
+  ///   - friendlyName: A name that tells the factor apart from the user's other factors.
+  /// - Returns: The new factor.
+  public func enrollPhone(
+    _ phone: String,
+    friendlyName: String? = nil
+  ) async throws -> PhoneEnrollment {
+    try await api.authorizedExecute {
+      try authAPI.enrollFactor(
+        .phone(phone, friendlyName: friendlyName), decoding: PhoneEnrollment.self,
+        accessToken: $0)
+    }
   }
 
-  /// Verifies a code against a challenge. The verification code is
-  /// provided by the user by entering a code seen in their authenticator app.
+  /// Enrolls a new, `unverified` WebAuthn factor.
   ///
-  /// - Parameter params: The parameters for verifying the MFA factor.
-  /// - Returns: An authentication response after verifying the factor.
-  @discardableResult
-  public func verify(params: MFAVerifyParams) async throws -> AuthMFAVerifyResponse {
-    let response = try await api.authorizedExecute {
-      try authAPI.verifyFactor(params, accessToken: $0)
+  /// Use it to drive the ceremony with your own authenticator. Otherwise, call
+  /// `enrollWebAuthnFactor(friendlyName:presentationAnchor:)`.
+  ///
+  /// - Parameter friendlyName: A name that tells the factor apart from the user's other factors.
+  /// - Returns: The ID of the new factor. Pass it to ``challenge(factorID:webAuthn:)``.
+  @_spi(Experimental)
+  public func enrollWebAuthn(friendlyName: String? = nil) async throws -> UUID {
+    struct Enrollment: Decodable {
+      let id: UUID
     }
 
-    try await sessionStore.commit(.signedIn(response, event: .mfaChallengeVerified))
-
-    return response
+    return try await api.authorizedExecute {
+      try authAPI.enrollFactor(
+        .webAuthn(friendlyName: friendlyName), decoding: Enrollment.self, accessToken: $0)
+    }.id
   }
 
-  /// Unenroll removes a MFA factor.
-  /// A user has to have an `aal2` authenticator level in order to unenroll a `verified` factor.
+  /// Creates a challenge for a factor. For a phone factor, this sends the code.
   ///
-  /// - Parameter params: The parameters for unenrolling an MFA factor.
-  /// - Returns: An authentication response after unenrolling the factor.
-  @discardableResult
-  public func unenroll(params: MFAUnenrollParams) async throws -> AuthMFAUnenrollResponse {
-    try await api.authorizedExecute { authAPI.unenrollFactor(params, accessToken: $0) }
+  /// - Parameters:
+  ///   - factorID: The ID of the factor to challenge.
+  ///   - channel: How to send the code to a phone factor. The server default is
+  ///     ``MessagingChannel/sms``. Ignored for other factor types.
+  /// - Returns: The challenge. Pass its ``MFAChallenge/id`` to
+  ///   ``verify(factorID:challengeID:code:)`` before ``MFAChallenge/expiresAt``.
+  public func challenge(
+    factorID: UUID,
+    channel: MessagingChannel? = nil
+  ) async throws -> MFAChallenge {
+    try await api.authorizedExecute {
+      try authAPI.challengeFactor(
+        factorID: factorID, channel: channel, webAuthn: nil, accessToken: $0)
+    }
   }
 
-  /// Helper method which creates a challenge and immediately uses the given code to verify against
-  /// it thereafter. The verification code is
-  /// provided by the user by entering a code seen in their authenticator app.
+  /// Creates a challenge for a WebAuthn factor with relying-party options.
   ///
-  /// - Parameter params: The parameters for creating and verifying a challenge.
-  /// - Returns: An authentication response after verifying the challenge.
+  /// - Parameters:
+  ///   - factorID: The ID of the WebAuthn factor to challenge.
+  ///   - webAuthn: The relying-party identifier and origins to challenge with.
+  /// - Returns: The challenge, with the credential options in ``MFAChallenge/webauthn``.
+  @_spi(Experimental)
+  public func challenge(
+    factorID: UUID,
+    webAuthn: WebAuthnChallengeOptions
+  ) async throws -> MFAChallenge {
+    try await api.authorizedExecute {
+      try authAPI.challengeFactor(
+        factorID: factorID, channel: nil, webAuthn: webAuthn, accessToken: $0)
+    }
+  }
+
+  /// Verifies a challenge with the code the user entered, and upgrades the session to `aal2`.
+  ///
+  /// On success the stored session is replaced with the upgraded one, the user's other sessions
+  /// are signed out, and ``AuthEvent/mfaChallengeVerified`` is emitted. Verifying an `unverified`
+  /// factor also marks it `verified`.
+  ///
+  /// - Parameters:
+  ///   - factorID: The ID of the factor the challenge is for.
+  ///   - challengeID: The ID returned by ``challenge(factorID:channel:)``.
+  ///   - code: The code from the authenticator app or the message sent to the phone.
+  /// - Returns: The upgraded session.
+  /// - Throws: An error with code ``ErrorCode/mfaVerificationFailed`` when the code is wrong, or
+  ///   ``ErrorCode/mfaChallengeExpired`` when the challenge has expired.
   @discardableResult
-  public func challengeAndVerify(
-    params: MFAChallengeAndVerifyParams
-  ) async throws -> AuthMFAVerifyResponse {
-    let response = try await challenge(params: MFAChallengeParams(factorId: params.factorId))
-    return try await verify(
-      params: MFAVerifyParams(
-        factorId: params.factorId, challengeId: response.id, code: params.code
-      )
+  public func verify(factorID: UUID, challengeID: UUID, code: String) async throws -> Session {
+    try await commitVerifiedSession {
+      try authAPI.verifyFactor(
+        factorID: factorID, challengeID: challengeID, code: code, accessToken: $0)
+    }
+  }
+
+  /// Verifies a WebAuthn challenge with the credential response from the authenticator, and
+  /// upgrades the session to `aal2`. See ``verify(factorID:challengeID:code:)``.
+  ///
+  /// - Parameters:
+  ///   - factorID: The ID of the WebAuthn factor the challenge is for.
+  ///   - challengeID: The ID returned by ``challenge(factorID:webAuthn:)``.
+  ///   - credentialResponse: The W3C credential the authenticator produced. It is sent verbatim,
+  ///     with its W3C field names.
+  /// - Returns: The upgraded session.
+  @_spi(Experimental)
+  @discardableResult
+  public func verify(
+    factorID: UUID,
+    challengeID: UUID,
+    credentialResponse: JSONValue
+  ) async throws -> Session {
+    try await commitVerifiedSession {
+      try authAPI.verifyFactor(
+        factorID: factorID, challengeID: challengeID, credentialResponse: credentialResponse,
+        accessToken: $0)
+    }
+  }
+
+  private func commitVerifiedSession(
+    _ makeRequest: (_ accessToken: String) throws -> AuthRequest<Session>
+  ) async throws -> Session {
+    let session = try await api.authorizedExecute(makeRequest)
+    try await sessionStore.commit(.signedIn(session, event: .mfaChallengeVerified))
+    return session
+  }
+
+  /// Creates a challenge and verifies it with `code` right away.
+  ///
+  /// Use it for TOTP factors, where the user already has the code. For a phone factor, call
+  /// ``challenge(factorID:channel:)`` first so the server sends the code.
+  ///
+  /// - Parameters:
+  ///   - factorID: The ID of the factor to verify.
+  ///   - code: The code from the authenticator app.
+  /// - Returns: The upgraded session. See ``verify(factorID:challengeID:code:)``.
+  @discardableResult
+  public func challengeAndVerify(factorID: UUID, code: String) async throws -> Session {
+    let challenge = try await challenge(factorID: factorID)
+    return try await verify(factorID: factorID, challengeID: challenge.id, code: code)
+  }
+
+  /// Removes a factor.
+  ///
+  /// The session has to be at `aal2` to remove a `verified` factor.
+  ///
+  /// - Parameter factorID: The ID of the factor to remove.
+  public func unenroll(factorID: UUID) async throws {
+    _ = try await api.authorizedExecute {
+      authAPI.unenrollFactor(factorID: factorID, accessToken: $0)
+    }
+  }
+
+  /// Fetches the user's factors from the server.
+  ///
+  /// Reads the factors from `GET /user` on every call, so the result reflects enrollments made on
+  /// other devices. The stored session is not changed.
+  ///
+  /// - Returns: The user's factors, split by status.
+  public func factors() async throws -> MFAFactors {
+    let user = try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+    return MFAFactors(user.factors ?? [])
+  }
+
+  /// Returns the assurance level of the current session and the highest level the user can
+  /// reach.
+  ///
+  /// Reads the `aal` and `amr` claims of the current access token, and the factors of the stored
+  /// user. It sends a request only when the session has to be refreshed.
+  ///
+  /// - Returns: The current level, the next level, and the methods attached to the session.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no user is
+  ///   signed in, and of kind ``AuthError/Kind-swift.struct/decoding`` when the access token is
+  ///   not a JWT.
+  public func assuranceLevel() async throws -> AssuranceLevelInfo {
+    let session = try await sessionManager.session()
+    guard let payload = JWT.decodePayload(session.accessToken) else {
+      throw AuthError.decoding("The access token is not a JWT.")
+    }
+
+    let currentLevel = (payload["aal"] as? String).map(AuthenticatorAssuranceLevel.init(rawValue:))
+
+    let hasVerifiedFactor = session.user.factors?.contains { $0.status == .verified } ?? false
+    let nextLevel = hasVerifiedFactor ? .aal2 : currentLevel
+
+    let issuedAt = payload["iat"] as? TimeInterval
+    let methods = (payload["amr"] as? [Any] ?? []).compactMap {
+      AMREntry(value: $0, issuedAt: issuedAt)
+    }
+
+    return AssuranceLevelInfo(
+      currentLevel: currentLevel,
+      nextLevel: nextLevel,
+      currentAuthenticationMethods: methods
     )
-  }
-
-  /// Returns the list of MFA factors enabled for this user.
-  ///
-  /// - Returns: An authentication response with the list of MFA factors.
-  public func listFactors() async throws -> AuthMFAListFactorsResponse {
-    let user = try await sessionManager.session().user
-    let factors = user.factors ?? []
-    let totp = factors.filter {
-      $0.factorType == "totp" && $0.status == .verified
-    }
-    let phone = factors.filter {
-      $0.factorType == "phone" && $0.status == .verified
-    }
-    let webauthn = factors.filter {
-      $0.factorType == "webauthn" && $0.status == .verified
-    }
-    return AuthMFAListFactorsResponse(all: factors, totp: totp, phone: phone, webauthn: webauthn)
-  }
-
-  /// Returns the Authenticator Assurance Level (AAL) for the active session.
-  ///
-  /// - Returns: An authentication response with the Authenticator Assurance Level.
-  public func authenticatorAssuranceLevel() async throws
-    -> AuthMFAGetAuthenticatorAssuranceLevelResponse
-  {
-    do {
-      let session = try await sessionManager.session()
-      let payload = JWT.decodePayload(session.accessToken)
-
-      var currentLevel: AuthenticatorAssuranceLevels?
-
-      if let aal = payload?["aal"] as? AuthenticatorAssuranceLevels {
-        currentLevel = aal
-      }
-
-      var nextLevel = currentLevel
-
-      let verifiedFactors = session.user.factors?.filter { $0.status == .verified } ?? []
-      if !verifiedFactors.isEmpty {
-        nextLevel = "aal2"
-      }
-
-      var currentAuthenticationMethods: [AMREntry] = []
-
-      if let amr = payload?["amr"] as? [Any] {
-        let issuedAt = payload?["iat"] as? TimeInterval
-        currentAuthenticationMethods = amr.compactMap { AMREntry(value: $0, issuedAt: issuedAt) }
-      }
-
-      return AuthMFAGetAuthenticatorAssuranceLevelResponse(
-        currentLevel: currentLevel,
-        nextLevel: nextLevel,
-        currentAuthenticationMethods: currentAuthenticationMethods
-      )
-    } catch let error as AuthError where error.kind == .sessionMissing {
-      return AuthMFAGetAuthenticatorAssuranceLevelResponse(
-        currentLevel: nil,
-        nextLevel: nil,
-        currentAuthenticationMethods: []
-      )
-    }
   }
 }

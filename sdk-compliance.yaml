@@ -613,12 +613,31 @@ features:
   auth.mfa.enroll:
     status: implemented
     symbols:
-      - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
+    supporting_symbols:
+      - TOTPEnrollment
+      - TOTPEnrollment.init
+      - TOTPEnrollment.id
+      - TOTPEnrollment.friendlyName
+      - TOTPEnrollment.qrCode
+      - TOTPEnrollment.secret
+      - TOTPEnrollment.uri
+      - PhoneEnrollment
+      - PhoneEnrollment.init
+      - PhoneEnrollment.id
+      - PhoneEnrollment.friendlyName
+      - PhoneEnrollment.phone
   auth.mfa.challenge:
     status: implemented
     symbols:
       - AuthMFA.challenge
     supporting_symbols:
+      - MFAChallenge
+      - MFAChallenge.init
+      - MFAChallenge.id
+      - MFAChallenge.factorType
+      - MFAChallenge.expiresAt
       - MessagingChannel
       - MessagingChannel.init
       - MessagingChannel.rawValue
@@ -639,8 +658,19 @@ features:
   auth.mfa.list_factors:
     status: implemented
     symbols:
-      - AuthMFA.listFactors
+      - AuthMFA.factors
     supporting_symbols:
+      - MFAFactors
+      - MFAFactors.verified
+      - MFAFactors.unverified
+      - MFAFactors.all
+      - FactorType
+      - FactorType.init
+      - FactorType.rawValue
+      - FactorType.totp
+      - FactorType.phone
+      - FactorType.webAuthn
+      - FactorType.recoveryCode
       - FactorStatus
       - FactorStatus.init
       - FactorStatus.rawValue
@@ -649,7 +679,41 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.authenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
+    supporting_symbols:
+      - AssuranceLevelInfo
+      - AssuranceLevelInfo.currentLevel
+      - AssuranceLevelInfo.nextLevel
+      - AssuranceLevelInfo.currentAuthenticationMethods
+      - AuthenticatorAssuranceLevel
+      - AuthenticatorAssuranceLevel.init
+      - AuthenticatorAssuranceLevel.rawValue
+      - AuthenticatorAssuranceLevel.aal1
+      - AuthenticatorAssuranceLevel.aal2
+      - AMREntry
+      - AMREntry.method
+      - AMREntry.timestamp
+      - AuthenticationMethod
+      - AuthenticationMethod.init
+      - AuthenticationMethod.rawValue
+      - AuthenticationMethod.oauth
+      - AuthenticationMethod.password
+      - AuthenticationMethod.otp
+      - AuthenticationMethod.totp
+      - AuthenticationMethod.recovery
+      - AuthenticationMethod.invite
+      - AuthenticationMethod.ssoSAML
+      - AuthenticationMethod.magicLink
+      - AuthenticationMethod.emailSignup
+      - AuthenticationMethod.emailChange
+      - AuthenticationMethod.tokenRefresh
+      - AuthenticationMethod.anonymous
+      - AuthenticationMethod.mfaPhone
+      - AuthenticationMethod.mfaWebAuthn
+      - AuthenticationMethod.mfaRecoveryCode
+      - AuthenticationMethod.web3
+      - AuthenticationMethod.oauthProviderAuthorizationCode
+      - AuthenticationMethod.passkey
 
   auth.mfa_recovery_codes.generate:
     status: implemented
