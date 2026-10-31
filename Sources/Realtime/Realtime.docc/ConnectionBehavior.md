@@ -13,7 +13,7 @@ statuses.
 ### Statuses
 
 ``RealtimeClient/status`` is a ``RealtimeClientStatus``. ``RealtimeChannel/status`` is a
-``RealtimeChannelStatus``. Each one is also a stream, ``RealtimeClient/statusChanges()`` and
+``RealtimeChannelStatus``. Both reads are `async`. Each one is also a stream, ``RealtimeClient/statusChanges()`` and
 ``RealtimeChannel/statusChanges()``, that starts with the current value and then yields every
 change.
 
@@ -53,6 +53,11 @@ The client stops when the answer cannot change:
 
 A failure in ``RealtimeClient/connect()`` itself is not retried: `connect()` throws it.
 
+``RealtimeClient/disconnect(code:reason:)`` is not a drop. It makes every subscribed channel
+``RealtimeChannelStatus/unsubscribed``, and the channels stay registered. The next
+``RealtimeClient/connect()`` does not join them again. Call ``RealtimeChannel/subscribe()`` on
+each one; ``RealtimeChannel/events()`` then yields ``RealtimeChannelEvent/resubscribed``.
+
 ### When the server closes a channel
 
 The automatic rejoin covers a dropped socket. It does not cover a channel that the server ends
@@ -60,8 +65,10 @@ while the socket stays up, for example when the token expires:
 
 - After a close (`phx_close`), the channel's status becomes
   ``RealtimeChannelStatus/unsubscribed``, the client removes the channel, and every stream on it
-  ends. Your `for await` loops end. To keep receiving events, ask the client for a new channel
-  and subscribe it.
+  ends. Your `for await` loops end. The handle is spent, as after
+  ``RealtimeClient/removeChannel(_:)``: its actions throw
+  ``RealtimeError/Kind-swift.struct/channelRemoved``. To keep receiving events, ask the client
+  for a new channel and subscribe it.
 - After a channel error (`phx_error`), the status becomes
   ``RealtimeChannelStatus/unsubscribed``, but the channel and its streams stay. Call
   ``RealtimeChannel/subscribe()`` again.

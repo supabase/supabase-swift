@@ -16,7 +16,7 @@ struct RealtimeChannelPushTests {
 
     try await channel.broadcast(event: "cursor", payload: ["x": 1] as JSONObject)
 
-    #expect(h.socket.sentEvents.contains { if case .frame(.binary) = $0 { true } else { false } })
+    #expect(await !h.socket.sentBinaryFrames().isEmpty)
   }
 
   @Test
@@ -49,11 +49,11 @@ struct RealtimeChannelPushTests {
     let frame = try #require(await h.received(ChannelEvent.presence))
     #expect(frame.payload["event"] == "track")
     #expect(frame.payload["payload"] == ["online": true])
-    #expect(await channel.pendingPushes.count == 1)
+    #expect(await h.client.pendingPushCount(for: "room") == 1)
     try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
 
     try await push.value
-    #expect(await channel.pendingPushes.isEmpty)
+    #expect(await h.client.pendingPushCount(for: "room") == 0)
   }
 
   @Test
@@ -96,11 +96,11 @@ struct RealtimeChannelPushTests {
 
     let push = Task { try await channel.track(["online": true] as JSONObject) }
     let frame = try #require(await h.received(ChannelEvent.presence))
-    #expect(await channel.pendingPushes.count == 1)
+    #expect(await h.client.pendingPushCount(for: "room") == 1)
     try h.reply(h.pushReply(to: frame, join: join, payload: ["status": "ok", "response": [:]]))
 
     try await push.value
-    #expect(await channel.pendingPushes.isEmpty)
+    #expect(await h.client.pendingPushCount(for: "room") == 0)
   }
 
   @Test
@@ -158,7 +158,7 @@ struct RealtimeChannelPushTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await push.value }
     #expect(error?.kind == .timeout)
-    #expect(await channel.pendingPushes.isEmpty)
+    #expect(await h.client.pendingPushCount(for: "room") == 0)
   }
 
   @Test
@@ -172,7 +172,7 @@ struct RealtimeChannelPushTests {
     push.cancel()
 
     await #expect(throws: CancellationError.self) { try await push.value }
-    #expect(await channel.pendingPushes.isEmpty)
+    #expect(await h.client.pendingPushCount(for: "room") == 0)
   }
 
   @Test

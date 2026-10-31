@@ -7,7 +7,6 @@
 
 import ConcurrencyExtras
 public import Foundation
-import IssueReporting
 
 extension RealtimeChannel {
   /// Returns an async stream of the entries that join and leave the channel's presence.
@@ -19,17 +18,13 @@ extension RealtimeChannel {
   /// changes nothing emits nothing.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
-  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// channel, so open it before subscribing. Opening one after ``subscribe()`` reports an issue
+  /// and returns a stream that ends at once. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceChange`` values.
-  public func presenceChanges() -> AsyncStream<PresenceChange> {
-    guard canChangeJoinConfig(for: "presence") else { return .finished }
-    let (stream, continuation) = AsyncStream<PresenceChange>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.presence(continuation), terminating: continuation)
-    return stream
+  public func presenceChanges() async -> AsyncStream<PresenceChange> {
+    await client?.presenceChanges(of: self) ?? .finished
   }
 
   /// Returns an async stream of the channel's presence state.
@@ -38,18 +33,13 @@ extension RealtimeChannel {
   /// that changes it.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
-  /// channel, so open it before subscribing. The stream ends when the iterating task is
+  /// channel, so open it before subscribing. Opening one after ``subscribe()`` reports an issue
+  /// and returns a stream that ends at once. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceState`` values.
-  public func presenceStates() -> AsyncStream<PresenceState> {
-    guard canChangeJoinConfig(for: "presence") else { return .finished }
-    let (stream, continuation) = AsyncStream<PresenceState>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.presenceState(continuation), terminating: continuation)
-    continuation.yield(presenceState)
-    return stream
+  public func presenceStates() async -> AsyncStream<PresenceState> {
+    await client?.presenceStates(of: self) ?? .finished
   }
 
   /// Returns an async stream of the row changes in a table.
@@ -81,8 +71,8 @@ extension RealtimeChannel {
     table: String? = nil,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil
-  ) -> AsyncStream<PostgresChange> {
-    postgresChanges(
+  ) async -> AsyncStream<PostgresChange> {
+    await postgresChanges(
       event: event, schema: schema, table: table, filter: filter?.value, select: select
     )
   }
@@ -97,7 +87,7 @@ extension RealtimeChannel {
   /// opened on a joined channel makes the channel leave and join again with the new binding.
   ///
   /// The method runs on the caller's actor, so `Row` can have a `Decodable` conformance isolated
-  /// to the main actor.
+  /// to the main actor. Only the binding crosses to the client.
   ///
   /// ```swift
   /// let changes = await channel.postgresChanges(of: Message.self, table: "messages")
@@ -117,7 +107,7 @@ extension RealtimeChannel {
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. Defaults to the decoder the SDK
   ///     uses for server responses.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
-  nonisolated public func postgresChanges<Row: Decodable>(
+  public func postgresChanges<Row: Decodable>(
     of _: Row.Type,
     event: PostgresChangeEvent = .all,
     schema: String = "public",
@@ -134,7 +124,7 @@ extension RealtimeChannel {
 
   /// The typed stream for a filter already in the `postgres_changes` grammar, for the `Supabase`
   /// module, which renders it from a typed PostgREST filter.
-  nonisolated package func postgresChanges<Row: Decodable>(
+  package func postgresChanges<Row: Decodable>(
     of _: Row.Type,
     event: PostgresChangeEvent,
     schema: String,
@@ -143,11 +133,11 @@ extension RealtimeChannel {
     select: [String]?,
     decoder: JSONDecoder
   ) async -> AsyncStream<TypedPostgresChange<Row>> {
-    let decoder = UncheckedSendable(decoder)
     let changes = await postgresChanges(
       event: event, schema: schema, table: table, filter: rawFilter, select: select
     )
-    return AsyncStream(changes.map { TypedPostgresChange(raw: $0, decoder: decoder) })
+    return AsyncStream(
+      TypedPostgresChanges<Row>(base: changes, decoder: UncheckedSendable(decoder)))
   }
 
   /// One stream of the changes for `bindings`, the channel events, and the status changes, in
@@ -160,13 +150,8 @@ extension RealtimeChannel {
   /// A change that matches more than one of `bindings` is delivered once.
   package func postgresChangesSignals(
     bindings: [PostgresJoinConfig]
-  ) -> AsyncStream<PostgresChangesSignal> {
-    let (stream, continuation) = AsyncStream<PostgresChangesSignal>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.postgresSignals(bindings, continuation), terminating: continuation)
-    rejoinIfBindingsChanged()
-    return stream
+  ) async -> AsyncStream<PostgresChangesSignal> {
+    await client?.postgresChangesSignals(of: self, bindings) ?? .finished
   }
 
   func postgresChanges(
@@ -175,7 +160,7 @@ extension RealtimeChannel {
     table: String?,
     filter: String?,
     select: [String]?
-  ) -> AsyncStream<PostgresChange> {
+  ) async -> AsyncStream<PostgresChange> {
     let config = PostgresJoinConfig(
       event: event,
       schema: schema,
@@ -183,13 +168,7 @@ extension RealtimeChannel {
       filter: filter,
       select: select
     )
-
-    let (stream, continuation) = AsyncStream<PostgresChange>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.postgres(config, continuation), terminating: continuation)
-    rejoinIfBindingsChanged()
-    return stream
+    return await client?.postgresChanges(of: self, config) ?? .finished
   }
 
   /// Returns an async stream of the broadcast messages for the given event.
@@ -201,12 +180,8 @@ extension RealtimeChannel {
   /// - Parameter event: The broadcast event name to listen for. Pass `"*"` to receive every
   ///   event.
   /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
-  public func broadcasts(event: String) -> AsyncStream<BroadcastMessage> {
-    let (stream, continuation) = AsyncStream<BroadcastMessage>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.broadcast(event: event, continuation), terminating: continuation)
-    return stream
+  public func broadcasts(event: String) async -> AsyncStream<BroadcastMessage> {
+    await client?.broadcasts(of: self, event: event) ?? .finished
   }
 
   /// Returns an async stream of server events about this channel.
@@ -223,34 +198,30 @@ extension RealtimeChannel {
   ///   }
   /// }
   /// ```
-  public func events() -> AsyncStream<RealtimeChannelEvent> {
-    let (stream, continuation) = AsyncStream<RealtimeChannelEvent>.makeStream(
-      bufferingPolicy: .unbounded
-    )
-    register(.events(continuation), terminating: continuation)
-    return stream
-  }
-
-  /// Presence streams shape the join payload, so they can only be opened before the join is sent.
-  private func canChangeJoinConfig(for feature: String) -> Bool {
-    switch state {
-    case .unsubscribed, .unsubscribing, .failed:
-      return true
-    case .subscribing, .subscribed:
-      reportIssue(
-        """
-        Cannot open "\(feature)" streams for "\(topic)" after `subscribe()`.
-        Please open all your \(feature) streams before subscribing to the channel.
-        """
-      )
-      return false
-    }
+  public func events() async -> AsyncStream<RealtimeChannelEvent> {
+    await client?.events(of: self) ?? .finished
   }
 }
 
-extension AsyncStream {
-  /// A stream with no elements.
-  fileprivate static var finished: AsyncStream {
-    AsyncStream { $0.finish() }
+/// Wraps each change of `base` as a ``TypedPostgresChange``.
+///
+/// A sequence type instead of `map`: the `map` transform runs off the caller's actor and would
+/// capture `Row.Type`, whose `Decodable` conformance may be isolated to the caller's actor.
+private struct TypedPostgresChanges<Row>: AsyncSequence, Sendable {
+  let base: AsyncStream<PostgresChange>
+  let decoder: UncheckedSendable<JSONDecoder>
+
+  struct AsyncIterator: AsyncIteratorProtocol {
+    var base: AsyncStream<PostgresChange>.Iterator
+    let decoder: UncheckedSendable<JSONDecoder>
+
+    @concurrent mutating func next() async -> TypedPostgresChange<Row>? {
+      guard let change = await base.next() else { return nil }
+      return TypedPostgresChange(raw: change, decoder: decoder)
+    }
+  }
+
+  func makeAsyncIterator() -> AsyncIterator {
+    AsyncIterator(base: base.makeAsyncIterator(), decoder: decoder)
   }
 }

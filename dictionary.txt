@@ -4,6 +4,7 @@ acks
 ahref
 Alamofire
 alamofire
+alice
 apikey
 Apikey
 appex
@@ -20,6 +21,7 @@ awailas
 backgrounded
 Backgrounded
 backgrounding
+backoffs
 bitbucket
 Bitbucket
 bpchar
@@ -336,3 +338,8 @@ hotfixes
 # Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
 synchronizable
 Synchronizable
+
+# Realtime client actor: the Fanout type that copies a value to every stream listener.
+Fanout
+fanout
+Fanouts

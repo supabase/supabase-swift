@@ -241,15 +241,16 @@ supporting_symbols:
   - AuthMFARecoveryCodesGenerateResponse.friendlyName
   - AuthMFARecoveryCodesGenerateResponse.total
   - AuthMFARecoveryCodesGenerateResponse.codes
-  # RealtimeClient and RealtimeChannel are the actors every realtime.* capability
-  # hangs off; their executors and identity properties are not a capability of their own.
+  # RealtimeClient and RealtimeChannel are the types every realtime.* capability
+  # hangs off; their identity properties are not a capability of their own.
   - SupabaseClient.realtime
   - RealtimeClient
   - RealtimeClient.init
-  - RealtimeClient.unownedExecutor
   - RealtimeChannel
   - RealtimeChannel.topic
   - RealtimeChannel.configuration
+  - RealtimeChannel.==
+  - RealtimeChannel.hash
   - RealtimeChannelConfiguration
   - RealtimeChannelConfiguration.init
   - RealtimeChannelConfiguration.broadcast
@@ -261,7 +262,6 @@ supporting_symbols:
   - RealtimeChannelConfiguration.Presence.init
   - RealtimeChannelConfiguration.PostgresChanges
   - RealtimeChannelConfiguration.PostgresChanges.init
-  - RealtimeChannel.unownedExecutor
   # RealtimeError (SDK-1788) is thrown by every realtime.* capability rather
   # than owned by one.
   - RealtimeError
@@ -286,6 +286,7 @@ supporting_symbols:
   - RealtimeError.Kind.unauthorized
   - RealtimeError.Kind.rateLimited
   - RealtimeError.Kind.channelClosed
+  - RealtimeError.Kind.channelRemoved
   - RealtimeError.Kind.payloadTooLarge
   - RealtimeError.serverCode
   - RealtimeError.isRetryable
@@ -1442,8 +1443,10 @@ features:
       - RealtimeClient.disconnect
   realtime.client.get_channels:
     status: implemented
+    note: "An async read: the RealtimeClient actor owns every channel."
     symbols:
       - RealtimeClient.channels
+      - SupabaseClient.channels
   realtime.client.remove_channel:
     status: implemented
     symbols:
@@ -1476,6 +1479,7 @@ features:
       - RealtimeClient.setAuth
   realtime.client.channel:
     status: implemented
+    note: "async. Returns the live channel for the topic or creates one. The configure closure is not @Sendable: it runs on the caller's actor before one hop to the RealtimeClient actor."
     symbols:
       - RealtimeClient.channel
       - SupabaseClient.channel

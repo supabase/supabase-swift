@@ -141,35 +141,38 @@ struct RealtimeChannelTypedPostgresChangesTests {
     let expectedConfig = PostgresJoinConfig(
       event: .insert, schema: "public", table: "todos", filter: "priority=gt.3,title=eq.milk"
     )
-    #expect(await channel.clientChanges == [expectedConfig])
+    #expect(await client.bindings(of: channel) == [expectedConfig])
 
-    await channel.setServerChanges([
-      PostgresJoinConfig(
-        event: .insert, schema: "public", table: "todos", filter: "priority=gt.3,title=eq.milk",
-        id: 1)
-    ])
-    await channel.onMessage(
-      RealtimeMessage(
-        joinRef: nil,
-        ref: nil,
-        topic: "realtime:todos",
-        event: ChannelEvent.postgresChanges,
-        payload: [
-          "ids": [1],
-          "data": [
-            "type": "INSERT",
-            "schema": "public",
-            "table": "todos",
-            "commit_timestamp": "2026-10-30T12:00:00.000Z",
-            "record": [
-              "id": 1, "title": "milk", "is_done": false, "priority": 5,
-              "due_date": "2026-10-31T09:30:00.000Z", "tags": ["home"],
+    await client.installSubscribedRecord(
+      of: channel,
+      serverChanges: [
+        PostgresJoinConfig(
+          event: .insert, schema: "public", table: "todos", filter: "priority=gt.3,title=eq.milk",
+          id: 1)
+      ])
+    await client.apply(
+      .frame(
+        RealtimeMessage(
+          joinRef: nil,
+          ref: nil,
+          topic: "realtime:todos",
+          event: ChannelEvent.postgresChanges,
+          payload: [
+            "ids": [1],
+            "data": [
+              "type": "INSERT",
+              "schema": "public",
+              "table": "todos",
+              "commit_timestamp": "2026-10-30T12:00:00.000Z",
+              "record": [
+                "id": 1, "title": "milk", "is_done": false, "priority": 5,
+                "due_date": "2026-10-31T09:30:00.000Z", "tags": ["home"],
+              ],
             ],
-          ],
-        ]
-      )
-    )
-    await channel.finishStreams()
+          ]
+        )
+      ))
+    await client.finishStreams(of: channel)
 
     var received: [TypedPostgresChange<RealtimeTodo>] = []
     for await change in changes {
@@ -213,14 +216,32 @@ struct RealtimeChannelTypedPostgresChangesTests {
     let changes = await channel.postgresChanges(for: Secret.self)
     withExtendedLifetime(changes) {}
 
-    let configs = await channel.clientChanges
+    let configs = await client.bindings(of: channel)
     #expect(configs == [PostgresJoinConfig(event: .all, schema: "private", table: "secrets")])
     #expect(configs.map(\.event) == [.all])
   }
 }
 
-extension RealtimeChannel {
-  fileprivate func setServerChanges(_ changes: [PostgresJoinConfig]) {
-    serverChanges = changes
+extension RealtimeClient {
+  /// The Postgres bindings of the open streams of `channel`, in registration order.
+  fileprivate func bindings(of channel: RealtimeChannel) -> [PostgresJoinConfig] {
+    state(of: channel)?.joinSnapshot.bindings ?? []
+  }
+
+  /// Puts a subscribed record for `channel` in the core, with the bindings the server confirmed,
+  /// so a frame for it reaches its streams without a socket.
+  fileprivate func installSubscribedRecord(
+    of channel: RealtimeChannel, serverChanges: [PostgresJoinConfig]
+  ) {
+    var record = ChannelRecord(topic: channel.topic, configuration: RealtimeChannelConfiguration())
+    record.phase = .subscribed(joinRef: "1")
+    record.hasBeenSubscribed = true
+    record.serverChanges = serverChanges
+    core.channels[channel.id] = record
+  }
+
+  /// Ends every stream of `channel`, so a test reads what a stream buffered without waiting.
+  fileprivate func finishStreams(of channel: RealtimeChannel) {
+    state(of: channel)?.finishAll()
   }
 }

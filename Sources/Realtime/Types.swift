@@ -351,6 +351,24 @@ public enum RealtimeClientStatus: Sendable {
   }
 }
 
+extension RealtimeClientStatus {
+  /// Whether `other` is the same case with the same values.
+  func isSame(as other: RealtimeClientStatus) -> Bool {
+    switch (self, other) {
+    case (.connected, .connected):
+      true
+    case (.disconnected(let a), .disconnected(let b)):
+      a?.isSameFailure(as: b) ?? (b == nil)
+    case (.connecting(let a), .connecting(let b)):
+      a == b
+    case (.reconnecting(let a, let da, let ea), .reconnecting(let b, let db, let eb)):
+      a == b && da == db && ea.isSameFailure(as: eb)
+    default:
+      false
+    }
+  }
+}
+
 /// A server event about a ``RealtimeChannel``, emitted by ``RealtimeChannel/events()``.
 ///
 /// ## Topics
