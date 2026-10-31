@@ -109,7 +109,7 @@ struct AuthClientRedirectTests {
     race.answer(.post, "recover")
     race.answerCodeExchange { [race] in try Race.ok(race.issue("recovered")) }
     let client = race.makeClient()
-    try await client.resetPasswordForEmail("user@example.com")
+    try await client.resetPassword(email: "user@example.com")
 
     let events = try await events(on: client) {
       let result = try await client.handleRedirect(callback)
@@ -310,7 +310,7 @@ struct AuthClientRedirectTests {
       ("signUp", { _ = try await client.signUp(email: "a@example.com", password: "secret") }),
       ("signInWithOTP", { try await client.signInWithOTP(email: "a@example.com") }),
       ("resend", { try await client.resend(email: "a@example.com", type: .signup) }),
-      ("resetPasswordForEmail", { try await client.resetPasswordForEmail("a@example.com") }),
+      ("resetPassword", { try await client.resetPassword(email: "a@example.com") }),
       ("update", { try await client.update(user: UserAttributes(email: "b@example.com")) }),
     ]
 
@@ -441,6 +441,81 @@ struct AuthClientRedirectTests {
     #expect(PKCE.live.generateCodeChallenge(verifier) == challenge.value)
     #expect(try storedFlow(try #require(newer.value)) != nil)
     #expect(try pendingFlowCount() == 1)
+  }
+
+  @Test
+  func ssoSignInURLPersistsTheVerifierBeforeReturning() async throws {
+    race.answer(.post, "sso") { try Race.ok(["url": "https://idp.example.com/saml"]) }
+    let client = race.makeClient()
+
+    let (url, flowID) = try await client.ssoSignInURL(
+      .domain("example.com"),
+      options: SSOOptions(redirectTo: URL(string: "myapp://cb")!)
+    )
+
+    #expect(url == URL(string: "https://idp.example.com/saml")!)
+    let record = try #require(try storedFlow(flowID))
+    #expect(record.purpose == .signIn)
+    #expect(record.redirectTo == URL(string: "myapp://cb")!)
+    let body = try #require(ssoBodies().first)
+    #expect(body["domain"] as? String == "example.com")
+    #expect(body["redirect_to"] as? String == "myapp://cb")
+    #expect(body["skip_http_redirect"] as? Bool == true)
+    #expect(
+      body["code_challenge"] as? String == PKCE.live.generateCodeChallenge(record.verifier))
+  }
+
+  /// No email goes out for SSO, and the caller gets no URL, so no code can come back for the flow.
+  @Test
+  func aTransportErrorOnTheSSORequestRemovesItsFlow() async throws {
+    race.answer(.post, "sso") { throw URLError(.timedOut) }
+    let client = race.makeClient()
+
+    await #expect {
+      try await client.ssoSignInURL(.domain("example.com"))
+    } throws: { ($0 as? AuthError)?.kind == .transport }
+
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
+  func signInWithSSORunsThePresenterAndExchangesTheCode() async throws {
+    race.answer(.post, "sso") { try Race.ok(["url": "https://idp.example.com/saml"]) }
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let providerID = UUID()
+    let presenter = ClosurePresenter { url, callbackScheme in
+      #expect(url == URL(string: "https://idp.example.com/saml")!)
+      #expect(callbackScheme == "myapp")
+      return URL(string: "myapp://cb?code=c")!
+    }
+
+    let events = try await events(on: client) {
+      let session = try await client.signInWithSSO(
+        .providerID(providerID),
+        options: SSOOptions(redirectTo: URL(string: "myapp://cb")!),
+        presenter: presenter
+      )
+      #expect(session.accessToken == "exchanged-access")
+    }
+
+    #expect(events == [.signedIn])
+    #expect(try pendingFlowCount() == 0)
+    #expect(ssoBodies().first?["provider_id"] as? String == providerID.uuidString)
+  }
+
+  @Test
+  func aCancelledSSOPresenterRethrowsAndRemovesTheFlow() async throws {
+    race.answer(.post, "sso") { try Race.ok(["url": "https://idp.example.com/saml"]) }
+    let client = race.makeClient()
+    let presenter = ClosurePresenter { _, _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) {
+      try await client.signInWithSSO(.domain("example.com"), presenter: presenter)
+    }
+
+    #expect(try pendingFlowCount() == 0)
+    #expect(race.requestCount(grantType: "pkce") == 0)
   }
 
   @Test
@@ -621,7 +696,7 @@ struct AuthClientRedirectTests {
     let client = race.makeClient()
     try await client.signInWithOTP(email: "user@example.com")
     let magicLink = try #require(try await client.dependencies.flowStore.pendingFlows().first)
-    try await client.resetPasswordForEmail("user@example.com")
+    try await client.resetPassword(email: "user@example.com")
     let recovery = try #require(try await client.dependencies.flowStore.pendingFlows().first)
     race.answerCodeExchange { [race] body in
       guard body.contains(magicLink.verifier) else {
@@ -819,6 +894,14 @@ struct AuthClientRedirectTests {
   private func queryItem(_ name: String, in url: URL) -> String? {
     URLComponents(url: url, resolvingAgainstBaseURL: false)?
       .queryItems?.first { $0.name == name }?.value
+  }
+
+  private func ssoBodies() -> [[String: Any]] {
+    race.transport.requests
+      .filter { $0.head.url?.path.hasSuffix("/sso") == true }
+      .compactMap { request in
+        request.body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+      }
   }
 
   private func exchangeBodies() -> [[String: String]] {

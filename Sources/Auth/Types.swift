@@ -635,6 +635,68 @@ public struct Web3Credentials: Hashable, Sendable {
   }
 }
 
+/// Options for ``AuthClient/signInWithOTP(email:options:)`` and
+/// ``AuthClient/signInWithOTP(phone:options:)``.
+public struct OTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the email or phone. The default is
+  /// `true`. When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The URL the email link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectToURL``. Phone sign-in ignores it.
+  public var redirectTo: URL?
+
+  /// The channel that delivers the code. The default is ``MessagingChannel/sms``. Email sign-in
+  /// ignores it.
+  ///
+  /// - Note: The ``MessagingChannel/whatsapp`` channel needs a WhatsApp sender on Twilio.
+  public var channel: MessagingChannel
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - redirectTo: The URL the email link redirects to. Phone sign-in ignores it.
+  ///   - channel: The channel that delivers the code. Email sign-in ignores it.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.channel = channel
+    self.captchaToken = captchaToken
+  }
+}
+
+/// The ID that the SMS provider gave a message. Use it to track delivery problems.
+public struct MessageID: RawRepresentable, Decodable, Hashable, Sendable {
+  /// The ID as the SMS provider wrote it.
+  public let rawValue: String
+
+  /// Creates a ``MessageID`` from the provider's ID.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+}
+
+/// The `{"message_id": …}` body of a phone `/otp` or `/resend` response.
+struct MessageIDBody: Decodable {
+  let messageId: MessageID?
+}
+
 struct OTPParams: Encodable, Hashable, Sendable {
   var email: String?
   var phone: String?
@@ -648,7 +710,7 @@ struct OTPParams: Encodable, Hashable, Sendable {
 
 enum VerifyOTPParams: Encodable {
   case email(VerifyEmailOTPParams)
-  case mobile(VerifyMobileOTPParams)
+  case phone(VerifyPhoneOTPParams)
   case tokenHash(VerifyTokenHashParams)
 
   func encode(to encoder: any Encoder) throws {
@@ -656,7 +718,7 @@ enum VerifyOTPParams: Encodable {
     switch self {
     case .email(let value):
       try container.encode(value)
-    case .mobile(let value):
+    case .phone(let value):
       try container.encode(value)
     case .tokenHash(let value):
       try container.encode(value)
@@ -668,8 +730,6 @@ struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
   var email: String
   var token: String
   var type: EmailOTPType
-  var redirectTo: URL?
-  var gotrueMetaSecurity: AuthMetaSecurity?
 }
 
 struct VerifyTokenHashParams: Encodable, Hashable, Sendable {
@@ -677,37 +737,39 @@ struct VerifyTokenHashParams: Encodable, Hashable, Sendable {
   var type: EmailOTPType
 }
 
-struct VerifyMobileOTPParams: Encodable, Hashable {
+struct VerifyPhoneOTPParams: Encodable, Hashable {
   var phone: String
   var token: String
-  var type: MobileOTPType
-  var gotrueMetaSecurity: AuthMetaSecurity?
+  var type: PhoneOTPType
 }
 
-/// The OTP type used when verifying a mobile (SMS/WhatsApp) one-time password.
-public struct MobileOTPType: RawRepresentable, Encodable, Hashable, Sendable,
+/// The kind of phone one-time password that ``AuthClient/verifyOTP(phone:token:type:)``
+/// checks.
+public struct PhoneOTPType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   public let rawValue: String
 
-  /// Creates a ``MobileOTPType`` from a raw string value.
+  /// Creates a ``PhoneOTPType`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``MobileOTPType`` from a string literal.
+  /// Creates a ``PhoneOTPType`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
-  /// A standard SMS OTP sent to the phone number.
-  public static let sms: MobileOTPType = "sms"
+  /// A code sent to sign in or to confirm the phone number, by SMS or WhatsApp.
+  public static let sms: PhoneOTPType = "sms"
 
-  /// An OTP used when confirming a phone number change.
-  public static let phoneChange: MobileOTPType = "phone_change"
+  /// A code sent to confirm a phone number change.
+  public static let phoneChange: PhoneOTPType = "phone_change"
 }
 
-/// The OTP type used when verifying an email one-time password.
+/// The kind of email one-time password or token hash that
+/// ``AuthClient/verifyOTP(email:token:type:)`` and
+/// ``AuthClient/verifyOTP(tokenHash:type:)`` check.
 public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
@@ -842,44 +904,44 @@ extension Decoder {
   }
 }
 
-/// The response from ``AuthClient/verifyOTP(tokenHash:type:)`` and its overloads.
-public enum VerifyOTPResponse: Decodable, Hashable, Sendable {
-  /// A full session was created, meaning the user is signed in.
-  case session(Session)
+/// The result of ``AuthClient/verifyOTP(email:token:type:)`` and its overloads.
+///
+/// ```swift
+/// switch try await client.auth.verifyOTP(email: email, token: code, type: .email) {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .emailChangePending(let message):
+///   showMessage(message)
+/// }
+/// ```
+public enum VerifyOTPResult: Sendable, Hashable {
+  /// The code was valid and the user is signed in. The client stored the session and emitted one
+  /// auth event: ``AuthEvent/passwordRecovery`` for ``EmailOTPType/recovery``,
+  /// ``AuthEvent/userUpdated`` for an email or phone change of the signed-in user, and
+  /// ``AuthEvent/signedIn`` otherwise.
+  case signedIn(Session)
 
-  /// Neither a session nor a user was returned. GoTrue sends this for the first of the two
-  /// confirmations required by a secure email change: whichever of the current or new email
-  /// address hasn't confirmed its link yet still needs to, before the change takes effect and a
-  /// session is issued.
-  case emailChangeConfirmationPending(EmailChangeConfirmation)
-
-  public init(from decoder: any Decoder) throws {
-    self =
-      try decoder.isSessionBody()
-      ? .session(Session(from: decoder))
-      : .emailChangeConfirmationPending(EmailChangeConfirmation(from: decoder))
-  }
-
-  /// The session, or `nil` if the email change is still pending its other confirmation. Access
-  /// the user through ``session``, e.g. `response.session?.user`.
-  public var session: Session? {
-    if case .session(let session) = self { return session }
-    return nil
-  }
+  /// The first of the two confirmations of a secure email change. The other address must confirm
+  /// its link too before the change takes effect. The client stored no session and emitted no
+  /// event. `message` comes from the server and is meant for display.
+  case emailChangePending(message: String)
 }
 
-/// The body GoTrue returns for the first of the two confirmations required by a secure email
-/// change, before a session can be issued.
-public struct EmailChangeConfirmation: Decodable, Hashable, Sendable {
-  /// A human-readable description of what happened, meant for display.
-  public let message: String
-
-  /// The HTTP status code of the response, as a string.
-  public let code: String
+/// A `/verify` response body: a session, or the `{"msg": …}` body of the first half of a secure
+/// email change.
+struct VerifyOTPBody: Decodable {
+  let result: VerifyOTPResult
 
   private enum CodingKeys: String, CodingKey {
     case message = "msg"
-    case code
+  }
+
+  init(from decoder: any Decoder) throws {
+    result =
+      try decoder.isSessionBody()
+      ? .signedIn(Session(from: decoder))
+      : .emailChangePending(
+        message: decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .message))
   }
 }
 
@@ -1460,7 +1522,7 @@ public struct SignOutScope: RawRepresentable, Hashable, Sendable, ExpressibleByS
   public static let others: SignOutScope = "others"
 }
 
-/// The type of email to resend when calling ``AuthClient/resend(email:type:emailRedirectTo:captchaToken:)``.
+/// The kind of email that ``AuthClient/resend(email:type:redirectTo:captchaToken:)`` sends again.
 public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
@@ -1491,47 +1553,33 @@ struct ResendEmailParams: Encodable {
   let codeChallengeMethod: String?
 }
 
-/// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.
-public struct ResendMobileType: RawRepresentable, Encodable, Hashable, Sendable,
+/// The kind of phone code that ``AuthClient/resend(phone:type:captchaToken:)`` sends again.
+public struct ResendPhoneType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   public let rawValue: String
 
-  /// Creates a ``ResendMobileType`` from a raw string value.
+  /// Creates a ``ResendPhoneType`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``ResendMobileType`` from a string literal.
+  /// Creates a ``ResendPhoneType`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
   /// Resends the SMS OTP for the current phone sign-in.
-  public static let sms: ResendMobileType = "sms"
+  public static let sms: ResendPhoneType = "sms"
 
   /// Resends the OTP for confirming a phone number change.
-  public static let phoneChange: ResendMobileType = "phone_change"
+  public static let phoneChange: ResendPhoneType = "phone_change"
 }
 
-struct ResendMobileParams: Encodable {
-  let type: ResendMobileType
+struct ResendPhoneParams: Encodable {
+  let type: ResendPhoneType
   let phone: String
   let gotrueMetaSecurity: AuthMetaSecurity?
-}
-
-/// The response returned when resending an SMS OTP.
-public struct ResendMobileResponse: Decodable, Hashable, Sendable {
-  /// Unique ID of the message as reported by the SMS sending provider. Useful for tracking
-  /// deliverability problems.
-  public let messageId: String?
-
-  /// Creates a resend mobile response.
-  ///
-  /// - Parameter messageId: The provider-assigned message ID.
-  public init(messageId: String?) {
-    self.messageId = messageId
-  }
 }
 
 /// Information about why a password is considered weak.
@@ -1567,8 +1615,38 @@ public struct MessagingChannel: RawRepresentable, Encodable, Hashable, Sendable,
   public static let whatsapp: MessagingChannel = "whatsapp"
 }
 
+/// The identity provider that ``AuthClient/signInWithSSO(_:options:presenter:)`` signs in with.
+public enum SSOTarget: Sendable, Hashable {
+  /// The provider registered for this email domain, for example `"example.com"`.
+  case domain(String)
+
+  /// The provider with this ID.
+  case providerID(UUID)
+}
+
+/// Options for ``AuthClient/signInWithSSO(_:options:presenter:)`` and
+/// ``AuthClient/ssoSignInURL(_:options:)``.
+public struct SSOOptions: Sendable, Hashable {
+  /// The URL the server redirects to after the identity provider step. When `nil`, the client
+  /// uses ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates SSO options.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the server redirects to after the identity provider step.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
 struct SignInWithSSORequest: Encodable {
-  let providerId: String?
+  let providerId: UUID?
   let domain: String?
   let redirectTo: URL?
   let gotrueMetaSecurity: AuthMetaSecurity?
@@ -1577,11 +1655,9 @@ struct SignInWithSSORequest: Encodable {
   let skipHttpRedirect: Bool?
 }
 
-/// The response from a single sign-on (SSO) initiation request.
-public struct SSOResponse: Decodable, Hashable, Sendable {
-  /// URL to open in a browser which will complete the sign-in flow by taking the user to the
-  /// identity provider's authentication flow.
-  public let url: URL
+/// The `{"url": …}` body of a `/sso` or `/user/identities/authorize` response.
+struct URLBody: Decodable {
+  let url: URL
 }
 
 /// Options for an OAuth sign-in or identity link.

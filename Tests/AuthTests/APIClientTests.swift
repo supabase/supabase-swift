@@ -69,9 +69,7 @@ struct APIClientTests {
 
     await #expect(throws: AuthError.self) {
       try await client.execute(
-        authAPI.signInWithOTP(
-          email: "a@b.c", redirectTo: nil, shouldCreateUser: true, userMetadata: [:],
-          captchaToken: nil, pkce: nil))
+        authAPI.signInWithOTP(email: "a@b.c", options: OTPOptions(), pkce: nil))
     }
     #expect(attempts.value == 1)
   }

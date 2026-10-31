@@ -109,6 +109,13 @@ extension AuthAPI {
     { [decoder] _, data in try data.decoded(as: T.self, decoder: decoder) }
   }
 
+  /// Decodes the body as `T`, then returns the part of it that `transform` picks.
+  func decoding<T: Decodable, R>(
+    _: T.Type, _ transform: @escaping @Sendable (T) -> R
+  ) -> @Sendable (HTTPResponse, Data) throws -> R {
+    { [decoder] _, data in try transform(data.decoded(as: T.self, decoder: decoder)) }
+  }
+
   var ignoringBody: @Sendable (HTTPResponse, Data) throws -> Void {
     { _, _ in }
   }
@@ -292,20 +299,17 @@ extension AuthAPI {
 extension AuthAPI {
   func signInWithOTP(
     email: String,
-    redirectTo: URL?,
-    shouldCreateUser: Bool,
-    userMetadata: JSONObject,
-    captchaToken: String?,
+    options: OTPOptions,
     pkce: PKCEChallenge?
   ) throws -> AuthRequest<Void> {
     try request(
-      .post, "otp", query: redirectQuery(redirectTo),
+      .post, "otp", query: redirectQuery(options.redirectTo),
       body: encoder.encode(
         OTPParams(
           email: email,
-          createUser: shouldCreateUser,
-          data: userMetadata.nilIfEmpty,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          createUser: options.shouldCreateUser,
+          data: options.userMetadata.nilIfEmpty,
+          gotrueMetaSecurity: options.captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
           codeChallenge: pkce?.codeChallenge,
           codeChallengeMethod: pkce?.codeChallengeMethod
         )
@@ -314,81 +318,58 @@ extension AuthAPI {
     )
   }
 
-  func signInWithOTP(
-    phone: String,
-    channel: MessagingChannel,
-    shouldCreateUser: Bool,
-    userMetadata: JSONObject,
-    captchaToken: String?
-  ) throws -> AuthRequest<Void> {
+  func signInWithOTP(phone: String, options: OTPOptions) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "otp",
       body: encoder.encode(
         OTPParams(
           phone: phone,
-          createUser: shouldCreateUser,
-          channel: channel,
-          data: userMetadata.nilIfEmpty,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          createUser: options.shouldCreateUser,
+          channel: options.channel,
+          data: options.userMetadata.nilIfEmpty,
+          gotrueMetaSecurity: options.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: ignoringBody
+      decode: decoding(MessageIDBody.self) { $0.messageId }
     )
   }
 
+  /// `POST /verify` checks no captcha token, so the verify requests send none.
   func verifyOTP(
     email: String,
     token: String,
-    type: EmailOTPType,
-    redirectTo: URL?,
-    captchaToken: String?
-  ) throws -> AuthRequest<VerifyOTPResponse> {
+    type: EmailOTPType
+  ) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
       body: encoder.encode(
-        VerifyOTPParams.email(
-          VerifyEmailOTPParams(
-            email: email,
-            token: token,
-            type: type,
-            redirectTo: redirectTo ?? defaultRedirectURL,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+        VerifyOTPParams.email(VerifyEmailOTPParams(email: email, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decoding(VerifyOTPBody.self) { $0.result }
     )
   }
 
   func verifyOTP(
     phone: String,
     token: String,
-    type: MobileOTPType,
-    captchaToken: String?
-  ) throws -> AuthRequest<VerifyOTPResponse> {
+    type: PhoneOTPType
+  ) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
       body: encoder.encode(
-        VerifyOTPParams.mobile(
-          VerifyMobileOTPParams(
-            phone: phone,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+        VerifyOTPParams.phone(VerifyPhoneOTPParams(phone: phone, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decoding(VerifyOTPBody.self) { $0.result }
     )
   }
 
-  func verifyOTP(tokenHash: String, type: EmailOTPType) throws -> AuthRequest<VerifyOTPResponse> {
+  func verifyOTP(tokenHash: String, type: EmailOTPType) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
       body: encoder.encode(
         VerifyOTPParams.tokenHash(VerifyTokenHashParams(tokenHash: tokenHash, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decoding(VerifyOTPBody.self) { $0.result }
     )
   }
 
@@ -416,24 +397,24 @@ extension AuthAPI {
 
   func resend(
     phone: String,
-    type: ResendMobileType,
+    type: ResendPhoneType,
     captchaToken: String?
-  ) throws -> AuthRequest<ResendMobileResponse> {
+  ) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "resend",
       body: encoder.encode(
-        ResendMobileParams(
+        ResendPhoneParams(
           type: type,
           phone: phone,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(ResendMobileResponse.self)
+      decode: decoding(MessageIDBody.self) { $0.messageId }
     )
   }
 
-  func resetPasswordForEmail(
-    _ email: String,
+  func resetPassword(
+    email: String,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
@@ -463,17 +444,21 @@ extension AuthAPI {
   /// `POST /sso`. Unlike every other endpoint, GoTrue reads `redirect_to` and
   /// `skip_http_redirect` from the body here.
   func signInWithSSO(
-    providerId: String? = nil,
-    domain: String? = nil,
+    _ target: SSOTarget,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
-  ) throws -> AuthRequest<SSOResponse> {
-    try request(
+  ) throws -> AuthRequest<URL> {
+    let (providerID, domain): (UUID?, String?) =
+      switch target {
+      case .domain(let domain): (nil, domain)
+      case .providerID(let id): (id, nil)
+      }
+    return try request(
       .post, "sso",
       body: encoder.encode(
         SignInWithSSORequest(
-          providerId: providerId,
+          providerId: providerID,
           domain: domain,
           redirectTo: redirectTo ?? defaultRedirectURL,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -482,7 +467,7 @@ extension AuthAPI {
           skipHttpRedirect: true
         )
       ),
-      decode: decoding(SSOResponse.self)
+      decode: decoding(URLBody.self) { $0.url }
     )
   }
 
@@ -511,17 +496,13 @@ extension AuthAPI {
     pkce: PKCEChallenge?,
     accessToken: String
   ) throws -> AuthRequest<URL> {
-    struct Response: Decodable {
-      let url: URL
-    }
-
     let url = try providerURL(
       url.appendingPathComponent("user/identities/authorize"), provider: provider, scopes: scopes,
       redirectTo: redirectTo, queryParams: queryParams, pkce: pkce, skipHTTPRedirect: true)
 
     return request(
       .get, url: url, authorization: bearer(accessToken),
-      decode: { [decoder] _, data in try data.decoded(as: Response.self, decoder: decoder).url })
+      decode: decoding(URLBody.self) { $0.url })
   }
 
   private func providerURL(

@@ -252,9 +252,75 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func resetPasswordForEmail() async throws {
+  func resetPassword() async throws {
     let email = mockEmail()
-    try await authClient.resetPasswordForEmail(email)
+    try await authClient.resetPassword(email: email)
+  }
+
+  @Test
+  func signInWithEmailOTPAndVerifyIt() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+    try await admin.admin.createUser(
+      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    try await authClient.signInWithOTP(email: email, options: OTPOptions(shouldCreateUser: false))
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+
+    let result = LockIsolated<VerifyOTPResult?>(nil)
+    try await expectAuthEvents([.initialSession, .signedIn]) {
+      let value = try await authClient.verifyOTP(email: email, token: token, type: .email)
+      result.setValue(value)
+    }
+    guard case .signedIn(let session) = result.value else {
+      Issue.record("Expected .signedIn, got \(String(describing: result.value))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(authClient.currentSession == session)
+  }
+
+  @Test
+  func signInWithOTPWithoutCreatingAUserFailsForAnUnknownEmail() async throws {
+    await #expect(throws: AuthError.self) {
+      try await authClient.signInWithOTP(
+        email: mockEmail(), options: OTPOptions(shouldCreateUser: false))
+    }
+  }
+
+  @Test
+  func signInWithOTPCreatesAUserWithItsMetadata() async throws {
+    let admin = Self.makeClient(serviceRole: true)
+    let email = mockEmail()
+
+    try await authClient.signInWithOTP(
+      email: email, options: OTPOptions(userMetadata: ["plan": "free"]))
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+    let result = try await authClient.verifyOTP(email: email, token: token, type: .email)
+
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(session.user.userMetadata["plan"] == "free")
+  }
+
+  /// The local stack's magic link email has no code, and the native stack cannot serve a custom
+  /// template. A new magic link from the admin API carries the code instead.
+  private func emailOTP(for email: String, admin: AuthClient) async throws -> String {
+    try await admin.admin.generateLink(params: .magicLink(email: email)).properties.emailOTP
+  }
+
+  @Test
+  func resendEmailSucceeds() async throws {
+    let email = mockEmail()
+    try await authClient.signInWithOTP(email: email)
+
+    try await authClient.resend(
+      email: email, type: .signup, redirectTo: URL(string: "http://localhost:3000")!)
   }
 
   @Test
@@ -395,8 +461,8 @@ struct AuthClientIntegrationTests {
       attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
-    try await authClient.resetPasswordForEmail(
-      email,
+    try await authClient.resetPassword(
+      email: email,
       redirectTo: URL(string: "http://localhost:3000")!
     )
     let link = try await MailCatcher().latestLink(to: email)
@@ -440,10 +506,10 @@ struct AuthClientIntegrationTests {
       )
     }
 
-    try await authClient.signInWithOTP(email: email, redirectTo: redirectTo)
+    try await authClient.signInWithOTP(email: email, options: OTPOptions(redirectTo: redirectTo))
     let magicLinkFlow = try #require(
       try await authClient.dependencies.flowStore.pendingFlows().first)
-    try await authClient.resetPasswordForEmail(otherEmail, redirectTo: redirectTo)
+    try await authClient.resetPassword(email: otherEmail, redirectTo: redirectTo)
     let recoveryFlow = try #require(
       try await authClient.dependencies.flowStore.pendingFlows().first)
     #expect(recoveryFlow.id != magicLinkFlow.id)
@@ -598,11 +664,12 @@ struct AuthClientIntegrationTests {
       tokenHash: currentEmailLink.properties.hashedToken,
       type: .emailChange
     )
-    guard case .emailChangeConfirmationPending(let confirmation) = firstConfirmation else {
-      Issue.record("Expected .emailChangeConfirmationPending, got \(firstConfirmation)")
+    guard case .emailChangePending(let message) = firstConfirmation else {
+      Issue.record("Expected .emailChangePending, got \(firstConfirmation)")
       return
     }
-    #expect(confirmation.code == "200")
+    #expect(!message.isEmpty)
+    #expect(client.currentSession == nil)
 
     // GoTrue's admin/generate_link response has a bug for `email_change_new`: `hashedToken` is
     // computed from the current email, not the new one, so it never matches what's actually
@@ -612,7 +679,10 @@ struct AuthClientIntegrationTests {
       token: newEmailLink.properties.emailOTP,
       type: .emailChange
     )
-    let session = try #require(secondConfirmation.session)
+    guard case .signedIn(let session) = secondConfirmation else {
+      Issue.record("Expected .signedIn, got \(secondConfirmation)")
+      return
+    }
     expectNoDifference(session.user.email, newEmail)
   }
 
