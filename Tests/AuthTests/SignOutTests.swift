@@ -266,6 +266,68 @@ import Testing
   }
 
   @Test
+  func globalSignsOutARefreshThatLandsDuringTheRequest() async throws {
+    http.respond { [sut] _, _ in
+      try await sut.dependencies.sessionStore.commit(
+        .refreshed(.refreshed, replacing: Session.valid.refreshToken))
+      return noContent
+    }
+    try await sut.seedSession(.valid)
+
+    try await sut.signOut(scope: .global)
+
+    expectNoDifference(sut.status, .signedOut(.userInitiated))
+  }
+
+  @Test
+  func globalSignsOutWhenARefreshItJoinsIsRejected() async throws {
+    let (release, releaseContinuation) = AsyncStream<Void>.makeStream()
+    let refreshStarted = LockIsolated(false)
+    http.respond(when: isTokenRequest) { _, _ in
+      refreshStarted.setValue(true)
+      _ = await release.first { _ in true }
+      return errorResponse(.badRequest, "validation_failed")
+    }
+    try await sut.seedSession(.expired)
+
+    let refresh = Task { [sut] in try await sut.refreshSession() }
+    try await withTimeout(.seconds(5)) {
+      while !refreshStarted.value { await Task.yield() }
+    }
+    let signOut = Task { [sut] in try await sut.signOut(scope: .global) }
+    try await Task.sleep(for: .milliseconds(100))
+    releaseContinuation.yield()
+    _ = await refresh.result
+
+    await #expect(throws: AuthError.self) { try await signOut.value }
+    #expect(logoutRequests.isEmpty)
+    expectNoDifference(sut.status, .signedOut(.userInitiated))
+  }
+
+  @Test
+  func globalSucceedsWhenASignOutLandsDuringTheRefresh() async throws {
+    let (release, releaseContinuation) = AsyncStream<Void>.makeStream()
+    let refreshStarted = LockIsolated(false)
+    http.respond(when: isTokenRequest) { _, _ in
+      refreshStarted.setValue(true)
+      _ = await release.first { _ in true }
+      return try sessionResponse(.refreshed)
+    }
+    try await sut.seedSession(.expired)
+
+    let signOut = Task { [sut] in try await sut.signOut(scope: .global) }
+    try await withTimeout(.seconds(5)) {
+      while !refreshStarted.value { await Task.yield() }
+    }
+    try await sut.dependencies.sessionStore.commit(.signedOut(.sessionRevoked, event: .signedOut))
+    releaseContinuation.yield()
+
+    try await signOut.value
+    #expect(logoutRequests.isEmpty)
+    expectNoDifference(sut.status, .signedOut(.userInitiated))
+  }
+
+  @Test
   func globalWithoutASessionEmitsTheSignOutAndSendsNothing() async throws {
     await sut.initialization()
 
@@ -336,6 +398,19 @@ import Testing
     expectNoDifference(error?.kind, .sessionInvalidated)
     #expect(logoutRequests.isEmpty)
     expectNoDifference(sut.status, .signedOut(.sessionExpired))
+  }
+
+  @Test
+  func othersRefreshesAnExpiredTokenWhenAutoRefreshIsDisabled() async throws {
+    let sut = AuthClient.testing(http: http, autoRefresh: .disabled)
+    http.respond(when: isTokenRequest) { _, _ in try sessionResponse(.refreshed) }
+    http.respond { _, _ in noContent }
+    try await sut.seedSession(.expired)
+
+    try await sut.signOut(scope: .others)
+
+    expectNoDifference(logoutRequests.map(\.authorization), ["Bearer refreshed-access-token"])
+    expectNoDifference(sut.currentSession?.refreshToken, "refreshed-refresh-token")
   }
 
   // MARK: - Helpers

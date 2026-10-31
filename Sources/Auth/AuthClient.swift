@@ -906,7 +906,9 @@ public final class AuthClient: Sendable {
   ///   retry or sign out with `.local`. When the server rejects the refresh of an expired session,
   ///   the client signs out with ``SignOutReason/userInitiated`` and throws.
   /// - ``SignOutScope/others`` ends every other session of the user. This session stays, and the
-  ///   client emits no ``AuthEvent/signedOut``.
+  ///   client emits no ``AuthEvent/signedOut``. The client first refreshes an expired session, as
+  ///   ``refreshSession()`` does, under every ``AutoRefreshPolicy``. When the server rejects that
+  ///   refresh, the client signs out with ``SignOutReason/sessionExpired`` and throws.
   ///
   /// When no session is stored, `.local` and `.global` still clear the local auth state and emit
   /// ``AuthEvent/signedOut``. A sign-out ends refresh tokens only: an access token stays valid
@@ -945,9 +947,7 @@ public final class AuthClient: Sendable {
 
   private func signOutGlobally() async throws {
     guard let held = currentSession else {
-      codeVerifierStorage.removeAll()
-      _ = try await sessionStore.signOut(.userInitiated)
-      return
+      return try await removeSession(refreshToken: nil)
     }
 
     var session = held
@@ -961,6 +961,9 @@ public final class AuthClient: Sendable {
       } catch let error as AuthError where error.isClientError {
         codeVerifierStorage.removeAll()
         throw error
+      } catch  where currentSession == nil && !Task.isCancelled {
+        // Another sign-out landed during the refresh, so no session is left to revoke.
+        return try await removeSession(refreshToken: nil)
       }
     }
 
@@ -969,15 +972,20 @@ public final class AuthClient: Sendable {
   }
 
   private func signOutOthers() async throws {
-    let session = try await session()
+    guard var session = currentSession else { throw AuthError.sessionMissing }
+    if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
+      session = try await sessionStore.refreshHeldSession(
+        readWith: session.refreshToken, using: dependencies.refreshRequest)
+    }
     try await logout(accessToken: session.accessToken, scope: .others)
   }
 
-  /// Signs out only while the store holds the session whose refresh token is `refreshToken`, so a
-  /// sign-in that landed during the request stays.
-  private func removeSession(refreshToken: String) async throws {
+  /// Signs out while the store holds the session whose refresh token was `refreshToken`, or a
+  /// refresh of it, or holds none when `refreshToken` is `nil`. A sign-in that landed during the
+  /// request stays.
+  private func removeSession(refreshToken: String?) async throws {
     codeVerifierStorage.removeAll()
-    try await sessionStore.commit(.invalidated(.userInitiated, refreshToken: refreshToken))
+    try await sessionStore.commit(.revoked(.userInitiated, refreshToken: refreshToken))
   }
 
   /// Sends `POST /logout`. Each scope decides what happens to the local session.

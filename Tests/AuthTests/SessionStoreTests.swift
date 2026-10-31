@@ -497,6 +497,41 @@ struct SessionStoreTests {
     #expect(store.currentStatus == .loading)
   }
 
+  @Test
+  func revocationFollowsTheHeldSessionThroughRefreshes() async throws {
+    let store = try await loadedStore()
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
+
+    try await store.commit(.revoked(.userInitiated, refreshToken: "refresh-a"))
+
+    #expect(store.currentStatus == .signedOut(.userInitiated))
+  }
+
+  @Test
+  func revocationKeepsASessionSignedInAfterIt() async throws {
+    let store = try await loadedStore()
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
+    try await store.commit(.signedIn(makeSession("c"), event: .signedIn))
+    let generation = await store.generation
+
+    try await store.commit(.revoked(.userInitiated, refreshToken: "refresh-a"))
+    try await store.commit(.revoked(.userInitiated, refreshToken: nil))
+
+    #expect(store.currentSession == makeSession("c"))
+    #expect(await store.generation == generation)
+  }
+
+  @Test
+  func revocationWithoutATokenSignsOutWhileNoSessionIsHeld() async throws {
+    let store = try await loadedStore()
+
+    try await store.commit(.revoked(.userInitiated, refreshToken: nil))
+
+    #expect(store.currentStatus == .signedOut(.userInitiated))
+  }
+
   @Test(arguments: [
     (ErrorCode.refreshTokenNotFound, SignOutReason.sessionExpired),
     (.sessionExpired, .sessionExpired),
