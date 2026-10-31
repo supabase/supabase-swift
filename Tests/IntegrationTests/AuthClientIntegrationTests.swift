@@ -232,8 +232,8 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
     let identities = try await authClient.userIdentities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [],
-      identities.map(\.identityId)
+      session.user.identities?.map(\.id) ?? [],
+      identities.map(\.id)
     )
   }
 

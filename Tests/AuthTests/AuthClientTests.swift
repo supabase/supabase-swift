@@ -1842,11 +1842,10 @@ extension AuthMockerTests {
 
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: identityId,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: identityId,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
@@ -1859,7 +1858,7 @@ extension AuthMockerTests {
       let identities = try #require(Session.valid.user.identities)
       let unlinked = identities[0]
       Mock(
-        url: clientURL.appendingPathComponent("user/identities/\(unlinked.identityId.uuidString)"),
+        url: clientURL.appendingPathComponent("user/identities/\(unlinked.id.uuidString)"),
         statusCode: 200,
         data: [.delete: Data("{}".utf8)]
       ).register()
@@ -1878,9 +1877,9 @@ extension AuthMockerTests {
     @Test
     func unlinkIdentityOfAnotherUserEmitsNothing() async throws {
       var identity = try #require(Session.valid.user.identities?.first)
-      identity.userId = UUID()
+      identity.userID = UUID()
       Mock(
-        url: clientURL.appendingPathComponent("user/identities/\(identity.identityId.uuidString)"),
+        url: clientURL.appendingPathComponent("user/identities/\(identity.id.uuidString)"),
         statusCode: 200,
         data: [.delete: Data("{}".utf8)]
       ).register()

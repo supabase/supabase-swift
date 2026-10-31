@@ -223,11 +223,11 @@ extension PersistedUser {
 extension PersistedIdentity {
   init(_ identity: UserIdentity) {
     self.init(
-      id: identity.id,
-      identityId: identity.identityId,
-      userId: identity.userId,
+      id: identity.providerUserID,
+      identityId: identity.id,
+      userId: identity.userID,
       identityData: identity.identityData,
-      provider: identity.provider,
+      provider: identity.provider.rawValue,
       createdAt: identity.createdAt,
       lastSignInAt: identity.lastSignInAt,
       updatedAt: identity.updatedAt
@@ -235,18 +235,16 @@ extension PersistedIdentity {
   }
 
   var identity: UserIdentity {
-    var identity = UserIdentity(
-      id: id,
-      identityId: identityId,
-      userId: userId,
-      identityData: [:],
-      provider: provider,
+    UserIdentity(
+      id: identityId,
+      providerUserID: id,
+      userID: userId,
+      provider: Provider(rawValue: provider),
+      identityData: identityData ?? [:],
       createdAt: createdAt,
       lastSignInAt: lastSignInAt,
       updatedAt: updatedAt
     )
-    identity.identityData = identityData
-    return identity
   }
 }
 

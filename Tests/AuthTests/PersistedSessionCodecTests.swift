@@ -44,13 +44,24 @@ struct PersistedSessionCodecTests {
         updatedAt: Date()
       )
     ]
-    session.user.identities?[0].identityData = nil
+    session.user.identities?[0].identityData = [:]
     let received = ReceivedSession(session: session, receivedAt: Date())
 
     let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(received))
 
     #expect(decoded.isCurrentSchema)
     expectNoDifference(decoded.session, received)
+  }
+
+  @Test(arguments: PersistedSessionFixtures.v2Shapes + [PersistedSessionFixtures.schema1])
+  func identityIDsMapAfterReshape(fixture: String) throws {
+    let decoded = try PersistedSessionCodec.decode(json(named: fixture))
+    let identity = try #require(decoded.session.session.user.identities?.first)
+
+    #expect(identity.id == UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF"))
+    #expect(identity.providerUserID == "859f402d-b3de-4105-a1b9-932836d9193b")
+    #expect(identity.userID == UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B"))
+    #expect(identity.provider == .email)
   }
 
   @Test
@@ -161,11 +172,11 @@ enum PersistedSessionFixtures {
       updatedAt: date(1_790_071_365),
       identities: [
         UserIdentity(
-          id: "859f402d-b3de-4105-a1b9-932836d9193b",
-          identityId: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
-          userId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+          id: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
+          providerUserID: "859f402d-b3de-4105-a1b9-932836d9193b",
+          userID: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+          provider: .email,
           identityData: ["sub": "859f402d-b3de-4105-a1b9-932836d9193b", "email_verified": true],
-          provider: "email",
           createdAt: date(1_789_000_000),
           lastSignInAt: date(1_790_071_365),
           updatedAt: date(1_790_071_365)
