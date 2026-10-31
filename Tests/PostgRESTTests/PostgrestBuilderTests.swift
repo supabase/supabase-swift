@@ -384,6 +384,34 @@ extension PostgrestMockerTests {
     }
 
     @Test
+    func setHeaderPreferKeepsTheUpsertResolution() throws {
+      let query = try sut.from("users")
+        .upsert(["username": "test"])
+        .setHeader(name: "Prefer", value: "tx=rollback")
+
+      #expect(query.request.headerFields[.prefer] == "resolution=merge-duplicates,tx=rollback")
+    }
+
+    @Test
+    func setHeaderPreferReplacesOnlyTheSamePreference() throws {
+      let query = try sut.from("users")
+        .insert(["username": "test"], count: .exact)
+        .select()
+        .setHeader(name: "Prefer", value: "return=minimal, timezone=UTC")
+
+      #expect(query.request.headerFields[.prefer] == "count=exact,return=minimal,timezone=UTC")
+    }
+
+    @Test
+    func setHeaderPreferWithoutAnExistingHeader() {
+      let query = sut.from("users")
+        .select()
+        .setHeader(name: "Prefer", value: "count=exact")
+
+      #expect(query.request.headerFields[.prefer] == "count=exact")
+    }
+
+    @Test
     func insertPerCallEncoderOverridesClientDefault() async throws {
       let capturedBody = LockIsolated<Data?>(nil)
       let sut = makeSUTWithCustomFetch { request in
