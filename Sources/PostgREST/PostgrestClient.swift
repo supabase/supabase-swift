@@ -413,7 +413,7 @@ public final class PostgrestClient: Sendable {
   /// One element of a Postgres array literal. An element that is empty, spells NULL, or holds
   /// `,` `{` `}` `"` `\` is double-quoted, as for the `cs`/`cd` filters, so it stays one element
   /// with its own text. A nested array stays a bare sub-literal, and a JSON null a bare `null`.
-  private func arrayElementValue(for value: JSONValue) -> String {
+  private func arrayElementValue(for value: AnyJSON) -> String {
     switch value {
     case .null, .array:
       return queryValue(for: value)
