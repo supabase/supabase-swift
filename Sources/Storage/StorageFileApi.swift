@@ -395,7 +395,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         url: configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
         body: encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
+          Body(expiresIn: expiresIn, transform: transform?.isEmpty == false ? transform : nil)
         )
       )
     )
