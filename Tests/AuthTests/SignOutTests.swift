@@ -328,6 +328,30 @@ import Testing
   }
 
   @Test
+  func globalThrowsWhenASignInLandsDuringTheRefresh() async throws {
+    let (release, releaseContinuation) = AsyncStream<Void>.makeStream()
+    let refreshStarted = LockIsolated(false)
+    http.respond(when: isTokenRequest) { _, _ in
+      refreshStarted.setValue(true)
+      _ = await release.first { _ in true }
+      return try sessionResponse(.valid)
+    }
+    try await sut.seedSession(.expired)
+
+    let signOut = Task { [sut] in try await sut.signOut(scope: .global) }
+    try await withTimeout(.seconds(5)) {
+      while !refreshStarted.value { await Task.yield() }
+    }
+    try await sut.dependencies.sessionStore.commit(.signedIn(.refreshed, event: .signedIn))
+    releaseContinuation.yield()
+
+    let error = await #expect(throws: AuthError.self) { try await signOut.value }
+    expectNoDifference(error?.kind, .refreshDiscarded)
+    #expect(logoutRequests.isEmpty)
+    expectNoDifference(sut.currentSession?.refreshToken, Session.refreshed.refreshToken)
+  }
+
+  @Test
   func globalWithoutASessionEmitsTheSignOutAndSendsNothing() async throws {
     await sut.initialization()
 

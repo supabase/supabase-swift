@@ -904,7 +904,8 @@ public final class AuthClient: Sendable {
   /// - ``SignOutScope/global`` ends every session of the user. The client removes the session
   ///   only after the server ended them. When the request fails, the session stays, so you can
   ///   retry or sign out with `.local`. When the server rejects the refresh of an expired session,
-  ///   the client signs out with ``SignOutReason/userInitiated`` and throws.
+  ///   the client signs out with ``SignOutReason/userInitiated`` and throws. When another sign-in
+  ///   replaces the session during that refresh, the client keeps the new session and throws.
   /// - ``SignOutScope/others`` ends every other session of the user. This session stays, and the
   ///   client emits no ``AuthEvent/signedOut``. The client first refreshes an expired session, as
   ///   ``refreshSession()`` does, under every ``AutoRefreshPolicy``. When the server rejects that
@@ -962,13 +963,8 @@ public final class AuthClient: Sendable {
       } catch let error as AuthError where error.isClientError {
         codeVerifierStorage.removeAll()
         throw error
-      } catch let error as AuthError
-        where [.sessionMissing, .refreshDiscarded].contains(error.kind)
-      {
-        // Another sign-out or sign-in replaced the session, so it is not left to revoke.
-        return try await removeSession(refreshToken: nil)
       } catch  where currentSession == nil && !Task.isCancelled {
-        // Another sign-out cancelled the refresh.
+        // Another sign-out landed during the refresh, so no session is left to revoke.
         return try await removeSession(refreshToken: nil)
       }
     }
