@@ -758,7 +758,7 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # AuthPasskeys and AuthAdminPasskeys methods are all
   # @_spi(Experimental), so the public symbol graph the compliance scanner reads
   # from never contains them.
   auth.passkey.register_passkey: implemented

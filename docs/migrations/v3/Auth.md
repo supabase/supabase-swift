@@ -472,8 +472,27 @@ Keychain consent prompt. It needs a provisioning profile with Keychain entitleme
 ## Experimental APIs
 
 Passkeys and WebAuthn MFA are `@_spi(Experimental)`. Import them with
-`@_spi(Experimental) import Supabase` (or `import Auth`). They may change in any release. In v3,
-`getPasskeyRegistrationOptions()` and `getPasskeyAuthenticationOptions()` drop the `get` prefix,
-`AuthAdmin.listPasskeys(userId:)` is `listPasskeys(forUser:)`, and
-`AuthAdmin.deletePasskey(userId:passkeyId:)` is `deletePasskey(id:forUser:)`. `signInWithPasskey`
-and `verifyPasskeyAuthentication` return `Session` instead of `AuthResponse`.
+`@_spi(Experimental) import Supabase` (or `import Auth`). They may change in any release.
+
+In v3, first-factor passkey calls move to `auth.passkeys` and admin calls to `admin.passkeys`.
+Challenge IDs are `UUID`, and the presentation anchor is optional; `nil` uses the app's key
+window. A user who cancels the passkey sheet now gets `CancellationError`.
+
+| v2 | v3 |
+| --- | --- |
+| `auth.signInWithPasskey(presentationAnchor:)` | `auth.passkeys.signIn(anchor:)` |
+| `auth.registerPasskey(presentationAnchor:)` | `auth.passkeys.register(anchor:)` |
+| `auth.getPasskeyRegistrationOptions()` | `auth.passkeys.registrationOptions()` |
+| `auth.verifyPasskeyRegistration(challengeId:credentialResponse:)` | `auth.passkeys.verifyRegistration(challengeID:credential:)` |
+| `auth.getPasskeyAuthenticationOptions()` | `auth.passkeys.authenticationOptions()` |
+| `auth.verifyPasskeyAuthentication(challengeId:credentialResponse:)` | `auth.passkeys.verifyAuthentication(challengeID:credential:)` |
+| `auth.listPasskeys()` | `auth.passkeys.list()` |
+| `auth.renamePasskey(id:friendlyName:)` | `auth.passkeys.rename(id:friendlyName:)` |
+| `auth.deletePasskey(id:)` | `auth.passkeys.delete(id:)` |
+| `PasskeyRegistrationOptions.challengeId: String` | `challengeID: UUID` (same for `PasskeyAuthenticationOptions`) |
+| `auth.mfa.enrollWebAuthnFactor(friendlyName:presentationAnchor:)` | `auth.mfa.enrollWebAuthn(friendlyName:anchor:)` |
+| `auth.mfa.verifyWebAuthnFactor(factorId:presentationAnchor:)` | `auth.mfa.verifyWebAuthn(factorID:anchor:)` |
+| `MFAVerifyParams(factorId:challengeId:credentialResponse:)` | `MFAVerifyParams(factorId:challengeId:type:credentialResponse:)` |
+| `admin.listPasskeys(userId:)` | `admin.passkeys.list(forUser:)` |
+| `admin.deletePasskey(userId:passkeyId:)` | `admin.passkeys.delete(id:forUser:)` |
+| `signInWithPasskey` and `verifyPasskeyAuthentication` return `AuthResponse` | They return `Session` |

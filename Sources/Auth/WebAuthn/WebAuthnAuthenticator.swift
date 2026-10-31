@@ -5,154 +5,92 @@
 //  Created by Guilherme Souza on 11/06/26.
 //
 
-import Foundation
-
-#if canImport(AuthenticationServices)
+#if canImport(AuthenticationServices) && !os(watchOS)
   import AuthenticationServices
-#endif
+  import Foundation
 
-extension JSONValue {
-  /// Base64url-decodes the `challenge` field of W3C credential options.
-  func webAuthnChallengeData() throws -> Data {
-    try base64URLDecoded(at: ["challenge"])
-  }
-
-  /// Base64url-decodes the `user.id` field of W3C creation options.
-  func webAuthnUserID() throws -> Data {
-    try base64URLDecoded(at: ["user", "id"])
-  }
-
-  /// Reads the `user.name` field of W3C creation options.
-  func webAuthnUserName() throws -> String {
-    guard let name = value(at: ["user", "name"])?.stringValue else {
-      throw AuthError.decoding("Missing field 'user.name' in WebAuthn credential options.")
-    }
-    return name
-  }
-
-  /// Reads the `rpId` field of W3C assertion options (`PublicKeyCredentialRequestOptions`).
-  func webAuthnAssertionRpId() throws -> String {
-    guard let id = value(at: ["rpId"])?.stringValue else {
-      throw AuthError.decoding("Missing field 'rpId' in WebAuthn credential options.")
-    }
-    return id
-  }
-
-  /// Reads the `rp.id` field of W3C creation options (`PublicKeyCredentialCreationOptions`).
-  func webAuthnCreationRpId() throws -> String {
-    guard let id = value(at: ["rp", "id"])?.stringValue else {
-      throw AuthError.decoding("Missing field 'rp.id' in WebAuthn credential options.")
-    }
-    return id
-  }
-
-  private func value(at path: [String]) -> JSONValue? {
-    var current: JSONValue? = self
-    for key in path {
-      current = current?.objectValue?[key]
-    }
-    return current
-  }
-
-  private func base64URLDecoded(at path: [String]) throws -> Data {
-    guard let string = value(at: path)?.stringValue else {
-      throw AuthError.decoding(
-        "Missing field '\(path.joined(separator: "."))' in WebAuthn credential options.")
-    }
-    guard let data = Base64URL.decode(string) else {
-      throw AuthError.decoding("Field '\(path.joined(separator: "."))' is not valid base64url.")
-    }
-    return data
-  }
-}
-
-#if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   /// Drives the platform passkey ceremony via `ASAuthorizationController`.
   ///
-  /// This is an injectable seam: ``AuthClient`` and ``AuthMFA`` orchestrate the network exchange
+  /// This is an injectable seam: ``AuthPasskeys`` and ``AuthMFA`` orchestrate the network exchange
   /// around it and can be tested by substituting a fake. The ``live`` implementation requires a
   /// real device, an Associated Domains entitlement (`webcredentials:<rpId>`), and a relying-party
   /// server hosting `.well-known/apple-app-site-association`, so it can only be exercised
   /// end-to-end on-device.
   struct WebAuthnAuthenticator: Sendable {
-    /// Presents the registration UI for the given W3C creation options and returns the resulting
-    /// W3C credential JSON.
+    /// Presents the registration UI and returns the resulting W3C credential JSON. A `nil` anchor
+    /// means ``AuthPlatform/defaultPresentationAnchor()``.
     var register:
-      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+      @MainActor @Sendable (_ options: WebAuthnCreationOptions, _ anchor: ASPresentationAnchor?)
         async throws -> JSONValue
 
-    /// Presents the assertion UI for the given W3C request options and returns the resulting W3C
-    /// credential JSON.
+    /// Presents the assertion UI and returns the resulting W3C credential JSON. A `nil` anchor
+    /// means ``AuthPlatform/defaultPresentationAnchor()``.
     var authenticate:
-      @MainActor @Sendable (_ options: JSONValue, _ rpId: String, _ anchor: ASPresentationAnchor)
+      @MainActor @Sendable (_ options: WebAuthnRequestOptions, _ anchor: ASPresentationAnchor?)
         async throws -> JSONValue
   }
 
   extension WebAuthnAuthenticator {
     static let live = WebAuthnAuthenticator(
-      register: { options, rpId, anchor in
+      register: { options, anchor in
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
-          relyingPartyIdentifier: rpId
+          relyingPartyIdentifier: options.rpID
         )
         let request = provider.createCredentialRegistrationRequest(
-          challenge: try options.webAuthnChallengeData(),
-          name: try options.webAuthnUserName(),
-          userID: try options.webAuthnUserID()
+          challenge: options.challenge,
+          name: options.userName,
+          userID: options.userID
         )
-        let authorization = try await WebAuthnCeremony(anchor: anchor).run(request: request)
-        return try registrationCredentialJSON(from: authorization)
+        #if !os(tvOS) && !os(visionOS)
+          if #available(iOS 17.4, macOS 13.5, *) {
+            request.excludedCredentials = options.excludedCredentialIDs.map {
+              ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: $0)
+            }
+          }
+        #endif
+        let credential: ASAuthorizationPlatformPublicKeyCredentialRegistration =
+          try await WebAuthnCeremony(anchor: anchor).run(request: request)
+        return try WebAuthnCredentialJSON.registration(
+          credentialID: credential.credentialID,
+          clientDataJSON: credential.rawClientDataJSON,
+          attestationObject: credential.rawAttestationObject
+        )
       },
-      authenticate: { options, rpId, anchor in
+      authenticate: { options, anchor in
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
-          relyingPartyIdentifier: rpId
+          relyingPartyIdentifier: options.rpID
         )
-        let request = provider.createCredentialAssertionRequest(
-          challenge: try options.webAuthnChallengeData()
+        let request = provider.createCredentialAssertionRequest(challenge: options.challenge)
+        request.allowedCredentials = options.allowedCredentialIDs.map {
+          ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: $0)
+        }
+        let credential: ASAuthorizationPlatformPublicKeyCredentialAssertion =
+          try await WebAuthnCeremony(anchor: anchor).run(request: request)
+        return WebAuthnCredentialJSON.assertion(
+          credentialID: credential.credentialID,
+          clientDataJSON: credential.rawClientDataJSON,
+          authenticatorData: credential.rawAuthenticatorData,
+          signature: credential.signature,
+          userID: credential.userID
         )
-        let authorization = try await WebAuthnCeremony(anchor: anchor).run(request: request)
-        return try assertionCredentialJSON(from: authorization)
       }
     )
-  }
 
-  /// Serializes a platform registration credential into the W3C JSON shape the backend expects.
-  private func registrationCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
-    guard
-      let credential = authorization.credential
-        as? ASAuthorizationPlatformPublicKeyCredentialRegistration
-    else {
-      throw AuthError.decoding("The authenticator returned an unexpected credential type.")
-    }
-    return [
-      "id": .string(Base64URL.encode(credential.credentialID)),
-      "rawId": .string(Base64URL.encode(credential.credentialID)),
-      "type": "public-key",
-      "response": [
-        "clientDataJSON": .string(Base64URL.encode(credential.rawClientDataJSON)),
-        "attestationObject": .string(Base64URL.encode(credential.rawAttestationObject ?? Data())),
-      ],
-    ]
-  }
+    /// Maps an `ASAuthorizationController` failure onto the error the ceremony throws: a user
+    /// cancel becomes `CancellationError`, as OAuth does, and any other `ASAuthorizationError`
+    /// becomes ``AuthError/Kind-swift.struct/passkeyCeremonyFailed``.
+    static func ceremonyError(from error: any Error) -> any Error {
+      guard let error = error as? ASAuthorizationError else { return error }
+      if error.code == .canceled { return CancellationError() }
 
-  /// Serializes a platform assertion credential into the W3C JSON shape the backend expects.
-  private func assertionCredentialJSON(from authorization: ASAuthorization) throws -> JSONValue {
-    guard
-      let credential = authorization.credential
-        as? ASAuthorizationPlatformPublicKeyCredentialAssertion
-    else {
-      throw AuthError.decoding("The authenticator returned an unexpected credential type.")
+      var errorCode = ErrorCode.unknown
+      #if !os(tvOS)
+        if #available(iOS 18, macOS 15, visionOS 2, *), error.code == .matchedExcludedCredential {
+          errorCode = .webAuthnCredentialExists
+        }
+      #endif
+      return AuthError.passkeyCeremonyFailed(error, errorCode: errorCode)
     }
-    return [
-      "id": .string(Base64URL.encode(credential.credentialID)),
-      "rawId": .string(Base64URL.encode(credential.credentialID)),
-      "type": "public-key",
-      "response": [
-        "clientDataJSON": .string(Base64URL.encode(credential.rawClientDataJSON)),
-        "authenticatorData": .string(Base64URL.encode(credential.rawAuthenticatorData)),
-        "signature": .string(Base64URL.encode(credential.signature)),
-        "userHandle": .string(Base64URL.encode(credential.userID)),
-      ],
-    ]
   }
 
   /// Bridges `ASAuthorizationController`'s delegate callbacks to `async`/`await`.
@@ -164,17 +102,17 @@ extension JSONValue {
   private final class WebAuthnCeremony: NSObject, ASAuthorizationControllerDelegate,
     ASAuthorizationControllerPresentationContextProviding
   {
-    private let anchor: ASPresentationAnchor
+    private let anchor: ASPresentationAnchor?
     private var continuation: CheckedContinuation<ASAuthorization, any Error>?
     private var controller: ASAuthorizationController?
     private var selfRetain: WebAuthnCeremony?
 
-    init(anchor: ASPresentationAnchor) {
+    init(anchor: ASPresentationAnchor?) {
       self.anchor = anchor
     }
 
-    func run(request: ASAuthorizationRequest) async throws -> ASAuthorization {
-      try await withCheckedThrowingContinuation { continuation in
+    func run<Credential>(request: ASAuthorizationRequest) async throws -> Credential {
+      let authorization = try await withCheckedThrowingContinuation { continuation in
         self.continuation = continuation
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
@@ -183,6 +121,10 @@ extension JSONValue {
         self.selfRetain = self
         controller.performRequests()
       }
+      guard let credential = authorization.credential as? Credential else {
+        throw AuthError.decoding("The authenticator returned an unexpected credential type.")
+      }
+      return credential
     }
 
     func authorizationController(
@@ -196,11 +138,11 @@ extension JSONValue {
       controller: ASAuthorizationController,
       didCompleteWithError error: any Error
     ) {
-      finish(.failure(error))
+      finish(.failure(WebAuthnAuthenticator.ceremonyError(from: error)))
     }
 
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-      anchor
+      anchor ?? AuthPlatform.defaultPresentationAnchor()
     }
 
     private func finish(_ result: Result<ASAuthorization, any Error>) {

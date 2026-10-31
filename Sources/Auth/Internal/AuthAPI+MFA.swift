@@ -24,40 +24,26 @@ extension AuthAPI {
     _ params: MFAChallengeParams,
     accessToken: String
   ) throws -> AuthRequest<AuthMFAChallengeResponse> {
-    let body: Data?
-    if let webAuthn = params.webAuthn {
-      body = try encoder.encode(["webauthn": webAuthn])
-    } else if params.channel != nil {
-      body = try encoder.encode(["channel": params.channel])
-    } else {
-      body = nil
+    // The server parses a JSON body for `webauthn` factors even when it has no fields, so always
+    // send an object.
+    struct Body: Encodable {
+      let channel: MessagingChannel?
+      let webauthn: WebAuthnChallengeOptions?
     }
 
-    return request(
+    return try request(
       .post, "factors/\(params.factorId)/challenge", authorization: bearer(accessToken),
-      body: body, decode: decoding(AuthMFAChallengeResponse.self))
+      body: encoder.encode(Body(channel: params.channel, webauthn: params.webAuthn)),
+      decode: decoding(AuthMFAChallengeResponse.self))
   }
 
   func verifyFactor(
     _ params: MFAVerifyParams,
     accessToken: String
   ) throws -> AuthRequest<AuthMFAVerifyResponse> {
-    let body: Data
-    if let credentialResponse = params.credentialResponse {
-      // WebAuthn credential responses use W3C camelCase field names (e.g. `clientDataJSON`).
-      // Encode without the snake_case strategy so they reach the backend verbatim.
-      body = try encodeWebAuthnBody([
-        "factor_id": .string(params.factorId.uuidString),
-        "challenge_id": .string(params.challengeId.uuidString),
-        "webauthn": ["credential_response": credentialResponse],
-      ])
-    } else {
-      body = try encoder.encode(params)
-    }
-
-    return request(
-      .post, "factors/\(params.factorId)/verify", authorization: bearer(accessToken), body: body,
-      decode: decoding(AuthMFAVerifyResponse.self))
+    try request(
+      .post, "factors/\(params.factorId)/verify", authorization: bearer(accessToken),
+      body: encoder.encode(params), decode: decoding(AuthMFAVerifyResponse.self))
   }
 
   func unenrollFactor(
