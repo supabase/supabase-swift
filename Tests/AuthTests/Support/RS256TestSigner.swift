@@ -36,3 +36,20 @@ struct RS256TestSigner {
     return "\(headerB64).\(payloadB64).\(Base64URL.encode(signature.rawRepresentation))"
   }
 }
+
+extension JWK {
+  func withModulusPrefixedByZeroBytes(_ count: Int) -> JWK {
+    JWK(
+      kty: kty,
+      keyOps: keyOps,
+      alg: alg,
+      kid: kid,
+      n: n.flatMap(Base64URL.decode).map { Base64URL.encode(Data(count: count) + $0) },
+      e: e,
+      crv: crv,
+      x: x,
+      y: y,
+      k: k
+    )
+  }
+}
