@@ -415,10 +415,30 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOTP
+    supporting_symbols:
+      - OTPOptions
+      - OTPOptions.init
+      - OTPOptions.shouldCreateUser
+      - OTPOptions.userMetadata
+      - OTPOptions.redirectTo
+      - OTPOptions.channel
+      - OTPOptions.captchaToken
+      - MessageID
+      - MessageID.init
+      - MessageID.rawValue
   auth.sign_in.sign_in_with_sso:
     status: implemented
     symbols:
       - AuthClient.signInWithSSO
+      - AuthClient.ssoSignInURL
+    supporting_symbols:
+      - SSOTarget
+      - SSOTarget.domain
+      - SSOTarget.providerID
+      - SSOOptions
+      - SSOOptions.init
+      - SSOOptions.redirectTo
+      - SSOOptions.captchaToken
   auth.sign_in.sign_in_with_id_token:
     status: implemented
     symbols:
@@ -462,19 +482,14 @@ features:
     symbols:
       - AuthClient.verifyOTP
     supporting_symbols:
-      - VerifyOTPResponse
-      - VerifyOTPResponse.session
-      - VerifyOTPResponse.emailChangeConfirmationPending
-      - VerifyOTPResponse.init
-      - EmailChangeConfirmation
-      - EmailChangeConfirmation.message
-      - EmailChangeConfirmation.code
-      - EmailChangeConfirmation.init
-      - MobileOTPType
-      - MobileOTPType.init
-      - MobileOTPType.rawValue
-      - MobileOTPType.sms
-      - MobileOTPType.phoneChange
+      - VerifyOTPResult
+      - VerifyOTPResult.signedIn
+      - VerifyOTPResult.emailChangePending
+      - PhoneOTPType
+      - PhoneOTPType.init
+      - PhoneOTPType.rawValue
+      - PhoneOTPType.sms
+      - PhoneOTPType.phoneChange
       - EmailOTPType
       - EmailOTPType.init
       - EmailOTPType.rawValue
@@ -494,15 +509,15 @@ features:
       - ResendEmailType.rawValue
       - ResendEmailType.signup
       - ResendEmailType.emailChange
-      - ResendMobileType
-      - ResendMobileType.init
-      - ResendMobileType.rawValue
-      - ResendMobileType.sms
-      - ResendMobileType.phoneChange
+      - ResendPhoneType
+      - ResendPhoneType.init
+      - ResendPhoneType.rawValue
+      - ResendPhoneType.sms
+      - ResendPhoneType.phoneChange
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
-      - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:

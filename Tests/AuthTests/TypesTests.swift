@@ -75,21 +75,21 @@ struct TypesTests {
   }
 
   @Test
-  func mobileOTPTypeEncodesAsRawString() throws {
-    let data = try JSONEncoder().encode(MobileOTPType.phoneChange)
+  func phoneOTPTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(PhoneOTPType.phoneChange)
     #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
   }
 
   @Test
-  func mobileOTPTypeStringLiteral() {
-    let type: MobileOTPType = "new_channel"
+  func phoneOTPTypeStringLiteral() {
+    let type: PhoneOTPType = "new_channel"
     #expect(type.rawValue == "new_channel")
   }
 
   @Test
-  func mobileOTPTypeHashability() {
-    let type1: MobileOTPType = .sms
-    let type2: MobileOTPType = "sms"
+  func phoneOTPTypeHashability() {
+    let type1: PhoneOTPType = .sms
+    let type2: PhoneOTPType = "sms"
     #expect(type1 == type2)
   }
 
@@ -125,15 +125,21 @@ struct TypesTests {
   }
 
   @Test
-  func resendMobileTypeEncodesAsRawString() throws {
-    let data = try JSONEncoder().encode(ResendMobileType.phoneChange)
+  func resendPhoneTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(ResendPhoneType.phoneChange)
     #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
   }
 
   @Test
-  func resendMobileTypeStringLiteral() {
-    let type: ResendMobileType = "new_resend_kind"
+  func resendPhoneTypeStringLiteral() {
+    let type: ResendPhoneType = "new_resend_kind"
     #expect(type.rawValue == "new_resend_kind")
+  }
+
+  @Test
+  func messageIDDecodesFromAString() throws {
+    let id = try JSONDecoder().decode(MessageID.self, from: Data(#""SM123""#.utf8))
+    #expect(id == MessageID(rawValue: "SM123"))
   }
 
   @Test

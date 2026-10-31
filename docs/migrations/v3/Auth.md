@@ -181,7 +181,7 @@ Changes that still compile but behave differently. Check each one by hand.
   `.passwordRecovery`. With `.emailChange` or `.phoneChange` it emits `.userUpdated` when the
   same user is signed in, and `.signedIn` otherwise. v2 emitted `.signedIn` for all of them. `session(from:)` for a recovery link emits only
   `.passwordRecovery`; v2 emitted `.signedIn` first. With the PKCE flow, the code exchange after
-  `resetPasswordForEmail` also emits `.passwordRecovery`, not `.signedIn`. The exchange after an
+  `resetPassword(email:)` also emits `.passwordRecovery`, not `.signedIn`. The exchange after an
   email change (`update(user:)` with an email, or `resend(type: .emailChange)`) follows the
   `verifyOTP` rule above. Search for `.signedIn`
   handlers that expect these flows.
@@ -245,9 +245,14 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
+| `enum MobileOTPType`, `enum ResendMobileType` | `struct PhoneOTPType`, `struct ResendPhoneType`, `RawRepresentable` with the same member names |
+| `resetPasswordForEmail(_:redirectTo:captchaToken:)` | `resetPassword(email:redirectTo:captchaToken:)` |
+| `resend(email:type:emailRedirectTo:captchaToken:)` | `resend(email:type:redirectTo:captchaToken:)` |
+| `resend(phone:type:captchaToken:)` returns `ResendMobileResponse` | returns `MessageID?`; read `.rawValue` for the string |
+| `verifyOTP(email:token:type:redirectTo:captchaToken:)`, `verifyOTP(phone:token:type:captchaToken:)` | `verifyOTP(email:token:type:)`, `verifyOTP(phone:token:type:)`; the server checks no `redirect_to` and no captcha token on this call |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
-| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
-| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
+| `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `EmailOTPType`, `ResendEmailType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
+| `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
 | `Provider`: `Codable` | no `Codable` conformance |
@@ -453,23 +458,60 @@ case .confirmationRequired: showCheckYourInbox()
 }
 ```
 
-## `verifyOTP` returns `VerifyOTPResponse`
+## `signInWithOTP` takes `OTPOptions`
 
-`verifyOTP` returns `VerifyOTPResponse` instead of v2's `AuthResponse`. The first step of a secure email
-change returns no session, so the result has a second case.
+The redirect URL, `shouldCreateUser`, the metadata, the channel, and the captcha token move into
+`OTPOptions`, and `data:` is `userMetadata:`. Phone sign-in returns the `MessageID?` of the SMS, so
+you can track delivery.
+
+```swift
+// v2
+try await supabase.auth.signInWithOTP(
+  email: email, redirectTo: callback, shouldCreateUser: false, captchaToken: token)
+try await supabase.auth.signInWithOTP(phone: phone, channel: .whatsapp)
+// v3
+try await supabase.auth.signInWithOTP(
+  email: email,
+  options: OTPOptions(shouldCreateUser: false, redirectTo: callback, captchaToken: token))
+let messageID = try await supabase.auth.signInWithOTP(
+  phone: phone, options: OTPOptions(channel: .whatsapp))
+```
+
+## `verifyOTP` returns `VerifyOTPResult`
+
+`verifyOTP` returns `VerifyOTPResult` instead of v2's `AuthResponse`: `.signedIn(Session)`, or
+`.emailChangePending(message:)` for the first confirmation of a secure email change, which signs
+no one in.
 
 ```swift
 // v2
 let response = try await supabase.auth.verifyOTP(tokenHash: hash, type: .emailChange)
 let email = response.user.email
 // v3
-let response = try await supabase.auth.verifyOTP(tokenHash: hash, type: .emailChange)
-switch response {
-case .session(let session):
+switch try await supabase.auth.verifyOTP(tokenHash: hash, type: .emailChange) {
+case .signedIn(let session):
   let email = session.user.email
-case .emailChangeConfirmationPending(let confirmation):
-  print(confirmation.message, confirmation.code)
+case .emailChangePending(let message):
+  print(message)
 }
+```
+
+## `signInWithSSO` shows the page and returns a session
+
+v2 returned an `SSOResponse` with the URL and left the browser to the app. v3 takes an `SSOTarget`
+(`.domain(String)` or `.providerID(UUID)`), shows the identity provider page with a presenter, like
+`signInWithOAuth`, and returns the `Session`. It emits `.signedIn`. For your own flow, use
+`ssoSignInURL(_:options:)`, which returns the URL and the flow ID.
+
+```swift
+// v2
+let response = try await supabase.auth.signInWithSSO(domain: "example.com", redirectTo: callback)
+await UIApplication.shared.open(response.url)
+// v3
+let session = try await supabase.auth.signInWithSSO(
+  .domain("example.com"), options: SSOOptions(redirectTo: callback))
+let (url, flowID) = try await supabase.auth.ssoSignInURL(
+  .providerID(UUID(uuidString: providerID)!))
 ```
 
 ## `emitLocalSessionAsInitialSession` is removed

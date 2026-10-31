@@ -15,7 +15,7 @@ that can.
 A value stays an `enum` when the set of cases is fixed by design:
 
 - The cases carry associated values, so a struct cannot express them: `SignUpResult`,
-  `RedirectResult`, `VerifyOTPResponse`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
+  `RedirectResult`, `VerifyOTPResult`, `SSOTarget`, `OAuthAuthorizationDetailsResponse`, `AudienceClaim`, `SignedURLResult`,
   `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
   `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,
   because their cases carry errors: match a case, or use `isConnected`, `isSubscribed` and
