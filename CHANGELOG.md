@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.55.7](https://github.com/supabase/supabase-swift/compare/v2.55.6...v2.55.7) (2026-10-31)
+
+
+### Bug Fixes
+
+* **auth:** exchangeCodeForSession fails before the request when the PKCE verifier is missing (v2 backport) ([#1681](https://github.com/supabase/supabase-swift/issues/1681)) ([0d92fea](https://github.com/supabase/supabase-swift/commit/0d92fea25b587f15eae0f50464df984618265809))
+
 ## [2.55.6](https://github.com/supabase/supabase-swift/compare/v2.55.5...v2.55.6) (2026-10-29)
 
 
