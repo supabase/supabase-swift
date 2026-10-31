@@ -54,7 +54,7 @@ jobs:
 
   linux:
     name: Build (Linux x86_64)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     # jammy's glibc, so the binary also runs on older distributions than the build image.
     container: swift:6.2-jammy
@@ -81,7 +81,7 @@ jobs:
   publish:
     name: ${{ inputs.tag && 'Publish' || 'Verify' }}
     needs: [macos, linux]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     permissions:
       contents: write

@@ -30,7 +30,7 @@ jobs:
   # Skipped jobs count as passed in ci-success, so a skipped matrix never blocks a merge.
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
@@ -239,7 +239,7 @@ jobs:
     name: Linux (${{ matrix.container }})
     needs: changes
     if: needs.changes.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
@@ -304,7 +304,7 @@ jobs:
           # turn on the Storage features the CLI leaves off (lifecycles, analytics buckets, CDN
           # purge), and their full integration tests run here. The native stack cannot.
           - name: Linux
-            runner: ubuntu-latest
+            runner: blacksmith-8vcpu-ubuntu-2404
             storage-features: true
           # The CLI's experimental stack backend runs every service as a native process on macOS
           # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
@@ -442,13 +442,13 @@ jobs:
         working-directory: Examples/${{ matrix.example }}
         run: swift build
 
-  # cSpell runs on Node, which the ubuntu-latest image already provides, so this
+  # cSpell runs on Node, which the Blacksmith Ubuntu image already provides, so this
   # job needs no setup-go and no setup-node - the runner's Node is part of the
-  # trusted image baseline, the same category as the OS and `ubuntu-latest`
+  # trusted image baseline, the same category as the OS and the runner label
   # itself.
   spell-check:
     name: Spell check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -487,7 +487,7 @@ jobs:
 
   lint:
     name: SwiftLint
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 10
     env:
       SWIFTLINT_VERSION: "0.65.0"
@@ -538,7 +538,7 @@ jobs:
         format-check,
         lint,
       ]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check all jobs
         run: |
@@ -568,7 +568,7 @@ jobs:
     # so a red main blocks it silently (no new release PR, no update to the open
     # one) unless someone happens to look at Actions. Alert instead of relying on that.
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Send Slack alert
         env:
