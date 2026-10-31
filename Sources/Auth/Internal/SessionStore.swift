@@ -364,7 +364,7 @@ actor SessionStore {
       let stored = try? PersistedSessionCodec.decode(data).session,
       stored.session.refreshToken != refreshToken
     {
-      let event: AuthChangeEvent =
+      let event: AuthEvent =
         stored.session.user.id == held.user.id ? .tokenRefreshed : .signedIn
       update(to: .signedIn(stored), event: event)
       return
