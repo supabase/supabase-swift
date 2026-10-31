@@ -207,10 +207,11 @@ Changes that still compile but behave differently. Check each one by hand.
   fails, `claims()` throws the error that `session` throws, such as `.sessionInvalidated` with
   `errorCode` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
   session. `.sessionMissing` now means only that no user is signed in.
-- **A token without `exp` fails verification.** `claims(jwt:)` throws `.jwtVerificationFailed`
-  for a token without an `exp` claim, before it sends any request. An expired token also fails
-  before any request, unless you pass `ClaimsOptions(allowsExpired: true)`. v2 accepted a token
-  without `exp`.
+- **A token without `exp` or `sub` fails verification.** `claims(jwt:)` throws
+  `.jwtVerificationFailed` for a token without an `exp` claim or a `sub` claim, before it sends
+  any request. The anon key and the service role key have no `sub`, so `claims(jwt:)` rejects
+  them. An expired token also fails before any request, unless you pass
+  `ClaimsOptions(allowsExpired: true)`. v2 accepted a token without `exp`.
 - **Each client caches its own key set.** `claims()` caches the JWKS per client for 10 minutes.
   v2 shared one cache between clients with the same storage key, so each new client now fetches
   the key set once. A token whose key is not in the cached set triggers a new fetch, so rotated

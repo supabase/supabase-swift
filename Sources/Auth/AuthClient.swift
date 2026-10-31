@@ -1151,6 +1151,7 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameter jwt: The access token to send.
   /// - Returns: The user that `jwt` belongs to.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
   public func user(jwt: String) async throws -> User {
     try await api.execute(
       authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
@@ -1207,6 +1208,8 @@ public final class AuthClient: Sendable {
   /// The client sends a request through ``user()``.
   ///
   /// - Returns: The linked identities. Empty when the server sends none.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
@@ -1464,8 +1467,9 @@ public final class AuthClient: Sendable {
   ///   - options: Options that change how the token is verified.
   /// - Returns: The verified claims, with the token's header and signature.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when the
-  ///   token is malformed, has no `exp` claim, has expired (unless
-  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The error of
+  ///   token is malformed, has no `exp` or `sub` claim, has expired (unless
+  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The client checks
+  ///   the structure and the `exp` and `sub` claims before it sends any request. The error of
   ///   ``user(jwt:)`` when the Auth server rejects the token.
   public func claims(jwt: String, options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
     guard let decodedJWT = JWT.decode(jwt) else {

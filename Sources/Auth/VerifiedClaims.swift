@@ -130,17 +130,26 @@ extension VerifiedClaims {
 public struct ClaimsOptions: Sendable, Hashable {
   /// Whether to return the claims of an expired token. When `false`, an expired token fails
   /// verification.
+  ///
+  /// It applies only to tokens that the client verifies on the device. The Auth server rejects an
+  /// expired token that it verifies, so ``AuthClient/claims(jwt:options:)`` still throws for that
+  /// token.
   public var allowsExpired: Bool = false
 
   /// A key set to verify the token with. It takes precedence over the key set that the client
   /// fetches from the Auth server.
+  ///
+  /// The client checks this key set first. When it has no key with the token's `kid`, the client
+  /// uses the key set from the Auth server.
   public var jwks: JWKS? = nil
 
   /// Creates claims options.
   ///
   /// - Parameters:
-  ///   - allowsExpired: Pass `true` to return the claims of an expired token.
-  ///   - jwks: A key set to verify the token with, instead of the one from the Auth server.
+  ///   - allowsExpired: Pass `true` to return the claims of an expired token that the client
+  ///     verifies on the device.
+  ///   - jwks: A key set to check first. When it has no key with the token's `kid`, the client
+  ///     uses the key set from the Auth server.
   public init(allowsExpired: Bool = false, jwks: JWKS? = nil) {
     self.allowsExpired = allowsExpired
     self.jwks = jwks
