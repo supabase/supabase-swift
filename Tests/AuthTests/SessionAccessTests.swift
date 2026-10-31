@@ -88,6 +88,33 @@ import Testing
   // MARK: - refreshSession()
 
   @Test
+  func refreshSessionReadsStorageThatWasLockedAtLaunch() async throws {
+    let storage = LockedLocalStorage()
+    let key = uniqueStorageKey()
+    try storage.store(
+      key: key,
+      value: PersistedSessionCodec.encode(ReceivedSession(session: .valid, receivedAt: Date()))
+    )
+    storage.isLocked.setValue(true)
+    http.respond { _, _ in try sessionResponse(.valid) }
+    let sut = AuthClient(
+      configuration: .init(
+        url: clientURL, storageKey: key, localStorage: storage, http: .init(transport: http),
+        autoRefresh: .manual),
+      date: { Date() },
+      pkce: .live,
+      platform: .live
+    )
+
+    let error = await #expect(throws: AuthError.self) { try await sut.refreshSession() }
+    expectNoDifference(error?.kind, .storageUnavailable)
+
+    storage.isLocked.setValue(false)
+    let session = try await sut.refreshSession()
+    expectNoDifference(session.refreshToken, Session.valid.refreshToken)
+  }
+
+  @Test
   func refreshSessionRefreshesTheHeldSession() async throws {
     var refreshed = Session.valid
     refreshed.refreshToken = "refreshed-refresh-token"

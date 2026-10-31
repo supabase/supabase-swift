@@ -68,6 +68,10 @@ private struct LiveSessionManager: Sendable {
 
   func refreshSession() async throws -> Session {
     try await trace(using: logger) {
+      if sessionStore.currentStatus == .loading {
+        try await sessionStore.load()
+      }
+
       guard let currentSession = sessionStore.currentSession else {
         throw AuthError.sessionMissing
       }

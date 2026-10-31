@@ -351,6 +351,38 @@ struct SessionStoreTests {
   }
 
   @Test
+  func refreshOfTheSameSessionReturnsARefreshThatReplacedIt() async throws {
+    let store = try await loadedStore(now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
+
+    let session = try await store.refreshHeldSession(
+      readWith: "refresh-a", requiringSameSession: true
+    ) { _ in makeSession("c") }
+
+    #expect(session == makeSession("b"))
+  }
+
+  @Test
+  func refreshOfTheSameSessionThrowsWhenASignInReplacedIt() async throws {
+    let store = try await loadedStore(now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
+    try await store.commit(.signedIn(makeSession("b"), event: .signedIn))
+    let requests = LockIsolated(0)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await store.refreshHeldSession(readWith: "refresh-a", requiringSameSession: true) { _ in
+        requests.withValue { $0 += 1 }
+        return makeSession("c")
+      }
+    }
+
+    #expect(error?.kind == .sessionMissing)
+    #expect(requests.value == 0)
+    #expect(store.currentSession == makeSession("b"))
+  }
+
+  @Test
   func refreshOfAHeldSessionThatAnExpiredSessionReplacedRedeemsTheHeldToken() async throws {
     let date = LockIsolated(receivedAt)
     let store = try await loadedStore(now: { date.value })

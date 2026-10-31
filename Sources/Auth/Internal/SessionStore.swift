@@ -314,13 +314,23 @@ actor SessionStore {
   /// a rotated token. The store then returns the held session without a request while it is
   /// valid, and refreshes the held token when it is not.
   ///
-  /// - Throws: ``AuthError/sessionMissing`` when the store holds no session.
+  /// - Parameter requiringSameSession: Whether the held session must be the one the caller read,
+  ///   or a refresh of it. A caller that acts on that one session, such as a sign-out, sets it, so
+  ///   a sign-in that landed since never hands it another session.
+  /// - Throws: ``AuthError/sessionMissing`` when the store holds no session, or another session
+  ///   than the one the caller read while `requiringSameSession` is `true`.
   func refreshHeldSession(
     readWith refreshToken: String,
+    requiringSameSession: Bool = false,
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session,
     signOutReason: @escaping RejectionReason = rejectedSession
   ) async throws -> Session {
     guard let held = heldSession else { throw AuthError.sessionMissing }
+    if requiringSameSession, held.session.refreshToken != refreshToken,
+      !replacedRefreshTokens.contains(refreshToken)
+    {
+      throw AuthError.sessionMissing
+    }
     if held.session.refreshToken != refreshToken,
       !held.isExpired(at: now(), leeway: defaultExpiryMargin)
     {

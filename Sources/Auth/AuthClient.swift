@@ -916,7 +916,7 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameter scope: Which sessions to end.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/sessionMissing`` for `.others` when
-  ///   no session is stored.
+  ///   no session is stored, or when another sign-in replaced the session during its refresh.
   public func signOut(scope: SignOutScope = .local) async throws {
     if status == .loading {
       try await sessionStore.load()
@@ -955,14 +955,20 @@ public final class AuthClient: Sendable {
       do {
         session = try await sessionStore.refreshHeldSession(
           readWith: held.refreshToken,
+          requiringSameSession: true,
           using: dependencies.refreshRequest,
           signOutReason: { $0.isClientError ? .userInitiated : nil }
         )
       } catch let error as AuthError where error.isClientError {
         codeVerifierStorage.removeAll()
         throw error
+      } catch let error as AuthError
+        where [.sessionMissing, .refreshDiscarded].contains(error.kind)
+      {
+        // Another sign-out or sign-in replaced the session, so it is not left to revoke.
+        return try await removeSession(refreshToken: nil)
       } catch  where currentSession == nil && !Task.isCancelled {
-        // Another sign-out landed during the refresh, so no session is left to revoke.
+        // Another sign-out cancelled the refresh.
         return try await removeSession(refreshToken: nil)
       }
     }
@@ -975,7 +981,8 @@ public final class AuthClient: Sendable {
     guard var session = currentSession else { throw AuthError.sessionMissing }
     if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
       session = try await sessionStore.refreshHeldSession(
-        readWith: session.refreshToken, using: dependencies.refreshRequest)
+        readWith: session.refreshToken, requiringSameSession: true,
+        using: dependencies.refreshRequest)
     }
     try await logout(accessToken: session.accessToken, scope: .others)
   }
