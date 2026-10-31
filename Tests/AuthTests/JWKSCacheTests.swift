@@ -95,7 +95,7 @@ struct JWKSCacheTests {
   }
 
   @Test
-  func staleCacheRefetches() async throws {
+  func staleCacheFetchesAgain() async throws {
     let fixture = Fixture()
 
     _ = try await fixture.cache.key(for: "k1")

@@ -556,7 +556,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func linkIdentityWithIDTokenEmitsUserUpdated() async throws {
+    func linkIdentityIDTokenEmitsUserUpdated() async throws {
       try await withMainSerialExecutor {
         Mock(
           url: clientURL.appendingPathComponent("token"),
@@ -3632,7 +3632,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withoutJWT_shouldUseSessionAccessToken() async throws {
+    func claims_withoutJWT_shouldUseSessionAccessToken() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3659,7 +3659,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
+    func claims_withES256JWTAndJWKS_shouldVerifyLocally() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3689,7 +3689,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withJWKMissingAlg_shouldVerifyLocally() async throws {
+    func claims_withJWKMissingAlg_shouldVerifyLocally() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3731,7 +3731,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldVerifyWithJWKAlgorithm()
+    func claims_withJWKMissingAlgAndMismatchedHeaderAlg_shouldVerifyWithJWKAlgorithm()
       async throws
     {
       let signer = ES256TestSigner()
@@ -3773,7 +3773,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
+    func claims_withTamperedES256JWT_shouldThrowWithoutFallback() async throws {
       let signer = ES256TestSigner()
       let jwt = try signer.sign(
         header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
@@ -3808,7 +3808,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withES256JWT_shouldFallbackToServerVerification() async throws {
+    func claims_withES256JWT_shouldFallbackToServerVerification() async throws {
       let jwt =
         "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
@@ -3831,7 +3831,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
+    func claims_withNoKidInHeader_shouldFallbackToServerVerification() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
 
@@ -3854,7 +3854,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withInvalidJWTStructure_shouldThrowJWTVerificationFailed() async throws {
+    func claims_withInvalidJWTStructure_shouldThrowJWTVerificationFailed() async throws {
       let invalidJWT = "invalid.jwt.token"
 
       let sut = makeSUT()
@@ -3871,7 +3871,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_whenServerRejectsJWT_shouldThrowError() async throws {
+    func claims_whenServerRejectsJWT_shouldThrowError() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
@@ -3898,7 +3898,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withComplexClaims_shouldDecodeAllFields() async throws {
+    func claims_withComplexClaims_shouldDecodeAllFields() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
 
@@ -3929,7 +3929,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getClaims_withArrayAudience_shouldDecodeCorrectly() async throws {
+    func claims_withArrayAudience_shouldDecodeCorrectly() async throws {
       let jwt =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
 
