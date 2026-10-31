@@ -138,6 +138,27 @@ struct JWTVerifierTests {
   }
 
   @Test
+  func rs256KeyUnder2048BitsPaddedTo256BytesFailsClosed() throws {
+    let signer = RS256TestSigner(keySize: _RSA.Signing.KeySize(bitCount: 1024))
+    let jwk = signer.jwk.withModulusPrefixedByZeroBytes(128)
+    let decoded = try #require(
+      JWT.decode(signer.sign(header: rs256Header, payload: rs256Payload)))
+
+    #expect(jwk.rsaPublicKey == nil)
+    #expect(JWTVerifier.verify(decoded, with: jwk) == false)
+  }
+
+  @Test
+  func rs256ModulusWithLeadingZeroByteVerifies() throws {
+    let signer = RS256TestSigner()
+    let jwk = signer.jwk.withModulusPrefixedByZeroBytes(1)
+    let decoded = try #require(
+      JWT.decode(signer.sign(header: rs256Header, payload: rs256Payload)))
+
+    #expect(JWTVerifier.verify(decoded, with: jwk) == true)
+  }
+
+  @Test
   func es256ValidSignatureVerifies() throws {
     let signer = ES256TestSigner()
     let jwt = try signer.sign(header: header, payload: payload)
