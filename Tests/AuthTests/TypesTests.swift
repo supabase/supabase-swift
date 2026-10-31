@@ -17,6 +17,16 @@ struct TypesTests {
   }
 
   @Test
+  func jwkDecodesKeyOps() throws {
+    let json = Data(
+      #"{"kty":"EC","key_ops":["verify"],"alg":"ES256","kid":"k1","crv":"P-256","x":"AQAB","y":"AQAB"}"#
+        .utf8
+    )
+    let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: json)
+    #expect(jwk.keyOps == ["verify"])
+  }
+
+  @Test
   func factorStatusDecodesUnknownValue() throws {
     let json = Data(#"{"status":"pending_review"}"#.utf8)
     let decoded = try JSONDecoder().decode(FactorStatusContainer.self, from: json)

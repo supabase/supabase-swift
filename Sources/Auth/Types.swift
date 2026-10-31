@@ -2227,9 +2227,11 @@ public struct JWK: Decodable, Hashable, Sendable {
   /// Symmetric key value (base64url-encoded).
   public let k: String?
 
+  /// Raw values are the camelCase names that the Auth decoder's `.convertFromSnakeCase` strategy
+  /// produces, so `key_ops` in the JSON matches `keyOps`.
   enum CodingKeys: String, CodingKey {
     case kty
-    case keyOps = "key_ops"
+    case keyOps
     case alg
     case kid
     case n
