@@ -9,32 +9,6 @@ import Logging
 
 typealias AuthClientID = Int
 
-private let jwksTTL: TimeInterval = 10 * 60
-
-private struct CachedJWKS {
-  let jwks: JWKS
-  let cachedAt: Date
-}
-
-/// Global JWKS cache shared across all clients with the same storage key.
-/// This is especially useful for shared-memory execution environments such as
-/// AWS Lambda or serverless functions. Regardless of how many clients are created,
-/// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up claims() with asymmetric JWTs.
-private actor GlobalJWKSCache {
-  private var cache: [String: CachedJWKS] = [:]
-
-  func get(for key: String) -> CachedJWKS? {
-    cache[key]
-  }
-
-  func set(_ value: CachedJWKS, for key: String) {
-    cache[key] = value
-  }
-}
-
-private let globalJWKSCache = GlobalJWKSCache()
-
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
@@ -127,6 +101,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
+/// - ``claims(options:)``
 /// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
@@ -146,6 +121,8 @@ public final class AuthClient: Sendable {
   let clientID: AuthClientID
 
   let dependencies: Dependencies
+
+  private let jwksCache: JWKSCache
 
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
@@ -256,6 +233,12 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    jwksCache = JWKSCache(
+      fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
+        try await api.execute(authAPI.jwks())
+      },
+      now: date
+    )
     Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
@@ -1411,104 +1394,73 @@ public final class AuthClient: Sendable {
       || error.underlyingError is URLError
   }
 
-  /// Fetches a JWK from the JWKS endpoint with caching
-  /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
-  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
-      return jwk
-    }
-
-    let now = date()
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-
-    if let cached = await globalJWKSCache.get(for: storageKey),
-      let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
-    {
-      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
-        return jwk
-      }
-    }
-
-    let fetchedJWKS = try await api.execute(authAPI.jwks())
-
-    guard !fetchedJWKS.keys.isEmpty else {
-      return nil
-    }
-
-    await globalJWKSCache.set(
-      CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
-      for: storageKey
-    )
-
-    return fetchedJWKS.keys.first(where: { $0.kid == kid })
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The token comes from ``session``, so an expired session is refreshed first. The token is
+  /// then verified as ``claims(jwt:options:)`` describes.
+  ///
+  /// - Parameter options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: Every error that ``session`` throws, unchanged: for example, an error of kind
+  ///   ``AuthError/Kind-swift.struct/sessionMissing`` when no user is signed in, or the refresh
+  ///   error when the server rejects the refresh. An error of kind
+  ///   ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when verification fails.
+  public func claims(options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    try await claims(jwt: session.accessToken, options: options)
   }
 
-  /// Extracts the JWT claims present in the access token by first verifying the
-  /// JWT against the server's JSON Web Key Set endpoint `/.well-known/jwks.json`
-  /// which is often cached, resulting in significantly faster responses. Prefer
-  /// this method over ``user(jwt:)`` which always sends a request to the Auth
-  /// server for each JWT.
+  /// Verifies a JSON Web Token and returns its claims.
   ///
-  /// If the project is not using an asymmetric JWT signing key (like ECC or RSA)
-  /// it always sends a request to the Auth server (similar to ``user(jwt:)``) to
-  /// verify the JWT.
+  /// A token signed with an asymmetric key, such as ES256 or RS256, that names its key in the
+  /// `kid` header is verified on the device against the project's JSON Web Key Set at
+  /// `/.well-known/jwks.json`. Each client caches the key set for 10 minutes, so most calls send
+  /// no request. Prefer this method over ``user(jwt:)``, which sends a request for each token.
+  ///
+  /// The Auth server verifies every other token through ``user(jwt:)``: a token signed with a
+  /// symmetric key (HS256), a token without a `kid`, and a token whose key the client cannot find.
   ///
   /// - Parameters:
-  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
-  ///   - options: Various additional options that allow you to customize the behavior of this method.
-  ///
+  ///   - jwt: The token to verify.
+  ///   - options: Options that change how the token is verified.
   /// - Returns: The verified claims, with the token's header and signature.
-  ///
-  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func claims(
-    jwt: String? = nil,
-    options: ClaimsOptions = ClaimsOptions()
-  ) async throws -> VerifiedClaims {
-    let token: String
-    if let jwt {
-      token = jwt
-    } else {
-      guard let session = try? await session else {
-        throw AuthError.sessionMissing
-      }
-      token = session.accessToken
-    }
-
-    guard let decodedJWT = JWT.decode(token) else {
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when the
+  ///   token is malformed, has no `exp` claim, has expired (unless
+  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The error of
+  ///   ``user(jwt:)`` when the Auth server rejects the token.
+  public func claims(jwt: String, options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    guard let decodedJWT = JWT.decode(jwt) else {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if !options.allowsExpired {
-      if let exp = decodedJWT.payload["exp"] as? TimeInterval {
-        let now = date().timeIntervalSince1970
-        if exp <= now {
-          throw AuthError.jwtVerificationFailed("JWT has expired")
-        }
-      }
-    }
-
-    let alg = decodedJWT.header["alg"] as? String
-    let kid = decodedJWT.header["kid"] as? String
-
-    let signingKey: JWK?
-    if let alg, !alg.hasPrefix("HS"), let kid {
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
-    } else {
-      signingKey = nil
+    let claims = try VerifiedClaims(decodedJWT)
+    if !options.allowsExpired, claims.expiresAt <= date() {
+      throw AuthError.jwtVerificationFailed("JWT has expired")
     }
 
     guard
-      let signingKey,
+      let signingKey = try await signingKey(for: decodedJWT, options: options),
       let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
-      _ = try await user(jwt: token)
-      return try VerifiedClaims(decodedJWT)
+      _ = try await user(jwt: jwt)
+      return claims
     }
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
+    return claims
+  }
 
-    return try VerifiedClaims(decodedJWT)
+  private func signingKey(for jwt: DecodedJWT, options: ClaimsOptions) async throws -> JWK? {
+    guard
+      let alg = jwt.header["alg"] as? String, !alg.hasPrefix("HS"),
+      let kid = jwt.header["kid"] as? String
+    else {
+      return nil
+    }
+    if let key = options.jwks?.keys.first(where: { $0.kid == kid }) {
+      return key
+    }
+    return try await jwksCache.key(for: kid)
   }
 }

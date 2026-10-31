@@ -530,6 +530,29 @@ features:
     status: implemented
     symbols:
       - AuthClient.claims
+    supporting_symbols:
+      - ClaimsOptions
+      - ClaimsOptions.allowsExpired
+      - ClaimsOptions.init
+      - ClaimsOptions.jwks
+      - VerifiedClaims
+      - VerifiedClaims.additionalClaims
+      - VerifiedClaims.amr
+      - VerifiedClaims.appMetadata
+      - VerifiedClaims.assuranceLevel
+      - VerifiedClaims.audience
+      - VerifiedClaims.email
+      - VerifiedClaims.expiresAt
+      - VerifiedClaims.header
+      - VerifiedClaims.isAnonymous
+      - VerifiedClaims.issuedAt
+      - VerifiedClaims.issuer
+      - VerifiedClaims.phone
+      - VerifiedClaims.role
+      - VerifiedClaims.sessionID
+      - VerifiedClaims.signature
+      - VerifiedClaims.subject
+      - VerifiedClaims.userMetadata
   auth.session.refresh_session:
     status: implemented
     symbols:

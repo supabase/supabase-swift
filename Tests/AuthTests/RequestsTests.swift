@@ -782,9 +782,9 @@ struct RequestsTests {
   @Test
   func fetchJWKS() async {
     let sut = makeSUT()
-    // RS256 header with a key id no cached key set holds, so the keys are fetched.
+    // RS256 header with a key id, so the client fetches the key set.
     let jwt =
-      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJleHAiOjQ4NTIxNjM1OTN9.c2ln"
+      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJzdWIiOiJyZXF1ZXN0cy10ZXN0cyIsImV4cCI6NDg1MjE2MzU5M30.c2ln"
 
     await assert {
       _ = try await sut.claims(jwt: jwt)

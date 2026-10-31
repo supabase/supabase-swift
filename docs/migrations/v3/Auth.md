@@ -200,6 +200,18 @@ Changes that still compile but behave differently. Check each one by hand.
   token's `iat` as the `timestamp`. v2 dropped them.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
+- **`claims()` throws the refresh error.** When the stored session is expired and its refresh
+  fails, `claims()` throws the error that `session` throws, such as `.sessionInvalidated` with
+  `errorCode` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
+  session. `.sessionMissing` now means only that no user is signed in.
+- **A token without `exp` fails verification.** `claims(jwt:)` throws `.jwtVerificationFailed`
+  for a token without an `exp` claim, before it sends any request. An expired token also fails
+  before any request, unless you pass `ClaimsOptions(allowsExpired: true)`. v2 accepted a token
+  without `exp`.
+- **Each client caches its own key set.** `claims()` caches the JWKS per client for 10 minutes.
+  v2 shared one cache between clients with the same storage key, so each new client now fetches
+  the key set once. A token whose key is not in the cached set triggers a new fetch, so rotated
+  keys resolve without waiting for the cache to expire.
 
 ## Renames and type changes
 
@@ -234,7 +246,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
 | `AuthClient.Configuration.flowType`, `AuthOptions.flowType`, `AuthFlowType`, `defaultFlowType` | removed; see below |
-| `AuthClient.getClaims(jwt:options:)` | `AuthClient.claims(jwt:options:)` |
+| `AuthClient.getClaims(options:)` (no `jwt`) | `AuthClient.claims(options:)` |
+| `AuthClient.getClaims(jwt:options:)` with a token | `AuthClient.claims(jwt:options:)`; `jwt` is a `String`, not a `String?` |
 | `GetClaimsOptions`, `GetClaimsOptions(allowExpired:jwks:)` | `ClaimsOptions`, `ClaimsOptions(allowsExpired:jwks:)` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
@@ -474,10 +487,10 @@ case .emailChangeConfirmationPending(let confirmation):
 
 ## `JWTClaimsResponse` and `JWTClaims` are `VerifiedClaims`
 
-`claims(jwt:options:)` returns `VerifiedClaims` instead of `JWTClaimsResponse`. The claims are
-top-level properties with full names, and `header` and `signature` stay. `sub` and `exp` are
-required, so `subject` and `expiresAt` are not optional, and a token without them fails
-verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, and `AudienceClaim` is
+`claims(options:)` and `claims(jwt:options:)` return `VerifiedClaims` instead of
+`JWTClaimsResponse`. The claims are top-level properties with full names, and `header` and
+`signature` stay. `sub` and `exp` are required, so `subject` and `expiresAt` are not optional,
+and a token without them fails verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, and `AudienceClaim` is
 gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
 their typed properties. `nbf`, `jti`, and every other claim are in `additionalClaims`.
 
