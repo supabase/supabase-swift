@@ -22,7 +22,7 @@ struct TypesTests {
       #"{"kty":"EC","key_ops":["verify"],"alg":"ES256","kid":"k1","crv":"P-256","x":"AQAB","y":"AQAB"}"#
         .utf8
     )
-    let jwk = try AuthClient.Configuration.jsonDecoder.decode(JWK.self, from: json)
+    let jwk = try JSONDecoder().decode(JWK.self, from: json)
     #expect(jwk.keyOps == ["verify"])
   }
 

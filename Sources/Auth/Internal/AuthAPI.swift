@@ -601,7 +601,9 @@ extension AuthAPI {
   }
 
   func jwks() -> AuthRequest<JWKS> {
-    request(.get, ".well-known/jwks.json", decode: decoding(JWKS.self))
+    request(.get, ".well-known/jwks.json") { _, data in
+      try data.decoded(as: JWKS.self, decoder: JSONDecoder())
+    }
   }
 }
 
