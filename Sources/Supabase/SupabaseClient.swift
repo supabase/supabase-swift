@@ -534,15 +534,16 @@ public final class SupabaseClient: Sendable {
 
   /// Mirrors Auth state onto the Realtime V2 sub-client for the client's lifetime.
   ///
-  /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
-  /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
-  /// cancels this task — could never run. The stream is therefore resolved up front (so the task
-  /// doesn't need `self` to reach `auth`) and `self` is captured weakly.
+  /// `events()` finishes only when the Auth client is released, and this client owns it, so the
+  /// observing task must not capture `self` strongly: it would keep the client alive forever, and
+  /// ``deinit`` — the only place that cancels this task — could never run. The stream is
+  /// therefore resolved up front (so the task doesn't need `self` to reach `auth`) and `self` is
+  /// captured weakly.
   private func listenForAuthEvents() {
-    let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
-      for await (event, session) in authStateChanges {
+    let task = Task { [weak self, events = _auth.events()] in
+      for await change in events {
         guard let self else { return }
-        await self.handleTokenChanged(event: event, session: session)
+        await self.handleTokenChanged(event: change.event, session: change.session)
       }
     }
     mutableState.withValue {
@@ -553,21 +554,18 @@ public final class SupabaseClient: Sendable {
   /// Pushes the new token to the Realtime client only when it already exists. Building it here
   /// would install its observers in apps that never use Realtime; a client built later pulls
   /// the current token itself.
-  func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
+  func handleTokenChanged(event: AuthEvent, session: Session?) async {
     let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
-        $0.changedAccessToken != session?.accessToken
-      {
-        $0.changedAccessToken = session?.accessToken
-        return session?.accessToken ?? supabaseKey
-      }
-
       if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
       }
 
-      return nil
+      // Any event can carry a new token: a recovery or email-change verification, or an MFA
+      // step-up, replaces the session without a `.signedIn`.
+      guard $0.changedAccessToken != session?.accessToken else { return nil }
+      $0.changedAccessToken = session?.accessToken
+      return session?.accessToken ?? supabaseKey
     }
 
     if let accessToken, let realtime = mutableState.realtime {

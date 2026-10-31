@@ -131,10 +131,13 @@ struct RealtimeColdStartTests {
       return
     }
 
+    // Check the join before the status: the rejoin resets the channel before it sends the join,
+    // so a status read first can still be the `.subscribed` from before the reconnect.
     await waitUntil(timeout: 5) {
-      let channelStatus = await channel.status
-      return sockets.value[1].sentMessages.contains { $0.event == "phx_join" }
-        && channelStatus == .subscribed
+      guard sockets.value[1].sentMessages.contains(where: { $0.event == "phx_join" }) else {
+        return false
+      }
+      return await channel.status == .subscribed
     }
     #expect(await channel.status == .subscribed, "Channel did not rejoin after reconnect")
 

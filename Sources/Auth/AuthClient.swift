@@ -52,16 +52,17 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// let session = try await auth.signIn(email: "user@example.com", password: "secret")
 ///
 /// // Listen for state changes
-/// for await (event, session) in auth.authStateChanges {
-///   print(event, session?.user.email ?? "signed out")
+/// for await change in auth.events() {
+///   print(change.event, change.session?.user.email ?? "signed out")
 /// }
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Observing state
-/// - ``onAuthStateChange(_:)``
-/// - ``authStateChanges``
+/// - ``events()``
+/// - ``status``
+/// - ``initialization()``
 /// - ``currentSession``
 /// - ``currentUser``
 /// - ``session``
@@ -124,11 +125,6 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``mfa``
 /// - ``admin``
 /// - ``oauthServer``
-///
-/// ### Notifications
-/// - ``didChangeAuthStateNotification``
-/// - ``authChangeEventInfoKey``
-/// - ``authChangeSessionInfoKey``
 public final class AuthClient: Sendable {
   private static let _globalClientID = LockIsolated(0)
 
@@ -160,10 +156,6 @@ public final class AuthClient: Sendable {
   }
   private var pkce: PKCE { dependencies.pkce }
 
-  /// Loads the stored session when the first read failed, then posts
-  /// ``didChangeAuthStateNotification`` for each change, for as long as the client lives.
-  private let notificationTask: Task<Void, Never>
-
   private let lifecycleTask: Task<Void, Never>
 
   /// Returns the session, refreshing it if necessary.
@@ -173,8 +165,8 @@ public final class AuthClient: Sendable {
   /// rejects the refresh of an expired session.
   ///
   /// When storage could not be read yet, each call reads it again, as do
-  /// ``refreshSessionIfNeeded()``, requests that send the session's access token, and each new
-  /// ``onAuthStateChange(_:)`` or ``authStateChanges`` subscription. While the device is locked it
+  /// ``refreshSessionIfNeeded()``, requests that send the session's access token, each new
+  /// ``events()`` stream, and ``initialization()``. While the device is locked it
   /// throws an error of kind ``AuthError/Kind-swift.struct/storageUnavailable``. On iOS, iPadOS,
   /// tvOS, visionOS, and Mac Catalyst the client also reads storage when protected data becomes
   /// available. On watchOS and macOS, only those calls read storage again. A missing Keychain
@@ -184,6 +176,14 @@ public final class AuthClient: Sendable {
     get async throws {
       try await sessionManager.session()
     }
+  }
+
+  /// Whether a user is signed in, as the client knows it in memory.
+  ///
+  /// Reading it does no I/O. It is ``AuthStatus/loading`` until the client reads storage; use
+  /// ``initialization()`` to wait for that.
+  public var status: AuthStatus {
+    sessionStore.currentStatus
   }
 
   /// Returns the current session, if any.
@@ -253,8 +253,7 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
-    notificationTask = Self.postAuthStateChangeNotifications(
-      sessionStore: dependencies.sessionStore, logger: logger)
+    Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
     lifecycleTask = Self.observeAppLifecycle(
@@ -266,7 +265,7 @@ public final class AuthClient: Sendable {
   }
 
   deinit {
-    notificationTask.cancel()
+    dependencies.sessionStore.finishChanges()
     lifecycleTask.cancel()
     let autoRefresh = dependencies.autoRefresh
     Task { await autoRefresh.stop() }
@@ -287,70 +286,54 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Listen for auth state changes.
-  /// - Parameter listener: Block that executes when a new event is emitted.
-  /// - Returns: A handle that can be used to manually unsubscribe.
+  /// Returns a stream of every change of the auth state, starting with the current one.
   ///
-  /// - Note: The session emitted in the ``AuthChangeEvent/initialSession`` event may have expired
-  /// since the last launch, so check ``Session/isExpired``. With
-  /// ``Configuration/autoRefresh`` set to ``AutoRefreshPolicy/automatic``, expect a
-  /// ``AuthChangeEvent/tokenRefreshed`` after it.
-  @discardableResult
-  public func onAuthStateChange(
-    _ listener: @escaping AuthStateChangeListener
-  ) async -> some AuthStateChangeListenerRegistration {
-    try? await sessionStore.load()
-
-    let (initialSessionDelivered, delivered) = AsyncStream<Never>.makeStream()
-    let task = Self.observeAuthStateChanges(
-      sessionStore: sessionStore
-    ) { event, session in
-      listener(event, session)
-      delivered.finish()
+  /// The stream is registered when this method returns, so it loses no change, even one that
+  /// happens before you start iterating. The first element is always
+  /// ``AuthEvent/initialSession`` with the current ``status``, delivered once the client has read
+  /// storage. Every later element is one change, in the order the client applied it. The session
+  /// in the initial element may have expired since the last launch, so check
+  /// ``Session/isExpired``.
+  ///
+  /// Each call returns a new stream for one consumer. The stream never throws: a failure that
+  /// ends the session arrives as ``AuthEvent/signedOut`` with a ``AuthChange/signOutReason``. It
+  /// finishes when the consuming task is cancelled or the client is released.
+  ///
+  /// ```swift
+  /// for await change in auth.events() {
+  ///   switch change.status {
+  ///   case .signedIn(let session): showHome(for: session.user)
+  ///   case .signedOut: showSignIn()
+  ///   case .loading: break
+  ///   }
+  /// }
+  /// ```
+  public func events() -> AsyncStream<AuthChange> {
+    let changes = sessionStore.changes()
+    if status == .loading {
+      Task { [sessionStore] in try? await sessionStore.load() }
     }
-
-    // While storage stays unreadable there is no initial session to wait for.
-    if sessionStore.currentStatus != .loading {
-      for await _ in initialSessionDelivered {}
-    }
-    return ObservationToken { task.cancel() }
+    return changes
   }
 
-  /// Listen for auth state changes.
+  /// Returns once the client has read storage, so ``status`` is no longer
+  /// ``AuthStatus/loading``.
   ///
-  /// An `.initialSession` is always emitted when this method is called.
-  public var authStateChanges:
-    AsyncStream<
-      (
-        event: AuthChangeEvent,
-        session: Session?
-      )
-    >
-  {
-    let (stream, continuation) = AsyncStream<
-      (
-        event: AuthChangeEvent,
-        session: Session?
-      )
-    >.makeStream(bufferingPolicy: .unbounded)
-
-    let task = Self.observeAuthStateChanges(
-      sessionStore: sessionStore
-    ) { event, session in
-      continuation.yield((event, session))
+  /// While storage cannot be read, for example after a launch into the background before the
+  /// first unlock, this waits until it can. It returns early when the calling task is cancelled.
+  public func initialization() async {
+    guard status == .loading else { return }
+    let changes = sessionStore.changes()
+    try? await sessionStore.load()
+    for await _ in changes {
+      return
     }
-
-    continuation.onTermination = { _ in
-      task.cancel()
-    }
-
-    return stream
   }
 
   /// Creates a user with an email address and a password.
   ///
   /// When email confirmation is off, the user is signed in at once: the client stores the session
-  /// and emits ``AuthChangeEvent/signedIn``. When it is on, the server emails a confirmation link
+  /// and emits ``AuthEvent/signedIn``. When it is on, the server emails a confirmation link
   /// and the user stays signed out.
   ///
   /// - Parameters:
@@ -380,7 +363,7 @@ public final class AuthClient: Sendable {
   /// Creates a user with a phone number and a password.
   ///
   /// When phone confirmation is off, the user is signed in at once: the client stores the session
-  /// and emits ``AuthChangeEvent/signedIn``. When it is on, the server sends a code over
+  /// and emits ``AuthEvent/signedIn``. When it is on, the server sends a code over
   /// ``SignUpOptions/channel`` and the user stays signed out until
   /// ``verifyOTP(phone:token:type:captchaToken:)``.
   ///
@@ -623,10 +606,11 @@ public final class AuthClient: Sendable {
     -> Session
   {
     let codeVerifier = codeVerifierStorage.get(flowId)
+    let purpose = codeVerifierStorage.purpose(flowId)
 
-    if codeVerifier == nil {
-      logger.error(
-        "code verifier not found, a code verifier should exist when calling this method."
+    if codeVerifier == nil, configuration.flowType == .pkce {
+      throw AuthError.oauthFlowFailed(
+        "PKCE code verifier not found. The flow was started on another device, its verifier was evicted or already used, or the storage was cleared."
       )
     }
 
@@ -636,7 +620,11 @@ public final class AuthClient: Sendable {
 
     codeVerifierStorage.remove(flowId)
 
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
+    switch purpose {
+    case .recovery: try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
+    case .emailChange: try await sessionStore.commit(.userChangeVerified(session))
+    default: try await sessionStore.commit(.signedIn(session, event: .signedIn))
+    }
 
     return session
   }
@@ -839,11 +827,8 @@ public final class AuthClient: Sendable {
       user: user
     )
 
-    try await sessionStore.commit(.signedIn(session, event: .signedIn))
-
-    if let type = params["type"], type == "recovery" {
-      try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
-    }
+    let event: AuthEvent = params["type"] == "recovery" ? .passwordRecovery : .signedIn
+    try await sessionStore.commit(.signedIn(session, event: event))
 
     return session
   }
@@ -910,7 +895,7 @@ public final class AuthClient: Sendable {
 
   /// Signs out the current user, if there is a logged in user.
   ///
-  /// If using ``SignOutScope/others`` scope, no ``AuthChangeEvent/signedOut`` event is fired.
+  /// If using ``SignOutScope/others`` scope, no ``AuthEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
     guard let session = currentSession else {
@@ -949,7 +934,8 @@ public final class AuthClient: Sendable {
         type: type,
         redirectTo: redirectTo,
         captchaToken: captchaToken
-      )
+      ),
+      transition: { Self.verifiedTransition($0, for: type) }
     )
   }
 
@@ -962,7 +948,10 @@ public final class AuthClient: Sendable {
     captchaToken: String? = nil
   ) async throws -> VerifyOTPResponse {
     try await _verifyOTP(
-      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken)
+      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken),
+      transition: {
+        type == .phoneChange ? .userChangeVerified($0) : .signedIn($0, event: .signedIn)
+      }
     )
   }
 
@@ -972,16 +961,31 @@ public final class AuthClient: Sendable {
     tokenHash: String,
     type: EmailOTPType
   ) async throws -> VerifyOTPResponse {
-    try await _verifyOTP(authAPI.verifyOTP(tokenHash: tokenHash, type: type))
+    try await _verifyOTP(
+      authAPI.verifyOTP(tokenHash: tokenHash, type: type),
+      transition: { Self.verifiedTransition($0, for: type) }
+    )
+  }
+
+  private static func verifiedTransition(
+    _ session: Session,
+    for type: EmailOTPType
+  ) -> SessionStore.Transition {
+    switch type {
+    case .recovery: .signedIn(session, event: .passwordRecovery)
+    case .emailChange: .userChangeVerified(session)
+    default: .signedIn(session, event: .signedIn)
+    }
   }
 
   private func _verifyOTP(
-    _ request: AuthRequest<VerifyOTPResponse>
+    _ request: AuthRequest<VerifyOTPResponse>,
+    transition: (Session) -> SessionStore.Transition
   ) async throws -> VerifyOTPResponse {
     let response = try await api.execute(request)
 
     if let session = response.session {
-      try await sessionStore.commit(.signedIn(session, event: .signedIn))
+      try await sessionStore.commit(transition(session))
     }
 
     return response
@@ -1003,7 +1007,7 @@ public final class AuthClient: Sendable {
         type: type,
         redirectTo: emailRedirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: prepareForPKCE(purpose: type == .emailChange ? .emailChange : .signIn).challenge
       )
     )
   }
@@ -1050,7 +1054,7 @@ public final class AuthClient: Sendable {
   /// Updates user data, if there is a logged in user.
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    let pkce = user.email != nil ? prepareForPKCE().challenge : nil
+    let pkce = user.email != nil ? prepareForPKCE(purpose: .emailChange).challenge : nil
 
     let updatedUser = try await api.authorizedExecute {
       try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
@@ -1168,8 +1172,14 @@ public final class AuthClient: Sendable {
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
+  ///
+  /// When the identity belongs to the signed-in user, the client removes it from
+  /// ``currentUser`` and emits ``AuthEvent/userUpdated``.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
+    // The response carries no user, so the store drops the identity from the held one.
+    try await sessionStore.commit(
+      .identityUnlinked(identity.identityId, userID: identity.userId))
   }
 
   /// Sends a reset request to an email address.
@@ -1183,7 +1193,7 @@ public final class AuthClient: Sendable {
         email,
         redirectTo: redirectTo,
         captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+        pkce: prepareForPKCE(purpose: .recovery).challenge
       )
     )
   }
@@ -1236,58 +1246,28 @@ public final class AuthClient: Sendable {
     await dependencies.autoRefresh.stop()
   }
 
-  /// Calls `deliver` with every change of the session store, in the order the store applied
-  /// them, starting with ``AuthChangeEvent/initialSession`` once storage was read.
-  ///
-  /// The task holds no reference to the client.
-  private static func observeAuthStateChanges(
-    sessionStore: SessionStore,
-    deliver: @escaping @Sendable (_ event: AuthChangeEvent, _ session: Session?) -> Void
-  ) -> Task<Void, Never> {
-    let changes = sessionStore.changes()
-    return Task {
-      try? await sessionStore.load()
-      for await change in changes {
-        deliver(change.event, change.status.session)
-      }
-    }
-  }
-
-  private static func postAuthStateChangeNotifications(
-    sessionStore: SessionStore,
-    logger: Logging.Logger
-  ) -> Task<Void, Never> {
-    let changes = sessionStore.changes()
-    return Task {
+  private static func loadStoredSession(sessionStore: SessionStore, logger: Logging.Logger) {
+    Task {
       do {
         try await sessionStore.load()
       } catch {
         logger.error("Failed to load the stored session: \(error)")
-      }
-      for await change in changes {
-        logger.trace("Auth state changed: \(change.event)")
-        NotificationCenter.default.post(
-          name: AuthClient.didChangeAuthStateNotification,
-          object: nil,
-          userInfo: [
-            AuthClient.authChangeEventInfoKey: change.event,
-            AuthClient.authChangeSessionInfoKey: change.status.session as Any,
-          ]
-        )
       }
     }
   }
 
   /// Starts a PKCE flow when the client uses one: stores a new code verifier under a new flow id
   /// and returns the challenge to send.
-  private func prepareForPKCE() -> (challenge: PKCEChallenge?, flowId: String?) {
+  private func prepareForPKCE(
+    purpose: PendingFlowRecord.Purpose = .signIn
+  ) -> (challenge: PKCEChallenge?, flowId: String?) {
     guard configuration.flowType == .pkce else {
       return (nil, nil)
     }
 
     let flowId = UUID().uuidString
     let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier, flowId)
+    codeVerifierStorage.set(codeVerifier, flowId, purpose)
 
     let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
     let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
@@ -1427,19 +1407,4 @@ public final class AuthClient: Sendable {
 
     return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
   }
-}
-
-extension AuthClient {
-  /// Notification posted when an auth state event is triggered.
-  public static let didChangeAuthStateNotification = Notification.Name(
-    "AuthClient.didChangeAuthStateNotification"
-  )
-
-  /// A user info key to retrieve the ``AuthChangeEvent`` value for a
-  /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeEventInfoKey = "AuthClient.authChangeEvent"
-
-  /// A user info key to retrieve the ``Session`` value for a
-  /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }

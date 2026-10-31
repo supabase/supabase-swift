@@ -83,7 +83,7 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// code works only once.
   ///
   /// On success the stored session is replaced with the upgraded one, the user's other `aal1`
-  /// sessions are signed out, and ``AuthChangeEvent/mfaChallengeVerified`` is emitted.
+  /// sessions are signed out, and ``AuthEvent/mfaChallengeVerified`` is emitted.
   ///
   /// - Parameter code: A recovery code, exactly as the user typed it. The server ignores letter
   ///   case, whitespace and `-` separators.

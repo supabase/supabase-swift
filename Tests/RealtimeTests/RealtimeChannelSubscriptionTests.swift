@@ -1180,6 +1180,31 @@ struct RealtimeChannelSubscriptionTests {
     #expect(await waitUntil { h.sent(ChannelEvent.leave).count == 1 })
   }
 
+  /// `removeChannel(_:)` stops a join still in flight. Once removed, the channel would never
+  /// see its reply and would keep retrying the join, and the server closes the topic's next
+  /// channel on each duplicate join.
+  @Test(.timeLimit(.minutes(1)))
+  func removeChannelStopsAJoinInFlight() async throws {
+    let h = Harness(timeout: .seconds(10))
+    // Keeps the client from disconnecting once the topic's channel is removed.
+    _ = await h.client.channel("other")
+    let channel = await h.client.channel("room")
+
+    let subscription = Task { try await channel.subscribe() }
+    let join = try #require(await h.received(ChannelEvent.join))
+    let removal = Task { await h.client.removeChannel(channel) }
+    _ = try #require(await h.received(ChannelEvent.leave))
+    try h.close(join)
+    await removal.value
+
+    #expect(await channel.status == .unsubscribed)
+    #expect(await !h.client.channels.contains { $0 === channel })
+    await #expect(throws: (any Error).self) { try await subscription.value }
+    // Past the attempt's timeout and the first retry delay.
+    await h.clock.advance(by: .seconds(12))
+    #expect(h.sent(ChannelEvent.join).count == 1)
+  }
+
   // MARK: - Status stream
 
   @Test

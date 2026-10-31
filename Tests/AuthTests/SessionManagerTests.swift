@@ -181,8 +181,8 @@ struct SessionManagerTests {
 
   private func collectAuthEvents(
     from store: SessionStore? = nil
-  ) -> (events: LockIsolated<[AuthChangeEvent]>, stop: () -> Void) {
-    let events = LockIsolated<[AuthChangeEvent]>([])
+  ) -> (events: LockIsolated<[AuthEvent]>, stop: () -> Void) {
+    let events = LockIsolated<[AuthEvent]>([])
     let changes = (store ?? dependencies.sessionStore).changes()
     let task = Task {
       for await change in changes {
@@ -194,8 +194,8 @@ struct SessionManagerTests {
 
   /// The events collected once `count` arrived, after giving any later event the chance to.
   private func settled(
-    _ events: LockIsolated<[AuthChangeEvent]>, count: Int
-  ) async -> [AuthChangeEvent] {
+    _ events: LockIsolated<[AuthEvent]>, count: Int
+  ) async -> [AuthEvent] {
     await waitUntil { events.value.count >= count }
     await Task.megaYield()
     return events.value
@@ -866,7 +866,7 @@ struct SessionManagerTests {
     let error = try #require(result.error as? AuthError)
     #expect(error.kind == failure.kind)
     #expect(error.isRetryable == failure.isRetryable)
-    let (expectedStatus, expectedEvents): (AuthStatus, [AuthChangeEvent]) =
+    let (expectedStatus, expectedEvents): (AuthStatus, [AuthEvent]) =
       switch failure.outcome {
       case .keepsSession: (.signedIn(held), [.initialSession])
       case .signsOut(let reason): (.signedOut(reason), [.initialSession, .signedOut])

@@ -850,6 +850,16 @@ struct SupabaseClientTests {
     #expect(await realtime.accessToken == "PUBLISHABLE_KEY")
   }
 
+  @Test(arguments: [AuthEvent.passwordRecovery, .userUpdated, .mfaChallengeVerified])
+  func anyEventThatChangesTheAccessTokenReachesRealtime(event: AuthEvent) async {
+    let client = makeRealtimeAuthClient()
+    let realtime = client.realtime
+
+    await client.handleTokenChanged(event: event, session: .stub(accessToken: "new-token"))
+
+    #expect(await realtime.accessToken == "new-token")
+  }
+
   @Test
   func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() {
     let client = SupabaseClient(
