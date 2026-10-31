@@ -4,6 +4,7 @@ import Foundation
 ///
 /// A lookup for a `kid` that the fresh cache lacks forces a refetch, so rotated keys resolve. Each
 /// unresolved fetch doubles the wait before the next forced refetch, from 1 second up to 16 seconds.
+/// A cancelled caller stops waiting at once; the shared fetch keeps running for the other callers.
 actor JWKSCache {
   private let ttl: TimeInterval
   private let fetch: @Sendable () async throws -> JWKS
@@ -38,32 +39,42 @@ actor JWKSCache {
   }
 
   private func fetchKey(for kid: String, forced: Bool) async throws -> JWK? {
-    if let inFlight {
-      return try await inFlight.value.key(for: kid)
+    let task = inFlight ?? startFetch(for: kid, forced: forced)
+    return try await cancellableValue(of: task).key(for: kid)
+  }
+
+  // The task, not the first caller, records the result, so a cancelled caller cannot skip it.
+  private func startFetch(for kid: String, forced: Bool) -> Task<JWKS, any Error> {
+    let task = Task { [fetch] in
+      let result: Result<JWKS, any Error>
+      do {
+        result = .success(try await fetch())
+      } catch {
+        result = .failure(error)
+      }
+      finishFetch(result, kid: kid, forced: forced)
+      return try result.get()
     }
-
-    let task = Task { [fetch] in try await fetch() }
     inFlight = task
-    defer { inFlight = nil }
+    return task
+  }
 
-    let jwks: JWKS
-    do {
-      jwks = try await task.value
-    } catch {
+  private func finishFetch(_ result: Result<JWKS, any Error>, kid: String, forced: Bool) {
+    inFlight = nil
+    switch result {
+    case .success(let jwks):
+      cached = (jwks, now())
+      if jwks.key(for: kid) == nil {
+        applyBackoff()
+      } else {
+        backoff = 0
+        forcedFetchAllowedAt = nil
+      }
+    case .failure:
       if forced {
         applyBackoff()
       }
-      throw error
     }
-
-    cached = (jwks, now())
-    guard let key = jwks.key(for: kid) else {
-      applyBackoff()
-      return nil
-    }
-    backoff = 0
-    forcedFetchAllowedAt = nil
-    return key
   }
 
   private func applyBackoff() {
