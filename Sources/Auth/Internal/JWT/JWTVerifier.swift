@@ -1,7 +1,7 @@
 import Crypto
 import Foundation
+import CryptoExtras
 import Helpers
-import _CryptoExtras
 
 enum JWTVerifier {
   enum Algorithm: String {

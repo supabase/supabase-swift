@@ -35,7 +35,7 @@ let package = Package(
     "OpenTelemetry"
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "3.6.0"..<"6.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"6.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
@@ -77,7 +77,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
-        .product(name: "_CryptoExtras", package: "swift-crypto"),
+        .product(name: "CryptoExtras", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         .product(name: "Logging", package: "swift-log"),

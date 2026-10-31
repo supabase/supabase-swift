@@ -1,5 +1,5 @@
 import Foundation
-import _CryptoExtras
+import CryptoExtras
 
 @testable import Auth
 @testable import Helpers
@@ -59,6 +59,23 @@ struct RS256TestSigner {
     precondition(bytes.removeFirst() == 0x30)
     _ = readLength()
     return (readInteger(), readInteger())
+  }
+}
+
+extension JWK {
+  func withModulusPrefixedByZeroBytes(_ count: Int) -> JWK {
+    JWK(
+      kty: kty,
+      keyOps: keyOps,
+      alg: alg,
+      kid: kid,
+      n: n.flatMap(Base64URL.decode).map { Base64URL.encode(Data(count: count) + $0) },
+      e: e,
+      crv: crv,
+      x: x,
+      y: y,
+      k: k
+    )
   }
 }
 
