@@ -266,10 +266,13 @@ struct RealtimeReconnectRecoveryTests {
 
     // The reconnect rejoins the other channel on the new socket.
     let rejoined = await waitUntil(timeout: 5) {
-      guard sockets.value.count == 2, await other.status == .subscribed else { return false }
-      return sockets.value[1].sentMessages.contains {
-        $0.event == "phx_join" && $0.topic == other.wireTopic
-      }
+      // Join first, then status: a status read before the rejoin's reset is still the old one.
+      guard sockets.value.count == 2,
+        sockets.value[1].sentMessages.contains(where: {
+          $0.event == "phx_join" && $0.topic == other.wireTopic
+        })
+      else { return false }
+      return await other.status == .subscribed
     }
     try #require(rejoined, "The other channel did not rejoin after the reconnect")
     try? await Task.sleep(nanoseconds: 300_000_000)
