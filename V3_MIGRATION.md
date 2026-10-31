@@ -283,6 +283,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthOptions.autoRefreshToken: Bool` | `AuthOptions.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
+| `AuthOptions.flowType: AuthFlowType` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
+| `supabase.handle(_:)` | `supabase.handleRedirect(_:)`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
 | `FunctionsOptions.region: String?` | `FunctionsOptions.region: FunctionRegion?` |
 

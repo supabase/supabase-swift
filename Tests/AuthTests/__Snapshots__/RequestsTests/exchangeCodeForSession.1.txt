@@ -4,5 +4,5 @@ curl \
 	--header "Content-Type: application/json" \
 	--header "X-Client-Info: gotrue-swift/x.y.z" \
 	--header "X-Supabase-Api-Version: 2024-01-01" \
-	--data "{\"auth_code\":\"auth-code\",\"code_verifier\":null}" \
+	--data "{\"auth_code\":\"auth-code\",\"code_verifier\":\"verifier\"}" \
 	"http://localhost:54321/auth/v1/token?grant_type=pkce"

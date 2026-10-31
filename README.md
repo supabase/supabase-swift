@@ -94,8 +94,7 @@ let client = SupabaseClient(
             schema: "public"
         ),
         auth: .init(
-            storage: MyCustomLocalStorage(),
-            flowType: .pkce
+            storage: MyCustomLocalStorage()
         ),
         global: .init(
             headers: ["x-my-custom-header": "my-app-name"],

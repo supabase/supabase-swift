@@ -47,7 +47,7 @@ import Logging
 /// - ``removeAllChannels()``
 ///
 /// ### Deep Links
-/// - ``handle(_:)``
+/// - ``handleRedirect(_:)``
 ///
 /// ### Configuration
 /// - ``headers``
@@ -249,7 +249,6 @@ public final class SupabaseClient: Sendable {
     _auth = AuthClient(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       headers: _headers.dictionary,
-      flowType: options.auth.flowType,
       redirectToURL: options.auth.redirectToURL,
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       localStorage: options.auth.storage,
@@ -388,62 +387,28 @@ public final class SupabaseClient: Sendable {
     await realtime.removeAllChannels()
   }
 
-  /// Passes an incoming URL to the Auth client for processing deep links and OAuth callbacks.
+  /// Finishes the auth flow that a redirect URL reports. Forwards to
+  /// ``AuthClient/handleRedirect(_:)``.
   ///
-  /// Call this from your app's URL-handling entry points so Auth can complete OAuth and
-  /// magic-link flows.
+  /// Pass the URLs that reach your auth callback. ``AuthClient/isAuthRedirect(_:)`` checks one. A
+  /// URL that is not an auth redirect returns `nil`. The same URL can arrive more than once; the
+  /// later deliveries get the first result and send no request.
   ///
-  /// ## Usage example:
-  ///
-  /// ### UIKit app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
-  ///
-  /// ```swift
-  /// public func application(
-  ///   _ application: UIApplication,
-  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  /// ) -> Bool {
-  ///   if let url = launchOptions?[.url] as? URL {
-  ///     supabase.handle(url)
-  ///   }
-  ///
-  ///   return true
-  /// }
-  ///
-  /// func application(
-  ///   _ app: UIApplication,
-  ///   open url: URL,
-  ///   options: [UIApplication.OpenURLOptionsKey: Any]
-  /// ) -> Bool {
-  ///   supabase.handle(url)
-  ///   return true
-  /// }
-  /// ```
-  ///
-  /// ### UIKit app lifecycle with scenes
-  ///
-  /// In your `SceneDelegate.swift`:
-  ///
-  /// ```swift
-  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-  ///   guard let url = URLContexts.first?.url else { return }
-  ///   supabase.handle(url)
-  /// }
-  /// ```
-  ///
-  /// ### SwiftUI app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
+  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to. Pass
+  /// only URLs that reach your own callback.
   ///
   /// ```swift
   /// SomeView()
   ///   .onOpenURL { url in
-  ///     supabase.handle(url)
+  ///     Task { try await supabase.handleRedirect(url) }
   ///   }
   /// ```
-  public func handle(_ url: URL) {
-    auth.handle(url)
+  ///
+  /// - Parameter url: The URL that opened the app.
+  /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
+  @discardableResult
+  public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
+    try await auth.handleRedirect(url)
   }
 
   deinit {

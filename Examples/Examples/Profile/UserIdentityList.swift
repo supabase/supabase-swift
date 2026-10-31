@@ -160,7 +160,7 @@ struct UserIdentityList: View {
           CodeExample(
             code: """
               // Link a new OAuth identity
-              try await supabase.auth.linkIdentity(provider: .google)
+              try await supabase.auth.linkIdentity(.google)
 
               // For Apple, use OIDC flow
               try await supabase.auth.linkIdentityWithIDToken(
@@ -293,7 +293,7 @@ struct UserIdentityList: View {
       if provider == .apple {
         try await linkAppleIdentity()
       } else {
-        try await supabase.auth.linkIdentity(provider: provider)
+        try await supabase.auth.linkIdentity(provider)
       }
 
       id = UUID()

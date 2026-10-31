@@ -369,6 +369,21 @@ features:
       - AuthClient.signInWithOAuth
       - AuthClient.oauthSignInURL
     supporting_symbols:
+      - WebAuthPresenter
+      - WebAuthPresenter.authenticate
+      - WebAuthPresenter.default
+      - ClosurePresenter
+      - ClosurePresenter.init
+      - ClosurePresenter.authenticate
+      - ASWebAuthenticationSessionPresenter
+      - ASWebAuthenticationSessionPresenter.init
+      - ASWebAuthenticationSessionPresenter.authenticate
+      - ASWebAuthenticationSessionPresenter.prefersEphemeralWebBrowserSession
+      - OAuthOptions
+      - OAuthOptions.init
+      - OAuthOptions.scopes
+      - OAuthOptions.redirectTo
+      - OAuthOptions.queryItems
       - Provider
       - Provider.init
       - Provider.rawValue
@@ -500,7 +515,6 @@ features:
     status: implemented
     symbols:
       - AuthClient.exchangeCodeForSession
-      - OAuthResponse.flowId
 
   auth.session.get_session:
     status: implemented
@@ -861,21 +875,20 @@ features:
     note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.events() and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
     symbols:
       - AuthClient.events
-  client.authentication_integration.oauth_flow_type:
-    status: implemented
-    symbols:
-      - SupabaseClientOptions.AuthOptions.flowType
-      - AuthClient.Configuration.flowType
-    supporting_symbols:
-      - AuthFlowType
-      - AuthFlowType.implicit
-      - AuthFlowType.pkce
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handle(_:)/AuthClient.handle(_:) manually and unconditionally from its own URL-handling entry point. That explicit call is how redirect handling works in Swift."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."
     symbols:
-      - SupabaseClient.handle
-      - AuthClient.handle
+      - SupabaseClient.handleRedirect
+      - AuthClient.handleRedirect
+      - AuthClient.isAuthRedirect
+    supporting_symbols:
+      - RedirectResult
+      - RedirectResult.signedIn
+      - RedirectResult.emailChangePending
+  client.authentication_integration.oauth_flow_type:
+    status: not_applicable
+    note: "PKCE is always used; the flow type is not configurable."
 
   client.session_management.custom_storage:
     status: implemented

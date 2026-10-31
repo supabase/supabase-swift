@@ -48,7 +48,7 @@ struct AuthView: View {
     .onOpenURL(perform: { url in
       Task {
         do {
-          try await supabase.auth.session(from: url)
+          try await supabase.auth.handleRedirect(url)
         } catch {
           result = .failure(error)
         }
