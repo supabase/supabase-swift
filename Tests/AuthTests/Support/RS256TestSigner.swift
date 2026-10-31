@@ -1,5 +1,5 @@
 import Foundation
-import _CryptoExtras
+import CryptoExtras
 
 @testable import Auth
 @testable import Helpers
