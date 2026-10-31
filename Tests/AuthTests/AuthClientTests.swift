@@ -627,6 +627,64 @@ extension AuthMockerTests {
     }
 
     @Test
+    func exchangeCodeForSessionFailsWhenNoVerifierIsStored() async throws {
+      let requested = LockIsolated(false)
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "pkce")
+        ]),
+        statusCode: 200,
+        data: [
+          .post: MockData.session
+        ]
+      )
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        requested.setValue(true)
+      })
+      mock.register()
+
+      let sut = makeSUT()
+
+      do {
+        _ = try await sut.exchangeCodeForSession(authCode: "12345")
+        Issue.record("Expected pkceGrantCodeExchange error")
+      } catch let error as AuthError {
+        guard case .pkceGrantCodeExchange = error else {
+          Issue.record("Expected pkceGrantCodeExchange error, got \(error)")
+          return
+        }
+      }
+
+      #expect(requested.value == false)
+    }
+
+    @Test
+    func exchangeCodeForSessionWithImplicitFlowStillSendsTheRequest() async throws {
+      let requested = LockIsolated(false)
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "pkce")
+        ]),
+        statusCode: 200,
+        data: [
+          .post: MockData.session
+        ]
+      )
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        requested.setValue(true)
+      })
+      mock.register()
+
+      let sut = makeSUT(flowType: .implicit)
+
+      _ = try await sut.exchangeCodeForSession(authCode: "12345")
+
+      #expect(requested.value == true)
+    }
+
+    @Test
     func signUpWithEmailAndPassword() async throws {
       Mock(
         url: clientURL.appendingPathComponent("signup"),
