@@ -384,20 +384,22 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
 
 /// A third-party identity linked to a ``User``.
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
-  /// Provider-specific identifier of this identity.
-  public var id: String
+  /// The Supabase identity UUID. Pass the identity to ``AuthClient/unlinkIdentity(_:)`` to remove
+  /// it.
+  public var id: UUID
 
-  /// Unique identifier of the identity record within Supabase.
-  public var identityId: UUID
+  /// The user's identifier at the provider, such as the `sub` claim of the provider's ID token.
+  public var providerUserID: String
 
   /// The user this identity belongs to.
-  public var userId: UUID
+  public var userID: UUID
 
-  /// Provider-specific identity data returned by the third-party.
-  public var identityData: [String: JSONValue]?
+  /// The provider of this identity.
+  public var provider: Provider
 
-  /// The name of the provider (e.g. `google`, `github`).
-  public var provider: String
+  /// Provider-specific identity data returned by the third party. Empty when the server sends
+  /// none.
+  public var identityData: JSONObject
 
   /// Timestamp when this identity was created.
   public var createdAt: Date?
@@ -411,40 +413,42 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   /// Creates a new user identity value.
   ///
   /// - Parameters:
-  ///   - id: The provider-specific identity ID.
-  ///   - identityId: The Supabase identity UUID.
-  ///   - userId: The owning user's UUID.
+  ///   - id: The Supabase identity UUID.
+  ///   - providerUserID: The user's identifier at the provider.
+  ///   - userID: The owning user's UUID.
+  ///   - provider: The provider of the identity.
   ///   - identityData: Provider-specific identity data.
-  ///   - provider: The provider name.
   ///   - createdAt: Timestamp the identity was created.
   ///   - lastSignInAt: Timestamp of the last sign-in via this identity.
   ///   - updatedAt: Timestamp the identity was last updated.
   public init(
-    id: String,
-    identityId: UUID,
-    userId: UUID,
-    identityData: [String: JSONValue],
-    provider: String,
-    createdAt: Date?,
-    lastSignInAt: Date?,
-    updatedAt: Date?
+    id: UUID,
+    providerUserID: String,
+    userID: UUID,
+    provider: Provider,
+    identityData: JSONObject = [:],
+    createdAt: Date? = nil,
+    lastSignInAt: Date? = nil,
+    updatedAt: Date? = nil
   ) {
     self.id = id
-    self.identityId = identityId
-    self.userId = userId
-    self.identityData = identityData
+    self.providerUserID = providerUserID
+    self.userID = userID
     self.provider = provider
+    self.identityData = identityData
     self.createdAt = createdAt
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
   }
 
-  enum CodingKeys: CodingKey {
-    case id
-    case identityId
-    case userId
-    case identityData
+  // Raw values are the names after `convertFromSnakeCase`, so `identity_id` maps to `id` and the
+  // wire `id` maps to `providerUserID`.
+  enum CodingKeys: String, CodingKey {
+    case id = "identityId"
+    case providerUserID = "id"
+    case userID = "userId"
     case provider
+    case identityData
     case createdAt
     case lastSignInAt
     case updatedAt
@@ -453,32 +457,22 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
-    id = try container.decode(String.self, forKey: .id)
-    identityId = try container.decode(UUID.self, forKey: .identityId)
-    userId = try container.decode(UUID.self, forKey: .userId)
-    identityData = try container.decodeIfPresent([String: JSONValue].self, forKey: .identityData)
-    provider = try container.decode(String.self, forKey: .provider)
+    id = try container.decode(UUID.self, forKey: .id)
+    providerUserID = try container.decode(String.self, forKey: .providerUserID)
+    userID = try container.decode(UUID.self, forKey: .userID)
+    provider = try container.decode(Provider.self, forKey: .provider)
+    // GoTrue omits `identity_data` when it is empty.
+    identityData = try container.decodeIfPresent(JSONObject.self, forKey: .identityData) ?? [:]
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
     updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
   }
-
-  public func encode(to encoder: any Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-
-    try container.encode(id, forKey: .id)
-    try container.encode(identityId, forKey: .identityId)
-    try container.encode(userId, forKey: .userId)
-    try container.encodeIfPresent(identityData, forKey: .identityData)
-    try container.encode(provider, forKey: .provider)
-    try container.encodeIfPresent(createdAt, forKey: .createdAt)
-    try container.encodeIfPresent(lastSignInAt, forKey: .lastSignInAt)
-    try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
-  }
 }
 
 /// One of the providers supported by Auth.
-public struct Provider: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+///
+/// A provider encodes and decodes as its ``rawValue`` string.
+public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
   public let rawValue: String
 
   /// Creates a ``Provider`` from a raw string value.

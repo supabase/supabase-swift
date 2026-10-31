@@ -195,6 +195,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **An identity needs `identity_id`.** A `UserIdentity` without `identity_id` now fails to decode,
   and so does the `User` that holds it. v2 filled in the all-zero UUID, which
   `unlinkIdentity(_:)` then sent to the server. Search for `00000000-0000-0000-0000-000000000000`.
+- **`UserIdentity.id` is the identity UUID.** `"\(identity.id)"` now prints the identity UUID,
+  not the provider's user ID, and `ForEach(identities)` keys on the identity UUID. Search for
+  `identity.id` and `\.id` on identities. See "`UserIdentity.id` is the identity UUID" below.
 - **String `amr` entries are kept.** When a custom access token hook writes `amr` as strings,
   `authenticatorAssuranceLevel()` now returns them in `currentAuthenticationMethods`, with the
   token's `iat` as the `timestamp`. v2 dropped them.
@@ -263,8 +266,13 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
-| `Provider`: `Codable` | no `Codable` conformance |
 | `UserCredentials` | internal |
+| `UserIdentity.id` (the provider's user ID, a `String`) | `UserIdentity.providerUserID`; `id` is now the identity UUID; see below |
+| `UserIdentity.identityId` | `UserIdentity.id` |
+| `UserIdentity.userId` | `UserIdentity.userID` |
+| `UserIdentity.provider: String` | `UserIdentity.provider: Provider` |
+| `UserIdentity.identityData: [String: JSONValue]?` | `UserIdentity.identityData: JSONObject`; `[:]` when the server sends none |
+| `UserIdentity(id:identityId:userId:identityData:provider:createdAt:lastSignInAt:updatedAt:)` | `UserIdentity(id:providerUserID:userID:provider:identityData:createdAt:lastSignInAt:updatedAt:)` |
 | `UserAttributes.emailChangeToken` | removed |
 
 For the structs that replace enums:
@@ -354,6 +362,27 @@ let session = try await supabase.auth.linkIdentity(
   .google, options: OAuthOptions(redirectTo: callback))
 let (url, _) = try await supabase.auth.linkIdentityURL(.google)
 open(url)
+```
+
+## `UserIdentity.id` is the identity UUID
+
+In v2, `UserIdentity.id` was the user's ID at the provider, a `String`, and `identityId` was the
+Supabase identity UUID. In v3, `id` is the identity UUID, the value that `unlinkIdentity(_:)`
+sends. The provider's user ID is `providerUserID`. `Identifiable` uses `id`, so SwiftUI lists now
+key on the identity UUID. Most uses stop compiling, because `id` is a `UUID`, not a `String`.
+`"\(identity.id)"` still compiles and prints the UUID.
+
+```swift
+// v2
+let providerUserID: String = identity.id
+let identityID: UUID = identity.identityId
+let isGoogle = identity.provider == "google"
+let email = identity.identityData?["email"]?.stringValue
+// v3
+let providerUserID: String = identity.providerUserID
+let identityID: UUID = identity.id
+let isGoogle = identity.provider == .google
+let email = identity.identityData["email"]?.stringValue
 ```
 
 ## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`

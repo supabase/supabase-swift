@@ -1282,7 +1282,7 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     // The response carries no user, so the store drops the identity from the held one.
     try await sessionStore.commit(
-      .identityUnlinked(identity.identityId, userID: identity.userId))
+      .identityUnlinked(identity.id, userID: identity.userID))
   }
 
   /// Sends a reset request to an email address.

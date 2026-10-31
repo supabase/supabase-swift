@@ -564,11 +564,11 @@ extension User {
   /// Removes the identity `identityID`, and its provider from `appMetadata["providers"]` when no
   /// other identity uses that provider.
   fileprivate mutating func removeIdentity(_ identityID: UUID) {
-    guard let removed = identities?.first(where: { $0.identityId == identityID }) else { return }
-    identities?.removeAll { $0.identityId == identityID }
+    guard let removed = identities?.first(where: { $0.id == identityID }) else { return }
+    identities?.removeAll { $0.id == identityID }
     guard identities?.contains(where: { $0.provider == removed.provider }) != true,
       case .array(let providers) = appMetadata["providers"]
     else { return }
-    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider) })
+    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider.rawValue) })
   }
 }

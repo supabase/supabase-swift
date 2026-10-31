@@ -596,7 +596,7 @@ extension AuthAPI {
 
   func unlinkIdentity(_ identity: UserIdentity, accessToken: String) -> AuthRequest<Void> {
     request(
-      .delete, "user/identities/\(identity.identityId)", authorization: bearer(accessToken),
+      .delete, "user/identities/\(identity.id)", authorization: bearer(accessToken),
       decode: ignoringBody)
   }
 

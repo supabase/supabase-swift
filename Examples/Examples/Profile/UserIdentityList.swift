@@ -22,7 +22,7 @@ struct UserIdentityList: View {
     let identities = identities.success ?? []
 
     return knownProviders.filter { provider in
-      !identities.contains(where: { $0.provider == provider.rawValue })
+      !identities.contains(where: { $0.provider == provider })
     }
   }
 
@@ -72,16 +72,16 @@ struct UserIdentityList: View {
             ForEach(identities) { identity in
               VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                  Image(systemName: iconForProvider(identity.provider))
+                  Image(systemName: iconForProvider(identity.provider.rawValue))
                     .font(.title2)
                     .foregroundColor(.accentColor)
                     .frame(width: 40)
 
                   VStack(alignment: .leading, spacing: 4) {
-                    Text(identity.provider.capitalized)
+                    Text(identity.provider.rawValue.capitalized)
                       .font(.headline)
 
-                    if let email = identity.identityData?["email"]?.stringValue {
+                    if let email = identity.identityData["email"]?.stringValue {
                       Text(email)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -101,9 +101,9 @@ struct UserIdentityList: View {
                   Spacer()
                 }
 
-                if let identityData = identity.identityData {
+                if !identity.identityData.isEmpty {
                   DisclosureGroup("Identity Data") {
-                    JSONValueView(value: .object(identityData))
+                    JSONValueView(value: .object(identity.identityData))
                       .font(.system(.caption, design: .monospaced))
                   }
                   .font(.caption)
@@ -151,8 +151,8 @@ struct UserIdentityList: View {
               let identities = try await supabase.auth.userIdentities()
 
               for identity in identities {
-                print("Provider:", identity.provider)
-                print("Email:", identity.identityData?["email"])
+                print("Provider:", identity.provider.rawValue)
+                print("Email:", identity.identityData["email"])
               }
               """
           )

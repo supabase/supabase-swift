@@ -189,38 +189,72 @@ struct TypesTests {
   }
 
   @Test
-  func identityWithoutIdentityIDFailsDecoding() {
-    let json = Data(
-      #"""
-      {
-        "id": "105012345678901234567",
-        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
-        "provider": "google"
-      }
-      """#.utf8
-    )
+  func userIdentityMapsIDs() throws {
+    let identity = try decodeIdentity()
 
-    #expect(throws: DecodingError.self) {
-      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    #expect(identity.id == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+    #expect(identity.providerUserID == "1234567890")
+    #expect(identity.userID == UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b"))
+    #expect(identity.provider == .google)
+    #expect(identity.identityData == ["email": "jane@example.com"])
+  }
+
+  @Test
+  func userIdentityMissingIdentityIDThrows() {
+    do {
+      _ = try decodeIdentity(dropping: "identity_id")
+      Issue.record("Expected a DecodingError")
+    } catch DecodingError.keyNotFound(let key, _) {
+      #expect(key.stringValue == "identityId")
+    } catch {
+      Issue.record("Unexpected error: \(error)")
     }
   }
 
   @Test
-  func identityDecodesIdentityID() throws {
-    let json = Data(
-      #"""
-      {
-        "id": "105012345678901234567",
-        "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
-        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
-        "provider": "google"
-      }
-      """#.utf8
+  func userIdentityMissingIdentityDataIsEmpty() throws {
+    let identity = try decodeIdentity(dropping: "identity_data")
+
+    #expect(identity.identityData == [:])
+  }
+
+  @Test
+  func userIdentityRoundTrips() throws {
+    let identity = UserIdentity(
+      id: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
+      providerUserID: "1234567890",
+      userID: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+      provider: .github,
+      identityData: ["email": "jane@example.com"],
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+      lastSignInAt: Date(timeIntervalSince1970: 1_700_000_100),
+      updatedAt: Date(timeIntervalSince1970: 1_700_000_200)
     )
 
-    let identity = try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    let data = try AuthClient.Configuration.jsonEncoder.encode(identity)
+    let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-    #expect(identity.identityId == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+    #expect(object["identity_id"] as? String == "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")
+    #expect(object["id"] as? String == "1234567890")
+    #expect(object["user_id"] as? String == "859F402D-B3DE-4105-A1B9-932836D9193B")
+    #expect(object["provider"] as? String == "github")
+    #expect(
+      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: data) == identity)
+  }
+
+  private func decodeIdentity(dropping key: String? = nil) throws -> UserIdentity {
+    var fields: [String: Any] = [
+      "id": "1234567890",
+      "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+      "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+      "provider": "google",
+      "identity_data": ["email": "jane@example.com"],
+    ]
+    if let key {
+      fields[key] = nil
+    }
+    return try AuthClient.Configuration.jsonDecoder.decode(
+      UserIdentity.self, from: JSONSerialization.data(withJSONObject: fields))
   }
 
   @Test

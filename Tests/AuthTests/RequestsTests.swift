@@ -409,11 +409,10 @@ struct RequestsTests {
     await assert {
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
