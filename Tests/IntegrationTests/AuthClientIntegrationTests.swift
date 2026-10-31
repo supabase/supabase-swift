@@ -345,7 +345,7 @@ struct AuthClientIntegrationTests {
     let session = try await authClient.session
 
     let client = Self.makeClient(serviceRole: true)
-    let passkeys = try await client.admin.listPasskeys(forUser: session.user.id)
+    let passkeys = try await client.admin.passkeys.list(forUser: session.user.id)
     #expect(passkeys.isEmpty)
   }
 
@@ -358,11 +358,79 @@ struct AuthClientIntegrationTests {
 
     let client = Self.makeClient(serviceRole: true)
     do {
-      try await client.admin.deletePasskey(id: UUID(), forUser: session.user.id)
+      try await client.admin.passkeys.delete(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
       #expect(error.response?.statusCode == 404)
+    }
+  }
+
+  @Test
+  func passkeyAuthenticationOptionsAreTheBarePublicKey() async throws {
+    let options = try await authClient.passkeys.authenticationOptions()
+
+    let publicKey = try WebAuthnRequestOptions(publicKey: options.options)
+    #expect(publicKey.rpID == "localhost")
+    #expect(!publicKey.challenge.isEmpty)
+  }
+
+  @Test
+  func passkeyRegistrationOptionsAreTheBarePublicKey() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    let session = try await authClient.session
+
+    let options = try await authClient.passkeys.registrationOptions()
+
+    let publicKey = try WebAuthnCreationOptions(publicKey: options.options)
+    #expect(publicKey.rpID == "localhost")
+    #expect(publicKey.userID == Data(session.user.id.uuidString.lowercased().utf8))
+    #expect(publicKey.excludedCredentialIDs.isEmpty)
+  }
+
+  @Test
+  func passkeyVerifyAuthenticationAcceptsTheChallengeIDAndRejectsAForgedCredential() async throws {
+    let options = try await authClient.passkeys.authenticationOptions()
+
+    await #expect {
+      try await authClient.passkeys.verifyAuthentication(
+        challengeID: options.challengeID,
+        credential: [
+          "id": "Zm9yZ2Vk", "rawId": "Zm9yZ2Vk", "type": "public-key",
+          "response": [
+            "clientDataJSON": "e30", "authenticatorData": "AA", "signature": "AA",
+            "userHandle": "AA",
+          ],
+        ]
+      )
+    } throws: { error in
+      // A malformed challenge ID would fail first with "challenge_id must be a valid UUID".
+      let error = error as? AuthError
+      return error?.kind == .server && error?.message.contains("challenge_id") == false
+    }
+  }
+
+  @Test
+  func mfaWebAuthnChallengeWrapsPublicKeyAndVerifyAcceptsTheType() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+    let factor = try await authClient.mfa.enroll(params: .webAuthn(friendlyName: "Laptop"))
+    let challenge = try await authClient.mfa.challenge(params: .init(factorId: factor.id))
+    let webauthn = try #require(challenge.webauthn)
+
+    #expect(webauthn.type == .create)
+    let publicKey = try WebAuthnCreationOptions(publicKey: webauthn.publicKeyOptions())
+    #expect(publicKey.rpID == "localhost")
+
+    await #expect {
+      try await authClient.mfa.verify(
+        params: MFAVerifyParams(
+          factorId: factor.id, challengeId: challenge.id, type: webauthn.type,
+          credentialResponse: ["id": "Zm9yZ2Vk", "type": "public-key"])
+      )
+    } throws: { error in
+      // Without `webauthn.type` the server answers "WebAuthn type must be create or request".
+      (error as? AuthError)?.message == "Invalid credential_response"
     }
   }
 

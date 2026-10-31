@@ -1264,6 +1264,19 @@ public struct MFAVerifyParams: Encodable, Hashable {
   /// factors. Forwarded verbatim to the backend, preserving the W3C field names.
   @_spi(Experimental) public let credentialResponse: JSONValue?
 
+  /// The ceremony the `webauthn` challenge asked for. The server needs it to parse
+  /// ``credentialResponse``.
+  let webAuthnType: WebAuthnChallengeType?
+
+  private enum CodingKeys: CodingKey {
+    case factorId, challengeId, code, webauthn
+  }
+
+  private struct WebAuthnBody: Encodable {
+    let type: String
+    let credentialResponse: JSONValue
+  }
+
   /// Verifies a `totp` or `phone` factor using a user-provided code.
   ///
   /// - Parameters:
@@ -1275,6 +1288,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
     self.challengeId = challengeId
     self.code = code
     self.credentialResponse = nil
+    self.webAuthnType = nil
   }
 
   /// Verifies a `webauthn` factor using the credential response produced by the authenticator.
@@ -1282,13 +1296,35 @@ public struct MFAVerifyParams: Encodable, Hashable {
   /// - Parameters:
   ///   - factorId: The factor ID being verified.
   ///   - challengeId: The challenge ID being verified.
-  ///   - credentialResponse: The W3C assertion produced by the platform authenticator.
+  ///   - type: ``WebAuthnChallengeResponseData/type`` of the challenge.
+  ///   - credentialResponse: The W3C credential produced by the platform authenticator.
   @_spi(Experimental)
-  public init(factorId: UUID, challengeId: UUID, credentialResponse: JSONValue) {
+  public init(
+    factorId: UUID,
+    challengeId: UUID,
+    type: WebAuthnChallengeType,
+    credentialResponse: JSONValue
+  ) {
     self.factorId = factorId
     self.challengeId = challengeId
     self.code = ""
     self.credentialResponse = credentialResponse
+    self.webAuthnType = type
+  }
+
+  /// A `webauthn` factor sends `{type, credential_response}` under `webauthn` instead of `code`.
+  /// The credential is a `JSONValue`, so the snake_case key strategy keeps its W3C field names.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(factorId, forKey: .factorId)
+    try container.encode(challengeId, forKey: .challengeId)
+    if let credentialResponse, let webAuthnType {
+      try container.encode(
+        WebAuthnBody(type: webAuthnType.rawValue, credentialResponse: credentialResponse),
+        forKey: .webauthn)
+    } else {
+      try container.encode(code, forKey: .code)
+    }
   }
 }
 

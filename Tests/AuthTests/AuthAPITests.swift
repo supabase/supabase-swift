@@ -98,10 +98,10 @@ struct AuthAPITests {
       api.unenrollRecoveryCodes(accessToken: token).head,
       api.passkeyRegistrationOptions(accessToken: token).head,
       api.verifyPasskeyRegistration(
-        challengeId: "c", credentialResponse: credential, accessToken: token
+        challengeID: id, credential: credential, accessToken: token
       ).head,
       api.passkeyAuthenticationOptions().head,
-      api.verifyPasskeyAuthentication(challengeId: "c", credentialResponse: credential).head,
+      api.verifyPasskeyAuthentication(challengeID: id, credential: credential).head,
       api.listPasskeys(accessToken: token).head,
       api.renamePasskey(id: id, friendlyName: "n", accessToken: token).head,
       api.deletePasskey(id: id, accessToken: token).head,

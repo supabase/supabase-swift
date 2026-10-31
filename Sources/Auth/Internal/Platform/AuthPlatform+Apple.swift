@@ -64,13 +64,17 @@
       #endif
     }
 
+    #if canImport(UIKit) && !os(watchOS)
+      /// An app extension has no shared `UIApplication`.
+      static var isAppExtension: Bool { Bundle.main.bundlePath.hasSuffix(".appex") }
+    #endif
+
     @MainActor
     private static var currentLifecycleState: AppLifecycleEvent {
       #if os(watchOS)
         WKApplication.shared().applicationState == .background ? .background : .foreground
       #elseif canImport(UIKit)
-        // An app extension has no shared UIApplication.
-        guard !Bundle.main.bundlePath.hasSuffix(".appex") else { return .foreground }
+        guard !isAppExtension else { return .foreground }
         return UIApplication.shared.applicationState == .background ? .background : .foreground
       #else
         .foreground
