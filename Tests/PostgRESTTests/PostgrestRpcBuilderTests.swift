@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Mocker
 import PostgREST
@@ -219,6 +220,42 @@ extension PostgrestMockerTests {
       .register()
 
       try await sut.rpc("hello", count: .estimated).execute()
+    }
+
+    @Test
+    func rpcWithCountKeepsClientPreferHeader() async throws {
+      let prefer = try await preferHeader(clientPrefer: "tx=rollback", count: .estimated)
+
+      #expect(prefer == "tx=rollback,count=estimated")
+    }
+
+    @Test
+    func rpcWithCountReplacesClientCountPreference() async throws {
+      let prefer = try await preferHeader(
+        clientPrefer: "tx=rollback, count=estimated", count: .exact)
+
+      #expect(prefer == "tx=rollback,count=exact")
+    }
+
+    private func preferHeader(clientPrefer: String, count: CountOption) async throws -> String? {
+      let captured = LockIsolated<URLRequest?>(nil)
+      let client = PostgrestClient(
+        url: url,
+        headers: ["Prefer": clientPrefer],
+        logger: nil,
+        fetch: { request in
+          captured.setValue(request)
+          return (
+            Data(),
+            HTTPURLResponse(
+              url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          )
+        }
+      )
+
+      try await client.rpc("hello", count: count).execute()
+
+      return captured.value?.value(forHTTPHeaderField: "Prefer")
     }
   }
 }
