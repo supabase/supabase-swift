@@ -445,6 +445,75 @@ extension StorageMockerTests {
     }
 
     @Test
+    func move_cleansSourceAndDestinationKeys() async throws {
+      let (storage, request) = capturingStorage(response: #"{"message":"ok"}"#)
+
+      try await storage.from("bucket").move(from: "/folder//a.txt", to: "folder///b.txt/")
+
+      let body =
+        try JSONSerialization.jsonObject(with: request.value?.httpBody ?? Data()) as? [String: Any]
+      #expect(body?["sourceKey"] as? String == "folder/a.txt")
+      #expect(body?["destinationKey"] as? String == "folder/b.txt")
+    }
+
+    @Test
+    func remove_cleansPrefixes() async throws {
+      let (storage, request) = capturingStorage(response: "[]")
+
+      _ = try await storage.from("bucket").remove(paths: ["/folder//a.txt"])
+
+      let body =
+        try JSONSerialization.jsonObject(with: request.value?.httpBody ?? Data()) as? [String: Any]
+      #expect(body?["prefixes"] as? [String] == ["folder/a.txt"])
+    }
+
+    @Test
+    func list_cleansPrefix() async throws {
+      let (storage, request) = capturingStorage(response: "[]")
+
+      _ = try await storage.from("bucket").list(path: "folder//sub/")
+
+      let body =
+        try JSONSerialization.jsonObject(with: request.value?.httpBody ?? Data()) as? [String: Any]
+      #expect(body?["prefix"] as? String == "folder/sub")
+    }
+
+    @Test
+    func download_cleansPathInURL() async throws {
+      let (storage, request) = capturingStorage(response: "data")
+
+      _ = try await storage.from("bucket").download(path: "folder//a.txt")
+
+      #expect(request.value?.url?.path.hasSuffix("/object/bucket/folder/a.txt") == true)
+    }
+
+    private func capturingStorage(
+      response: String
+    ) -> (SupabaseStorageClient, LockIsolated<URLRequest?>) {
+      let request = LockIsolated<URLRequest?>(nil)
+      let storage = SupabaseStorageClient(
+        configuration: StorageClientConfiguration(
+          url: url,
+          headers: [:],
+          session: StorageHTTPSession(
+            fetch: { captured in
+              request.setValue(captured)
+              return (
+                Data(response.utf8),
+                HTTPURLResponse(
+                  url: captured.url!, statusCode: 200, httpVersion: nil, headerFields: nil
+                )!
+              )
+            },
+            upload: { _, _ in fatalError() }
+          ),
+          logger: nil
+        )
+      )
+      return (storage, request)
+    }
+
+    @Test
     func createSignedURLs() async throws {
       let storage = makeSUT()
 
