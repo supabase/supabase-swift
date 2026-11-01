@@ -244,8 +244,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
   /// - Returns: The same builder instance so calls can be chained.
   public func csv() -> PostgrestTransformBuilder {
     mutableState.withValue {
-      let preferComponents = $0.request.headers[.prefer]?.components(separatedBy: ",") ?? []
-      if preferComponents.contains("return=stripped-nulls") {
+      if $0.stripsNulls {
         $0.pendingError = "`.csv()` cannot be combined with `.stripNulls()`"
       }
       $0.request.headers[.accept] = "text/csv"
@@ -265,7 +264,7 @@ public class PostgrestTransformBuilder: PostgrestBuilder, @unchecked Sendable {
       if $0.request.headers[.accept] == "text/csv" {
         $0.pendingError = "`.stripNulls()` cannot be combined with `.csv()`"
       }
-      $0.request.headers.appendOrUpdate(.prefer, value: "return=stripped-nulls")
+      $0.stripsNulls = true
     }
     return self
   }

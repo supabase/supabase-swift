@@ -50,6 +50,9 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     /// Whether a `PGRST116` error should be returned as a `nil` value instead of being thrown.
     var isMaybeSingle: Bool = false
+
+    /// Set by ``PostgrestTransformBuilder/stripNulls()``; `execute` turns it into the `nulls=stripped` `Accept` media type.
+    var stripsNulls: Bool = false
   }
 
   let mutableState: LockIsolated<MutableState>
@@ -173,11 +176,11 @@ public class PostgrestBuilder: @unchecked Sendable {
     options: FetchOptions,
     decode: @Sendable (Data) throws -> T
   ) async throws -> PostgrestResponse<T> {
-    let (baseRequest, retryEnabled, isMaybeSingle) = try mutableState.withValue {
+    let (baseRequest, retryEnabled, isMaybeSingle, stripsNulls) = try mutableState.withValue {
       if let message = $0.pendingError {
         throw PostgrestError(message: message)
       }
-      return ($0.request, $0.retryEnabled, $0.isMaybeSingle)
+      return ($0.request, $0.retryEnabled, $0.isMaybeSingle, $0.stripsNulls)
     }
     var request = baseRequest
 
@@ -191,6 +194,17 @@ public class PostgrestBuilder: @unchecked Sendable {
 
     if request.headers[.accept] == nil {
       request.headers[.accept] = "application/json"
+    }
+
+    if stripsNulls {
+      switch request.headers[.accept] {
+      case "application/vnd.pgrst.object+json":
+        request.headers[.accept] = "application/vnd.pgrst.object+json;nulls=stripped"
+      case "application/json":
+        request.headers[.accept] = "application/vnd.pgrst.array+json;nulls=stripped"
+      default:
+        break
+      }
     }
     request.headers[.contentType] = "application/json"
 
