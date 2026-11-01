@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/01/25.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Mocker
 import PostgREST
@@ -676,9 +677,8 @@ extension PostgrestMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "Accept: application/json" \
+        	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
         	--header "Content-Type: application/json" \
-        	--header "Prefer: return=stripped-nulls" \
         	--header "X-Client-Info: postgrest-swift/0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/countries?select=*"
@@ -691,6 +691,62 @@ extension PostgrestMockerTests {
         .select()
         .stripNulls()
         .execute()
+    }
+
+    @Test
+    func stripNullsKeepsReturnRepresentationOnInsert() async throws {
+      let request = try await capturedRequest {
+        try await $0
+          .from("users")
+          .insert(User(id: 1, username: "admin"))
+          .select()
+          .stripNulls()
+          .execute()
+      }
+
+      #expect(
+        request?.value(forHTTPHeaderField: "Accept")
+          == "application/vnd.pgrst.array+json;nulls=stripped")
+      #expect(request?.value(forHTTPHeaderField: "Prefer") == "return=representation")
+    }
+
+    @Test
+    func stripNullsBeforeSingleStripsTheObject() async throws {
+      let request = try await capturedRequest {
+        try await $0
+          .from("countries")
+          .select()
+          .stripNulls()
+          .single()
+          .execute()
+      }
+
+      #expect(
+        request?.value(forHTTPHeaderField: "Accept")
+          == "application/vnd.pgrst.object+json;nulls=stripped")
+      #expect(request?.value(forHTTPHeaderField: "Prefer") == nil)
+    }
+
+    private func capturedRequest(
+      _ run: (PostgrestClient) async throws -> Void
+    ) async throws -> URLRequest? {
+      let captured = LockIsolated<URLRequest?>(nil)
+      let client = PostgrestClient(
+        url: url,
+        logger: nil,
+        fetch: { request in
+          captured.setValue(request)
+          return (
+            Data("{}".utf8),
+            HTTPURLResponse(
+              url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          )
+        }
+      )
+
+      try await run(client)
+
+      return captured.value
     }
 
     @Test
