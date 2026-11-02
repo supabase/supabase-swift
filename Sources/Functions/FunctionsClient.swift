@@ -322,17 +322,30 @@ public final class FunctionsClient: Sendable {
 
 final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
   let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+  private let errorResponse = LockIsolated<(statusCode: Int, data: Data)?>(nil)
 
   init(continuation: AsyncThrowingStream<Data, any Error>.Continuation) {
     self.continuation = continuation
   }
 
   func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-    continuation.yield(data)
+    let isErrorBody = errorResponse.withValue { response -> Bool in
+      guard response != nil else { return false }
+      response?.data.append(data)
+      return true
+    }
+    if !isErrorBody {
+      continuation.yield(data)
+    }
   }
 
   func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    continuation.finish(throwing: error)
+    if let response = errorResponse.value {
+      continuation.finish(
+        throwing: FunctionsError.httpError(code: response.statusCode, data: response.data))
+    } else {
+      continuation.finish(throwing: error)
+    }
   }
 
   func urlSession(
@@ -355,11 +368,7 @@ final class StreamResponseDelegate: NSObject, URLSessionDataDelegate, Sendable {
     }
 
     guard 200..<300 ~= httpResponse.statusCode else {
-      let error = FunctionsError.httpError(
-        code: httpResponse.statusCode,
-        data: Data()
-      )
-      continuation.finish(throwing: error)
+      errorResponse.setValue((httpResponse.statusCode, Data()))
       return
     }
   }

@@ -502,6 +502,31 @@ struct FunctionsClientTests {
   }
 
   @Test
+  func invokeWithStreamedResponseHTTPErrorKeepsResponseBody() async throws {
+    let sut = makeSUT()
+    let body = Data(#"{"error":"invalid input"}"#.utf8)
+
+    Mock(
+      url: url.appendingPathComponent("stream"),
+      statusCode: 400,
+      data: [.post: body]
+    )
+    .register()
+
+    let stream = sut._invokeWithStreamedResponse("stream")
+
+    do {
+      for try await _ in stream {
+        Issue.record("should throw error")
+      }
+      Issue.record("should throw error")
+    } catch let FunctionsError.httpError(code, data) {
+      #expect(code == 400)
+      #expect(data == body)
+    }
+  }
+
+  @Test
   func invokeWithStreamedResponseRelayError() async throws {
     let sut = makeSUT()
 
