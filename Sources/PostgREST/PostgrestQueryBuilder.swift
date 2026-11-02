@@ -164,12 +164,14 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(
-          URLQueryItem(
-            name: "columns",
-            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+        if !uniqueKeys.isEmpty {
+          $0.request.query.appendOrUpdate(
+            URLQueryItem(
+              name: "columns",
+              value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+            )
           )
-        )
+        }
       }
     }
 
@@ -239,12 +241,14 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       {
         let allKeys = jsonObject.flatMap(\.keys)
         let uniqueKeys = Set(allKeys).sorted()
-        $0.request.query.appendOrUpdate(
-          URLQueryItem(
-            name: "columns",
-            value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+        if !uniqueKeys.isEmpty {
+          $0.request.query.appendOrUpdate(
+            URLQueryItem(
+              name: "columns",
+              value: uniqueKeys.map { "\"\($0)\"" }.joined(separator: ",")
+            )
           )
-        )
+        }
       }
     }
     return PostgrestFilterBuilder(self)
