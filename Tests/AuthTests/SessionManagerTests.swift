@@ -127,6 +127,36 @@ struct SessionManagerTests {
     }
   }
 
+  @Test
+  func refreshSession_doesNotPutTheRefreshTokenInLogContext() async throws {
+    final class CapturingLogger: SupabaseLogger {
+      let messages = LockIsolated<[SupabaseLogMessage]>([])
+
+      func log(message: SupabaseLogMessage) {
+        messages.withValue { $0.append(message) }
+      }
+    }
+
+    try await withMainSerialExecutor {
+      let logger = CapturingLogger()
+      Dependencies[clientID].logger = logger
+      let current = session("current")
+      Dependencies[clientID].sessionStorage.store(current)
+      await http.when(
+        { $0.url.path.contains("/token") },
+        return: { _ in .stub(session("refreshed")) }
+      )
+
+      _ = try await sut.refreshSession(current.refreshToken)
+
+      #expect(!logger.messages.value.isEmpty)
+      for message in logger.messages.value {
+        #expect(message.additionalContext["refresh_token"] == nil)
+        #expect(!message.description.contains(current.refreshToken))
+      }
+    }
+  }
+
   // MARK: - Commit guard (SDK-1882)
 
   /// A session with tokens derived from `name`, so two sessions in one test are distinguishable.

@@ -78,8 +78,7 @@ private actor LiveSessionManager {
 
     return try await SupabaseLoggerTaskLocal.$additionalContext.withValue(
       merging: [
-        "refresh_id": .string(UUID().uuidString),
-        "refresh_token": .string(refreshToken),
+        "refresh_id": .string(UUID().uuidString)
       ]
     ) {
       try await trace(using: logger) {
