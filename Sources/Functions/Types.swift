@@ -1,5 +1,5 @@
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 import Helpers
 
 /// An error type representing various errors that can occur while invoking functions.
@@ -8,6 +8,40 @@ public enum FunctionsError: Error, LocalizedError {
   case relayError
   /// Error indicating a non-2xx status code returned by the Edge Function.
   case httpError(code: Int, data: Data)
+
+  /// Identifies which party failed. Matches `FunctionsError.Kind` in v3.
+  public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// The Supabase gateway failed to relay the call to the function.
+    public static let relay: Kind = "relay"
+    /// The function answered with a non-2xx status.
+    public static let server: Kind = "server"
+  }
+
+  /// The failure category. Prefer matching on `kind` over the enum cases.
+  public var kind: Kind {
+    switch self {
+    case .relayError: .relay
+    case .httpError: .server
+    }
+  }
+
+  /// A human-readable description of the failure.
+  public var message: String { errorDescription ?? "" }
+
+  /// The HTTP status code of a ``Kind-swift.struct/server`` failure, `nil` otherwise.
+  public var statusCode: Int? {
+    if case .httpError(let code, _) = self { code } else { nil }
+  }
 
   /// A localized description of the error.
   public var errorDescription: String? {
@@ -21,20 +55,58 @@ public enum FunctionsError: Error, LocalizedError {
 }
 
 /// Options for invoking a function.
-public struct FunctionInvokeOptions: Sendable {
-  /// Method to use in the function invocation.
-  let method: Method?
-  /// Headers to be included in the function invocation.
-  let headers: HTTPFields
-  /// Body data to be sent with the function invocation.
-  let body: Data?
-  /// The Region to invoke the function in.
-  let region: String?
-  /// The query to be included in the function invocation.
-  let query: [URLQueryItem]
+///
+/// Pass the request body separately with ``FunctionBody`` through
+/// ``FunctionsClient/invoke(_:body:options:)``.
+///
+/// ```swift
+/// let options = FunctionInvokeOptions(
+///   method: .put,
+///   headers: [.init("X-Custom")!: "value"],
+///   region: .usEast1,
+///   timeout: .seconds(30)
+/// )
+/// ```
+public struct FunctionInvokeOptions: Sendable, Hashable {
+  /// The HTTP method to use. Defaults to `POST`.
+  public var method: HTTPTypes.HTTPRequest.Method
+
+  /// Headers to include in the invocation. They override the client's headers.
+  public var headers: HTTPFields
+
+  /// Query items appended to the function URL.
+  public var query: [URLQueryItem]
+
+  /// The region to invoke the function in. Overrides the client's region.
+  public var region: FunctionRegion?
+
   /// A per-invocation override for the request timeout. Defaults to
   /// ``FunctionsClient/requestIdleTimeout`` when `nil`.
-  let timeoutInterval: TimeInterval?
+  public var timeout: Duration?
+
+  /// Body carried by the deprecated `body:` initializers.
+  var body: Data?
+
+  /// Creates options for a function invocation.
+  /// - Parameters:
+  ///   - method: The HTTP method to use. Defaults to `POST`.
+  ///   - headers: Additional headers to include in the request.
+  ///   - query: Query items appended to the function URL.
+  ///   - region: The region to invoke the function in.
+  ///   - timeout: A per-invocation override for the request timeout.
+  public init(
+    method: HTTPTypes.HTTPRequest.Method = .post,
+    headers: HTTPFields = [:],
+    query: [URLQueryItem] = [],
+    region: FunctionRegion? = nil,
+    timeout: Duration? = nil
+  ) {
+    self.method = method
+    self.headers = headers
+    self.query = query
+    self.region = region
+    self.timeout = timeout
+  }
 
   /// Creates options for a function invocation with an encodable body.
   /// - Parameters:
@@ -45,8 +117,12 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - body: The body to encode and send. Strings are sent as `text/plain`, `Data` as
   ///     `application/octet-stream`, and all other `Encodable` values as JSON.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
-  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
-  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  ///   - timeoutInterval: A per-invocation override for the request timeout.
+  @available(
+    *, deprecated,
+    message:
+      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:)."
+  )
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -58,24 +134,28 @@ public struct FunctionInvokeOptions: Sendable {
     timeoutInterval: TimeInterval? = nil
   ) {
     var defaultHeaders = HTTPFields()
+    let encodedBody: Data?
 
     switch body {
     case let string as String:
       defaultHeaders[.contentType] = "text/plain"
-      self.body = string.data(using: .utf8)
+      encodedBody = string.data(using: .utf8)
     case let data as Data:
       defaultHeaders[.contentType] = "application/octet-stream"
-      self.body = data
+      encodedBody = data
     default:
       defaultHeaders[.contentType] = "application/json"
-      self.body = try? encoder.encode(body)
+      encodedBody = try? encoder.encode(body)
     }
 
-    self.method = method
-    self.headers = defaultHeaders.merging(with: HTTPFields(headers))
-    self.region = region
-    self.query = query
-    self.timeoutInterval = timeoutInterval
+    self.init(
+      method: method?.httpTypesMethod ?? .post,
+      headers: defaultHeaders.merging(with: HTTPFields(headers)),
+      query: query,
+      region: region.map(FunctionRegion.init(rawValue:)),
+      timeout: timeoutInterval.map { .seconds($0) }
+    )
+    self.body = encodedBody
   }
 
   /// Creates options for a function invocation with no body.
@@ -84,8 +164,10 @@ public struct FunctionInvokeOptions: Sendable {
   ///   - query: Query items appended to the function URL.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region string to invoke the function in.
-  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
-  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  ///   - timeoutInterval: A per-invocation override for the request timeout.
+  @available(
+    *, deprecated, message: "Use init(method:headers:query:region:timeout:) instead."
+  )
   @_disfavoredOverload
   public init(
     method: Method? = nil,
@@ -94,15 +176,17 @@ public struct FunctionInvokeOptions: Sendable {
     region: String? = nil,
     timeoutInterval: TimeInterval? = nil
   ) {
-    self.method = method
-    self.headers = HTTPFields(headers)
-    self.region = region
-    self.query = query
-    self.timeoutInterval = timeoutInterval
-    body = nil
+    self.init(
+      method: method?.httpTypesMethod ?? .post,
+      headers: HTTPFields(headers),
+      query: query,
+      region: region.map(FunctionRegion.init(rawValue:)),
+      timeout: timeoutInterval.map { .seconds($0) }
+    )
   }
 
   /// The HTTP method to use when invoking a function.
+  @available(*, deprecated, message: "Use HTTPTypes.HTTPRequest.Method instead.")
   public enum Method: String, Sendable {
     /// Performs an HTTP GET request.
     case get = "GET"
@@ -114,23 +198,22 @@ public struct FunctionInvokeOptions: Sendable {
     case patch = "PATCH"
     /// Performs an HTTP DELETE request.
     case delete = "DELETE"
-  }
 
-  static func httpMethod(_ method: Method?) -> HTTPTypes.HTTPRequest.Method? {
-    switch method {
-    case .get:
-      .get
-    case .post:
-      .post
-    case .put:
-      .put
-    case .patch:
-      .patch
-    case .delete:
-      .delete
-    case nil:
-      nil
+    var httpTypesMethod: HTTPTypes.HTTPRequest.Method {
+      switch self {
+      case .get: .get
+      case .post: .post
+      case .put: .put
+      case .patch: .patch
+      case .delete: .delete
+      }
     }
+  }
+}
+
+extension Duration {
+  var timeInterval: TimeInterval {
+    TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
   }
 }
 
@@ -161,6 +244,7 @@ public struct FunctionRegion: RawRepresentable, Hashable, Sendable {
   public static let apSoutheast2 = FunctionRegion(rawValue: "ap-southeast-2")
   public static let caCentral1 = FunctionRegion(rawValue: "ca-central-1")
   public static let euCentral1 = FunctionRegion(rawValue: "eu-central-1")
+  public static let euCentral2 = FunctionRegion(rawValue: "eu-central-2")
   public static let euWest1 = FunctionRegion(rawValue: "eu-west-1")
   public static let euWest2 = FunctionRegion(rawValue: "eu-west-2")
   public static let euWest3 = FunctionRegion(rawValue: "eu-west-3")
@@ -184,8 +268,13 @@ extension FunctionInvokeOptions {
   ///   - region: The region to invoke the function in.
   ///   - body: The body to encode and send.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
-  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
-  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  ///   - timeoutInterval: A per-invocation override for the request timeout.
+  @available(
+    *, deprecated,
+    message:
+      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:)."
+  )
+  @_disfavoredOverload
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
@@ -209,8 +298,11 @@ extension FunctionInvokeOptions {
   ///   - method: The HTTP method to use. Defaults to POST when `nil`.
   ///   - headers: Additional headers to include in the request.
   ///   - region: The region to invoke the function in.
-  ///   - timeoutInterval: A per-invocation override for the request timeout. Defaults to
-  ///     ``FunctionsClient/requestIdleTimeout`` when `nil`.
+  ///   - timeoutInterval: A per-invocation override for the request timeout.
+  @available(
+    *, deprecated, message: "Use init(method:headers:query:region:timeout:) instead."
+  )
+  @_disfavoredOverload
   public init(
     method: Method? = nil,
     headers: [String: String] = [:],
