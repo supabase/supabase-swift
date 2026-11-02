@@ -94,6 +94,29 @@ import Testing
     }
 
     @Test
+    func transportFromOptions() async {
+      await withMainSerialExecutor {
+        let request = LockIsolated<(url: URL, headers: [String: String])?>(nil)
+        var options = RealtimeClientOptions(headers: ["apikey": apiKey])
+        options.transport = { url, headers in
+          request.setValue((url, headers))
+          return FakeWebSocket.fakes().0
+        }
+        let client = RealtimeClientV2(url: url, options: options)
+
+        await client.connect()
+
+        #expect(client.status == .connected)
+        #expect(
+          request.value?.url.absoluteString
+            == "ws://localhost:54321/realtime/v1/websocket?apikey=publishable.api.key&vsn=2.0.0"
+        )
+        #expect(request.value?.headers["apikey"] == apiKey)
+        client.disconnect()
+      }
+    }
+
+    @Test
     func behavior() async throws {
       try await withMainSerialExecutor {
         let channel = sut.channel("public:messages")
