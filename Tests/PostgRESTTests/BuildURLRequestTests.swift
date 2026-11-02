@@ -257,6 +257,34 @@ struct BuildURLRequestTests {
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     #expect(clientInfoHeader != nil)
   }
+
+  @Test(arguments: ["insert", "upsert"])
+  func emptyBulkWriteSendsNoColumns(method: String) async throws {
+    let sentRequest = LockIsolated(URLRequest?.none)
+    let client = PostgrestClient(
+      url: url,
+      schema: nil,
+      logger: nil,
+      fetch: { request in
+        sentRequest.setValue(request)
+        return (Data(), URLResponse.empty())
+      },
+      retryEnabled: false
+    )
+    let rows = [RequestUser]()
+
+    let builder =
+      method == "insert"
+      ? try client.from("users").insert(rows)
+      : try client.from("users").upsert(rows)
+    _ = try? await builder.execute()
+
+    let request = try #require(sentRequest.value)
+    let components = try #require(
+      request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) })
+    #expect(components.queryItems?.contains { $0.name == "columns" } != true)
+    #expect(request.httpBody == Data("[]".utf8))
+  }
 }
 
 extension URLResponse {
