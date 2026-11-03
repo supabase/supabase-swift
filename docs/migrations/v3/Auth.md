@@ -206,7 +206,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFA.challenge(params:)`, `MFAChallengeParams` | `AuthMFA.challenge(factorID:channel:)` |
 | `AuthMFA.verify(params:)`, `MFAVerifyParams` | `AuthMFA.verify(factorID:challengeID:code:)` |
 | `AuthMFA.challengeAndVerify(params:)`, `MFAChallengeAndVerifyParams` | `AuthMFA.challengeAndVerify(factorID:code:)` |
-| `AuthMFA.unenroll(params:)`, `MFAUnenrollParams` | `AuthMFA.unenroll(factorID:)`, which returns nothing |
+| `AuthMFA.unenroll(params:)`, `MFAUnenrollParams` | `AuthMFA.unenroll(factorID:)`, which still returns `AuthMFAUnenrollResponse` |
 | `AuthMFA.listFactors()`, `AuthMFAListFactorsResponse` | `AuthMFA.factors()`, `MFAFactors`; see below |
 | `AuthMFAEnrollResponse` | `TOTPEnrollment` (`totp.qrCode` is `qrCode`), `PhoneEnrollment` |
 | `AuthMFAChallengeResponse`, `.type`, `.expiresAt: TimeInterval` | `MFAChallenge`, `.factorType`, `.expiresAt: Date` |
@@ -331,7 +331,9 @@ let totp = try await supabase.auth.mfa.factors().verified.filter { $0.factorType
 ## `getAuthenticatorAssuranceLevel()` is `assuranceLevel()`
 
 With no session, `assuranceLevel()` throws an error of kind `.sessionMissing`. v2 returned `nil`
-levels. It also throws an error of kind `.decoding` when the access token is not a JWT.
+levels. It also throws an error of kind `.decoding` when the access token is not a JWT. Like
+`factors()`, it fetches the user from the server, so `nextLevel` sees factors enrolled on other
+devices; v2 read the stored user.
 
 ```swift
 // v2

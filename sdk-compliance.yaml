@@ -651,6 +651,9 @@ features:
     status: implemented
     symbols:
       - AuthMFA.unenroll
+    supporting_symbols:
+      - AuthMFAUnenrollResponse
+      - AuthMFAUnenrollResponse.id
   auth.mfa.challenge_and_verify:
     status: implemented
     symbols:

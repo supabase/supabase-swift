@@ -2696,7 +2696,9 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      try await sut.mfa.unenroll(factorID: factorID)
+      let response = try await sut.mfa.unenroll(factorID: factorID)
+
+      expectNoDifference(response, AuthMFAUnenrollResponse(id: factorID))
     }
 
     /// A 2xx body that does not decode is a client-side failure, never a server error (#904).
@@ -3183,25 +3185,34 @@ extension AuthMockerTests {
     #endif
 
     @Test
-    func mfaAssuranceLevelWithVerifiedFactorReturnsNextLevelAAL2() async throws {
+    func mfaAssuranceLevelReadsFactorsFromAFreshUser() async throws {
       var session = Session.valid
 
       session.accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJ0b3RwIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfSx7Im1ldGhvZCI6InBob25lIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfV19.OQy2SmA1hcw9V5wrY-bvORjbFh5tWznLIfcMCqPu_6M"
 
-      session.user.factors = [
+      var user = User(fromMockNamed: "user")
+      user.factors = [
         Factor(
           id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           friendlyName: nil,
           factorType: .totp,
           status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
+          createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+          updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
       ]
 
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [.get: try AuthClient.Configuration.jsonEncoder.encode(user)]
+      )
+      .register()
+
       let sut = makeSUT()
 
+      // The cached user has no factors, so `nextLevel` can only come from `GET /user`.
       try await sut.seedSession(session)
 
       let info = try await sut.mfa.assuranceLevel()
@@ -3217,6 +3228,7 @@ extension AuthMockerTests {
           ]
         )
       )
+      expectNoDifference(sut.currentSession, session)
     }
 
     @Test

@@ -211,8 +211,12 @@ public struct AuthMFA: Sendable {
   /// The session has to be at `aal2` to remove a `verified` factor.
   ///
   /// - Parameter factorID: The ID of the factor to remove.
-  public func unenroll(factorID: UUID) async throws {
-    _ = try await api.authorizedExecute {
+  /// - Returns: The ID of the factor that was removed.
+  /// - Throws: An error with code ``ErrorCode/validationFailed`` for the recovery-codes factor.
+  ///   Remove it with ``AuthMFARecoveryCodes/unenroll()``.
+  @discardableResult
+  public func unenroll(factorID: UUID) async throws -> AuthMFAUnenrollResponse {
+    try await api.authorizedExecute {
       authAPI.unenrollFactor(factorID: factorID, accessToken: $0)
     }
   }
@@ -231,8 +235,9 @@ public struct AuthMFA: Sendable {
   /// Returns the assurance level of the current session and the highest level the user can
   /// reach.
   ///
-  /// Reads the `aal` and `amr` claims of the current access token, and the factors of the stored
-  /// user. It sends a request only when the session has to be refreshed.
+  /// Reads the `aal` and `amr` claims of the current access token. Fetches the user's factors from
+  /// `GET /user`, like ``factors()``, so ``AssuranceLevelInfo/nextLevel`` reflects enrollments made
+  /// on other devices. The stored session is not changed.
   ///
   /// - Returns: The current level, the next level, and the methods attached to the session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no user is
@@ -244,9 +249,12 @@ public struct AuthMFA: Sendable {
       throw AuthError.decoding("The access token is not a JWT.")
     }
 
+    let user = try await api.execute(
+      authAPI.user(accessToken: session.accessToken), for: .snapshot(session))
+
     let currentLevel = (payload["aal"] as? String).map(AuthenticatorAssuranceLevel.init(rawValue:))
 
-    let hasVerifiedFactor = session.user.factors?.contains { $0.status == .verified } ?? false
+    let hasVerifiedFactor = user.factors?.contains { $0.status == .verified } ?? false
     let nextLevel = hasVerifiedFactor ? .aal2 : currentLevel
 
     let issuedAt = payload["iat"] as? TimeInterval

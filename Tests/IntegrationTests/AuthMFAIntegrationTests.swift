@@ -70,7 +70,8 @@ struct AuthMFAIntegrationTests {
     expectNoDifference(verified.verified.map(\.id), [enrollment.id])
     expectNoDifference(verified.unverified, [])
 
-    try await auth.mfa.unenroll(factorID: enrollment.id)
+    let removed = try await auth.mfa.unenroll(factorID: enrollment.id)
+    expectNoDifference(removed.id, enrollment.id)
 
     #expect(try await auth.mfa.factors().all.isEmpty)
   }
