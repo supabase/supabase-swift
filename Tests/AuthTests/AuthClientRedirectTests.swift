@@ -255,10 +255,16 @@ struct AuthClientRedirectTests {
     #expect(try storedFlow(flowID) == nil)
   }
 
-  @Test
-  func anUnrelatedURLReturnsNilWithoutARequest() async throws {
+  @Test(
+    arguments: [
+      "com.example.app://settings?tab=profile",
+      "com.example.app://chat?message=hello",
+      "com.example.app://chat#message=hello",
+    ]
+  )
+  func anUnrelatedURLReturnsNilWithoutARequest(urlString: String) async throws {
     let client = race.makeClient()
-    let unrelated = URL(string: "com.example.app://settings?tab=profile")!
+    let unrelated = URL(string: urlString)!
 
     let result = try await client.handleRedirect(unrelated)
 
@@ -285,7 +291,7 @@ struct AuthClientRedirectTests {
     try await client.signIn(email: "user@example.com", password: "secret")
     let before = client.currentSession
     let url = URL(
-      string: "com.example.app://callback#message=Confirm+the+link+sent+to+the+other+email")!
+      string: "com.example.app://callback#message=Confirm+the+link+sent+to+the+other+email&sb=")!
 
     let events = try await events(on: client) {
       let result = try await client.handleRedirect(url)
@@ -484,7 +490,7 @@ struct AuthClientRedirectTests {
     arguments: [
       ("myapp://cb", "The callback URL is not an auth redirect."),
       (
-        "myapp://cb#message=Confirm",
+        "myapp://cb#message=Confirm&sb=",
         "The callback URL reports a pending email change, not a session."
       ),
       ("myapp://cb?error=access_denied&error_description=x", "x"),

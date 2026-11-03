@@ -26,7 +26,7 @@ enum AuthRedirect: Sendable, Equatable {
       return .error(.oauthFlowFailed(message, errorCode: errorCode))
     }
 
-    if let message = items["message"] {
+    if let message = items["message"], items["sb"] != nil {
       return .emailChangePending(message: message)
     }
 

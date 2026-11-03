@@ -459,7 +459,10 @@ let email = identity.email
 `handleRedirect(_:)` takes the URL that opened your app. It returns `nil` when the URL is not an
 auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verification:)` or
 `.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
-`AuthClient` and `SupabaseClient` have the method.
+`AuthClient` and `SupabaseClient` have the method. A URL with a `message` item is an email-change
+redirect only when it also has the `sb` marker, so your own links, such as
+`myapp://chat?message=hello`, return `nil`. Auth servers before v2.186.0 do not send `sb`, so
+`handleRedirect(_:)` returns `nil` for their email-change redirects.
 
 ```swift
 // v2
