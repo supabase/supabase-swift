@@ -126,7 +126,7 @@ struct AuthWithMagicLink: View {
     actionState = .inFlight
     actionState = await .result(
       Result { @Sendable in
-        try await supabase.auth.session(from: url)
+        try await supabase.auth.handleRedirect(url)
       }
     )
   }

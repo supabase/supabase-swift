@@ -11,19 +11,22 @@ import HTTPTypes
 // MARK: - Factors
 
 extension AuthAPI {
-  func enrollFactor(
-    _ params: any MFAEnrollParamsType,
+  func enrollFactor<Enrollment: Decodable>(
+    _ params: MFAEnrollParams,
+    decoding _: Enrollment.Type,
     accessToken: String
-  ) throws -> AuthRequest<AuthMFAEnrollResponse> {
+  ) throws -> AuthRequest<Enrollment> {
     try request(
       .post, "factors", authorization: bearer(accessToken), body: encoder.encode(params),
-      decode: decoding(AuthMFAEnrollResponse.self))
+      decode: decoding(Enrollment.self))
   }
 
   func challengeFactor(
-    _ params: MFAChallengeParams,
+    factorID: UUID,
+    channel: MessagingChannel?,
+    webAuthn: WebAuthnChallengeOptions?,
     accessToken: String
-  ) throws -> AuthRequest<AuthMFAChallengeResponse> {
+  ) throws -> AuthRequest<MFAChallenge> {
     // The server parses a JSON body for `webauthn` factors even when it has no fields, so always
     // send an object.
     struct Body: Encodable {
@@ -32,26 +35,63 @@ extension AuthAPI {
     }
 
     return try request(
-      .post, "factors/\(params.factorId)/challenge", authorization: bearer(accessToken),
-      body: encoder.encode(Body(channel: params.channel, webauthn: params.webAuthn)),
-      decode: decoding(AuthMFAChallengeResponse.self))
+      .post, "factors/\(factorID)/challenge", authorization: bearer(accessToken),
+      body: encoder.encode(Body(channel: channel, webauthn: webAuthn)),
+      decode: decoding(MFAChallenge.self))
   }
 
   func verifyFactor(
-    _ params: MFAVerifyParams,
+    factorID: UUID,
+    challengeID: UUID,
+    code: String,
     accessToken: String
-  ) throws -> AuthRequest<AuthMFAVerifyResponse> {
-    try request(
-      .post, "factors/\(params.factorId)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(params), decode: decoding(AuthMFAVerifyResponse.self))
+  ) throws -> AuthRequest<Session> {
+    struct Params: Encodable {
+      let factorId: UUID
+      let challengeId: UUID
+      let code: String
+    }
+
+    return try request(
+      .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
+      body: encoder.encode(Params(factorId: factorID, challengeId: challengeID, code: code)),
+      decode: decoding(Session.self))
+  }
+
+  func verifyFactor(
+    factorID: UUID,
+    challengeID: UUID,
+    type: WebAuthnChallengeType,
+    credentialResponse: JSONValue,
+    accessToken: String
+  ) throws -> AuthRequest<Session> {
+    // The server needs `type` to parse the credential. The credential is a `JSONValue`, so the
+    // snake_case key strategy keeps its W3C field names.
+    struct WebAuthn: Encodable {
+      let type: String
+      let credentialResponse: JSONValue
+    }
+    struct Params: Encodable {
+      let factorId: UUID
+      let challengeId: UUID
+      let webauthn: WebAuthn
+    }
+
+    return try request(
+      .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
+      body: encoder.encode(
+        Params(
+          factorId: factorID, challengeId: challengeID,
+          webauthn: WebAuthn(type: type.rawValue, credentialResponse: credentialResponse))),
+      decode: decoding(Session.self))
   }
 
   func unenrollFactor(
-    _ params: MFAUnenrollParams,
+    factorID: UUID,
     accessToken: String
   ) -> AuthRequest<AuthMFAUnenrollResponse> {
     request(
-      .delete, "factors/\(params.factorId)", authorization: bearer(accessToken),
+      .delete, "factors/\(factorID)", authorization: bearer(accessToken),
       decode: decoding(AuthMFAUnenrollResponse.self))
   }
 }
@@ -86,14 +126,14 @@ extension AuthAPI {
   func verifyRecoveryCode(
     _ code: String,
     accessToken: String
-  ) throws -> AuthRequest<AuthMFAVerifyResponse> {
+  ) throws -> AuthRequest<Session> {
     struct Params: Encodable {
       let code: String
     }
 
     return try request(
       .post, "\(Self.recoveryCodes)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(Params(code: code)), decode: decoding(AuthMFAVerifyResponse.self))
+      body: encoder.encode(Params(code: code)), decode: decoding(Session.self))
   }
 
   func regenerateRecoveryCodes(

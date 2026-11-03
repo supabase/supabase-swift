@@ -17,5 +17,4 @@ struct AuthPlatform: Sendable {
   /// order the system posts it.
   var lifecycleEvents: @Sendable () async -> AsyncStream<AppLifecycleEvent>
 
-  var openURL: @MainActor @Sendable (_ url: URL) throws -> Void
 }

@@ -86,17 +86,16 @@ actor SessionStore {
     }
   }
 
-  private enum Waiter {
-    case pending
-    case suspended(CheckedContinuation<Session, any Error>)
-    case finished
-  }
-
   private static let refreshFailureCooldown: TimeInterval = 60
 
   /// Grows by one on every state change, so tests can tell that a commit changed nothing, and the
   /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
+
+  /// Grows by one on every ``Transition/signedOut(_:event:)`` commit and every
+  /// ``recordSignOut()``. A sign-in that started before
+  /// a sign-out passes the count it read to ``commit(_:unlessSignedOutSince:)``.
+  private(set) var signOuts: UInt64 = 0
 
   private let storage: any AuthStorage
   private let key: String
@@ -224,6 +223,28 @@ actor SessionStore {
     try await serialized { try await self.apply(transition) }
   }
 
+  /// Counts a sign-out that found no session, without an event, so a sign-in that started before
+  /// it cannot commit after it.
+  func recordSignOut() async throws {
+    try await serialized { await self.countSignOut() }
+  }
+
+  private func countSignOut() {
+    signOuts += 1
+  }
+
+  /// Applies `transition` only when no sign-out was committed since `signOuts` was read.
+  ///
+  /// A sign-in that finishes after the user signed out must not sign them back in.
+  ///
+  /// - Throws: `CancellationError` when a sign-out came first, and changes nothing.
+  func commit(_ transition: Transition, unlessSignedOutSince signOuts: UInt64) async throws {
+    try await serialized {
+      guard await self.signOuts == signOuts else { throw CancellationError() }
+      try await self.apply(transition)
+    }
+  }
+
   /// Redeems `refreshToken` once, however many callers ask at the same time, and commits the
   /// refreshed session.
   ///
@@ -232,7 +253,8 @@ actor SessionStore {
   /// A ``Transition/signedOut(_:event:)`` commit cancels every running refresh.
   ///
   /// A failed refresh keeps the session, unless the server rejected `refreshToken` and the held
-  /// session for it is expired. A fresh or a cached rejection then signs out before it throws.
+  /// session for it is expired. A fresh or a cached rejection then signs out before it throws,
+  /// unless storage holds a session with another refresh token: the store adopts that one.
   ///
   /// - Parameter request: Sends the refresh request. Called only when no refresh of
   ///   `refreshToken` runs.
@@ -246,7 +268,7 @@ actor SessionStore {
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
   ) async throws -> Session {
     if let flight = refreshFlights[refreshToken] {
-      return try await Self.value(of: flight.task)
+      return try await cancellableValue(of: flight.task)
     }
     if let failure = lastRefreshFailure, failure.refreshToken == refreshToken,
       (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince(failure.date))
@@ -254,7 +276,7 @@ actor SessionStore {
       await signOutIfRejectedAndExpired(by: failure.error, refreshToken: refreshToken)
       throw failure.error
     }
-    return try await Self.value(of: startRefresh(refreshToken, using: request))
+    return try await cancellableValue(of: startRefresh(refreshToken, using: request))
   }
 
   /// Refreshes the held session, whose refresh token was `refreshToken` when the caller read it,
@@ -343,8 +365,32 @@ actor SessionStore {
     {
       return
     }
-    try? await commit(
-      .invalidated(SignOutReason(invalidatedBy: error), refreshToken: refreshToken))
+    let reason = SignOutReason(invalidatedBy: error)
+    try? await serialized {
+      try await self.invalidateUnlessStorageHoldsANewerSession(reason, refreshToken: refreshToken)
+    }
+  }
+
+  /// Another store over the same storage key may have redeemed `refreshToken` first and saved the
+  /// session it got. Removing storage would sign that store out at the next launch, so when storage
+  /// holds a session with another refresh token, this store adopts it instead of signing out.
+  ///
+  /// A storage read error changes nothing, as a failed write does. The rejection stays cached, so
+  /// the next refresh of `refreshToken` tries the sign-out again.
+  private func invalidateUnlessStorageHoldsANewerSession(
+    _ reason: SignOutReason, refreshToken: String
+  ) async throws {
+    guard let held = currentSession, held.refreshToken == refreshToken else { return }
+    if let data = try await storage.load(key: key),
+      let stored = try? PersistedSessionCodec.decode(data).session,
+      stored.session.refreshToken != refreshToken
+    {
+      let event: AuthEvent =
+        stored.session.user.id == held.user.id ? .tokenRefreshed : .signedIn
+      update(to: .signedIn(stored), event: event)
+      return
+    }
+    try await apply(.invalidated(reason, refreshToken: refreshToken))
   }
 
   func startAutoRefresh(using driver: Refresher.Driver) {
@@ -386,36 +432,7 @@ actor SessionStore {
     }
     let flight =
       try refreshFlights[refreshToken]?.task ?? startRefresh(refreshToken, using: request)
-    _ = try await Self.value(of: flight)
-  }
-
-  private static func value(of task: Task<Session, any Error>) async throws -> Session {
-    let waiter = LockIsolated(Waiter.pending)
-    let resume = { @Sendable (result: Result<Session, any Error>) in
-      let continuation = waiter.withValue { state -> CheckedContinuation<Session, any Error>? in
-        defer { state = .finished }
-        guard case .suspended(let continuation) = state else { return nil }
-        return continuation
-      }
-      continuation?.resume(with: result)
-    }
-
-    return try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
-        let cancelled = waiter.withValue { state in
-          guard case .pending = state else { return true }
-          state = .suspended(continuation)
-          return false
-        }
-        if cancelled {
-          continuation.resume(throwing: CancellationError())
-          return
-        }
-        Task { resume(await task.result) }
-      }
-    } onCancel: {
-      resume(.failure(CancellationError()))
-    }
+    _ = try await cancellableValue(of: flight)
   }
 
   // Each operation runs in its own task, so cancelling the caller never stops a write halfway.
@@ -505,6 +522,7 @@ actor SessionStore {
     }
 
     if case .signedOut = transition {
+      signOuts += 1
       for flight in refreshFlights.values {
         flight.task.cancel()
       }
@@ -536,11 +554,11 @@ extension User {
   /// Removes the identity `identityID`, and its provider from `appMetadata["providers"]` when no
   /// other identity uses that provider.
   fileprivate mutating func removeIdentity(_ identityID: UUID) {
-    guard let removed = identities?.first(where: { $0.identityId == identityID }) else { return }
-    identities?.removeAll { $0.identityId == identityID }
+    guard let removed = identities?.first(where: { $0.id == identityID }) else { return }
+    identities?.removeAll { $0.id == identityID }
     guard identities?.contains(where: { $0.provider == removed.provider }) != true,
       case .array(let providers) = appMetadata["providers"]
     else { return }
-    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider) })
+    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider.rawValue) })
   }
 }

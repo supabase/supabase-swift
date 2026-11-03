@@ -9,32 +9,6 @@ import Logging
 
 typealias AuthClientID = Int
 
-private let jwksTTL: TimeInterval = 10 * 60
-
-private struct CachedJWKS {
-  let jwks: JWKS
-  let cachedAt: Date
-}
-
-/// Global JWKS cache shared across all clients with the same storage key.
-/// This is especially useful for shared-memory execution environments such as
-/// AWS Lambda or serverless functions. Regardless of how many clients are created,
-/// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up claims() with asymmetric JWTs.
-private actor GlobalJWKSCache {
-  private var cache: [String: CachedJWKS] = [:]
-
-  func get(for key: String) -> CachedJWKS? {
-    cache[key]
-  }
-
-  func set(_ value: CachedJWKS, for key: String) {
-    cache[key] = value
-  }
-}
-
-private let globalJWKSCache = GlobalJWKSCache()
-
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
@@ -85,11 +59,21 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOTP(phone:channel:shouldCreateUser:userMetadata:captchaToken:)``
 /// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
 /// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
-/// - ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``
+/// - ``signInWithOAuth(_:options:presenter:)``
+/// - ``oauthSignInURL(_:options:)``
+/// - ``OAuthOptions``
+/// - ``OAuthFlow``
+/// - ``WebAuthPresenter``
+/// - ``ClosurePresenter``
+/// - ``ASWebAuthenticationSessionPresenter``
+///
+/// ### Handling redirects
+/// - ``handleRedirect(_:)``
+/// - ``isAuthRedirect(_:)``
+/// - ``RedirectResult``
+/// - ``exchangeCodeForSession(_:flowID:)``
 ///
 /// ### Session management
-/// - ``exchangeCodeForSession(authCode:flowId:)``
-/// - ``session(from:)``
 /// - ``setSession(accessToken:refreshToken:)``
 /// - ``refreshSession(refreshToken:)``
 /// - ``refreshSessionIfNeeded()``
@@ -100,8 +84,10 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signOut(scope:)``
 ///
 /// ### User management
+/// - ``user()``
 /// - ``user(jwt:)``
-/// - ``update(user:redirectTo:)``
+/// - ``updateUser(_:redirectTo:)``
+/// - ``UserAttributes``
 /// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
 /// - ``verifyOTP(phone:token:type:captchaToken:)``
 /// - ``verifyOTP(tokenHash:type:)``
@@ -111,14 +97,14 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
 ///
 /// ### Identities
-/// - ``userIdentities()``
-/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``
-/// - ``linkIdentity(provider:scopes:redirectTo:queryParams:)``
-/// - ``linkIdentityWithIDToken(_:)``
-/// - ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``
+/// - ``identities()``
+/// - ``linkIdentity(_:options:presenter:)``
+/// - ``linkIdentity(idToken:)``
+/// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
+/// - ``claims(options:)``
 /// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
@@ -139,14 +125,12 @@ public final class AuthClient: Sendable {
 
   let dependencies: Dependencies
 
+  private let jwksCache: JWKSCache
+
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
 
   var configuration: AuthClient.Configuration { dependencies.configuration }
-
-  private var codeVerifierStorage: CodeVerifierStorage {
-    dependencies.codeVerifierStorage
-  }
 
   private var date: @Sendable () -> Date { dependencies.date }
   private var sessionManager: SessionManager { dependencies.sessionManager }
@@ -154,7 +138,6 @@ public final class AuthClient: Sendable {
   private var logger: Logging.Logger {
     dependencies.configuration.logger
   }
-  private var pkce: PKCE { dependencies.pkce }
 
   private let lifecycleTask: Task<Void, Never>
 
@@ -195,15 +178,13 @@ public final class AuthClient: Sendable {
 
   /// Returns the current user, if any.
   ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  /// The user returned by this property may be outdated. Use ``user()`` to fetch an up-to-date user.
   public var currentUser: User? {
     currentSession?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public var mfa: AuthMFA {
-    AuthMFA(client: self)
-  }
+  public let mfa: AuthMFA
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
@@ -253,6 +234,13 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    self.mfa = AuthMFA(dependencies: dependencies)
+    jwksCache = JWKSCache(
+      fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
+        try await api.execute(authAPI.jwks())
+      },
+      now: date
+    )
     Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
@@ -348,16 +336,23 @@ public final class AuthClient: Sendable {
     password: String,
     options: SignUpOptions = .init()
   ) async throws -> SignUpResult {
-    try await _signUp(
-      authAPI.signUp(
-        email: email,
-        password: password,
-        userMetadata: options.userMetadata,
-        redirectTo: options.redirectTo,
-        captchaToken: options.captchaToken,
-        pkce: prepareForPKCE().challenge
+    try await withFlow(.signIn, redirectTo: options.redirectTo) { started in
+      let result = try await _signUp(
+        authAPI.signUp(
+          email: email,
+          password: password,
+          userMetadata: options.userMetadata,
+          redirectTo: options.redirectTo,
+          captchaToken: options.captchaToken,
+          pkce: started.challenge
+        )
       )
-    )
+      if result.session != nil {
+        // No confirmation email was sent, so no code can come back for this flow.
+        await removeFlow(started.flow.id)
+      }
+      return result
+    }
   }
 
   /// Creates a user with a phone number and a password.
@@ -511,16 +506,18 @@ public final class AuthClient: Sendable {
     userMetadata: JSONObject = [:],
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.signInWithOTP(
-        email: email,
-        redirectTo: redirectTo,
-        shouldCreateUser: shouldCreateUser,
-        userMetadata: userMetadata,
-        captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithOTP(
+          email: email,
+          redirectTo: redirectTo,
+          shouldCreateUser: shouldCreateUser,
+          userMetadata: userMetadata,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Log in user using a one-time password (OTP)..
@@ -562,14 +559,16 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    try await api.execute(
-      authAPI.signInWithSSO(
-        domain: domain,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithSSO(
+          domain: domain,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -584,109 +583,146 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws -> SSOResponse {
-    try await api.execute(
-      authAPI.signInWithSSO(
-        providerId: providerId,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: prepareForPKCE().challenge
-      )
-    )
-  }
-
-  /// Log in an existing user by exchanging an Auth Code issued during the PKCE flow.
-  /// - Parameters:
-  ///   - authCode: The auth code received from the PKCE callback.
-  ///   - flowId: The id of the flow that generated `authCode`, as returned by
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``linkIdentityURL(provider:scopes:redirectTo:queryParams:)``. Pass this when several
-  /// PKCE flows may be pending at once, so the correct code verifier is used. When `nil`, the
-  /// most recently started flow's verifier is used.
-  public func exchangeCodeForSession(authCode: String, flowId: String? = nil) async throws
-    -> Session
-  {
-    let codeVerifier = codeVerifierStorage.get(flowId)
-    let purpose = codeVerifierStorage.purpose(flowId)
-
-    if codeVerifier == nil, configuration.flowType == .pkce {
-      throw AuthError.oauthFlowFailed(
-        "PKCE code verifier not found. The flow was started on another device, its verifier was evicted or already used, or the storage was cleared."
+    try await withFlow(.signIn, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.signInWithSSO(
+          providerId: providerId,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
     }
-
-    let session = try await api.execute(
-      authAPI.exchangeCodeForSession(authCode: authCode, codeVerifier: codeVerifier)
-    )
-
-    codeVerifierStorage.remove(flowId)
-
-    switch purpose {
-    case .recovery: try await sessionStore.commit(.signedIn(session, event: .passwordRecovery))
-    case .emailChange: try await sessionStore.commit(.userChangeVerified(session))
-    default: try await sessionStore.commit(.signedIn(session, event: .signedIn))
-    }
-
-    return session
   }
 
-  /// Get a URL which you can use to start an OAuth flow for a third-party provider.
+  /// Returns the URL that starts an OAuth sign-in with a third-party provider.
   ///
-  /// Use this method if you want to have full control over the OAuth flow implementation, once you
-  /// have result URL with a OAuth token, use method ``session(from:)`` to load the session
-  /// into the client.
-  ///
-  /// If that isn't the case, you should consider using
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)`` or
-  /// ``signInWithOAuth(provider:redirectTo:scopes:queryParams:configure:)``.
-  public func oauthSignInURL(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) throws -> URL {
-    try authAPI.authorizeURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams,
-      pkce: prepareForPKCE().challenge
-    )
-  }
-
-  /// Sign-in an existing user via a third-party provider.
+  /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
+  /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or pass the code
+  /// and `flowID` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - queryParams: Additional query params.
-  ///   - launchFlow: A launch closure that you can use to implement the authentication flow. Use
-  /// the `url` to initiate the flow and return a `URL` that contains the OAuth result.
-  ///
-  /// - Note: This method support the PKCE flow.
-  @discardableResult
-  public func signInWithOAuth(
-    provider: Provider,
-    redirectTo: URL? = nil,
-    scopes: String? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    launchFlow: @MainActor @Sendable (_ url: URL) async throws -> URL
-  ) async throws -> Session {
-    let (pkce, flowId) = prepareForPKCE()
-    let url = try authAPI.authorizeURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: Self.oauthRedirectURL(
+  ///   - options: The scopes, the redirect URL, and extra query items.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
+  public func oauthSignInURL(
+    _ provider: Provider,
+    options: OAuthOptions = .init()
+  ) async throws -> OAuthFlow {
+    let redirectTo = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+    return try await withFlow(.signIn, redirectTo: redirectTo) { started in
+      let url = try authAPI.authorizeURL(
+        provider: provider,
+        scopes: options.scopesParameter,
         redirectTo: redirectTo,
-        configured: configuration.redirectToURL
-      ),
-      queryParams: queryParams,
-      pkce: pkce
-    )
+        queryParams: options.queryParams,
+        pkce: started.challenge
+      )
+      return OAuthFlow(id: started.flow.id, url: url)
+    }
+  }
 
-    let resultURL = try await launchFlow(url)
+  #if canImport(AuthenticationServices)
+    /// Signs in with a third-party provider, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthEvent/signedIn``.
+    ///
+    /// ```swift
+    /// try await supabase.auth.signInWithOAuth(
+    ///   .github,
+    ///   options: OAuthOptions(redirectTo: URL(string: "myapp://login-callback"))
+    /// )
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - provider: The third-party provider.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page. The default is
+    ///     ``ASWebAuthenticationSessionPresenter``.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
+    @discardableResult
+    public func signInWithOAuth(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter = .default
+    ) async throws -> Session {
+      try await present(
+        oauthSignInURL(provider, options: options), options: options, with: presenter)
+    }
+  #else
+    /// Signs in with a third-party provider, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthEvent/signedIn``.
+    ///
+    /// - Parameters:
+    ///   - provider: The third-party provider.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
+    @discardableResult
+    public func signInWithOAuth(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter
+    ) async throws -> Session {
+      try await present(
+        oauthSignInURL(provider, options: options), options: options, with: presenter)
+    }
+  #endif
 
-    return try await session(from: resultURL, flowId: flowId)
+  /// Shows `flow.url` with `presenter`, then finishes the flow with the callback URL.
+  private func present(
+    _ flow: OAuthFlow,
+    options: OAuthOptions,
+    with presenter: some WebAuthPresenter
+  ) async throws -> Session {
+    // A sign-out while the page is open must win over the callback.
+    let signOuts = await sessionStore.signOuts
+    let callbackScheme = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)?.scheme
+
+    let callback: URL
+    do {
+      callback = try await presenter.authenticate(url: flow.url, callbackScheme: callbackScheme)
+    } catch {
+      await removeFlow(flow.id)
+      throw error
+    }
+
+    // The page is closed, so no other code can come back for this flow. Only an exchange that may
+    // not have reached the server keeps it, so a retry can still finish it.
+    let result: RedirectResult?
+    do {
+      result = try await handleRedirect(callback, flowID: flow.id, signOuts: signOuts)
+    } catch {
+      if !Self.mayHaveReachedServer(error) {
+        await removeFlow(flow.id)
+      }
+      throw error
+    }
+
+    // A code exchange removed the flow already. Implicit tokens or a non-redirect leave it.
+    await removeFlow(flow.id)
+    switch result {
+    case .signedIn(let session, _):
+      return session
+    case .emailChangePending:
+      throw AuthError.oauthFlowFailed(
+        "The callback URL reports a pending email change, not a session.")
+    case nil:
+      throw AuthError.oauthFlowFailed("The callback URL is not an auth redirect.")
+    }
   }
 
   /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
@@ -700,157 +736,206 @@ public final class AuthClient: Sendable {
     redirectTo ?? configured
   }
 
-  /// Handles an incoming URL received by the app.
+  /// Exchanges an authorization code for a session, and stores the session.
   ///
-  /// ## Usage example:
+  /// The client emits one auth event, chosen by the call that started the flow:
+  /// ``AuthEvent/passwordRecovery`` for ``resetPasswordForEmail(_:redirectTo:captchaToken:)``,
+  /// ``AuthEvent/userUpdated`` for an email change or an identity link, and
+  /// ``AuthEvent/signedIn`` otherwise.
   ///
-  /// ### UIKit app lifecycle
+  /// This call is not deduplicated. To handle a redirect URL that can arrive more than once, use
+  /// ``handleRedirect(_:)``.
   ///
-  /// In your `AppDelegate.swift`:
+  /// - Parameters:
+  ///   - code: The authorization code from the redirect URL.
+  ///   - flowID: The ID of the flow that produced `code`: the ``OAuthFlow/id`` that
+  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)`` returned. When `nil`, the
+  ///     client tries the pending flows newest first.
+  /// - Returns: The new session.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
+  ///   flow matches, without a request.
+  public func exchangeCodeForSession(_ code: String, flowID: UUID? = nil) async throws -> Session {
+    try await exchange(code: code, flowID: flowID, signOuts: sessionStore.signOuts).session
+  }
+
+  /// Returns `true` when `url` is a redirect that ``handleRedirect(_:)`` handles.
   ///
-  /// ```swift
-  /// public func application(
-  ///   _ application: UIApplication,
-  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  /// ) -> Bool {
-  ///   if let url = launchOptions?[.url] as? URL {
-  ///     supabase.auth.handle(url)
-  ///   }
+  /// It reads only the URL, not storage. A URL with a code returns `true` even when no flow
+  /// waits for it.
+  public func isAuthRedirect(_ url: URL) -> Bool {
+    AuthRedirect.parse(url) != nil
+  }
+
+  /// Finishes the auth flow that a redirect URL reports, and stores the session.
   ///
-  ///   return true
-  /// }
+  /// Pass the URLs that reach your auth callback. ``isAuthRedirect(_:)`` checks one. The client
+  /// reads the URL's contents to find the flow: a PKCE code, tokens from an email link, an error,
+  /// or an email change that waits for a second confirmation.
   ///
-  /// func application(
-  ///   _ app: UIApplication,
-  ///   open url: URL,
-  ///   options: [UIApplication.OpenURLOptionsKey: Any]
-  /// ) -> Bool {
-  ///   supabase.auth.handle(url)
-  ///   return true
-  /// }
-  /// ```
+  /// A code without a flow ID, such as the code in an email link, can belong to any pending flow.
+  /// The client tries the pending flows newest first, so a link from an earlier email can still
+  /// finish its own flow. The server may have made that link invalid already, for example when a
+  /// later email went to the same user.
   ///
-  /// ### UIKit app lifecycle with scenes
+  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
+  /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
+  /// this way. Pass only URLs that reach your own callback.
   ///
-  /// In your `SceneDelegate.swift`:
-  ///
-  /// ```swift
-  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-  ///   guard let url = URLContexts.first?.url else { return }
-  ///   supabase.auth.handle(url)
-  /// }
-  /// ```
-  ///
-  /// ### SwiftUI app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
+  /// The same URL can arrive more than once, for example from both a scene delegate and
+  /// `onOpenURL`. A redelivery returns the same result, or throws the same error, and sends no
+  /// request. That includes a transport error: to retry the exchange after one, call
+  /// ``exchangeCodeForSession(_:flowID:)`` with the code. The flow stays stored after a transport
+  /// error, so the retry can still succeed.
   ///
   /// ```swift
   /// SomeView()
   ///   .onOpenURL { url in
-  ///     supabase.auth.handle(url)
+  ///     Task { try await supabase.auth.handleRedirect(url) }
   ///   }
   /// ```
-  public func handle(_ url: URL) {
-    Task {
-      do {
-        try await session(from: url)
-      } catch {
-        logger.error("Failure loading session from url '\(url)' error: \(error)")
-      }
-    }
-  }
-
-  /// Gets the session data from a OAuth2 callback URL.
+  ///
+  /// - Parameter url: The URL that opened the app.
+  /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the URL
+  ///   reports an error or no pending flow matches its code, or the error of the request.
+  ///   `CancellationError` when ``signOut(scope:)`` finished while the redirect was handled; the
+  ///   client then stores nothing.
   @discardableResult
-  public func session(from url: URL) async throws -> Session {
-    try await session(from: url, flowId: nil)
+  public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
+    try await handleRedirect(url, flowID: nil)
   }
 
-  /// Gets the session data from a OAuth2 callback URL.
-  /// - Parameter flowId: The id of the PKCE flow that produced this callback, when known ahead
-  /// of time (e.g. the flow that was just launched by ``signInWithOAuth(provider:redirectTo:scopes:queryParams:launchFlow:)``).
-  /// `nil` falls back to the most recently started flow's verifier.
-  private func session(from url: URL, flowId: String?) async throws -> Session {
-    logger.debug("Received URL: \(url)")
+  /// `flowID` names the flow the caller started. It wins over the URL's `sb_flow_id`.
+  ///
+  /// `signOuts` is the sign-out count when the sign-in started; a later sign-out discards it.
+  /// `nil` reads the count now.
+  func handleRedirect(
+    _ url: URL,
+    flowID: UUID?,
+    signOuts: UInt64? = nil
+  ) async throws -> RedirectResult? {
+    guard let redirect = AuthRedirect.parse(url) else { return nil }
+    let started = if let signOuts { signOuts } else { await sessionStore.signOuts }
 
-    let params = extractParams(from: url)
+    switch redirect {
+    case .error(let error):
+      throw error
 
-    switch configuration.flowType {
-    case .implicit:
-      guard isImplicitGrantFlow(params: params) else {
-        throw AuthError.oauthFlowFailed("Not a valid implicit grant flow URL: \(url)")
+    case .emailChangePending(let message):
+      return .emailChangePending(message: message)
+
+    case .code(let code, let urlFlowID):
+      return try await dependencies.redirectDeduplicator.value(for: code) { [self] in
+        let (session, flow) = try await exchange(
+          code: code, flowID: flowID ?? urlFlowID, signOuts: started)
+        return .signedIn(session, verification: flow.purpose.verification)
       }
-      return try await handleImplicitGrantFlow(params: params)
 
-    case .pkce:
-      guard isPKCEFlow(params: params) else {
-        throw AuthError.oauthFlowFailed("Not a valid PKCE flow URL: \(url)")
+    case .implicit(let tokens, let type):
+      return try await dependencies.redirectDeduplicator.value(for: tokens.accessToken) { [self] in
+        let session = try await signIn(with: tokens, type: type, signOuts: started)
+        return .signedIn(session, verification: type)
       }
-      return try await handlePKCEFlow(params: params, flowId: flowId)
     }
   }
 
-  /// Only reached from ``session(from:)``, under `case .implicit` of its switch on
-  /// `configuration.flowType`, which is what guarantees the flow type here.
-  private func handleImplicitGrantFlow(params: [String: String]) async throws -> Session {
-    if let errorMessage = params["error_description"] ?? params["error"] {
-      throw AuthError.oauthFlowFailed(errorMessage)
+  /// Exchanges `code` with the flow `flowID` names. With an ID, never falls back to another flow.
+  ///
+  /// Without an ID, the code can belong to any pending flow, for example an email link that cannot
+  /// carry an ID. The client tries the flows newest first. A ``ErrorCode/badCodeVerifier``
+  /// rejection means the code belongs to another flow, so the client tries the next one. Any other
+  /// rejection throws. A guessed flow is kept on every rejection, because a rejection does not
+  /// prove the code was that flow's; the TTL drops it.
+  private func exchange(
+    code: String,
+    flowID: UUID?,
+    signOuts: UInt64
+  ) async throws -> (session: Session, flow: PendingFlowRecord) {
+    if let flowID {
+      guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
+        throw AuthError.oauthFlowFailed(
+          "No pending flow with ID \(flowID). It finished, expired, or started on another device.")
+      }
+      return (try await exchange(code: code, flow: flow, guessed: false, signOuts: signOuts), flow)
     }
 
-    guard
-      let accessToken = params["access_token"],
-      let expiresIn = params["expires_in"].flatMap(TimeInterval.init),
-      let refreshToken = params["refresh_token"],
-      let tokenType = params["token_type"]
-    else {
-      throw AuthError.oauthFlowFailed("No session defined in URL")
+    let flows = try await dependencies.flowStore.pendingFlows()
+    var rejection: (any Error)?
+    for flow in flows {
+      do {
+        return (
+          try await exchange(code: code, flow: flow, guessed: true, signOuts: signOuts), flow
+        )
+      } catch let error as AuthError where error.errorCode == .badCodeVerifier {
+        rejection = error
+      }
+    }
+    throw rejection
+      ?? AuthError.oauthFlowFailed(
+        "No pending flow for this code. It finished, expired, or started on another device.")
+  }
+
+  /// `guessed` is `true` when the caller chose `flow` without an ID. A rejection then keeps `flow`,
+  /// because it does not prove the code belongs to `flow`.
+  private func exchange(
+    code: String,
+    flow: PendingFlowRecord,
+    guessed: Bool,
+    signOuts: UInt64
+  ) async throws -> Session {
+    let session: Session
+    do {
+      session = try await api.execute(
+        authAPI.exchangeCodeForSession(authCode: code, codeVerifier: flow.verifier))
+    } catch {
+      // After a transport error the server may not have seen the code, so a retry can still work.
+      if !guessed, let error = error as? AuthError, error.response != nil {
+        await removeFlow(flow.id)
+      }
+      throw error
     }
 
-    let expiresAt = params["expires_at"].flatMap(TimeInterval.init)
-    let providerToken = params["provider_token"]
-    let providerRefreshToken = params["provider_refresh_token"]
-
-    let user = try await api.execute(
-      authAPI.user(accessToken: accessToken, tokenType: tokenType),
-      for: sessionOwnership(ofAccessToken: accessToken)
-    )
-
-    let session = Session(
-      providerToken: providerToken,
-      providerRefreshToken: providerRefreshToken,
-      accessToken: accessToken,
-      tokenType: tokenType,
-      expiresIn: expiresIn,
-      expiresAt: expiresAt ?? date().addingTimeInterval(expiresIn).timeIntervalSince1970,
-      refreshToken: refreshToken,
-      user: user
-    )
-
-    let event: AuthEvent = params["type"] == "recovery" ? .passwordRecovery : .signedIn
-    try await sessionStore.commit(.signedIn(session, event: event))
-
+    await removeFlow(flow.id)
+    try await sessionStore.commit(flow.purpose.transition(session), unlessSignedOutSince: signOuts)
     return session
   }
 
-  /// Only reached from ``session(from:)``, under `case .pkce` of its switch on
-  /// `configuration.flowType`, which is what guarantees the flow type here.
-  private func handlePKCEFlow(params: [String: String], flowId: String?) async throws -> Session {
-    if params["error"] != nil || params["error_description"] != nil || params["error_code"] != nil {
-      let oauthError = params["error"] ?? "unspecified_error"
-      let description =
-        params["error_description"] ?? "Error in URL with unspecified error_description."
-      throw AuthError.oauthFlowFailed(
-        "\(oauthError): \(description)",
-        errorCode: params["error_code"].map { ErrorCode($0) } ?? .unknown
-      )
+  /// A failed removal is only logged. The flow cannot be used again, and the TTL drops it.
+  private func removeFlow(_ id: UUID) async {
+    do {
+      try await dependencies.flowStore.remove(id: id)
+    } catch {
+      logger.error("Failure removing a finished flow: \(error.localizedDescription)")
     }
+  }
 
-    guard let code = params["code"] else {
-      throw AuthError.oauthFlowFailed("No code detected.")
-    }
+  private func signIn(
+    with tokens: ImplicitTokens,
+    type: EmailOTPType?,
+    signOuts: UInt64
+  ) async throws -> Session {
+    let user = try await api.execute(
+      authAPI.user(accessToken: tokens.accessToken, tokenType: tokens.tokenType),
+      for: sessionOwnership(ofAccessToken: tokens.accessToken)
+    )
 
-    return try await exchangeCodeForSession(authCode: code, flowId: flowId)
+    let session = Session(
+      providerToken: tokens.providerToken,
+      providerRefreshToken: tokens.providerRefreshToken,
+      accessToken: tokens.accessToken,
+      tokenType: tokens.tokenType,
+      expiresIn: tokens.expiresIn,
+      expiresAt: tokens.expiresAt
+        ?? date().addingTimeInterval(tokens.expiresIn).timeIntervalSince1970,
+      refreshToken: tokens.refreshToken,
+      user: user
+    )
+
+    try await sessionStore.commit(
+      Self.verifiedTransition(session, for: type),
+      unlessSignedOutSince: signOuts
+    )
+    return session
   }
 
   /// Sets the session data from the current session. If the current session is expired, setSession
@@ -898,13 +983,24 @@ public final class AuthClient: Sendable {
   /// If using ``SignOutScope/others`` scope, no ``AuthEvent/signedOut`` event is fired.
   /// - Parameter scope: Specifies which sessions should be logged out.
   public func signOut(scope: SignOutScope = .global) async throws {
+    if scope != .others {
+      // A redirect handled before the sign-out must sign in again when it comes back.
+      await dependencies.redirectDeduplicator.removeAll()
+    }
+
     guard let session = currentSession else {
       configuration.logger.warning("signOut called without a session")
+      if scope != .others {
+        // A sign-in that started before this call must not commit after it.
+        try await sessionStore.recordSignOut()
+      }
       return
     }
 
     if scope != .others {
       try await sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
+      // A redirect cached between the first clear and the commit must not replay either.
+      await dependencies.redirectDeduplicator.removeAll()
     }
 
     do {
@@ -969,7 +1065,7 @@ public final class AuthClient: Sendable {
 
   private static func verifiedTransition(
     _ session: Session,
-    for type: EmailOTPType
+    for type: EmailOTPType?
   ) -> SessionStore.Transition {
     switch type {
     case .recovery: .signedIn(session, event: .passwordRecovery)
@@ -1001,15 +1097,17 @@ public final class AuthClient: Sendable {
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.resend(
-        email: email,
-        type: type,
-        redirectTo: emailRedirectTo,
-        captchaToken: captchaToken,
-        pkce: prepareForPKCE(purpose: type == .emailChange ? .emailChange : .signIn).challenge
+    try await withFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: emailRedirectTo) {
+      try await api.execute(
+        authAPI.resend(
+          email: email,
+          type: type,
+          redirectTo: emailRedirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Resends an existing SMS OTP or phone change OTP.
@@ -1032,18 +1130,31 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
 
-  /// Gets the current user details if there is an existing session.
-  /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
-  /// attempt to get the jwt from the current session.
+  /// Fetches the signed-in user from the Auth server.
   ///
-  /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
-  public func user(jwt: String? = nil) async throws -> User {
-    if let jwt {
-      return try await api.execute(
-        authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
-    }
+  /// The client sends the access token of the current session. It refreshes the session first
+  /// when the access token has expired. Use this method when you need the latest user data. For a
+  /// value without a request, read ``currentUser``.
+  ///
+  /// - Returns: The signed-in user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  }
 
-    return try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  /// Fetches the user that an access token belongs to.
+  ///
+  /// The client sends `jwt` as is. It does not refresh it. When `jwt` is the access token of the
+  /// current session and the Auth server reports that its session no longer exists, the client
+  /// signs out.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Returns: The user that `jwt` belongs to.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
+  public func user(jwt: String) async throws -> User {
+    try await api.execute(
+      authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
@@ -1051,30 +1162,69 @@ public final class AuthClient: Sendable {
     return .snapshot(stored)
   }
 
-  /// Updates user data, if there is a logged in user.
+  /// Updates the signed-in user.
+  ///
+  /// The client merges the returned user into the current session and emits
+  /// ``AuthEvent/userUpdated``. It keeps the tokens of the current session, also when a refresh
+  /// rotates them while the request is in flight.
+  ///
+  /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
+  /// the current password for that change. When `attributes` changes the email, the client starts
+  /// an email change flow. Pass the redirect URL that comes back to ``handleRedirect(_:)``.
+  ///
+  /// - Parameters:
+  ///   - attributes: The values to change.
+  ///   - redirectTo: The URL that the confirmation link of an email change opens.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    let pkce = user.email != nil ? prepareForPKCE(purpose: .emailChange).challenge : nil
+  public func updateUser(
+    _ attributes: UserAttributes,
+    redirectTo: URL? = nil
+  ) async throws -> User {
+    guard attributes.email != nil else {
+      return try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: nil)
+    }
+    return try await withFlow(.emailChange, redirectTo: redirectTo) {
+      try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: $0.challenge)
+    }
+  }
 
+  private func sendUserUpdate(
+    _ attributes: UserAttributes,
+    redirectTo: URL?,
+    pkce: PKCEChallenge?
+  ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
-      try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+      try authAPI.updateUser(attributes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
     try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser
   }
 
-  /// Gets all the identities linked to a user.
-  public func userIdentities() async throws -> [UserIdentity] {
+  /// Fetches the identities linked to the signed-in user.
+  ///
+  /// The client sends a request through ``user()``.
+  ///
+  /// - Returns: The linked identities. Empty when the server sends none.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
-  /// Links an identity to the current user with an ID token that a third-party identity provider
-  /// issued.
+  /// Links an identity to the signed-in user with an ID token that a third-party identity
+  /// provider issued.
+  ///
+  /// The client stores the returned session and emits ``AuthEvent/userUpdated``.
   ///
   /// - Parameter credentials: The ID token and the values the server needs to check it.
-  /// - Returns: The updated session.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
       authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
     )
@@ -1084,91 +1234,87 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Links an OAuth identity to an existing user.
+  /// Returns the URL that links an OAuth identity to the signed-in user.
   ///
-  /// This method supports the PKCE flow.
-  ///
-  /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
-  ///   - launchURL: Custom launch URL logic.
-  public func linkIdentity(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = [],
-    launchURL: @MainActor (_ url: URL) -> Void
-  ) async throws {
-    let response = try await linkIdentityURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams
-    )
-
-    await launchURL(response.url)
-  }
-
-  /// Links an OAuth identity to an existing user.
-  ///
-  /// This method supports the PKCE flow.
+  /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
+  /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, which emits
+  /// ``AuthEvent/userUpdated``.
   ///
   /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
-  ///
-  /// - Note: This method opens the URL with the platform's default handler. Where the platform
-  /// cannot open a URL, such as Linux, it throws an error of kind
-  /// ``AuthError/Kind-swift.struct/oauthFlowFailed``. To open the URL yourself, use
-  /// ``linkIdentity(provider:scopes:redirectTo:queryParams:launchURL:)``.
-  public func linkIdentity(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) async throws {
-    let response = try await linkIdentityURL(
-      provider: provider,
-      scopes: scopes,
-      redirectTo: redirectTo,
-      queryParams: queryParams
-    )
-    try await dependencies.platform.openURL(response.url)
-  }
-
-  /// Returns the URL to link the user's identity with an OAuth provider.
-  ///
-  /// This method supports the PKCE flow.
-  ///
-  /// - Parameters:
-  ///   - provider: The provider you want to link the user with.
-  ///   - scopes: A space-separated list of scopes granted to the OAuth application.
-  ///   - redirectTo: A URL to send the user to after they are confirmed.
-  ///   - queryParams: Additional query parameters to use.
+  ///   - provider: The provider to link.
+  ///   - options: The scopes, the redirect URL, and extra query items.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
   public func linkIdentityURL(
-    provider: Provider,
-    scopes: String? = nil,
-    redirectTo: URL? = nil,
-    queryParams: [(name: String, value: String?)] = []
-  ) async throws -> OAuthResponse {
-    let (pkce, flowId) = prepareForPKCE()
-    let url = try await api.authorizedExecute {
-      try authAPI.linkIdentityURL(
-        provider: provider,
-        scopes: scopes,
-        redirectTo: redirectTo,
-        queryParams: queryParams,
-        pkce: pkce,
-        accessToken: $0
-      )
+    _ provider: Provider,
+    options: OAuthOptions = .init()
+  ) async throws -> OAuthFlow {
+    let redirectTo = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+    return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
+      let url = try await api.authorizedExecute {
+        try authAPI.linkIdentityURL(
+          provider: provider,
+          scopes: options.scopesParameter,
+          redirectTo: redirectTo,
+          queryParams: options.queryParams,
+          pkce: started.challenge,
+          accessToken: $0
+        )
+      }
+      return OAuthFlow(id: started.flow.id, url: url)
     }
-
-    return OAuthResponse(provider: provider, url: url, flowId: flowId)
   }
+
+  #if canImport(AuthenticationServices)
+    /// Links an OAuth identity to the signed-in user.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthEvent/userUpdated``.
+    ///
+    /// - Parameters:
+    ///   - provider: The provider to link.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page. The default is
+    ///     ``ASWebAuthenticationSessionPresenter``.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. ``AuthError/sessionMissing`` when no
+    ///   user is signed in. Else the error of `presenter`, or an error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
+    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
+    @discardableResult
+    public func linkIdentity(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter = .default
+    ) async throws -> Session {
+      try await present(
+        linkIdentityURL(provider, options: options), options: options, with: presenter)
+    }
+  #else
+    /// Links an OAuth identity to the signed-in user.
+    ///
+    /// The client starts a PKCE flow, shows the provider page with `presenter`, and exchanges the
+    /// code from the callback URL. It emits ``AuthEvent/userUpdated``.
+    ///
+    /// - Parameters:
+    ///   - provider: The provider to link.
+    ///   - options: The scopes, the redirect URL, and extra query items.
+    ///   - presenter: Shows the provider page.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. ``AuthError/sessionMissing`` when no
+    ///   user is signed in. Else the error of `presenter`, or an error of kind
+    ///   ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is not an auth
+    ///   redirect or reports an error. The client removes the flow when `presenter` throws.
+    @discardableResult
+    public func linkIdentity(
+      _ provider: Provider,
+      options: OAuthOptions = .init(),
+      presenter: some WebAuthPresenter
+    ) async throws -> Session {
+      try await present(
+        linkIdentityURL(provider, options: options), options: options, with: presenter)
+    }
+  #endif
 
   /// Unlinks an identity from a user by deleting it. The user will no longer be able to sign in
   /// with that identity once it's unlinked.
@@ -1179,7 +1325,7 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     // The response carries no user, so the store drops the identity from the held one.
     try await sessionStore.commit(
-      .identityUnlinked(identity.identityId, userID: identity.userId))
+      .identityUnlinked(identity.id, userID: identity.userID))
   }
 
   /// Sends a reset request to an email address.
@@ -1188,14 +1334,16 @@ public final class AuthClient: Sendable {
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await api.execute(
-      authAPI.resetPasswordForEmail(
-        email,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken,
-        pkce: prepareForPKCE(purpose: .recovery).challenge
+    try await withFlow(.recovery, redirectTo: redirectTo) {
+      try await api.execute(
+        authAPI.resetPasswordForEmail(
+          email,
+          redirectTo: redirectTo,
+          captchaToken: captchaToken,
+          pkce: $0.challenge
+        )
       )
-    )
+    }
   }
 
   /// Refresh and return a session, regardless of expiry status.
@@ -1256,155 +1404,104 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Starts a PKCE flow when the client uses one: stores a new code verifier under a new flow id
-  /// and returns the challenge to send.
-  private func prepareForPKCE(
-    purpose: PendingFlowRecord.Purpose = .signIn
-  ) -> (challenge: PKCEChallenge?, flowId: String?) {
-    guard configuration.flowType == .pkce else {
-      return (nil, nil)
-    }
-
-    let flowId = UUID().uuidString
-    let codeVerifier = pkce.generateCodeVerifier()
-    codeVerifierStorage.set(codeVerifier, flowId, purpose)
-
-    let codeChallenge = pkce.generateCodeChallenge(codeVerifier)
-    let codeChallengeMethod = codeVerifier == codeChallenge ? "plain" : "s256"
-
-    return (
-      PKCEChallenge(codeChallenge: codeChallenge, codeChallengeMethod: codeChallengeMethod),
-      flowId
-    )
-  }
-
-  private func isImplicitGrantFlow(params: [String: String]) -> Bool {
-    params["access_token"] != nil || params["error_description"] != nil || params["error"] != nil
-  }
-
-  private func isPKCEFlow(params: [String: String]) -> Bool {
-    let currentCodeVerifier = codeVerifierStorage.get(nil)
-    return params["code"] != nil || params["error_description"] != nil || params["error"] != nil
-      || params["error_code"] != nil && currentCodeVerifier != nil
-  }
-
-  /// Fetches a JWK from the JWKS endpoint with caching
-  /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
-  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
-      return jwk
-    }
-
-    let now = date()
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-
-    if let cached = await globalJWKSCache.get(for: storageKey),
-      let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
-    {
-      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
-        return jwk
-      }
-    }
-
-    let fetchedJWKS = try await api.execute(authAPI.jwks())
-
-    guard !fetchedJWKS.keys.isEmpty else {
-      return nil
-    }
-
-    await globalJWKSCache.set(
-      CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
-      for: storageKey
-    )
-
-    return fetchedJWKS.keys.first(where: { $0.kid == kid })
-  }
-
-  /// Extracts the JWT claims present in the access token by first verifying the
-  /// JWT against the server's JSON Web Key Set endpoint `/.well-known/jwks.json`
-  /// which is often cached, resulting in significantly faster responses. Prefer
-  /// this method over ``user(jwt:)`` which always sends a request to the Auth
-  /// server for each JWT.
+  /// Stores a new PKCE flow, then runs `request`, which starts the flow on the server.
   ///
-  /// If the project is not using an asymmetric JWT signing key (like ECC or RSA)
-  /// it always sends a request to the Auth server (similar to ``user(jwt:)``) to
-  /// verify the JWT.
+  /// When `request` fails, the flow is removed, so it cannot become the newest flow that a later
+  /// code without a flow ID is exchanged with. A transport error or a cancellation keeps it: the
+  /// request may have reached the server, and its email may already be out. A decoding error keeps
+  /// it too: it follows a 2xx, so the server accepted the request.
+  private func withFlow<Result>(
+    _ purpose: PendingFlowRecord.Purpose,
+    redirectTo: URL?,
+    _ request: (_ started: (flow: PendingFlowRecord, challenge: PKCEChallenge)) async throws ->
+      Result
+  ) async throws -> Result {
+    let started = try await dependencies.flowStore.start(
+      purpose: purpose,
+      redirectTo: redirectTo ?? configuration.redirectToURL
+    )
+    do {
+      return try await request(started)
+    } catch {
+      if !Self.mayHaveReachedServer(error) {
+        await removeFlow(started.flow.id)
+      }
+      throw error
+    }
+  }
+
+  private static func mayHaveReachedServer(_ error: any Error) -> Bool {
+    if error is CancellationError || error is URLError { return true }
+    guard let error = error as? AuthError else { return false }
+    return error.kind == .transport || error.kind == .decoding
+      || error.underlyingError is URLError
+  }
+
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The token comes from ``session``, so an expired session is refreshed first. The token is
+  /// then verified as ``claims(jwt:options:)`` describes.
+  ///
+  /// - Parameter options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: Every error that ``session`` throws, unchanged: for example, an error of kind
+  ///   ``AuthError/Kind-swift.struct/sessionMissing`` when no user is signed in, or the refresh
+  ///   error when the server rejects the refresh. An error of kind
+  ///   ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when verification fails.
+  public func claims(options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    try await claims(jwt: session.accessToken, options: options)
+  }
+
+  /// Verifies a JSON Web Token and returns its claims.
+  ///
+  /// A token signed with an asymmetric key, such as ES256 or RS256, that names its key in the
+  /// `kid` header is verified on the device against the project's JSON Web Key Set at
+  /// `/.well-known/jwks.json`. Each client caches the key set for 10 minutes, so most calls send
+  /// no request. Prefer this method over ``user(jwt:)``, which sends a request for each token.
+  ///
+  /// The Auth server verifies every other token through ``user(jwt:)``: a token signed with a
+  /// symmetric key (HS256), a token without a `kid`, and a token whose key the client cannot find.
   ///
   /// - Parameters:
-  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
-  ///   - options: Various additional options that allow you to customize the behavior of this method.
-  ///
-  /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
-  ///
-  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func claims(
-    jwt: String? = nil,
-    options: GetClaimsOptions = GetClaimsOptions()
-  ) async throws -> JWTClaimsResponse {
-    let token: String
-    if let jwt {
-      token = jwt
-    } else {
-      guard let session = try? await session else {
-        throw AuthError.sessionMissing
-      }
-      token = session.accessToken
-    }
-
-    guard let decodedJWT = JWT.decode(token) else {
+  ///   - jwt: The token to verify.
+  ///   - options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when the
+  ///   token is malformed, has no `exp` or `sub` claim, has expired (unless
+  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The client checks
+  ///   the structure and the `exp` and `sub` claims before it sends any request. The error of
+  ///   ``user(jwt:)`` when the Auth server rejects the token.
+  public func claims(jwt: String, options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    guard let decodedJWT = JWT.decode(jwt) else {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if !options.allowsExpired {
-      if let exp = decodedJWT.payload["exp"] as? TimeInterval {
-        let now = date().timeIntervalSince1970
-        if exp <= now {
-          throw AuthError.jwtVerificationFailed("JWT has expired")
-        }
-      }
-    }
-
-    let alg = decodedJWT.header["alg"] as? String
-    let kid = decodedJWT.header["kid"] as? String
-
-    let signingKey: JWK?
-    if let alg, !alg.hasPrefix("HS"), let kid {
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
-    } else {
-      signingKey = nil
+    let claims = try VerifiedClaims(decodedJWT)
+    if !options.allowsExpired, claims.expiresAt <= date() {
+      throw AuthError.jwtVerificationFailed("JWT has expired")
     }
 
     guard
-      let signingKey,
-      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
+      let signingKey = try await signingKey(for: claims.header, options: options),
+      let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
-      _ = try await user(jwt: token)
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      _ = try await user(jwt: jwt)
+      return claims
     }
-
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
+    return claims
+  }
 
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
-
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+  private func signingKey(for header: JWTHeader, options: ClaimsOptions) async throws -> JWK? {
+    guard !header.alg.hasPrefix("HS"), let kid = header.kid else {
+      return nil
+    }
+    if let key = options.jwks?.key(for: kid) {
+      return key
+    }
+    return try await jwksCache.key(for: kid)
   }
 }

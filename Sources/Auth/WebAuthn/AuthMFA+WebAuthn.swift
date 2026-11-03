@@ -18,10 +18,8 @@ public import Foundation
     /// entitlement must list `webcredentials:<rp.id>`.
     ///
     /// When the ceremony or the verification fails, the server keeps the new factor as
-    /// unverified, and its name blocks a new enrollment with the same name. Find it in the
-    /// `factors` of ``AuthClient/user(jwt:)``, which fetches the user from the server, and remove
-    /// it with ``unenroll(params:)``. ``listFactors()`` reads the stored session, so it does not
-    /// show the new factor.
+    /// unverified, and its name blocks a new enrollment with the same name. Find it in
+    /// ``MFAFactors/unverified`` of ``factors()`` and remove it with ``unenroll(factorID:)``.
     ///
     /// - Parameters:
     ///   - friendlyName: A name for the factor.
@@ -46,17 +44,15 @@ public import Foundation
       anchor: ASPresentationAnchor?,
       authenticator: WebAuthnAuthenticator
     ) async throws -> Session {
-      let factor = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factor.id)
+      let factorID = try await enrollWebAuthnFactor(friendlyName: friendlyName)
+      let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factorID)
       guard webauthn.type == .create else {
         throw unexpectedChallengeType(webauthn.type)
       }
       let credential = try await authenticator.register(
         WebAuthnCreationOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
       return try await verify(
-        params: MFAVerifyParams(
-          factorId: factor.id, challengeId: challengeID, type: .create,
-          credentialResponse: credential)
+        factorID: factorID, challengeID: challengeID, type: .create, credentialResponse: credential
       )
     }
 
@@ -107,16 +103,14 @@ public import Foundation
       let credential = try await authenticator.authenticate(
         WebAuthnRequestOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
       return try await verify(
-        params: MFAVerifyParams(
-          factorId: factorID, challengeId: challengeID, type: .request,
-          credentialResponse: credential)
+        factorID: factorID, challengeID: challengeID, type: .request, credentialResponse: credential
       )
     }
 
     private func webAuthnChallenge(
       factorID: UUID
     ) async throws -> (UUID, WebAuthnChallengeResponseData) {
-      let challenge = try await challenge(params: MFAChallengeParams(factorId: factorID))
+      let challenge = try await challenge(factorID: factorID)
       guard let webauthn = challenge.webauthn else {
         throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }

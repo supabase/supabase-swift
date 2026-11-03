@@ -93,8 +93,10 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Each client keeps its own session in memory.** Because the session is read once, two
   clients with the same storage and storage key do not see each other's changes. When one
   refreshes, the other still holds the old refresh token, and its next refresh fails with
-  `refresh_token_already_used`. It signs out on the first such refresh after its session
-  expires. Create one client per project, or give each client its own `storageKey`.
+  `refresh_token_already_used`. On the first such refresh after its session expires, it reads
+  storage again: when storage holds the newer session, it takes that session and emits
+  `tokenRefreshed` (`signedIn` for another user); otherwise it signs out. Create one client per
+  project, or give each client its own `storageKey`.
 - **Refreshes are deduplicated and throttled.** A client runs one refresh of a refresh token at a
   time. A cancelled caller of `session` or `refreshSession` throws `CancellationError` at once,
   and the shared refresh still finishes. When a refresh fails, a new refresh with that same token
@@ -136,9 +138,25 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`startAutoRefresh()` and `stopAutoRefresh()` take effect in order.** Each returns once its
   call took effect, so `await stopAutoRefresh()` followed by `await startAutoRefresh()` ends with
   auto refresh running. Under `.manual` and `.disabled`, `startAutoRefresh()` does nothing.
-- **Opening a URL throws where the platform cannot.** On Linux, Android, and Windows,
-  `linkIdentity(provider:scopes:redirectTo:queryParams:)` throws an `AuthError` of kind
-  `.oauthFlowFailed`. v2 did nothing. Pass a `launchURL` closure instead.
+- **Pending v2 OAuth flows cannot finish.** v3 keeps PKCE flows in its own store and does not
+  read the v2 code verifier. A user who started a sign-in, a password reset, or an identity link
+  with v2 and returns after the upgrade gets an `AuthError` of kind `.oauthFlowFailed`. Ask the user
+  to start again.
+- **`handleRedirect(_:)` ignores URLs that are not auth redirects.** v2's `session(from:)` threw
+  for them. v3 returns `nil`. Search for `catch` blocks that showed an "invalid URL" message.
+- **A redirect with tokens signs in without a pending flow.** `handleRedirect(_:)` accepts a URL
+  with implicit tokens (`#access_token=…`), as email links without PKCE and `generateLink` send.
+  It signs in the account that the tokens belong to, whoever made the URL. Pass only URLs that
+  reach your own callback, so another app or a web page cannot sign the user in to its account.
+- **The same redirect URL is handled once.** A second delivery of a URL (a scene delegate and
+  `onOpenURL` both fire) returns the first result and sends no request. v2 sent the code again and
+  failed.
+- **`exchangeCodeForSession` needs a pending flow.** With no stored flow for the code, it throws
+  `.oauthFlowFailed` without a request. v2 sent the code with no verifier.
+- **Several PKCE flows can be pending.** v2 kept one code verifier, so a new sign-in replaced the
+  old one. In v3 each flow has its own verifier. Pass the `flowID` from `oauthSignInURL` or
+  `linkIdentityURL` to `exchangeCodeForSession` to pick one. Without it, as for the code in an
+  email link, the client tries the pending flows newest first.
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
   session's access token. PostgREST says so with a 401 whose `WWW-Authenticate` header carries
@@ -166,7 +184,7 @@ Changes that still compile but behave differently. Check each one by hand.
   same user is signed in, and `.signedIn` otherwise. v2 emitted `.signedIn` for all of them. `session(from:)` for a recovery link emits only
   `.passwordRecovery`; v2 emitted `.signedIn` first. With the PKCE flow, the code exchange after
   `resetPasswordForEmail` also emits `.passwordRecovery`, not `.signedIn`. The exchange after an
-  email change (`update(user:)` with an email, or `resend(type: .emailChange)`) follows the
+  email change (`updateUser(_:redirectTo:)` with an email, or `resend(type: .emailChange)`) follows the
   `verifyOTP` rule above. Search for `.signedIn`
   handlers that expect these flows.
 - **`unlinkIdentity` updates the user.** It removes the identity from `currentUser`, and its
@@ -179,11 +197,32 @@ Changes that still compile but behave differently. Check each one by hand.
 - **An identity needs `identity_id`.** A `UserIdentity` without `identity_id` now fails to decode,
   and so does the `User` that holds it. v2 filled in the all-zero UUID, which
   `unlinkIdentity(_:)` then sent to the server. Search for `00000000-0000-0000-0000-000000000000`.
+- **`UserIdentity.id` is the identity UUID.** `"\(identity.id)"` now prints the identity UUID,
+  not the provider's user ID, and `ForEach(identities)` keys on the identity UUID. Search for
+  `identity.id` and `\.id` on identities. See "`UserIdentity.id` is the identity UUID" below.
 - **String `amr` entries are kept.** When a custom access token hook writes `amr` as strings,
-  `authenticatorAssuranceLevel()` now returns them in `currentAuthenticationMethods`, with the
-  token's `iat` as the `timestamp`. v2 dropped them.
+  `assuranceLevel()` now returns them in `currentAuthenticationMethods`, with the token's `iat` as
+  the `timestamp`. v2 dropped them.
+- **MFA string values are structs.** `FactorType`, `AuthenticatorAssuranceLevel` (also
+  `VerifiedClaims.assuranceLevel`, the `aal` claim), and `AuthenticationMethod` (`AMREntry.method`)
+  were `String`. `==` and string literals still work, but `"\(factor.factorType)"` prints
+  `FactorType(rawValue: "totp")`. Search for interpolations of `factorType`, `currentLevel`,
+  `nextLevel`, `aal`, `assuranceLevel`, and `method`, and use `.rawValue`.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
+- **`claims()` throws the refresh error.** When the stored session is expired and its refresh
+  fails, `claims()` throws the error that `session` throws, such as `.sessionInvalidated` with
+  `errorCode` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
+  session. `.sessionMissing` now means only that no user is signed in.
+- **A token without `exp` or `sub` fails verification.** `claims(jwt:)` throws
+  `.jwtVerificationFailed` for a token without an `exp` claim or a `sub` claim, before it sends
+  any request. The anon key and the service role key have no `sub`, so `claims(jwt:)` rejects
+  them. An expired token also fails before any request, unless you pass
+  `ClaimsOptions(allowsExpired: true)`. v2 accepted a token without `exp`.
+- **Each client caches its own key set.** `claims()` caches the JWKS per client for 10 minutes.
+  v2 shared one cache between clients with the same storage key, so each new client now fetches
+  the key set once. A token whose key is not in the cached set triggers a new fetch, so rotated
+  keys resolve without waiting for the cache to expire.
 
 ## Renames and type changes
 
@@ -192,13 +231,27 @@ Changes that still compile but behave differently. Check each one by hand.
 | `public actor AuthClient` | `public final class AuthClient: Sendable` |
 | `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthError` |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
-| `signInWithIdToken(credentials:)`, `linkIdentityWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `linkIdentityWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `signInWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `signInWithWeb3(_:)` |
+| `linkIdentityWithIdToken(credentials:)` | `linkIdentity(idToken:)` |
+| `user(jwt: String? = nil)` | `user()` for the signed-in user, `user(jwt:)` with a token; `jwt` is a `String`, not a `String?` |
+| `update(user:redirectTo:)` | `updateUser(_:redirectTo:)` |
+| `userIdentities()` | `identities()` |
 | `OpenIDConnectCredentials(provider:idToken:accessToken:nonce:gotrueMetaSecurity:)` | `IDTokenCredentials(provider:idToken:nonce:accessToken:captchaToken:)` |
 | `OpenIDConnectCredentials.Provider` | `Provider` |
 | `Web3Credentials.gotrueMetaSecurity` | `Web3Credentials.captchaToken` |
 | `signInAnonymously(data:)`, `signInWithOTP(…data:…)`, `UserAttributes.data`, `UserAttributes(…data:)` | `userMetadata:` (a `JSONObject`; empty sends nothing) |
 | `JSONEncoder.goTrue`, `JSONDecoder.goTrue` | `AuthClient.Configuration.jsonEncoder`, `.jsonDecoder` |
-| `MFAEnrollParams` | `MFATotpEnrollParams` or `MFAPhoneEnrollParams` |
+| `AuthMFA.enroll(params:)`, `MFAEnrollParams`, `MFAEnrollParamsType`, `MFATotpEnrollParams`, `MFAPhoneEnrollParams` | `AuthMFA.enrollTOTP(issuer:friendlyName:)`, `AuthMFA.enrollPhone(_:friendlyName:)`; see below |
+| `AuthMFA.challenge(params:)`, `MFAChallengeParams` | `AuthMFA.challenge(factorID:channel:)` |
+| `AuthMFA.verify(params:)`, `MFAVerifyParams` | `AuthMFA.verify(factorID:challengeID:code:)` |
+| `AuthMFA.challengeAndVerify(params:)`, `MFAChallengeAndVerifyParams` | `AuthMFA.challengeAndVerify(factorID:code:)` |
+| `AuthMFA.unenroll(params:)`, `MFAUnenrollParams` | `AuthMFA.unenroll(factorID:)`, which still returns `AuthMFAUnenrollResponse` |
+| `AuthMFA.listFactors()`, `AuthMFAListFactorsResponse` | `AuthMFA.factors()`, `MFAFactors`; see below |
+| `AuthMFAEnrollResponse` | `TOTPEnrollment` (`totp.qrCode` is `qrCode`), `PhoneEnrollment` |
+| `AuthMFAChallengeResponse`, `.type`, `.expiresAt: TimeInterval` | `MFAChallenge`, `.factorType`, `.expiresAt: Date` |
+| `AuthMFAVerifyResponse` | `Session` |
+| `typealias FactorType = String`, `AuthenticatorAssuranceLevels`, `AMREntry.Method` | `RawRepresentable` structs `FactorType`, `AuthenticatorAssuranceLevel`, `AuthenticationMethod` |
+| `AMREntry.timestamp: TimeInterval` | `Date` |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdmin.user(id:)` |
 | `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
@@ -209,27 +262,40 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthOAuthServer.approveAuthorization(authorizationId:)` | `AuthOAuthServer.approveAuthorization(id:)` |
 | `AuthOAuthServer.denyAuthorization(authorizationId:)` | `AuthOAuthServer.denyAuthorization(id:)` |
 | `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(id:)` |
-| `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
+| `AuthMFA.getAuthenticatorAssuranceLevel()`, `AuthMFAGetAuthenticatorAssuranceLevelResponse` | `AuthMFA.assuranceLevel()`, `AssuranceLevelInfo`; see below |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
-| `AuthClient.getClaims(jwt:options:)` | `AuthClient.claims(jwt:options:)` |
-| `GetClaimsOptions.allowExpired` | `GetClaimsOptions.allowsExpired` |
+| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns `OAuthFlow` (`id`, `url`) |
+| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns `OAuthFlow` (`id`, `url`) |
+| `exchangeCodeForSession(authCode:)` | `exchangeCodeForSession(_:flowID:)`, `flowID` is an optional `UUID` |
+| `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
+| `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
+| `AuthClient.Configuration.flowType`, `AuthOptions.flowType`, `AuthFlowType`, `defaultFlowType` | removed; see below |
+| `AuthClient.getClaims(options:)` (no `jwt`) | `AuthClient.claims(options:)` |
+| `AuthClient.getClaims(jwt:options:)` with a token | `AuthClient.claims(jwt:options:)`; `jwt` is a `String`, not a `String?` |
+| `GetClaimsOptions`, `GetClaimsOptions(allowExpired:jwks:)` | `ClaimsOptions`, `ClaimsOptions(allowsExpired:jwks:)` |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
-| `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`) |
-| `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `UUID` (was `String`) |
+| `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
+| `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `MFAChallenge.id`, `challengeID:`: `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
 | `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `MobileOTPType`, `EmailOTPType`, `ResendEmailType`, `ResendMobileType`, `SignOutScope` | `RawRepresentable` structs with the same member names |
-| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`, `JWTClaims`, `AudienceClaim`: `Codable` | `Decodable` |
+| `SSOResponse`, `OAuthClient`, `OAuthClientType`, `OAuthClientRegistrationType`, `OAuthAuthorization*`, `OAuthRedirect`, `OAuthGrant`, `JWK`, `JWKS`, `JWTHeader`: `Codable` | `Decodable` |
 | `Web3Chain`, `UserAttributes`, `MessagingChannel`: `Codable` | `Encodable` |
 | `OpenIDConnectCredentials`, `Web3Credentials`: `Codable` | `IDTokenCredentials`, `Web3Credentials`: no `Codable` conformance |
-| `OAuthResponse`, `Provider`: `Codable` | no `Codable` conformance |
+| `AMREntry`: `Decodable` | no `Codable` conformance |
 | `UserCredentials` | internal |
+| `UserIdentity.id` (the provider's user ID, a `String`) | `UserIdentity.providerUserID`; `id` is now the identity UUID; see below |
+| `UserIdentity.identityId` | `UserIdentity.id` |
+| `UserIdentity.userId` | `UserIdentity.userID` |
+| `UserIdentity.provider: String` | `UserIdentity.provider: Provider` |
+| `UserIdentity.identityData: [String: JSONValue]?` | `UserIdentity.identityData: JSONObject`; `[:]` when the server sends none |
+| `UserIdentity(id:identityId:userId:identityData:provider:createdAt:lastSignInAt:updatedAt:)` | `UserIdentity(id:providerUserID:userID:provider:identityData:email:createdAt:lastSignInAt:updatedAt:)` |
 | `UserAttributes.emailChangeToken` | removed |
 
 For the structs that replace enums:
@@ -241,6 +307,167 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## OAuth has one entry point
+
+v2 had `signInWithOAuth` with a `launchFlow:` closure, `signInWithOAuth` with a `configure:`
+closure for `ASWebAuthenticationSession`, `getOAuthSignInURL`, and two `linkIdentity` overloads.
+v3 starts a flow with `signInWithOAuth(_:options:presenter:)`, `oauthSignInURL(_:options:)`, or
+`linkIdentity(_:options:presenter:)`. The provider is unlabeled. `scopes`, `redirectTo` and
+`queryParams` move into `OAuthOptions`; `scopes` is an array and `queryParams` is `queryItems`.
+`presenter` shows the provider page. The default on Apple platforms is
+`ASWebAuthenticationSessionPresenter`. On other platforms you must pass one.
+
+```swift
+// v2
+try await supabase.auth.signInWithOAuth(
+  provider: .github,
+  redirectTo: URL(string: "myapp://login-callback"),
+  scopes: "repo user",
+  queryParams: [("access_type", "offline")]
+)
+// v3
+try await supabase.auth.signInWithOAuth(
+  .github,
+  options: OAuthOptions(
+    scopes: ["repo", "user"],
+    redirectTo: URL(string: "myapp://login-callback"),
+    queryItems: [URLQueryItem(name: "access_type", value: "offline")]
+  )
+)
+```
+
+## `configure:` and `launchFlow:` are presenters
+
+The `configure:` closure that customized the `ASWebAuthenticationSession` is gone. Set
+`prefersEphemeralWebBrowserSession` on the presenter. To control the session fully, or to open the
+page another way, pass a `ClosurePresenter`. It replaces the `launchFlow:` closure: it gets the
+URL and the callback scheme, and returns the callback URL.
+
+```swift
+// v2
+try await supabase.auth.signInWithOAuth(provider: .github) { session in
+  session.prefersEphemeralWebBrowserSession = true
+}
+try await supabase.auth.signInWithOAuth(provider: .github) { url in
+  try await myBrowser.open(url)
+}
+// v3
+try await supabase.auth.signInWithOAuth(
+  .github,
+  presenter: ASWebAuthenticationSessionPresenter(prefersEphemeralWebBrowserSession: true)
+)
+try await supabase.auth.signInWithOAuth(
+  .github,
+  presenter: ClosurePresenter { url, callbackScheme in
+    try await myBrowser.open(url)
+  }
+)
+```
+
+A user who cancels now gets `CancellationError`.
+
+## `linkIdentity` shows the page and returns a session
+
+The v2 `linkIdentity` overloads took a `launchURL` closure or opened the URL, and returned
+nothing. v3 runs the whole flow with a presenter, like `signInWithOAuth`, and returns the new
+`Session`. It emits `.userUpdated`. For your own flow, use `linkIdentityURL(_:options:)`.
+
+```swift
+// v2
+try await supabase.auth.linkIdentity(provider: .google, redirectTo: callback) { url in
+  UIApplication.shared.open(url)
+}
+let response = try await supabase.auth.getLinkIdentityURL(provider: .google)
+open(response.url)
+// v3
+let session = try await supabase.auth.linkIdentity(
+  .google, options: OAuthOptions(redirectTo: callback))
+let flow = try await supabase.auth.linkIdentityURL(.google)
+open(flow.url)
+```
+
+## `UserIdentity.id` is the identity UUID
+
+In v2, `UserIdentity.id` was the user's ID at the provider, a `String`, and `identityId` was the
+Supabase identity UUID. In v3, `id` is the identity UUID, the value that `unlinkIdentity(_:)`
+sends. The provider's user ID is `providerUserID`. `Identifiable` uses `id`, so SwiftUI lists now
+key on the identity UUID. Most uses stop compiling, because `id` is a `UUID`, not a `String`.
+`"\(identity.id)"` still compiles and prints the UUID.
+
+The v3 names follow what each value is, not the JSON keys of the Auth server. The server sends the
+identity UUID as `identity_id` and the provider's user ID as `id`, and supabase-js keeps those
+keys. So `id` means a different value in Swift than in the JSON and in supabase-js:
+
+| Value | Swift v3 | JSON key and supabase-js | Swift v2 |
+|---|---|---|---|
+| Supabase identity UUID | `id: UUID` | `identity_id` | `identityId: UUID` |
+| User's ID at the provider | `providerUserID: String` | `id` | `id: String` |
+| UUID of the user | `userID: UUID` | `user_id` | `userId: UUID` |
+| Email address of the identity | `email: String?` | `email` | none |
+
+`email` is new in v3. The Auth server takes it from the provider, so it can differ from
+`User.email`. It is `nil` when the server sends no email.
+
+```swift
+// v2
+let providerUserID: String = identity.id
+let identityID: UUID = identity.identityId
+let isGoogle = identity.provider == "google"
+let email = identity.identityData?["email"]?.stringValue
+// v3
+let providerUserID: String = identity.providerUserID
+let identityID: UUID = identity.id
+let isGoogle = identity.provider == .google
+let email = identity.email
+```
+
+## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`
+
+`handleRedirect(_:)` takes the URL that opened your app. It returns `nil` when the URL is not an
+auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verification:)` or
+`.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
+`AuthClient` and `SupabaseClient` have the method.
+
+```swift
+// v2
+.onOpenURL { url in supabase.handle(url) }
+let session = try await supabase.auth.session(from: url)
+// v3
+.onOpenURL { url in
+  Task { try await supabase.handleRedirect(url) }
+}
+if case .signedIn(let session, _)? = try await supabase.auth.handleRedirect(url) {
+  show(session.user)
+}
+```
+
+## `flowType` is removed
+
+v3 always uses PKCE for the flows it starts, and `handleRedirect(_:)` reads the flow from the URL,
+so email links and implicit tokens still work. Remove `flowType:` from `AuthClient`,
+`AuthClient.Configuration` and `SupabaseClientOptions.AuthOptions`.
+
+```swift
+// v2
+let options = SupabaseClientOptions(auth: .init(flowType: .pkce))
+// v3
+let options = SupabaseClientOptions(auth: .init())
+```
+
+## `oauthSignInURL` returns a flow ID
+
+`oauthSignInURL` and `linkIdentityURL` are `async` and return the URL with the ID of the flow they
+started. Pass the ID back to `exchangeCodeForSession` when more than one flow can be pending.
+
+```swift
+// v2
+let url = try supabase.auth.getOAuthSignInURL(provider: .github)
+let session = try await supabase.auth.exchangeCodeForSession(authCode: code)
+// v3
+let flow = try await supabase.auth.oauthSignInURL(.github)
+let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.id)
+```
 
 ## `AuthError` is a struct
 
@@ -282,6 +509,57 @@ do {
 `throw AuthError.sessionMissing` still compiles. `signInWithOAuth` now throws `.oauthFlowFailed`
 when it has no redirect URL, where v2 trapped.
 
+## MFA methods take arguments
+
+The `params:` structs are gone. Each method takes its arguments directly, and enrollment has one
+method per factor type, which returns that type's data.
+
+```swift
+// v2
+let enrolled = try await supabase.auth.mfa.enroll(params: .totp(friendlyName: "Phone"))
+showQRCode(enrolled.totp!.qrCode)
+try await supabase.auth.mfa.challengeAndVerify(
+  params: MFAChallengeAndVerifyParams(factorId: enrolled.id, code: code))
+try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: enrolled.id))
+// v3
+let enrolled = try await supabase.auth.mfa.enrollTOTP(friendlyName: "Phone")
+showQRCode(enrolled.qrCode)
+try await supabase.auth.mfa.challengeAndVerify(factorID: enrolled.id, code: code)
+try await supabase.auth.mfa.unenroll(factorID: enrolled.id)
+```
+
+## `listFactors()` is `factors()`
+
+`factors()` fetches the user from the server on each call; v2 read the stored user. It splits the
+factors by status, not by type. Filter on `factorType` for one type.
+
+```swift
+// v2
+let totp = try await supabase.auth.mfa.listFactors().totp
+// v3
+let totp = try await supabase.auth.mfa.factors().verified.filter { $0.factorType == .totp }
+```
+
+## `getAuthenticatorAssuranceLevel()` is `assuranceLevel()`
+
+With no session, `assuranceLevel()` throws an error of kind `.sessionMissing`. v2 returned `nil`
+levels. It also throws an error of kind `.decoding` when the access token is not a JWT. Like
+`factors()`, it fetches the user from the server, so `nextLevel` sees factors enrolled on other
+devices; v2 read the stored user.
+
+```swift
+// v2
+let aal = try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+if aal.currentLevel == nil { showSignIn() }
+// v3
+do {
+  let aal = try await supabase.auth.mfa.assuranceLevel()
+  if aal.nextLevel != aal.currentLevel { showMFAPrompt() }
+} catch let error as AuthError where error.kind == .sessionMissing {
+  showSignIn()
+}
+```
+
 ## `signUp` returns `SignUpResult`
 
 `signUp(email:)` and `signUp(phone:)` return `SignUpResult` instead of `AuthResponse`. Its cases
@@ -322,6 +600,28 @@ case .session(let session):
 case .emailChangeConfirmationPending(let confirmation):
   print(confirmation.message, confirmation.code)
 }
+```
+
+## `JWTClaimsResponse` and `JWTClaims` are `VerifiedClaims`
+
+`claims(options:)` and `claims(jwt:options:)` return `VerifiedClaims` instead of
+`JWTClaimsResponse`. The claims are top-level properties with full names, and `header` and
+`signature` stay. `sub` and `exp` are required, so `subject` and `expiresAt` are not optional,
+and a token without them fails verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, `aal` is an
+`AuthenticatorAssuranceLevel`, and `AudienceClaim` is gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
+their typed properties. `nbf`, `jti`, and every other claim are in `additionalClaims`.
+
+```swift
+// v2
+let response = try await supabase.auth.getClaims()
+let userID = response.claims.sub
+let sessionID = response.claims.sessionId
+let expiresAt = response.claims.exp.map(Date.init(timeIntervalSince1970:))
+// v3
+let claims = try await supabase.auth.claims()
+let userID = claims.subject
+let sessionID = claims.sessionID
+let expiresAt = claims.expiresAt
 ```
 
 ## `emitLocalSessionAsInitialSession` is removed
@@ -494,7 +794,9 @@ window. A user who cancels the passkey sheet now gets `CancellationError`.
 | `PasskeyRegistrationOptions.challengeId: String` | `challengeID: UUID` (same for `PasskeyAuthenticationOptions`) |
 | `auth.mfa.enrollWebAuthnFactor(friendlyName:presentationAnchor:)` | `auth.mfa.enrollWebAuthn(friendlyName:anchor:)` |
 | `auth.mfa.verifyWebAuthnFactor(factorId:presentationAnchor:)` | `auth.mfa.verifyWebAuthn(factorID:anchor:)` |
-| `MFAVerifyParams(factorId:challengeId:credentialResponse:)` | `MFAVerifyParams(factorId:challengeId:type:credentialResponse:)` |
+| `mfa.enroll(params: .webAuthn(friendlyName:))` | `mfa.enrollWebAuthnFactor(friendlyName:)`, which returns the factor ID |
+| `mfa.challenge(params: MFAChallengeParams(factorId:webAuthn:))` | `mfa.challenge(factorID:webAuthn:)` |
+| `mfa.verify(params: MFAVerifyParams(factorId:challengeId:credentialResponse:))` | `mfa.verify(factorID:challengeID:type:credentialResponse:)` |
 | `admin.listPasskeys(userId:)` | `admin.passkeys.list(forUser:)` |
 | `admin.deletePasskey(userId:passkeyId:)` | `admin.passkeys.delete(id:forUser:)` |
 | `signInWithPasskey` and `verifyPasskeyAuthentication` return `AuthResponse` | They return `Session` |

@@ -323,7 +323,7 @@ public struct AuthError: SupabaseError {
     /// ``AuthMFA/verifyWebAuthn(factorID:anchor:)`` got a factor that is not verified yet. The
     /// SDK shows no passkey sheet and sends no credential. Register a factor with
     /// ``AuthMFA/enrollWebAuthn(friendlyName:anchor:)``, or remove the unverified one with
-    /// ``AuthMFA/unenroll(params:)``.
+    /// ``AuthMFA/unenroll(factorID:)``.
     @_spi(Experimental) public static let mfaFactorNotVerified: Kind = "mfaFactorNotVerified"
   }
 

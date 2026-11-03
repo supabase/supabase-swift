@@ -177,8 +177,20 @@ public actor RealtimeChannel {
   var sharedSubscribeWaiters:
     [UUID: (task: Task<Void, any Error>, continuation: CheckedContinuation<Void, any Error>)] = [:]
 
-  /// Resumed by the server's `phx_close` while an unsubscribe waits for it.
-  var closeWaiter: CheckedContinuation<Void, Never>?
+  /// Resumed by the server's `phx_close` while the unsubscribe run `run` waits for it.
+  var closeWaiter: (run: Int, continuation: CheckedContinuation<Void, Never>)?
+
+  /// The number of the latest unsubscribe run. A run owns the `.unsubscribing` state only while
+  /// it is the latest one.
+  var unsubscribeRun = 0
+
+  /// Whether the caller wants the channel joined: set by ``subscribe()``, cleared by
+  /// ``unsubscribe()``. A reconnect rejoins only these channels.
+  var subscribeRequested = false
+
+  /// Whether the client removed the channel, or the server closed it. Terminal: the client no
+  /// longer routes replies to the channel, so it never joins again.
+  var isRemoved = false
 
   /// The subscribe task a server close or ``RealtimeClient/disconnect(code:reason:)`` cancelled
   /// while it was in flight, and the error its caller gets. That attempt compares the task against
@@ -692,6 +704,8 @@ public actor RealtimeChannel {
     guard didReceiveClose(joinRef: message.joinRef) else {
       return
     }
+    // Before the hop: a reconnect or a `subscribe()` must never join a channel that is unmapped.
+    isRemoved = true
     await client?.remove(self)
     finishStreams()
   }

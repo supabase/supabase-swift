@@ -39,6 +39,7 @@ datastructure
 Dedup
 dedup
 dedupe
+deduplicator
 decoratee
 deeplinking
 deno
@@ -77,6 +78,7 @@ Gxlbmdl
 Hashability
 heartbeating
 Heartbeating
+HMAC
 hostnames
 HTTPURL
 Ilike
@@ -108,6 +110,7 @@ lnbm
 Lukas
 magiclink
 magnifyingglass
+Mailpit
 matview
 metamask
 metas
@@ -132,6 +135,7 @@ OIDC
 posix
 omitempty
 openssl
+otpauth
 opentelemetry
 parameterless
 passout
