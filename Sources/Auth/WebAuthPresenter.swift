@@ -18,32 +18,6 @@ public protocol WebAuthPresenter: Sendable {
   @MainActor func authenticate(url: URL, callbackScheme: String?) async throws -> URL
 }
 
-/// A web sign-in flow that the client started, with the page to open.
-///
-/// ``AuthClient/oauthSignInURL(_:options:)``, ``AuthClient/linkIdentityURL(_:options:)``, and
-/// ``AuthClient/ssoSignInURL(_:options:)`` return it when you present the page yourself.
-///
-/// ```swift
-/// let flow = try await supabase.auth.oauthSignInURL(.github)
-/// await UIApplication.shared.open(flow.url)
-/// // Later, in onOpenURL:
-/// try await supabase.auth.handleRedirect(callbackURL)
-/// ```
-public struct WebAuthFlow: Sendable, Hashable {
-  /// The provider page to open.
-  public let url: URL
-
-  /// The ID of the flow. Pass it to ``AuthClient/exchangeCodeForSession(_:flowID:)`` when you
-  /// exchange the code yourself. ``AuthClient/handleRedirect(_:)`` does not need it.
-  public let id: UUID
-
-  /// Creates a flow from its page and ID.
-  public init(url: URL, id: UUID) {
-    self.url = url
-    self.id = id
-  }
-}
-
 /// A presenter that runs a closure.
 ///
 /// ```swift

@@ -69,9 +69,7 @@ struct AuthAPITests {
       api.user(accessToken: token).head,
       api.updateUser(UserAttributes(), redirectTo: nil, pkce: nil, accessToken: token).head,
       api.unlinkIdentity(
-        UserIdentity(
-          id: "1", identityId: id, userId: id, identityData: [:], provider: "email",
-          createdAt: Date(), lastSignInAt: Date(), updatedAt: Date()),
+        UserIdentity(id: id, providerUserID: "1", userID: id, provider: .email),
         accessToken: token
       ).head,
       api.jwks().head,
@@ -79,12 +77,10 @@ struct AuthAPITests {
       api.oauthConsent(authorizationId: "a", action: "approve", accessToken: token).head,
       api.oauthGrants(accessToken: token).head,
       api.revokeOAuthGrant(clientId: id, accessToken: token).head,
-      api.enrollFactor(MFATotpEnrollParams(), accessToken: token).head,
-      api.challengeFactor(MFAChallengeParams(factorId: id), accessToken: token).head,
-      api.verifyFactor(
-        MFAVerifyParams(factorId: id, challengeId: id, code: "1"), accessToken: token
-      ).head,
-      api.unenrollFactor(MFAUnenrollParams(factorId: id), accessToken: token).head,
+      api.enrollFactor(.totp(), decoding: TOTPEnrollment.self, accessToken: token).head,
+      api.challengeFactor(factorID: id, channel: nil, webAuthn: nil, accessToken: token).head,
+      api.verifyFactor(factorID: id, challengeID: id, code: "1", accessToken: token).head,
+      api.unenrollFactor(factorID: id, accessToken: token).head,
       api.recoveryCodesStatus(accessToken: token).head,
       api.generateRecoveryCodes(friendlyName: nil, accessToken: token).head,
       api.verifyRecoveryCode("c", accessToken: token).head,
@@ -92,10 +88,10 @@ struct AuthAPITests {
       api.unenrollRecoveryCodes(accessToken: token).head,
       api.passkeyRegistrationOptions(accessToken: token).head,
       api.verifyPasskeyRegistration(
-        challengeId: "c", credentialResponse: credential, accessToken: token
+        challengeID: id, credential: credential, accessToken: token
       ).head,
       api.passkeyAuthenticationOptions().head,
-      api.verifyPasskeyAuthentication(challengeId: "c", credentialResponse: credential).head,
+      api.verifyPasskeyAuthentication(challengeID: id, credential: credential).head,
       api.listPasskeys(accessToken: token).head,
       api.renamePasskey(id: id, friendlyName: "n", accessToken: token).head,
       api.deletePasskey(id: id, accessToken: token).head,

@@ -51,6 +51,9 @@ extension RealtimeChannel {
   /// 30 s. An expired token gets one rejoin at once, with a token fetched again from the
   /// `accessToken` callback. Cancel the calling task to stop waiting.
   ///
+  /// A channel removed from its client, or closed by the server, never joins again; get a new one
+  /// from ``RealtimeClient/channel(_:configure:)``.
+  ///
   /// - Throws: ``RealtimeError`` when a retry cannot help: the server refused the join for good
   ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/ServerCode/unauthorized``
   ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
@@ -58,8 +61,14 @@ extension RealtimeChannel {
   ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, or the server
   ///   could not set up the channel's Postgres changes in time.
   ///   ``RealtimeError/Kind-swift.struct/channelClosedByServer`` when the server closed the
-  ///   channel during the join, and `CancellationError` when the calling task is cancelled.
+  ///   channel during the join, and `CancellationError` when the calling task is cancelled, when
+  ///   an ``unsubscribe()`` or a removal stops the join, or when the channel was already removed.
   public func subscribe() async throws {
+    guard !isRemoved else {
+      logger.debug("Subscribe refused for channel '\(topic)': the channel was removed")
+      throw CancellationError()
+    }
+    subscribeRequested = true
     switch state {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -72,7 +81,7 @@ extension RealtimeChannel {
       logger.debug("Waiting for in-flight unsubscribe on '\(topic)' before subscribing")
       await task.value
       // Re-dispatch rather than calling `beginSubscribe()` directly: another caller may have
-      // moved the state while this one awaited the unsubscribe.
+      // moved the state, or removed the channel, while this one awaited the unsubscribe.
       try await subscribe()
 
     case .unsubscribed, .failed:
@@ -84,10 +93,9 @@ extension RealtimeChannel {
   /// Leaves the Realtime topic and transitions the channel to
   /// ``RealtimeChannelStatus/unsubscribed``. Cancels an in-flight subscribe if one is running.
   public func unsubscribe() async {
-    // Probe the socket before reading `state`: the probe suspends, and another caller could move
-    // the state while this one waits. After it, the switch and the transition run without a
-    // suspension point.
-    let socketConnected = await isSocketConnected()
+    // No suspension before the transition: the request and the state it leaves change in one
+    // turn, so a reconnect or a `subscribe()` never runs in between.
+    subscribeRequested = false
     // A later subscribe is a new subscription, not a rejoin.
     hasBeenSubscribed = false
     deliverPresence(presence.clear())
@@ -107,16 +115,12 @@ extension RealtimeChannel {
       task.cancel()
       // Subscribe hadn't completed yet, so the server may not recognize the channel and will
       // likely never send `phx_close`. Don't wait for it.
-      await beginUnsubscribe(waitForServerClose: false, sendLeave: socketConnected)
+      await startUnsubscribe(waitForServerClose: false).value
 
     case .subscribed:
       // We had a live subscription; wait (bounded) for the server's `phx_close` so observers see
       // the full status trail.
-      //
-      // Unless the socket is dead: the server-side channel died with the connection,
-      // `phx_leave` would only be buffered into the *next* connection as a stale frame, and
-      // `phx_close` can never arrive — waiting would stall for the full timeout (issue #1145).
-      await beginUnsubscribe(waitForServerClose: socketConnected, sendLeave: socketConnected)
+      await startUnsubscribe(waitForServerClose: true).value
     }
   }
 
@@ -127,8 +131,14 @@ extension RealtimeChannel {
   /// A channel that is `.subscribed` when the socket reconnects must re-send `phx_join` on the
   /// new socket, but ``subscribe()`` is a no-op for `.subscribed` channels, so the client resets
   /// it first. An in-flight join is waiting for a reply that will never arrive on the dead
-  /// socket; cancel it so a fresh `phx_join` goes out on the new connection.
-  func resetForReconnect() {
+  /// socket; cancel it so a fresh `phx_join` goes out on the new connection. An unsubscribe
+  /// waiting for the server's `phx_close` ends here: that close died with the socket.
+  ///
+  /// - Returns: Whether the channel should rejoin: only when the caller subscribed it and has
+  ///   neither unsubscribed nor removed it since, so a reconnect never joins a channel the caller
+  ///   does not want or the client no longer routes to.
+  @discardableResult
+  func resetForReconnect() -> Bool {
     joinRef = nil
     failPendingPushes(with: RealtimeError.notConnected)
     switch state {
@@ -144,6 +154,18 @@ extension RealtimeChannel {
     case .unsubscribed, .failed:
       break
     }
+    return subscribeRequested && !isRemoved
+  }
+
+  /// Resets the channel after a reconnect and joins again if the caller still wants it joined.
+  ///
+  /// The reset and the start of the join run in one turn of this actor. An ``unsubscribe()`` or a
+  /// removal that arrives after the reset finds the join in flight and stops it; it never finds
+  /// an `.unsubscribed` channel whose rejoin is still to come.
+  func rejoinAfterReconnect() async throws {
+    guard resetForReconnect() else { return }
+    logger.debug("Rejoining channel '\(topic)' after a reconnect")
+    try await awaitSubscribe(startSubscribeTask())
   }
 
   /// The socket was closed by ``RealtimeClient/disconnect(code:reason:)``: nothing in flight can
@@ -166,6 +188,14 @@ extension RealtimeChannel {
     }
     joinRef = nil
     setState(.unsubscribed)
+  }
+
+  /// The client removes the channel. It leaves the topic and never joins again: once unmapped,
+  /// it would never see a reply, and each retried `phx_join` would be a duplicate join that
+  /// closes the topic's next channel.
+  func unsubscribeForRemoval() async {
+    isRemoved = true
+    await unsubscribe()
   }
 
   // MARK: - Server signals
@@ -292,8 +322,10 @@ extension RealtimeChannel {
 
   private func beginSubscribe() async throws {
     logger.debug("Beginning subscribe flow for channel '\(topic)'")
-    let task = startSubscribeTask()
+    try await awaitSubscribe(startSubscribeTask())
+  }
 
+  private func awaitSubscribe(_ task: Task<Void, any Error>) async throws {
     do {
       // Forward cancellation of the caller's task to the spawned subscribe task. Without this,
       // `task.value` would keep waiting for the inner retry loop even after the caller cancels.
@@ -621,48 +653,66 @@ extension RealtimeChannel {
 
   // MARK: - Unsubscribe flow
 
-  private func beginUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
+  /// Starts an unsubscribe run and moves to `.unsubscribing`, without a suspension point.
+  func startUnsubscribe(waitForServerClose: Bool) -> Task<Void, Never> {
     logger.debug("Beginning unsubscribe flow for channel '\(topic)'")
+    unsubscribeRun += 1
+    let run = unsubscribeRun
     let task = Task<Void, Never> {
-      await runUnsubscribe(waitForServerClose: waitForServerClose, sendLeave: sendLeave)
+      await runUnsubscribe(run, waitForServerClose: waitForServerClose)
     }
     setState(.unsubscribing(task))
-    await task.value
+    return task
   }
 
-  private func runUnsubscribe(waitForServerClose: Bool, sendLeave: Bool) async {
-    // Send `phx_leave` (skipped when the socket is dead — it could never be delivered, only
-    // buffered into the next connection as a stale frame). When `waitForServerClose` is true,
-    // wait (bounded by `timeout`) for the server's `phx_close` to arrive via `didReceiveClose()`.
-    if sendLeave {
+  private func runUnsubscribe(_ run: Int, waitForServerClose: Bool) async {
+    // Send `phx_leave` and wait for `phx_close` only on a live socket. On a dead one the
+    // server-side channel died with the connection, `phx_leave` would only be buffered into the
+    // *next* connection as a stale frame, and `phx_close` can never arrive — waiting would stall
+    // for the full timeout (issue #1145).
+    let socketConnected = await isSocketConnected()
+
+    // A reset or a server close may end this run at any suspension point, and a newer subscribe
+    // or unsubscribe may own the state and `joinRef` since: this run must not touch them.
+    guard ownsState(run) else { return }
+    if socketConnected {
       await push(ChannelEvent.leave)
     }
 
-    if waitForServerClose {
+    // Wait (bounded by `timeout`) for the server's `phx_close` to arrive via `didReceiveClose()`.
+    if waitForServerClose, socketConnected {
       _ = try? await withTimeout(timeout, clock: clock) {
         await withTaskCancellationHandler {
           await withCheckedContinuation { continuation in
-            guard case .unsubscribing = state else {
+            guard ownsState(run) else {
               continuation.resume()
               return
             }
-            closeWaiter = continuation
+            closeWaiter = (run, continuation)
           }
         } onCancel: {
-          Task { await self.resumeCloseWaiter() }
+          Task { await self.resumeCloseWaiter(for: run) }
         }
       }
     }
 
+    guard ownsState(run) else { return }
     joinRef = nil
     failPendingPushes(with: RealtimeError.notSubscribed)
-    if case .unsubscribing = state {
-      setState(.unsubscribed)
-    }
+    setState(.unsubscribed)
   }
 
-  func resumeCloseWaiter() {
-    closeWaiter?.resume()
+  /// Whether the state is still `.unsubscribing` with the task of unsubscribe run `run`.
+  private func ownsState(_ run: Int) -> Bool {
+    guard case .unsubscribing = state else { return false }
+    return run == unsubscribeRun
+  }
+
+  /// Resumes the parked close waiter. With `run`, only if the waiter belongs to that run; the
+  /// waiter of a newer run is left alone.
+  func resumeCloseWaiter(for run: Int? = nil) {
+    if let run, run != closeWaiter?.run { return }
+    closeWaiter?.continuation.resume()
     closeWaiter = nil
   }
 }

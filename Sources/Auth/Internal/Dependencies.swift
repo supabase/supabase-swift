@@ -22,6 +22,8 @@ struct Dependencies: Sendable {
   /// Owns the session.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
+  /// Sends one refresh request. Stores nothing and emits no event.
+  let refreshRequest: @Sendable (_ refreshToken: String) async throws -> Session
   let autoRefresh: AutoRefreshController
   let date: @Sendable () -> Date
   let platform: AuthPlatform
@@ -95,6 +97,7 @@ extension Dependencies {
       redirectDeduplicator: RedirectDeduplicator(),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
+      refreshRequest: refresh,
       autoRefresh: autoRefresh,
       date: date,
       platform: platform,

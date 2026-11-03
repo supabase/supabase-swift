@@ -9,32 +9,6 @@ import Logging
 
 typealias AuthClientID = Int
 
-private let jwksTTL: TimeInterval = 10 * 60
-
-private struct CachedJWKS {
-  let jwks: JWKS
-  let cachedAt: Date
-}
-
-/// Global JWKS cache shared across all clients with the same storage key.
-/// This is especially useful for shared-memory execution environments such as
-/// AWS Lambda or serverless functions. Regardless of how many clients are created,
-/// if they share the same storage key they will use the same JWKS cache,
-/// significantly speeding up claims() with asymmetric JWTs.
-private actor GlobalJWKSCache {
-  private var cache: [String: CachedJWKS] = [:]
-
-  func get(for key: String) -> CachedJWKS? {
-    cache[key]
-  }
-
-  func set(_ value: CachedJWKS, for key: String) {
-    cache[key] = value
-  }
-}
-
-private let globalJWKSCache = GlobalJWKSCache()
-
 /// The primary interface to Supabase Auth.
 ///
 /// Use `AuthClient` to sign users up, sign them in, manage sessions, and subscribe to
@@ -65,7 +39,6 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``initialization()``
 /// - ``currentSession``
 /// - ``currentUser``
-/// - ``session``
 ///
 /// ### Signing up
 /// - ``signUp(email:password:options:)``
@@ -84,7 +57,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(_:options:presenter:)``
 /// - ``oauthSignInURL(_:options:)``
 /// - ``OAuthOptions``
-/// - ``WebAuthFlow``
+/// - ``OAuthFlow``
 /// - ``WebAuthPresenter``
 /// - ``ClosurePresenter``
 /// - ``ASWebAuthenticationSessionPresenter``
@@ -120,8 +93,9 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``exchangeCodeForSession(_:flowID:)``
 ///
 /// ### Session management
-/// - ``setSession(accessToken:refreshToken:)``
-/// - ``refreshSession(refreshToken:)``
+/// - ``session()``
+/// - ``importSession(accessToken:refreshToken:)``
+/// - ``refreshSession()``
 /// - ``refreshSessionIfNeeded()``
 /// - ``startAutoRefresh()``
 /// - ``stopAutoRefresh()``
@@ -130,19 +104,22 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signOut(scope:)``
 ///
 /// ### User management
+/// - ``user()``
 /// - ``user(jwt:)``
-/// - ``update(user:redirectTo:)``
+/// - ``updateUser(_:redirectTo:)``
+/// - ``UserAttributes``
 /// - ``reauthenticate()``
 /// - ``resetPassword(email:redirectTo:captchaToken:)``
 ///
 /// ### Identities
-/// - ``userIdentities()``
+/// - ``identities()``
 /// - ``linkIdentity(_:options:presenter:)``
-/// - ``linkIdentityWithIDToken(_:)``
+/// - ``linkIdentity(idToken:)``
 /// - ``linkIdentityURL(_:options:)``
 /// - ``unlinkIdentity(_:)``
 ///
 /// ### JWT claims
+/// - ``claims(options:)``
 /// - ``claims(jwt:options:)``
 ///
 /// ### Namespaces
@@ -163,6 +140,8 @@ public final class AuthClient: Sendable {
 
   let dependencies: Dependencies
 
+  private let jwksCache: JWKSCache
+
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
 
@@ -177,7 +156,8 @@ public final class AuthClient: Sendable {
 
   private let lifecycleTask: Task<Void, Never>
 
-  /// Returns the session, refreshing it if necessary.
+  /// Returns the session, refreshing it first when its access token expires in less than 30
+  /// seconds.
   ///
   /// Throws an error of kind ``AuthError/Kind-swift.struct/sessionMissing`` when no session is
   /// stored, and of kind ``AuthError/Kind-swift.struct/sessionInvalidated`` when the server
@@ -191,10 +171,8 @@ public final class AuthClient: Sendable {
   /// available. On watchOS and macOS, only those calls read storage again. A missing Keychain
   /// entitlement throws an error of kind
   /// ``AuthError/Kind-swift.struct/storageMisconfigured``.
-  public var session: Session {
-    get async throws {
-      try await sessionManager.session()
-    }
+  public func session() async throws -> Session {
+    try await sessionManager.session()
   }
 
   /// Whether a user is signed in, as the client knows it in memory.
@@ -207,22 +185,21 @@ public final class AuthClient: Sendable {
 
   /// Returns the current session, if any.
   ///
-  /// The session returned by this property may be expired. Use ``session`` for a session that is guaranteed to be valid.
+  /// Reading it does no I/O, so the session may be expired. Use ``session()`` for
+  /// a session that is valid.
   public var currentSession: Session? {
     sessionStore.currentSession
   }
 
   /// Returns the current user, if any.
   ///
-  /// The user returned by this property may be outdated. Use ``user(jwt:)`` method to get an up-to-date user instance.
+  /// The user returned by this property may be outdated. Use ``user()`` to fetch an up-to-date user.
   public var currentUser: User? {
     currentSession?.user
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public var mfa: AuthMFA {
-    AuthMFA(client: self)
-  }
+  public let mfa: AuthMFA
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
@@ -272,6 +249,13 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    self.mfa = AuthMFA(dependencies: dependencies)
+    jwksCache = JWKSCache(
+      fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
+        try await api.execute(authAPI.jwks())
+      },
+      now: date
+    )
     Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
     let autoRefresh = dependencies.autoRefresh
@@ -559,7 +543,7 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when you present the identity provider page yourself. The client stores a new PKCE
   /// flow before it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or
-  /// pass the code and ``WebAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
+  /// pass the code and ``OAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - target: The email domain or the ID of the identity provider.
@@ -568,7 +552,7 @@ public final class AuthClient: Sendable {
   public func ssoSignInURL(
     _ target: SSOTarget,
     options: SSOOptions = .init()
-  ) async throws -> WebAuthFlow {
+  ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.signIn, redirectTo: redirectTo, sendsEmail: false) { started in
@@ -580,7 +564,7 @@ public final class AuthClient: Sendable {
           pkce: started.challenge
         )
       )
-      return WebAuthFlow(url: url, id: started.flow.id)
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 
@@ -646,16 +630,16 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
   /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or pass the code
-  /// and ``WebAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
+  /// and ``OAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The flow that this call started, with the URL to open.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
   public func oauthSignInURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> WebAuthFlow {
+  ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.signIn, redirectTo: redirectTo) { started in
@@ -666,7 +650,7 @@ public final class AuthClient: Sendable {
         queryParams: options.queryParams,
         pkce: started.challenge
       )
-      return WebAuthFlow(url: url, id: started.flow.id)
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 
@@ -730,7 +714,7 @@ public final class AuthClient: Sendable {
 
   /// Shows `flow.url` with `presenter`, then finishes the flow with the callback URL.
   private func present(
-    _ flow: WebAuthFlow,
+    _ flow: OAuthFlow,
     redirectTo: URL?,
     with presenter: some WebAuthPresenter
   ) async throws -> Session {
@@ -795,9 +779,10 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameters:
   ///   - code: The authorization code from the redirect URL.
-  ///   - flowID: The ``WebAuthFlow/id`` of the flow that produced `code`, as returned by
+  ///   - flowID: The ID of the flow that produced `code`: the ``OAuthFlow/id`` that
   ///     ``oauthSignInURL(_:options:)``, ``linkIdentityURL(_:options:)``, or
-  ///     ``ssoSignInURL(_:options:)``. When `nil`, the client tries the pending flows newest first.
+  ///     ``ssoSignInURL(_:options:)`` returned. When `nil`, the client tries the pending flows
+  ///     newest first.
   /// - Returns: The new session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
@@ -900,8 +885,9 @@ public final class AuthClient: Sendable {
   ) async throws -> (session: Session, flow: PendingFlowRecord) {
     if let flowID {
       guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
-        throw AuthError.oauthFlowFailed(
-          "No pending flow with ID \(flowID). It finished, expired, or started on another device.")
+        throw await missingFlowError(
+          "No pending flow with ID \(flowID). It finished, expired, or started on another device.",
+          signOuts: signOuts)
       }
       return (try await exchange(code: code, flow: flow, guessed: false, signOuts: signOuts), flow)
     }
@@ -917,9 +903,17 @@ public final class AuthClient: Sendable {
         rejection = error
       }
     }
-    throw rejection
-      ?? AuthError.oauthFlowFailed(
-        "No pending flow for this code. It finished, expired, or started on another device.")
+    if let rejection { throw rejection }
+    throw await missingFlowError(
+      "No pending flow for this code. It finished, expired, or started on another device.",
+      signOuts: signOuts)
+  }
+
+  /// A sign-out since `signOuts` removed the pending flows. The sign-in then throws
+  /// `CancellationError`, as it does when the sign-out lands during the exchange.
+  private func missingFlowError(_ message: String, signOuts: UInt64) async -> any Error {
+    await sessionStore.signOuts == signOuts
+      ? AuthError.oauthFlowFailed(message) : CancellationError()
   }
 
   /// `guessed` is `true` when the caller chose `flow` without an ID. A rejection then keeps `flow`,
@@ -985,37 +979,38 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Sets the session data from the current session. If the current session is expired, setSession
-  /// will take care of refreshing it to obtain a new session.
+  /// Signs in with a session your app got outside this client, such as tokens that a tvOS app
+  /// receives from a sign-in on another device.
   ///
-  /// If the refresh token is invalid and the current session has expired, an error will be thrown.
-  /// This method will use the exp claim defined in the access token.
+  /// The client reads the expiry from the access token. When the token has expired, it redeems
+  /// `refreshToken` for a new session. Otherwise it fetches the user with the access token. Then
+  /// it stores the session and emits ``AuthEvent/signedIn`` once. When a request fails, the
+  /// stored session stays as it was.
+  ///
   /// - Parameters:
-  ///   - accessToken: The current access token.
-  ///   - refreshToken: The current refresh token.
-  /// - Returns: A new valid session.
+  ///   - accessToken: The access token of the session.
+  ///   - refreshToken: The refresh token of the session.
+  /// - Returns: The stored session.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when
+  ///   `accessToken` is not a JWT with an `exp` claim.
   @discardableResult
-  public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
-    let now = date()
-    var expiresAt = now
-    var hasExpired = true
-    var session: Session
-
-    let jwt = JWT.decodePayload(accessToken)
-    if let exp = jwt?["exp"] as? TimeInterval {
-      expiresAt = Date(timeIntervalSince1970: exp)
-      hasExpired = expiresAt <= now
+  public func importSession(accessToken: String, refreshToken: String) async throws -> Session {
+    guard let exp = JWT.decodePayload(accessToken)?["exp"] as? TimeInterval else {
+      throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if hasExpired {
-      session = try await refreshSession(refreshToken: refreshToken)
+    let now = date()
+    let expiresAt = Date(timeIntervalSince1970: exp)
+    let session: Session
+    if expiresAt <= now {
+      session = try await dependencies.refreshRequest(refreshToken)
     } else {
-      let user = try await user(jwt: accessToken)
+      let user = try await api.execute(authAPI.user(accessToken: accessToken))
       session = Session(
         accessToken: accessToken,
         tokenType: "bearer",
         expiresIn: expiresAt.timeIntervalSince(now),
-        expiresAt: expiresAt.timeIntervalSince1970,
+        expiresAt: exp,
         refreshToken: refreshToken,
         user: user
       )
@@ -1025,40 +1020,127 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Signs out the current user, if there is a logged in user.
+  /// Ends the sessions that `scope` names.
   ///
-  /// If using ``SignOutScope/others`` scope, no ``AuthEvent/signedOut`` event is fired.
-  /// - Parameter scope: Specifies which sessions should be logged out.
-  public func signOut(scope: SignOutScope = .global) async throws {
+  /// - ``SignOutScope/local``, the default, signs out this device. The client removes the
+  ///   session, clears every pending PKCE flow, and emits ``AuthEvent/signedOut`` with
+  ///   ``SignOutReason/userInitiated`` before it asks the server to revoke the session. So the
+  ///   device is signed out whatever the server answers. An error means that the server did not
+  ///   revoke the refresh token, which then stays valid until it expires.
+  /// - ``SignOutScope/global`` ends every session of the user. The client removes the session
+  ///   only after the server ended them. When the request fails, the session stays, so you can
+  ///   retry or sign out with `.local`. When the server rejects the refresh of an expired session,
+  ///   the client signs out with ``SignOutReason/userInitiated`` and throws. When another sign-in
+  ///   replaces the session during that refresh, the client keeps the new session and throws.
+  /// - ``SignOutScope/others`` ends every other session of the user. This session stays, and the
+  ///   client emits no ``AuthEvent/signedOut``. The client first refreshes an expired session, as
+  ///   ``refreshSession()`` does, under every ``AutoRefreshPolicy``. When the server rejects that
+  ///   refresh, the client signs out with ``SignOutReason/sessionExpired`` and throws.
+  ///
+  /// When no session is stored, `.local` and `.global` still clear the local auth state and emit
+  /// ``AuthEvent/signedOut``. A sign-out ends refresh tokens only: an access token stays valid
+  /// until it expires.
+  ///
+  /// - Parameter scope: Which sessions to end.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/sessionMissing`` for `.others` when
+  ///   no session is stored, or when another sign-in replaced the session during its refresh.
+  public func signOut(scope: SignOutScope = .local) async throws {
+    if status == .loading {
+      try await sessionStore.load()
+    }
+
     if scope != .others {
       // A redirect handled before the sign-out must sign in again when it comes back.
       await dependencies.redirectDeduplicator.removeAll()
     }
 
-    guard let session = currentSession else {
-      configuration.logger.warning("signOut called without a session")
-      if scope != .others {
-        // A sign-in that started before this call must not commit after it.
-        try await sessionStore.recordSignOut()
+    switch scope {
+    case .local: try await signOutLocally()
+    case .global: try await signOutGlobally()
+    case .others: try await signOutOthers()
+    }
+  }
+
+  private func signOutLocally() async throws {
+    await removePendingFlows()
+    let removed = try await sessionStore.signOut(.userInitiated)
+    await dependencies.redirectDeduplicator.removeAll()
+    guard let removed else { return }
+
+    var accessToken = removed.session.accessToken
+    if removed.isExpired(at: date(), leeway: defaultExpiryMargin) {
+      do {
+        accessToken = try await dependencies.refreshRequest(removed.session.refreshToken)
+          .accessToken
+      } catch let error as AuthError where error.endsSessionForGood {
+        return
       }
-      return
+    }
+    try await logout(accessToken: accessToken, scope: .local)
+  }
+
+  private func signOutGlobally() async throws {
+    guard let held = currentSession else {
+      return try await removeSession(refreshToken: nil)
     }
 
-    if scope != .others {
-      try await sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
-      // A redirect cached between the first clear and the commit must not replay either.
-      await dependencies.redirectDeduplicator.removeAll()
+    var session = held
+    if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
+      do {
+        session = try await sessionStore.refreshHeldSession(
+          readWith: held.refreshToken,
+          requiringSameSession: true,
+          using: dependencies.refreshRequest,
+          signOutReason: { $0.isClientError ? .userInitiated : nil }
+        )
+      } catch let error as AuthError where error.isClientError {
+        await removePendingFlows()
+        await dependencies.redirectDeduplicator.removeAll()
+        throw error
+      } catch  where currentSession == nil && !Task.isCancelled {
+        // Another sign-out landed during the refresh, so no session is left to revoke.
+        return try await removeSession(refreshToken: nil)
+      }
     }
 
+    try await logout(accessToken: session.accessToken, scope: .global)
+    try await removeSession(refreshToken: session.refreshToken)
+  }
+
+  private func signOutOthers() async throws {
+    guard var session = currentSession else { throw AuthError.sessionMissing }
+    if sessionStore.validSession(minimumValidity: defaultExpiryMargin) == nil {
+      session = try await sessionStore.refreshHeldSession(
+        readWith: session.refreshToken, requiringSameSession: true,
+        using: dependencies.refreshRequest)
+    }
+    try await logout(accessToken: session.accessToken, scope: .others)
+  }
+
+  /// Signs out while the store holds the session whose refresh token was `refreshToken`, or a
+  /// refresh of it, or holds none when `refreshToken` is `nil`. A sign-in that landed during the
+  /// request stays.
+  private func removeSession(refreshToken: String?) async throws {
+    await removePendingFlows()
+    try await sessionStore.commit(.revoked(.userInitiated, refreshToken: refreshToken))
+    // A redirect cached between the first clear and the commit must not replay either.
+    await dependencies.redirectDeduplicator.removeAll()
+  }
+
+  /// A storage error is logged: it must not stop the sign-out.
+  private func removePendingFlows() async {
     do {
-      try await api.execute(
-        authAPI.signOut(accessToken: session.accessToken, scope: scope),
-        for: .snapshot(session)
-      )
-    } catch let error as AuthError
-      where error.kind == .sessionInvalidated
-      || error.kind == .server && [404, 403, 401].contains(error.response?.statusCode ?? 0)
-    {}
+      try await dependencies.flowStore.removeAll()
+    } catch {
+      configuration.logger.error("Failure removing pending flows: \(error.localizedDescription)")
+    }
+  }
+
+  /// Sends `POST /logout`. Each scope decides what happens to the local session.
+  private func logout(accessToken: String, scope: SignOutScope) async throws {
+    do {
+      try await api.execute(authAPI.signOut(accessToken: accessToken, scope: scope))
+    } catch let error as AuthError where error.meansNothingLeftToRevoke(for: scope) {}
   }
 
   /// Verifies a one-time code from an email, and stores the session.
@@ -1205,24 +1287,37 @@ public final class AuthClient: Sendable {
 
   /// Sends a one-time code to the email or phone of the signed-in user.
   ///
-  /// Pass the code as ``UserAttributes/nonce`` to ``update(user:redirectTo:)`` when the project
+  /// Pass the code as ``UserAttributes/nonce`` to ``updateUser(_:redirectTo:)`` when the project
   /// needs a recent sign-in to change the password.
   public func reauthenticate() async throws {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
 
-  /// Gets the current user details if there is an existing session.
-  /// - Parameter jwt: Takes in an optional access token jwt. If no jwt is provided, user() will
-  /// attempt to get the jwt from the current session.
+  /// Fetches the signed-in user from the Auth server.
   ///
-  /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
-  public func user(jwt: String? = nil) async throws -> User {
-    if let jwt {
-      return try await api.execute(
-        authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
-    }
+  /// The client sends the access token of the current session. It refreshes the session first
+  /// when the access token has expired. Use this method when you need the latest user data. For a
+  /// value without a request, read ``currentUser``.
+  ///
+  /// - Returns: The signed-in user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  }
 
-    return try await api.authorizedExecute { authAPI.user(accessToken: $0) }
+  /// Fetches the user that an access token belongs to.
+  ///
+  /// The client sends `jwt` as is. It does not refresh it. When `jwt` is the access token of the
+  /// current session and the Auth server reports that its session no longer exists, the client
+  /// signs out.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Returns: The user that `jwt` belongs to.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
+  public func user(jwt: String) async throws -> User {
+    try await api.execute(
+      authAPI.user(accessToken: jwt), for: sessionOwnership(ofAccessToken: jwt))
   }
 
   private func sessionOwnership(ofAccessToken accessToken: String) -> SessionOwnership {
@@ -1230,43 +1325,71 @@ public final class AuthClient: Sendable {
     return .snapshot(stored)
   }
 
-  /// Updates user data, if there is a logged in user.
+  /// Updates the signed-in user.
+  ///
+  /// The client merges the returned user into the current session and emits
+  /// ``AuthEvent/userUpdated``. It keeps the tokens of the current session, also when a refresh
+  /// rotates them while the request is in flight.
+  ///
+  /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
+  /// the current password for that change. When `attributes` changes the email, the client starts
+  /// an email change flow. Pass the redirect URL that comes back to ``handleRedirect(_:)``.
+  ///
+  /// - Parameters:
+  ///   - attributes: The values to change.
+  ///   - redirectTo: The URL that the confirmation link of an email change opens.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
-    guard user.email != nil else {
-      return try await updateUser(user, redirectTo: redirectTo, pkce: nil)
+  public func updateUser(
+    _ attributes: UserAttributes,
+    redirectTo: URL? = nil
+  ) async throws -> User {
+    guard attributes.email != nil else {
+      return try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: nil)
     }
     return try await withFlow(.emailChange, redirectTo: redirectTo) {
-      try await updateUser(user, redirectTo: redirectTo, pkce: $0.challenge)
+      try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: $0.challenge)
     }
   }
 
-  private func updateUser(
-    _ user: UserAttributes,
+  private func sendUserUpdate(
+    _ attributes: UserAttributes,
     redirectTo: URL?,
     pkce: PKCEChallenge?
   ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
-      try authAPI.updateUser(user, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+      try authAPI.updateUser(attributes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
     try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser
   }
 
-  /// Gets all the identities linked to a user.
-  public func userIdentities() async throws -> [UserIdentity] {
+  /// Fetches the identities linked to the signed-in user.
+  ///
+  /// The client sends a request through ``user()``.
+  ///
+  /// - Returns: The linked identities. Empty when the server sends none.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
-  /// Links an identity to the current user with an ID token that a third-party identity provider
-  /// issued.
+  /// Links an identity to the signed-in user with an ID token that a third-party identity
+  /// provider issued.
+  ///
+  /// The client stores the returned session and emits ``AuthEvent/userUpdated``.
   ///
   /// - Parameter credentials: The ID token and the values the server needs to check it.
-  /// - Returns: The updated session.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   request.
   @discardableResult
-  public func linkIdentityWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
     let session = try await api.execute(
-      authAPI.signInWithIDToken(credentials: credentials, linkingTo: session.accessToken)
+      authAPI.signInWithIDToken(credentials: credentials, linkingTo: session().accessToken)
     )
 
     try await sessionStore.commit(.signedIn(session, event: .userUpdated))
@@ -1283,11 +1406,11 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - provider: The provider to link.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The flow that this call started, with the URL to open.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
   public func linkIdentityURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> WebAuthFlow {
+  ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
@@ -1301,7 +1424,7 @@ public final class AuthClient: Sendable {
           accessToken: $0
         )
       }
-      return WebAuthFlow(url: url, id: started.flow.id)
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 
@@ -1367,7 +1490,7 @@ public final class AuthClient: Sendable {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     // The response carries no user, so the store drops the identity from the held one.
     try await sessionStore.commit(
-      .identityUnlinked(identity.identityId, userID: identity.userId))
+      .identityUnlinked(identity.id, userID: identity.userID))
   }
 
   /// Sends a password reset email.
@@ -1376,7 +1499,7 @@ public final class AuthClient: Sendable {
   /// URL of the link to ``handleRedirect(_:)``, or the code to
   /// ``verifyOTP(email:token:type:)`` with ``EmailOTPType/recovery``. Both sign the
   /// user in and emit ``AuthEvent/passwordRecovery``. Then set the new password with
-  /// ``update(user:redirectTo:)``.
+  /// ``updateUser(_:redirectTo:)``.
   ///
   /// The call succeeds for an unknown email too, so it does not show which addresses have an
   /// account.
@@ -1403,17 +1526,17 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Refresh and return a session, regardless of expiry status.
-  /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
-  /// none is provided then this method refreshes the current session. When a concurrent refresh or
-  /// sign-in replaced the current session during this call, and the new session is still valid,
-  /// this method returns the new session without a request.
+  /// Refreshes the session, whatever its expiry, and returns it.
+  ///
+  /// When a concurrent refresh or sign-in replaced the session during this call, and the new
+  /// session is still valid, this method returns the new session without a request. To sign in
+  /// with tokens from elsewhere, use ``importSession(accessToken:refreshToken:)``.
+  ///
   /// - Returns: A new session, or the valid session that replaced the current one.
-  /// - Throws: ``AuthError/sessionMissing`` when no `refreshToken` is given and there is no
-  ///   current session.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored.
   @discardableResult
-  public func refreshSession(refreshToken: String? = nil) async throws -> Session {
-    try await sessionManager.refreshSession(refreshToken)
+  public func refreshSession() async throws -> Session {
+    try await sessionManager.refreshSession()
   }
 
   /// Refreshes the session when less than half of its lifetime is left, and returns it.
@@ -1498,123 +1621,79 @@ public final class AuthClient: Sendable {
       || error.underlyingError is URLError
   }
 
-  /// Fetches a JWK from the JWKS endpoint with caching
-  /// Returns nil if the key is not found, allowing graceful fallback to server-side verification
-  private func fetchJWK(kid: String, jwks: JWKS? = nil) async throws -> JWK? {
-    if let jwk = jwks?.keys.first(where: { $0.kid == kid }) {
-      return jwk
-    }
-
-    let now = date()
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-
-    if let cached = await globalJWKSCache.get(for: storageKey),
-      let jwk = cached.jwks.keys.first(where: { $0.kid == kid })
-    {
-      if cached.cachedAt.addingTimeInterval(jwksTTL) > now {
-        return jwk
-      }
-    }
-
-    let fetchedJWKS = try await api.execute(authAPI.jwks())
-
-    guard !fetchedJWKS.keys.isEmpty else {
-      return nil
-    }
-
-    await globalJWKSCache.set(
-      CachedJWKS(jwks: fetchedJWKS, cachedAt: now),
-      for: storageKey
-    )
-
-    return fetchedJWKS.keys.first(where: { $0.kid == kid })
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The token comes from ``session()``, so an expired session is refreshed first. The token is
+  /// then verified as ``claims(jwt:options:)`` describes.
+  ///
+  /// - Parameter options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: Every error that ``session()`` throws, unchanged: for example, an error of kind
+  ///   ``AuthError/Kind-swift.struct/sessionMissing`` when no user is signed in, or the refresh
+  ///   error when the server rejects the refresh. An error of kind
+  ///   ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when verification fails.
+  public func claims(options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    try await claims(jwt: session().accessToken, options: options)
   }
 
-  /// Extracts the JWT claims present in the access token by first verifying the
-  /// JWT against the server's JSON Web Key Set endpoint `/.well-known/jwks.json`
-  /// which is often cached, resulting in significantly faster responses. Prefer
-  /// this method over ``user(jwt:)`` which always sends a request to the Auth
-  /// server for each JWT.
+  /// Verifies a JSON Web Token and returns its claims.
   ///
-  /// If the project is not using an asymmetric JWT signing key (like ECC or RSA)
-  /// it always sends a request to the Auth server (similar to ``user(jwt:)``) to
-  /// verify the JWT.
+  /// A token signed with an asymmetric key, such as ES256 or RS256, that names its key in the
+  /// `kid` header is verified on the device against the project's JSON Web Key Set at
+  /// `/.well-known/jwks.json`. Each client caches the key set for 10 minutes, so most calls send
+  /// no request. Prefer this method over ``user(jwt:)``, which sends a request for each token.
+  ///
+  /// The Auth server verifies every other token through ``user(jwt:)``: a token signed with a
+  /// symmetric key (HS256), a token without a `kid`, and a token whose key the client cannot find.
   ///
   /// - Parameters:
-  ///   - jwt: An optional specific JWT you wish to verify, not the one you can obtain from ``session``.
-  ///   - options: Various additional options that allow you to customize the behavior of this method.
-  ///
-  /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
-  ///
-  /// - Throws: ``AuthError`` with kind `.jwtVerificationFailed` if verification fails, or ``AuthError/sessionMissing`` if no session exists.
-  public func claims(
-    jwt: String? = nil,
-    options: GetClaimsOptions = GetClaimsOptions()
-  ) async throws -> JWTClaimsResponse {
-    let token: String
-    if let jwt {
-      token = jwt
-    } else {
-      guard let session = try? await session else {
-        throw AuthError.sessionMissing
-      }
-      token = session.accessToken
-    }
-
-    guard let decodedJWT = JWT.decode(token) else {
+  ///   - jwt: The token to verify.
+  ///   - options: Options that change how the token is verified.
+  /// - Returns: The verified claims, with the token's header and signature.
+  /// - Throws: An error of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed`` when the
+  ///   token is malformed, has no `exp` or `sub` claim, has expired (unless
+  ///   ``ClaimsOptions/allowsExpired`` is `true`), or has an invalid signature. The client checks
+  ///   the structure and the `exp` and `sub` claims before it sends any request. The error of
+  ///   ``user(jwt:)`` when the Auth server rejects the token.
+  public func claims(jwt: String, options: ClaimsOptions = .init()) async throws -> VerifiedClaims {
+    guard let decodedJWT = JWT.decode(jwt) else {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    if !options.allowsExpired {
-      if let exp = decodedJWT.payload["exp"] as? TimeInterval {
-        let now = date().timeIntervalSince1970
-        if exp <= now {
-          throw AuthError.jwtVerificationFailed("JWT has expired")
-        }
-      }
-    }
-
-    let alg = decodedJWT.header["alg"] as? String
-    let kid = decodedJWT.header["kid"] as? String
-
-    let signingKey: JWK?
-    if let alg, !alg.hasPrefix("HS"), let kid {
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
-    } else {
-      signingKey = nil
+    let claims = try VerifiedClaims(decodedJWT)
+    if !options.allowsExpired, claims.expiresAt <= date() {
+      throw AuthError.jwtVerificationFailed("JWT has expired")
     }
 
     guard
-      let signingKey,
-      let algorithm = (signingKey.alg ?? alg).flatMap(JWTAlgorithm.init(rawValue:))
+      let signingKey = try await signingKey(for: claims.header, options: options),
+      let isValid = JWTVerifier.verify(decodedJWT, with: signingKey)
     else {
-      _ = try await user(jwt: token)
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      _ = try await user(jwt: jwt)
+      return claims
     }
-
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
 
     guard isValid else {
       throw AuthError.jwtVerificationFailed("Invalid JWT signature")
     }
+    return claims
+  }
 
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
+  private func signingKey(for header: JWTHeader, options: ClaimsOptions) async throws -> JWK? {
+    guard !header.alg.hasPrefix("HS"), let kid = header.kid else {
+      return nil
+    }
+    if let key = options.jwks?.key(for: kid) {
+      return key
+    }
+    return try await jwksCache.key(for: kid)
+  }
+}
 
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+extension AuthError {
+  /// Whether a logout answer means the server has nothing left to revoke for `scope`.
+  fileprivate func meansNothingLeftToRevoke(for scope: SignOutScope) -> Bool {
+    guard response?.statusCode == 403 else { return false }
+    return errorCode == .userNotFound || (scope == .local && errorCode == .sessionNotFound)
   }
 }

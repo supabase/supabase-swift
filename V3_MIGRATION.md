@@ -92,6 +92,18 @@ Naming rules applied across all modules (the module tables list each symbol):
 v3 needs Xcode 26.0 or later and Swift 6.2 or later. v2 needed Xcode 16.4 and Swift 6.1. No
 source change is needed for this item.
 
+### Dependencies: swift-crypto 4.0.0 or later
+
+The minimum version of swift-crypto moves from 3.0.0 to 4.0.0. Auth now also depends on the
+`CryptoExtras` product of swift-crypto, which it uses to verify RS256 tokens. swift-crypto 4.0.0
+is the first release that ships this product. Every app that uses the package needs this version,
+not only apps that use Auth. If your app pins swift-crypto below 4.0.0, raise the pin, or the
+package fails to resolve.
+
+Some packages cap swift-crypto below 4.0.0. For example, jwt-kit 4.x allows only
+`"2.0.0"..<"4.0.0"`. Move such a package to a release that allows swift-crypto 4, such as
+jwt-kit 5.
+
 ### All deprecated APIs are removed
 
 Every API that was `@available(*, deprecated)` in v2.55.4 is gone. If your v2 build showed a

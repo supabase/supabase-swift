@@ -30,7 +30,7 @@ jobs:
   # Skipped jobs count as passed in ci-success, so a skipped matrix never blocks a merge.
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
@@ -235,11 +235,14 @@ jobs:
         if: matrix.config == 'debug'
         run: ./scripts/check-compile-failures.sh debug
 
+  # Each suite runs in its own job so the slow ones overlap instead of queueing behind one
+  # another. The nightly toolchain only runs outside pull requests: it is allowed to fail, so
+  # on a PR it would hold a runner for the longest leg without gating anything.
   linux:
-    name: Linux (${{ matrix.container }})
+    name: Linux (${{ matrix.container }}, ${{ matrix.suite }})
     needs: changes
     if: needs.changes.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
@@ -251,8 +254,8 @@ jobs:
       matrix:
         # The stable releases live under the `swift` image; nightly snapshots are only
         # published under `swiftlang/swift` (there is no `swift:nightly`).
-        container:
-          ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
+        container: ${{ fromJSON(github.event_name == 'pull_request' && '["swift:6.2-noble", "swift:6.3-noble"]' || '["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]') }}
+        suite: [package, opentelemetry, typegen]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Official Swift images run as root, so files the container writes into the
@@ -260,33 +263,41 @@ jobs:
       # action's post-step (it stats the workspace from the runner's own, non-root
       # context), so this key can't depend on hashFiles('**/Package.resolved') the way
       # the uncontainerized jobs' keys do.
+      #
+      # Blacksmith's sticky disks mount on the host after the job container starts, so the
+      # container cannot see them. This job keeps actions/cache.
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen-${{ github.sha }}
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-${{ matrix.container }}-typegen-
-      - name: "Build Swift Package"
-        run: swift build --explicit-target-dependency-import-check error
+            ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
       # worker threads and every in-flight test parked on a timer that never fires. The other
       # targets keep the parallel runner.
       # On nightly, each test step has its own time limit, about twice its usual run time. A
       # stalled test process then fails the step, which continue-on-error tolerates, instead of
       # reaching the job limit, where the job is cancelled and CI Success fails (SDK-2597).
+      - name: "Build Swift Package"
+        if: matrix.suite == 'package'
+        run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
+        if: matrix.suite == 'package'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --skip IntegrationTests --skip RealtimeTests
       - name: "Test RealtimeTests (serial)"
+        if: matrix.suite == 'package'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 5 || 30 }}
         run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
+        if: matrix.suite == 'opentelemetry'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"
+        if: matrix.suite == 'typegen'
         timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
         run: swift test --package-path tools/supabase-typegen
 
@@ -304,7 +315,7 @@ jobs:
           # turn on the Storage features the CLI leaves off (lifecycles, analytics buckets, CDN
           # purge), and their full integration tests run here. The native stack cannot.
           - name: Linux
-            runner: ubuntu-latest
+            runner: blacksmith-8vcpu-ubuntu-2404
             storage-features: true
           # The CLI's experimental stack backend runs every service as a native process on macOS
           # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
@@ -330,7 +341,17 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
           echo "SUPABASE_EXPERIMENTAL_STACK=1" >> "$GITHUB_ENV"
+      # Linux runs on the host, not in a container, so it can use a sticky disk: the build
+      # directory stays on the runner's disk instead of being zipped and uploaded each run.
+      # Sticky disks are Linux-only, so macOS keeps actions/cache.
+      - name: "Mount Swift build disk"
+        if: runner.os == 'Linux'
+        uses: useblacksmith/stickydisk@b6cb58d1d31d6d32a25248fab12493d831f7bd48 # v1.7.2
+        with:
+          key: ${{ github.repository }}-integration-${{ matrix.name }}
+          path: .build
       - name: "Cache Swift Package"
+        if: runner.os != 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
@@ -442,13 +463,13 @@ jobs:
         working-directory: Examples/${{ matrix.example }}
         run: swift build
 
-  # cSpell runs on Node, which the ubuntu-latest image already provides, so this
+  # cSpell runs on Node, which the Blacksmith Ubuntu image already provides, so this
   # job needs no setup-go and no setup-node - the runner's Node is part of the
-  # trusted image baseline, the same category as the OS and `ubuntu-latest`
+  # trusted image baseline, the same category as the OS and the runner label
   # itself.
   spell-check:
     name: Spell check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -487,7 +508,7 @@ jobs:
 
   lint:
     name: SwiftLint
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 10
     env:
       SWIFTLINT_VERSION: "0.65.0"
@@ -538,7 +559,7 @@ jobs:
         format-check,
         lint,
       ]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check all jobs
         run: |
@@ -568,7 +589,7 @@ jobs:
     # so a red main blocks it silently (no new release PR, no update to the open
     # one) unless someone happens to look at Actions. Alert instead of relying on that.
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Send Slack alert
         env:

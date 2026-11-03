@@ -155,8 +155,11 @@ struct RequestsTests {
   @Test
   func refreshSession() async {
     let sut = makeSUT()
+    var session = Session.valid
+    session.refreshToken = "refresh-token"
+    try? await sut.seedSession(session)
     await assert {
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      try await sut.refreshSession()
     }
   }
 
@@ -208,7 +211,7 @@ struct RequestsTests {
   }
 
   @Test
-  func setSessionWithAFutureExpirationDate() async throws {
+  func importSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -216,29 +219,29 @@ struct RequestsTests {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func setSessionWithAExpiredToken() async throws {
+  func importSessionWithAnExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func signOut() async throws {
+  func signOutWithGlobalScope() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.signOut()
+      try await sut.signOut(scope: .global)
     }
   }
 
@@ -308,14 +311,27 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
           nonce: "abcdef",
           userMetadata: ["custom_key": .string("custom_value")]
         )
+      )
+    }
+  }
+
+  @Test
+  func updateUserWithCurrentPassword() async throws {
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    await assert {
+      try await sut.updateUser(
+        UserAttributes(password: "new-pass", currentPassword: "old-pass")
       )
     }
   }
@@ -375,7 +391,7 @@ struct RequestsTests {
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.admin.listPasskeys(forUser: userId)
+      _ = try await sut.admin.passkeys.list(forUser: userId)
     }
   }
 
@@ -386,7 +402,7 @@ struct RequestsTests {
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
+      try await sut.admin.passkeys.delete(id: passkeyId, forUser: userId)
     }
   }
 
@@ -410,11 +426,10 @@ struct RequestsTests {
     await assert {
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
@@ -484,25 +499,13 @@ struct RequestsTests {
   }
 
   @Test
-  func mfaEnrollLegacy() async throws {
-    let sut = makeSUT()
-
-    try await sut.seedSession(.valid)
-
-    await assert {
-      _ = try await sut.mfa.enroll(
-        params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test"))
-    }
-  }
-
-  @Test
   func mfaEnrollTotp() async throws {
     let sut = makeSUT()
 
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
+      _ = try await sut.mfa.enrollTOTP(issuer: "supabase.com", friendlyName: "test")
     }
   }
 
@@ -513,7 +516,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
+      _ = try await sut.mfa.enrollPhone("+1 202-918-2132", friendlyName: "test")
     }
   }
 
@@ -525,7 +528,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -537,9 +540,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
-      )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
     }
   }
 
@@ -551,10 +552,9 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          code: "123456"))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        code: "123456")
     }
   }
 
@@ -565,8 +565,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.unenroll(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+      try await sut.mfa.unenroll(
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -577,7 +577,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
+      _ = try await sut.mfa.enrollWebAuthnFactor(friendlyName: "My Passkey")
     }
   }
 
@@ -589,10 +589,8 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
       )
     }
   }
@@ -605,19 +603,18 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          credentialResponse: [
-            "id": "credential-id",
-            "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
-            "type": "public-key",
-            "response": [
-              "clientDataJSON": "Y2xpZW50LWRhdGE",
-              "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
-            ],
-          ]
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        type: .create,
+        credentialResponse: [
+          "id": "credential-id",
+          "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+          "type": "public-key",
+          "response": [
+            "clientDataJSON": "Y2xpZW50LWRhdGE",
+            "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
+          ],
+        ]
       )
     }
   }
@@ -629,7 +626,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.passkeyRegistrationOptions()
+      _ = try await sut.passkeys.registrationOptions()
     }
   }
 
@@ -640,9 +637,9 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.verifyPasskeyRegistration(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyRegistration(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -660,7 +657,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.passkeyAuthenticationOptions()
+      _ = try await sut.passkeys.authenticationOptions()
     }
   }
 
@@ -669,9 +666,9 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.verifyPasskeyAuthentication(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyAuthentication(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -693,7 +690,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.listPasskeys()
+      _ = try await sut.passkeys.list()
     }
   }
 
@@ -704,7 +701,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.renamePasskey(
+      _ = try await sut.passkeys.rename(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
         friendlyName: "Renamed Passkey"
       )
@@ -718,7 +715,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.deletePasskey(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
+      try await sut.passkeys.delete(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
@@ -774,8 +771,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.linkIdentityWithIDToken(
-        IDTokenCredentials(
+      try await sut.linkIdentity(
+        idToken: IDTokenCredentials(
           provider: .google,
           idToken: "id-token",
           nonce: "nonce"
@@ -787,9 +784,9 @@ struct RequestsTests {
   @Test
   func fetchJWKS() async {
     let sut = makeSUT()
-    // RS256 header with a key id no cached key set holds, so the keys are fetched.
+    // RS256 header with a key id, so the client fetches the key set.
     let jwt =
-      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJleHAiOjQ4NTIxNjM1OTN9.c2ln"
+      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJzdWIiOiJyZXF1ZXN0cy10ZXN0cyIsImV4cCI6NDg1MjE2MzU5M30.c2ln"
 
     await assert {
       _ = try await sut.claims(jwt: jwt)

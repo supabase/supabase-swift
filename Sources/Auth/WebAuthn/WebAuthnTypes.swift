@@ -8,35 +8,10 @@
 public import Foundation
 import Helpers
 
-/// Parameters for enrolling a new WebAuthn (passkey) factor as a second factor (MFA).
+/// Relying-party options sent when challenging a WebAuthn factor.
 ///
 /// - Warning: WebAuthn/passkey support is experimental and may change in a future release. Opt in
 ///   with `@_spi(Experimental) import Supabase`.
-@_spi(Experimental)
-public struct MFAWebAuthnEnrollParams: MFAEnrollParamsType {
-  public let factorType: FactorType = "webauthn"
-
-  /// Human readable name assigned to the factor.
-  public let friendlyName: String?
-
-  public init(friendlyName: String? = nil) {
-    self.friendlyName = friendlyName
-  }
-}
-
-@_spi(Experimental)
-extension MFAEnrollParamsType where Self == MFAWebAuthnEnrollParams {
-  /// Creates parameters for enrolling a WebAuthn (passkey) factor.
-  ///
-  /// - Parameter friendlyName: Human readable name assigned to the factor.
-  public static func webAuthn(friendlyName: String? = nil) -> Self {
-    MFAWebAuthnEnrollParams(friendlyName: friendlyName)
-  }
-}
-
-/// Relying-party options sent when challenging a WebAuthn factor.
-///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
 @_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
@@ -53,7 +28,7 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 
 /// The kind of WebAuthn ceremony a challenge requests.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
@@ -77,22 +52,23 @@ public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Send
   public static let request: WebAuthnChallengeType = "request"
 }
 
-/// WebAuthn-specific payload returned by ``AuthMFA/challenge(params:)`` for `webauthn` factors.
+/// WebAuthn-specific payload returned by ``AuthMFA/challenge(factorID:webAuthn:)`` for `webauthn` factors.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   /// Whether the authenticator should create a new credential or assert an existing one.
   public let type: WebAuthnChallengeType
 
-  /// The W3C credential options (creation or request) to forward to the authenticator. Field
-  /// names follow the W3C spec verbatim (camelCase) and are not transformed.
+  /// The W3C credential options (creation or request), wrapped as `{"publicKey": {…}}` like the
+  /// argument of `navigator.credentials.create()`. Passkey endpoints send the inner object bare.
+  /// Field names follow the W3C spec verbatim (camelCase) and are not transformed.
   public let credentialOptions: JSONValue
 }
 
 /// A passkey registered for the current user.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
@@ -117,39 +93,38 @@ public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
 
 /// Credential creation options for registering a new passkey (first factor).
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeId: String
+  public let challengeID: UUID
 
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
   public let options: JSONValue
 
   /// Unix timestamp (seconds since epoch) when the challenge expires.
   public let expiresAt: TimeInterval
+
+  private enum CodingKeys: String, CodingKey {
+    case challengeID = "challengeId", options, expiresAt
+  }
 }
 
 /// Assertion options for authenticating with a passkey (first factor).
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeId: String
+  public let challengeID: UUID
 
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
   public let options: JSONValue
 
   /// Unix timestamp (seconds since epoch) when the challenge expires.
   public let expiresAt: TimeInterval
-}
 
-/// Encodes a WebAuthn request body without applying the snake_case key strategy, so the embedded
-/// W3C credential JSON (which uses camelCase field names such as `clientDataJSON`) reaches the
-/// backend verbatim. All backend field names must be spelled out explicitly by the caller.
-func encodeWebAuthnBody(_ json: JSONValue) throws -> Data {
-  let encoder = JSONEncoder()
-  encoder.outputFormatting = [.sortedKeys]
-  return try encoder.encode(json)
+  private enum CodingKeys: String, CodingKey {
+    case challengeID = "challengeId", options, expiresAt
+  }
 }

@@ -26,6 +26,8 @@ enabled = false
 port = 54322
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
+# Configures Postgres storage engine to use OrioleDB (S3)
+orioledb_version = ""
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
 major_version = 15
@@ -75,7 +77,7 @@ openai_api_key = "env(OPENAI_API_KEY)"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
-[inbucket]
+[local_smtp]
 enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
@@ -131,6 +133,16 @@ password_requirements = ""
 enabled = true
 authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = false
+
+# Configure passkey sign-ins.
+[auth.passkey]
+enabled = true
+
+# Configure WebAuthn relying party settings (required when passkey is enabled).
+[auth.webauthn]
+rp_display_name = "Supabase"
+rp_id = "localhost"
+rp_origins = ["http://localhost:3000"]
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
@@ -225,8 +237,8 @@ max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
@@ -237,9 +249,9 @@ template = "Your code is {{ .Code }}"
 max_frequency = "5s"
 
 # Configure MFA via WebAuthn
-# [auth.mfa.web_authn]
-# enroll_enabled = true
-# verify_enabled = true
+[auth.mfa.web_authn]
+enroll_enabled = true
+verify_enabled = true
 
 # Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
@@ -307,8 +319,6 @@ backend = "postgres"
 
 # Experimental features may be deprecated any time
 [experimental]
-# Configures Postgres storage engine to use OrioleDB (S3)
-orioledb_version = ""
 # Configures S3 bucket URL, eg. <bucket_name>.s3-<region>.amazonaws.com
 s3_host = "env(S3_HOST)"
 # Configures S3 bucket region, eg. us-east-1

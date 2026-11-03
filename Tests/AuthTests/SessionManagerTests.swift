@@ -209,7 +209,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(other))
     }
 
-    let refreshed = try await sut.refreshSession("foreign-refresh")
+    let refreshed = try await dependencies.redeem("foreign-refresh")
 
     expectNoDifference(refreshed.refreshToken, other.refreshToken)
     expectNoDifference(tokenRequestCount, 1)
@@ -228,7 +228,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -298,7 +298,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session("A2")))
     }
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     #expect(await waitUntil { requestSeen.value })
 
     try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
@@ -320,7 +320,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
     }
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -351,7 +351,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -398,12 +398,12 @@ struct SessionManagerTests {
       )
     }
 
-    let refreshA = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refreshA = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
     #expect(sawRequest)
 
     try await dependencies.seedSession(userB)
-    let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
+    let refreshB = Task { try await dependencies.redeem(userB.refreshToken) }
     _ = await waitUntil { tokensRequested.value.count == 2 }
 
     continuation.yield(())
@@ -441,13 +441,13 @@ struct SessionManagerTests {
       )
     }
 
-    let firstA = Task { try await sut.refreshSession(userA.refreshToken) }
+    let firstA = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawFirstA = await waitUntil { tokensRequested.value.contains(userA.refreshToken) }
     #expect(sawFirstA)
 
-    let refreshB = Task { try await sut.refreshSession(userB.refreshToken) }
+    let refreshB = Task { try await dependencies.redeem(userB.refreshToken) }
     _ = await waitUntil { tokensRequested.value.contains(userB.refreshToken) }
-    let secondA = Task { try await sut.refreshSession(userA.refreshToken) }
+    let secondA = Task { try await dependencies.redeem(userA.refreshToken) }
     _ = await waitUntil(timeout: 0.5) { tokensRequested.value.count > 2 }
 
     continuation.yield(())
@@ -467,7 +467,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(hydrated))
     }
 
-    let result = try await sut.refreshSession("externally-sourced-refresh")
+    let result = try await dependencies.redeem("externally-sourced-refresh")
 
     expectNoDifference(result.refreshToken, hydrated.refreshToken)
     expectNoDifference(
@@ -485,7 +485,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let refresh = Task { try await sut.refreshSession(hydrated.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(hydrated.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -515,7 +515,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let refresh = Task { try await sut.refreshSession("externally-sourced-refresh") }
+    let refresh = Task { try await dependencies.redeem("externally-sourced-refresh") }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -544,7 +544,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let result = await Task { try await sut.refreshSession("foreign-refresh") }.result
+    let result = await Task { try await dependencies.redeem("foreign-refresh") }.result
 
     expectNoDifference(dependencies.sessionStore.currentSession?.refreshToken, userB.refreshToken)
     let collected = await settled(events, count: 1)
@@ -562,7 +562,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshedA))
     }
 
-    let result = try await sut.refreshSession("A-refresh")
+    let result = try await dependencies.redeem("A-refresh")
 
     expectNoDifference(result.refreshToken, refreshedA.refreshToken)
     expectNoDifference(
@@ -625,7 +625,7 @@ struct SessionManagerTests {
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
     }
 
-    let waiter = Task { try await sut.refreshSession(userA.refreshToken) }
+    let waiter = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -651,7 +651,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     let sawRequest = await waitUntil { requestSeen.value }
     #expect(sawRequest)
 
@@ -674,16 +674,16 @@ struct SessionManagerTests {
     let sut = dependencies.sessionManager
     rateLimitedTokenResponse()
 
-    let first = await Task { try await sut.refreshSession("limited") }.result
+    let first = await Task { try await dependencies.redeem("limited") }.result
     now.withValue { $0.addTimeInterval(59) }
-    let second = await Task { try await sut.refreshSession("limited") }.result
+    let second = await Task { try await dependencies.redeem("limited") }.result
 
     #expect((first.error as? AuthError)?.errorCode == .overRequestRateLimit)
     #expect((second.error as? AuthError)?.errorCode == .overRequestRateLimit)
     expectNoDifference(tokenRequestCount, 1)
 
     now.withValue { $0.addTimeInterval(1) }
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
     expectNoDifference(tokenRequestCount, 2)
   }
 
@@ -698,8 +698,8 @@ struct SessionManagerTests {
       )
     }
 
-    let first = await Task { try await sut.refreshSession(userA.refreshToken) }.result
-    let second = await Task { try await sut.refreshSession(userA.refreshToken) }.result
+    let first = await Task { try await dependencies.redeem(userA.refreshToken) }.result
+    let second = await Task { try await dependencies.redeem(userA.refreshToken) }.result
 
     #expect(dependencies.sessionStore.currentSession == nil)
     #expect((first.error as? AuthError)?.kind == .sessionInvalidated)
@@ -711,9 +711,9 @@ struct SessionManagerTests {
   func commitClearsTheCachedRefreshFailure() async throws {
     rateLimitedTokenResponse()
 
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
     try await dependencies.seedSession(session("B"))
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
 
     expectNoDifference(tokenRequestCount, 2)
   }
@@ -722,8 +722,8 @@ struct SessionManagerTests {
   func cachedRefreshFailureDoesNotBlockAnotherToken() async throws {
     rateLimitedTokenResponse()
 
-    _ = await Task { try await sut.refreshSession("first") }.result
-    _ = await Task { try await sut.refreshSession("second") }.result
+    _ = await Task { try await dependencies.redeem("first") }.result
+    _ = await Task { try await dependencies.redeem("second") }.result
 
     expectNoDifference(tokenRequestCount, 2)
   }
@@ -738,16 +738,16 @@ struct SessionManagerTests {
     }
 
     for attempt in 0..<5 {
-      _ = try await sut.refreshSession("token-\(attempt)")
+      _ = try await dependencies.redeem("token-\(attempt)")
     }
     now.withValue { $0.addTimeInterval(29) }
-    let sixth = await Task { try await sut.refreshSession("token-5") }.result
+    let sixth = await Task { try await dependencies.redeem("token-5") }.result
 
     #expect((sixth.error as? AuthError)?.kind == .excessiveRefresh)
     expectNoDifference(tokenRequestCount, 5)
 
     now.withValue { $0.addTimeInterval(1) }
-    _ = try await sut.refreshSession("token-6")
+    _ = try await dependencies.redeem("token-6")
     expectNoDifference(tokenRequestCount, 6)
   }
 
@@ -770,11 +770,11 @@ struct SessionManagerTests {
       return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(refreshed))
     }
 
-    let older = Task { try await sut.refreshSession(userA.refreshToken) }
+    let older = Task { try await dependencies.redeem(userA.refreshToken) }
     await waitUntil { gates.value.count == 1 }
     try await dependencies.sessionStore.commit(.signedOut(.userInitiated, event: .signedOut))
 
-    let newer = Task { try await sut.refreshSession(userA.refreshToken) }
+    let newer = Task { try await dependencies.redeem(userA.refreshToken) }
     let newerStarted = await waitUntil { gates.value.count == 2 }
     #expect(newerStarted)
 
@@ -782,7 +782,7 @@ struct SessionManagerTests {
     let olderResult = await older.result
     #expect(olderResult.error is CancellationError)
 
-    let joiner = Task { try await sut.refreshSession(userA.refreshToken) }
+    let joiner = Task { try await dependencies.redeem(userA.refreshToken) }
     let joinerStartedARequest = await waitUntil(timeout: 0.5) { requests.value > 2 }
     gates.value[1].resume()
 
@@ -801,13 +801,13 @@ struct SessionManagerTests {
     let sut = dependencies.sessionManager
     rateLimitedTokenResponse()
 
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
     now.withValue { $0.addTimeInterval(-3600) }
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
     expectNoDifference(tokenRequestCount, 2)
 
     now.withValue { $0.addTimeInterval(120) }
-    _ = await Task { try await sut.refreshSession("limited") }.result
+    _ = await Task { try await dependencies.redeem("limited") }.result
     expectNoDifference(tokenRequestCount, 3)
   }
 
@@ -821,10 +821,10 @@ struct SessionManagerTests {
     }
 
     for attempt in 0..<5 {
-      _ = try await sut.refreshSession("token-\(attempt)")
+      _ = try await dependencies.redeem("token-\(attempt)")
     }
     now.withValue { $0.addTimeInterval(-3600) }
-    _ = try await sut.refreshSession("token-5")
+    _ = try await dependencies.redeem("token-5")
 
     expectNoDifference(tokenRequestCount, 6)
   }
@@ -839,7 +839,7 @@ struct SessionManagerTests {
     let userA = session("A")
     try await dependencies.seedSession(userA)
 
-    let refresh = Task { try await sut.refreshSession(userA.refreshToken) }
+    let refresh = Task { try await dependencies.redeem(userA.refreshToken) }
     let readingBody = await waitUntil { transport.bodyReads.value == 1 }
     #expect(readingBody)
 
@@ -847,7 +847,7 @@ struct SessionManagerTests {
     let outcome = await resultIfFinished(of: refresh)
     #expect(outcome?.error is CancellationError)
 
-    _ = await Task { try await sut.refreshSession(userA.refreshToken) }.result
+    _ = await Task { try await dependencies.redeem(userA.refreshToken) }.result
     expectNoDifference(transport.requests.value, 2)
   }
 
@@ -861,7 +861,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let result = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    let result = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
     let error = try #require(result.error as? AuthError)
     #expect(error.kind == failure.kind)
@@ -888,7 +888,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let result = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    let result = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
     let collected = await settled(events, count: 1)
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
@@ -907,7 +907,7 @@ struct SessionManagerTests {
       try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
     }
 
-    _ = await Task { try await dependencies.sessionManager.refreshSession(held.refreshToken) }
+    _ = await Task { try await dependencies.redeem(held.refreshToken) }
       .result
 
     #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
@@ -929,11 +929,11 @@ struct SessionManagerTests {
       try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
     }
 
-    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    _ = await Task { try await dependencies.redeem(held.refreshToken) }.result
     #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
 
     now.withValue { $0.addTimeInterval(40) }
-    let cached = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    let cached = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
     #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
     #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
@@ -976,11 +976,11 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents(from: dependencies.sessionStore)
     defer { stopCollecting() }
 
-    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    _ = await Task { try await dependencies.redeem(held.refreshToken) }.result
     now.withValue { $0.addTimeInterval(40) }
-    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    _ = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
-    let afterSignOut = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    let afterSignOut = await Task { try await dependencies.redeem(held.refreshToken) }.result
     #expect((afterSignOut.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
 
     let collected = await settled(events, count: 2)
@@ -1007,10 +1007,10 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents(from: dependencies.sessionStore)
     defer { stopCollecting() }
 
-    _ = await Task { try await sut.refreshSession(held.refreshToken) }.result
+    _ = await Task { try await dependencies.redeem(held.refreshToken) }.result
     now.withValue { $0.addTimeInterval(40) }
     let refreshes = (0..<20).map { _ in
-      Task { try await sut.refreshSession(held.refreshToken) }
+      Task { try await dependencies.redeem(held.refreshToken) }
     }
     for refresh in refreshes {
       _ = await refresh.result
@@ -1029,7 +1029,7 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    let result = await Task { try await sut.refreshSession("foreign") }.result
+    let result = await Task { try await dependencies.redeem("foreign") }.result
 
     let collected = await settled(events, count: 1)
     #expect((result.error as? AuthError)?.kind == .sessionInvalidated)
@@ -1047,8 +1047,8 @@ struct SessionManagerTests {
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 
-    _ = await Task { try await sut.refreshSession("foreign") }.result
-    let cached = await Task { try await sut.refreshSession("foreign") }.result
+    _ = await Task { try await dependencies.redeem("foreign") }.result
+    let cached = await Task { try await dependencies.redeem("foreign") }.result
 
     let collected = await settled(events, count: 1)
     #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)

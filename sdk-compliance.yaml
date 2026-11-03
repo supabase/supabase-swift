@@ -369,10 +369,6 @@ features:
       - AuthClient.signInWithOAuth
       - AuthClient.oauthSignInURL
     supporting_symbols:
-      - WebAuthFlow
-      - WebAuthFlow.init
-      - WebAuthFlow.url
-      - WebAuthFlow.id
       - WebAuthPresenter
       - WebAuthPresenter.authenticate
       - WebAuthPresenter.default
@@ -388,6 +384,10 @@ features:
       - OAuthOptions.scopes
       - OAuthOptions.redirectTo
       - OAuthOptions.queryItems
+      - OAuthFlow
+      - OAuthFlow.init
+      - OAuthFlow.id
+      - OAuthFlow.url
       - Provider
       - Provider.init
       - Provider.rawValue
@@ -550,10 +550,35 @@ features:
     symbols:
       - AuthClient.currentUser
       - AuthClient.user
+    supporting_symbols:
+      - User.userMetadata
   auth.session.get_claims:
     status: implemented
     symbols:
       - AuthClient.claims
+    supporting_symbols:
+      - ClaimsOptions
+      - ClaimsOptions.allowsExpired
+      - ClaimsOptions.init
+      - ClaimsOptions.jwks
+      - VerifiedClaims
+      - VerifiedClaims.additionalClaims
+      - VerifiedClaims.amr
+      - VerifiedClaims.appMetadata
+      - VerifiedClaims.assuranceLevel
+      - VerifiedClaims.audience
+      - VerifiedClaims.email
+      - VerifiedClaims.expiresAt
+      - VerifiedClaims.header
+      - VerifiedClaims.isAnonymous
+      - VerifiedClaims.issuedAt
+      - VerifiedClaims.issuer
+      - VerifiedClaims.phone
+      - VerifiedClaims.role
+      - VerifiedClaims.sessionID
+      - VerifiedClaims.signature
+      - VerifiedClaims.subject
+      - VerifiedClaims.userMetadata
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -562,7 +587,7 @@ features:
   auth.session.set_session:
     status: implemented
     symbols:
-      - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -570,17 +595,17 @@ features:
     supporting_symbols:
       - SignOutScope
       - SignOutScope.init
-      - SignOutScope.rawValue
       - SignOutScope.global
       - SignOutScope.local
       - SignOutScope.others
   auth.session.update_user:
     status: implemented
     symbols:
-      - AuthClient.update
+      - AuthClient.updateUser
     supporting_symbols:
       - UserAttributes
       - UserAttributes.userMetadata
+      - UserAttributes.currentPassword
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -638,7 +663,6 @@ features:
     symbols:
       - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
-      - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
     status: implemented
     symbols:
@@ -646,17 +670,40 @@ features:
   auth.identities.list_identities:
     status: implemented
     symbols:
-      - AuthClient.userIdentities
+      - AuthClient.identities
+    supporting_symbols:
+      - UserIdentity.email
+      - UserIdentity.providerUserID
+      - UserIdentity.userID
 
   auth.mfa.enroll:
     status: implemented
     symbols:
-      - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
+    supporting_symbols:
+      - TOTPEnrollment
+      - TOTPEnrollment.init
+      - TOTPEnrollment.id
+      - TOTPEnrollment.friendlyName
+      - TOTPEnrollment.qrCode
+      - TOTPEnrollment.secret
+      - TOTPEnrollment.uri
+      - PhoneEnrollment
+      - PhoneEnrollment.init
+      - PhoneEnrollment.id
+      - PhoneEnrollment.friendlyName
+      - PhoneEnrollment.phone
   auth.mfa.challenge:
     status: implemented
     symbols:
       - AuthMFA.challenge
     supporting_symbols:
+      - MFAChallenge
+      - MFAChallenge.init
+      - MFAChallenge.id
+      - MFAChallenge.factorType
+      - MFAChallenge.expiresAt
       - MessagingChannel
       - MessagingChannel.init
       - MessagingChannel.rawValue
@@ -670,6 +717,9 @@ features:
     status: implemented
     symbols:
       - AuthMFA.unenroll
+    supporting_symbols:
+      - AuthMFAUnenrollResponse
+      - AuthMFAUnenrollResponse.id
   auth.mfa.challenge_and_verify:
     status: implemented
     symbols:
@@ -677,8 +727,19 @@ features:
   auth.mfa.list_factors:
     status: implemented
     symbols:
-      - AuthMFA.listFactors
+      - AuthMFA.factors
     supporting_symbols:
+      - MFAFactors
+      - MFAFactors.verified
+      - MFAFactors.unverified
+      - MFAFactors.all
+      - FactorType
+      - FactorType.init
+      - FactorType.rawValue
+      - FactorType.totp
+      - FactorType.phone
+      - FactorType.webAuthn
+      - FactorType.recoveryCode
       - FactorStatus
       - FactorStatus.init
       - FactorStatus.rawValue
@@ -687,7 +748,41 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.authenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
+    supporting_symbols:
+      - AssuranceLevelInfo
+      - AssuranceLevelInfo.currentLevel
+      - AssuranceLevelInfo.nextLevel
+      - AssuranceLevelInfo.currentAuthenticationMethods
+      - AuthenticatorAssuranceLevel
+      - AuthenticatorAssuranceLevel.init
+      - AuthenticatorAssuranceLevel.rawValue
+      - AuthenticatorAssuranceLevel.aal1
+      - AuthenticatorAssuranceLevel.aal2
+      - AMREntry
+      - AMREntry.method
+      - AMREntry.timestamp
+      - AuthenticationMethod
+      - AuthenticationMethod.init
+      - AuthenticationMethod.rawValue
+      - AuthenticationMethod.oauth
+      - AuthenticationMethod.password
+      - AuthenticationMethod.otp
+      - AuthenticationMethod.totp
+      - AuthenticationMethod.recovery
+      - AuthenticationMethod.invite
+      - AuthenticationMethod.ssoSAML
+      - AuthenticationMethod.magicLink
+      - AuthenticationMethod.emailSignup
+      - AuthenticationMethod.emailChange
+      - AuthenticationMethod.tokenRefresh
+      - AuthenticationMethod.anonymous
+      - AuthenticationMethod.mfaPhone
+      - AuthenticationMethod.mfaWebAuthn
+      - AuthenticationMethod.mfaRecoveryCode
+      - AuthenticationMethod.web3
+      - AuthenticationMethod.oauthProviderAuthorizationCode
+      - AuthenticationMethod.passkey
 
   auth.mfa_recovery_codes.generate:
     status: implemented
@@ -796,7 +891,7 @@ features:
   auth.admin.get_provider: not_implemented
   auth.admin.list_providers: not_implemented
 
-  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # AuthPasskeys and AuthAdminPasskeys methods are all
   # @_spi(Experimental), so the public symbol graph the compliance scanner reads
   # from never contains them.
   auth.passkey.register_passkey: implemented

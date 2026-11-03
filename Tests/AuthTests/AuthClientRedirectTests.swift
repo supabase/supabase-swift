@@ -125,7 +125,7 @@ struct AuthClientRedirectTests {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("changed")) }
     let client = race.makeClient()
     try await client.signIn(email: "user@example.com", password: "secret")
-    try await client.update(user: UserAttributes(email: "new@example.com"))
+    try await client.updateUser(UserAttributes(email: "new@example.com"))
 
     let events = try await events(on: client) {
       let result = try await client.handleRedirect(callback)
@@ -311,7 +311,7 @@ struct AuthClientRedirectTests {
       ("signInWithOTP", { try await client.signInWithOTP(email: "a@example.com") }),
       ("resend", { try await client.resend(email: "a@example.com", type: .signup) }),
       ("resetPassword", { try await client.resetPassword(email: "a@example.com") }),
-      ("update", { try await client.update(user: UserAttributes(email: "b@example.com")) }),
+      ("update", { try await client.updateUser(UserAttributes(email: "b@example.com")) }),
     ]
 
     for (index, (name, call)) in calls.enumerated() {
@@ -580,8 +580,8 @@ struct AuthClientRedirectTests {
     #expect(try pendingFlowCount() == 0)
   }
 
-  @Test
-  func aSignOutDuringTheExchangeDiscardsTheSession() async throws {
+  @Test(arguments: [SignOutScope.local, .global])
+  func aSignOutDuringTheExchangeDiscardsTheSession(scope: SignOutScope) async throws {
     let gate = Gate()
     race.answerCodeExchange(through: gate) { [race] in try Race.ok(race.issue("exchanged")) }
     race.answerSignOut()
@@ -591,7 +591,7 @@ struct AuthClientRedirectTests {
 
     let redirect = Task { try await client.handleRedirect(callback) }
     await gate.arrivals(1)
-    try await client.signOut()
+    try await client.signOut(scope: scope)
     gate.open()
 
     await #expect(throws: CancellationError.self) { try await redirect.value }
@@ -599,8 +599,9 @@ struct AuthClientRedirectTests {
     #expect(race.relaunch().currentSession == nil)
   }
 
-  @Test
-  func aSignOutWithoutASessionDuringTheExchangeDiscardsTheSession() async throws {
+  @Test(arguments: [SignOutScope.local, .global])
+  func aSignOutWithoutASessionDuringTheExchangeDiscardsTheSession(scope: SignOutScope) async throws
+  {
     let gate = Gate()
     race.answerCodeExchange(through: gate) { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
@@ -608,7 +609,7 @@ struct AuthClientRedirectTests {
 
     let redirect = Task { try await client.handleRedirect(callback) }
     await gate.arrivals(1)
-    try await client.signOut()
+    try await client.signOut(scope: scope)
     gate.open()
 
     await #expect(throws: CancellationError.self) { try await redirect.value }
