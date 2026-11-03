@@ -263,7 +263,7 @@ extension AuthAPI {
 
   func exchangeCodeForSession(
     authCode: String,
-    codeVerifier: String?
+    codeVerifier: String
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "pkce",

@@ -45,6 +45,29 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
   }
 }
 
+extension PendingFlowRecord.Purpose {
+  /// How a finished flow of this purpose commits its session.
+  ///
+  /// An email change or an identity link updates the held user, so it emits
+  /// ``AuthEvent/userUpdated``; for another user it signs that user in.
+  func transition(_ session: Session) -> SessionStore.Transition {
+    switch self {
+    case .signIn: .signedIn(session, event: .signedIn)
+    case .recovery: .signedIn(session, event: .passwordRecovery)
+    case .emailChange, .linkIdentity: .userChangeVerified(session)
+    }
+  }
+
+  /// The email link type a finished flow of this purpose reports in ``RedirectResult``.
+  var verification: EmailOTPType? {
+    switch self {
+    case .recovery: .recovery
+    case .emailChange: .emailChange
+    case .signIn, .linkIdentity: nil
+    }
+  }
+}
+
 /// The pending PKCE flows, oldest first, stored as JSON under `<storageKey>-flows`.
 ///
 /// The index lets the client find and expire flows without reading every record. It keeps at most
