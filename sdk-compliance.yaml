@@ -530,6 +530,8 @@ features:
     symbols:
       - AuthClient.currentUser
       - AuthClient.user
+    supporting_symbols:
+      - User.userMetadata
   auth.session.get_claims:
     status: implemented
     symbols:
