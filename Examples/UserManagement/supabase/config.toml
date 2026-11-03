@@ -20,6 +20,8 @@ max_rows = 1000
 port = 54322
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
+# Configures Postgres storage engine to use OrioleDB (S3)
+orioledb_version = ""
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
 major_version = 15
@@ -52,7 +54,7 @@ api_url = "http://127.0.0.1"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
-[inbucket]
+[local_smtp]
 enabled = true
 # Port to use for the email testing server web interface.
 port = 54324
@@ -147,8 +149,6 @@ backend = "postgres"
 
 # Experimental features may be deprecated any time
 [experimental]
-# Configures Postgres storage engine to use OrioleDB (S3)
-orioledb_version = ""
 # Configures S3 bucket URL, eg. <bucket_name>.s3-<region>.amazonaws.com
 s3_host = "env(S3_HOST)"
 # Configures S3 bucket region, eg. us-east-1

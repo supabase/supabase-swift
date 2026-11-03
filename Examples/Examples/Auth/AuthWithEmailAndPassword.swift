@@ -174,7 +174,7 @@ struct AuthWithEmailAndPassword: View {
   @MainActor
   private func onOpenURL(_ url: URL) async {
     do {
-      try await supabase.auth.session(from: url)
+      try await supabase.auth.handleRedirect(url)
     } catch {
       debug("Fail to init session with url: \(url)")
     }
