@@ -3191,7 +3191,7 @@ extension AuthMockerTests {
 
       @Test
       @MainActor
-      func mfaVerifyWebAuthnRegistersWhenTheChallengeAsksForCreate() async throws {
+      func mfaVerifyWebAuthnThrowsWhenTheFactorIsNotVerified() async throws {
         Mock(
           url: clientURL.appendingPathComponent(
             "factors/00000000-0000-0000-0000-000000000001/challenge"),
@@ -3210,20 +3210,30 @@ extension AuthMockerTests {
           data: [.post: MockData.session]
         )
         .registerCapturingBody()
+        let sheetShown = LockIsolated(false)
 
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        _ = try await sut.mfa.verifyWebAuthn(
-          factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-          anchor: nil,
-          authenticator: .fake(register: { _, _ in ["id": "cred"] })
-        )
-
-        expectNoDifference(
-          verifyBody.value?.objectValue?["webauthn"],
-          ["type": "create", "credential_response": ["id": "cred"]]
-        )
+        let error = await #expect(throws: AuthError.self) {
+          try await sut.mfa.verifyWebAuthn(
+            factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            anchor: nil,
+            authenticator: .fake(
+              register: { _, _ in
+                sheetShown.setValue(true)
+                return [:]
+              },
+              authenticate: { _, _ in
+                sheetShown.setValue(true)
+                return [:]
+              }
+            )
+          )
+        }
+        #expect(error?.kind == .mfaFactorNotVerified)
+        #expect(!sheetShown.value)
+        #expect(verifyBody.value == nil)
       }
 
       @Test

@@ -477,6 +477,8 @@ Passkeys and WebAuthn MFA are `@_spi(Experimental)`. Import them with
 In v3, first-factor passkey calls move to `auth.passkeys` and admin calls to `admin.passkeys`.
 Challenge IDs are `UUID`, and the presentation anchor is optional; `nil` uses the app's key
 window. A user who cancels the passkey sheet now gets `CancellationError`.
+`mfa.verifyWebAuthn` only steps up with a verified factor; for an unverified one it throws an
+`AuthError` of kind `mfaFactorNotVerified` before it shows the sheet.
 
 | v2 | v3 |
 | --- | --- |

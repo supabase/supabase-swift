@@ -320,6 +320,11 @@ public struct AuthError: SupabaseError {
     /// `ASAuthorizationError`. ``AuthError/errorCode`` is ``ErrorCode/webAuthnCredentialExists``
     /// when the device already holds one of the user's passkeys.
     @_spi(Experimental) public static let passkeyCeremonyFailed: Kind = "passkeyCeremonyFailed"
+    /// ``AuthMFA/verifyWebAuthn(factorID:anchor:)`` got a factor that is not verified yet. The
+    /// SDK shows no passkey sheet and sends no credential. Register a factor with
+    /// ``AuthMFA/enrollWebAuthn(friendlyName:anchor:)``, or remove the unverified one with
+    /// ``AuthMFA/unenroll(params:)``.
+    @_spi(Experimental) public static let mfaFactorNotVerified: Kind = "mfaFactorNotVerified"
   }
 
   public var kind: Kind

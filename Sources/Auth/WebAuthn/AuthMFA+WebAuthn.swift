@@ -19,9 +19,9 @@ public import Foundation
     ///
     /// When the ceremony or the verification fails, the server keeps the new factor as
     /// unverified, and its name blocks a new enrollment with the same name. Find it in the
-    /// `factors` of ``AuthClient/user(jwt:)``, which fetches the user from the server, then finish
-    /// it with ``verifyWebAuthn(factorID:anchor:)`` or remove it with ``unenroll(params:)``.
-    /// ``listFactors()`` reads the stored session, so it does not show the new factor.
+    /// `factors` of ``AuthClient/user(jwt:)``, which fetches the user from the server, and remove
+    /// it with ``unenroll(params:)``. ``listFactors()`` reads the stored session, so it does not
+    /// show the new factor.
     ///
     /// - Parameters:
     ///   - friendlyName: A name for the factor.
@@ -47,23 +47,35 @@ public import Foundation
       authenticator: WebAuthnAuthenticator
     ) async throws -> Session {
       let factor = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      return try await verifyWebAuthn(
-        factorID: factor.id, anchor: anchor, authenticator: authenticator)
+      let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factor.id)
+      guard webauthn.type == .create else {
+        throw unexpectedChallengeType(webauthn.type)
+      }
+      let credential = try await authenticator.register(
+        WebAuthnCreationOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
+      return try await verify(
+        params: MFAVerifyParams(
+          factorId: factor.id, challengeId: challengeID, type: .create,
+          credentialResponse: credential)
+      )
     }
 
-    /// Verifies a WebAuthn factor: requests a challenge, shows the system passkey sheet, and
-    /// verifies the result.
+    /// Steps the session up to `aal2` with a verified WebAuthn factor: requests a challenge, shows
+    /// the system passkey sheet, and verifies the assertion.
     ///
-    /// The server picks the ceremony: an assertion for a verified factor, a new credential for
-    /// one that is not verified yet.
+    /// This method never registers a credential. For a factor that is not verified, the server
+    /// asks for a new credential instead of an assertion, so this method throws before it shows
+    /// the sheet. Register a factor with ``enrollWebAuthn(friendlyName:anchor:)``.
     ///
     /// - Parameters:
-    ///   - factorID: ``Factor/id`` of a `webauthn` factor.
+    ///   - factorID: ``Factor/id`` of a verified `webauthn` factor.
     ///   - anchor: The window to show the sheet from. `nil` uses the app's key window. An app
     ///     extension has no key window to find, so pass one there.
     /// - Returns: The session, now at `aal2`.
-    /// - Throws: `CancellationError` when the user dismisses the sheet. An error of kind
-    ///   ``AuthError/Kind-swift.struct/passkeyCeremonyFailed`` when the authenticator fails.
+    /// - Throws: An error of kind ``AuthError/Kind-swift.struct/mfaFactorNotVerified`` when the
+    ///   factor is not verified. `CancellationError` when the user dismisses the sheet. An error
+    ///   of kind ``AuthError/Kind-swift.struct/passkeyCeremonyFailed`` when the authenticator
+    ///   fails.
     @_spi(Experimental)
     @discardableResult
     @MainActor
@@ -81,21 +93,22 @@ public import Foundation
       authenticator: WebAuthnAuthenticator
     ) async throws -> Session {
       let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factorID)
-      let publicKey = try webauthn.publicKeyOptions()
-      let credential: JSONValue
       switch webauthn.type {
-      case .create:
-        credential = try await authenticator.register(
-          WebAuthnCreationOptions(publicKey: publicKey), anchor)
       case .request:
-        credential = try await authenticator.authenticate(
-          WebAuthnRequestOptions(publicKey: publicKey), anchor)
+        break
+      case .create:
+        // A `create` challenge registers a new credential, which only enrollment may do.
+        throw AuthError(
+          kind: .mfaFactorNotVerified,
+          message: "The WebAuthn factor is not verified. Enroll a factor with enrollWebAuthn.")
       default:
-        throw AuthError.decoding("Unknown WebAuthn challenge type '\(webauthn.type.rawValue)'.")
+        throw unexpectedChallengeType(webauthn.type)
       }
+      let credential = try await authenticator.authenticate(
+        WebAuthnRequestOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
       return try await verify(
         params: MFAVerifyParams(
-          factorId: factorID, challengeId: challengeID, type: webauthn.type,
+          factorId: factorID, challengeId: challengeID, type: .request,
           credentialResponse: credential)
       )
     }
@@ -108,6 +121,10 @@ public import Foundation
         throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
       return (challenge.id, webauthn)
+    }
+
+    private func unexpectedChallengeType(_ type: WebAuthnChallengeType) -> AuthError {
+      AuthError.decoding("Unexpected WebAuthn challenge type '\(type.rawValue)'.")
     }
   }
 #endif
