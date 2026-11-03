@@ -151,8 +151,11 @@ struct RequestsTests {
   @Test
   func refreshSession() async {
     let sut = makeSUT()
+    var session = Session.valid
+    session.refreshToken = "refresh-token"
+    try? await sut.seedSession(session)
     await assert {
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      try await sut.refreshSession()
     }
   }
 
@@ -204,7 +207,7 @@ struct RequestsTests {
   }
 
   @Test
-  func setSessionWithAFutureExpirationDate() async throws {
+  func importSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -212,29 +215,29 @@ struct RequestsTests {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func setSessionWithAExpiredToken() async throws {
+  func importSessionWithAnExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func signOut() async throws {
+  func signOutWithGlobalScope() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.signOut()
+      try await sut.signOut(scope: .global)
     }
   }
 
@@ -491,25 +494,13 @@ struct RequestsTests {
   }
 
   @Test
-  func mfaEnrollLegacy() async throws {
-    let sut = makeSUT()
-
-    try await sut.seedSession(.valid)
-
-    await assert {
-      _ = try await sut.mfa.enroll(
-        params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test"))
-    }
-  }
-
-  @Test
   func mfaEnrollTotp() async throws {
     let sut = makeSUT()
 
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
+      _ = try await sut.mfa.enrollTOTP(issuer: "supabase.com", friendlyName: "test")
     }
   }
 
@@ -520,7 +511,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
+      _ = try await sut.mfa.enrollPhone("+1 202-918-2132", friendlyName: "test")
     }
   }
 
@@ -532,7 +523,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -544,9 +535,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
-      )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
     }
   }
 
@@ -558,10 +547,9 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          code: "123456"))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        code: "123456")
     }
   }
 
@@ -572,8 +560,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.unenroll(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+      try await sut.mfa.unenroll(
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -584,7 +572,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
+      _ = try await sut.mfa.enrollWebAuthn(friendlyName: "My Passkey")
     }
   }
 
@@ -596,10 +584,8 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
       )
     }
   }
@@ -612,19 +598,17 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          credentialResponse: [
-            "id": "credential-id",
-            "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
-            "type": "public-key",
-            "response": [
-              "clientDataJSON": "Y2xpZW50LWRhdGE",
-              "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
-            ],
-          ]
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credentialResponse: [
+          "id": "credential-id",
+          "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+          "type": "public-key",
+          "response": [
+            "clientDataJSON": "Y2xpZW50LWRhdGE",
+            "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
+          ],
+        ]
       )
     }
   }

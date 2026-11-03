@@ -98,269 +98,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func signOut() async throws {
-      try await withMainSerialExecutor {
-        let sut = makeSUT()
-
-        Mock(
-          url: clientURL.appendingPathComponent("logout"),
-          ignoreQuery: true,
-          statusCode: 200,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut() },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.dependencies.sessionStore.currentStatus == .signedOut(.userInitiated))
-        do {
-          _ = try await sut.session
-        } catch {
-          #expect((error as? AuthError)?.kind == .sessionMissing)
-        }
-      }
-    }
-
-    @Test
-    func signOutWithOthersScopeShouldNotRemoveLocalSession() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "others")
-          ]),
-          statusCode: 200,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=others"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        try await sut.seedSession(.valid)
-
-        try await sut.signOut(scope: .others)
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(!(sessionRemoved))
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIfUserIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 404,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [.valid, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIfJWTIsInvalid() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 401,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [validSession, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldRemoveSessionIf403Returned() async throws {
-      try await withMainSerialExecutor {
-        Mock(
-          url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-            URLQueryItem(name: "scope", value: "global")
-          ]),
-          statusCode: 403,
-          data: [
-            .post: Data()
-          ]
-        )
-        .snapshotRequest {
-          #"""
-          curl \
-          	--request POST \
-          	--header "Authorization: Bearer accesstoken" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
-          	--header "X-Supabase-Api-Version: 2024-01-01" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:54321/auth/v1/logout?scope=global"
-          """#
-        }
-        .register()
-
-        let sut = makeSUT()
-
-        let validSession = Session.valid
-        try await sut.seedSession(validSession)
-
-        let eventsTask = Task {
-          await sut.events().prefix(2).collect()
-        }
-
-        await Task.megaYield()
-
-        try await sut.signOut()
-
-        let events = await eventsTask.value.map(\.event)
-        let sessions = await eventsTask.value.map(\.session)
-
-        expectNoDifference(events, [.initialSession, .signedOut])
-        expectNoDifference(sessions, [validSession, nil])
-
-        let sessionRemoved = sut.currentSession == nil
-        #expect(sessionRemoved)
-      }
-    }
-
-    @Test
-    func signOutShouldSucceedIfSessionIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        sessionNotFoundMock(scope: "global").register()
-
-        let sut = makeSUT()
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut() },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.currentSession == nil)
-      }
-    }
-
-    @Test
-    func signOutWithOthersScopeShouldRemoveSessionIfSessionIsNotFound() async throws {
-      try await withMainSerialExecutor {
-        sessionNotFoundMock(scope: "others").register()
-
-        let sut = makeSUT()
-        try await sut.seedSession(.valid)
-
-        try await assertAuthStateChanges(
-          sut: sut,
-          action: { try await sut.signOut(scope: .others) },
-          expectedEvents: [.initialSession, .signedOut]
-        )
-
-        #expect(sut.currentSession == nil)
-      }
-    }
-
-    @Test
-    func signOutShouldKeepASessionStoredWhileLoggingOut() async throws {
+    func globalSignOutKeepsASessionSignedInWhileLoggingOut() async throws {
       try await withMainSerialExecutor {
         let sut = makeSUT()
 
@@ -368,7 +106,12 @@ extension AuthMockerTests {
         nextSession.accessToken = "next-access-token"
         nextSession.refreshToken = "next-refresh-token"
 
-        var mock = sessionNotFoundMock(scope: "global")
+        var mock = Mock(
+          url: clientURL.appendingPathComponent("logout"),
+          ignoreQuery: true,
+          statusCode: 204,
+          data: [.post: Data()]
+        )
         mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
           let signedIn = DispatchSemaphore(value: 0)
           Task {
@@ -381,7 +124,7 @@ extension AuthMockerTests {
 
         try await sut.seedSession(.valid)
 
-        try await sut.signOut()
+        try await sut.signOut(scope: .global)
 
         expectNoDifference(sut.currentSession, nextSession)
       }
@@ -1106,7 +849,10 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      var session = Session.valid
+      session.refreshToken = "refresh-token"
+      try await sut.seedSession(session)
+      try await sut.refreshSession()
     }
 
     #if !os(Linux) && !os(Windows) && !os(Android)
@@ -1153,7 +899,7 @@ extension AuthMockerTests {
     #endif
 
     @Test
-    func setSessionWithAFutureExpirationDate() async throws {
+    func importSessionWithAFutureExpirationDate() async throws {
       Mock(
         url: clientURL.appendingPathComponent("user"),
         statusCode: 200,
@@ -1177,11 +923,11 @@ extension AuthMockerTests {
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
 
     @Test
-    func setSessionWithAExpiredToken() async throws {
+    func importSessionWithAnExpiredToken() async throws {
       Mock(
         url: clientURL.appendingPathComponent("token"),
         ignoreQuery: true,
@@ -1208,7 +954,7 @@ extension AuthMockerTests {
       let accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
 
     @Test
@@ -2019,7 +1765,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func mfaEnrollLegacy() async throws {
+    func mfaEnrollTOTP() async throws {
       Mock(
         url: clientURL.appendingPathComponent("factors"),
         statusCode: 200,
@@ -2028,7 +1774,13 @@ extension AuthMockerTests {
             """
             {
               "id": "00000000-0000-0000-0000-000000012345",
-              "type": "totp"
+              "type": "totp",
+              "friendly_name": "test",
+              "totp": {
+                "qr_code": "<svg />",
+                "secret": "SECRET",
+                "uri": "otpauth://totp/supabase.com:user?secret=SECRET"
+              }
             }
             """.utf8
           )
@@ -2054,62 +1806,37 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.enroll(
-        params: MFATotpEnrollParams(
-          issuer: "supabase.com",
-          friendlyName: "test"
+      let enrollment = try await sut.mfa.enrollTOTP(issuer: "supabase.com", friendlyName: "test")
+
+      expectNoDifference(
+        enrollment,
+        TOTPEnrollment(
+          id: UUID(uuidString: "00000000-0000-0000-0000-000000012345")!,
+          friendlyName: "test",
+          qrCode: "<svg />",
+          secret: "SECRET",
+          uri: "otpauth://totp/supabase.com:user?secret=SECRET"
         )
       )
-
-      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
-      expectNoDifference(response.type, "totp")
     }
 
     @Test
-    func mfaEnrollTotp() async throws {
+    func mfaEnrollTOTPWithoutTOTPDataThrowsDecoding() async throws {
       Mock(
         url: clientURL.appendingPathComponent("factors"),
         statusCode: 200,
-        data: [
-          .post: Data(
-            """
-            {
-              "id": "00000000-0000-0000-0000-000000012345",
-              "type": "totp"
-            }
-            """.utf8
-          )
-        ]
+        data: [.post: Data(#"{"id":"00000000-0000-0000-0000-000000012345","type":"totp"}"#.utf8)]
       )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 69" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"factor_type\":\"totp\",\"friendly_name\":\"test\",\"issuer\":\"supabase.com\"}" \
-        	"http://localhost:54321/auth/v1/factors"
-        """#
-      }
       .register()
 
       let sut = makeSUT()
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.enroll(
-        params: .totp(
-          issuer: "supabase.com",
-          friendlyName: "test"
-        )
-      )
-
-      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
-      expectNoDifference(response.type, "totp")
+      let error = await #expect(throws: AuthError.self) {
+        try await sut.mfa.enrollTOTP()
+      }
+      expectNoDifference(error?.kind, .decoding)
     }
 
     @Test
@@ -2122,7 +1849,9 @@ extension AuthMockerTests {
             """
             {
               "id": "00000000-0000-0000-0000-000000012345",
-              "type": "phone"
+              "type": "phone",
+              "friendly_name": "test",
+              "phone": "12029182132"
             }
             """.utf8
           )
@@ -2148,23 +1877,24 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.enroll(
-        params: .phone(
+      let enrollment = try await sut.mfa.enrollPhone("+1 202-918-2132", friendlyName: "test")
+
+      expectNoDifference(
+        enrollment,
+        PhoneEnrollment(
+          id: UUID(uuidString: "00000000-0000-0000-0000-000000012345")!,
           friendlyName: "test",
-          phone: "+1 202-918-2132"
+          phone: "12029182132"
         )
       )
-
-      expectNoDifference(response.id, UUID(uuidString: "00000000-0000-0000-0000-000000012345")!)
-      expectNoDifference(response.type, "phone")
     }
 
     @Test
     func mfaChallenge() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
         statusCode: 200,
         data: [
           .post: Data(
@@ -2195,24 +1925,24 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.challenge(params: .init(factorId: factorId))
+      let challenge = try await sut.mfa.challenge(factorID: factorID)
 
       expectNoDifference(
-        response,
-        AuthMFAChallengeResponse(
+        challenge,
+        MFAChallenge(
           id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          type: "totp",
-          expiresAt: 12_345_678
+          factorType: .totp,
+          expiresAt: Date(timeIntervalSince1970: 12_345_678)
         )
       )
     }
 
     @Test
     func mfaChallengeWithPhoneType() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
         statusCode: 200,
         data: [
           .post: Data(
@@ -2246,29 +1976,24 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.challenge(
-        params: .init(
-          factorId: factorId,
-          channel: .sms
-        )
-      )
+      let challenge = try await sut.mfa.challenge(factorID: factorID, channel: .sms)
 
       expectNoDifference(
-        response,
-        AuthMFAChallengeResponse(
+        challenge,
+        MFAChallenge(
           id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          type: "phone",
-          expiresAt: 12_345_678
+          factorType: .phone,
+          expiresAt: Date(timeIntervalSince1970: 12_345_678)
         )
       )
     }
 
     @Test
     func mfaChallengeWebAuthnReturnsCredentialOptions() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
         statusCode: 200,
         data: [
           .post: Data(
@@ -2296,25 +2021,24 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let response = try await sut.mfa.challenge(
-        params: .init(factorId: factorId, webAuthn: .init(rpId: "example.com"))
-      )
+      let challenge = try await sut.mfa.challenge(
+        factorID: factorID, webAuthn: .init(rpId: "example.com"))
 
-      expectNoDifference(response.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
-      expectNoDifference(response.type, "webauthn")
-      expectNoDifference(response.webauthn?.type, .create)
+      expectNoDifference(challenge.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
+      expectNoDifference(challenge.factorType, .webAuthn)
+      expectNoDifference(challenge.webauthn?.type, .create)
 
-      let options = response.webauthn?.credentialOptions.objectValue
+      let options = challenge.webauthn?.credentialOptions.objectValue
       expectNoDifference(options?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
       expectNoDifference(options?["pubKeyCredParams"]?.arrayValue?.count, 1)
     }
 
     @Test
-    func mfaVerify() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+    func mfaVerifyReplacesSessionAndEmitsEvent() async throws {
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/verify"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/verify"),
         statusCode: 200,
         data: [.post: MockData.session]
       )
@@ -2338,21 +2062,33 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      try await sut.mfa.verify(
-        params: .init(
-          factorId: factorId,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          code: "123456"
-        )
+      let changes = LockIsolated<[AuthChange]>([])
+      let stream = sut.events()
+      let collect = Task {
+        for await change in stream {
+          changes.withValue { $0.append(change) }
+          if change.event == .mfaChallengeVerified { break }
+        }
+      }
+
+      let session = try await sut.mfa.verify(
+        factorID: factorID,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        code: "123456"
       )
+      await collect.value
+
+      expectNoDifference(sut.currentSession, session)
+      #expect(session.refreshToken != Session.valid.refreshToken)
+      expectNoDifference(changes.value.map(\.event), [.initialSession, .mfaChallengeVerified])
     }
 
     @Test
     func mfaUnenroll() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)"),
         statusCode: 200,
         data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000123"}"#.utf8)]
       )
@@ -2373,18 +2109,39 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      let id = try await sut.mfa.unenroll(params: .init(factorId: factorId)).id
+      let response = try await sut.mfa.unenroll(factorID: factorID)
 
-      expectNoDifference(id, factorId)
+      expectNoDifference(response, AuthMFAUnenrollResponse(id: factorID))
+    }
+
+    /// A 2xx body that does not decode is a client-side failure, never a server error (#904).
+    @Test
+    func mfaUnenrollUndecodableSuccessBodyThrowsDecoding() async throws {
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+
+      Mock(
+        url: clientURL.appendingPathComponent("factors/\(factorID)"),
+        statusCode: 200,
+        data: [.delete: Data("{}".utf8)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      try await sut.seedSession(.valid)
+
+      let error = await #expect(throws: AuthError.self) {
+        try await sut.mfa.unenroll(factorID: factorID)
+      }
+      expectNoDifference(error?.kind, .decoding)
     }
 
     @Test
     func mfaChallengeAndVerify() async throws {
-      let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
-      let code = "456"
+      let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/challenge"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
         statusCode: 200,
         data: [
           .post: Data(
@@ -2412,7 +2169,7 @@ extension AuthMockerTests {
       .register()
 
       Mock(
-        url: clientURL.appendingPathComponent("factors/\(factorId)/verify"),
+        url: clientURL.appendingPathComponent("factors/\(factorID)/verify"),
         statusCode: 200,
         data: [
           .post: MockData.session
@@ -2438,107 +2195,76 @@ extension AuthMockerTests {
 
       try await sut.seedSession(.valid)
 
-      try await sut.mfa.challengeAndVerify(
-        params: MFAChallengeAndVerifyParams(
-          factorId: factorId,
-          code: code
-        )
+      let session = try await sut.mfa.challengeAndVerify(factorID: factorID, code: "456")
+
+      expectNoDifference(sut.currentSession, session)
+    }
+
+    @Test
+    func mfaFactorsFetchesUserAndSplitsByStatus() async throws {
+      let totpVerified = Factor(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+        friendlyName: nil,
+        factorType: .totp,
+        status: .verified,
+        createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+        updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
       )
+      let phoneUnverified = Factor(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+        friendlyName: nil,
+        factorType: .phone,
+        status: .unverified,
+        createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+        updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+      )
+      let recoveryCodes = Factor(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
+        friendlyName: "Recovery codes",
+        factorType: .recoveryCode,
+        status: .verified,
+        createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+        updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
+      )
+
+      var user = User(fromMockNamed: "user")
+      user.factors = [totpVerified, phoneUnverified, recoveryCodes]
+
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [.get: try AuthClient.Configuration.jsonEncoder.encode(user)]
+      )
+      .register()
+
+      let sut = makeSUT()
+
+      // The cached user has no factors, so the result can only come from `GET /user`.
+      try await sut.seedSession(.valid)
+
+      let factors = try await sut.mfa.factors()
+
+      expectNoDifference(factors.verified, [totpVerified, recoveryCodes])
+      expectNoDifference(factors.unverified, [phoneUnverified])
+      expectNoDifference(factors.all, [totpVerified, recoveryCodes, phoneUnverified])
     }
 
     @Test
-    func mfaListFactors() async throws {
+    func mfaFactorsWhenUserHasNoFactorsReturnsEmpty() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [.get: MockData.user]
+      )
+      .register()
+
       let sut = makeSUT()
 
-      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
-      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
-      let factorId4 = UUID(uuidString: "00000000-0000-0000-0000-000000000004")!
+      try await sut.seedSession(.valid)
 
-      var session = Session.valid
-      session.user.factors = [
-        Factor(
-          id: factorId1,
-          friendlyName: nil,
-          factorType: "totp",
-          status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-        Factor(
-          id: factorId2,
-          friendlyName: nil,
-          factorType: "totp",
-          status: .unverified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-        Factor(
-          id: factorId3,
-          friendlyName: nil,
-          factorType: "phone",
-          status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-        Factor(
-          id: factorId4,
-          friendlyName: nil,
-          factorType: "phone",
-          status: .unverified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-      ]
+      let factors = try await sut.mfa.factors()
 
-      try await sut.seedSession(session)
-
-      let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.totp.map(\.id), [factorId1])
-      expectNoDifference(factors.phone.map(\.id), [factorId3])
-    }
-
-    @Test
-    func mfaListFactorsIncludesWebAuthn() async throws {
-      let sut = makeSUT()
-
-      let factorId1 = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-      let factorId2 = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
-      let factorId3 = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
-
-      var session = Session.valid
-      session.user.factors = [
-        Factor(
-          id: factorId1,
-          friendlyName: "My Passkey",
-          factorType: "webauthn",
-          status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-        Factor(
-          id: factorId2,
-          friendlyName: nil,
-          factorType: "webauthn",
-          status: .unverified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-        Factor(
-          id: factorId3,
-          friendlyName: nil,
-          factorType: "totp",
-          status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
-        ),
-      ]
-
-      try await sut.seedSession(session)
-
-      let factors = try await sut.mfa.listFactors()
-      expectNoDifference(factors.webauthn.map(\.id), [factorId1])
-      expectNoDifference(factors.totp.map(\.id), [factorId3])
+      expectNoDifference(factors, MFAFactors(verified: [], unverified: []))
     }
 
     @Test
@@ -2861,7 +2587,7 @@ extension AuthMockerTests {
         try await sut.seedSession(.valid)
 
         let session = try await sut.mfa._verifyWebAuthnFactor(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+          factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           presentationAnchor: ASPresentationAnchor(),
           authenticator: authenticator
         )
@@ -2872,46 +2598,73 @@ extension AuthMockerTests {
     #endif
 
     @Test
-    func getAuthenticatorAssuranceLevel_whenAALAndVerifiedFactor_shouldReturnAAL2() async throws {
+    func mfaAssuranceLevelReadsFactorsFromAFreshUser() async throws {
       var session = Session.valid
 
       session.accessToken =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJ0b3RwIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfSx7Im1ldGhvZCI6InBob25lIiwidGltZXN0YW1wIjoxNTE2MjM5MDIyfV19.OQy2SmA1hcw9V5wrY-bvORjbFh5tWznLIfcMCqPu_6M"
 
-      session.user.factors = [
+      var user = User(fromMockNamed: "user")
+      user.factors = [
         Factor(
           id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
           friendlyName: nil,
-          factorType: "totp",
+          factorType: .totp,
           status: .verified,
-          createdAt: Date(),
-          updatedAt: Date()
+          createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+          updatedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
       ]
 
+      Mock(
+        url: clientURL.appendingPathComponent("user"),
+        statusCode: 200,
+        data: [.get: try AuthClient.Configuration.jsonEncoder.encode(user)]
+      )
+      .register()
+
       let sut = makeSUT()
 
+      // The cached user has no factors, so `nextLevel` can only come from `GET /user`.
       try await sut.seedSession(session)
 
-      let aal = try await sut.mfa.authenticatorAssuranceLevel()
+      let info = try await sut.mfa.assuranceLevel()
 
       expectNoDifference(
-        aal,
-        AuthMFAGetAuthenticatorAssuranceLevelResponse(
-          currentLevel: "aal1",
-          nextLevel: "aal2",
+        info,
+        AssuranceLevelInfo(
+          currentLevel: .aal1,
+          nextLevel: .aal2,
           currentAuthenticationMethods: [
-            AMREntry(
-              method: "totp",
-              timestamp: 1_516_239_022
-            ),
-            AMREntry(
-              method: "phone",
-              timestamp: 1_516_239_022
-            ),
+            AMREntry(method: .totp, timestamp: Date(timeIntervalSince1970: 1_516_239_022)),
+            AMREntry(method: "phone", timestamp: Date(timeIntervalSince1970: 1_516_239_022)),
           ]
         )
       )
+      expectNoDifference(sut.currentSession, session)
+    }
+
+    @Test
+    func mfaAssuranceLevelWithUndecodableTokenThrowsDecoding() async throws {
+      let sut = makeSUT()
+
+      // `Session.valid.accessToken` is not a JWT.
+      try await sut.seedSession(.valid)
+
+      let error = await #expect(throws: AuthError.self) {
+        try await sut.mfa.assuranceLevel()
+      }
+      expectNoDifference(error?.kind, .decoding)
+    }
+
+    @Test
+    func mfaAssuranceLevelWithoutSessionThrowsSessionMissing() async throws {
+      let sut = makeSUT()
+
+      let error = await #expect(throws: AuthError.self) {
+        try await sut.mfa.assuranceLevel()
+      }
+      expectNoDifference(error?.kind, .sessionMissing)
     }
 
     @Test
@@ -3301,7 +3054,9 @@ extension AuthMockerTests {
     }
 
     @Test
-    func setSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
+    func importSessionWithForeignTokenKeepsStoredSessionIfSessionNotFoundErrorReturned()
+      async throws
+    {
       let sut = makeSUT()
 
       Mock(
@@ -3329,7 +3084,7 @@ extension AuthMockerTests {
         sut: sut,
         action: {
           do {
-            _ = try await sut.setSession(
+            _ = try await sut.importSession(
               accessToken: accessToken, refreshToken: "dummy-refresh-token")
             Issue.record("Expected failure")
           } catch {
@@ -3416,7 +3171,7 @@ extension AuthMockerTests {
         sut: sut,
         action: {
           do {
-            _ = try await sut.session
+            _ = try await sut.session()
             Issue.record("Expected failure")
           } catch {
             // `.initialSession` starts a background refresh of the expired session. If it
@@ -3451,7 +3206,7 @@ extension AuthMockerTests {
       try await assertAuthStateChanges(
         sut: sut,
         action: {
-          _ = try await sut.session
+          _ = try await sut.session()
         },
         expectedEvents: expectedEvents
       )
@@ -4023,28 +3778,6 @@ extension AuthMockerTests {
       } catch {
         Issue.record("Unexpected error \(error)")
       }
-    }
-
-    private func sessionNotFoundMock(scope: String) -> Mock {
-      Mock(
-        url: clientURL.appendingPathComponent("logout").appendingQueryItems([
-          URLQueryItem(name: "scope", value: scope)
-        ]),
-        statusCode: 403,
-        data: [
-          .post: Data(
-            """
-            {
-              "code": "session_not_found",
-              "message": "Session from session_id claim in JWT does not exist"
-            }
-            """.utf8
-          )
-        ],
-        additionalHeaders: [
-          "X-Supabase-Api-Version": "2024-01-01"
-        ]
-      )
     }
 
     private func mockJWKS(_ key: JWK, url: URL = clientURL) throws -> LockIsolated<Int> {

@@ -71,7 +71,7 @@ struct MessagesView: View {
     do {
       let message = try await NewMessage(
         message: newMessage,
-        userId: supabase.auth.session.user.id,
+        userId: supabase.auth.session().user.id,
         channelId: channel.id
       )
 

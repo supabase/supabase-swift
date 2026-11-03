@@ -30,7 +30,7 @@ struct VerifiedClaimsTests {
     #expect(claims.appMetadata == ["provider": "email"])
     #expect(claims.userMetadata == ["name": "Ada"])
     #expect(claims.isAnonymous == false)
-    #expect(claims.assuranceLevel == "aal1")
+    #expect(claims.assuranceLevel == .aal1)
     #expect(claims.additionalClaims.isEmpty)
     #expect(claims.header.alg == "ES256")
     #expect(claims.header.kid == "kid-1")
@@ -70,9 +70,9 @@ struct VerifiedClaimsTests {
     #expect(claims.issuedAt?.timeIntervalSince1970 == 1_700_000_100)
     #expect(claims.amr.count == 2)
     #expect(claims.amr.first?.method == "password")
-    #expect(claims.amr.first?.timestamp == 1_700_000_000)
+    #expect(claims.amr.first?.timestamp == Date(timeIntervalSince1970: 1_700_000_000))
     #expect(claims.amr.last?.method == "otp")
-    #expect(claims.amr.last?.timestamp == 1_700_000_100)
+    #expect(claims.amr.last?.timestamp == Date(timeIntervalSince1970: 1_700_000_100))
   }
 
   @Test

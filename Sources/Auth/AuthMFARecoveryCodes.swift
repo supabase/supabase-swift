@@ -39,13 +39,11 @@ import Foundation
 /// - ``status()``
 /// - ``unenroll()``
 public struct AuthMFARecoveryCodes: Sendable {
-  /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
-  /// value kept past its call site keeps the client alive instead of dangling.
-  let client: AuthClient
+  let dependencies: Dependencies
 
-  var api: SessionAPIClient { client.dependencies.sessionAPI }
-  var authAPI: AuthAPI { client.dependencies.authAPI }
-  var sessionStore: SessionStore { client.dependencies.sessionStore }
+  private var api: SessionAPIClient { dependencies.sessionAPI }
+  private var authAPI: AuthAPI { dependencies.authAPI }
+  private var sessionStore: SessionStore { dependencies.sessionStore }
 
   /// Returns how many recovery codes the user's current set holds and how many of them are still
   /// unused. Never returns the codes themselves.
@@ -68,7 +66,7 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// The session has to be at `aal2` and the user has to already have another verified factor. A
   /// user can only hold one set of recovery codes; use ``regenerate()`` to replace an existing set.
   ///
-  /// - Parameter friendlyName: The name the factor is listed under in ``AuthMFA/listFactors()``,
+  /// - Parameter friendlyName: The name the factor is listed under in ``AuthMFA/factors()``,
   ///   unique among the user's factors. The server names it `Recovery codes` when omitted.
   /// - Returns: The new set of recovery codes.
   public func generate(
@@ -91,7 +89,7 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// - Throws: An error with code `mfa_verification_failed` when the code is wrong, already used or
   ///   missing.
   @discardableResult
-  public func verify(code: String) async throws -> AuthMFAVerifyResponse {
+  public func verify(code: String) async throws -> Session {
     let response = try await api.authorizedExecute {
       try authAPI.verifyRecoveryCode(code, accessToken: $0)
     }

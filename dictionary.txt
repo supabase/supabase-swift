@@ -78,6 +78,7 @@ Gxlbmdl
 Hashability
 heartbeating
 Heartbeating
+HMAC
 hostnames
 HTTPURL
 Ilike
@@ -134,6 +135,7 @@ OIDC
 posix
 omitempty
 openssl
+otpauth
 opentelemetry
 parameterless
 passout

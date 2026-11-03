@@ -245,7 +245,9 @@ struct WebAuthnPasskeysView: View {
       defer { isLoading = false }
 
       passkeys = try await supabase.auth.listPasskeys()
-      webAuthnFactors = try await supabase.auth.mfa.listFactors().webauthn
+      webAuthnFactors = try await supabase.auth.mfa.factors().verified.filter {
+        $0.factorType == .webAuthn
+      }
     } catch {
       self.error = error
     }
@@ -324,7 +326,7 @@ struct WebAuthnPasskeysView: View {
         defer { isLoading = false }
 
         _ = try await supabase.auth.mfa.verifyWebAuthnFactor(
-          factorId: factor.id,
+          factorID: factor.id,
           presentationAnchor: webAuthnPresentationAnchor()
         )
         await refresh()
