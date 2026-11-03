@@ -83,6 +83,21 @@ actor FlowStore {
     try await storage.remove(key: recordKey(id))
   }
 
+  /// Removes every flow. A record that fails to remove is logged, as a dropped one is.
+  func removeAll() async throws {
+    let removed = try await updateIndex { index in
+      defer { index = PendingFlowIndex() }
+      return index.flows.map(\.id)
+    }
+    for id in removed {
+      do {
+        try await storage.remove(key: recordKey(id))
+      } catch {
+        logger.error("Failure removing a pending flow record: \(error.localizedDescription)")
+      }
+    }
+  }
+
   /// Like ``flow(id:)``, but a record that fails to decode is logged and skipped.
   private func liveFlow(id: UUID) async throws -> PendingFlowRecord? {
     do {
