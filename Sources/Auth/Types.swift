@@ -635,22 +635,52 @@ public struct Web3Credentials: Hashable, Sendable {
   }
 }
 
-/// Options for ``AuthClient/signInWithOTP(email:options:)`` and
-/// ``AuthClient/signInWithOTP(phone:options:)``.
-public struct OTPOptions: Sendable, Hashable {
-  /// Whether the server creates a user when none exists for the email or phone. The default is
-  /// `true`. When `false`, the call fails for an unknown user.
+/// Options for ``AuthClient/signInWithOTP(email:options:)``.
+public struct EmailOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the email. The default is `true`.
+  /// When `false`, the call fails for an unknown user.
   public var shouldCreateUser: Bool
 
   /// Data to store on the user if the call creates one.
   public var userMetadata: JSONObject
 
   /// The URL the email link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``. Phone sign-in ignores it.
+  /// ``AuthClient/Configuration/redirectToURL``.
   public var redirectTo: URL?
 
-  /// The channel that delivers the code. The default is ``MessagingChannel/sms``. Email sign-in
-  /// ignores it.
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates email OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - redirectTo: The URL the email link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/signInWithOTP(phone:options:)``.
+public struct PhoneOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the phone number. The default is
+  /// `true`. When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The channel that delivers the code. The default is ``MessagingChannel/sms``.
   ///
   /// - Note: The ``MessagingChannel/whatsapp`` channel needs a WhatsApp sender on Twilio.
   public var channel: MessagingChannel
@@ -658,24 +688,21 @@ public struct OTPOptions: Sendable, Hashable {
   /// The captcha verification token.
   public var captchaToken: String?
 
-  /// Creates OTP options.
+  /// Creates phone OTP options.
   ///
   /// - Parameters:
   ///   - shouldCreateUser: Whether the server creates a user when none exists.
   ///   - userMetadata: Data to store on the user if the call creates one.
-  ///   - redirectTo: The URL the email link redirects to. Phone sign-in ignores it.
-  ///   - channel: The channel that delivers the code. Email sign-in ignores it.
+  ///   - channel: The channel that delivers the code.
   ///   - captchaToken: The captcha verification token.
   public init(
     shouldCreateUser: Bool = true,
     userMetadata: JSONObject = [:],
-    redirectTo: URL? = nil,
     channel: MessagingChannel = .sms,
     captchaToken: String? = nil
   ) {
     self.shouldCreateUser = shouldCreateUser
     self.userMetadata = userMetadata
-    self.redirectTo = redirectTo
     self.channel = channel
     self.captchaToken = captchaToken
   }
@@ -904,7 +931,8 @@ extension Decoder {
   }
 }
 
-/// The result of ``AuthClient/verifyOTP(email:token:type:)`` and its overloads.
+/// The result of ``AuthClient/verifyOTP(email:token:type:)`` and
+/// ``AuthClient/verifyOTP(tokenHash:type:)``.
 ///
 /// ```swift
 /// switch try await client.auth.verifyOTP(email: email, token: code, type: .email) {

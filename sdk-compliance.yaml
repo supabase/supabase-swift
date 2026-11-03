@@ -369,6 +369,10 @@ features:
       - AuthClient.signInWithOAuth
       - AuthClient.oauthSignInURL
     supporting_symbols:
+      - WebAuthFlow
+      - WebAuthFlow.init
+      - WebAuthFlow.url
+      - WebAuthFlow.id
       - WebAuthPresenter
       - WebAuthPresenter.authenticate
       - WebAuthPresenter.default
@@ -416,13 +420,18 @@ features:
     symbols:
       - AuthClient.signInWithOTP
     supporting_symbols:
-      - OTPOptions
-      - OTPOptions.init
-      - OTPOptions.shouldCreateUser
-      - OTPOptions.userMetadata
-      - OTPOptions.redirectTo
-      - OTPOptions.channel
-      - OTPOptions.captchaToken
+      - EmailOTPOptions
+      - EmailOTPOptions.init
+      - EmailOTPOptions.shouldCreateUser
+      - EmailOTPOptions.userMetadata
+      - EmailOTPOptions.redirectTo
+      - EmailOTPOptions.captchaToken
+      - PhoneOTPOptions
+      - PhoneOTPOptions.init
+      - PhoneOTPOptions.shouldCreateUser
+      - PhoneOTPOptions.userMetadata
+      - PhoneOTPOptions.channel
+      - PhoneOTPOptions.captchaToken
       - MessageID
       - MessageID.init
       - MessageID.rawValue

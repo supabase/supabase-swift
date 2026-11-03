@@ -69,7 +69,7 @@ struct APIClientTests {
 
     await #expect(throws: AuthError.self) {
       try await client.execute(
-        authAPI.signInWithOTP(email: "a@b.c", options: OTPOptions(), pkce: nil))
+        authAPI.signInWithOTP(email: "a@b.c", options: EmailOTPOptions(), pkce: nil))
     }
     #expect(attempts.value == 1)
   }

@@ -84,6 +84,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(_:options:presenter:)``
 /// - ``oauthSignInURL(_:options:)``
 /// - ``OAuthOptions``
+/// - ``WebAuthFlow``
 /// - ``WebAuthPresenter``
 /// - ``ClosurePresenter``
 /// - ``ASWebAuthenticationSessionPresenter``
@@ -91,7 +92,8 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// ### One-time passwords and magic links
 /// - ``signInWithOTP(email:options:)``
 /// - ``signInWithOTP(phone:options:)``
-/// - ``OTPOptions``
+/// - ``EmailOTPOptions``
+/// - ``PhoneOTPOptions``
 /// - ``MessagingChannel``
 /// - ``MessageID``
 /// - ``verifyOTP(email:token:type:)``
@@ -527,8 +529,8 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - email: The user's email address.
   ///   - options: Whether to create the user, its metadata, the redirect URL of the link, and the
-  ///     captcha token. Email sign-in ignores ``OTPOptions/channel``.
-  public func signInWithOTP(email: String, options: OTPOptions = .init()) async throws {
+  ///     captcha token.
+  public func signInWithOTP(email: String, options: EmailOTPOptions = .init()) async throws {
     try await withFlow(.signIn, redirectTo: options.redirectTo) {
       try await api.execute(
         authAPI.signInWithOTP(email: email, options: options, pkce: $0.challenge))
@@ -543,13 +545,12 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - phone: The user's phone number, with the international prefix.
   ///   - options: Whether to create the user, its metadata, the channel, and the captcha token.
-  ///     Phone sign-in ignores ``OTPOptions/redirectTo``.
   /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
   ///   none.
   @discardableResult
   public func signInWithOTP(
     phone: String,
-    options: OTPOptions = .init()
+    options: PhoneOTPOptions = .init()
   ) async throws -> MessageID? {
     try await api.execute(authAPI.signInWithOTP(phone: phone, options: options))
   }
@@ -558,16 +559,16 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when you present the identity provider page yourself. The client stores a new PKCE
   /// flow before it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or
-  /// pass the code and `flowID` to ``exchangeCodeForSession(_:flowID:)``.
+  /// pass the code and ``WebAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - target: The email domain or the ID of the identity provider.
   ///   - options: The redirect URL and the captcha token.
-  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  /// - Returns: The flow that this call started, with the URL to open.
   public func ssoSignInURL(
     _ target: SSOTarget,
     options: SSOOptions = .init()
-  ) async throws -> (url: URL, flowID: UUID) {
+  ) async throws -> WebAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.signIn, redirectTo: redirectTo, sendsEmail: false) { started in
@@ -579,7 +580,7 @@ public final class AuthClient: Sendable {
           pkce: started.challenge
         )
       )
-      return (url, started.flow.id)
+      return WebAuthFlow(url: url, id: started.flow.id)
     }
   }
 
@@ -645,16 +646,16 @@ public final class AuthClient: Sendable {
   ///
   /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
   /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or pass the code
-  /// and `flowID` to ``exchangeCodeForSession(_:flowID:)``.
+  /// and ``WebAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  /// - Returns: The flow that this call started, with the URL to open.
   public func oauthSignInURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> (url: URL, flowID: UUID) {
+  ) async throws -> WebAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.signIn, redirectTo: redirectTo) { started in
@@ -665,7 +666,7 @@ public final class AuthClient: Sendable {
         queryParams: options.queryParams,
         pkce: started.challenge
       )
-      return (url, started.flow.id)
+      return WebAuthFlow(url: url, id: started.flow.id)
     }
   }
 
@@ -727,9 +728,9 @@ public final class AuthClient: Sendable {
     }
   #endif
 
-  /// Shows `start.url` with `presenter`, then finishes the flow with the callback URL.
+  /// Shows `flow.url` with `presenter`, then finishes the flow with the callback URL.
   private func present(
-    _ start: (url: URL, flowID: UUID),
+    _ flow: WebAuthFlow,
     redirectTo: URL?,
     with presenter: some WebAuthPresenter
   ) async throws -> Session {
@@ -740,9 +741,9 @@ public final class AuthClient: Sendable {
 
     let callback: URL
     do {
-      callback = try await presenter.authenticate(url: start.url, callbackScheme: callbackScheme)
+      callback = try await presenter.authenticate(url: flow.url, callbackScheme: callbackScheme)
     } catch {
-      await removeFlow(start.flowID)
+      await removeFlow(flow.id)
       throw error
     }
 
@@ -750,16 +751,16 @@ public final class AuthClient: Sendable {
     // not have reached the server keeps it, so a retry can still finish it.
     let result: RedirectResult?
     do {
-      result = try await handleRedirect(callback, flowID: start.flowID, signOuts: signOuts)
+      result = try await handleRedirect(callback, flowID: flow.id, signOuts: signOuts)
     } catch {
       if !Self.mayHaveReachedServer(error) {
-        await removeFlow(start.flowID)
+        await removeFlow(flow.id)
       }
       throw error
     }
 
     // A code exchange removed the flow already. Implicit tokens or a non-redirect leave it.
-    await removeFlow(start.flowID)
+    await removeFlow(flow.id)
     switch result {
     case .signedIn(let session, _):
       return session
@@ -794,9 +795,9 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameters:
   ///   - code: The authorization code from the redirect URL.
-  ///   - flowID: The ID of the flow that produced `code`, as returned by
-  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)``. When `nil`, the client
-  ///     tries the pending flows newest first.
+  ///   - flowID: The ``WebAuthFlow/id`` of the flow that produced `code`, as returned by
+  ///     ``oauthSignInURL(_:options:)``, ``linkIdentityURL(_:options:)``, or
+  ///     ``ssoSignInURL(_:options:)``. When `nil`, the client tries the pending flows newest first.
   /// - Returns: The new session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
@@ -1081,7 +1082,7 @@ public final class AuthClient: Sendable {
   ) async throws -> VerifyOTPResult {
     try await _verifyOTP(
       authAPI.verifyOTP(email: email, token: token, type: type),
-      transition: { Self.verifiedTransition($0, for: type) }
+      type: type
     )
   }
 
@@ -1094,20 +1095,18 @@ public final class AuthClient: Sendable {
   ///   - phone: The phone number that got the code.
   ///   - token: The code from the message.
   ///   - type: The kind of message that sent the code.
-  /// - Returns: ``VerifyOTPResult/signedIn(_:)`` with the session. A phone code never returns
-  ///   ``VerifyOTPResult/emailChangePending(message:)``.
+  /// - Returns: The session.
   @discardableResult
   public func verifyOTP(
     phone: String,
     token: String,
     type: PhoneOTPType
-  ) async throws -> VerifyOTPResult {
-    try await _verifyOTP(
-      authAPI.verifyOTP(phone: phone, token: token, type: type),
-      transition: {
-        type == .phoneChange ? .userChangeVerified($0) : .signedIn($0, event: .signedIn)
-      }
-    )
+  ) async throws -> Session {
+    let session = try await api.execute(
+      authAPI.verifyOTP(phone: phone, token: token, type: type))
+    try await sessionStore.commit(
+      type == .phoneChange ? .userChangeVerified(session) : .signedIn(session, event: .signedIn))
+    return session
   }
 
   /// Verifies the token hash of an email link, and stores the session.
@@ -1126,7 +1125,7 @@ public final class AuthClient: Sendable {
   ) async throws -> VerifyOTPResult {
     try await _verifyOTP(
       authAPI.verifyOTP(tokenHash: tokenHash, type: type),
-      transition: { Self.verifiedTransition($0, for: type) }
+      type: type
     )
   }
 
@@ -1143,12 +1142,12 @@ public final class AuthClient: Sendable {
 
   private func _verifyOTP(
     _ request: AuthRequest<VerifyOTPResult>,
-    transition: (Session) -> SessionStore.Transition
+    type: EmailOTPType
   ) async throws -> VerifyOTPResult {
     let result = try await api.execute(request)
 
     if case .signedIn(let session) = result {
-      try await sessionStore.commit(transition(session))
+      try await sessionStore.commit(Self.verifiedTransition(session, for: type))
     }
 
     return result
@@ -1284,11 +1283,11 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - provider: The provider to link.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  /// - Returns: The flow that this call started, with the URL to open.
   public func linkIdentityURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> (url: URL, flowID: UUID) {
+  ) async throws -> WebAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
@@ -1302,7 +1301,7 @@ public final class AuthClient: Sendable {
           accessToken: $0
         )
       }
-      return (url, started.flow.id)
+      return WebAuthFlow(url: url, id: started.flow.id)
     }
   }
 

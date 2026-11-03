@@ -299,7 +299,7 @@ extension AuthAPI {
 extension AuthAPI {
   func signInWithOTP(
     email: String,
-    options: OTPOptions,
+    options: EmailOTPOptions,
     pkce: PKCEChallenge?
   ) throws -> AuthRequest<Void> {
     try request(
@@ -318,7 +318,7 @@ extension AuthAPI {
     )
   }
 
-  func signInWithOTP(phone: String, options: OTPOptions) throws -> AuthRequest<MessageID?> {
+  func signInWithOTP(phone: String, options: PhoneOTPOptions) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "otp",
       body: encoder.encode(
@@ -353,13 +353,13 @@ extension AuthAPI {
     phone: String,
     token: String,
     type: PhoneOTPType
-  ) throws -> AuthRequest<VerifyOTPResult> {
+  ) throws -> AuthRequest<Session> {
     try request(
       .post, "verify",
       body: encoder.encode(
         VerifyOTPParams.phone(VerifyPhoneOTPParams(phone: phone, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPBody.self) { $0.result }
+      decode: decoding(Session.self)
     )
   }
 

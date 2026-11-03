@@ -106,7 +106,7 @@ struct RequestsTests {
     await assert {
       try await sut.signInWithOTP(
         email: "example@mail.com",
-        options: OTPOptions(
+        options: EmailOTPOptions(
           shouldCreateUser: true,
           userMetadata: ["custom_key": .string("custom_value")],
           redirectTo: URL(string: "https://supabase.com"),
@@ -123,7 +123,7 @@ struct RequestsTests {
     await assert {
       _ = try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
-        options: OTPOptions(
+        options: PhoneOTPOptions(
           shouldCreateUser: true,
           userMetadata: ["custom_key": .string("custom_value")],
           captchaToken: "dummy-captcha"
@@ -135,7 +135,7 @@ struct RequestsTests {
   @Test
   func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let (url, _) = try await sut.oauthSignInURL(
+    let flow = try await sut.oauthSignInURL(
       .github,
       options: OAuthOptions(
         scopes: ["read", "write"],
@@ -144,7 +144,7 @@ struct RequestsTests {
       )
     )
     #expect(
-      url
+      flow.url
         == URL(
           string:
             "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=challenge&code_challenge_method=s256&extra_key=extra_value"

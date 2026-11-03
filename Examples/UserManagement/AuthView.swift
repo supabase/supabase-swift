@@ -64,7 +64,7 @@ struct AuthView: View {
       do {
         try await supabase.auth.signInWithOTP(
           email: email,
-          options: OTPOptions(
+          options: EmailOTPOptions(
             redirectTo: URL(string: "io.supabase.user-management://login-callback"))
         )
         result = .success(())

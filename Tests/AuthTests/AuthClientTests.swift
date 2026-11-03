@@ -489,9 +489,9 @@ extension AuthMockerTests {
         )
         .register()
 
-        let flowA = try await sut.linkIdentityURL(.github).flowID
+        let flowA = try await sut.linkIdentityURL(.github).id
 
-        let flowB = try await sut.linkIdentityURL(.google).flowID
+        let flowB = try await sut.linkIdentityURL(.google).id
 
         #expect(flowA != flowB)
 
@@ -548,10 +548,10 @@ extension AuthMockerTests {
 
         try await sut.seedSession(.valid)
 
-        let response = try await sut.linkIdentityURL(.github)
+        let flow = try await sut.linkIdentityURL(.github)
 
-        expectNoDifference(response.url, URL(string: url)!)
-        #expect(try await sut.dependencies.flowStore.flow(id: response.flowID) != nil)
+        expectNoDifference(flow.url, URL(string: url)!)
+        #expect(try await sut.dependencies.flowStore.flow(id: flow.id) != nil)
       }
     }
 
@@ -1022,7 +1022,7 @@ extension AuthMockerTests {
 
       try await sut.signInWithOTP(
         email: "example@mail.com",
-        options: OTPOptions(
+        options: EmailOTPOptions(
           shouldCreateUser: true,
           userMetadata: ["custom_key": .string("custom_value")],
           redirectTo: URL(string: "https://supabase.com"),
@@ -1058,7 +1058,7 @@ extension AuthMockerTests {
 
       let messageID = try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
-        options: OTPOptions(
+        options: PhoneOTPOptions(
           shouldCreateUser: true,
           userMetadata: ["custom_key": .string("custom_value")],
           channel: .whatsapp,
@@ -1086,7 +1086,7 @@ extension AuthMockerTests {
     @Test
     func oauthSignInURL() async throws {
       let sut = makeSUT()
-      let (url, _) = try await sut.oauthSignInURL(
+      let flow = try await sut.oauthSignInURL(
         .github,
         options: OAuthOptions(
           scopes: ["read", "write"],
@@ -1095,7 +1095,7 @@ extension AuthMockerTests {
         )
       )
       expectNoDifference(
-        url,
+        flow.url,
         URL(
           string:
             "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&extra_key=extra_value"
@@ -1944,7 +1944,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let (url, _) = try await sut.ssoSignInURL(
+      let flow = try await sut.ssoSignInURL(
         .domain("supabase.com"),
         options: SSOOptions(
           redirectTo: URL(string: "https://supabase.com"),
@@ -1952,7 +1952,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(url, URL(string: "https://supabase.com")!)
+      expectNoDifference(flow.url, URL(string: "https://supabase.com")!)
     }
 
     @Test
@@ -1980,7 +1980,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let (url, _) = try await sut.ssoSignInURL(
+      let flow = try await sut.ssoSignInURL(
         .providerID(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!),
         options: SSOOptions(
           redirectTo: URL(string: "https://supabase.com"),
@@ -1988,7 +1988,7 @@ extension AuthMockerTests {
         )
       )
 
-      expectNoDifference(url, URL(string: "https://supabase.com")!)
+      expectNoDifference(flow.url, URL(string: "https://supabase.com")!)
     }
 
     @Test

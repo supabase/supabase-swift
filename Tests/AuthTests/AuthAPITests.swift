@@ -52,8 +52,8 @@ struct AuthAPITests {
       api.exchangeCodeForSession(authCode: "c", codeVerifier: "v").head,
       api.refreshSession(refreshToken: "r").head,
       api.signOut(accessToken: token, scope: .global).head,
-      api.signInWithOTP(email: "a@b.c", options: OTPOptions(), pkce: nil).head,
-      api.signInWithOTP(phone: "1", options: OTPOptions()).head,
+      api.signInWithOTP(email: "a@b.c", options: EmailOTPOptions(), pkce: nil).head,
+      api.signInWithOTP(phone: "1", options: PhoneOTPOptions()).head,
       api.verifyOTP(email: "a@b.c", token: "1", type: .email).head,
       api.verifyOTP(phone: "1", token: "1", type: .sms).head,
       api.verifyOTP(tokenHash: "h", type: .email).head,
@@ -168,7 +168,7 @@ struct AuthAPITests {
       ])
 
     let otp = try api.signInWithOTP(
-      email: "a@b.c", options: OTPOptions(shouldCreateUser: false), pkce: nil)
+      email: "a@b.c", options: EmailOTPOptions(shouldCreateUser: false), pkce: nil)
     #expect(try body(otp) == ["email": "a@b.c", "create_user": false])
 
     let sso = try api.signInWithSSO(
@@ -197,7 +197,8 @@ struct AuthAPITests {
 
   @Test
   func errorResponseDecodesThroughErrorDecoder() throws {
-    let request = try api.signInWithOTP(phone: "1", options: OTPOptions(shouldCreateUser: false))
+    let request = try api.signInWithOTP(
+      phone: "1", options: PhoneOTPOptions(shouldCreateUser: false))
 
     let error = try #require(throws: AuthError.self) {
       try request.decode(
@@ -246,7 +247,7 @@ struct AuthAPITests {
     #expect(try body(anonymous) == ["data": ["name": "Jane"]])
     #expect(try body(api.signInAnonymously(userMetadata: [:], captchaToken: nil)) == [:])
 
-    let otp = try api.signInWithOTP(phone: "1", options: OTPOptions(userMetadata: metadata))
+    let otp = try api.signInWithOTP(phone: "1", options: PhoneOTPOptions(userMetadata: metadata))
     #expect(
       try body(otp) == [
         "phone": "1", "channel": "sms", "create_user": true, "data": ["name": "Jane"],
@@ -355,6 +356,18 @@ struct AuthAPITests {
             "Confirmation link accepted. Please proceed to confirm link sent to the other email"))
 
     #expect(throws: (any Error).self) { try request.decode(ok, json(named: "user")) }
+  }
+
+  @Test
+  func phoneVerifyOTPDecodesOnlyASession() throws {
+    let request = try api.verifyOTP(phone: "1", token: "1", type: .phoneChange)
+
+    let session = try request.decode(ok, json(named: "session"))
+    #expect(session.accessToken.isEmpty == false)
+
+    #expect(throws: (any Error).self) {
+      try request.decode(ok, json(named: "email-change-single-confirmation"))
+    }
   }
 
   @Test

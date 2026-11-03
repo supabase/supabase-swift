@@ -152,8 +152,8 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`exchangeCodeForSession` needs a pending flow.** With no stored flow for the code, it throws
   `.oauthFlowFailed` without a request. v2 sent the code with no verifier.
 - **Several PKCE flows can be pending.** v2 kept one code verifier, so a new sign-in replaced the
-  old one. In v3 each flow has its own verifier. Pass the `flowID` from `oauthSignInURL` or
-  `linkIdentityURL` to `exchangeCodeForSession` to pick one. Without it, as for the code in an
+  old one. In v3 each flow has its own verifier. Pass the `id` of the `WebAuthFlow` from
+  `oauthSignInURL`, `linkIdentityURL`, or `ssoSignInURL` to `exchangeCodeForSession` to pick one. Without it, as for the code in an
   email link, the client tries the pending flows newest first.
 - **A data request rejected for a stale token is retried once.** `SupabaseClient` sends a
   PostgREST, Storage, or Functions request again once when the server says it rejected the
@@ -228,8 +228,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
-| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
-| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
+| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns a `WebAuthFlow` (`url`, `id`) |
+| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns a `WebAuthFlow` (`url`, `id`) |
 | `exchangeCodeForSession(authCode:)` | `exchangeCodeForSession(_:flowID:)`, `flowID` is an optional `UUID` |
 | `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
@@ -344,8 +344,8 @@ open(response.url)
 // v3
 let session = try await supabase.auth.linkIdentity(
   .google, options: OAuthOptions(redirectTo: callback))
-let (url, _) = try await supabase.auth.linkIdentityURL(.google)
-open(url)
+let flow = try await supabase.auth.linkIdentityURL(.google)
+open(flow.url)
 ```
 
 ## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`
@@ -381,18 +381,19 @@ let options = SupabaseClientOptions(auth: .init(flowType: .pkce))
 let options = SupabaseClientOptions(auth: .init())
 ```
 
-## `oauthSignInURL` returns a flow ID
+## `oauthSignInURL` returns a `WebAuthFlow`
 
-`oauthSignInURL` and `linkIdentityURL` are `async` and return the URL with the ID of the flow they
-started. Pass the ID back to `exchangeCodeForSession` when more than one flow can be pending.
+`oauthSignInURL` and `linkIdentityURL` are `async` and return a `WebAuthFlow`: the `url` to open
+and the `id` of the flow they started. Pass the ID back to `exchangeCodeForSession` when more than
+one flow can be pending.
 
 ```swift
 // v2
 let url = try supabase.auth.getOAuthSignInURL(provider: .github)
 let session = try await supabase.auth.exchangeCodeForSession(authCode: code)
 // v3
-let (url, flowID) = try await supabase.auth.oauthSignInURL(.github)
-let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flowID)
+let flow = try await supabase.auth.oauthSignInURL(.github)
+let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.id)
 ```
 
 ## `AuthError` is a struct
@@ -458,11 +459,11 @@ case .confirmationRequired: showCheckYourInbox()
 }
 ```
 
-## `signInWithOTP` takes `OTPOptions`
+## `signInWithOTP` takes `EmailOTPOptions` or `PhoneOTPOptions`
 
-The redirect URL, `shouldCreateUser`, the metadata, the channel, and the captcha token move into
-`OTPOptions`, and `data:` is `userMetadata:`. Phone sign-in returns the `MessageID?` of the SMS, so
-you can track delivery.
+`shouldCreateUser`, the metadata, and the captcha token move into the options type, and `data:` is
+`userMetadata:`. Only `EmailOTPOptions` has `redirectTo`, and only `PhoneOTPOptions` has `channel`.
+Phone sign-in returns the `MessageID?` of the SMS, so you can track delivery.
 
 ```swift
 // v2
@@ -472,16 +473,16 @@ try await supabase.auth.signInWithOTP(phone: phone, channel: .whatsapp)
 // v3
 try await supabase.auth.signInWithOTP(
   email: email,
-  options: OTPOptions(shouldCreateUser: false, redirectTo: callback, captchaToken: token))
+  options: EmailOTPOptions(shouldCreateUser: false, redirectTo: callback, captchaToken: token))
 let messageID = try await supabase.auth.signInWithOTP(
-  phone: phone, options: OTPOptions(channel: .whatsapp))
+  phone: phone, options: PhoneOTPOptions(channel: .whatsapp))
 ```
 
-## `verifyOTP` returns `VerifyOTPResult`
+## `verifyOTP` returns `VerifyOTPResult` or a `Session`
 
-`verifyOTP` returns `VerifyOTPResult` instead of v2's `AuthResponse`: `.signedIn(Session)`, or
-`.emailChangePending(message:)` for the first confirmation of a secure email change, which signs
-no one in.
+`verifyOTP(email:)` and `verifyOTP(tokenHash:)` return `VerifyOTPResult` instead of v2's
+`AuthResponse`: `.signedIn(Session)`, or `.emailChangePending(message:)` for the first confirmation
+of a secure email change, which signs no one in. `verifyOTP(phone:)` returns the `Session`.
 
 ```swift
 // v2
@@ -494,6 +495,7 @@ case .signedIn(let session):
 case .emailChangePending(let message):
   print(message)
 }
+let session = try await supabase.auth.verifyOTP(phone: phone, token: code, type: .sms)
 ```
 
 ## `signInWithSSO` shows the page and returns a session
@@ -501,7 +503,7 @@ case .emailChangePending(let message):
 v2 returned an `SSOResponse` with the URL and left the browser to the app. v3 takes an `SSOTarget`
 (`.domain(String)` or `.providerID(UUID)`), shows the identity provider page with a presenter, like
 `signInWithOAuth`, and returns the `Session`. It emits `.signedIn`. For your own flow, use
-`ssoSignInURL(_:options:)`, which returns the URL and the flow ID.
+`ssoSignInURL(_:options:)`, which returns a `WebAuthFlow`.
 
 ```swift
 // v2
@@ -510,7 +512,7 @@ await UIApplication.shared.open(response.url)
 // v3
 let session = try await supabase.auth.signInWithSSO(
   .domain("example.com"), options: SSOOptions(redirectTo: callback))
-let (url, flowID) = try await supabase.auth.ssoSignInURL(
+let flow = try await supabase.auth.ssoSignInURL(
   .providerID(UUID(uuidString: providerID)!))
 ```
 

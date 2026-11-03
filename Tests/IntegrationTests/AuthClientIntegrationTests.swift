@@ -265,7 +265,8 @@ struct AuthClientIntegrationTests {
       attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
-    try await authClient.signInWithOTP(email: email, options: OTPOptions(shouldCreateUser: false))
+    try await authClient.signInWithOTP(
+      email: email, options: EmailOTPOptions(shouldCreateUser: false))
     _ = try await MailCatcher().latestLink(to: email)
     let token = try await emailOTP(for: email, admin: admin)
 
@@ -286,7 +287,7 @@ struct AuthClientIntegrationTests {
   func signInWithOTPWithoutCreatingAUserFailsForAnUnknownEmail() async throws {
     await #expect(throws: AuthError.self) {
       try await authClient.signInWithOTP(
-        email: mockEmail(), options: OTPOptions(shouldCreateUser: false))
+        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
     }
   }
 
@@ -296,7 +297,7 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
 
     try await authClient.signInWithOTP(
-      email: email, options: OTPOptions(userMetadata: ["plan": "free"]))
+      email: email, options: EmailOTPOptions(userMetadata: ["plan": "free"]))
     _ = try await MailCatcher().latestLink(to: email)
     let token = try await emailOTP(for: email, admin: admin)
     let result = try await authClient.verifyOTP(email: email, token: token, type: .email)
@@ -389,8 +390,8 @@ struct AuthClientIntegrationTests {
   func linkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    let (url, _) = try await authClient.linkIdentityURL(.apple)
-    #expect(url.absoluteString.contains("apple.com"))
+    let flow = try await authClient.linkIdentityURL(.apple)
+    #expect(flow.url.absoluteString.contains("apple.com"))
   }
 
   @Test(.disabled("Requires secret key and pre-seeded users"))
@@ -506,7 +507,8 @@ struct AuthClientIntegrationTests {
       )
     }
 
-    try await authClient.signInWithOTP(email: email, options: OTPOptions(redirectTo: redirectTo))
+    try await authClient.signInWithOTP(
+      email: email, options: EmailOTPOptions(redirectTo: redirectTo))
     let magicLinkFlow = try #require(
       try await authClient.dependencies.flowStore.pendingFlows().first)
     try await authClient.resetPassword(email: otherEmail, redirectTo: redirectTo)

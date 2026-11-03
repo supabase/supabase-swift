@@ -114,7 +114,7 @@ struct AuthWithMagicLink: View {
       Result { @Sendable in
         try await supabase.auth.signInWithOTP(
           email: email,
-          options: OTPOptions(redirectTo: Constants.redirectToURL)
+          options: EmailOTPOptions(redirectTo: Constants.redirectToURL)
         )
       }
     )
