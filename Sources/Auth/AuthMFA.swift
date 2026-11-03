@@ -88,12 +88,13 @@ public struct AuthMFA: Sendable {
   /// Enrolls a new, `unverified` WebAuthn factor.
   ///
   /// Use it to drive the ceremony with your own authenticator. Otherwise, call
-  /// `enrollWebAuthnFactor(friendlyName:presentationAnchor:)`.
+  /// `enrollWebAuthn(friendlyName:anchor:)`, which also shows the system passkey sheet.
   ///
   /// - Parameter friendlyName: A name that tells the factor apart from the user's other factors.
-  /// - Returns: The ID of the new factor. Pass it to ``challenge(factorID:webAuthn:)``.
+  /// - Returns: The ID of the new factor. Pass it to ``challenge(factorID:channel:)``, then send
+  ///   the authenticator's credential to ``verify(factorID:challengeID:type:credentialResponse:)``.
   @_spi(Experimental)
-  public func enrollWebAuthn(friendlyName: String? = nil) async throws -> UUID {
+  public func enrollWebAuthnFactor(friendlyName: String? = nil) async throws -> UUID {
     struct Enrollment: Decodable {
       let id: UUID
     }
@@ -166,6 +167,8 @@ public struct AuthMFA: Sendable {
   /// - Parameters:
   ///   - factorID: The ID of the WebAuthn factor the challenge is for.
   ///   - challengeID: The ID returned by ``challenge(factorID:webAuthn:)``.
+  ///   - type: ``WebAuthnChallengeResponseData/type`` of the challenge: `create` for a credential
+  ///     from a registration, `request` for an assertion.
   ///   - credentialResponse: The W3C credential the authenticator produced. It is sent verbatim,
   ///     with its W3C field names.
   /// - Returns: The upgraded session.
@@ -174,12 +177,13 @@ public struct AuthMFA: Sendable {
   public func verify(
     factorID: UUID,
     challengeID: UUID,
+    type: WebAuthnChallengeType,
     credentialResponse: JSONValue
   ) async throws -> Session {
     try await commitVerifiedSession {
       try authAPI.verifyFactor(
-        factorID: factorID, challengeID: challengeID, credentialResponse: credentialResponse,
-        accessToken: $0)
+        factorID: factorID, challengeID: challengeID, type: type,
+        credentialResponse: credentialResponse, accessToken: $0)
     }
   }
 

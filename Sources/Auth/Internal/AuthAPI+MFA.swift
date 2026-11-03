@@ -27,18 +27,17 @@ extension AuthAPI {
     webAuthn: WebAuthnChallengeOptions?,
     accessToken: String
   ) throws -> AuthRequest<MFAChallenge> {
-    let body: Data?
-    if let webAuthn {
-      body = try encoder.encode(["webauthn": webAuthn])
-    } else if let channel {
-      body = try encoder.encode(["channel": channel])
-    } else {
-      body = nil
+    // The server parses a JSON body for `webauthn` factors even when it has no fields, so always
+    // send an object.
+    struct Body: Encodable {
+      let channel: MessagingChannel?
+      let webauthn: WebAuthnChallengeOptions?
     }
 
-    return request(
+    return try request(
       .post, "factors/\(factorID)/challenge", authorization: bearer(accessToken),
-      body: body, decode: decoding(MFAChallenge.self))
+      body: encoder.encode(Body(channel: channel, webauthn: webAuthn)),
+      decode: decoding(MFAChallenge.self))
   }
 
   func verifyFactor(
@@ -62,19 +61,28 @@ extension AuthAPI {
   func verifyFactor(
     factorID: UUID,
     challengeID: UUID,
+    type: WebAuthnChallengeType,
     credentialResponse: JSONValue,
     accessToken: String
   ) throws -> AuthRequest<Session> {
-    // WebAuthn credential responses use W3C camelCase field names (e.g. `clientDataJSON`).
-    // Encode without the snake_case strategy so they reach the backend verbatim.
-    let body = try encodeWebAuthnBody([
-      "factor_id": .string(factorID.uuidString),
-      "challenge_id": .string(challengeID.uuidString),
-      "webauthn": ["credential_response": credentialResponse],
-    ])
+    // The server needs `type` to parse the credential. The credential is a `JSONValue`, so the
+    // snake_case key strategy keeps its W3C field names.
+    struct WebAuthn: Encodable {
+      let type: String
+      let credentialResponse: JSONValue
+    }
+    struct Params: Encodable {
+      let factorId: UUID
+      let challengeId: UUID
+      let webauthn: WebAuthn
+    }
 
-    return request(
-      .post, "factors/\(factorID)/verify", authorization: bearer(accessToken), body: body,
+    return try request(
+      .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
+      body: encoder.encode(
+        Params(
+          factorId: factorID, challengeId: challengeID,
+          webauthn: WebAuthn(type: type.rawValue, credentialResponse: credentialResponse))),
       decode: decoding(Session.self))
   }
 

@@ -15,26 +15,8 @@
 //
 
 @_spi(Experimental) import Auth
-import AuthenticationServices
 import Supabase
 import SwiftUI
-
-#if canImport(UIKit)
-  import UIKit
-#elseif canImport(AppKit)
-  import AppKit
-#endif
-
-@MainActor
-private func webAuthnPresentationAnchor() -> ASPresentationAnchor {
-  #if canImport(UIKit)
-    return UIApplication.shared.firstKeyWindow ?? UIWindow()
-  #elseif canImport(AppKit)
-    return NSApplication.shared.keyWindow ?? NSWindow()
-  #else
-    return ASPresentationAnchor()
-  #endif
-}
 
 private struct WebAuthnSetupNote: View {
   var body: some View {
@@ -97,9 +79,9 @@ struct SignInWithPasskeyView: View {
         isLoading = true
         defer { isLoading = false }
 
-        try await supabase.auth.signInWithPasskey(
-          presentationAnchor: webAuthnPresentationAnchor()
-        )
+        try await supabase.auth.passkeys.signIn()
+      } catch is CancellationError {
+        // The user closed the passkey sheet.
       } catch {
         self.error = error
       }
@@ -244,7 +226,7 @@ struct WebAuthnPasskeysView: View {
       isLoading = true
       defer { isLoading = false }
 
-      passkeys = try await supabase.auth.listPasskeys()
+      passkeys = try await supabase.auth.passkeys.list()
       webAuthnFactors = try await supabase.auth.mfa.factors().verified.filter {
         $0.factorType == .webAuthn
       }
@@ -261,10 +243,10 @@ struct WebAuthnPasskeysView: View {
         isLoading = true
         defer { isLoading = false }
 
-        _ = try await supabase.auth.registerPasskey(
-          presentationAnchor: webAuthnPresentationAnchor()
-        )
+        _ = try await supabase.auth.passkeys.register()
         await refresh()
+      } catch is CancellationError {
+        // The user closed the passkey sheet.
       } catch {
         self.error = error
       }
@@ -276,7 +258,7 @@ struct WebAuthnPasskeysView: View {
     Task {
       do {
         error = nil
-        try await supabase.auth.deletePasskey(id: passkey.id)
+        try await supabase.auth.passkeys.delete(id: passkey.id)
         await refresh()
       } catch {
         self.error = error
@@ -290,7 +272,7 @@ struct WebAuthnPasskeysView: View {
     Task {
       do {
         error = nil
-        _ = try await supabase.auth.renamePasskey(id: passkey.id, friendlyName: name)
+        _ = try await supabase.auth.passkeys.rename(id: passkey.id, friendlyName: name)
         await refresh()
       } catch {
         self.error = error
@@ -306,11 +288,10 @@ struct WebAuthnPasskeysView: View {
         isLoading = true
         defer { isLoading = false }
 
-        _ = try await supabase.auth.mfa.enrollWebAuthnFactor(
-          friendlyName: newFactorName,
-          presentationAnchor: webAuthnPresentationAnchor()
-        )
+        _ = try await supabase.auth.mfa.enrollWebAuthn(friendlyName: newFactorName)
         await refresh()
+      } catch is CancellationError {
+        // The user closed the passkey sheet.
       } catch {
         self.error = error
       }
@@ -325,11 +306,10 @@ struct WebAuthnPasskeysView: View {
         isLoading = true
         defer { isLoading = false }
 
-        _ = try await supabase.auth.mfa.verifyWebAuthnFactor(
-          factorID: factor.id,
-          presentationAnchor: webAuthnPresentationAnchor()
-        )
+        _ = try await supabase.auth.mfa.verifyWebAuthn(factorID: factor.id)
         await refresh()
+      } catch is CancellationError {
+        // The user closed the passkey sheet.
       } catch {
         self.error = error
       }

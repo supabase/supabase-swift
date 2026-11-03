@@ -390,7 +390,7 @@ struct RequestsTests {
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.admin.listPasskeys(forUser: userId)
+      _ = try await sut.admin.passkeys.list(forUser: userId)
     }
   }
 
@@ -401,7 +401,7 @@ struct RequestsTests {
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
+      try await sut.admin.passkeys.delete(id: passkeyId, forUser: userId)
     }
   }
 
@@ -572,7 +572,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enrollWebAuthn(friendlyName: "My Passkey")
+      _ = try await sut.mfa.enrollWebAuthnFactor(friendlyName: "My Passkey")
     }
   }
 
@@ -600,6 +600,7 @@ struct RequestsTests {
       _ = try await sut.mfa.verify(
         factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
         challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        type: .create,
         credentialResponse: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
@@ -620,7 +621,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.passkeyRegistrationOptions()
+      _ = try await sut.passkeys.registrationOptions()
     }
   }
 
@@ -631,9 +632,9 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.verifyPasskeyRegistration(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyRegistration(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -651,7 +652,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.passkeyAuthenticationOptions()
+      _ = try await sut.passkeys.authenticationOptions()
     }
   }
 
@@ -660,9 +661,9 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.verifyPasskeyAuthentication(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyAuthentication(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -684,7 +685,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.listPasskeys()
+      _ = try await sut.passkeys.list()
     }
   }
 
@@ -695,7 +696,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.renamePasskey(
+      _ = try await sut.passkeys.rename(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
         friendlyName: "Renamed Passkey"
       )
@@ -709,7 +710,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.deletePasskey(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
+      try await sut.passkeys.delete(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 

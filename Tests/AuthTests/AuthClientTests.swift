@@ -1495,7 +1495,7 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let passkeys = try await sut.admin.listPasskeys(forUser: userId)
+      let passkeys = try await sut.admin.passkeys.list(forUser: userId)
 
       expectNoDifference(
         passkeys.map(\.id),
@@ -1532,7 +1532,7 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
+      try await sut.admin.passkeys.delete(id: passkeyId, forUser: userId)
     }
 
     @Test
@@ -1913,9 +1913,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
+        	--header "Content-Length: 2" \
+        	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
@@ -2160,9 +2163,12 @@ extension AuthMockerTests {
         curl \
         	--request POST \
         	--header "Authorization: Bearer accesstoken" \
+        	--header "Content-Length: 2" \
+        	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+        	--data "{}" \
         	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
         """#
       }
@@ -2268,7 +2274,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func getPasskeyRegistrationOptionsDecodesOptions() async throws {
+    func passkeyRegistrationOptionsDecodeTheChallengeID() async throws {
       Mock(
         url: clientURL.appendingPathComponent("passkeys/registration/options"),
         statusCode: 200,
@@ -2276,7 +2282,7 @@ extension AuthMockerTests {
           .post: Data(
             """
             {
-              "challenge_id": "challenge-1",
+              "challenge_id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
               "expires_at": 1705312800,
               "options": {
                 "challenge": "Y2hhbGxlbmdl",
@@ -2294,9 +2300,10 @@ extension AuthMockerTests {
       let sut = makeSUT()
       try await sut.seedSession(.valid)
 
-      let options = try await sut.passkeyRegistrationOptions()
+      let options = try await sut.passkeys.registrationOptions()
 
-      expectNoDifference(options.challengeId, "challenge-1")
+      expectNoDifference(
+        options.challengeID, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
       expectNoDifference(options.options.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
       expectNoDifference(options.options.objectValue?["pubKeyCredParams"]?.arrayValue?.count, 1)
     }
@@ -2332,7 +2339,7 @@ extension AuthMockerTests {
       let sut = makeSUT()
       try await sut.seedSession(.valid)
 
-      let passkeys = try await sut.listPasskeys()
+      let passkeys = try await sut.passkeys.list()
 
       expectNoDifference(
         passkeys.map(\.id),
@@ -2357,9 +2364,9 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.verifyPasskeyAuthentication(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      let response = try await sut.passkeys.verifyAuthentication(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWlk",
           "type": "public-key",
@@ -2374,90 +2381,63 @@ extension AuthMockerTests {
       expectNoDifference(sut.currentSession, response)
     }
 
-    @Test
-    func webAuthnCredentialOptionsParsing() throws {
-      let options: JSONValue = [
-        "challenge": "Y2hhbGxlbmdl",
-        "user": [
-          "id": "dXNlci1pZA",
-          "name": "user@example.com",
-          "displayName": "User",
-        ],
-      ]
-
-      expectNoDifference(
-        String(data: try options.webAuthnChallengeData(), encoding: .utf8),
-        "challenge"
-      )
-      expectNoDifference(
-        String(data: try options.webAuthnUserID(), encoding: .utf8),
-        "user-id"
-      )
-      expectNoDifference(try options.webAuthnUserName(), "user@example.com")
-    }
-
-    @Test
-    func webAuthnChallengeParsingThrowsWhenMissing() {
-      let options: JSONValue = ["user": ["id": "dXNlci1pZA"]]
-      #expect(throws: (any Error).self) { try options.webAuthnChallengeData() }
-    }
-
-    #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
+    #if canImport(AuthenticationServices) && !os(watchOS)
       @Test
       @MainActor
-      func signInWithPasskeyDrivesFullFlow() async throws {
+      func passkeySignInForwardsBareOptionsAndCommitsSession() async throws {
         Mock(
           url: clientURL.appendingPathComponent("passkeys/authentication/options"),
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}"#
+              #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com","allowCredentials":[{"id":"Y3JlZA","type":"public-key"}]}}"#
                 .utf8)
           ]
         )
         .register()
-        Mock(
+        let verifyBody = Mock(
           url: clientURL.appendingPathComponent("passkeys/authentication/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
-        .register()
+        .registerCapturingBody()
 
-        let forwardedOptions = LockIsolated<JSONValue?>(nil)
-        let authenticator = WebAuthnAuthenticator(
-          register: { _, _, _ in [:] },
-          authenticate: { options, _, _ in
+        let forwardedOptions = LockIsolated<WebAuthnRequestOptions?>(nil)
+        let authenticator = WebAuthnAuthenticator.fake(
+          authenticate: { options, _ in
             forwardedOptions.setValue(options)
-            return [
-              "id": "cred", "rawId": "cmF3", "type": "public-key",
-              "response": [
-                "clientDataJSON": "Y2Rh", "authenticatorData": "YXV0aA", "signature": "c2ln",
-              ],
-            ]
+            return ["id": "cred"]
           }
         )
 
         let sut = makeSUT()
 
-        let response = try await sut._signInWithPasskey(
-          presentationAnchor: ASPresentationAnchor(),
-          authenticator: authenticator
-        )
+        let session = try await sut.passkeys.signIn(anchor: nil, authenticator: authenticator)
 
-        expectNoDifference(sut.currentSession, response)
+        expectNoDifference(sut.currentSession, session)
         expectNoDifference(
-          forwardedOptions.value?.objectValue?["challenge"]?.stringValue, "Y2hhbGxlbmdl")
+          forwardedOptions.value,
+          WebAuthnRequestOptions(
+            rpID: "example.com",
+            challenge: Data("challenge".utf8),
+            allowedCredentialIDs: [Data("cred".utf8)]
+          )
+        )
+        expectNoDifference(
+          verifyBody.value,
+          ["challenge_id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F", "credential": ["id": "cred"]]
+        )
       }
 
       @Test
       @MainActor
-      func registerPasskeyDrivesFullFlow() async throws {
+      func passkeyRegisterForwardsBareOptions() async throws {
         Mock(
           url: clientURL.appendingPathComponent("passkeys/registration/options"),
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"challenge_id":"ch-1","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}"#
+              #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"},"excludeCredentials":[{"id":"b2xk","type":"public-key"}]}}"#
                 .utf8)
           ]
         )
@@ -2467,37 +2447,41 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"11111111-1111-1111-1111-111111111111","friendly_name":"My Passkey","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
+              #"{"id":"11111111-1111-1111-1111-111111111111","friendly_name":"iCloud Keychain","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
                 .utf8)
           ]
         )
         .register()
 
-        let authenticator = WebAuthnAuthenticator(
-          register: { _, _, _ in
-            [
-              "id": "cred", "rawId": "cmF3", "type": "public-key",
-              "response": ["clientDataJSON": "Y2Rh", "attestationObject": "YXR0"],
-            ]
-          },
-          authenticate: { _, _, _ in [:] }
+        let forwardedOptions = LockIsolated<WebAuthnCreationOptions?>(nil)
+        let authenticator = WebAuthnAuthenticator.fake(
+          register: { options, _ in
+            forwardedOptions.setValue(options)
+            return ["id": "cred"]
+          }
         )
 
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        let passkey = try await sut._registerPasskey(
-          presentationAnchor: ASPresentationAnchor(),
-          authenticator: authenticator
-        )
+        let passkey = try await sut.passkeys.register(anchor: nil, authenticator: authenticator)
 
         expectNoDifference(passkey.id, UUID(uuidString: "11111111-1111-1111-1111-111111111111")!)
-        expectNoDifference(passkey.friendlyName, "My Passkey")
+        expectNoDifference(
+          forwardedOptions.value,
+          WebAuthnCreationOptions(
+            rpID: "example.com",
+            challenge: Data("challenge".utf8),
+            userID: Data("user-id".utf8),
+            userName: "u@e.com",
+            excludedCredentialIDs: [Data("old".utf8)]
+          )
+        )
       }
 
       @Test
       @MainActor
-      func enrollWebAuthnFactorDrivesFullFlow() async throws {
+      func mfaEnrollWebAuthnUnwrapsPublicKeyAndSendsCreateType() async throws {
         Mock(
           url: clientURL.appendingPathComponent("factors"),
           statusCode: 200,
@@ -2512,44 +2496,141 @@ extension AuthMockerTests {
           statusCode: 200,
           data: [
             .post: Data(
-              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"}}}}"#
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
                 .utf8)
           ]
         )
         .register()
-        Mock(
+        let verifyBody = Mock(
           url: clientURL.appendingPathComponent(
             "factors/00000000-0000-0000-0000-000000000001/verify"),
           statusCode: 200,
           data: [.post: MockData.session]
         )
-        .register()
+        .registerCapturingBody()
 
-        let authenticator = WebAuthnAuthenticator(
-          register: { _, _, _ in
-            [
-              "id": "cred", "rawId": "cmF3", "type": "public-key",
-              "response": ["clientDataJSON": "Y2Rh", "attestationObject": "YXR0"],
-            ]
-          },
-          authenticate: { _, _, _ in [:] }
+        let forwardedRpID = LockIsolated<String?>(nil)
+        let authenticator = WebAuthnAuthenticator.fake(
+          register: { options, _ in
+            forwardedRpID.setValue(options.rpID)
+            return ["id": "cred"]
+          }
         )
 
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        let session = try await sut.mfa._enrollWebAuthnFactor(
+        let session = try await sut.mfa.enrollWebAuthn(
           friendlyName: "My Passkey",
-          presentationAnchor: ASPresentationAnchor(),
+          anchor: nil,
           authenticator: authenticator
         )
 
-        #expect(!(session.accessToken.isEmpty))
+        expectNoDifference(sut.currentSession, session)
+        expectNoDifference(forwardedRpID.value, "example.com")
+        expectNoDifference(
+          verifyBody.value?.objectValue?["webauthn"],
+          ["type": "create", "credential_response": ["id": "cred"]]
+        )
       }
 
       @Test
       @MainActor
-      func verifyWebAuthnFactorDrivesFullFlow() async throws {
+      func mfaVerifyWebAuthnUnwrapsPublicKeyAndSendsRequestType() async throws {
+        Mock(
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
+          statusCode: 200,
+          data: [
+            .post: Data(
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}}"#
+                .utf8)
+          ]
+        )
+        .register()
+        let verifyBody = Mock(
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
+          statusCode: 200,
+          data: [.post: MockData.session]
+        )
+        .registerCapturingBody()
+
+        let forwardedRpID = LockIsolated<String?>(nil)
+        let authenticator = WebAuthnAuthenticator.fake(
+          authenticate: { options, _ in
+            forwardedRpID.setValue(options.rpID)
+            return ["id": "cred"]
+          }
+        )
+
+        let sut = makeSUT()
+        try await sut.seedSession(.valid)
+
+        let session = try await sut.mfa.verifyWebAuthn(
+          factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+          anchor: nil,
+          authenticator: authenticator
+        )
+
+        expectNoDifference(sut.currentSession, session)
+        expectNoDifference(forwardedRpID.value, "example.com")
+        expectNoDifference(
+          verifyBody.value?.objectValue?["webauthn"],
+          ["type": "request", "credential_response": ["id": "cred"]]
+        )
+      }
+
+      @Test
+      @MainActor
+      func mfaVerifyWebAuthnThrowsWhenTheFactorIsNotVerified() async throws {
+        Mock(
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/challenge"),
+          statusCode: 200,
+          data: [
+            .post: Data(
+              #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
+                .utf8)
+          ]
+        )
+        .register()
+        let verifyBody = Mock(
+          url: clientURL.appendingPathComponent(
+            "factors/00000000-0000-0000-0000-000000000001/verify"),
+          statusCode: 200,
+          data: [.post: MockData.session]
+        )
+        .registerCapturingBody()
+        let sheetShown = LockIsolated(false)
+
+        let sut = makeSUT()
+        try await sut.seedSession(.valid)
+
+        let error = await #expect(throws: AuthError.self) {
+          try await sut.mfa.verifyWebAuthn(
+            factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            anchor: nil,
+            authenticator: .fake(
+              register: { _, _ in
+                sheetShown.setValue(true)
+                return [:]
+              },
+              authenticate: { _, _ in
+                sheetShown.setValue(true)
+                return [:]
+              }
+            )
+          )
+        }
+        #expect(error?.kind == .mfaFactorNotVerified)
+        #expect(!sheetShown.value)
+        #expect(verifyBody.value == nil)
+      }
+
+      @Test
+      @MainActor
+      func mfaVerifyWebAuthnThrowsDecodingWhenPublicKeyIsMissing() async throws {
         Mock(
           url: clientURL.appendingPathComponent(
             "factors/00000000-0000-0000-0000-000000000001/challenge"),
@@ -2561,39 +2642,19 @@ extension AuthMockerTests {
           ]
         )
         .register()
-        Mock(
-          url: clientURL.appendingPathComponent(
-            "factors/00000000-0000-0000-0000-000000000001/verify"),
-          statusCode: 200,
-          data: [.post: MockData.session]
-        )
-        .register()
-
-        let forwardedRpId = LockIsolated<String?>(nil)
-        let authenticator = WebAuthnAuthenticator(
-          register: { _, _, _ in [:] },
-          authenticate: { _, rpId, _ in
-            forwardedRpId.setValue(rpId)
-            return [
-              "id": "cred", "rawId": "cmF3", "type": "public-key",
-              "response": [
-                "clientDataJSON": "Y2Rh", "authenticatorData": "YXV0aA", "signature": "c2ln",
-              ],
-            ]
-          }
-        )
 
         let sut = makeSUT()
         try await sut.seedSession(.valid)
 
-        let session = try await sut.mfa._verifyWebAuthnFactor(
-          factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-          presentationAnchor: ASPresentationAnchor(),
-          authenticator: authenticator
-        )
-
-        #expect(!(session.accessToken.isEmpty))
-        expectNoDifference(forwardedRpId.value, "example.com")
+        await #expect {
+          try await sut.mfa.verifyWebAuthn(
+            factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            anchor: nil,
+            authenticator: .fake()
+          )
+        } throws: { error in
+          (error as? AuthError)?.kind == .decoding
+        }
       }
     #endif
 
@@ -3936,3 +3997,32 @@ enum MockData {
     )!
   )
 }
+
+extension Mock {
+  /// Registers the mock and returns the JSON body of the last request it served.
+  fileprivate func registerCapturingBody() -> LockIsolated<JSONValue?> {
+    let body = LockIsolated<JSONValue?>(nil)
+    var mock = self
+    mock.onRequestHandler = OnRequestHandler(httpBodyType: JSONValue.self) { _, json in
+      body.setValue(json)
+    }
+    mock.register()
+    return body
+  }
+}
+
+#if canImport(AuthenticationServices) && !os(watchOS)
+  extension WebAuthnAuthenticator {
+    /// An authenticator whose ceremonies return `{}` unless a test overrides them.
+    fileprivate static func fake(
+      register:
+        @escaping @MainActor @Sendable (WebAuthnCreationOptions, ASPresentationAnchor?)
+        async throws -> JSONValue = { _, _ in [:] },
+      authenticate:
+        @escaping @MainActor @Sendable (WebAuthnRequestOptions, ASPresentationAnchor?)
+        async throws -> JSONValue = { _, _ in [:] }
+    ) -> Self {
+      WebAuthnAuthenticator(register: register, authenticate: authenticate)
+    }
+  }
+#endif

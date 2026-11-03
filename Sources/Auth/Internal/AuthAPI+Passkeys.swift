@@ -9,6 +9,12 @@ import Foundation
 import HTTPTypes
 
 extension AuthAPI {
+  /// The credential is a `JSONValue`, so the snake_case key strategy keeps its W3C field names.
+  private struct VerifyBody: Encodable {
+    let challengeId: UUID
+    let credential: JSONValue
+  }
+
   func passkeyRegistrationOptions(
     accessToken: String
   ) -> AuthRequest<PasskeyRegistrationOptions> {
@@ -18,16 +24,13 @@ extension AuthAPI {
   }
 
   func verifyPasskeyRegistration(
-    challengeId: String,
-    credentialResponse: JSONValue,
+    challengeID: UUID,
+    credential: JSONValue,
     accessToken: String
   ) throws -> AuthRequest<PasskeyListItem> {
     try request(
       .post, "passkeys/registration/verify", authorization: bearer(accessToken),
-      body: encodeWebAuthnBody([
-        "challenge_id": .string(challengeId),
-        "credential": credentialResponse,
-      ]),
+      body: encoder.encode(VerifyBody(challengeId: challengeID, credential: credential)),
       decode: decoding(PasskeyListItem.self))
   }
 
@@ -38,15 +41,12 @@ extension AuthAPI {
   }
 
   func verifyPasskeyAuthentication(
-    challengeId: String,
-    credentialResponse: JSONValue
+    challengeID: UUID,
+    credential: JSONValue
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "passkeys/authentication/verify",
-      body: encodeWebAuthnBody([
-        "challenge_id": .string(challengeId),
-        "credential": credentialResponse,
-      ]),
+      body: encoder.encode(VerifyBody(challengeId: challengeID, credential: credential)),
       decode: decoding(Session.self))
   }
 

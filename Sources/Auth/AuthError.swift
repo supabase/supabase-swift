@@ -315,6 +315,16 @@ public struct AuthError: SupabaseError {
     /// Ignore the result; the stored session is unchanged. Distinct from ``sessionMissing``: a
     /// session may well be stored, just not the one that refresh belonged to.
     public static let refreshDiscarded: Kind = "refreshDiscarded"
+    /// The platform authenticator ended a passkey ceremony with an error other than a user
+    /// cancel, which throws `CancellationError`. ``AuthError/underlyingError`` is the
+    /// `ASAuthorizationError`. ``AuthError/errorCode`` is ``ErrorCode/webAuthnCredentialExists``
+    /// when the device already holds one of the user's passkeys.
+    @_spi(Experimental) public static let passkeyCeremonyFailed: Kind = "passkeyCeremonyFailed"
+    /// ``AuthMFA/verifyWebAuthn(factorID:anchor:)`` got a factor that is not verified yet. The
+    /// SDK shows no passkey sheet and sends no credential. Register a factor with
+    /// ``AuthMFA/enrollWebAuthn(friendlyName:anchor:)``, or remove the unverified one with
+    /// ``AuthMFA/unenroll(factorID:)``.
+    @_spi(Experimental) public static let mfaFactorNotVerified: Kind = "mfaFactorNotVerified"
   }
 
   public var kind: Kind
@@ -431,6 +441,12 @@ extension AuthError {
 
   static func oauthFlowFailed(_ message: String, errorCode: ErrorCode = .unknown) -> AuthError {
     AuthError(kind: .oauthFlowFailed, message: message, errorCode: errorCode)
+  }
+
+  static func passkeyCeremonyFailed(_ error: any Error, errorCode: ErrorCode) -> AuthError {
+    AuthError(
+      kind: .passkeyCeremonyFailed, message: error.localizedDescription, errorCode: errorCode,
+      underlyingError: error)
   }
 
   static func jwtVerificationFailed(_ message: String) -> AuthError {
