@@ -415,7 +415,7 @@ struct AuthClientIntegrationTests {
   @Test
   func passkeyRegistrationOptionsAreTheBarePublicKey() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-    let session = try await authClient.session
+    let session = try await authClient.session()
 
     let options = try await authClient.passkeys.registrationOptions()
 
