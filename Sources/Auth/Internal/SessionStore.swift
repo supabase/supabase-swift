@@ -94,12 +94,6 @@ actor SessionStore {
     }
   }
 
-  private enum Waiter {
-    case pending
-    case suspended(CheckedContinuation<Session, any Error>)
-    case finished
-  }
-
   private static let refreshFailureCooldown: TimeInterval = 60
 
   /// Why a rejected refresh of the held, expired session signs out, or `nil` to keep it.
@@ -306,7 +300,7 @@ actor SessionStore {
     if let flight = refreshFlights[refreshToken] {
       refreshFlights[refreshToken]?.signOutReasons.append(signOutReason)
       do {
-        return try await Self.value(of: flight.task)
+        return try await cancellableValue(of: flight.task)
       } catch {
         await signOutIfRejectedAndExpired(
           by: error, refreshToken: refreshToken, reason: signOutReason)
@@ -320,7 +314,7 @@ actor SessionStore {
         by: failure.error, refreshToken: refreshToken, reason: signOutReason)
       throw failure.error
     }
-    return try await Self.value(
+    return try await cancellableValue(
       of: startRefresh(refreshToken, using: request, signOutReason: signOutReason))
   }
 
@@ -508,36 +502,7 @@ actor SessionStore {
     let flight =
       try refreshFlights[refreshToken]?.task
       ?? startRefresh(refreshToken, using: request, signOutReason: Self.rejectedSession)
-    _ = try await Self.value(of: flight)
-  }
-
-  private static func value(of task: Task<Session, any Error>) async throws -> Session {
-    let waiter = LockIsolated(Waiter.pending)
-    let resume = { @Sendable (result: Result<Session, any Error>) in
-      let continuation = waiter.withValue { state -> CheckedContinuation<Session, any Error>? in
-        defer { state = .finished }
-        guard case .suspended(let continuation) = state else { return nil }
-        return continuation
-      }
-      continuation?.resume(with: result)
-    }
-
-    return try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
-        let cancelled = waiter.withValue { state in
-          guard case .pending = state else { return true }
-          state = .suspended(continuation)
-          return false
-        }
-        if cancelled {
-          continuation.resume(throwing: CancellationError())
-          return
-        }
-        Task { resume(await task.result) }
-      }
-    } onCancel: {
-      resume(.failure(CancellationError()))
-    }
+    _ = try await cancellableValue(of: flight)
   }
 
   // Each operation runs in its own task, so cancelling the caller never stops a write halfway.
@@ -678,11 +643,11 @@ extension User {
   /// Removes the identity `identityID`, and its provider from `appMetadata["providers"]` when no
   /// other identity uses that provider.
   fileprivate mutating func removeIdentity(_ identityID: UUID) {
-    guard let removed = identities?.first(where: { $0.identityId == identityID }) else { return }
-    identities?.removeAll { $0.identityId == identityID }
+    guard let removed = identities?.first(where: { $0.id == identityID }) else { return }
+    identities?.removeAll { $0.id == identityID }
     guard identities?.contains(where: { $0.provider == removed.provider }) != true,
       case .array(let providers) = appMetadata["providers"]
     else { return }
-    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider) })
+    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider.rawValue) })
   }
 }

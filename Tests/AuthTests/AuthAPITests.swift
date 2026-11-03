@@ -75,9 +75,7 @@ struct AuthAPITests {
       api.user(accessToken: token).head,
       api.updateUser(UserAttributes(), redirectTo: nil, pkce: nil, accessToken: token).head,
       api.unlinkIdentity(
-        UserIdentity(
-          id: "1", identityId: id, userId: id, identityData: [:], provider: "email",
-          createdAt: Date(), lastSignInAt: Date(), updatedAt: Date()),
+        UserIdentity(id: id, providerUserID: "1", userID: id, provider: .email),
         accessToken: token
       ).head,
       api.jwks().head,
