@@ -5,6 +5,8 @@ import Logging
 struct SessionManager: Sendable {
   var session: @Sendable () async throws -> Session
   var refreshSession: @Sendable () async throws -> Session
+  /// Refreshes the held session, unless a commit already replaced the one with `refreshToken`.
+  var refreshHeldSession: @Sendable (_ readWith: String) async throws -> Session
   var refreshSessionIfNeeded: @Sendable () async throws -> Session?
 }
 
@@ -26,6 +28,7 @@ extension SessionManager {
     return Self(
       session: { try await instance.session() },
       refreshSession: { try await instance.refreshSession() },
+      refreshHeldSession: { try await instance.refreshSession(readWith: $0) },
       refreshSessionIfNeeded: { try await instance.refreshSessionIfNeeded() }
     )
   }
@@ -76,6 +79,12 @@ private struct LiveSessionManager: Sendable {
         throw AuthError.sessionMissing
       }
       return try await refreshHeldSession(readWith: currentSession.refreshToken)
+    }
+  }
+
+  func refreshSession(readWith refreshToken: String) async throws -> Session {
+    try await trace(using: logger) {
+      try await refreshHeldSession(readWith: refreshToken)
     }
   }
 

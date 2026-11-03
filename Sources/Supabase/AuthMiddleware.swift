@@ -105,14 +105,17 @@ struct AuthMiddleware: ClientMiddleware {
   private func retrySession(after used: Session) async throws -> Session? {
     let current = auth.currentSession
     let retry =
-      current?.accessToken == used.accessToken ? try await refreshedSession() : current
+      current?.accessToken == used.accessToken
+      ? try await refreshedSession(replacing: used) : current
     return retry?.user.id == used.user.id ? retry : nil
   }
 
-  private func refreshedSession() async throws -> Session? {
+  /// A refresh can commit after `retrySession(after:)` read the current session, so the session
+  /// store, not that read, decides whether `used` still needs one.
+  private func refreshedSession(replacing used: Session) async throws -> Session? {
     guard autoRefresh != .disabled else { return nil }
     do {
-      return try await auth.refreshSession()
+      return try await auth.refreshSession(replacing: used)
     } catch {
       try Task.checkCancellation()
       return nil
