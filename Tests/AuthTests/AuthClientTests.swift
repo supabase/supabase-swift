@@ -2317,8 +2317,9 @@ extension AuthMockerTests {
       try await sut.seedSession(.valid)
 
       let changes = LockIsolated<[AuthChange]>([])
+      let stream = sut.events()
       let collect = Task {
-        for await change in sut.events() {
+        for await change in stream {
           changes.withValue { $0.append(change) }
           if change.event == .mfaChallengeVerified { break }
         }
