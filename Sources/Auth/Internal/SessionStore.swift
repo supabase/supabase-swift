@@ -612,7 +612,6 @@ actor SessionStore {
     default: break
     }
     if case .signedOut = transition {
-      signOuts += 1
       for flight in refreshFlights.values {
         flight.task.cancel()
       }
