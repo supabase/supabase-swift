@@ -94,6 +94,7 @@ struct PersistedIdentity: Codable, Sendable {
   var userId: UUID
   var identityData: [String: JSONValue]?
   var provider: String
+  var email: String?
   var createdAt: Date?
   var lastSignInAt: Date?
   var updatedAt: Date?
@@ -104,6 +105,7 @@ struct PersistedIdentity: Codable, Sendable {
     case userId = "user_id"
     case identityData = "identity_data"
     case provider
+    case email
     case createdAt = "created_at"
     case lastSignInAt = "last_sign_in_at"
     case updatedAt = "updated_at"
@@ -223,11 +225,12 @@ extension PersistedUser {
 extension PersistedIdentity {
   init(_ identity: UserIdentity) {
     self.init(
-      id: identity.id,
-      identityId: identity.identityId,
-      userId: identity.userId,
+      id: identity.providerUserID,
+      identityId: identity.id,
+      userId: identity.userID,
       identityData: identity.identityData,
-      provider: identity.provider,
+      provider: identity.provider.rawValue,
+      email: identity.email,
       createdAt: identity.createdAt,
       lastSignInAt: identity.lastSignInAt,
       updatedAt: identity.updatedAt
@@ -235,18 +238,17 @@ extension PersistedIdentity {
   }
 
   var identity: UserIdentity {
-    var identity = UserIdentity(
-      id: id,
-      identityId: identityId,
-      userId: userId,
-      identityData: [:],
-      provider: provider,
+    UserIdentity(
+      id: identityId,
+      providerUserID: id,
+      userID: userId,
+      provider: Provider(rawValue: provider),
+      identityData: identityData ?? [:],
+      email: email,
       createdAt: createdAt,
       lastSignInAt: lastSignInAt,
       updatedAt: updatedAt
     )
-    identity.identityData = identityData
-    return identity
   }
 }
 

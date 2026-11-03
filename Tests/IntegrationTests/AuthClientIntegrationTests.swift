@@ -210,7 +210,8 @@ struct AuthClientIntegrationTests {
       password: mockPassword()
     )
 
-    let user = try await authClient.user(jwt: firstUserSession?.accessToken)
+    let accessToken = try #require(firstUserSession?.accessToken)
+    let user = try await authClient.user(jwt: accessToken)
 
     #expect(user.id == firstUserSession?.user.id)
     #expect(user.id != secondUserSession.user.id)
@@ -221,19 +222,19 @@ struct AuthClientIntegrationTests {
     try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      let updatedUser = try await authClient.update(
-        user: .init(userMetadata: ["test": .integer(42)]))
+      let updatedUser = try await authClient.updateUser(
+        .init(userMetadata: ["test": .integer(42)]))
       #expect(updatedUser.userMetadata["test"] == 42)
     }
   }
 
   @Test
-  func userIdentities() async throws {
+  func identities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-    let identities = try await authClient.userIdentities()
+    let identities = try await authClient.identities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [],
-      identities.map(\.identityId)
+      session.user.identities?.map(\.id) ?? [],
+      identities.map(\.id)
     )
   }
 
@@ -295,7 +296,7 @@ struct AuthClientIntegrationTests {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
-      let user = try await authClient.update(user: UserAttributes(email: email))
+      let user = try await authClient.updateUser(UserAttributes(email: email))
 
       #expect(user.email == email)
     }
@@ -633,7 +634,7 @@ struct AuthClientIntegrationTests {
   func wellKnownJWKSServesES256Key() async throws {
     let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
     let (data, _) = try await URLSession.shared.data(from: url)
-    let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
+    let jwks = try JSONDecoder().decode(JWKS.self, from: data)
 
     let jwk = try #require(jwks.keys.first { $0.alg == "ES256" })
     expectNoDifference(jwk.kty, "EC")
@@ -643,12 +644,12 @@ struct AuthClientIntegrationTests {
     expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
     expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
 
-    expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
+    expectNoDifference(JWTVerifier.algorithm(for: jwk), .es256)
     #expect(jwk.p256PublicKey != nil)
   }
 
   @Test
-  func getClaimsWithLiveES256Session() async throws {
+  func claimsVerifiesES256LocallyAgainstJWKS() async throws {
     let email = mockEmail()
     let session = try #require(
       try await authClient.signUp(email: email, password: mockPassword()).session
@@ -662,13 +663,14 @@ struct AuthClientIntegrationTests {
     let result = try await authClient.claims()
 
     expectNoDifference(result.header.alg, "ES256")
-    expectNoDifference(result.claims.sub, session.user.id.uuidString.lowercased())
-    expectNoDifference(result.claims.email, email)
-    expectNoDifference(result.claims.role, "authenticated")
+    #expect(result.header.kid != nil)
+    expectNoDifference(result.subject, session.user.id.uuidString.lowercased())
+    expectNoDifference(result.email, email)
+    expectNoDifference(result.role, "authenticated")
   }
 
   @Test
-  func getClaimsRejectsTamperedLiveES256Token() async throws {
+  func claimsRejectsTamperedPayload() async throws {
     let session = try #require(
       try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
     )
@@ -688,6 +690,48 @@ struct AuthClientIntegrationTests {
     }
     #expect(error?.kind == .jwtVerificationFailed)
     #expect(error?.message == "Invalid JWT signature")
+  }
+
+  @Test
+  func claimsRejectsTamperedSignature() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    var parts = session.accessToken.split(separator: ".").map(String.init)
+    let signature = parts[2]
+    let flipped: Character = signature.first == "A" ? "B" : "A"
+    parts[2] = String(flipped) + signature.dropFirst()
+    let tamperedJWT = parts.joined(separator: ".")
+
+    let error = await #expect(throws: AuthError.self) {
+      _ = try await authClient.claims(jwt: tamperedJWT)
+    }
+    #expect(error?.kind == .jwtVerificationFailed)
+    #expect(error?.message == "Invalid JWT signature")
+  }
+
+  @Test
+  func userReturnsSignedInUser() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    let user = try await authClient.user()
+
+    expectNoDifference(user.id, session.user.id)
+  }
+
+  @Test
+  func updateUserWithCurrentPassword() async throws {
+    let email = mockEmail()
+    try await authClient.signUp(email: email, password: "pass-1")
+
+    try await authClient.updateUser(UserAttributes(password: "pass-2", currentPassword: "pass-1"))
+    try await authClient.signOut()
+
+    let session = try await authClient.signIn(email: email, password: "pass-2")
+    expectNoDifference(session.user.email, email)
   }
 
   @discardableResult
