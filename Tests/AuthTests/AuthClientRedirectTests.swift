@@ -22,21 +22,21 @@ struct AuthClientRedirectTests {
   func oauthSignInURLPersistsTheVerifierBeforeReturning() async throws {
     let client = race.makeClient()
 
-    let (url, flowID) = try await client.oauthSignInURL(.github)
+    let flow = try await client.oauthSignInURL(.github)
 
-    let record = try #require(try storedFlow(flowID))
+    let record = try #require(try storedFlow(flow.id))
     #expect(record.purpose == .signIn)
     #expect(
-      queryItem("code_challenge", in: url) == PKCE.live.generateCodeChallenge(record.verifier))
-    #expect(queryItem("code_challenge_method", in: url) == "s256")
-    #expect(queryItem("provider", in: url) == "github")
+      queryItem("code_challenge", in: flow.url) == PKCE.live.generateCodeChallenge(record.verifier))
+    #expect(queryItem("code_challenge_method", in: flow.url) == "s256")
+    #expect(queryItem("provider", in: flow.url) == "github")
   }
 
   @Test
   func oauthOptionsBuildTheAuthorizeURL() async throws {
     let client = race.makeClient()
 
-    let (url, flowID) = try await client.oauthSignInURL(
+    let flow = try await client.oauthSignInURL(
       .github,
       options: OAuthOptions(
         scopes: ["repo", "user"],
@@ -45,10 +45,10 @@ struct AuthClientRedirectTests {
       )
     )
 
-    #expect(queryItem("scopes", in: url) == "repo user")
-    #expect(queryItem("redirect_to", in: url) == "com.example.app://login")
-    #expect(queryItem("access_type", in: url) == "offline")
-    #expect(try storedFlow(flowID)?.redirectTo == URL(string: "com.example.app://login")!)
+    #expect(queryItem("scopes", in: flow.url) == "repo user")
+    #expect(queryItem("redirect_to", in: flow.url) == "com.example.app://login")
+    #expect(queryItem("access_type", in: flow.url) == "offline")
+    #expect(try storedFlow(flow.id)?.redirectTo == URL(string: "com.example.app://login")!)
   }
 
   @Test
@@ -58,10 +58,10 @@ struct AuthClientRedirectTests {
     let client = race.makeClient()
     try await client.signIn(email: "user@example.com", password: "secret")
 
-    let (url, flowID) = try await client.linkIdentityURL(.github)
+    let flow = try await client.linkIdentityURL(.github)
 
-    #expect(url == URL(string: "https://github.com/login/oauth/authorize")!)
-    #expect(try storedFlow(flowID)?.purpose == .linkIdentity)
+    #expect(flow.url == URL(string: "https://github.com/login/oauth/authorize")!)
+    #expect(try storedFlow(flow.id)?.purpose == .linkIdentity)
     let authorize = try #require(
       race.transport.requests.first { $0.head.url?.path.hasSuffix("/authorize") == true })
     #expect(authorize.head.url?.query?.contains("code_challenge=") == true)
@@ -187,8 +187,8 @@ struct AuthClientRedirectTests {
   func sbFlowIDSelectsItsFlow() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
-    let a = try await client.oauthSignInURL(.github).flowID
-    let b = try await client.oauthSignInURL(.google).flowID
+    let a = try await client.oauthSignInURL(.github).id
+    let b = try await client.oauthSignInURL(.google).id
     let verifierA = try #require(try storedFlow(a)).verifier
 
     try await client.handleRedirect(
@@ -203,8 +203,8 @@ struct AuthClientRedirectTests {
   func theNewestFlowIsUsedWithoutAnID() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
-    let a = try await client.oauthSignInURL(.github).flowID
-    let b = try await client.oauthSignInURL(.google).flowID
+    let a = try await client.oauthSignInURL(.github).id
+    let b = try await client.oauthSignInURL(.google).id
     let verifierB = try #require(try storedFlow(b)).verifier
 
     try await client.handleRedirect(callback)
@@ -220,7 +220,7 @@ struct AuthClientRedirectTests {
       Race.error(.badRequest, code: "flow_state_not_found", message: "invalid flow state")
     }
     let client = race.makeClient()
-    let flowID = try await client.oauthSignInURL(.github).flowID
+    let flowID = try await client.oauthSignInURL(.github).id
 
     await #expect {
       try await client.exchangeCodeForSession("one-time-code", flowID: flowID)
@@ -241,7 +241,7 @@ struct AuthClientRedirectTests {
       return try Race.ok(race.issue("exchanged"))
     }
     let client = race.makeClient()
-    let flowID = try await client.oauthSignInURL(.github).flowID
+    let flowID = try await client.oauthSignInURL(.github).id
 
     await #expect {
       try await client.exchangeCodeForSession("one-time-code", flowID: flowID)
@@ -331,7 +331,7 @@ struct AuthClientRedirectTests {
     }
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
-    let previous = try await client.oauthSignInURL(.github).flowID
+    let previous = try await client.oauthSignInURL(.github).id
     let previousVerifier = try #require(try storedFlow(previous)).verifier
 
     await #expect {
@@ -430,7 +430,7 @@ struct AuthClientRedirectTests {
     let presenter = ClosurePresenter { [self] url, _ in
       challenge.setValue(queryItem("code_challenge", in: url))
       // A newer flow, so the newest flow is not the one this call started.
-      let newerFlowID = try await client.oauthSignInURL(.google).flowID
+      let newerFlowID = try await client.oauthSignInURL(.google).id
       newer.setValue(newerFlowID)
       return callback
     }
@@ -692,8 +692,8 @@ struct AuthClientRedirectTests {
       Race.error(.badRequest, code: "bad_code_verifier", message: "code challenge does not match")
     }
     let client = race.makeClient()
-    let a = try await client.oauthSignInURL(.github).flowID
-    let b = try await client.oauthSignInURL(.google).flowID
+    let a = try await client.oauthSignInURL(.github).id
+    let b = try await client.oauthSignInURL(.google).id
 
     await #expect {
       try await client.handleRedirect(
@@ -772,7 +772,7 @@ struct AuthClientRedirectTests {
   func theStartedFlowWinsOverTheURLsFlowID() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
-    let other = try await client.oauthSignInURL(.google).flowID
+    let other = try await client.oauthSignInURL(.google).id
     let challenge = LockIsolated<String?>(nil)
     let presenter = ClosurePresenter { [self] url, _ in
       challenge.setValue(queryItem("code_challenge", in: url))

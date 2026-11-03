@@ -323,7 +323,7 @@ struct AuthClientIntegrationTests {
   func linkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    let (url, _) = try await authClient.linkIdentityURL(.apple)
+    let url = try await authClient.linkIdentityURL(.apple).url
     #expect(url.absoluteString.contains("apple.com"))
   }
 

@@ -228,8 +228,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFA.getAuthenticatorAssuranceLevel()` | `AuthMFA.authenticatorAssuranceLevel()` |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
-| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
-| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns the tuple `(url: URL, flowID: UUID)` |
+| `getOAuthSignInURL(...)` returns `URL` | `oauthSignInURL(_:options:)` returns `OAuthFlow` (`id`, `url`) |
+| `getLinkIdentityURL(...)` returns `OAuthResponse` (`provider`, `url`) | `linkIdentityURL(_:options:)` returns `OAuthFlow` (`id`, `url`) |
 | `exchangeCodeForSession(authCode:)` | `exchangeCodeForSession(_:flowID:)`, `flowID` is an optional `UUID` |
 | `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
@@ -339,8 +339,8 @@ open(response.url)
 // v3
 let session = try await supabase.auth.linkIdentity(
   .google, options: OAuthOptions(redirectTo: callback))
-let (url, _) = try await supabase.auth.linkIdentityURL(.google)
-open(url)
+let flow = try await supabase.auth.linkIdentityURL(.google)
+open(flow.url)
 ```
 
 ## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`
@@ -386,8 +386,8 @@ started. Pass the ID back to `exchangeCodeForSession` when more than one flow ca
 let url = try supabase.auth.getOAuthSignInURL(provider: .github)
 let session = try await supabase.auth.exchangeCodeForSession(authCode: code)
 // v3
-let (url, flowID) = try await supabase.auth.oauthSignInURL(.github)
-let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flowID)
+let flow = try await supabase.auth.oauthSignInURL(.github)
+let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.id)
 ```
 
 ## `AuthError` is a struct

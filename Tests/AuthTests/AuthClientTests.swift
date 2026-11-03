@@ -489,9 +489,9 @@ extension AuthMockerTests {
         )
         .register()
 
-        let flowA = try await sut.linkIdentityURL(.github).flowID
+        let flowA = try await sut.linkIdentityURL(.github).id
 
-        let flowB = try await sut.linkIdentityURL(.google).flowID
+        let flowB = try await sut.linkIdentityURL(.google).id
 
         #expect(flowA != flowB)
 
@@ -551,7 +551,7 @@ extension AuthMockerTests {
         let response = try await sut.linkIdentityURL(.github)
 
         expectNoDifference(response.url, URL(string: url)!)
-        #expect(try await sut.dependencies.flowStore.flow(id: response.flowID) != nil)
+        #expect(try await sut.dependencies.flowStore.flow(id: response.id) != nil)
       }
     }
 
@@ -1065,14 +1065,14 @@ extension AuthMockerTests {
     @Test
     func oauthSignInURL() async throws {
       let sut = makeSUT()
-      let (url, _) = try await sut.oauthSignInURL(
+      let url = try await sut.oauthSignInURL(
         .github,
         options: OAuthOptions(
           scopes: ["read", "write"],
           redirectTo: URL(string: "https://dummy-url.com/redirect")!,
           queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
         )
-      )
+      ).url
       expectNoDifference(
         url,
         URL(

@@ -88,6 +88,7 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// - ``signInWithOAuth(_:options:presenter:)``
 /// - ``oauthSignInURL(_:options:)``
 /// - ``OAuthOptions``
+/// - ``OAuthFlow``
 /// - ``WebAuthPresenter``
 /// - ``ClosurePresenter``
 /// - ``ASWebAuthenticationSessionPresenter``
@@ -619,11 +620,11 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - provider: The third-party provider.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
   public func oauthSignInURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> (url: URL, flowID: UUID) {
+  ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.signIn, redirectTo: redirectTo) { started in
@@ -634,7 +635,7 @@ public final class AuthClient: Sendable {
         queryParams: options.queryParams,
         pkce: started.challenge
       )
-      return (url, started.flow.id)
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 
@@ -696,9 +697,9 @@ public final class AuthClient: Sendable {
     }
   #endif
 
-  /// Shows `start.url` with `presenter`, then finishes the flow with the callback URL.
+  /// Shows `flow.url` with `presenter`, then finishes the flow with the callback URL.
   private func present(
-    _ start: (url: URL, flowID: UUID),
+    _ flow: OAuthFlow,
     options: OAuthOptions,
     with presenter: some WebAuthPresenter
   ) async throws -> Session {
@@ -709,9 +710,9 @@ public final class AuthClient: Sendable {
 
     let callback: URL
     do {
-      callback = try await presenter.authenticate(url: start.url, callbackScheme: callbackScheme)
+      callback = try await presenter.authenticate(url: flow.url, callbackScheme: callbackScheme)
     } catch {
-      await removeFlow(start.flowID)
+      await removeFlow(flow.id)
       throw error
     }
 
@@ -719,16 +720,16 @@ public final class AuthClient: Sendable {
     // not have reached the server keeps it, so a retry can still finish it.
     let result: RedirectResult?
     do {
-      result = try await handleRedirect(callback, flowID: start.flowID, signOuts: signOuts)
+      result = try await handleRedirect(callback, flowID: flow.id, signOuts: signOuts)
     } catch {
       if !Self.mayHaveReachedServer(error) {
-        await removeFlow(start.flowID)
+        await removeFlow(flow.id)
       }
       throw error
     }
 
     // A code exchange removed the flow already. Implicit tokens or a non-redirect leave it.
-    await removeFlow(start.flowID)
+    await removeFlow(flow.id)
     switch result {
     case .signedIn(let session, _):
       return session
@@ -763,9 +764,9 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameters:
   ///   - code: The authorization code from the redirect URL.
-  ///   - flowID: The ID of the flow that produced `code`, as returned by
-  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)``. When `nil`, the client
-  ///     tries the pending flows newest first.
+  ///   - flowID: The ID of the flow that produced `code`: the ``OAuthFlow/id`` that
+  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)`` returned. When `nil`, the
+  ///     client tries the pending flows newest first.
   /// - Returns: The new session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
@@ -1217,11 +1218,11 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - provider: The provider to link.
   ///   - options: The scopes, the redirect URL, and extra query items.
-  /// - Returns: The URL to open, and the ID of the flow that this call started.
+  /// - Returns: The flow that this call started: the URL to open, and the flow ID.
   public func linkIdentityURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
-  ) async throws -> (url: URL, flowID: UUID) {
+  ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
     return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
@@ -1235,7 +1236,7 @@ public final class AuthClient: Sendable {
           accessToken: $0
         )
       }
-      return (url, started.flow.id)
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 

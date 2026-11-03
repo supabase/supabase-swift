@@ -1620,6 +1620,30 @@ extension OAuthOptions {
   }
 }
 
+/// An OAuth flow that ``AuthClient/oauthSignInURL(_:options:)`` or
+/// ``AuthClient/linkIdentityURL(_:options:)`` started.
+///
+/// Open ``url`` to show the provider page. Pass the redirect URL that comes back to
+/// ``AuthClient/handleRedirect(_:)``, or pass the code and ``id`` to
+/// ``AuthClient/exchangeCodeForSession(_:flowID:)``.
+public struct OAuthFlow: Sendable, Hashable, Identifiable {
+  /// The ID of the PKCE flow. The client stores the flow under this ID.
+  public let id: UUID
+
+  /// The URL that starts the flow at the provider.
+  public let url: URL
+
+  /// Creates an OAuth flow.
+  ///
+  /// - Parameters:
+  ///   - id: The ID of the PKCE flow.
+  ///   - url: The URL that starts the flow at the provider.
+  public init(id: UUID, url: URL) {
+    self.id = id
+    self.url = url
+  }
+}
+
 /// What ``AuthClient/handleRedirect(_:)`` did with a redirect URL.
 public enum RedirectResult: Sendable, Hashable {
   /// The redirect gave a session. The client stored it and emitted one auth event.

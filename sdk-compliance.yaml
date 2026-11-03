@@ -384,6 +384,10 @@ features:
       - OAuthOptions.scopes
       - OAuthOptions.redirectTo
       - OAuthOptions.queryItems
+      - OAuthFlow
+      - OAuthFlow.init
+      - OAuthFlow.id
+      - OAuthFlow.url
       - Provider
       - Provider.init
       - Provider.rawValue

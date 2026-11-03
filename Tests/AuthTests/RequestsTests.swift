@@ -131,14 +131,14 @@ struct RequestsTests {
   @Test
   func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let (url, _) = try await sut.oauthSignInURL(
+    let url = try await sut.oauthSignInURL(
       .github,
       options: OAuthOptions(
         scopes: ["read", "write"],
         redirectTo: URL(string: "https://dummy-url.com/redirect")!,
         queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
       )
-    )
+    ).url
     #expect(
       url
         == URL(
