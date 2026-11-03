@@ -32,8 +32,8 @@ public struct VerifiedClaims: Sendable, Hashable {
   /// The user's phone number (`phone` claim).
   public let phone: String?
 
-  /// The Authenticator Assurance Level of the session (`aal` claim), `"aal1"` or `"aal2"`.
-  public let assuranceLevel: String?
+  /// The Authenticator Assurance Level of the session (`aal` claim).
+  public let assuranceLevel: AuthenticatorAssuranceLevel?
 
   /// The authentication methods of the session (`amr` claim). A bare method string has no time
   /// of its own, so its entry takes the token's `iat`.
@@ -86,7 +86,8 @@ extension VerifiedClaims {
     self.role = payload["role"]?.stringValue
     self.email = payload["email"]?.stringValue
     self.phone = payload["phone"]?.stringValue
-    self.assuranceLevel = payload["aal"]?.stringValue
+    self.assuranceLevel = payload["aal"]?.stringValue.map(
+      AuthenticatorAssuranceLevel.init(rawValue:))
     self.amr =
       (jwt.payload["amr"] as? [Any])?.compactMap { AMREntry(value: $0, issuedAt: issuedAt) } ?? []
     self.sessionID = payload["session_id"]?.stringValue

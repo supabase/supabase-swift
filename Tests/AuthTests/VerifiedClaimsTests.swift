@@ -30,7 +30,7 @@ struct VerifiedClaimsTests {
     #expect(claims.appMetadata == ["provider": "email"])
     #expect(claims.userMetadata == ["name": "Ada"])
     #expect(claims.isAnonymous == false)
-    #expect(claims.assuranceLevel == "aal1")
+    #expect(claims.assuranceLevel == .aal1)
     #expect(claims.additionalClaims.isEmpty)
     #expect(claims.header.alg == "ES256")
     #expect(claims.header.kid == "kid-1")

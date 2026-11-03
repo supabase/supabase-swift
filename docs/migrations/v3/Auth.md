@@ -203,10 +203,11 @@ Changes that still compile but behave differently. Check each one by hand.
 - **String `amr` entries are kept.** When a custom access token hook writes `amr` as strings,
   `assuranceLevel()` now returns them in `currentAuthenticationMethods`, with the token's `iat` as
   the `timestamp`. v2 dropped them.
-- **MFA string values are structs.** `FactorType`, `AuthenticatorAssuranceLevel`, and
-  `AuthenticationMethod` (`AMREntry.method`) were `String`. `==` and string literals still work, but
-  `"\(factor.factorType)"` prints `FactorType(rawValue: "totp")`. Search for interpolations of
-  `factorType`, `currentLevel`, `nextLevel`, and `method`, and use `.rawValue`.
+- **MFA string values are structs.** `FactorType`, `AuthenticatorAssuranceLevel` (also
+  `VerifiedClaims.assuranceLevel`, the `aal` claim), and `AuthenticationMethod` (`AMREntry.method`)
+  were `String`. `==` and string literals still work, but `"\(factor.factorType)"` prints
+  `FactorType(rawValue: "totp")`. Search for interpolations of `factorType`, `currentLevel`,
+  `nextLevel`, `aal`, `assuranceLevel`, and `method`, and use `.rawValue`.
 - **MFA IDs print in uppercase.** Factor and challenge IDs are `UUID`. `"\(factor.id)"` is
   uppercase; compare `UUID` values, not strings.
 - **`claims()` throws the refresh error.** When the stored session is expired and its refresh
@@ -606,8 +607,8 @@ case .emailChangeConfirmationPending(let confirmation):
 `claims(options:)` and `claims(jwt:options:)` return `VerifiedClaims` instead of
 `JWTClaimsResponse`. The claims are top-level properties with full names, and `header` and
 `signature` stay. `sub` and `exp` are required, so `subject` and `expiresAt` are not optional,
-and a token without them fails verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, and `AudienceClaim` is
-gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
+and a token without them fails verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, `aal` is an
+`AuthenticatorAssuranceLevel`, and `AudienceClaim` is gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
 their typed properties. `nbf`, `jti`, and every other claim are in `additionalClaims`.
 
 ```swift
