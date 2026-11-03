@@ -15,7 +15,10 @@ struct Dependencies: Sendable {
   let api: APIClient
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
-  let codeVerifierStorage: CodeVerifierStorage
+  /// The pending PKCE flows, one stored record each.
+  let flowStore: FlowStore
+  /// Makes a repeated delivery of one redirect reuse the first result.
+  let redirectDeduplicator: RedirectDeduplicator<RedirectResult>
   /// Owns the session.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
@@ -53,8 +56,9 @@ extension Dependencies {
     let api = APIClient(http: http)
     let storageKey = configuration.storageKey ?? defaultStorageKey
     let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
+    let storage = AuthLocalStorageAdapter(localStorage: localStorage)
     let sessionStore = SessionStore(
-      storage: AuthLocalStorageAdapter(localStorage: localStorage),
+      storage: storage,
       key: storageKey,
       now: date,
       initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
@@ -83,7 +87,14 @@ extension Dependencies {
       api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, sessionStore: sessionStore),
-      codeVerifierStorage: .live(configuration: configuration, localStorage: localStorage),
+      flowStore: FlowStore(
+        storage: storage,
+        storageKey: storageKey,
+        pkce: pkce,
+        now: date,
+        logger: logger
+      ),
+      redirectDeduplicator: RedirectDeduplicator(),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
       refreshRequest: refresh,

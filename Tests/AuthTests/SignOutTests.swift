@@ -55,28 +55,27 @@ import Testing
   @Test
   func localClearsPendingPKCEFlows() async throws {
     http.respond { _, _ in noContent }
-    let verifiers = sut.dependencies.codeVerifierStorage
-    verifiers.set("verifier-1", "flow-1", .signIn)
-    verifiers.set("verifier-2", "flow-2", .recovery)
+    let flows = sut.dependencies.flowStore
+    _ = try await flows.start(purpose: .signIn, redirectTo: nil)
+    let recovery = try await flows.start(purpose: .recovery, redirectTo: nil).flow
     try await sut.seedSession(.valid)
 
     try await sut.signOut(scope: .local)
 
-    expectNoDifference(verifiers.get("flow-1"), nil)
-    expectNoDifference(verifiers.get("flow-2"), nil)
-    expectNoDifference(verifiers.get(nil), nil)
+    #expect(try await flows.pendingFlows().isEmpty)
+    #expect(try await flows.flow(id: recovery.id) == nil)
   }
 
   @Test
   func localWithoutASessionEmitsTheSignOutAndSendsNothing() async throws {
     await sut.initialization()
-    sut.dependencies.codeVerifierStorage.set("verifier", "flow", .signIn)
+    _ = try await sut.dependencies.flowStore.start(purpose: .signIn, redirectTo: nil)
 
     let (_, changes) = try await sut.recordingChanges { try await sut.signOut(scope: .local) }
 
     expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
     expectNoDifference(sut.status, .signedOut(.userInitiated))
-    expectNoDifference(sut.dependencies.codeVerifierStorage.get("flow"), nil)
+    #expect(try await sut.dependencies.flowStore.pendingFlows().isEmpty)
     #expect(http.requests.isEmpty)
   }
 
@@ -181,7 +180,7 @@ import Testing
       heldDuringRequest.setValue(sut.currentSession)
       return noContent
     }
-    sut.dependencies.codeVerifierStorage.set("verifier", "flow", .signIn)
+    _ = try await sut.dependencies.flowStore.start(purpose: .signIn, redirectTo: nil)
     try await sut.seedSession(.valid)
 
     let (_, changes) = try await sut.recordingChanges { try await sut.signOut(scope: .global) }
@@ -190,7 +189,7 @@ import Testing
     expectNoDifference(logoutRequests.map(\.scope), ["global"])
     expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
     expectNoDifference(sut.status, .signedOut(.userInitiated))
-    expectNoDifference(sut.dependencies.codeVerifierStorage.get("flow"), nil)
+    #expect(try await sut.dependencies.flowStore.pendingFlows().isEmpty)
   }
 
   @Test

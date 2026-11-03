@@ -114,6 +114,11 @@ actor SessionStore {
   /// auto refresher can tell that the session changed after it was armed.
   private(set) var generation: UInt64 = 0
 
+  /// Grows by one on every ``Transition/signedOut(_:event:)`` commit and every
+  /// ``Transition/revoked(_:refreshToken:)`` commit that signs out. A sign-in that started before
+  /// a sign-out passes the count it read to ``commit(_:unlessSignedOutSince:)``.
+  private(set) var signOuts: UInt64 = 0
+
   private let storage: any AuthStorage
   private let key: String
   private let now: @Sendable () -> Date
@@ -257,6 +262,18 @@ actor SessionStore {
       try await self.apply(.signedOut(reason, event: .signedOut))
     }
     return removed.value
+  }
+
+  /// Applies `transition` only when no sign-out was committed since `signOuts` was read.
+  ///
+  /// A sign-in that finishes after the user signed out must not sign them back in.
+  ///
+  /// - Throws: `CancellationError` when a sign-out came first, and changes nothing.
+  func commit(_ transition: Transition, unlessSignedOutSince signOuts: UInt64) async throws {
+    try await serialized {
+      guard await self.signOuts == signOuts else { throw CancellationError() }
+      try await self.apply(transition)
+    }
   }
 
   /// Redeems `refreshToken` once, however many callers ask at the same time, and commits the
@@ -625,6 +642,10 @@ actor SessionStore {
       replacedRefreshTokens = []
     }
 
+    switch transition {
+    case .signedOut, .revoked: signOuts += 1
+    default: break
+    }
     if case .signedOut = transition {
       for flight in refreshFlights.values {
         flight.task.cancel()
