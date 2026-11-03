@@ -184,9 +184,7 @@ public final class AuthClient: Sendable {
   }
 
   /// Namespace for accessing multi-factor authentication API.
-  public var mfa: AuthMFA {
-    AuthMFA(client: self)
-  }
+  public let mfa: AuthMFA
 
   /// Namespace for the GoTrue admin methods.
   /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
@@ -236,6 +234,7 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    self.mfa = AuthMFA(dependencies: dependencies)
     jwksCache = JWKSCache(
       fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
         try await api.execute(authAPI.jwks())

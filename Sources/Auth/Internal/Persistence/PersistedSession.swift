@@ -257,7 +257,7 @@ extension PersistedFactor {
     self.init(
       id: factor.id,
       friendlyName: factor.friendlyName,
-      factorType: factor.factorType,
+      factorType: factor.factorType.rawValue,
       status: factor.status.rawValue,
       createdAt: factor.createdAt,
       updatedAt: factor.updatedAt
@@ -268,7 +268,7 @@ extension PersistedFactor {
     Factor(
       id: id,
       friendlyName: friendlyName,
-      factorType: factorType,
+      factorType: FactorType(rawValue: factorType),
       status: FactorStatus(rawValue: status),
       createdAt: createdAt,
       updatedAt: updatedAt

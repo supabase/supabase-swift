@@ -29,7 +29,7 @@ import Foundation
     public func enrollWebAuthnFactor(
       friendlyName: String,
       presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
+    ) async throws -> Session {
       try await _enrollWebAuthnFactor(
         friendlyName: friendlyName,
         presentationAnchor: presentationAnchor,
@@ -42,11 +42,9 @@ import Foundation
       friendlyName: String,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let enrolled = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      let challengeResponse = try await challenge(
-        params: MFAChallengeParams(factorId: enrolled.id)
-      )
+    ) async throws -> Session {
+      let factorID = try await enrollWebAuthn(friendlyName: friendlyName)
+      let challengeResponse = try await challenge(factorID: factorID)
       guard let webauthn = challengeResponse.webauthn else {
         throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
@@ -55,11 +53,9 @@ import Foundation
         webauthn.credentialOptions, rpId, presentationAnchor
       )
       return try await verify(
-        params: MFAVerifyParams(
-          factorId: enrolled.id,
-          challengeId: challengeResponse.id,
-          credentialResponse: credentialResponse
-        )
+        factorID: factorID,
+        challengeID: challengeResponse.id,
+        credentialResponse: credentialResponse
       )
     }
 
@@ -71,17 +67,17 @@ import Foundation
     /// returned by the server — no client-side configuration needed.
     ///
     /// - Parameters:
-    ///   - factorId: The ID of the factor to verify.
+    ///   - factorID: The ID of the factor to verify.
     ///   - presentationAnchor: The window to present the passkey UI from.
     @_spi(Experimental)
     @discardableResult
     @MainActor
     public func verifyWebAuthnFactor(
-      factorId: UUID,
+      factorID: UUID,
       presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
+    ) async throws -> Session {
       try await _verifyWebAuthnFactor(
-        factorId: factorId,
+        factorID: factorID,
         presentationAnchor: presentationAnchor,
         authenticator: .live
       )
@@ -89,13 +85,11 @@ import Foundation
 
     @MainActor
     func _verifyWebAuthnFactor(
-      factorId: UUID,
+      factorID: UUID,
       presentationAnchor: ASPresentationAnchor,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let challengeResponse = try await challenge(
-        params: MFAChallengeParams(factorId: factorId)
-      )
+    ) async throws -> Session {
+      let challengeResponse = try await challenge(factorID: factorID)
       guard let webauthn = challengeResponse.webauthn else {
         throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
@@ -104,11 +98,9 @@ import Foundation
         webauthn.credentialOptions, rpId, presentationAnchor
       )
       return try await verify(
-        params: MFAVerifyParams(
-          factorId: factorId,
-          challengeId: challengeResponse.id,
-          credentialResponse: credentialResponse
-        )
+        factorID: factorID,
+        challengeID: challengeResponse.id,
+        credentialResponse: credentialResponse
       )
     }
   }
