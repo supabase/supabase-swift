@@ -45,6 +45,7 @@ struct PersistedSessionCodecTests {
       )
     ]
     session.user.identities?[0].identityData = [:]
+    session.user.identities?[0].email = "jane@example.com"
     let received = ReceivedSession(session: session, receivedAt: Date())
 
     let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(received))

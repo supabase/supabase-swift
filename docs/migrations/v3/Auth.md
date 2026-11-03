@@ -279,7 +279,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `UserIdentity.userId` | `UserIdentity.userID` |
 | `UserIdentity.provider: String` | `UserIdentity.provider: Provider` |
 | `UserIdentity.identityData: [String: JSONValue]?` | `UserIdentity.identityData: JSONObject`; `[:]` when the server sends none |
-| `UserIdentity(id:identityId:userId:identityData:provider:createdAt:lastSignInAt:updatedAt:)` | `UserIdentity(id:providerUserID:userID:provider:identityData:createdAt:lastSignInAt:updatedAt:)` |
+| `UserIdentity(id:identityId:userId:identityData:provider:createdAt:lastSignInAt:updatedAt:)` | `UserIdentity(id:providerUserID:userID:provider:identityData:email:createdAt:lastSignInAt:updatedAt:)` |
 | `UserAttributes.emailChangeToken` | removed |
 
 For the structs that replace enums:
@@ -379,6 +379,20 @@ sends. The provider's user ID is `providerUserID`. `Identifiable` uses `id`, so 
 key on the identity UUID. Most uses stop compiling, because `id` is a `UUID`, not a `String`.
 `"\(identity.id)"` still compiles and prints the UUID.
 
+The v3 names follow what each value is, not the JSON keys of the Auth server. The server sends the
+identity UUID as `identity_id` and the provider's user ID as `id`, and supabase-js keeps those
+keys. So `id` means a different value in Swift than in the JSON and in supabase-js:
+
+| Value | Swift v3 | JSON key and supabase-js | Swift v2 |
+|---|---|---|---|
+| Supabase identity UUID | `id: UUID` | `identity_id` | `identityId: UUID` |
+| User's ID at the provider | `providerUserID: String` | `id` | `id: String` |
+| UUID of the user | `userID: UUID` | `user_id` | `userId: UUID` |
+| Email address of the identity | `email: String?` | `email` | none |
+
+`email` is new in v3. The Auth server takes it from the provider, so it can differ from
+`User.email`. It is `nil` when the server sends no email.
+
 ```swift
 // v2
 let providerUserID: String = identity.id
@@ -389,7 +403,7 @@ let email = identity.identityData?["email"]?.stringValue
 let providerUserID: String = identity.providerUserID
 let identityID: UUID = identity.id
 let isGoogle = identity.provider == .google
-let email = identity.identityData["email"]?.stringValue
+let email = identity.email
 ```
 
 ## `handleRedirect(_:)` replaces `session(from:)` and `handle(_:)`

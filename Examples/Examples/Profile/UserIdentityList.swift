@@ -81,7 +81,7 @@ struct UserIdentityList: View {
                     Text(identity.provider.rawValue.capitalized)
                       .font(.headline)
 
-                    if let email = identity.identityData["email"]?.stringValue {
+                    if let email = identity.email {
                       Text(email)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -152,7 +152,7 @@ struct UserIdentityList: View {
 
               for identity in identities {
                 print("Provider:", identity.provider.rawValue)
-                print("Email:", identity.identityData["email"])
+                print("Email:", identity.email ?? "none")
               }
               """
           )

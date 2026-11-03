@@ -410,15 +410,41 @@ extension User {
 }
 
 /// A third-party identity linked to a ``User``.
+///
+/// The properties are named for what they hold, not for the JSON keys of the Auth server. The
+/// server sends the Supabase identity UUID as `identity_id` and the provider's user ID as `id`.
+/// This type swaps them, so ``id`` is the identity UUID, as `Identifiable` and
+/// ``AuthClient/unlinkIdentity(_:)`` expect:
+///
+/// | Property | JSON key | Value |
+/// |---|---|---|
+/// | ``id`` | `identity_id` | The Supabase identity UUID. |
+/// | ``providerUserID`` | `id` | The user's ID at the provider. |
+/// | ``userID`` | `user_id` | The UUID of the user. |
+///
+/// > Note: supabase-js keeps the JSON keys, so its `UserIdentity.id` is the provider's user ID.
+/// > Use ``providerUserID`` for that value in Swift.
+///
+/// ```swift
+/// let identities = try await supabase.auth.identities()
+/// if let google = identities.first(where: { $0.provider == .google }) {
+///   print(google.providerUserID)  // The user's Google account ID
+///   try await supabase.auth.unlinkIdentity(google)  // Sends google.id
+/// }
+/// ```
 public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
-  /// The Supabase identity UUID. Pass the identity to ``AuthClient/unlinkIdentity(_:)`` to remove
-  /// it.
+  /// The Supabase identity UUID, sent as `identity_id`.
+  ///
+  /// ``AuthClient/unlinkIdentity(_:)`` sends this value. It is not the provider's user ID; for
+  /// that, read ``providerUserID``.
   public var id: UUID
 
-  /// The user's identifier at the provider, such as the `sub` claim of the provider's ID token.
+  /// The user's ID at the provider, sent as `id`.
+  ///
+  /// For an OpenID Connect provider, it is the `sub` claim of the provider's ID token.
   public var providerUserID: String
 
-  /// The user this identity belongs to.
+  /// The UUID of the user that this identity belongs to, sent as `user_id`.
   public var userID: UUID
 
   /// The provider of this identity.
@@ -427,6 +453,11 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   /// Provider-specific identity data returned by the third party. Empty when the server sends
   /// none.
   public var identityData: JSONObject
+
+  /// The email address of this identity, or `nil` when the server sends none.
+  ///
+  /// The Auth server takes it from the provider, so it can differ from ``User/email``.
+  public var email: String?
 
   /// Timestamp when this identity was created.
   public var createdAt: Date?
@@ -440,11 +471,12 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   /// Creates a new user identity value.
   ///
   /// - Parameters:
-  ///   - id: The Supabase identity UUID.
-  ///   - providerUserID: The user's identifier at the provider.
-  ///   - userID: The owning user's UUID.
+  ///   - id: The Supabase identity UUID, the `identity_id` JSON key.
+  ///   - providerUserID: The user's ID at the provider, the `id` JSON key.
+  ///   - userID: The UUID of the user that owns the identity.
   ///   - provider: The provider of the identity.
   ///   - identityData: Provider-specific identity data.
+  ///   - email: The email address of the identity.
   ///   - createdAt: Timestamp the identity was created.
   ///   - lastSignInAt: Timestamp of the last sign-in via this identity.
   ///   - updatedAt: Timestamp the identity was last updated.
@@ -454,6 +486,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     userID: UUID,
     provider: Provider,
     identityData: JSONObject = [:],
+    email: String? = nil,
     createdAt: Date? = nil,
     lastSignInAt: Date? = nil,
     updatedAt: Date? = nil
@@ -463,6 +496,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.userID = userID
     self.provider = provider
     self.identityData = identityData
+    self.email = email
     self.createdAt = createdAt
     self.lastSignInAt = lastSignInAt
     self.updatedAt = updatedAt
@@ -476,6 +510,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     case userID = "userId"
     case provider
     case identityData
+    case email
     case createdAt
     case lastSignInAt
     case updatedAt
@@ -490,6 +525,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     provider = try container.decode(Provider.self, forKey: .provider)
     // GoTrue omits `identity_data` when it is empty.
     identityData = try container.decodeIfPresent(JSONObject.self, forKey: .identityData) ?? [:]
+    email = try container.decodeIfPresent(String.self, forKey: .email)
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     lastSignInAt = try container.decodeIfPresent(Date.self, forKey: .lastSignInAt)
     updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)

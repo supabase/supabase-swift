@@ -197,6 +197,14 @@ struct TypesTests {
     #expect(identity.userID == UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b"))
     #expect(identity.provider == .google)
     #expect(identity.identityData == ["email": "jane@example.com"])
+    #expect(identity.email == "jane@example.com")
+  }
+
+  @Test
+  func userIdentityMissingEmailIsNil() throws {
+    let identity = try decodeIdentity(dropping: "email")
+
+    #expect(identity.email == nil)
   }
 
   @Test
@@ -226,6 +234,7 @@ struct TypesTests {
       userID: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
       provider: .github,
       identityData: ["email": "jane@example.com"],
+      email: "jane@example.com",
       createdAt: Date(timeIntervalSince1970: 1_700_000_000),
       lastSignInAt: Date(timeIntervalSince1970: 1_700_000_100),
       updatedAt: Date(timeIntervalSince1970: 1_700_000_200)
@@ -238,6 +247,7 @@ struct TypesTests {
     #expect(object["id"] as? String == "1234567890")
     #expect(object["user_id"] as? String == "859F402D-B3DE-4105-A1B9-932836D9193B")
     #expect(object["provider"] as? String == "github")
+    #expect(object["email"] as? String == "jane@example.com")
     #expect(
       try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: data) == identity)
   }
@@ -249,6 +259,7 @@ struct TypesTests {
       "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
       "provider": "google",
       "identity_data": ["email": "jane@example.com"],
+      "email": "jane@example.com",
     ]
     if let key {
       fields[key] = nil

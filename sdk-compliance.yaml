@@ -651,6 +651,7 @@ features:
     symbols:
       - AuthClient.identities
     supporting_symbols:
+      - UserIdentity.email
       - UserIdentity.providerUserID
       - UserIdentity.userID
 
