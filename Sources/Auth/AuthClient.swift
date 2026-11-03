@@ -1360,6 +1360,18 @@ public final class AuthClient: Sendable {
     try await sessionManager.refreshSession(refreshToken)
   }
 
+  /// Refreshes the session, unless a concurrent refresh or sign-in already replaced `session`.
+  ///
+  /// The check runs in the session store, together with the refresh, so a refresh that commits
+  /// after the caller read `session` is never repeated with the rotated refresh token.
+  ///
+  /// - Parameter session: The session the caller read, such as the one it signed a request with.
+  /// - Returns: A new session, or the valid session that replaced `session`.
+  /// - Throws: ``AuthError/sessionMissing`` when there is no current session.
+  package func refreshSession(replacing session: Session) async throws -> Session {
+    try await sessionManager.refreshHeldSession(session.refreshToken)
+  }
+
   /// Refreshes the session when less than half of its lifetime is left, and returns it.
   ///
   /// Call it from a `BGAppRefreshTask` handler, so the stored session is fresh when the app or
