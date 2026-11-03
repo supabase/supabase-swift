@@ -99,7 +99,7 @@ struct ProfileView: View {
 
   func getInitialProfile() async {
     do {
-      let currentUser = try await supabase.auth.session.user
+      let currentUser = try await supabase.auth.session().user
 
       let profile: Profile = try await supabase.from("profiles")
         .select()
@@ -128,7 +128,7 @@ struct ProfileView: View {
       do {
         let imageURL = try await uploadImage()
 
-        let currentUser = try await supabase.auth.session.user
+        let currentUser = try await supabase.auth.session().user
 
         let updatedProfile = Profile(
           username: username,
@@ -166,7 +166,7 @@ struct ProfileView: View {
   private func uploadImage() async throws -> String? {
     guard let data = avatarImage?.data else { return nil }
 
-    let userId = try await supabase.auth.session.user.id.uuidString
+    let userId = try await supabase.auth.session().user.id.uuidString
     let filePath = "\(userId)/profile.jpeg"
 
     try await supabase.storage
@@ -183,7 +183,7 @@ struct ProfileView: View {
   private func deleteAccountButtonTapped() {
     Task {
       do {
-        let currentUserId = try await supabase.auth.session.user.id
+        let currentUserId = try await supabase.auth.session().user.id
         try await supabase.auth.admin.deleteUser(
           id: currentUserId,
           shouldSoftDelete: true

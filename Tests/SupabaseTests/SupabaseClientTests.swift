@@ -450,7 +450,7 @@ struct SupabaseClientTests {
       )
     )
 
-    let session = try await client._auth.session
+    let session = try await client._auth.session()
 
     #expect(session.accessToken == "stored-access-token")
     #expect(

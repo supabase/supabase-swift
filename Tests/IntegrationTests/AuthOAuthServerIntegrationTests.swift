@@ -76,7 +76,7 @@ struct AuthOAuthServerIntegrationTests {
       )
     )
 
-    let session = try await authClient.session
+    let session = try await authClient.session()
     let authorizationId = try await createPendingAuthorization(
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
@@ -125,7 +125,7 @@ struct AuthOAuthServerIntegrationTests {
       )
     )
 
-    let session = try await authClient.session
+    let session = try await authClient.session()
     let authorizationId = try await createPendingAuthorization(
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
