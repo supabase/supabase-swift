@@ -5,6 +5,7 @@
 //  Demonstrates passwordless authentication using magic links sent via email
 //
 
+import Supabase
 import SwiftUI
 
 struct AuthWithMagicLink: View {
