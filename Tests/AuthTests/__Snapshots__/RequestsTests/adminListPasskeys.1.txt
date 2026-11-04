@@ -1,5 +1,6 @@
 curl \
-	--header "Apikey: dummy.api.key" \
-	--header "X-Client-Info: gotrue-swift/x.y.z" \
+	--header "Authorization: Bearer dummy.secret.key" \
+	--header "X-Client-Info: auth-swift/0.0.0" \
 	--header "X-Supabase-Api-Version: 2024-01-01" \
+	--header "apikey: dummy.secret.key" \
 	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/passkeys"

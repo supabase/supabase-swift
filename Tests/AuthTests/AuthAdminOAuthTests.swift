@@ -34,26 +34,6 @@ extension AuthMockerTests {
   struct AuthAdminOAuthTests {
     let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
-    let storage = InMemoryLocalStorage()
-
-    private func makeSUT() -> AuthClient {
-      let sessionConfiguration = URLSessionConfiguration.default
-      sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-      let session = URLSession(configuration: sessionConfiguration)
-
-      let configuration = AuthClient.Configuration(
-        url: clientURL,
-        headers: [
-          "apikey": "supabase.publishable.key",
-          "Authorization": "Bearer supabase.secret.key",
-        ],
-        storageKey: uniqueStorageKey(),
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
-
-      return AuthClient(configuration: configuration)
-    }
-
     @Test
     func listOAuthClients() async throws {
       let responseData = """
@@ -92,15 +72,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let response = try await sut.admin.oauth.listClients()
+      let response = try await sut.oauth.listClients()
 
       #expect(response.clients.count == 1)
       #expect(response.clients[0].clientId == clientId)
@@ -142,16 +122,16 @@ extension AuthMockerTests {
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	--data "{\"client_name\":\"Update Client name\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let client = try await sut.admin.oauth.updateClient(
+      let client = try await sut.oauth.updateClient(
         id: clientId,
         params: UpdateOAuthClientParams(
           clientName: "Update Client name",
@@ -198,21 +178,21 @@ extension AuthMockerTests {
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	--data "{\"client_name\":\"New Client\",\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
       let params = CreateOAuthClientParams(
         clientName: "New Client",
         redirectUris: ["https://example.com/callback"]
       )
 
-      let client = try await sut.admin.oauth.createClient(params: params)
+      let client = try await sut.oauth.createClient(params: params)
 
       #expect(client.clientId == clientId)
       #expect(client.clientName == "New Client")
@@ -247,15 +227,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let client = try await sut.admin.oauth.client(id: clientId)
+      let client = try await sut.oauth.client(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.clientName == "Test Client")
@@ -287,9 +267,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let client = try await sut.admin.oauth.client(id: clientId)
+      let client = try await sut.oauth.client(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.clientName == nil)
@@ -316,9 +296,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let client = try await sut.admin.oauth.client(id: clientId)
+      let client = try await sut.oauth.client(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.redirectUris == nil)
@@ -340,15 +320,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      try await sut.admin.oauth.deleteClient(id: clientId)
+      try await sut.oauth.deleteClient(id: clientId)
     }
 
     @Test
@@ -381,15 +361,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/regenerate_secret"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let client = try await sut.admin.oauth.regenerateClientSecret(id: clientId)
+      let client = try await sut.oauth.regenerateClientSecret(id: clientId)
 
       #expect(client.clientId == clientId)
       #expect(client.clientSecret == "new-secret456")
@@ -416,9 +396,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let response = try await sut.admin.oauth.listClients()
+      let response = try await sut.oauth.listClients()
 
       #expect(response.clients.isEmpty)
       #expect(response.nextPage == nil)

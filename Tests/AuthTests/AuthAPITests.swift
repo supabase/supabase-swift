@@ -104,9 +104,9 @@ struct AuthAPITests {
       api.adminUser(id: id).head,
       api.adminUpdateUser(id: id, attributes: AdminUserAttributes()).head,
       api.adminCreateUser(attributes: AdminUserAttributes()).head,
-      api.adminInviteUser(email: "a@b.c", data: nil, redirectTo: nil).head,
-      api.adminDeleteUser(id: id, shouldSoftDelete: false).head,
-      api.adminListUsers(params: nil).head,
+      api.adminInviteUser(email: "a@b.c", userMetadata: [:], redirectTo: nil).head,
+      api.adminDeleteUser(id: id, softDelete: false).head,
+      api.adminListUsers(page: nil, perPage: nil).head,
       api.adminGenerateLink(params: .magicLink(email: "a@b.c")).head,
       api.adminListFactors(userId: id).head,
       api.adminDeleteFactor(id: id, userId: id).head,
@@ -120,6 +120,16 @@ struct AuthAPITests {
       api.adminUpdateOAuthClient(id: id, params: UpdateOAuthClientParams()).head,
       api.adminDeleteOAuthClient(id: id).head,
       api.adminRegenerateOAuthClientSecret(id: id).head,
+      api.adminListCustomProviders(type: nil).head,
+      api.adminCreateCustomProvider(
+        params: CreateCustomProviderParams(
+          providerType: .oidc, identifier: "custom:a", name: "n", clientID: "c",
+          clientSecret: "s")
+      ).head,
+      api.adminCustomProvider(identifier: "custom:a").head,
+      api.adminUpdateCustomProvider(identifier: "custom:a", params: UpdateCustomProviderParams())
+        .head,
+      api.adminDeleteCustomProvider(identifier: "custom:a").head,
     ]
   }
 
@@ -222,7 +232,7 @@ struct AuthAPITests {
 
   @Test
   func listUsersReadsPaginationFromHeaders() throws {
-    let response = try api.adminListUsers(params: nil).decode(
+    let response = try api.adminListUsers(page: nil, perPage: nil).decode(
       HTTPTypes.HTTPResponse(
         status: .ok,
         headerFields: [

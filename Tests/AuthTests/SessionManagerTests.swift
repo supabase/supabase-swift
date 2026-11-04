@@ -265,7 +265,7 @@ struct SessionManagerTests {
       using: Refresher.Driver(
         clock: ContinuousClock(), logger: dependencies.logger,
         request: { [dependencies] refreshToken in
-          try await dependencies.api.execute(
+          try await dependencies.sessionAPI.api.execute(
             dependencies.authAPI.refreshSession(refreshToken: refreshToken))
         }
       )

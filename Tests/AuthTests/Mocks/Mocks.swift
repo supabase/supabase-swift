@@ -10,10 +10,34 @@ import Foundation
 import HTTPTypes
 import TestHelpers
 import IssueReporting
+import Mocker
 
 @testable import Auth
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 let clientURL = URL(string: "http://localhost:54321/auth/v1")!
+
+extension AuthAdminClient {
+  /// An admin client whose network `transport` answers.
+  static func testing(
+    serviceRoleKey: String = "supabase.secret.key", http transport: any ClientTransport
+  ) -> AuthAdminClient {
+    AuthAdminClient(
+      url: clientURL, serviceRoleKey: serviceRoleKey, http: .init(transport: transport))
+  }
+
+  /// An admin client whose requests go to Mocker's registered mocks.
+  static func mocked(serviceRoleKey: String = "supabase.secret.key") -> AuthAdminClient {
+    let sessionConfiguration = URLSessionConfiguration.default
+    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
+    return testing(
+      serviceRoleKey: serviceRoleKey,
+      http: URLSessionTransport(session: URLSession(configuration: sessionConfiguration)))
+  }
+}
 
 extension Dependencies {
   /// Signs `session` in through the session store, the only writer of the session.

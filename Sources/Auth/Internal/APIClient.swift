@@ -24,7 +24,7 @@ extension HTTPClient {
 
 /// Sends an ``AuthRequest`` and decodes its response.
 ///
-/// Knows nothing about sessions. `AuthAdmin` uses it standalone; ``SessionAPIClient`` layers the
+/// Knows nothing about sessions. `AuthAdminClient` uses it standalone; ``SessionAPIClient`` layers the
 /// session bookkeeping on top for the user-facing client.
 struct APIClient: Sendable {
   let http: HTTPClient

@@ -70,10 +70,6 @@ struct ProfileView: View {
           if isLoading {
             ProgressView()
           }
-
-          Button("Delete account", role: .destructive) {
-            deleteAccountButtonTapped()
-          }
         }
       }
       .onMac { $0.padding() }
@@ -178,20 +174,6 @@ struct ProfileView: View {
       )
 
     return filePath
-  }
-
-  private func deleteAccountButtonTapped() {
-    Task {
-      do {
-        let currentUserId = try await supabase.auth.session().user.id
-        try await supabase.auth.admin.deleteUser(
-          id: currentUserId,
-          shouldSoftDelete: true
-        )
-      } catch {
-        debugPrint(error)
-      }
-    }
   }
 }
 

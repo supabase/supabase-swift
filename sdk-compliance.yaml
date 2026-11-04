@@ -223,13 +223,59 @@ supporting_symbols:
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
   - ErrorCode.~=
-  # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
+  # AuthAdminClient (SDK-2074) is the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
-  - AuthAdmin.init
+  - AuthAdminClient
+  - AuthAdminClient.init
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
-  - AuthAdmin.mfa
+  - AuthAdminClient.mfa
   - AuthAdminMFA
+  # The custom providers namespace and its types are shared by every
+  # auth.admin.*_provider capability rather than owned by one.
+  - AuthAdminClient.customProviders
+  - AuthAdminCustomProviders
+  - CustomProvider
+  - CustomProvider.init
+  - CustomProvider.id
+  - CustomProvider.providerType
+  - CustomProvider.identifier
+  - CustomProvider.name
+  - CustomProvider.clientID
+  - CustomProvider.acceptableClientIDs
+  - CustomProvider.scopes
+  - CustomProvider.customClaimsAllowlist
+  - CustomProvider.pkceEnabled
+  - CustomProvider.attributeMapping
+  - CustomProvider.authorizationParams
+  - CustomProvider.enabled
+  - CustomProvider.emailOptional
+  - CustomProvider.issuer
+  - CustomProvider.discoveryURL
+  - CustomProvider.skipNonceCheck
+  - CustomProvider.authorizationURL
+  - CustomProvider.tokenURL
+  - CustomProvider.userinfoURL
+  - CustomProvider.jwksURI
+  - CustomProvider.discoveryDocument
+  - CustomProvider.createdAt
+  - CustomProvider.updatedAt
+  - CustomProviderType
+  - CustomProviderType.init
+  - CustomProviderType.rawValue
+  - CustomProviderType.oauth2
+  - CustomProviderType.oidc
+  - OIDCDiscoveryDocument
+  - OIDCDiscoveryDocument.init
+  - OIDCDiscoveryDocument.issuer
+  - OIDCDiscoveryDocument.authorizationEndpoint
+  - OIDCDiscoveryDocument.tokenEndpoint
+  - OIDCDiscoveryDocument.userinfoEndpoint
+  - OIDCDiscoveryDocument.jwksURI
+  - OIDCDiscoveryDocument.scopesSupported
+  - OIDCDiscoveryDocument.responseTypesSupported
+  - OIDCDiscoveryDocument.grantTypesSupported
+  - OIDCDiscoveryDocument.subjectTypesSupported
   # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
   # capability rather than owned by one, and its generate response is returned
   # by both generate and regenerate.
@@ -794,42 +840,42 @@ features:
   auth.admin.create_user:
     status: implemented
     symbols:
-      - AuthAdmin.createUser
+      - AuthAdminClient.createUser
   auth.admin.delete_user:
     status: implemented
     symbols:
-      - AuthAdmin.deleteUser
+      - AuthAdminClient.deleteUser
   auth.admin.update_user:
     status: implemented
     symbols:
-      - AuthAdmin.updateUserById
+      - AuthAdminClient.updateUser
   auth.admin.get_user:
     status: implemented
     symbols:
-      - AuthAdmin.user
+      - AuthAdminClient.user
   auth.admin.list_users:
     status: implemented
     symbols:
-      - AuthAdmin.listUsers
-      - AuthAdmin.users
+      - AuthAdminClient.listUsers
+      - AuthAdminClient.users
     supporting_symbols:
-      - AuthAdmin.UserSequence
-      - AuthAdmin.UserSequence.Element
-      - AuthAdmin.UserSequence.makeAsyncIterator
-      - AuthAdmin.UserSequence.AsyncIterator
-      - AuthAdmin.UserSequence.AsyncIterator.next
+      - AuthAdminClient.UserSequence
+      - AuthAdminClient.UserSequence.Element
+      - AuthAdminClient.UserSequence.makeAsyncIterator
+      - AuthAdminClient.UserSequence.AsyncIterator
+      - AuthAdminClient.UserSequence.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
-      - AuthAdmin.inviteUserByEmail
+      - AuthAdminClient.inviteUser
   auth.admin.sign_out:
     status: implemented
     symbols:
-      - AuthAdmin.signOut
+      - AuthAdminClient.signOut
   auth.admin.generate_link:
     status: implemented
     symbols:
-      - AuthAdmin.generateLink
+      - AuthAdminClient.generateLink
       - GenerateLinkParams
       - GenerateLinkParams.signUp
       - GenerateLinkParams.invite
@@ -865,11 +911,70 @@ features:
     status: implemented
     symbols:
       - AuthAdminMFA.deleteFactor
-  auth.admin.create_provider: not_implemented
-  auth.admin.delete_provider: not_implemented
-  auth.admin.update_provider: not_implemented
-  auth.admin.get_provider: not_implemented
-  auth.admin.list_providers: not_implemented
+  auth.admin.create_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.create
+      - CreateCustomProviderParams
+      - CreateCustomProviderParams.init
+      - CreateCustomProviderParams.oauth2
+      - CreateCustomProviderParams.oidc
+      - CreateCustomProviderParams.providerType
+      - CreateCustomProviderParams.identifier
+      - CreateCustomProviderParams.name
+      - CreateCustomProviderParams.clientID
+      - CreateCustomProviderParams.clientSecret
+      - CreateCustomProviderParams.acceptableClientIDs
+      - CreateCustomProviderParams.scopes
+      - CreateCustomProviderParams.customClaimsAllowlist
+      - CreateCustomProviderParams.pkceEnabled
+      - CreateCustomProviderParams.attributeMapping
+      - CreateCustomProviderParams.authorizationParams
+      - CreateCustomProviderParams.enabled
+      - CreateCustomProviderParams.emailOptional
+      - CreateCustomProviderParams.issuer
+      - CreateCustomProviderParams.discoveryURL
+      - CreateCustomProviderParams.skipNonceCheck
+      - CreateCustomProviderParams.authorizationURL
+      - CreateCustomProviderParams.tokenURL
+      - CreateCustomProviderParams.userinfoURL
+      - CreateCustomProviderParams.jwksURI
+  auth.admin.delete_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.delete
+  auth.admin.update_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.update
+      - UpdateCustomProviderParams
+      - UpdateCustomProviderParams.init
+      - UpdateCustomProviderParams.name
+      - UpdateCustomProviderParams.clientID
+      - UpdateCustomProviderParams.clientSecret
+      - UpdateCustomProviderParams.acceptableClientIDs
+      - UpdateCustomProviderParams.scopes
+      - UpdateCustomProviderParams.customClaimsAllowlist
+      - UpdateCustomProviderParams.pkceEnabled
+      - UpdateCustomProviderParams.attributeMapping
+      - UpdateCustomProviderParams.authorizationParams
+      - UpdateCustomProviderParams.enabled
+      - UpdateCustomProviderParams.emailOptional
+      - UpdateCustomProviderParams.issuer
+      - UpdateCustomProviderParams.discoveryURL
+      - UpdateCustomProviderParams.skipNonceCheck
+      - UpdateCustomProviderParams.authorizationURL
+      - UpdateCustomProviderParams.tokenURL
+      - UpdateCustomProviderParams.userinfoURL
+      - UpdateCustomProviderParams.jwksURI
+  auth.admin.get_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.provider
+  auth.admin.list_providers:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.list
 
   # AuthPasskeys and AuthAdminPasskeys methods are all
   # @_spi(Experimental), so the public symbol graph the compliance scanner reads

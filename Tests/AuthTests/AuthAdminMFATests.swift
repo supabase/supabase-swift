@@ -22,26 +22,6 @@ extension AuthMockerTests {
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
-    let storage = InMemoryLocalStorage()
-
-    private func makeSUT() -> AuthClient {
-      let sessionConfiguration = URLSessionConfiguration.default
-      sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-      let session = URLSession(configuration: sessionConfiguration)
-
-      let configuration = AuthClient.Configuration(
-        url: clientURL,
-        headers: [
-          "apikey": "supabase.publishable.key",
-          "Authorization": "Bearer supabase.secret.key",
-        ],
-        storageKey: uniqueStorageKey(),
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
-
-      return AuthClient(configuration: configuration)
-    }
-
     @Test
     func listFactors() async throws {
       let responseData = """
@@ -68,15 +48,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/factors"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let factors = try await sut.admin.mfa.listFactors(forUser: userId)
+      let factors = try await sut.mfa.listFactors(forUser: userId)
 
       #expect(factors.count == 1)
       #expect(factors.first?.id == factorId)
@@ -94,9 +74,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      #expect(try await sut.admin.mfa.listFactors(forUser: userId).isEmpty)
+      #expect(try await sut.mfa.listFactors(forUser: userId).isEmpty)
     }
 
     @Test
@@ -120,9 +100,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let factors = try await sut.admin.mfa.listFactors(forUser: userId)
+      let factors = try await sut.mfa.listFactors(forUser: userId)
 
       #expect(factors.first?.friendlyName == nil)
       #expect(factors.first?.factorType == "phone")
@@ -153,15 +133,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer supabase.secret.key" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/factors/0D3AA138-DA96-4AEA-8D9E-C8B0E1234567"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      try await sut.admin.mfa.deleteFactor(id: factorId, forUser: userId)
+      try await sut.mfa.deleteFactor(id: factorId, forUser: userId)
     }
   }
 }

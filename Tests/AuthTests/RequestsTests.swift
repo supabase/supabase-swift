@@ -376,32 +376,32 @@ struct RequestsTests {
 
   @Test
   func deleteUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      try await sut.admin.deleteUser(id: id)
+      try await sut.deleteUser(id: id)
     }
   }
 
   @Test
   func adminListPasskeys() async throws {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.admin.passkeys.list(forUser: userId)
+      _ = try await sut.passkeys.list(forUser: userId)
     }
   }
 
   @Test
   func adminDeletePasskey() async throws {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.admin.passkeys.delete(id: passkeyId, forUser: userId)
+      try await sut.passkeys.delete(id: passkeyId, forUser: userId)
     }
   }
 
@@ -891,45 +891,45 @@ struct RequestsTests {
 
   @Test
   func adminGetUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.user(id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
+      _ = try await sut.user(id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     }
   }
 
   @Test
   func adminUpdateUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.updateUserById(
-        UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-        attributes: AdminUserAttributes(banDuration: "24h", email: "new@mail.com")
+      try await sut.updateUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        attributes: AdminUserAttributes(banDuration: .seconds(86_400), email: "new@mail.com")
       )
     }
   }
 
   @Test
   func adminCreateUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.createUser(
-        attributes: AdminUserAttributes(
+      try await sut.createUser(
+        AdminUserAttributes(
           email: "example@mail.com", confirmsEmail: true, password: "the.pass")
       )
     }
   }
 
   @Test
-  func adminInviteUserByEmail() async {
-    let sut = makeSUT()
+  func adminInviteUser() async {
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.inviteUserByEmail(
-        "example@mail.com",
-        data: ["custom_key": .string("custom_value")],
+      try await sut.inviteUser(
+        email: "example@mail.com",
+        userMetadata: ["custom_key": .string("custom_value")],
         redirectTo: URL(string: "https://supabase.com")
       )
     }
@@ -937,29 +937,29 @@ struct RequestsTests {
 
   @Test
   func adminSignOut() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.signOut(jwt: "user-jwt", scope: .others)
+      try await sut.signOut(jwt: "user-jwt", scope: .others)
     }
   }
 
   @Test
   func adminListUsers() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.listUsers(params: PageParams(page: 2, perPage: 10))
+      _ = try await sut.listUsers(page: 2, perPage: 10)
     }
   }
 
   @Test
   func adminGenerateLink() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.generateLink(
-        params: .magicLink(
+      _ = try await sut.generateLink(
+        .magicLink(
           email: "example@mail.com", redirectTo: URL(string: "https://supabase.com"))
       )
     }
@@ -967,20 +967,20 @@ struct RequestsTests {
 
   @Test
   func adminListFactors() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.mfa.listFactors(
+      _ = try await sut.mfa.listFactors(
         forUser: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     }
   }
 
   @Test
   func adminDeleteFactor() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.mfa.deleteFactor(
+      try await sut.mfa.deleteFactor(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
         forUser: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
       )
@@ -989,19 +989,19 @@ struct RequestsTests {
 
   @Test
   func adminListOAuthClients() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.listClients(params: PageParams(page: 1, perPage: 5))
+      _ = try await sut.oauth.listClients(params: PageParams(page: 1, perPage: 5))
     }
   }
 
   @Test
   func adminCreateOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.createClient(
+      try await sut.oauth.createClient(
         params: CreateOAuthClientParams(
           clientName: "Example", redirectUris: ["https://example.com/callback"])
       )
@@ -1010,20 +1010,20 @@ struct RequestsTests {
 
   @Test
   func adminGetOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.client(
+      _ = try await sut.oauth.client(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
   @Test
   func adminUpdateOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.updateClient(
+      _ = try await sut.oauth.updateClient(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
         params: UpdateOAuthClientParams(clientName: "Renamed")
       )
@@ -1032,21 +1032,103 @@ struct RequestsTests {
 
   @Test
   func adminDeleteOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.deleteClient(
+      try await sut.oauth.deleteClient(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
   @Test
   func adminRegenerateOAuthClientSecret() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.regenerateClientSecret(
+      try await sut.oauth.regenerateClientSecret(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
+    }
+  }
+
+  @Test
+  func adminLiftBan() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.updateUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        attributes: AdminUserAttributes(banDuration: .zero)
+      )
+    }
+  }
+
+  @Test
+  func adminSoftDeleteUser() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.deleteUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!, softDelete: true)
+    }
+  }
+
+  @Test
+  func adminListCustomProviders() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      _ = try await sut.customProviders.list(type: .oidc)
+    }
+  }
+
+  @Test
+  func adminCreateCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    var params = CreateCustomProviderParams.oauth2(
+      identifier: "custom:acme",
+      name: "Acme",
+      clientID: "client-id",
+      clientSecret: "client-secret",
+      authorizationURL: URL(string: "https://acme.example.com/authorize")!,
+      tokenURL: URL(string: "https://acme.example.com/token")!,
+      userinfoURL: URL(string: "https://acme.example.com/userinfo")!
+    )
+    params.scopes = ["openid", "email"]
+    params.customClaimsAllowlist = ["groups"]
+
+    await assert {
+      try await sut.customProviders.create(params)
+    }
+  }
+
+  @Test
+  func adminGetCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      _ = try await sut.customProviders.provider(identifier: "custom:acme")
+    }
+  }
+
+  @Test
+  func adminUpdateCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.customProviders.update(
+        identifier: "custom:acme",
+        params: UpdateCustomProviderParams(name: "Acme Inc.", customClaimsAllowlist: [])
+      )
+    }
+  }
+
+  @Test
+  func adminDeleteCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.customProviders.delete(identifier: "custom:acme")
     }
   }
 
@@ -1056,6 +1138,49 @@ struct RequestsTests {
     } catch is UnimplementedError {
     } catch {
       Issue.record("Unexpected error: \(error)")
+    }
+  }
+
+  private func makeAdminSUT(
+    file: StaticString = #filePath,
+    testName: String = #function,
+    line: UInt = #line
+  ) -> AuthAdminClient {
+    AuthAdminClient(
+      url: clientURL,
+      serviceRoleKey: "dummy.secret.key",
+      http: .init(
+        transport: snapshotTransport(
+          record: false, fetch: nil, file: file, testName: testName, line: line))
+    )
+  }
+
+  private func snapshotTransport(
+    record: Bool,
+    fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))?,
+    file: StaticString,
+    testName: String,
+    line: UInt
+  ) -> ClosureTransport {
+    ClosureTransport { request, body in
+      guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+      if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+      await MainActor.run {
+        assertSnapshot(
+          of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
+        )
+      }
+
+      if let fetch {
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
+
+      throw UnimplementedError()
     }
   }
 
@@ -1073,26 +1198,8 @@ struct RequestsTests {
       storageKey: uniqueStorageKey(),
       localStorage: InMemoryLocalStorage(),
       http: .init(
-        transport: ClosureTransport { request, body in
-          guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
-          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
-
-          await MainActor.run {
-            assertSnapshot(
-              of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
-            )
-          }
-
-          if let fetch {
-            let (data, response) = try await fetch(urlRequest)
-            guard let head = (response as? HTTPURLResponse)?.httpResponse else {
-              throw URLError(.badServerResponse)
-            }
-            return (head, data.isEmpty ? nil : HTTPBody(data))
-          }
-
-          throw UnimplementedError()
-        }),
+        transport: snapshotTransport(
+          record: record, fetch: fetch, file: file, testName: testName, line: line)),
       autoRefresh: .manual
     )
 

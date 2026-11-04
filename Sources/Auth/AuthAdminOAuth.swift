@@ -10,7 +10,7 @@ public import Foundation
 /// Admin operations for managing OAuth 2.1 clients registered in Supabase Auth.
 ///
 /// Only relevant when the OAuth 2.1 server feature is enabled in Supabase Auth.
-/// Access this namespace via ``AuthAdmin/oauth``.
+/// Access this namespace via ``AuthAdminClient/oauth``.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
@@ -25,7 +25,7 @@ public import Foundation
 /// - ``deleteClient(id:)``
 /// - ``regenerateClientSecret(id:)``
 public struct AuthAdminOAuth: Sendable {
-  let admin: AuthAdmin
+  let admin: AuthAdminClient
 
   var api: APIClient { admin.api }
   var authAPI: AuthAPI { admin.authAPI }

@@ -25,11 +25,17 @@ import Testing
 struct AuthClientIntegrationTests {
   let authClient = makeClient()
 
+  static let authURL = URL(string: "\(DotEnv.supabaseURL)/auth/v1")!
+
+  static func makeAdminClient() -> AuthAdminClient {
+    AuthAdminClient(url: authURL, serviceRoleKey: DotEnv.supabaseSecretKey)
+  }
+
   static func makeClient(serviceRole: Bool = false) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
+        url: authURL,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",
@@ -367,8 +373,8 @@ struct AuthClientIntegrationTests {
 
   @Test(.disabled("Requires secret key and pre-seeded users"))
   func listUsers() async throws {
-    let client = Self.makeClient(serviceRole: true)
-    let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
+    let admin = Self.makeAdminClient()
+    let pagination = try await admin.listUsers(perPage: 10)
     #expect(pagination.users.count == 10)
     #expect(pagination.audience == "authenticated")
     #expect(pagination.nextPage == 2)
@@ -381,8 +387,8 @@ struct AuthClientIntegrationTests {
     try await signUpIfNeededOrSignIn(email: email, password: password)
     let session = try await authClient.session()
 
-    let client = Self.makeClient(serviceRole: true)
-    let passkeys = try await client.admin.passkeys.list(forUser: session.user.id)
+    let admin = Self.makeAdminClient()
+    let passkeys = try await admin.passkeys.list(forUser: session.user.id)
     #expect(passkeys.isEmpty)
   }
 
@@ -393,9 +399,9 @@ struct AuthClientIntegrationTests {
     try await signUpIfNeededOrSignIn(email: email, password: password)
     let session = try await authClient.session()
 
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     do {
-      try await client.admin.passkeys.delete(id: UUID(), forUser: session.user.id)
+      try await admin.passkeys.delete(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
@@ -493,10 +499,10 @@ struct AuthClientIntegrationTests {
 
   @Test
   func pkceRecoveryLinkSignsInThroughHandleRedirect() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
-    try await admin.admin.createUser(
-      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
     try await authClient.resetPasswordForEmail(
@@ -533,13 +539,13 @@ struct AuthClientIntegrationTests {
   /// the same user makes the magic link itself invalid, before any code exchange.
   @Test
   func anEarlierMagicLinkFinishesAfterALaterPasswordReset() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let otherEmail = mockEmail()
     let redirectTo = URL(string: "http://localhost:3000")!
     for address in [email, otherEmail] {
-      try await admin.admin.createUser(
-        attributes: AdminUserAttributes(
+      try await admin.createUser(
+        AdminUserAttributes(
           email: address, confirmsEmail: true, password: mockPassword())
       )
     }
@@ -568,13 +574,13 @@ struct AuthClientIntegrationTests {
 
   @Test
   func implicitMagicLinkSignsInThroughHandleRedirect() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
-    try await admin.admin.createUser(
-      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
-    let link = try await admin.admin.generateLink(params: .magicLink(email: email))
+    let link = try await admin.generateLink(.magicLink(email: email))
     let location = try await redirectLocation(of: link.properties.actionLink)
     #expect(location.fragment?.contains("access_token=") == true)
 
@@ -594,12 +600,12 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkSignUp() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
-    let link = try await client.admin.generateLink(
-      params: .signUp(
+    let link = try await admin.generateLink(
+      .signUp(
         email: email,
         password: password,
         data: ["full_name": "John Doe"]
@@ -613,15 +619,15 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkMagicLink() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
-    try await client.admin.createUser(
-      attributes: AdminUserAttributes(email: email, password: password)
+    try await admin.createUser(
+      AdminUserAttributes(email: email, password: password)
     )
 
-    let link = try await client.admin.generateLink(params: .magicLink(email: email))
+    let link = try await admin.generateLink(.magicLink(email: email))
 
     expectNoDifference(link.properties.verificationType, .magiclink)
   }
@@ -629,23 +635,24 @@ struct AuthClientIntegrationTests {
   @Test
   func generateLinkRecovery() async throws {
     let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
     _ = try await client.signUp(email: email, password: password)
 
-    let link = try await client.admin.generateLink(params: .recovery(email: email))
+    let link = try await admin.generateLink(.recovery(email: email))
 
     expectNoDifference(link.properties.verificationType, .recovery)
   }
 
   @Test
   func verifyOTPForRecoveryEmitsPasswordRecovery() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
-    _ = try await admin.admin.createUser(
-      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
-    let link = try await admin.admin.generateLink(params: .recovery(email: email))
+    _ = try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
+    let link = try await admin.generateLink(.recovery(email: email))
 
     try await expectAuthEvents([.initialSession, .passwordRecovery]) {
       try await authClient.verifyOTP(tokenHash: link.properties.hashedToken, type: .recovery)
@@ -656,20 +663,20 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkInvite() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
 
-    let link = try await client.admin.generateLink(params: .invite(email: email))
+    let link = try await admin.generateLink(.invite(email: email))
 
     expectNoDifference(link.properties.verificationType, .invite)
   }
 
   @Test
-  func inviteUserByEmail() async throws {
-    let client = Self.makeClient(serviceRole: true)
+  func inviteUser() async throws {
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
 
-    let user = try await client.admin.inviteUserByEmail(email)
+    let user = try await admin.inviteUser(email: email)
 
     expectNoDifference(user.email, email)
     #expect(user.invitedAt != nil)
@@ -678,6 +685,7 @@ struct AuthClientIntegrationTests {
   @Test
   func verifyOTPForSecureEmailChange() async throws {
     let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let newEmail = mockEmail()
     let password = mockPassword()
@@ -691,11 +699,11 @@ struct AuthClientIntegrationTests {
     #expect(user.identities?.isEmpty == false)
     #expect(client.currentSession == nil)
 
-    let currentEmailLink = try await client.admin.generateLink(
-      params: .emailChangeCurrent(email: email, newEmail: newEmail)
+    let currentEmailLink = try await admin.generateLink(
+      .emailChangeCurrent(email: email, newEmail: newEmail)
     )
-    let newEmailLink = try await client.admin.generateLink(
-      params: .emailChangeNew(email: email, newEmail: newEmail)
+    let newEmailLink = try await admin.generateLink(
+      .emailChangeNew(email: email, newEmail: newEmail)
     )
 
     let firstConfirmation = try await client.verifyOTP(
@@ -728,9 +736,8 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: email, password: password).session
     let accessToken = try #require(session?.accessToken)
 
-    let adminClient = Self.makeClient(serviceRole: true)
-    try await adminClient.admin.signOut(jwt: accessToken)
-    withExtendedLifetime(adminClient) {}
+    let admin = Self.makeAdminClient()
+    try await admin.signOut(jwt: accessToken)
   }
 
   @Test

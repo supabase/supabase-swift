@@ -120,24 +120,6 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
-  func adminOutlivesClient() async throws {
-    let (admin, transport) = releasedClientSubClient(\.admin)
-
-    try await admin.deleteUser(id: UUID())
-
-    #expect(transport.requests.count == 1)
-  }
-
-  @Test
-  func adminOAuthOutlivesClient() async throws {
-    let (oauth, transport) = releasedClientSubClient(\.admin.oauth)
-
-    try await oauth.deleteClient(id: UUID())
-
-    #expect(transport.requests.count == 1)
-  }
-
-  @Test
   func oauthServerOutlivesClient() async throws {
     let (oauthServer, transport) = releasedClientSubClient(\.oauthServer)
     try await oauthServer.client.seedSession(.valid)

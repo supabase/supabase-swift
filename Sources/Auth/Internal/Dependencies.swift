@@ -11,8 +11,6 @@ struct Dependencies: Sendable {
   let http: HTTPClient
   /// Builds every request and decodes every response.
   let authAPI: AuthAPI
-  /// Session-free requests. What `AuthAdmin` runs on.
-  let api: APIClient
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
   /// The pending PKCE flows, one stored record each.
@@ -84,7 +82,6 @@ extension Dependencies {
       configuration: configuration,
       http: http,
       authAPI: authAPI,
-      api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, sessionStore: sessionStore),
       flowStore: FlowStore(
