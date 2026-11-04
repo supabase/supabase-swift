@@ -16,21 +16,60 @@ public protocol WebAuthPresenter: Sendable {
   /// - Returns: The URL that the provider redirected to.
   /// - Throws: `CancellationError` when the user cancels.
   @MainActor func authenticate(url: URL, callbackScheme: String?) async throws -> URL
+
+  /// Opens `url` and returns the callback URL, given the full redirect URL.
+  ///
+  /// The client calls this method. Implement it when the scheme is not enough, for example to
+  /// listen for a universal link. The default implementation calls
+  /// ``authenticate(url:callbackScheme:)`` with the scheme of `redirectURL`.
+  ///
+  /// - Parameters:
+  ///   - url: The provider page to open.
+  ///   - redirectURL: The redirect URL of the flow, or `nil` when the client has none.
+  /// - Returns: The URL that the provider redirected to.
+  /// - Throws: `CancellationError` when the user cancels.
+  @MainActor func authenticate(url: URL, redirectURL: URL?) async throws -> URL
+}
+
+extension WebAuthPresenter {
+  /// Opens `url` and returns the callback URL, with the scheme of `redirectURL`.
+  ///
+  /// This implementation calls ``authenticate(url:callbackScheme:)`` with `redirectURL?.scheme`.
+  @MainActor
+  public func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
+    try await authenticate(url: url, callbackScheme: redirectURL?.scheme)
+  }
 }
 
 /// A presenter that runs a closure.
 ///
+/// Use it to present the page another way. For example, an app that uses SwiftUI can pass the
+/// `webAuthenticationSession` from the environment, which is available on iOS 16.4 and later:
+///
 /// ```swift
-/// try await supabase.auth.signInWithOAuth(
-///   .github,
-///   presenter: ClosurePresenter { url, callbackScheme in
-///     try await webAuthenticationSession.authenticate(
-///       using: url,
-///       callbackURLScheme: callbackScheme ?? "myapp"
-///     )
+/// struct SignInView: View {
+///   @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+///
+///   var body: some View {
+///     Button("Sign in with GitHub") {
+///       Task {
+///         try await supabase.auth.signInWithOAuth(
+///           .github,
+///           presenter: ClosurePresenter { [webAuthenticationSession] url, callbackScheme in
+///             try await webAuthenticationSession.authenticate(
+///               using: url,
+///               callbackURLScheme: callbackScheme ?? "myapp"
+///             )
+///           }
+///         )
+///       }
+///     }
 ///   }
-/// )
+/// }
 /// ```
+///
+/// The closure gets the scheme of the redirect URL. To listen for a universal link, adopt
+/// ``WebAuthPresenter/authenticate(url:redirectURL:)`` in your own presenter instead.
 public struct ClosurePresenter: WebAuthPresenter {
   private let _authenticate:
     @MainActor @Sendable (_ url: URL, _ callbackScheme: String?) async throws -> URL

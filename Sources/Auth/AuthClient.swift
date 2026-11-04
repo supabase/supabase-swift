@@ -719,12 +719,12 @@ public final class AuthClient: Sendable {
   ) async throws -> Session {
     // A sign-out while the page is open must win over the callback.
     let signOuts = await sessionStore.signOuts
-    let callbackScheme = Self.oauthRedirectURL(
-      redirectTo: redirectTo, configured: configuration.redirectToURL)?.scheme
+    let redirectURL = Self.oauthRedirectURL(
+      redirectTo: redirectTo, configured: configuration.redirectToURL)
 
     let callback: URL
     do {
-      callback = try await presenter.authenticate(url: flow.url, callbackScheme: callbackScheme)
+      callback = try await presenter.authenticate(url: flow.url, redirectURL: redirectURL)
     } catch {
       await removeFlow(flow.id)
       throw error
@@ -759,8 +759,7 @@ public final class AuthClient: Sendable {
   /// client-wide ``Configuration/redirectToURL``.
   ///
   /// Both halves of the flow have to agree on this — the authorize request tells the provider
-  /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
-  /// on. They are resolved in different places, and writing the rule out twice is exactly how
+  /// where to send the user, and the presenter is told which URL to listen for. They are resolved in different places, and writing the rule out twice is exactly how
   /// they drifted apart and stopped agreeing (SDK-1873), so it lives here once instead.
   static func oauthRedirectURL(redirectTo: URL?, configured: URL?) -> URL? {
     redirectTo ?? configured
