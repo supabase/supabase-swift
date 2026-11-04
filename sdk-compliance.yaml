@@ -231,6 +231,11 @@ supporting_symbols:
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdminClient.mfa
   - AuthAdminMFA
+  # The admin OAuth namespace is shared by every auth.oauth_admin.* capability.
+  - AuthAdminClient.oauth
+  # AdminUserAttributes is the request body of both auth.admin.create_user and
+  # auth.admin.update_user; its encoder maps banDuration to a Go duration string.
+  - AdminUserAttributes.encode
   # The custom providers namespace and its types are shared by every
   # auth.admin.*_provider capability rather than owned by one.
   - AuthAdminClient.customProviders
@@ -859,6 +864,12 @@ features:
       - AuthAdminClient.listUsers
       - AuthAdminClient.users
     supporting_symbols:
+      - UserPage
+      - UserPage.users
+      - UserPage.audience
+      - UserPage.nextPage
+      - UserPage.lastPage
+      - UserPage.total
       - AuthAdminClient.UserSequence
       - AuthAdminClient.UserSequence.Element
       - AuthAdminClient.UserSequence.makeAsyncIterator

@@ -38,6 +38,7 @@ struct AuthAdminTests {
     (.seconds(-5), "-5s"),
     (.seconds(Int64.max), "\(Int64.max)ns"),
     (Duration(secondsComponent: 0, attosecondsComponent: 500_000_000), "1ns"),
+    (Duration(secondsComponent: Int64.min, attosecondsComponent: -1), "\(Int64.min)ns"),
   ])
   func banDurationIsAGoDurationString(duration: Duration, expected: String) throws {
     let body = try AuthClient.Configuration.jsonEncoder.encode(

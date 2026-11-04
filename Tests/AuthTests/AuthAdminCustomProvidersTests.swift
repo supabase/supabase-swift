@@ -141,4 +141,44 @@ struct AuthAdminCustomProvidersTests {
     #expect(json?.keys.sorted() == ["client_id", "custom_claims_allowlist", "jwks_uri"])
     #expect((json?["custom_claims_allowlist"] as? [String])?.isEmpty == true)
   }
+
+  @Test
+  func createOIDCSendsTheIssuer() throws {
+    var params = CreateCustomProviderParams.oidc(
+      identifier: "custom:corp", name: "Corp", clientID: "c", clientSecret: "s",
+      issuer: "https://corp.example.com")
+    params.skipNonceCheck = true
+    let body = try AuthClient.Configuration.jsonEncoder.encode(params)
+    let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+
+    #expect(json?["provider_type"] as? String == "oidc")
+    #expect(json?["issuer"] as? String == "https://corp.example.com")
+    #expect(json?["skip_nonce_check"] as? Bool == true)
+    #expect(json?["authorization_url"] == nil)
+  }
+
+  @Test
+  func updateAndDeleteReachTheProviderPath() async throws {
+    let body = """
+      {
+        "id": "859f402d-b3de-4105-a1b9-932836d9193b", "provider_type": "oauth2",
+        "identifier": "custom:acme", "name": "Renamed", "client_id": "c",
+        "created_at": "2026-11-03T10:00:00Z", "updated_at": "2026-11-03T10:00:00Z"
+      }
+      """
+    let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data(body.utf8)) }
+    let sut = AuthAdminClient.testing(http: transport)
+
+    let updated = try await sut.customProviders.update(
+      identifier: "custom:acme", params: UpdateCustomProviderParams(name: "Renamed"))
+    try await sut.customProviders.delete(identifier: "custom:acme")
+
+    #expect(updated.name == "Renamed")
+    #expect(!updated.enabled)
+    #expect(
+      transport.requests.map { "\($0.head.method) \($0.head.url?.path ?? "")" } == [
+        "PUT /auth/v1/admin/custom-providers/custom:acme",
+        "DELETE /auth/v1/admin/custom-providers/custom:acme",
+      ])
+  }
 }
