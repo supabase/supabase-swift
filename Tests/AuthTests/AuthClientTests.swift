@@ -377,7 +377,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       let response = try await sut.listUsers()
       expectNoDifference(response.total, 669)
@@ -411,7 +411,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       let response = try await sut.listUsers()
       expectNoDifference(response.total, 669)
@@ -1465,7 +1465,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
       try await sut.deleteUser(id: id)
     }
 
@@ -1499,7 +1499,7 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       let passkeys = try await sut.passkeys.list(forUser: userId)
 
@@ -1538,7 +1538,7 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
       try await sut.passkeys.delete(id: passkeyId, forUser: userId)
     }
 
@@ -2738,7 +2738,7 @@ extension AuthMockerTests {
     @Test
     func getUserById() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2765,7 +2765,7 @@ extension AuthMockerTests {
     @Test
     func adminUpdateUser() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2802,7 +2802,7 @@ extension AuthMockerTests {
 
     @Test
     func createUser() async throws {
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users"),
@@ -2837,7 +2837,7 @@ extension AuthMockerTests {
 
     @Test
     func createUserConfirmingEmailAndPhone() async throws {
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users"),
@@ -2874,7 +2874,7 @@ extension AuthMockerTests {
     @Test
     func adminUpdateUserConfirmingEmail() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2907,7 +2907,7 @@ extension AuthMockerTests {
 
     @Test
     func adminInviteUser() async throws {
-      let sut = AuthAdminClient.mocked(serviceRoleKey: apiKey)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("invite"),

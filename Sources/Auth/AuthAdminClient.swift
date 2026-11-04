@@ -17,7 +17,7 @@ public import Logging
 /// ```swift
 /// let admin = AuthAdminClient(
 ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
-///   serviceRoleKey: secretKey
+///   secretKey: secretKey
 /// )
 /// let user = try await admin.createUser(
 ///   AdminUserAttributes(email: "user@example.com", confirmsEmail: true)
@@ -30,7 +30,7 @@ public import Logging
 /// ## Topics
 ///
 /// ### Creating an admin client
-/// - ``init(url:serviceRoleKey:http:logger:)``
+/// - ``init(url:secretKey:http:logger:)``
 ///
 /// ### User management
 /// - ``user(id:)``
@@ -55,20 +55,22 @@ public struct AuthAdminClient: Sendable {
   ///
   /// - Parameters:
   ///   - url: The base URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
-  ///   - serviceRoleKey: The project's secret key. The client sends it as the `apikey` header
-  ///     and as the bearer token.
+  ///   - secretKey: The project's secret key. The client sends it as the `apikey` header. It
+  ///     also sends a legacy JWT key as the bearer token, but never an `sb_secret_` key.
   ///   - http: The transport and middleware chain every request goes through.
   ///   - logger: The logger to use. Defaults to a build-config-aware logger.
   public init(
     url: URL,
-    serviceRoleKey: String,
+    secretKey: String,
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) {
-    let headers = AuthClient.Configuration.defaultHeaders.merging([
-      "apikey": serviceRoleKey,
-      "Authorization": "Bearer \(serviceRoleKey)",
-    ]) { _, new in new }
+    var headers = AuthClient.Configuration.defaultHeaders.merging(["apikey": secretKey]) {
+      _, new in new
+    }
+    if !APIKeyFormat.isNew(secretKey) {
+      headers["Authorization"] = "Bearer \(secretKey)"
+    }
 
     self.authAPI = AuthAPI(
       url: url,

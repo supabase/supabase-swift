@@ -15,9 +15,9 @@ import Testing
 @Suite
 struct AuthAdminTests {
   @Test
-  func sendsTheServiceRoleKeyOnEveryRequest() async throws {
+  func sendsTheSecretKeyOnEveryRequest() async throws {
     let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) }
-    let admin = AuthAdminClient.testing(serviceRoleKey: "secret.key", http: transport)
+    let admin = AuthAdminClient.testing(secretKey: "secret.key", http: transport)
 
     let id = UUID()
     try await admin.deleteUser(id: id)
@@ -29,6 +29,18 @@ struct AuthAdminTests {
     #expect(request.headerFields[HTTPField.Name("apikey")!] == "secret.key")
     #expect(
       request.headerFields[HTTPField.Name("X-Client-Info")!]?.hasPrefix("auth-swift/") == true)
+  }
+
+  @Test
+  func neverSendsANewFormatSecretKeyAsBearer() async throws {
+    let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) }
+    let admin = AuthAdminClient.testing(secretKey: "sb_secret_abc", http: transport)
+
+    try await admin.deleteUser(id: UUID())
+
+    let request = try #require(transport.requests.first?.head)
+    #expect(request.headerFields[.authorization] == nil)
+    #expect(request.headerFields[HTTPField.Name("apikey")!] == "sb_secret_abc")
   }
 
   @Test(arguments: [

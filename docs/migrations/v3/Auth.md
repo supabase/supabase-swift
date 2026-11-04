@@ -271,7 +271,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAVerifyResponse` | `Session` |
 | `typealias FactorType = String`, `AuthenticatorAssuranceLevels`, `AMREntry.Method` | `RawRepresentable` structs `FactorType`, `AuthenticatorAssuranceLevel`, `AuthenticationMethod` |
 | `AMREntry.timestamp: TimeInterval` | `Date` |
-| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:serviceRoleKey:)`; see below |
+| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:secretKey:)`; see below |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
@@ -353,7 +353,7 @@ try await supabase.auth.admin.deleteUser(id: userID)
 // v3
 let admin = AuthAdminClient(
   url: supabaseURL.appendingPathComponent("auth/v1"),
-  serviceRoleKey: secretKey
+  secretKey: secretKey
 )
 try await admin.deleteUser(id: userID)
 ```

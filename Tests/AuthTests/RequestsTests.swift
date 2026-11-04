@@ -1148,7 +1148,7 @@ struct RequestsTests {
   ) -> AuthAdminClient {
     AuthAdminClient(
       url: clientURL,
-      serviceRoleKey: "dummy.secret.key",
+      secretKey: "dummy.secret.key",
       http: .init(
         transport: snapshotTransport(
           record: false, fetch: nil, file: file, testName: testName, line: line))
