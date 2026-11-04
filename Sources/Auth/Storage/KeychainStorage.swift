@@ -153,11 +153,12 @@
     ///
     /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
     ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error, if deleting
-    ///   from the current location fails. Legacy-location delete failures are ignored, with every
-    ///   location attempted regardless.
+    ///   from the current or a legacy location fails. Every location is attempted regardless, and
+    ///   the current location's error wins.
     @concurrent
     public func remove(key: String) async throws {
       var primaryError: (any Error)?
+      var legacyError: (any Error)?
       do {
         try mappingKeychainErrors { try keychain.deleteItem(forKey: key) }
       } catch {
@@ -165,11 +166,15 @@
       }
 
       for legacy in legacyKeychains {
-        try? legacy.deleteItem(forKey: key)
+        do {
+          try mappingKeychainErrors { try legacy.deleteItem(forKey: key) }
+        } catch {
+          legacyError = legacyError ?? error
+        }
       }
 
-      if let primaryError {
-        throw primaryError
+      if let error = primaryError ?? legacyError {
+        throw error
       }
     }
   }

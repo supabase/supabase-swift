@@ -141,6 +141,21 @@
     }
 
     @Test
+    func removeThrowsWhenALegacyDeleteFailsAfterAttemptingEveryLocation() async {
+      struct DeleteFailure: Error {}
+      let primary = FakeKeychain(items: ["key": Data()])
+      let failing = FakeKeychain(items: ["key": Data()], deleteError: DeleteFailure())
+      let last = FakeKeychain(items: ["key": Data()])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [failing, last])
+
+      await #expect(throws: DeleteFailure.self) {
+        try await storage.remove(key: "key")
+      }
+      #expect(primary.items.value["key"] == nil)
+      #expect(last.items.value["key"] == nil)
+    }
+
+    @Test
     func loadReturnsLegacyValueAndKeepsItWhenPrimaryWriteFails() async throws {
       struct WriteFailure: Error {}
       let legacyValue = Data("session".utf8)
