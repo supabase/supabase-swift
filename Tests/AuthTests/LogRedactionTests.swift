@@ -123,6 +123,44 @@ struct RedactingLogHandlerTests {
   }
 
   @Test
+  func redactsMetadataThatIsOnlyConvertibleToAString() {
+    struct Leaky: CustomStringConvertible, Sendable {
+      var description: String { "refresh_token=r-secret-1" }
+    }
+    let logger = recorder.makeLogger().redactingSecrets()
+
+    logger.info("converted", metadata: ["value": .stringConvertible(Leaky())])
+
+    #expect(recorder.entries == ["converted value=refresh_token=<redacted>"])
+  }
+
+  @Test
+  func redactsAndReadsBackMetadataSetOnTheHandler() {
+    var handler = RedactingLogHandler(wrapping: recorder.makeLogger())
+
+    handler.metadata = ["access_token": "a-secret-1", "client_id": "1"]
+    handler[metadataKey: "url"] = "https://x.co/verify?token=t-secret-1"
+
+    #expect(handler.metadata["access_token"] == "<redacted>")
+    #expect(handler[metadataKey: "client_id"] == "1")
+    #expect(handler[metadataKey: "url"] == "https://x.co/verify")
+    handler[metadataKey: "url"] = nil
+    #expect(handler[metadataKey: "url"] == nil)
+  }
+
+  @Test
+  func changingTheLevelOfTheWrapperChangesTheBaseLevel() {
+    var logger = recorder.makeLogger().redactingSecrets()
+
+    logger.logLevel = .error
+    logger.warning("dropped")
+    logger.error("kept")
+
+    #expect(logger.logLevel == .error)
+    #expect(recorder.entries == ["kept"])
+  }
+
+  @Test
   func keepsTheBaseLoggerLevel() {
     var base = recorder.makeLogger()
     base.logLevel = .error
@@ -132,5 +170,20 @@ struct RedactingLogHandlerTests {
     logger.error("kept")
 
     #expect(recorder.entries == ["kept"])
+  }
+}
+
+@Suite
+struct LogRecorderTests {
+  @Test
+  func recordsHandlerMetadataBesideTheMessage() {
+    let recorder = LogRecorder()
+    var logger = recorder.makeLogger()
+
+    logger[metadataKey: "system"] = "auth"
+    logger.info("hello", metadata: ["id": "1"])
+
+    #expect(logger[metadataKey: "system"] == "auth")
+    #expect(recorder.entries == ["hello id=1 system=auth"])
   }
 }
