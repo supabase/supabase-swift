@@ -3,6 +3,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 import TestHelpers
 import Testing
 
@@ -18,13 +19,20 @@ struct Race: Sendable {
   let transport = RecordingTransport()
   let localStorage = InMemoryLocalStorage()
   let storageKey = uniqueStorageKey()
+  let logger: Logging.Logger
   private let start: SignalingTestClock.Instant
   private let skew: TimeInterval
 
-  /// - Parameter skew: How far the device clock runs ahead of the server's.
-  init(skew: TimeInterval = 0) {
+  /// - Parameters:
+  ///   - skew: How far the device clock runs ahead of the server's.
+  ///   - logger: The logger the clients log to. Defaults to the SDK's silent-in-release default.
+  init(
+    skew: TimeInterval = 0,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
+  ) {
     start = clock.now
     self.skew = skew
+    self.logger = logger
   }
 
   var now: @Sendable () -> Date {
@@ -41,11 +49,15 @@ struct Race: Sendable {
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
     storage: (any AuthLocalStorage)? = nil,
     redirectToURL: URL? = nil,
+    clock: (any Clock<Duration>)? = nil,
+    lifecycleEvents: (@Sendable () async -> AsyncStream<AppLifecycleEvent>)? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
       autoRefresh: autoRefresh, storage: storage ?? localStorage,
-      redirectToURL: redirectToURL, beforeRefreshingHeldSession: beforeRefreshingHeldSession)
+      redirectToURL: redirectToURL, clock: clock ?? self.clock,
+      lifecycleEvents: lifecycleEvents ?? { AsyncStream { $0.finish() } },
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
@@ -58,16 +70,19 @@ struct Race: Sendable {
     autoRefresh: AuthClient.AutoRefreshPolicy,
     storage: any AuthLocalStorage,
     redirectToURL: URL? = nil,
+    clock: any Clock<Duration>,
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent>,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     var platform = AuthPlatform.live
-    platform.lifecycleEvents = { AsyncStream { $0.finish() } }
+    platform.lifecycleEvents = lifecycleEvents
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: storage,
+        logger: logger,
         http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,

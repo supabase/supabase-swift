@@ -79,7 +79,7 @@ public struct AuthAdminClient: Sendable {
       encoder: AuthClient.Configuration.jsonEncoder,
       decoder: AuthClient.Configuration.jsonDecoder
     )
-    var logger = logger
+    var logger = logger.redactingSecrets()
     logger[metadataKey: "system"] = "auth"
     self.api = APIClient(http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger))
   }
