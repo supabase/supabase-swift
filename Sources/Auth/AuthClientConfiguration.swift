@@ -104,6 +104,18 @@ extension AuthClient {
     /// yourself, as this package does not export it.
     public let clock: any Clock<Duration>
 
+    /// How long the client waits, when it is created with an expired stored session, for one
+    /// refresh of that session before it delivers ``AuthEvent/initialSession``.
+    ///
+    /// Defaults to 5 seconds. A refresh that finishes in time makes the initial session the
+    /// refreshed one. A refresh that fails, or does not finish in time, makes it the expired
+    /// session. A refresh that is still running then commits as ``AuthEvent/tokenRefreshed``. The
+    /// wait uses ``clock``.
+    ///
+    /// The client refreshes at start-up only under ``AuthClient/AutoRefreshPolicy/automatic``. A
+    /// value of zero or less turns it off.
+    public let initialRefreshTimeout: Duration
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
@@ -118,6 +130,8 @@ extension AuthClient {
     ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
     ///     foreground.
     ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+    ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
+    ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
@@ -128,7 +142,8 @@ extension AuthClient {
       http: HTTPClientConfiguration = .init(),
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      clock: any Clock<Duration> = ContinuousClock(),
+      initialRefreshTimeout: Duration = .seconds(5)
     ) {
       self.init(
         url: url,
@@ -142,7 +157,8 @@ extension AuthClient {
         http: http,
         autoRefresh: autoRefresh,
         observesAppLifecycle: observesAppLifecycle,
-        clock: clock
+        clock: clock,
+        initialRefreshTimeout: initialRefreshTimeout
       )
     }
 
@@ -162,7 +178,8 @@ extension AuthClient {
       http: HTTPClientConfiguration = .init(),
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      clock: any Clock<Duration> = ContinuousClock(),
+      initialRefreshTimeout: Duration = .seconds(5)
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
@@ -180,6 +197,7 @@ extension AuthClient {
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
       self.clock = clock
+      self.initialRefreshTimeout = initialRefreshTimeout
     }
   }
 
@@ -197,6 +215,8 @@ extension AuthClient {
   ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
   ///     foreground.
   ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+  ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
+  ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
   public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
@@ -207,7 +227,8 @@ extension AuthClient {
     http: HTTPClientConfiguration = .init(),
     autoRefresh: AutoRefreshPolicy = .automatic,
     observesAppLifecycle: Bool = true,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    initialRefreshTimeout: Duration = .seconds(5)
   ) {
     self.init(
       configuration: Configuration(
@@ -220,7 +241,8 @@ extension AuthClient {
         http: http,
         autoRefresh: autoRefresh,
         observesAppLifecycle: observesAppLifecycle,
-        clock: clock
+        clock: clock,
+        initialRefreshTimeout: initialRefreshTimeout
       )
     )
   }

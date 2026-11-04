@@ -11,13 +11,21 @@ every module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
-- **Initial session can be expired.** `.initialSession` now fires at once with the stored session.
-  With `autoRefresh: .automatic`, auto refresh then refreshes an expired session as soon as it
-  runs. On macOS, Linux, Android, and Windows, it runs when the client is created. On iOS, iPadOS,
-  tvOS, visionOS, Mac Catalyst, and watchOS, it runs only while the app is in the foreground. After
-  a launch into the background, the session stays expired until the app comes to the foreground or
-  a call to `session()` refreshes it. Check `session.isExpired` in handlers that switch on
-  `.initialSession`.
+- **Initial session can be expired.** With `autoRefresh: .automatic`, the client tries one
+  refresh of an expired stored session before it delivers `.initialSession`. It waits at most
+  `AuthClient.Configuration.initialRefreshTimeout`, 5 seconds by default. A value of zero or less
+  turns the refresh off. On a launch into the background it runs too, as it does not wait for the
+  app to come to the foreground.
+  - The refresh succeeds: `.initialSession` carries the new session.
+  - The server rejects the refresh token: `.initialSession` carries
+    `.signedOut(.sessionExpired)` or `.signedOut(.sessionRevoked)`.
+  - The refresh fails for another reason, such as no network, or does not finish in time:
+    `.initialSession` carries the expired session. A refresh that is still running then commits
+    as `.tokenRefreshed`, or, when the server rejects the refresh token, ends the session with
+    `.signedOut`.
+
+  With `.manual` or `.disabled`, `.initialSession` fires at once with the stored session. Check
+  `session.isExpired` in handlers that switch on `.initialSession`.
 - **`KeychainLocalStorage` returns `nil` for a missing key.** `retrieve(key:)` no longer throws
   when no item exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that
   treated an error as "no session". A custom `AuthLocalStorage` must follow the same contract.

@@ -55,15 +55,21 @@ extension Dependencies {
     let storageKey = configuration.storageKey ?? defaultStorageKey
     let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
     let storage = AuthLocalStorageAdapter(localStorage: localStorage)
+    let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
+      try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
+    }
+    let startupRefresh: SessionStore.StartupRefresh? =
+      configuration.autoRefresh == .automatic && configuration.initialRefreshTimeout > .zero
+      ? SessionStore.StartupRefresh(
+        request: refresh, clock: configuration.clock, deadline: configuration.initialRefreshTimeout)
+      : nil
     let sessionStore = SessionStore(
       storage: storage,
       key: storageKey,
       now: date,
+      startupRefresh: startupRefresh,
       initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
     )
-    let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
-      try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
-    }
     let sessionManager = SessionManager.live(
       policy: configuration.autoRefresh,
       sessionStore: sessionStore,

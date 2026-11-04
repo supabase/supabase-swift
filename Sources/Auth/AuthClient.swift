@@ -286,9 +286,15 @@ public final class AuthClient: Sendable {
   /// The stream is registered when this method returns, so it loses no change, even one that
   /// happens before you start iterating. The first element is always
   /// ``AuthEvent/initialSession`` with the current ``status``, delivered once the client has read
-  /// storage. Every later element is one change, in the order the client applied it. The session
-  /// in the initial element may have expired since the last launch, so check
-  /// ``Session/isExpired``.
+  /// storage. When the stored session is expired and ``Configuration/autoRefresh`` is
+  /// ``AutoRefreshPolicy/automatic``, the client first tries one refresh, for at most
+  /// ``Configuration/initialRefreshTimeout``. The initial element then carries the refreshed
+  /// session, or ``AuthStatus/signedOut(_:)`` when the server rejected the refresh token. Every
+  /// later element is one change, in the order the client applied it. When the refresh fails for
+  /// another reason, such as no network, the session in the initial element is still expired, so
+  /// check ``Session/isExpired``. A refresh that outlasts the timeout still commits later, as
+  /// ``AuthEvent/tokenRefreshed``, or as ``AuthEvent/signedOut`` when the server rejects the
+  /// refresh token.
   ///
   /// Each call returns a new stream for one consumer. The stream never throws: a failure that
   /// ends the session arrives as ``AuthEvent/signedOut`` with a ``AuthChange/signOutReason``. It
@@ -312,7 +318,8 @@ public final class AuthClient: Sendable {
   }
 
   /// Returns once the client has read storage, so ``status`` is no longer
-  /// ``AuthStatus/loading``.
+  /// ``AuthStatus/loading``. When it refreshes an expired stored session first, this waits for
+  /// that refresh too, for at most ``Configuration/initialRefreshTimeout``.
   ///
   /// While storage cannot be read, for example after a launch into the background before the
   /// first unlock, this waits until it can. It returns early when the calling task is cancelled.

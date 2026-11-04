@@ -31,7 +31,11 @@ struct AuthClientIntegrationTests {
     AuthAdminClient(url: authURL, secretKey: DotEnv.supabaseSecretKey)
   }
 
-  static func makeClient(serviceRole: Bool = false) -> AuthClient {
+  static func makeClient(
+    serviceRole: Bool = false,
+    localStorage: any AuthLocalStorage = InMemoryLocalStorage(),
+    storageKey: String? = nil
+  ) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
@@ -40,9 +44,59 @@ struct AuthClientIntegrationTests {
           "apikey": key,
           "Authorization": "Bearer \(key)",
         ],
-        localStorage: InMemoryLocalStorage()
+        storageKey: storageKey,
+        localStorage: localStorage
       )
     )
+  }
+
+  @Test
+  func anExpiredStoredSessionIsRefreshedBeforeTheInitialSession() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    let signedIn = try await authClient.session()
+    let (storage, key) = try storing(signedIn, expiredBy: 60)
+
+    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    var changes = client.events().makeAsyncIterator()
+
+    let initial = try #require(await changes.next())
+    #expect(initial.event == .initialSession)
+    let refreshed = try #require(initial.session)
+    #expect(refreshed.refreshToken != signedIn.refreshToken)
+    #expect(refreshed.user.id == signedIn.user.id)
+    #expect(!refreshed.isExpired)
+  }
+
+  @Test
+  func aRejectedRefreshTokenSignsOutInTheInitialSession() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    var rejected = try await authClient.session()
+    // A well-formed token the server does not know. A malformed one is a `validation_failed`
+    // answer, which is not a rejection of the session.
+    rejected.refreshToken = "aaaaaaaaaaaa"
+    let (storage, key) = try storing(rejected, expiredBy: 60)
+
+    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    var changes = client.events().makeAsyncIterator()
+
+    let initial = try #require(await changes.next())
+    #expect(initial.event == .initialSession)
+    #expect(initial.status == .signedOut(.sessionExpired))
+    #expect(try storage.retrieve(key: key) == nil)
+  }
+
+  /// A storage that holds `session` as one that a client received `seconds` after it expired.
+  private func storing(
+    _ session: Session, expiredBy seconds: TimeInterval
+  ) throws -> (storage: InMemoryLocalStorage, key: String) {
+    let storage = InMemoryLocalStorage()
+    let key = "sb-startup-refresh-\(UUID().uuidString)-auth-token"
+    let receivedAt = Date().addingTimeInterval(-session.expiresIn - seconds)
+    try storage.store(
+      key: key,
+      value: PersistedSessionCodec.encode(ReceivedSession(session: session, receivedAt: receivedAt))
+    )
+    return (storage, key)
   }
 
   @Test
