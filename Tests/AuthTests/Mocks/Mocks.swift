@@ -59,15 +59,18 @@ extension AuthClient {
     try await dependencies.seedSession(session)
   }
 
-  /// A client whose network `http` answers, with auto refresh off unless `autoRefresh` says so.
+  /// A client whose network `http` answers and whose session lives in `storage`, with auto
+  /// refresh off unless `autoRefresh` says so.
   static func testing(
-    http: RecordingTransport, autoRefresh: AutoRefreshPolicy = .manual
+    http: RecordingTransport,
+    storage: any AuthStorage = InMemoryTestStorage(),
+    autoRefresh: AutoRefreshPolicy = .manual
   ) -> AuthClient {
     AuthClient(
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        storage: InMemoryTestStorage(),
+        storage: storage,
         http: .init(transport: http),
         autoRefresh: autoRefresh
       ),

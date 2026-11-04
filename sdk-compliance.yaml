@@ -666,6 +666,12 @@ features:
       - AuthClient.status
       - AuthClient.initialization
     supporting_symbols:
+      - AuthModel
+      - AuthModel.init
+      - AuthModel.status
+      - AuthModel.session
+      - AuthModel.user
+      - AuthModel.isLoading
       - AuthEvent
       - AuthEvent.init
       - AuthEvent.rawValue
