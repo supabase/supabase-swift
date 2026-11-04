@@ -21,7 +21,8 @@ Changes that still compile but behave differently. Check each one by hand.
     `.signedOut(.sessionExpired)` or `.signedOut(.sessionRevoked)`.
   - The refresh fails for another reason, such as no network, or does not finish in time:
     `.initialSession` carries the expired session. A refresh that is still running then commits
-    as `.tokenRefreshed`.
+    as `.tokenRefreshed`, or, when the server rejects the refresh token, ends the session with
+    `.signedOut`.
 
   With `.manual` or `.disabled`, `.initialSession` fires at once with the stored session. Check
   `session.isExpired` in handlers that switch on `.initialSession`.

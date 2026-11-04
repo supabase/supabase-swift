@@ -285,7 +285,9 @@ public final class AuthClient: Sendable {
   /// session, or ``AuthStatus/signedOut(_:)`` when the server rejected the refresh token. Every
   /// later element is one change, in the order the client applied it. When the refresh fails for
   /// another reason, such as no network, the session in the initial element is still expired, so
-  /// check ``Session/isExpired``.
+  /// check ``Session/isExpired``. A refresh that outlasts the timeout still commits later, as
+  /// ``AuthEvent/tokenRefreshed``, or as ``AuthEvent/signedOut`` when the server rejects the
+  /// refresh token.
   ///
   /// Each call returns a new stream for one consumer. The stream never throws: a failure that
   /// ends the session arrives as ``AuthEvent/signedOut`` with a ``AuthChange/signOutReason``. It

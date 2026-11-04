@@ -258,6 +258,23 @@ struct StartupRefreshTests {
     #expect(retriedAfterBackoff)
   }
 
+  @Test
+  func aRefreshThatCannotBeSavedIsRetriedAfterABackoffNotAtOnce() async throws {
+    http.respond { _, _ in Self.refreshResponse }
+    try storeExpiredSession()
+    let client = makeClient(storage: WriteFailingStorage(wrapping: localStorage))
+    var events = client.events().makeAsyncIterator()
+
+    let first = await events.next()
+    expectNoDifference(first, AuthChange(event: .initialSession, status: .signedIn(Self.expired)))
+    let startupRequests = http.requests.count
+
+    let retriedAtOnce = await waitUntil(timeout: 0.3) { [http] in
+      http.requests.count > startupRequests
+    }
+    #expect(!retriedAtOnce)
+  }
+
   // MARK: - Helpers
 
   private static let expired = session(
@@ -293,13 +310,14 @@ struct StartupRefreshTests {
 
   private func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
-    initialRefreshTimeout: Duration = .seconds(5)
+    initialRefreshTimeout: Duration = .seconds(5),
+    storage: (any AuthLocalStorage)? = nil
   ) -> AuthClient {
     AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
         storageKey: key,
-        localStorage: localStorage,
+        localStorage: storage ?? localStorage,
         http: HTTPClientConfiguration(transport: http),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
@@ -310,5 +328,26 @@ struct StartupRefreshTests {
       pkce: .live,
       platform: .live
     )
+  }
+}
+
+/// Reads from the storage it wraps and throws from every write, as a full disk does.
+private struct WriteFailingStorage: AuthLocalStorage {
+  let wrapped: InMemoryLocalStorage
+
+  init(wrapping wrapped: InMemoryLocalStorage) {
+    self.wrapped = wrapped
+  }
+
+  func store(key: String, value: Data) throws {
+    throw AuthError(kind: .storageUnavailable, message: "disk full")
+  }
+
+  func retrieve(key: String) throws -> Data? {
+    try wrapped.retrieve(key: key)
+  }
+
+  func remove(key: String) throws {
+    try wrapped.remove(key: key)
   }
 }

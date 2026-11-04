@@ -429,9 +429,16 @@ actor SessionStore {
         throw error
       }
 
-      try await serialized {
-        try await self.applyRefreshed(
-          session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+      do {
+        try await serialized {
+          try await self.applyRefreshed(
+            session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+        }
+      } catch {
+        if !(error is CancellationError) {
+          lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
+        }
+        throw error
       }
       return session
     }
