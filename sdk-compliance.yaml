@@ -680,6 +680,7 @@ features:
       - AuthChange.status
       - AuthChange.session
       - AuthChange.description
+      - Session.description
       - AuthStatus
       - AuthStatus.loading
       - AuthStatus.signedOut
