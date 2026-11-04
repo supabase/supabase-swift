@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import Helpers
 
 /// The one owner of the session.
 ///
@@ -51,12 +52,15 @@ actor SessionStore {
 
   private enum State {
     case loading
+    /// An expired stored session that one refresh is trying to renew. The status is still
+    /// ``AuthStatus/loading``, and no subscriber has heard of the session.
+    case settling(ReceivedSession)
     case signedOut(SignOutReason)
     case signedIn(ReceivedSession)
 
     var status: AuthStatus {
       switch self {
-      case .loading: .loading
+      case .loading, .settling: .loading
       case .signedOut(let reason): .signedOut(reason)
       case .signedIn(let received): .signedIn(received.session)
       }
@@ -96,6 +100,14 @@ actor SessionStore {
 
   private static let refreshFailureCooldown: TimeInterval = 60
 
+  /// The one refresh that runs while an expired stored session is read, before the store leaves
+  /// ``AuthStatus/loading``.
+  struct StartupRefresh: Sendable {
+    let request: @Sendable (_ refreshToken: String) async throws -> Session
+    let clock: any Clock<Duration>
+    let deadline: Duration
+  }
+
   /// Why a rejected refresh of the held, expired session signs out, or `nil` to keep it.
   typealias RejectionReason = @Sendable (AuthError) -> SignOutReason?
 
@@ -116,8 +128,10 @@ actor SessionStore {
   private let storage: any AuthStorage
   private let key: String
   private let now: @Sendable () -> Date
+  private let startupRefresh: StartupRefresh?
   private let published: LockIsolated<Published>
   private var lastOperation: Task<Void, any Error>?
+  private var settling: Task<Void, any Error>?
   private var refreshFlights: [String: RefreshFlight] = [:]
   /// The refresh tokens that refreshes of the held session replaced since it was signed in.
   private var replacedRefreshTokens: Set<String> = []
@@ -128,10 +142,16 @@ actor SessionStore {
     didSet { oldValue?.cancel() }
   }
 
-  init(storage: any AuthStorage, key: String, now: @escaping @Sendable () -> Date = { Date() }) {
+  init(
+    storage: any AuthStorage,
+    key: String,
+    now: @escaping @Sendable () -> Date = { Date() },
+    startupRefresh: StartupRefresh? = nil
+  ) {
     self.storage = storage
     self.key = key
     self.now = now
+    self.startupRefresh = startupRefresh
     published = LockIsolated(Published())
   }
 
@@ -141,14 +161,20 @@ actor SessionStore {
     storage: any AuthStorage,
     key: String,
     now: @escaping @Sendable () -> Date = { Date() },
+    startupRefresh: StartupRefresh? = nil,
     initialLoad: () throws -> ReceivedSession?
   ) {
     self.storage = storage
     self.key = key
     self.now = now
+    self.startupRefresh = startupRefresh
     let state: State
     if case .success(let loaded) = Result(catching: initialLoad) {
-      state = loaded.map(State.signedIn) ?? .signedOut(.sessionMissing)
+      if let loaded, startupRefresh != nil, loaded.isExpired(at: now(), leeway: .zero) {
+        state = .loading
+      } else {
+        state = loaded.map(State.signedIn) ?? .signedOut(.sessionMissing)
+      }
     } else {
       state = .loading
     }
@@ -177,9 +203,17 @@ actor SessionStore {
     return held.session
   }
 
+  /// The session the store holds, including an expired stored one that a startup refresh is
+  /// renewing, which ``currentSession`` does not show while the status is ``AuthStatus/loading``.
   private nonisolated var heldSession: ReceivedSession? {
-    guard case .signedIn(let received) = published.value.state else { return nil }
-    return received
+    switch published.value.state {
+    case .signedIn(let received), .settling(let received): received
+    case .loading, .signedOut: nil
+    }
+  }
+
+  private nonisolated var held: Session? {
+    heldSession?.session
   }
 
   /// The number of callers that wait for the running refresh of `refreshToken`, so tests can tell
@@ -230,9 +264,16 @@ actor SessionStore {
   /// Returns at once when storage was already read. A storage error keeps the status at
   /// ``AuthStatus/loading`` and propagates, so a later call retries. Data that does not decode
   /// is removed and the status becomes `.signedOut(.sessionMissing)`: retrying cannot repair it.
+  ///
+  /// An expired session that a ``StartupRefresh`` is set for stays ``AuthStatus/loading`` until
+  /// one refresh of it ends or its deadline passes, and this waits for that. A refresh that is
+  /// still running at the deadline keeps running, and commits as ``AuthEvent/tokenRefreshed``.
   func load() async throws {
     guard currentStatus == .loading else { return }
     try await serialized { try await self.loadIfNeeded() }
+    if let settling {
+      try await cancellableValue(of: settling)
+    }
   }
 
   /// Applies `transition`: writes storage, updates memory, bumps ``generation``, and yields the
@@ -360,9 +401,9 @@ actor SessionStore {
     guard refreshWindow.admit(at: now()) else { throw AuthError.excessiveRefresh }
 
     let id = UUID()
-    let heldRefreshToken = currentSession?.refreshToken
+    let heldRefreshToken = held?.refreshToken
     let refreshesHeldSession = heldRefreshToken == refreshToken
-    let heldUserAtStart = refreshesHeldSession ? currentSession?.user : nil
+    let heldUserAtStart = refreshesHeldSession ? held?.user : nil
     let task = Task {
       defer {
         if refreshFlights[refreshToken]?.id == id {
@@ -388,9 +429,16 @@ actor SessionStore {
         throw error
       }
 
-      try await serialized {
-        try await self.applyRefreshed(
-          session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+      do {
+        try await serialized {
+          try await self.applyRefreshed(
+            session, replacing: heldRefreshToken, heldUserAtStart: heldUserAtStart)
+        }
+      } catch {
+        if !(error is CancellationError) {
+          lastRefreshFailure = RefreshFailure(refreshToken: refreshToken, date: now(), error: error)
+        }
+        throw error
       }
       return session
     }
@@ -405,7 +453,7 @@ actor SessionStore {
     _ session: Session, replacing heldRefreshToken: String?, heldUserAtStart: User?
   ) async throws {
     var session = session
-    if let heldUserAtStart, let held = currentSession, held.refreshToken == heldRefreshToken,
+    if let heldUserAtStart, let held, held.refreshToken == heldRefreshToken,
       held.user != heldUserAtStart
     {
       session.user = held.user
@@ -445,13 +493,13 @@ actor SessionStore {
   private func invalidateUnlessStorageHoldsANewerSession(
     _ reason: SignOutReason, refreshToken: String
   ) async throws {
-    guard let held = currentSession, held.refreshToken == refreshToken else { return }
+    guard let held, held.refreshToken == refreshToken else { return }
     if let data = try await storage.load(key: key),
       let stored = try? PersistedSessionCodec.decode(data).session,
       stored.session.refreshToken != refreshToken
     {
       let sameUser = stored.session.user.id == held.user.id
-      update(to: .signedIn(stored), event: sameUser ? .tokenRefreshed : .signedIn)
+      update(to: .signedIn(stored), event: startupEvent(sameUser ? .tokenRefreshed : .signedIn))
       if sameUser {
         replacedRefreshTokens.insert(refreshToken)
       } else {
@@ -477,14 +525,22 @@ actor SessionStore {
   }
 
   private func armRefresher() {
-    guard let received = heldSession, let driver = autoRefreshDriver else {
+    guard case .signedIn(let received) = published.value.state, let driver = autoRefreshDriver
+    else {
       autoRefreshTask = nil
       return
     }
     let armedGeneration = generation
     let now = now
+    // A refresh of this token that failed a moment ago, as the startup one can, gets a backoff
+    // before the next, not an immediate second request.
+    let recentFailure = lastRefreshFailure.flatMap {
+      $0.refreshToken == received.session.refreshToken
+        && (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince($0.date))
+        ? $0.error : nil
+    }
     autoRefreshTask = Task { [weak self] in
-      await Refresher.run(for: received, driver: driver, now: now) {
+      await Refresher.run(for: received, driver: driver, now: now, afterFailure: recentFailure) {
         guard let self else { throw CancellationError() }
         try await self.refreshHeldSessionIgnoringCachedFailure(
           armedAt: armedGeneration, using: driver.request)
@@ -496,13 +552,20 @@ actor SessionStore {
     armedAt armedGeneration: UInt64,
     using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
   ) async throws {
-    guard generation == armedGeneration, let refreshToken = currentSession?.refreshToken else {
+    guard generation == armedGeneration, let refreshToken = held?.refreshToken else {
       throw CancellationError()
     }
-    let flight =
-      try refreshFlights[refreshToken]?.task
-      ?? startRefresh(refreshToken, using: request, signOutReason: Self.rejectedSession)
+    let flight = try joinOrStartRefresh(of: refreshToken, using: request)
     _ = try await cancellableValue(of: flight)
+  }
+
+  /// The running refresh of `refreshToken`, or a new one that signs out on a rejection.
+  private func joinOrStartRefresh(
+    of refreshToken: String,
+    using request: @escaping @Sendable (_ refreshToken: String) async throws -> Session
+  ) throws -> Task<Session, any Error> {
+    try refreshFlights[refreshToken]?.task
+      ?? startRefresh(refreshToken, using: request, signOutReason: Self.rejectedSession)
   }
 
   // Each operation runs in its own task, so cancelling the caller never stops a write halfway.
@@ -517,7 +580,7 @@ actor SessionStore {
   }
 
   private func loadIfNeeded() async throws {
-    guard currentStatus == .loading else { return }
+    guard case .loading = published.value.state else { return }
     let next: State
     do {
       if let received = try await PersistedSessionLoader.load(from: storage, key: key) {
@@ -529,7 +592,41 @@ actor SessionStore {
       try await storage.remove(key: key)
       next = .signedOut(.sessionMissing)
     }
-    update(to: next, event: .initialSession)
+    if case .signedIn(let received) = next, let startupRefresh,
+      received.isExpired(at: now(), leeway: .zero)
+    {
+      published.withValue { $0.state = .settling(received) }
+      // The refresh runs outside the serial queue: its commit is an operation of that queue.
+      settling = Task { await self.settle(received, using: startupRefresh) }
+    } else {
+      update(to: next, event: .initialSession)
+    }
+  }
+
+  /// Waits for the refresh of `received`, joining it when it runs, for at most the deadline, then
+  /// leaves ``AuthStatus/loading`` unless that refresh already did. A deadline does not cancel
+  /// the refresh.
+  private func settle(_ received: ReceivedSession, using startup: StartupRefresh) async {
+    if let flight = try? joinOrStartRefresh(
+      of: received.session.refreshToken, using: startup.request)
+    {
+      _ = try? await withTimeout(startup.deadline, clock: startup.clock) {
+        try await cancellableValue(of: flight)
+      }
+    }
+    try? await serialized { await self.finishSettling() }
+    settling = nil
+  }
+
+  /// Delivers the stored session as it is, when no refresh or sign-out replaced it.
+  private func finishSettling() {
+    guard case .settling(let received) = published.value.state else { return }
+    update(to: .signedIn(received), event: .initialSession)
+  }
+
+  /// A change that ends a startup refresh is the initial session, not a change that follows it.
+  private func startupEvent(_ event: AuthEvent) -> AuthEvent {
+    if case .settling = published.value.state { .initialSession } else { event }
   }
 
   private func apply(_ transition: Transition) async throws {
@@ -541,11 +638,11 @@ actor SessionStore {
       event = signInEvent
 
     case .refreshed(let session, let replacedRefreshToken):
-      guard currentSession?.refreshToken == replacedRefreshToken else {
+      guard held?.refreshToken == replacedRefreshToken else {
         throw AuthError.refreshDiscarded
       }
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
-      event = .tokenRefreshed
+      event = startupEvent(.tokenRefreshed)
 
     case .userUpdated(let user, let userEvent):
       guard case .signedIn(var current) = published.value.state else {
@@ -560,13 +657,16 @@ actor SessionStore {
       event = signOutEvent
 
     case .invalidated(let reason, let refreshToken):
-      guard currentSession?.refreshToken == refreshToken else { return }
+      guard held?.refreshToken == refreshToken else { return }
       next = .signedOut(reason)
-      event = .signedOut
+      event = startupEvent(.signedOut)
 
     case .revoked(let reason, let refreshToken):
-      let held = currentSession?.refreshToken
-      guard held == refreshToken || refreshToken.map(replacedRefreshTokens.contains) == true else {
+      let heldRefreshToken = held?.refreshToken
+      guard
+        heldRefreshToken == refreshToken
+          || refreshToken.map(replacedRefreshTokens.contains) == true
+      else {
         return
       }
       next = .signedOut(reason)
@@ -580,7 +680,7 @@ actor SessionStore {
       event = .userUpdated
 
     case .userChangeVerified(let session):
-      event = currentSession?.user.id == session.user.id ? .userUpdated : .signedIn
+      event = held?.user.id == session.user.id ? .userUpdated : .signedIn
       next = .signedIn(ReceivedSession(session: session, receivedAt: now()))
     }
 

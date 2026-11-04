@@ -639,6 +639,7 @@ features:
       - AuthClient.stopAutoRefresh
       - AuthClient.Configuration.autoRefresh
       - AuthClient.Configuration.observesAppLifecycle
+      - AuthClient.Configuration.initialRefreshTimeout
       - AuthClient.AutoRefreshPolicy
       - AuthClient.AutoRefreshPolicy.automatic
       - AuthClient.AutoRefreshPolicy.manual

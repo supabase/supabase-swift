@@ -17,6 +17,7 @@ enum Refresher {
     for received: ReceivedSession,
     driver: Driver,
     now: @Sendable () -> Date,
+    afterFailure failure: (any Error)? = nil,
     refresh: () async throws -> Void
   ) async {
     if received.hasClockSkew {
@@ -24,8 +25,10 @@ enum Refresher {
         "The device clock and the server's disagree; refreshing on the local receipt time.")
     }
 
-    var delay = delayBeforeRefresh(of: received, now: now())
-    var attempt = 0
+    var attempt = failure == nil ? 0 : 1
+    var delay =
+      failure.map { delayBeforeRetry(attempt: 1, after: $0, for: received, now: now()) }
+      ?? delayBeforeRefresh(of: received, now: now())
     while true {
       do {
         if delay > .zero {
