@@ -12,4 +12,4 @@ permissions:
 
 jobs:
   validate:
-    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@969c8268cf65c89590b9296ca8352a9a70d8a0dc # capability-matrix/v2.0.0
+    uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@a87c7cad984b0d8d48983d64d93095de257841bd # capability-matrix/v2.1.0
