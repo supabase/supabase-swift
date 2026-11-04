@@ -321,7 +321,11 @@ struct LoggerInterceptorTests {
         "name": "Acme",
         "client_secret": "provider-secret",
         "users": [{"email": "a@example.com", "password": "hunter2"}],
-        "session": {"access_token": "jwt", "refresh_token": "rt"}
+        "session": {"access_token": "jwt", "refresh_token": "rt"},
+        "verify": {"token": "123456", "token_hash": "th"},
+        "properties": {
+          "email_otp": "654321", "hashed_token": "ht", "action_link": "https://link.example"
+        }
       }
       """.data(using: .utf8)!
 
@@ -329,7 +333,11 @@ struct LoggerInterceptorTests {
 
     #expect(result.contains("Acme"))
     #expect(result.contains("a@example.com"))
-    for secret in ["provider-secret", "hunter2", "\"jwt\"", "\"rt\""] {
+    let secrets = [
+      "provider-secret", "hunter2", "\"jwt\"", "\"rt\"", "123456", "\"th\"", "654321",
+      "\"ht\"", "link.example",
+    ]
+    for secret in secrets {
       #expect(!result.contains(secret))
     }
     #expect(result.contains("<redacted>"))

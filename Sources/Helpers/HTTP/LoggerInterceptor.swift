@@ -83,7 +83,8 @@ package struct LoggerInterceptor: ClientMiddleware {
 /// JSON fields whose values `stringify` replaces with `<redacted>`, at any depth.
 let redactedJSONKeys: Set<String> = [
   "password", "client_secret", "secret", "access_token", "refresh_token", "id_token",
-  "provider_token", "provider_refresh_token", "code_verifier",
+  "provider_token", "provider_refresh_token", "code_verifier", "token", "token_hash",
+  "email_otp", "hashed_token", "action_link",
 ]
 
 func stringify(_ data: Data?) -> String {
