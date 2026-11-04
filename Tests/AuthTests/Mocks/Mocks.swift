@@ -67,11 +67,10 @@ extension AuthClient {
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(transport: http),
         autoRefresh: autoRefresh
       ),
-      date: { Date() },
       pkce: .live,
       platform: .live
     )

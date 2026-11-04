@@ -16,11 +16,12 @@ typealias AuthClientID = Int
 /// actors, and every member that does not need the network is synchronous.
 ///
 /// ```swift
-/// let auth = AuthClient(
+/// var configuration = AuthClient.Configuration(
 ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
-///   headers: ["apikey": "<publishable-key>"],
-///   localStorage: KeychainLocalStorage()
+///   storageKey: "sb-<project>-auth-token"
 /// )
+/// configuration.headers[HTTPField.Name("apikey")!] = "<publishable-key>"
+/// let auth = AuthClient(configuration: configuration)
 ///
 /// // Sign in
 /// let session = try await auth.signIn(email: "user@example.com", password: "secret")
@@ -210,15 +211,14 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - configuration: The client configuration.
   public convenience init(configuration: Configuration) {
-    self.init(configuration: configuration, date: { Date() }, pkce: .live, platform: .live)
+    self.init(configuration: configuration, pkce: .live, platform: .live)
   }
 
-  /// Test seam: pins the clock, the PKCE material, and the platform at construction.
+  /// Test seam: pins the PKCE material and the platform at construction.
   /// `beforeRefreshingHeldSession` runs after a call reads the held refresh token and before it
   /// asks the session store to refresh it, so a test can hold the call between the two.
   init(
     configuration: Configuration,
-    date: @escaping @Sendable () -> Date,
     pkce: PKCE,
     platform: AuthPlatform,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
@@ -228,6 +228,7 @@ public final class AuthClient: Sendable {
 
     let logger: Logging.Logger = {
       var logger = configuration.logger
+      logger[metadataKey: "system"] = "auth"
       logger[metadataKey: "client_id"] = "\(clientID)"
       return logger
     }()
@@ -235,7 +236,6 @@ public final class AuthClient: Sendable {
     let dependencies = Dependencies.live(
       configuration: configuration,
       logger: logger,
-      date: date,
       pkce: pkce,
       platform: platform,
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
@@ -246,7 +246,7 @@ public final class AuthClient: Sendable {
       fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
         try await api.execute(authAPI.jwks())
       },
-      now: date
+      now: configuration.now
     )
     Self.loadStoredSession(sessionStore: dependencies.sessionStore, logger: logger)
 
@@ -553,7 +553,7 @@ public final class AuthClient: Sendable {
     options: SSOOptions = .init()
   ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
-      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+      redirectTo: options.redirectTo, configured: configuration.redirectTo)
     return try await withFlow(.signIn, redirectTo: redirectTo, sendsEmail: false) { started in
       let url = try await api.execute(
         authAPI.signInWithSSO(
@@ -640,7 +640,7 @@ public final class AuthClient: Sendable {
     options: OAuthOptions = .init()
   ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
-      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+      redirectTo: options.redirectTo, configured: configuration.redirectTo)
     return try await withFlow(.signIn, redirectTo: redirectTo) { started in
       let url = try authAPI.authorizeURL(
         provider: provider,
@@ -720,7 +720,7 @@ public final class AuthClient: Sendable {
     // A sign-out while the page is open must win over the callback.
     let signOuts = await sessionStore.signOuts
     let callbackScheme = Self.oauthRedirectURL(
-      redirectTo: redirectTo, configured: configuration.redirectToURL)?.scheme
+      redirectTo: redirectTo, configured: configuration.redirectTo)?.scheme
 
     let callback: URL
     do {
@@ -756,7 +756,7 @@ public final class AuthClient: Sendable {
   }
 
   /// The redirect an OAuth flow will actually use: a per-call `redirectTo` overrides the
-  /// client-wide ``Configuration/redirectToURL``.
+  /// client-wide ``Configuration/redirectTo``.
   ///
   /// Both halves of the flow have to agree on this — the authorize request tells the provider
   /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
@@ -1243,7 +1243,7 @@ public final class AuthClient: Sendable {
   ///   - email: The email address to send to.
   ///   - type: The kind of email to send again.
   ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
-  ///     ``Configuration/redirectToURL``.
+  ///     ``Configuration/redirectTo``.
   ///   - captchaToken: The captcha verification token.
   public func resend(
     email: String,
@@ -1411,7 +1411,7 @@ public final class AuthClient: Sendable {
     options: OAuthOptions = .init()
   ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
-      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+      redirectTo: options.redirectTo, configured: configuration.redirectTo)
     return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
       let url = try await api.authorizedExecute {
         try authAPI.linkIdentityURL(
@@ -1506,7 +1506,7 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - email: The user's email address.
   ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
-  ///     ``Configuration/redirectToURL``.
+  ///     ``Configuration/redirectTo``.
   ///   - captchaToken: The captcha verification token.
   public func resetPassword(
     email: String,
@@ -1613,7 +1613,7 @@ public final class AuthClient: Sendable {
   ) async throws -> Result {
     let started = try await dependencies.flowStore.start(
       purpose: purpose,
-      redirectTo: redirectTo ?? configuration.redirectToURL
+      redirectTo: redirectTo ?? configuration.redirectTo
     )
     do {
       return try await request(started)

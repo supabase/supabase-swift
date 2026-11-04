@@ -40,12 +40,12 @@ struct SessionManagerTests {
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
-        autoRefresh: .manual
+        storage: InMemoryTestStorage(),
+        autoRefresh: .manual,
+        now: date
       ),
       http: HTTPClient(transport: http),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth"),
-      date: date
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
   }
 
@@ -1026,6 +1026,7 @@ struct SessionManagerTests {
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       try RefreshFailure.coded("refresh_token_not_found", status: .badRequest).response()
     }
+    try await dependencies.sessionStore.load()
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 

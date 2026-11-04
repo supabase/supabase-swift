@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import Crypto
 import CustomDump
 import Foundation
+import HTTPTypes
 import Helpers
 import InlineSnapshotTesting
 import P256K
@@ -33,19 +34,19 @@ struct AuthClientIntegrationTests {
 
   static func makeClient(
     serviceRole: Bool = false,
-    localStorage: any AuthLocalStorage = InMemoryLocalStorage(),
-    storageKey: String? = nil
+    storage: any AuthStorage = InMemoryTestStorage(),
+    storageKey: String = "sb-test-\(UUID().uuidString)-auth-token"
   ) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: authURL,
-        headers: [
-          "apikey": key,
-          "Authorization": "Bearer \(key)",
-        ],
         storageKey: storageKey,
-        localStorage: localStorage
+        headers: [
+          HTTPField.Name("apikey")!: key,
+          .authorization: "Bearer \(key)",
+        ],
+        storage: storage
       )
     )
   }
@@ -56,7 +57,7 @@ struct AuthClientIntegrationTests {
     let signedIn = try await authClient.session()
     let (storage, key) = try storing(signedIn, expiredBy: 60)
 
-    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    let client = Self.makeClient(storage: storage, storageKey: key)
     var changes = client.events().makeAsyncIterator()
 
     let initial = try #require(await changes.next())
@@ -76,7 +77,7 @@ struct AuthClientIntegrationTests {
     rejected.refreshToken = "aaaaaaaaaaaa"
     let (storage, key) = try storing(rejected, expiredBy: 60)
 
-    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    let client = Self.makeClient(storage: storage, storageKey: key)
     var changes = client.events().makeAsyncIterator()
 
     let initial = try #require(await changes.next())
@@ -88,8 +89,8 @@ struct AuthClientIntegrationTests {
   /// A storage that holds `session` as one that a client received `seconds` after it expired.
   private func storing(
     _ session: Session, expiredBy seconds: TimeInterval
-  ) throws -> (storage: InMemoryLocalStorage, key: String) {
-    let storage = InMemoryLocalStorage()
+  ) throws -> (storage: InMemoryTestStorage, key: String) {
+    let storage = InMemoryTestStorage()
     let key = "sb-startup-refresh-\(UUID().uuidString)-auth-token"
     let receivedAt = Date().addingTimeInterval(-session.expiresIn - seconds)
     try storage.store(

@@ -6,168 +6,149 @@
   @testable import Auth
 
   @Suite
-  struct KeychainLocalStorageTests {
-    @Test
-    func defaultServiceIsFixedWithoutAccessGroup() throws {
-      let storage = KeychainLocalStorage()
-      let keychain = try #require(storage.keychain as? Keychain)
+  struct KeychainStorageMigrationTests {
+    #if os(macOS)
+      @Test
+      func dataProtectionKeychainProbesTheFileBasedLocationWithSameServiceAndGroup() throws {
+        let storage = KeychainStorage(service: "custom", accessGroup: "group")
+        let primary = try #require(storage.keychain as? Keychain)
+        let legacy = try #require(storage.legacyKeychains.first as? Keychain)
 
-      #expect(keychain.service == "supabase.gotrue.swift")
-      #expect(keychain.accessGroup == nil)
+        #expect(primary.useDataProtectionKeychain)
+        #expect(storage.legacyKeychains.count == 1)
+        #expect(legacy.service == "custom")
+        #expect(legacy.accessGroup == "group")
+        #expect(!legacy.useDataProtectionKeychain)
+      }
+    #endif
+
+    @Test
+    func fileBasedKeychainHasNothingToMigrate() {
+      let storage = KeychainStorage(useDataProtectionKeychain: false)
       #expect(storage.legacyKeychains.isEmpty)
     }
 
     @Test
-    func defaultServiceIsFixedAndSharedAcrossTargets() throws {
-      let storage = KeychainLocalStorage(accessGroup: "group")
-      let keychain = try #require(storage.keychain as? Keychain)
-
-      #expect(keychain.service == "supabase.gotrue.swift")
-      #expect(keychain.accessGroup == "group")
-      #expect(!keychain.useDataProtectionKeychain)
-      #expect(storage.legacyKeychains.isEmpty)
-    }
-
-    @Test
-    func dataProtectionProbesFileBasedLocationWithSameServiceAndGroup() throws {
-      let storage = KeychainLocalStorage(accessGroup: "group", useDataProtectionKeychain: true)
-      let primary = try #require(storage.keychain as? Keychain)
-      let legacy = try #require(storage.legacyKeychains.first as? Keychain)
-
-      #expect(primary.useDataProtectionKeychain)
-      #expect(storage.legacyKeychains.count == 1)
-      #expect(legacy.service == "supabase.gotrue.swift")
-      #expect(legacy.accessGroup == "group")
-      #expect(!legacy.useDataProtectionKeychain)
-    }
-
-    @Test
-    func explicitServiceDoesNotMigrate() {
-      let storage = KeychainLocalStorage(service: "custom", useDataProtectionKeychain: true)
-      #expect(storage.legacyKeychains.isEmpty)
-    }
-
-    @Test
-    func sharedTargetsMigrateOnceIntoOneLocation() throws {
+    func sharedTargetsMigrateOnceIntoOneLocation() async throws {
       let session = Data("session".utf8)
       let primary = FakeKeychain()
       let legacy = FakeKeychain(items: ["key": session])
-      let widget = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
-      let app = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let widget = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
+      let app = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      #expect(try widget.retrieve(key: "key") == session)
+      #expect(try await widget.load(key: "key") == session)
       #expect(legacy.items.value["key"] == nil)
-      #expect(try app.retrieve(key: "key") == session)
+      #expect(try await app.load(key: "key") == session)
     }
 
     @Test
-    func retrieveMigratesFromLegacyLocation() throws {
+    func loadMigratesFromLegacyLocation() async throws {
       let value = Data("session".utf8)
       let primary = FakeKeychain()
       let legacy = FakeKeychain(items: ["key": value])
-      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      #expect(try storage.retrieve(key: "key") == value)
+      #expect(try await storage.load(key: "key") == value)
       #expect(primary.items.value["key"] == value)
       #expect(legacy.items.value["key"] == nil)
     }
 
     @Test
-    func retrievePrefersPrimaryAndLeavesLegacyUntouched() throws {
+    func loadPrefersPrimaryAndLeavesLegacyUntouched() async throws {
       let primaryValue = Data("new".utf8)
       let legacyValue = Data("old".utf8)
       let primary = FakeKeychain(items: ["key": primaryValue])
       let legacy = FakeKeychain(items: ["key": legacyValue])
-      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      #expect(try storage.retrieve(key: "key") == primaryValue)
+      #expect(try await storage.load(key: "key") == primaryValue)
       #expect(legacy.items.value["key"] == legacyValue)
     }
 
     @Test
-    func retrieveProbesLegacyLocationsInOrder() throws {
+    func loadProbesLegacyLocationsInOrder() async throws {
       let first = FakeKeychain(items: ["key": Data("first".utf8)])
       let second = FakeKeychain(items: ["key": Data("second".utf8)])
       let primary = FakeKeychain()
-      let storage = KeychainLocalStorage(
+      let storage = KeychainStorage(
         keychain: primary,
         legacyKeychains: [first, second]
       )
 
-      #expect(try storage.retrieve(key: "key") == Data("first".utf8))
+      #expect(try await storage.load(key: "key") == Data("first".utf8))
       #expect(primary.items.value["key"] == Data("first".utf8))
       #expect(first.items.value["key"] == nil)
       #expect(second.items.value["key"] == Data("second".utf8))
     }
 
     @Test
-    func retrieveMissingEverywhereReturnsNil() throws {
-      let storage = KeychainLocalStorage(
+    func loadMissingEverywhereReturnsNil() async throws {
+      let storage = KeychainStorage(
         keychain: FakeKeychain(),
         legacyKeychains: [FakeKeychain()]
       )
-      #expect(try storage.retrieve(key: "key") == nil)
+      #expect(try await storage.load(key: "key") == nil)
     }
 
     @Test
-    func retrievePropagatesLegacyProbeFailure() {
+    func loadPropagatesLegacyProbeFailure() async {
       struct ProbeFailure: Error {}
-      let storage = KeychainLocalStorage(
+      let storage = KeychainStorage(
         keychain: FakeKeychain(),
         legacyKeychains: [FakeKeychain(readError: ProbeFailure())]
       )
 
-      #expect(throws: ProbeFailure.self) {
-        try storage.retrieve(key: "key")
+      await #expect(throws: ProbeFailure.self) {
+        try await storage.load(key: "key")
       }
     }
 
     @Test
-    func retrievePropagatesPrimaryFailure() {
+    func loadPropagatesPrimaryFailure() async {
       struct PrimaryFailure: Error {}
-      let storage = KeychainLocalStorage(
+      let storage = KeychainStorage(
         keychain: FakeKeychain(readError: PrimaryFailure()),
         legacyKeychains: []
       )
-      #expect(throws: PrimaryFailure.self) {
-        try storage.retrieve(key: "key")
+      await #expect(throws: PrimaryFailure.self) {
+        try await storage.load(key: "key")
       }
     }
 
     @Test
-    func removeClearsPrimaryAndLegacyLocations() throws {
+    func removeClearsPrimaryAndLegacyLocations() async throws {
       let primary = FakeKeychain(items: ["key": Data()])
       let legacy = FakeKeychain(items: ["key": Data()])
-      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      try storage.remove(key: "key")
+      try await storage.remove(key: "key")
 
       #expect(primary.items.value["key"] == nil)
       #expect(legacy.items.value["key"] == nil)
     }
 
     @Test
-    func removeClearsLegacyLocationsEvenWhenPrimaryDeleteFails() {
+    func removeClearsLegacyLocationsEvenWhenPrimaryDeleteFails() async {
       struct DeleteFailure: Error {}
       let primary = FakeKeychain(items: ["key": Data()], deleteError: DeleteFailure())
       let legacy = FakeKeychain(items: ["key": Data()])
-      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      #expect(throws: DeleteFailure.self) {
-        try storage.remove(key: "key")
+      await #expect(throws: DeleteFailure.self) {
+        try await storage.remove(key: "key")
       }
       #expect(legacy.items.value["key"] == nil)
     }
 
     @Test
-    func retrieveReturnsLegacyValueAndKeepsItWhenPrimaryWriteFails() throws {
+    func loadReturnsLegacyValueAndKeepsItWhenPrimaryWriteFails() async throws {
       struct WriteFailure: Error {}
       let legacyValue = Data("session".utf8)
       let primary = FakeKeychain(writeError: WriteFailure())
       let legacy = FakeKeychain(items: ["key": legacyValue])
-      let storage = KeychainLocalStorage(keychain: primary, legacyKeychains: [legacy])
+      let storage = KeychainStorage(keychain: primary, legacyKeychains: [legacy])
 
-      #expect(try storage.retrieve(key: "key") == legacyValue)
+      #expect(try await storage.load(key: "key") == legacyValue)
       #expect(legacy.items.value["key"] == legacyValue)
       #expect(primary.items.value["key"] == nil)
     }
@@ -176,32 +157,33 @@
       (errSecMissingEntitlement, AuthError.Kind.storageMisconfigured),
       (errSecInteractionNotAllowed, AuthError.Kind.storageUnavailable),
     ])
-    func keychainStatusesAnAppHandlesBecomeAuthErrors(status: OSStatus, kind: AuthError.Kind) {
+    func keychainStatusesAnAppHandlesBecomeAuthErrors(status: OSStatus, kind: AuthError.Kind) async
+    {
       let error = KeychainError(code: .init(rawValue: status))
-      let storage = KeychainLocalStorage(
+      let storage = KeychainStorage(
         keychain: FakeKeychain(readError: error, writeError: error, deleteError: error),
         legacyKeychains: []
       )
 
       for operation in [
-        { _ = try storage.retrieve(key: "key") },
-        { try storage.store(key: "key", value: Data()) },
-        { try storage.remove(key: "key") },
-      ] {
-        let thrown = #expect(throws: AuthError.self) { try operation() }
+        { _ = try await storage.load(key: "key") },
+        { try await storage.save(Data(), key: "key") },
+        { try await storage.remove(key: "key") },
+      ] as [@Sendable () async throws -> Void] {
+        let thrown = await #expect(throws: AuthError.self) { try await operation() }
         #expect(thrown?.kind == kind)
         #expect(thrown?.underlyingError is KeychainError)
       }
     }
 
     @Test
-    func legacyProbeThatIsLockedIsStorageUnavailable() {
-      let storage = KeychainLocalStorage(
+    func legacyProbeThatIsLockedIsStorageUnavailable() async {
+      let storage = KeychainStorage(
         keychain: FakeKeychain(),
         legacyKeychains: [FakeKeychain(readError: KeychainError.interactionNotAllowed)]
       )
 
-      let thrown = #expect(throws: AuthError.self) { try storage.retrieve(key: "key") }
+      let thrown = await #expect(throws: AuthError.self) { try await storage.load(key: "key") }
       #expect(thrown?.kind == .storageUnavailable)
     }
   }

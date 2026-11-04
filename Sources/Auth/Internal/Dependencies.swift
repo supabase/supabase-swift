@@ -1,9 +1,9 @@
 import Foundation
 import Logging
 
-/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:platform:beforeRefreshingHeldSession:)``.
+/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:pkce:platform:beforeRefreshingHeldSession:)``.
 ///
-/// Immutable on purpose. The test seams (`date`, `pkce`, `platform`) are injected at
+/// Immutable on purpose. The test seams (`pkce`, `platform`) are injected at
 /// construction and never mutated afterwards, so plain `let` storage is enough and nothing needs a
 /// lock or a process-global registry.
 struct Dependencies: Sendable {
@@ -28,8 +28,8 @@ struct Dependencies: Sendable {
   let pkce: PKCE
   let logger: Logging.Logger
 
-  var resolvedEncoder: JSONEncoder { configuration.resolvedEncoder }
-  var resolvedDecoder: JSONDecoder { configuration.resolvedDecoder }
+  var resolvedEncoder: JSONEncoder { AuthClient.Configuration.jsonEncoder }
+  var resolvedDecoder: JSONDecoder { AuthClient.Configuration.jsonDecoder }
 }
 
 extension Dependencies {
@@ -37,7 +37,6 @@ extension Dependencies {
     configuration: AuthClient.Configuration,
     http: HTTPClient? = nil,
     logger: Logging.Logger? = nil,
-    date: @escaping @Sendable () -> Date = { Date() },
     pkce: PKCE = .live,
     platform: AuthPlatform = .live,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
@@ -46,15 +45,14 @@ extension Dependencies {
     let logger = logger ?? configuration.logger
     let authAPI = AuthAPI(
       url: configuration.url,
-      headers: configuration.headers,
-      defaultRedirectURL: configuration.redirectToURL,
-      encoder: configuration.resolvedEncoder,
-      decoder: configuration.resolvedDecoder
+      headers: AuthClient.Configuration.defaultHeaders.merging(with: configuration.headers),
+      defaultRedirectURL: configuration.redirectTo,
+      encoder: AuthClient.Configuration.jsonEncoder,
+      decoder: AuthClient.Configuration.jsonDecoder
     )
     let api = APIClient(http: http)
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-    let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
-    let storage = AuthLocalStorageAdapter(localStorage: localStorage)
+    let storageKey = configuration.storageKey
+    let storage = MisconfigurationReportingStorage(configuration.storage)
     let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
       try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
     }
@@ -66,9 +64,8 @@ extension Dependencies {
     let sessionStore = SessionStore(
       storage: storage,
       key: storageKey,
-      now: date,
-      startupRefresh: startupRefresh,
-      initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
+      now: configuration.now,
+      startupRefresh: startupRefresh
     )
     let sessionManager = SessionManager.live(
       policy: configuration.autoRefresh,
@@ -94,7 +91,7 @@ extension Dependencies {
         storage: storage,
         storageKey: storageKey,
         pkce: pkce,
-        now: date,
+        now: configuration.now,
         logger: logger
       ),
       redirectDeduplicator: RedirectDeduplicator(),
@@ -102,7 +99,7 @@ extension Dependencies {
       sessionManager: sessionManager,
       refreshRequest: refresh,
       autoRefresh: autoRefresh,
-      date: date,
+      date: configuration.now,
       platform: platform,
       pkce: pkce,
       logger: logger

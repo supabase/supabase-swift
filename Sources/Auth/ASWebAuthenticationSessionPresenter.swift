@@ -6,7 +6,7 @@
   /// A presenter that shows the provider page in an `ASWebAuthenticationSession`.
   ///
   /// It is the default presenter on Apple platforms. The client must have a redirect URL with a
-  /// scheme, from ``OAuthOptions/redirectTo`` or ``AuthClient/Configuration/redirectToURL``.
+  /// scheme, from ``OAuthOptions/redirectTo`` or ``AuthClient/Configuration/redirectTo``.
   public struct ASWebAuthenticationSessionPresenter: WebAuthPresenter {
     /// Whether the session asks the browser for a private session, with no shared cookies.
     public let prefersEphemeralWebBrowserSession: Bool
@@ -30,7 +30,7 @@
         throw AuthError.oauthFlowFailed(
           """
           Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-          or globally through `AuthClient.Configuration.redirectToURL`.
+          or globally through `AuthClient.Configuration.redirectTo`.
           """
         )
       }

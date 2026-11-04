@@ -28,26 +28,6 @@ enum PersistedSessionLoader {
     return migration.session
   }
 
-  /// The same load over the synchronous ``AuthLocalStorage``.
-  static func load(from storage: any AuthLocalStorage, key: String) throws -> ReceivedSession? {
-    let stored = try storage.retrieve(key: key)
-    let legacy = stored == nil ? try storage.retrieve(key: legacyKey) : nil
-    let migration: Migration
-    do {
-      migration = try migrate(stored: stored, legacy: legacy, key: key)
-    } catch let error as DecodingError where legacy != nil {
-      try storage.remove(key: legacyKey)
-      throw error
-    }
-    for write in migration.writes {
-      switch write {
-      case .save(let data, let key): try storage.store(key: key, value: data)
-      case .remove(let key): try storage.remove(key: key)
-      }
-    }
-    return migration.session
-  }
-
   private enum Write {
     case save(Data, key: String)
     case remove(key: String)

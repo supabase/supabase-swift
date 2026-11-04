@@ -21,7 +21,7 @@ import Testing
 struct AuthAPITests {
   let api = AuthAPI(
     url: URL(string: "http://localhost:54321/auth/v1")!,
-    headers: ["apikey": "dummy.api.key"],
+    headers: [HTTPField.Name("apikey")!: "dummy.api.key"],
     defaultRedirectURL: URL(string: "https://example.com/callback"),
     encoder: AuthClient.Configuration.jsonEncoder,
     decoder: AuthClient.Configuration.jsonDecoder
@@ -139,7 +139,7 @@ struct AuthAPITests {
   func configuredAPIVersionIsKept() {
     let api = AuthAPI(
       url: URL(string: "http://localhost:54321/auth/v1")!,
-      headers: ["X-Supabase-Api-Version": "2025-01-01"],
+      headers: [.apiVersionHeaderName: "2025-01-01"],
       defaultRedirectURL: nil,
       encoder: JSONEncoder(),
       decoder: JSONDecoder()

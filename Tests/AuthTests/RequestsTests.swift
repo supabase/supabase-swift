@@ -1199,20 +1199,21 @@ struct RequestsTests {
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: clientURL,
-      headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
       storageKey: uniqueStorageKey(),
-      localStorage: InMemoryLocalStorage(),
+      headers: HTTPFields(["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"]),
+      storage: InMemoryTestStorage(),
       http: .init(
         transport: snapshotTransport(
           record: record, fetch: fetch, file: file, testName: testName, line: line)),
-      autoRefresh: .manual
+      autoRefresh: .manual,
+      now: date
     )
 
     let pkce = PKCE(
       generateCodeVerifier: { "verifier" },
       generateCodeChallenge: { _ in "challenge" }
     )
-    return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: .live)
+    return AuthClient(configuration: configuration, pkce: pkce, platform: .live)
   }
 }
 

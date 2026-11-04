@@ -45,6 +45,10 @@
 
     let keychain: any KeychainProtocol
 
+    /// Locations probed when an item is missing from ``keychain``. Only the macOS file-based
+    /// Keychain is one, and only while the data-protection Keychain is in use.
+    let legacyKeychains: [any KeychainProtocol]
+
     /// Creates a Keychain-backed storage.
     ///
     /// - Parameters:
@@ -61,7 +65,9 @@
     ///   - useDataProtectionKeychain: On macOS, whether to use the data-protection Keychain
     ///     instead of the legacy file-based one. Pass `false` only for apps that cannot be
     ///     signed with the keychain-access-groups entitlement. Other platforms always use the
-    ///     data-protection Keychain.
+    ///     data-protection Keychain. Items do not move between the two Keychains on their own,
+    ///     so with `true` a session that the file-based Keychain holds is moved on the first
+    ///     load.
     ///
     /// - Precondition: `synchronizable` is `false`, or `accessibility` does not end in
     ///   `ThisDeviceOnly`.
@@ -77,6 +83,14 @@
         "KeychainStorage: a synchronizable item cannot use the \(accessibility) accessibility. "
           + "Pick one that does not end in ThisDeviceOnly, or set synchronizable to false."
       )
+      #if os(macOS)
+        let legacyKeychains: [any KeychainProtocol] =
+          useDataProtectionKeychain
+          ? [Keychain(service: service, accessGroup: accessGroup, accessibility: accessibility)]
+          : []
+      #else
+        let legacyKeychains: [any KeychainProtocol] = []
+      #endif
       self.init(
         keychain: Keychain(
           service: service,
@@ -84,21 +98,45 @@
           accessibility: accessibility,
           synchronizable: synchronizable,
           useDataProtectionKeychain: useDataProtectionKeychain
-        )
+        ),
+        legacyKeychains: legacyKeychains
       )
     }
 
-    init(keychain: any KeychainProtocol) {
+    init(keychain: any KeychainProtocol, legacyKeychains: [any KeychainProtocol] = []) {
       self.keychain = keychain
+      self.legacyKeychains = legacyKeychains
     }
 
     /// Returns the bytes stored in the Keychain under `key`, or `nil` when no item exists.
     ///
+    /// If the item is absent but exists in a legacy location (the macOS file-based Keychain,
+    /// once the data-protection one is in use), it is moved to the current location and returned.
+    ///
     /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
-    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error.
+    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error, if reading
+    ///   the current location or probing a legacy location fails. A failed write of the moved
+    ///   value does not throw. The read value is returned, and the next load retries the move.
     @concurrent
     public func load(key: String) async throws -> Data? {
-      try mappingKeychainErrors { try keychain.data(forKey: key) }
+      if let data = try mappingKeychainErrors({ try keychain.data(forKey: key) }) {
+        return data
+      }
+
+      for legacy in legacyKeychains {
+        guard let data = try mappingKeychainErrors({ try legacy.data(forKey: key) }) else {
+          continue
+        }
+
+        do {
+          try keychain.set(data, forKey: key)
+          try? legacy.deleteItem(forKey: key)
+        } catch {}
+
+        return data
+      }
+
+      return nil
     }
 
     /// Stores `data` in the Keychain under `key`. An existing item is updated in place.
@@ -110,13 +148,29 @@
       try mappingKeychainErrors { try keychain.set(data, forKey: key) }
     }
 
-    /// Removes the Keychain item stored under `key`. Removing a key with no item succeeds.
+    /// Removes the Keychain item stored under `key`, including any left in a legacy location.
+    /// Removing a key with no item succeeds.
     ///
     /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/storageUnavailable`` or
-    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error.
+    ///   ``AuthError/Kind-swift.struct/storageMisconfigured``, or the Keychain error, if deleting
+    ///   from the current location fails. Legacy-location delete failures are ignored, with every
+    ///   location attempted regardless.
     @concurrent
     public func remove(key: String) async throws {
-      try mappingKeychainErrors { try keychain.deleteItem(forKey: key) }
+      var primaryError: (any Error)?
+      do {
+        try mappingKeychainErrors { try keychain.deleteItem(forKey: key) }
+      } catch {
+        primaryError = error
+      }
+
+      for legacy in legacyKeychains {
+        try? legacy.deleteItem(forKey: key)
+      }
+
+      if let primaryError {
+        throw primaryError
+      }
     }
   }
 

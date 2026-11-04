@@ -30,12 +30,12 @@ struct AuthAPI: Sendable {
 
   init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields,
     defaultRedirectURL: URL?,
     encoder: JSONEncoder,
     decoder: JSONDecoder
   ) {
-    var headers = HTTPFields(headers)
+    var headers = headers
     if headers[.apiVersionHeaderName] == nil {
       headers[.apiVersionHeaderName] = Self.apiVersion
     }

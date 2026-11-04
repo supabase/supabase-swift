@@ -35,7 +35,7 @@ struct SessionLifecycleRaceTests {
 
     #expect(result.isCancellationOrDiscard)
     #expect(client.currentSession == nil)
-    #expect(race.relaunch().currentSession == nil)
+    #expect(await race.relaunch().currentSession == nil)
     #expect(await events.next()?.event == .signedOut)
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
@@ -63,7 +63,9 @@ struct SessionLifecycleRaceTests {
     #expect(await events.next()?.event == .userUpdated)
     let refreshed = await events.next()
     #expect(refreshed?.event == .tokenRefreshed)
-    for session in [refreshed?.session, client.currentSession, race.relaunch().currentSession] {
+    for session in [
+      refreshed?.session, client.currentSession, await race.relaunch().currentSession,
+    ] {
       #expect(session?.refreshToken == "refreshed-refresh")
       #expect(session?.user.userMetadata["nickname"] == "updated")
     }
@@ -116,7 +118,7 @@ struct SessionLifecycleRaceTests {
     let change = await events.next()
     #expect(change?.event == .tokenRefreshed)
     #expect(change?.session?.accessToken == "refreshed-access")
-    #expect(race.relaunch().currentSession?.refreshToken == "refreshed-refresh")
+    #expect(await race.relaunch().currentSession?.refreshToken == "refreshed-refresh")
   }
 
   @Test
@@ -234,7 +236,7 @@ struct SessionLifecycleRaceTests {
     #expect(client.currentSession?.accessToken == "signed-in-access")
     let session = try await client.session()
     #expect(session.accessToken == "signed-in-access")
-    #expect(race.relaunch().currentSession?.accessToken == "signed-in-access")
+    #expect(await race.relaunch().currentSession?.accessToken == "signed-in-access")
     try await client.signIn(email: "a@example.com", password: "secret")
     #expect(await events.next()?.event == .signedIn)
     #expect(race.refreshRequestCount == 1)
@@ -272,7 +274,7 @@ struct SessionLifecycleRaceTests {
     #expect(Set(orders[0]) == ["first-access", "second-access"])
     #expect(orders[1] == orders[0])
     #expect(client.currentSession?.accessToken == orders[0].last)
-    #expect(race.relaunch().currentSession?.accessToken == orders[0].last)
+    #expect(await race.relaunch().currentSession?.accessToken == orders[0].last)
   }
 
   @Test
@@ -281,6 +283,7 @@ struct SessionLifecycleRaceTests {
     race.answerSignIn { _ in race.issue("signed-in") }
     race.answerSignOut()
     let client = race.makeClient()
+    await client.initialization()
     let stream = client.events()
 
     try await client.signIn(email: "a@example.com", password: "secret")

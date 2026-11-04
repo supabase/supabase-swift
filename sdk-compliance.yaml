@@ -36,6 +36,7 @@ supporting_symbols:
   # per-sub-client properties, so all three spell the same knob at a different layer.
   - SupabaseClientOptions.GlobalOptions.clock
   - AuthClient.Configuration.clock
+  - AuthClient.Configuration.now
   - RealtimeClientOptions.clock
   # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
   # knob, not a capability.
@@ -1130,11 +1131,8 @@ features:
     status: implemented
     symbols:
       - SupabaseClientOptions.AuthOptions.storage
-      - AuthClient.Configuration.localStorage
+      - AuthClient.Configuration.storage
     supporting_symbols:
-      - AuthLocalStorage
-      # The async v3 storage protocol and its implementations, added alongside
-      # AuthLocalStorage. AuthClient adopts them in a later Auth v3 change.
       - AuthStorage
       - AuthStorage.load
       - AuthStorage.save
@@ -1157,9 +1155,9 @@ features:
       - KeychainStorage.Accessibility.whenPasscodeSetThisDeviceOnly
   client.session_management.persist_session:
     status: implemented
-    note: "Sessions persist by default via AuthClient.Configuration.defaultLocalStorage (KeychainLocalStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a custom, non-persisting AuthLocalStorage via client.session_management.custom_storage."
+    note: "Sessions persist by default through AuthClient.Configuration.storage (KeychainStorage on Apple platforms). There's no separate boolean toggle to disable persistence — that's done by swapping in a non-persisting AuthStorage, such as InMemoryAuthStorage, via client.session_management.custom_storage."
     symbols:
-      - AuthClient.Configuration.defaultLocalStorage
+      - AuthClient.Configuration.storage
 
   client.request_configuration.custom_http_client:
     status: implemented

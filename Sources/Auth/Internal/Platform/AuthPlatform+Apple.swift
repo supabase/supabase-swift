@@ -16,7 +16,9 @@
       lifecycleEvents: { await MainActor.run { observeInPostingOrder(lifecycleNotifications) } }
     )
 
-    static var defaultLocalStorage: any AuthLocalStorage { KeychainLocalStorage() }
+    static var defaultStorage: any AuthStorage {
+      KeychainStorage(accessibility: .afterFirstUnlock, useDataProtectionKeychain: false)
+    }
 
     #if os(watchOS) || canImport(UIKit)
       private static let hasBackgroundState = true

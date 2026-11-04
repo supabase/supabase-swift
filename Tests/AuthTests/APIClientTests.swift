@@ -30,7 +30,7 @@ struct APIClientTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in
             attempts.withValue { $0 += 1 }
@@ -146,7 +146,7 @@ struct APIClientTests {
         configuration: AuthClient.Configuration(
           url: URL(string: "http://localhost/auth/v1")!,
           storageKey: uniqueStorageKey(),
-          localStorage: InMemoryLocalStorage(),
+          storage: InMemoryTestStorage(),
           http: .init(
             transport: ClosureTransport { request, _ in
               let (response, data) = try respond(request)

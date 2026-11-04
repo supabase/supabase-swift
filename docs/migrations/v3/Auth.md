@@ -26,9 +26,13 @@ Changes that still compile but behave differently. Check each one by hand.
 
   With `.manual` or `.disabled`, `.initialSession` fires at once with the stored session. Check
   `session.isExpired` in handlers that switch on `.initialSession`.
-- **`KeychainLocalStorage` returns `nil` for a missing key.** `retrieve(key:)` no longer throws
-  when no item exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that
-  treated an error as "no session". A custom `AuthLocalStorage` must follow the same contract.
+- **The stored session loads asynchronously.** `AuthStorage` is `async`, so a new client has
+  `status == .loading` and `currentSession == nil` until it has read storage. v2 read storage
+  before `init` returned. Call `await auth.initialization()`, or wait for the first
+  `.initialSession` event from `events()`, before you read `currentSession`.
+- **`KeychainStorage` returns `nil` for a missing key.** `load(key:)` does not throw when no item
+  exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that treated an
+  error as "no session". A custom `AuthStorage` must follow the same contract.
 - **Network and decoding errors are wrapped.** `URLError` and `DecodingError` arrive as
   `AuthError` with kind `.transport` or `.decoding`; the original is in `underlyingError`. A
   cancelled task throws `CancellationError`. Search for `as URLError` and `as DecodingError` near
@@ -50,13 +54,13 @@ Changes that still compile but behave differently. Check each one by hand.
   session in a versioned format with snake_case keys and ISO 8601 dates, and moves a session
   stored under the old `supabase.session` key to the configured key. v2 cannot read the new
   format, so going back to v2 signs users out. Code that reads the session JSON from your
-  `AuthLocalStorage` directly must read the new format.
-- **Storage errors surface.** When `localStorage` throws while the client saves or removes the
+  `AuthStorage` directly must read the new format.
+- **Storage errors surface.** When `storage` throws while the client saves or removes the
   session, the call that changed the session (a sign-in, `refreshSession`, `signOut`) throws that
   error and the session stays as it was. v2 logged the error and went on. When the read at launch
   throws, `currentSession` is `nil` and `session()` throws the storage error, not `.sessionMissing`;
   v2 read a failed read as signed out.
-- **A locked Keychain is not signed out.** `KeychainLocalStorage` throws an `AuthError` of kind
+- **A locked Keychain is not signed out.** `KeychainStorage` throws an `AuthError` of kind
   `.storageUnavailable` while the device is locked (`errSecInteractionNotAllowed`), and of kind
   `.storageMisconfigured` when the app lacks the Keychain entitlement (`errSecMissingEntitlement`).
   v2 threw an internal Keychain error, and a launch into the background before the first unlock
@@ -73,28 +77,18 @@ Changes that still compile but behave differently. Check each one by hand.
   the report comes from the first sign-in.
 - **Unit tests with the default storage report an issue.** A test bundle with no host app on an
   iOS, tvOS, visionOS, or watchOS simulator has no Keychain entitlement. A test there that creates
-  a client with the default `KeychainLocalStorage` now records a runtime issue when it creates the
+  a client with the default `KeychainStorage` now records a runtime issue when it creates the
   client, and Swift Testing and XCTest fail the test. Pass storage that keeps values in memory in
-  tests. The SDK's `InMemoryAuthStorage` conforms to `AuthStorage`, not `AuthLocalStorage`, so
-  `AuthOptions(storage:)` does not take it. Define your own:
+  tests:
 
   ```swift
-  final class InMemoryLocalStorage: AuthLocalStorage, @unchecked Sendable {
-    private let lock = NSLock()
-    private var values: [String: Data] = [:]
-
-    func store(key: String, value: Data) throws { lock.withLock { values[key] = value } }
-    func retrieve(key: String) throws -> Data? { lock.withLock { values[key] } }
-    func remove(key: String) throws { lock.withLock { values[key] = nil } }
-  }
-
   let client = SupabaseClient(
     supabaseURL: url,
     supabaseKey: key,
-    options: .init(auth: .init(storage: InMemoryLocalStorage()))
+    options: .init(auth: .init(storage: InMemoryAuthStorage()))
   )
   ```
-- **The stored session is read once.** The client reads `localStorage` when it is created and
+- **The stored session is read once.** The client reads `storage` when it is created and
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next
   client is created.
@@ -249,7 +243,7 @@ Changes that still compile but behave differently. Check each one by hand.
   the key set once. A token whose key is not in the cached set triggers a new fetch, so rotated
   keys resolve without waiting for the cache to expire.
 - **Admin calls have no default redirect.** `AuthAdminClient` does not read
-  `AuthClient.Configuration.redirectToURL`. `inviteUser` and `generateLink` send `redirect_to`
+  `AuthClient.Configuration.redirectTo`. `inviteUser` and `generateLink` send `redirect_to`
   only when you pass `redirectTo:`; without it, the server uses its site URL.
 
 ## Renames and type changes
@@ -257,7 +251,17 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `public actor AuthClient` | `public final class AuthClient: Sendable` |
-| `GoTrueClient`, `GoTrueMFA`, `GoTrueLocalStorage`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthLocalStorage`, `AuthError` |
+| `GoTrueClient`, `GoTrueMFA`, `GoTrueError` | `AuthClient`, `AuthMFA`, `AuthError` |
+| `GoTrueLocalStorage`, `AuthLocalStorage` (`store`, `retrieve`, `remove`) | `AuthStorage` (`async`: `save(_:key:)`, `load(key:)`, `remove(key:)`); see below |
+| `KeychainLocalStorage`, `WinCredLocalStorage` | `KeychainStorage`, `InMemoryAuthStorage`; see below |
+| `AuthClient.Configuration.localStorage:`, `AuthOptions.storage: any AuthLocalStorage` | `storage: any AuthStorage`; `nil` or omitted uses the platform default |
+| `AuthClient.Configuration.defaultLocalStorage` | removed; leave `storage` out |
+| `AuthClient.Configuration.url: URL?` (default `http://localhost:9999`) | `url: URL`, required |
+| `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
+| `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
+| `AuthClient.Configuration.redirectToURL` | `redirectTo` |
+| `AuthClient.Configuration` `let` properties | `var` properties |
+| `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
 | `signInWithIdToken(credentials:)`, `signInWithWeb3(credentials:)` | `signInWithIDToken(_:)`, `signInWithWeb3(_:)` |
 | `linkIdentityWithIdToken(credentials:)` | `linkIdentity(idToken:)` |
@@ -268,7 +272,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `OpenIDConnectCredentials.Provider` | `Provider` |
 | `Web3Credentials.gotrueMetaSecurity` | `Web3Credentials.captchaToken` |
 | `signInAnonymously(data:)`, `signInWithOTP(…data:…)`, `UserAttributes.data`, `UserAttributes(…data:)` | `userMetadata:` (a `JSONObject`; empty sends nothing) |
-| `JSONEncoder.goTrue`, `JSONDecoder.goTrue` | `AuthClient.Configuration.jsonEncoder`, `.jsonDecoder` |
+| `JSONEncoder.goTrue`, `JSONDecoder.goTrue`, `AuthClient.Configuration.jsonEncoder`, `.jsonDecoder` | removed; Auth always uses its own JSON coders |
 | `AuthMFA.enroll(params:)`, `MFAEnrollParams`, `MFAEnrollParamsType`, `MFATotpEnrollParams`, `MFAPhoneEnrollParams` | `AuthMFA.enrollTOTP(issuer:friendlyName:)`, `AuthMFA.enrollPhone(_:friendlyName:)`; see below |
 | `AuthMFA.challenge(params:)`, `MFAChallengeParams` | `AuthMFA.challenge(factorID:channel:)` |
 | `AuthMFA.verify(params:)`, `MFAVerifyParams` | `AuthMFA.verify(factorID:challengeID:code:)` |
@@ -309,6 +313,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.handle(_:)`, `SupabaseClient.handle(_:)` | `handleRedirect(_:)` (`async throws`); see below |
 | `AuthClient.session(from:)` | `handleRedirect(_:)`; see below |
 | `AuthClient.Configuration.flowType`, `AuthOptions.flowType`, `AuthFlowType`, `defaultFlowType` | removed; see below |
+| `AuthClient(url:headers:localStorage:…)` | `AuthClient(configuration:)`; see below |
 | `AuthClient.getClaims(options:)` (no `jwt`) | `AuthClient.claims(options:)` |
 | `AuthClient.getClaims(jwt:options:)` with a token | `AuthClient.claims(jwt:options:)`; `jwt` is a `String`, not a `String?` |
 | `GetClaimsOptions`, `GetClaimsOptions(allowExpired:jwks:)` | `ClaimsOptions`, `ClaimsOptions(allowsExpired:jwks:)` |
@@ -811,6 +816,27 @@ Task {
 }
 ```
 
+## `AuthClient` is created from a `Configuration`
+
+`AuthClient.init(configuration:)` is the only initializer. `url` and `storageKey` are required,
+`headers` is `HTTPFields`, and every property is a `var`. The client adds `X-Client-Info` unless
+`headers` sets it. `SupabaseClient` fills all of this in for you.
+
+```swift
+// v2
+let auth = AuthClient(
+  url: url,
+  headers: ["apikey": key],
+  redirectToURL: redirect,
+  localStorage: KeychainLocalStorage()
+)
+// v3
+var configuration = AuthClient.Configuration(url: url, storageKey: "sb-project-auth-token")
+configuration.headers[HTTPField.Name("apikey")!] = key
+configuration.redirectTo = redirect
+let auth = AuthClient(configuration: configuration)
+```
+
 ## Custom `encoder` and `decoder` are removed
 
 `AuthClient` and `AuthClient.Configuration` no longer take `encoder:` or `decoder:`, and
@@ -820,7 +846,7 @@ Task {
 // v2
 let auth = AuthClient(url: url, localStorage: storage, encoder: myEncoder, decoder: myDecoder)
 // v3
-let auth = AuthClient(url: url, localStorage: storage)
+let auth = AuthClient(configuration: .init(url: url, storageKey: "my-key", storage: storage))
 ```
 
 ## `autoRefreshToken` is `autoRefresh`
@@ -859,31 +885,38 @@ func inspect(_ auth: isolated AuthClient) { print(auth.currentUser?.email ?? "")
 func inspect(_ auth: AuthClient) { print(auth.currentUser?.email ?? "") }
 ```
 
-## `WinCredLocalStorage` is removed
+## `AuthLocalStorage` is `AuthStorage`
 
-`WinCredLocalStorage` and `WinCredLocalStorageError` are removed. On Windows, as on Linux and
-Android, `AuthClient.Configuration.defaultLocalStorage` keeps the session in memory, so the user
-must sign in again after the app exits. The v2 type could not read back what it wrote, so no stored
-session is lost. To persist the session, pass your own `AuthLocalStorage`.
+`AuthStorage` is `async`, and `save(_:key:)` takes the bytes first. `KeychainLocalStorage` is
+`KeychainStorage`. `WinCredLocalStorage` and `WinCredLocalStorageError` are removed. On Windows,
+as on Linux and Android, the default storage keeps the session in memory, so the user must sign in
+again after the app exits. The v2 type could not read back what it wrote, so no stored session is
+lost. To persist the session, pass your own `AuthStorage`.
 
 ```swift
 // v2 (Windows)
-let supabase = SupabaseClient(supabaseURL: url, supabaseKey: key)
-// v3 (Windows)
 struct MyLocalStorage: AuthLocalStorage {
   func store(key: String, value: Data) throws { /* ... */ }
   func retrieve(key: String) throws -> Data? { /* return nil when missing */ }
   func remove(key: String) throws { /* ... */ }
 }
+// v3 (Windows)
+struct MyStorage: AuthStorage {
+  func save(_ data: Data, key: String) async throws { /* ... */ }
+  func load(key: String) async throws -> Data? { /* return nil when missing */ }
+  func remove(key: String) async throws { /* ... */ }
+}
 let supabase = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
-  options: .init(auth: .init(storage: MyLocalStorage()))
+  options: .init(auth: .init(storage: MyStorage()))
 )
 ```
 
-On macOS, `KeychainLocalStorage(useDataProtectionKeychain: true)` is a new opt-in that removes the
-Keychain consent prompt. It needs a provisioning profile with Keychain entitlements.
+On macOS, `KeychainStorage()` uses the data-protection Keychain, which removes the Keychain
+consent prompt and needs a provisioning profile with Keychain entitlements. It moves a session
+from the file-based Keychain on the first load. The default storage of a client keeps the
+file-based Keychain, as v2 did, so a client you create without `storage:` behaves as before.
 
 ## Experimental APIs
 

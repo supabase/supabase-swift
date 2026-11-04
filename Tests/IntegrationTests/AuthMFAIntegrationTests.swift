@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import Crypto
 import CustomDump
 import Foundation
+import HTTPTypes
 import Helpers
 import TestHelpers
 import Testing
@@ -20,11 +21,12 @@ struct AuthMFAIntegrationTests {
   let auth = AuthClient(
     configuration: AuthClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
+      storageKey: "sb-test-\(UUID().uuidString)-auth-token",
       headers: [
-        "apikey": DotEnv.supabasePublishableKey,
-        "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+        HTTPField.Name("apikey")!: DotEnv.supabasePublishableKey,
+        .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
       ],
-      localStorage: InMemoryLocalStorage()
+      storage: InMemoryTestStorage()
     )
   )
 

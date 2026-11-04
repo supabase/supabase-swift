@@ -447,7 +447,7 @@ private func makeClient(
     supabaseKey: "PUBLISHABLE_KEY",
     options: SupabaseClientOptions(
       auth: SupabaseClientOptions.AuthOptions(
-        storage: AuthLocalStorageMock(),
+        storage: InMemoryAuthStorage(),
         autoRefresh: .manual
       ),
       global: SupabaseClientOptions.GlobalOptions(

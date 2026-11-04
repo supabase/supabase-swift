@@ -16,7 +16,7 @@ struct Race: Sendable {
 
   let clock = SignalingTestClock()
   let transport = RecordingTransport()
-  let localStorage = InMemoryLocalStorage()
+  let localStorage = InMemoryTestStorage()
   let storageKey = uniqueStorageKey()
   private let start: SignalingTestClock.Instant
   private let skew: TimeInterval
@@ -39,25 +39,27 @@ struct Race: Sendable {
 
   func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
-    storage: (any AuthLocalStorage)? = nil,
-    redirectToURL: URL? = nil,
+    storage: (any AuthStorage)? = nil,
+    redirectTo: URL? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
       autoRefresh: autoRefresh, storage: storage ?? localStorage,
-      redirectToURL: redirectToURL, beforeRefreshingHeldSession: beforeRefreshingHeldSession)
+      redirectTo: redirectTo, beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
   /// would.
-  func relaunch() -> AuthClient {
-    makeClient(autoRefresh: .manual, storage: localStorage)
+  func relaunch() async -> AuthClient {
+    let client = makeClient(autoRefresh: .manual, storage: localStorage)
+    await client.initialization()
+    return client
   }
 
   private func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy,
-    storage: any AuthLocalStorage,
-    redirectToURL: URL? = nil,
+    storage: any AuthStorage,
+    redirectTo: URL? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     var platform = AuthPlatform.live
@@ -65,15 +67,15 @@ struct Race: Sendable {
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
-        redirectToURL: redirectToURL,
         storageKey: storageKey,
-        localStorage: storage,
+        storage: storage,
+        redirectTo: redirectTo,
         http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
-        clock: clock
+        clock: clock,
+        now: now
       ),
-      date: now,
       pkce: .live,
       platform: platform,
       beforeRefreshingHeldSession: beforeRefreshingHeldSession

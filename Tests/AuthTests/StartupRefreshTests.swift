@@ -15,7 +15,7 @@ struct StartupRefreshTests {
   private let key = uniqueStorageKey()
   private let clock = SignalingTestClock()
   private let http = RecordingTransport()
-  private let localStorage = InMemoryLocalStorage()
+  private let localStorage = InMemoryTestStorage()
 
   @Test
   func refreshesAnExpiredSessionBeforeDeliveringInitialSession() async throws {
@@ -173,6 +173,7 @@ struct StartupRefreshTests {
     try storeExpiredSession()
 
     let client = makeClient(autoRefresh: policy, initialRefreshTimeout: timeout)
+    await client.initialization()
     #expect(client.status == .signedIn(Self.expired))
     var events = client.events().makeAsyncIterator()
 
@@ -188,6 +189,7 @@ struct StartupRefreshTests {
       key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: Self.valid)))
 
     let client = makeClient()
+    await client.initialization()
     #expect(client.status == .signedIn(Self.valid))
     var events = client.events().makeAsyncIterator()
 
@@ -311,20 +313,20 @@ struct StartupRefreshTests {
   private func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
     initialRefreshTimeout: Duration = .seconds(5),
-    storage: (any AuthLocalStorage)? = nil
+    storage: (any AuthStorage)? = nil
   ) -> AuthClient {
     AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
         storageKey: key,
-        localStorage: storage ?? localStorage,
+        storage: storage ?? localStorage,
         http: HTTPClientConfiguration(transport: http),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
         clock: clock,
+        now: { Self.now },
         initialRefreshTimeout: initialRefreshTimeout
       ),
-      date: { Self.now },
       pkce: .live,
       platform: .live
     )
@@ -332,22 +334,22 @@ struct StartupRefreshTests {
 }
 
 /// Reads from the storage it wraps and throws from every write, as a full disk does.
-private struct WriteFailingStorage: AuthLocalStorage {
-  let wrapped: InMemoryLocalStorage
+private struct WriteFailingStorage: AuthStorage {
+  let wrapped: InMemoryTestStorage
 
-  init(wrapping wrapped: InMemoryLocalStorage) {
+  init(wrapping wrapped: InMemoryTestStorage) {
     self.wrapped = wrapped
   }
 
-  func store(key: String, value: Data) throws {
+  func save(_ data: Data, key: String) async throws {
     throw AuthError(kind: .storageUnavailable, message: "disk full")
   }
 
-  func retrieve(key: String) throws -> Data? {
-    try wrapped.retrieve(key: key)
+  func load(key: String) async throws -> Data? {
+    wrapped.retrieve(key: key)
   }
 
-  func remove(key: String) throws {
-    try wrapped.remove(key: key)
+  func remove(key: String) async throws {
+    try await wrapped.remove(key: key)
   }
 }

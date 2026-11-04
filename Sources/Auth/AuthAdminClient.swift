@@ -65,11 +65,10 @@ public struct AuthAdminClient: Sendable {
     http: HTTPClientConfiguration = .init(),
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) {
-    var headers = AuthClient.Configuration.defaultHeaders.merging(["apikey": secretKey]) {
-      _, new in new
-    }
+    var headers = AuthClient.Configuration.defaultHeaders
+    headers[.apikeyHeaderName] = secretKey
     if !APIKeyFormat.isNew(secretKey) {
-      headers["Authorization"] = "Bearer \(secretKey)"
+      headers[.authorization] = "Bearer \(secretKey)"
     }
 
     self.authAPI = AuthAPI(

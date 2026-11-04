@@ -155,32 +155,6 @@ actor SessionStore {
     published = LockIsolated(Published())
   }
 
-  /// Starts loaded with what `initialLoad`, a synchronous read of storage, returns. When it
-  /// throws, the store starts ``AuthStatus/loading`` and ``load()`` reads storage again.
-  init(
-    storage: any AuthStorage,
-    key: String,
-    now: @escaping @Sendable () -> Date = { Date() },
-    startupRefresh: StartupRefresh? = nil,
-    initialLoad: () throws -> ReceivedSession?
-  ) {
-    self.storage = storage
-    self.key = key
-    self.now = now
-    self.startupRefresh = startupRefresh
-    let state: State
-    if case .success(let loaded) = Result(catching: initialLoad) {
-      if let loaded, startupRefresh != nil, loaded.isExpired(at: now(), leeway: .zero) {
-        state = .loading
-      } else {
-        state = loaded.map(State.signedIn) ?? .signedOut(.sessionMissing)
-      }
-    } else {
-      state = .loading
-    }
-    published = LockIsolated(Published(state: state))
-  }
-
   deinit {
     autoRefreshTask?.cancel()
     for continuation in published.value.subscribers.values {

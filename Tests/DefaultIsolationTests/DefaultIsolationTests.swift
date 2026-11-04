@@ -16,13 +16,12 @@ import Testing
 /// constructed. The SDK modules themselves stay nonisolated.
 @Suite
 struct DefaultIsolationTests {
-  /// `AuthLocalStorage` refines `Sendable`, so its conformance cannot be main-actor isolated. A
-  /// consumer under default isolation opts the type out with `nonisolated`, as an app would. An
-  /// explicit storage also keeps this target building on Linux, which has no default storage.
-  nonisolated struct NoopAuthStorage: AuthLocalStorage {
-    func store(key: String, value: Data) throws {}
-    func retrieve(key: String) throws -> Data? { nil }
-    func remove(key: String) throws {}
+  /// `AuthStorage` refines `Sendable`, so its conformance cannot be main-actor isolated. A
+  /// consumer under default isolation opts the type out with `nonisolated`, as an app would.
+  nonisolated struct NoopAuthStorage: AuthStorage {
+    func load(key: String) async throws -> Data? { nil }
+    func save(_ data: Data, key: String) async throws {}
+    func remove(key: String) async throws {}
   }
 
   struct Prompt: Encodable {

@@ -702,7 +702,7 @@ public struct EmailOTPOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the email link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -944,7 +944,7 @@ public struct SignUpOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
-  /// the client uses ``AuthClient/Configuration/redirectToURL``.
+  /// the client uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The channel that delivers the confirmation code. Applies to phone sign-up only.
@@ -1730,7 +1730,7 @@ public enum SSOTarget: Sendable, Hashable {
 /// ``AuthClient/ssoSignInURL(_:options:)``.
 public struct SSOOptions: Sendable, Hashable {
   /// The URL the server redirects to after the identity provider step. When `nil`, the client
-  /// uses ``AuthClient/Configuration/redirectToURL``.
+  /// uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -1768,7 +1768,7 @@ public struct OAuthOptions: Sendable, Hashable {
   public var scopes: [String]
 
   /// The URL the server redirects to after the provider step. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// Extra query items to add to the authorize URL, for example `access_type=offline`.

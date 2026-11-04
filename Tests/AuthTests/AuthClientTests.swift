@@ -30,7 +30,7 @@ private let apiKey =
 extension AuthMockerTests {
   @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthClientTests {
-    let storage = InMemoryLocalStorage()
+    let storage = InMemoryTestStorage()
 
     init() {
       Mocker.removeAll()
@@ -69,6 +69,7 @@ extension AuthMockerTests {
     @Test
     func eventsFinishWhenTheClientIsReleased() async throws {
       var sut: AuthClient? = makeSUT()
+      await sut?.initialization()
       let events = try #require(sut).events()
 
       sut = nil
@@ -3927,12 +3928,11 @@ extension AuthMockerTests {
 
       let configuration = AuthClient.Configuration(
         url: url,
-        headers: [
-          "apikey": apiKey
-        ],
         storageKey: storageKey,
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
+        headers: HTTPFields(["apikey": apiKey]),
+        storage: storage,
+        http: .init(transport: URLSessionTransport(session: session)),
+        now: date)
 
       var pkce = PKCE.live
       pkce.generateCodeVerifier = {
@@ -3942,7 +3942,7 @@ extension AuthMockerTests {
         "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
 
-      return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: platform)
+      return AuthClient(configuration: configuration, pkce: pkce, platform: platform)
     }
 
     private func assertAuthStateChanges<T>(

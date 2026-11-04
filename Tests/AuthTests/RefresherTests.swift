@@ -342,8 +342,7 @@ struct World {
   func makeClient(clock sleepClock: (any Clock<Duration>)? = nil) -> Dependencies {
     .live(
       configuration: configuration(clock: sleepClock ?? clock),
-      http: HTTPClient(transport: http),
-      date: now
+      http: HTTPClient(transport: http)
     )
   }
 
@@ -355,11 +354,12 @@ struct World {
     AuthClient.Configuration(
       url: clientURL,
       storageKey: storageKey,
-      localStorage: InMemoryLocalStorage(),
+      storage: InMemoryTestStorage(),
       http: HTTPClientConfiguration(transport: http),
       autoRefresh: autoRefresh,
       observesAppLifecycle: observesAppLifecycle,
-      clock: sleepClock ?? clock
+      clock: sleepClock ?? clock,
+      now: now
     )
   }
 

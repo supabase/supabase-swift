@@ -674,9 +674,13 @@ struct SessionStoreTests {
   }
 
   @Test
-  func storeStartsWithItsInitialLoad() async throws {
-    let store = SessionStore(
-      storage: InMemoryAuthStorage(), key: key, initialLoad: { received("stored") })
+  func storeStartsLoadingAndLoadReadsTheStoredSession() async throws {
+    let storage = InMemoryAuthStorage()
+    try await storage.save(PersistedSessionCodec.encode(received("stored")), key: key)
+    let store = SessionStore(storage: storage, key: key)
+
+    #expect(store.currentStatus == .loading)
+    try await store.load()
 
     #expect(store.currentSession == makeSession("stored"))
     var changes = store.changes().makeAsyncIterator()
@@ -685,19 +689,26 @@ struct SessionStoreTests {
   }
 
   @Test
-  func storeWithNothingLoadedIsSignedOut() {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, initialLoad: { nil })
+  func storeWithNothingStoredIsSignedOutAfterLoad() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+
+    try await store.load()
 
     #expect(store.currentStatus == .signedOut(.sessionMissing))
   }
 
   @Test
-  func failedInitialLoadKeepsTheStoreLoading() {
-    let store = SessionStore(
-      storage: InMemoryAuthStorage(),
-      key: key,
-      initialLoad: { throw AuthError(kind: .storageUnavailable, message: "locked") }
-    )
+  func failedLoadKeepsTheStoreLoading() async {
+    struct LockedStorage: AuthStorage {
+      func load(key: String) async throws -> Data? {
+        throw AuthError(kind: .storageUnavailable, message: "locked")
+      }
+      func save(_ data: Data, key: String) async throws {}
+      func remove(key: String) async throws {}
+    }
+    let store = SessionStore(storage: LockedStorage(), key: key)
+
+    await #expect(throws: AuthError.self) { try await store.load() }
 
     #expect(store.currentStatus == .loading)
   }
