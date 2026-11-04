@@ -1,4 +1,5 @@
 import Foundation
+import Helpers
 import IssueReporting
 
 actor AutoRefreshController {
@@ -62,7 +63,7 @@ actor AutoRefreshController {
   /// ends with the state of the last call.
   func apply() async {
     let previous = lastApply
-    let current = Task {
+    let current = Task.named("supabase.auth.lifecycle.apply") {
       await previous?.value
       if state.shouldRun {
         await store.startAutoRefresh(using: driver)

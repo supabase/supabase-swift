@@ -11,6 +11,7 @@ import CustomDump
 import Foundation
 import Helpers
 import InlineSnapshotTesting
+import Logging
 import P256K
 import TestHelpers
 import Testing
@@ -34,7 +35,8 @@ struct AuthClientIntegrationTests {
   static func makeClient(
     serviceRole: Bool = false,
     localStorage: any AuthLocalStorage = InMemoryLocalStorage(),
-    storageKey: String? = nil
+    storageKey: String? = nil,
+    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
@@ -45,9 +47,33 @@ struct AuthClientIntegrationTests {
           "Authorization": "Bearer \(key)",
         ],
         storageKey: storageKey,
-        localStorage: localStorage
+        localStorage: localStorage,
+        logger: logger
       )
     )
+  }
+
+  @Test
+  func tokensAndPasswordsNeverReachTheLogs() async throws {
+    let recorder = LogRecorder()
+    let client = Self.makeClient(logger: recorder.makeLogger())
+    let email = mockEmail()
+    let password = mockPassword()
+
+    _ = try await client.signUp(email: email, password: password)
+    let first = try await client.session()
+    let refreshed = try await client.refreshSession()
+    _ = try await client.user()
+    try await client.signOut()
+
+    let logged = recorder.entries.joined(separator: "\n")
+    #expect(logged.contains("/auth/v1/token"), "The client logged no requests.")
+    for secret in [
+      password, first.accessToken, first.refreshToken, refreshed.accessToken,
+      refreshed.refreshToken,
+    ] {
+      #expect(!logged.contains(secret), "A secret reached the log.")
+    }
   }
 
   @Test

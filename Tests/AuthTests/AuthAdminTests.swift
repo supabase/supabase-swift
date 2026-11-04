@@ -32,6 +32,25 @@ struct AuthAdminTests {
   }
 
   @Test
+  func logsRequestsWithoutTheQueryOrTheSecretKey() async throws {
+    let recorder = LogRecorder()
+    let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data("[]".utf8)) }
+    let admin = AuthAdminClient(
+      url: clientURL,
+      secretKey: "sb_secret_admin-key",
+      http: .init(transport: transport),
+      logger: recorder.makeLogger()
+    )
+
+    _ = try? await admin.listUsers(page: 2, perPage: 5)
+
+    let logged = recorder.entries.joined(separator: "\n")
+    #expect(logged.contains("/auth/v1/admin/users"))
+    #expect(!logged.contains("page=2"))
+    #expect(!logged.contains("sb_secret_admin-key"))
+  }
+
+  @Test
   func neverSendsANewFormatSecretKeyAsBearer() async throws {
     let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) }
     let admin = AuthAdminClient.testing(secretKey: "sb_secret_abc", http: transport)

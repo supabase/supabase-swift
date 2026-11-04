@@ -181,6 +181,14 @@ public struct Session: Codable, Hashable, Sendable {
   }
 }
 
+extension Session: CustomStringConvertible {
+  /// The user ID and the expiry of the session. It holds no token, so logging a session does
+  /// not leak one.
+  public var description: String {
+    "Session(user_id: \(user.id), expires_at: \(expiresAt))"
+  }
+}
+
 /// A Supabase Auth user record.
 public struct User: Codable, Hashable, Identifiable, Sendable {
   /// The unique identifier of the user.
