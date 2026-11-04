@@ -11,7 +11,8 @@
   ///
   /// Cancelling the task that awaits ``authenticate(url:redirectURL:)`` closes the page and throws
   /// `CancellationError`. So does the user closing it. On tvOS, the system cannot close the page
-  /// for the app: the call throws at once, and the page stays until the user dismisses it. Only
+  /// for the app: the call throws at once, and the page stays until the user dismisses it. A new page
+  /// cannot open before then. Only
   /// one page can be open at a time: a second call while one is open throws an error of kind
   /// ``AuthError/Kind-swift.struct/oauthFlowFailed``.
   ///
@@ -101,12 +102,11 @@
         )
       }
       try Task.checkCancellation()
-      guard activeSession.begin() else {
+      guard let lease = activeSession.begin() else {
         throw AuthError.oauthFlowFailed(
           "Another sign-in page is already open. Wait for it to close, then try again."
         )
       }
-      defer { activeSession.end() }
 
       let handle = WebAuthSessionHandle()
 
@@ -115,6 +115,7 @@
           let pending = PendingResult(continuation)
           let session = makeSession(url, callback, prefersEphemeralWebBrowserSession) {
             url, error in
+            lease.release()
             if let result = Self.callbackResult(url: url, error: error) {
               pending.resume(with: result)
             } else {
@@ -123,8 +124,9 @@
                 with: .failure(AuthError.oauthFlowFailed(Self.sessionContractViolation)))
             }
           }
-          handle.hold(session, pending: pending)
+          handle.hold(session, pending: pending, lease: lease)
           if !session.start() {
+            lease.release()
             pending.resume(
               with: .failure(
                 AuthError.oauthFlowFailed("The system could not open the sign-in page.")))
@@ -200,6 +202,8 @@
   /// in tests, because the system session needs a window and a user.
   @MainActor
   protocol WebAuthSession: AnyObject {
+    /// `false` when `cancel()` leaves the page open, as on tvOS.
+    var dismissesOnCancel: Bool { get }
     /// Returns `false` when the session cannot start.
     func start() -> Bool
     func cancel()
@@ -238,14 +242,21 @@
   final class WebAuthSessionHandle {
     private var session: (any WebAuthSession)?
     private var pending: PendingResult?
+    private var lease: ActiveWebAuthSession.Lease?
 
-    func hold(_ session: any WebAuthSession, pending: PendingResult) {
+    func hold(
+      _ session: any WebAuthSession, pending: PendingResult, lease: ActiveWebAuthSession.Lease
+    ) {
       self.session = session
       self.pending = pending
+      self.lease = lease
     }
 
+    /// Stops the wait. The slot for the page frees now only if `cancel()` closes the page. Else it
+    /// frees when the system reports that the user closed it.
     func cancel() {
       session?.cancel()
+      if session?.dismissesOnCancel == true { lease?.release() }
       pending?.resume(with: .failure(CancellationError()))
     }
   }
@@ -256,16 +267,31 @@
 
     private let isActive = LockIsolated(false)
 
-    /// Returns `false` when a page is already open.
-    func begin() -> Bool {
-      isActive.withValue { isActive in
-        guard !isActive else { return false }
+    /// Returns `nil` when a page is already open.
+    func begin() -> Lease? {
+      isActive.withValue { isActive -> Lease? in
+        guard !isActive else { return nil }
         isActive = true
-        return true
+        return Lease(owner: self)
       }
     }
 
-    func end() { isActive.setValue(false) }
+    /// The right to the slot. Releasing twice is safe, so a late call cannot free the slot of a
+    /// later page.
+    final class Lease: Sendable {
+      private let owner: ActiveWebAuthSession
+      private let isReleased = LockIsolated(false)
+
+      fileprivate init(owner: ActiveWebAuthSession) { self.owner = owner }
+
+      func release() {
+        let isFirstRelease = isReleased.withValue { isReleased -> Bool in
+          defer { isReleased = true }
+          return !isReleased
+        }
+        if isFirstRelease { owner.isActive.setValue(false) }
+      }
+    }
   }
 
   /// The real `ASWebAuthenticationSession`, with the presentation anchor it needs.
@@ -301,6 +327,12 @@
       presentationAnchor = ASWebAuthenticationSessionPresenter.installDefaultPresentationAnchor(
         on: session)
     }
+
+    #if os(tvOS)
+      let dismissesOnCancel = false
+    #else
+      let dismissesOnCancel = true
+    #endif
 
     func start() -> Bool { session.start() }
 

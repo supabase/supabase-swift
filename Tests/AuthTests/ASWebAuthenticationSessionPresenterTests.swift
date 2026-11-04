@@ -20,6 +20,7 @@ import Testing
     let callback: WebAuthCallback
     let prefersEphemeralWebBrowserSession: Bool
     private let completion: @Sendable (URL?, (any Error)?) -> Void
+    let dismissesOnCancel: Bool
     private let startResult: Bool
     private let completesOnCancel: Bool
     private(set) var startCount = 0
@@ -31,8 +32,10 @@ import Testing
       prefersEphemeralWebBrowserSession: Bool,
       startResult: Bool,
       completesOnCancel: Bool,
+      dismissesOnCancel: Bool,
       completion: @escaping @Sendable (URL?, (any Error)?) -> Void
     ) {
+      self.dismissesOnCancel = dismissesOnCancel
       self.url = url
       self.callback = callback
       self.prefersEphemeralWebBrowserSession = prefersEphemeralWebBrowserSession
@@ -69,6 +72,7 @@ import Testing
     private(set) var created: [FakeWebAuthSession] = []
     var startResult = true
     var completesOnCancel = true
+    var dismissesOnCancel = true
 
     func make(
       url: URL,
@@ -82,6 +86,7 @@ import Testing
         prefersEphemeralWebBrowserSession: prefersEphemeralWebBrowserSession,
         startResult: startResult,
         completesOnCancel: completesOnCancel,
+        dismissesOnCancel: dismissesOnCancel,
         completion: completion
       )
       created.append(session)
@@ -367,6 +372,35 @@ import Testing
 
       session.complete(with: Self.callbackURL)
       #expect(try await first.value == Self.callbackURL)
+    }
+
+    @Test
+    @MainActor
+    func aPageThatStaysOpenAfterACancelKeepsTheSlotUntilItCloses() async throws {
+      let sessions = FakeWebAuthSessions()
+      sessions.dismissesOnCancel = false
+      sessions.completesOnCancel = false
+      let presenter = makePresenter(sessions)
+
+      let first = Task {
+        try await presenter.authenticate(url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      let session = await sessions.started()
+      first.cancel()
+      await #expect(throws: CancellationError.self) { try await first.value }
+
+      let error = await #expect(throws: AuthError.self) {
+        try await presenter.authenticate(url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      #expect(error?.message.contains("already open") == true)
+
+      session.fail(with: ASWebAuthenticationSessionError(.canceledLogin))
+
+      let second = Task {
+        try await presenter.authenticate(url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      await sessions.started(2).complete(with: Self.callbackURL)
+      #expect(try await second.value == Self.callbackURL)
     }
 
     @Test
