@@ -505,6 +505,8 @@ jobs:
         run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
       - name: Forbid yield loops in Realtime tests
         run: ./scripts/check-no-yield-loops.sh
+      - name: Check main-actor call sites cover the Auth API
+        run: ./scripts/check-auth-isolation-coverage.sh
 
   lint:
     name: SwiftLint
