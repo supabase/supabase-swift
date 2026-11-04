@@ -124,7 +124,6 @@ typealias AuthClientID = Int
 ///
 /// ### Namespaces
 /// - ``mfa``
-/// - ``admin``
 /// - ``oauthServer``
 public final class AuthClient: Sendable {
   private static let _globalClientID = LockIsolated(0)
@@ -200,13 +199,6 @@ public final class AuthClient: Sendable {
 
   /// Namespace for accessing multi-factor authentication API.
   public let mfa: AuthMFA
-
-  /// Namespace for the GoTrue admin methods.
-  /// - Warning: This methods requires `secret` key, be careful to never expose `secret`
-  /// key in the client.
-  public var admin: AuthAdmin {
-    AuthAdmin(authAPI: dependencies.authAPI, api: dependencies.api)
-  }
 
   /// Namespace for the OAuth 2.1 authorization server consent and grant-management API.
   public var oauthServer: AuthOAuthServer {

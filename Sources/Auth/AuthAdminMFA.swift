@@ -9,7 +9,7 @@ public import Foundation
 
 /// Admin operations for managing a user's multi-factor authentication factors.
 ///
-/// Access this namespace via ``AuthAdmin/mfa``.
+/// Access this namespace via ``AuthAdminClient/mfa``.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app. Call these methods from a secure server-side environment only.
@@ -20,7 +20,7 @@ public import Foundation
 /// - ``listFactors(forUser:)``
 /// - ``deleteFactor(id:forUser:)``
 public struct AuthAdminMFA: Sendable {
-  let admin: AuthAdmin
+  let admin: AuthAdminClient
 
   var api: APIClient { admin.api }
   var authAPI: AuthAPI { admin.authAPI }

@@ -248,6 +248,9 @@ Changes that still compile but behave differently. Check each one by hand.
   v2 shared one cache between clients with the same storage key, so each new client now fetches
   the key set once. A token whose key is not in the cached set triggers a new fetch, so rotated
   keys resolve without waiting for the cache to expire.
+- **Admin calls have no default redirect.** `AuthAdminClient` does not read
+  `AuthClient.Configuration.redirectToURL`. `inviteUser` and `generateLink` send `redirect_to`
+  only when you pass `redirectTo:`; without it, the server uses its site URL.
 
 ## Renames and type changes
 
@@ -277,8 +280,18 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAVerifyResponse` | `Session` |
 | `typealias FactorType = String`, `AuthenticatorAssuranceLevels`, `AMREntry.Method` | `RawRepresentable` structs `FactorType`, `AuthenticatorAssuranceLevel`, `AuthenticationMethod` |
 | `AMREntry.timestamp: TimeInterval` | `Date` |
-| `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdmin.deleteUser(id: UUID, shouldSoftDelete:)` |
-| `AuthAdmin.getUserById(_:)` | `AuthAdmin.user(id:)` |
+| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:secretKey:)`; see below |
+| `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
+| `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
+| `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
+| `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)` |
+| `AuthAdmin.inviteUserByEmail(_:data:redirectTo:)` | `AuthAdminClient.inviteUser(email:userMetadata:redirectTo:)`; `userMetadata` is a `JSONObject` |
+| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:perPage:)` |
+| `ListUsersPaginatedResponse` | `UserPage`, with only `let` properties |
+| `AuthAdmin.generateLink(params:)` | `AuthAdminClient.generateLink(_:)` |
+| `GenerateLinkProperties.redirectTo: URL` | `URL?` |
+| `AdminUserAttributes.id: String?` | `UUID?` |
+| `AdminUserAttributes.banDuration: String?` (`"24h"`, `"none"`) | `Duration?` (`.seconds(86_400)`, `.zero` to lift the ban) |
 | `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
 | `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:params:)` |
 | `AuthAdminOAuth.deleteClient(clientId:)` | `AuthAdminOAuth.deleteClient(id:)` |
@@ -303,7 +316,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.setSession(accessToken:refreshToken:)` | `AuthClient.importSession(accessToken:refreshToken:)`; it emits only `.signedIn`, not `.tokenRefreshed` then `.signedIn` |
 | `AuthClient.refreshSession(refreshToken:)` | `AuthClient.refreshSession()`; see below |
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
-| `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` |
+| `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` (`UserPage.audience` for users) |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
@@ -340,6 +353,24 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## `admin` is a separate `AuthAdminClient`
+
+`AuthClient.admin` is removed. Create an `AuthAdminClient` with the secret key on your server. It
+sets the `apikey` and `Authorization` headers itself and never touches a user session. Do not ship
+the secret key in an app.
+
+```swift
+// v2
+let supabase = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: secretKey)
+try await supabase.auth.admin.deleteUser(id: userID)
+// v3
+let admin = AuthAdminClient(
+  url: supabaseURL.appendingPathComponent("auth/v1"),
+  secretKey: secretKey
+)
+try await admin.deleteUser(id: userID)
+```
 
 ## `refreshSession(refreshToken:)` is gone
 
@@ -859,7 +890,8 @@ Keychain consent prompt. It needs a provisioning profile with Keychain entitleme
 Passkeys and WebAuthn MFA are `@_spi(Experimental)`. Import them with
 `@_spi(Experimental) import Supabase` (or `import Auth`). They may change in any release.
 
-In v3, first-factor passkey calls move to `auth.passkeys` and admin calls to `admin.passkeys`.
+In v3, first-factor passkey calls move to `auth.passkeys` and admin calls to
+`AuthAdminClient.passkeys`.
 Challenge IDs are `UUID`, and the presentation anchor is optional; `nil` uses the app's key
 window. A user who cancels the passkey sheet now gets `CancellationError`.
 `mfa.verifyWebAuthn` only steps up with a verified factor; for an unverified one it throws an

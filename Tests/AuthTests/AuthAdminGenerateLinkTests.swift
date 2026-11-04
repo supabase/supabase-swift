@@ -21,27 +21,11 @@ import Testing
 extension AuthMockerTests {
   @Suite(.mockerSerialized)
   struct AuthAdminGenerateLinkTests {
-    let storage = InMemoryLocalStorage()
 
-    private func makeSUT() -> AuthClient {
-      let sessionConfiguration = URLSessionConfiguration.default
-      sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-      let session = URLSession(configuration: sessionConfiguration)
-
-      let configuration = AuthClient.Configuration(
-        url: clientURL,
-        headers: [
-          "apikey": "supabase.publishable.key",
-          "Authorization": "Bearer supabase.secret.key",
-        ],
-        storageKey: uniqueStorageKey(),
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
-
-      return AuthClient(configuration: configuration)
-    }
-
-    private func responseData(verificationType: String) throws -> Data {
+    private func responseData(
+      verificationType: String,
+      redirectTo: String? = "https://example.com"
+    ) throws -> Data {
       let user = User(fromMockNamed: "user")
       let encoder = AuthClient.Configuration.jsonEncoder
       let userData = try encoder.encode(user)
@@ -51,7 +35,7 @@ extension AuthMockerTests {
         "https://example.com/auth/v1/verify?type=\(verificationType)&token=hashed_token&redirect_to=https://example.com"
       json["email_otp"] = "123456"
       json["hashed_token"] = "hashed_token"
-      json["redirect_to"] = "https://example.com"
+      json["redirect_to"] = redirectTo
       json["verification_type"] = verificationType
 
       return try JSONSerialization.data(withJSONObject: json)
@@ -67,10 +51,10 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let link = try await sut.admin.generateLink(
-        params: .signUp(
+      let link = try await sut.generateLink(
+        .signUp(
           email: "test@example.com",
           password: "password",
           data: ["full_name": "John Doe"]
@@ -93,10 +77,10 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let link = try await sut.admin.generateLink(
-        params: .magicLink(email: "test@example.com")
+      let link = try await sut.generateLink(
+        .magicLink(email: "test@example.com")
       )
 
       expectNoDifference(link.properties.verificationType, .magiclink)
@@ -112,10 +96,10 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let link = try await sut.admin.generateLink(
-        params: .recovery(email: "test@example.com")
+      let link = try await sut.generateLink(
+        .recovery(email: "test@example.com")
       )
 
       expectNoDifference(link.properties.verificationType, .recovery)
@@ -131,10 +115,10 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let link = try await sut.admin.generateLink(
-        params: .invite(email: "test@example.com")
+      let link = try await sut.generateLink(
+        .invite(email: "test@example.com")
       )
 
       expectNoDifference(link.properties.verificationType, .invite)
@@ -150,13 +134,31 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      let link = try await sut.admin.generateLink(
-        params: .emailChangeNew(email: "test@example.com", newEmail: "new@example.com")
+      let link = try await sut.generateLink(
+        .emailChangeNew(email: "test@example.com", newEmail: "new@example.com")
       )
 
       expectNoDifference(link.properties.verificationType, .emailChangeNew)
+    }
+
+    @Test
+    func generateLinkWithoutRedirectTo() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("admin/generate_link"),
+        ignoreQuery: true,
+        statusCode: 200,
+        data: [.post: try responseData(verificationType: "magiclink", redirectTo: nil)]
+      )
+      .register()
+
+      let sut = AuthAdminClient.mocked()
+
+      let link = try await sut.generateLink(.magicLink(email: "test@example.com"))
+
+      #expect(link.properties.redirectTo == nil)
+      #expect(link.user.id == User(fromMockNamed: "user").id)
     }
   }
 }

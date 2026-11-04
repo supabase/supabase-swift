@@ -16,7 +16,7 @@ public import Foundation
 /// Access this namespace via ``AuthClient/oauthServer``.
 ///
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth. Not
-/// to be confused with ``AuthAdmin/oauth``, which manages OAuth *client*
+/// to be confused with ``AuthAdminClient/oauth``, which manages OAuth *client*
 /// registrations (an admin-only, secret-key operation).
 ///
 /// ## Topics

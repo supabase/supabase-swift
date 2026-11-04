@@ -24,6 +24,9 @@ import Testing
   import AuthenticationServices
 #endif
 
+private let apiKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+
 extension AuthMockerTests {
   @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthClientTests {
@@ -365,6 +368,7 @@ extension AuthMockerTests {
       .snapshotRequest {
         #"""
         curl \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -373,9 +377,9 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
-      let response = try await sut.admin.listUsers()
+      let response = try await sut.listUsers()
       expectNoDifference(response.total, 669)
       expectNoDifference(response.nextPage, 2)
       expectNoDifference(response.lastPage, 14)
@@ -398,6 +402,7 @@ extension AuthMockerTests {
       .snapshotRequest {
         #"""
         curl \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -406,9 +411,9 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
-      let response = try await sut.admin.listUsers()
+      let response = try await sut.listUsers()
       expectNoDifference(response.total, 669)
       #expect(response.nextPage == nil)
       expectNoDifference(response.lastPage, 14)
@@ -1471,6 +1476,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request DELETE \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 28" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -1482,8 +1488,8 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = makeSUT()
-      try await sut.admin.deleteUser(id: id)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
+      try await sut.deleteUser(id: id)
     }
 
     @Test
@@ -1516,9 +1522,9 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
-      let passkeys = try await sut.admin.passkeys.list(forUser: userId)
+      let passkeys = try await sut.passkeys.list(forUser: userId)
 
       expectNoDifference(
         passkeys.map(\.id),
@@ -1546,6 +1552,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request DELETE \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -1554,8 +1561,8 @@ extension AuthMockerTests {
       }
       .register()
 
-      let sut = makeSUT()
-      try await sut.admin.passkeys.delete(id: passkeyId, forUser: userId)
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
+      try await sut.passkeys.delete(id: passkeyId, forUser: userId)
     }
 
     @Test
@@ -2758,7 +2765,7 @@ extension AuthMockerTests {
     @Test
     func getUserById() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2768,6 +2775,7 @@ extension AuthMockerTests {
       .snapshotRequest {
         #"""
         curl \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -2776,15 +2784,15 @@ extension AuthMockerTests {
       }
       .register()
 
-      let user = try await sut.admin.user(id: id)
+      let user = try await sut.user(id: id)
 
       expectNoDifference(user.id, id)
     }
 
     @Test
-    func updateUserById() async throws {
+    func adminUpdateUser() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2795,6 +2803,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request PUT \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 63" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -2813,14 +2822,14 @@ extension AuthMockerTests {
         ]
       )
 
-      let user = try await sut.admin.updateUserById(id, attributes: attributes)
+      let user = try await sut.updateUser(id: id, attributes: attributes)
 
       expectNoDifference(user.id, id)
     }
 
     @Test
     func createUser() async throws {
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users"),
@@ -2831,6 +2840,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 98" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -2849,12 +2859,12 @@ extension AuthMockerTests {
         phone: "1234567890"
       )
 
-      _ = try await sut.admin.createUser(attributes: attributes)
+      _ = try await sut.createUser(attributes)
     }
 
     @Test
     func createUserConfirmingEmailAndPhone() async throws {
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users"),
@@ -2865,6 +2875,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 113" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -2884,13 +2895,13 @@ extension AuthMockerTests {
         confirmsPhone: true
       )
 
-      _ = try await sut.admin.createUser(attributes: attributes)
+      _ = try await sut.createUser(attributes)
     }
 
     @Test
-    func updateUserByIdConfirmingEmail() async throws {
+    func adminUpdateUserConfirmingEmail() async throws {
       let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("admin/users/\(id)"),
@@ -2901,6 +2912,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request PUT \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 22" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -2912,8 +2924,8 @@ extension AuthMockerTests {
       }
       .register()
 
-      let user = try await sut.admin.updateUserById(
-        id,
+      let user = try await sut.updateUser(
+        id: id,
         attributes: AdminUserAttributes(confirmsEmail: true)
       )
 
@@ -2921,8 +2933,8 @@ extension AuthMockerTests {
     }
 
     @Test
-    func inviteUserByEmail() async throws {
-      let sut = makeSUT()
+    func adminInviteUser() async throws {
+      let sut = AuthAdminClient.mocked(secretKey: apiKey)
 
       Mock(
         url: clientURL.appendingPathComponent("invite"),
@@ -2934,6 +2946,7 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
+        	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "Content-Length: 60" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
@@ -2945,9 +2958,9 @@ extension AuthMockerTests {
       }
       .register()
 
-      _ = try await sut.admin.inviteUserByEmail(
-        "test@example.com",
-        data: ["full_name": "John Doe"],
+      _ = try await sut.inviteUser(
+        email: "test@example.com",
+        userMetadata: ["full_name": "John Doe"],
         redirectTo: URL(string: "https://example.com")
       )
     }
@@ -3915,8 +3928,7 @@ extension AuthMockerTests {
       let configuration = AuthClient.Configuration(
         url: url,
         headers: [
-          "apikey":
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+          "apikey": apiKey
         ],
         storageKey: storageKey,
         localStorage: storage,

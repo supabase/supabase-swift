@@ -1,0 +1,9 @@
+curl \
+	--request DELETE \
+	--header "Authorization: Bearer dummy.secret.key" \
+	--header "Content-Type: application/json" \
+	--header "X-Client-Info: auth-swift/0.0.0" \
+	--header "X-Supabase-Api-Version: 2024-01-01" \
+	--header "apikey: dummy.secret.key" \
+	--data "{\"should_soft_delete\":true}" \
+	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"

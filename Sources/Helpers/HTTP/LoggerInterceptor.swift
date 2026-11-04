@@ -80,6 +80,13 @@ package struct LoggerInterceptor: ClientMiddleware {
   }
 }
 
+/// JSON fields whose values `stringify` replaces with `<redacted>`, at any depth.
+let redactedJSONKeys: Set<String> = [
+  "password", "client_secret", "secret", "access_token", "refresh_token", "id_token",
+  "provider_token", "provider_refresh_token", "code_verifier", "token", "token_hash",
+  "email_otp", "hashed_token", "action_link",
+]
+
 func stringify(_ data: Data?) -> String {
   guard let data else {
     return "<none>"
@@ -88,11 +95,24 @@ func stringify(_ data: Data?) -> String {
   do {
     let object = try JSONSerialization.jsonObject(with: data, options: [])
     let prettyData = try JSONSerialization.data(
-      withJSONObject: object,
+      withJSONObject: redactingSecrets(in: object),
       options: [.prettyPrinted, .sortedKeys]
     )
     return String(data: prettyData, encoding: .utf8) ?? "<failed>"
   } catch {
     return String(data: data, encoding: .utf8) ?? "<failed>"
   }
+}
+
+private func redactingSecrets(in object: Any) -> Any {
+  if let dictionary = object as? [String: Any] {
+    return dictionary.reduce(into: [String: Any]()) { result, entry in
+      result[entry.key] =
+        redactedJSONKeys.contains(entry.key) ? "<redacted>" : redactingSecrets(in: entry.value)
+    }
+  }
+  if let array = object as? [Any] {
+    return array.map(redactingSecrets(in:))
+  }
+  return object
 }

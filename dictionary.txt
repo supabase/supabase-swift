@@ -340,3 +340,5 @@ hotfixes
 # Keychain attribute (kSecAttrSynchronizable) exposed by KeychainStorage.
 synchronizable
 Synchronizable
+# OAuth 2.0 / OIDC userinfo endpoint, used by the custom provider admin API.
+userinfo

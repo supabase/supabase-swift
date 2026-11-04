@@ -35,41 +35,36 @@ extension AuthAPI {
 
   func adminInviteUser(
     email: String,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     redirectTo: URL?
   ) throws -> AuthRequest<User> {
     try request(
       .post, "invite", query: redirectQuery(redirectTo),
-      body: encoder.encode(
-        [
-          "email": .string(email),
-          "data": data.map({ JSONValue.object($0) }) ?? .null,
-        ]
-      ),
+      body: encoder.encode(["email": .string(email), "data": .object(userMetadata)] as JSONObject),
       decode: decoding(User.self)
     )
   }
 
-  func adminDeleteUser(id: UUID, shouldSoftDelete: Bool) throws -> AuthRequest<Void> {
+  func adminDeleteUser(id: UUID, softDelete: Bool) throws -> AuthRequest<Void> {
     try request(
       .delete, "admin/users/\(id)",
-      body: encoder.encode(DeleteUserRequest(shouldSoftDelete: shouldSoftDelete)),
+      body: encoder.encode(DeleteUserRequest(shouldSoftDelete: softDelete)),
       decode: ignoringBody)
   }
 
-  func adminListUsers(params: PageParams?) -> AuthRequest<ListUsersPaginatedResponse> {
+  func adminListUsers(page: Int?, perPage: Int?) -> AuthRequest<UserPage> {
     struct Response: Decodable {
       let users: [User]
       let aud: String
     }
 
     return request(
-      .get, "admin/users", query: pageQuery(params),
+      .get, "admin/users", query: pageQuery(page: page, perPage: perPage),
       decode: { [decoder] httpResponse, data in
         let response = try data.decoded(as: Response.self, decoder: decoder)
         let pages = Self.pages(httpResponse)
 
-        return ListUsersPaginatedResponse(
+        return UserPage(
           users: response.users,
           audience: response.aud,
           nextPage: pages.next,
@@ -86,10 +81,10 @@ extension AuthAPI {
       body: encoder.encode(params.body), decode: decoding(GenerateLinkResponse.self))
   }
 
-  private func pageQuery(_ params: PageParams?) -> [URLQueryItem] {
+  private func pageQuery(page: Int?, perPage: Int?) -> [URLQueryItem] {
     [
-      params?.page.map { URLQueryItem(name: "page", value: $0.description) },
-      params?.perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
+      page.map { URLQueryItem(name: "page", value: $0.description) },
+      perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
     ].compactMap { $0 }
   }
 
@@ -136,7 +131,7 @@ extension AuthAPI {
     }
 
     return request(
-      .get, "admin/oauth/clients", query: pageQuery(params),
+      .get, "admin/oauth/clients", query: pageQuery(page: params?.page, perPage: params?.perPage),
       decode: { [decoder] httpResponse, data in
         let response = try data.decoded(as: Response.self, decoder: decoder)
         let pages = Self.pages(httpResponse)
@@ -180,5 +175,49 @@ extension AuthAPI {
   func adminRegenerateOAuthClientSecret(id: UUID) -> AuthRequest<OAuthClient> {
     request(
       .post, "admin/oauth/clients/\(id)/regenerate_secret", decode: decoding(OAuthClient.self))
+  }
+}
+
+// MARK: - Custom providers
+
+extension AuthAPI {
+  func adminListCustomProviders(type: CustomProviderType?) -> AuthRequest<[CustomProvider]> {
+    struct Response: Decodable {
+      let providers: [CustomProvider]?
+    }
+
+    return request(
+      .get, "admin/custom-providers",
+      query: type.map { [URLQueryItem(name: "type", value: $0.rawValue)] } ?? [],
+      decode: { [decoder] _, data in
+        try data.decoded(as: Response.self, decoder: decoder).providers ?? []
+      }
+    )
+  }
+
+  func adminCreateCustomProvider(
+    params: CreateCustomProviderParams
+  ) throws -> AuthRequest<CustomProvider> {
+    try request(
+      .post, "admin/custom-providers", body: encoder.encode(params),
+      decode: decoding(CustomProvider.self))
+  }
+
+  func adminCustomProvider(identifier: String) -> AuthRequest<CustomProvider> {
+    request(
+      .get, "admin/custom-providers/\(identifier)", decode: decoding(CustomProvider.self))
+  }
+
+  func adminUpdateCustomProvider(
+    identifier: String,
+    params: UpdateCustomProviderParams
+  ) throws -> AuthRequest<CustomProvider> {
+    try request(
+      .put, "admin/custom-providers/\(identifier)", body: encoder.encode(params),
+      decode: decoding(CustomProvider.self))
+  }
+
+  func adminDeleteCustomProvider(identifier: String) -> AuthRequest<Void> {
+    request(.delete, "admin/custom-providers/\(identifier)", decode: ignoringBody)
   }
 }

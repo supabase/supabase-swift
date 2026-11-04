@@ -7,7 +7,7 @@
 
 public import Foundation
 
-extension AuthAdmin {
+extension AuthAdminClient {
   /// Contains the passkey administration methods.
   ///
   /// - Warning: Experimental. Requires the `secret` key; never expose it in a client app.
@@ -19,13 +19,13 @@ extension AuthAdmin {
 
 /// Admin operations on a user's passkeys.
 ///
-/// Access this namespace via ``AuthAdmin/passkeys``.
+/// Access this namespace via ``AuthAdminClient/passkeys``.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app. Call these methods from a secure server-side environment only.
 @_spi(Experimental)
 public struct AuthAdminPasskeys: Sendable {
-  let admin: AuthAdmin
+  let admin: AuthAdminClient
 
   /// Lists the passkeys registered for a user.
   ///

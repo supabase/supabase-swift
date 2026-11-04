@@ -1097,10 +1097,10 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
   public var appMetadata: [String: JSONValue]?
 
-  /// Determines how long a user is banned for.
+  /// How long to ban the user, counted from the time of the request.
   ///
-  /// Pass `none` to remove an existing ban.
-  public var banDuration: String?
+  /// Pass `.zero` to lift an existing ban. `nil` leaves the ban as it is.
+  public var banDuration: Duration?
 
   /// The user's email.
   public var email: String?
@@ -1109,7 +1109,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var confirmsEmail: Bool?
 
   /// The `id` for the user.
-  public var id: String?
+  public var id: UUID?
 
   /// The nonce sent for reauthentication if the user's password is to be updated.
   public var nonce: String?
@@ -1151,10 +1151,10 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - appMetadata: Application-level metadata.
-  ///   - banDuration: Ban duration string, e.g. `"24h"`, or `"none"` to lift a ban.
+  ///   - banDuration: How long to ban the user. Pass `.zero` to lift a ban.
   ///   - email: The user's email address.
   ///   - confirmsEmail: Whether to mark the email as confirmed.
-  ///   - id: The user's UUID (string form).
+  ///   - id: The user's ID.
   ///   - nonce: Reauthentication nonce for password updates.
   ///   - password: Plain-text password.
   ///   - passwordHash: Pre-hashed password.
@@ -1164,10 +1164,10 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///   - userMetadata: User-supplied metadata.
   public init(
     appMetadata: [String: JSONValue]? = nil,
-    banDuration: String? = nil,
+    banDuration: Duration? = nil,
     email: String? = nil,
     confirmsEmail: Bool? = nil,
-    id: String? = nil,
+    id: UUID? = nil,
     nonce: String? = nil,
     password: String? = nil,
     passwordHash: String? = nil,
@@ -1188,6 +1188,40 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
     self.confirmsPhone = confirmsPhone
     self.role = role
     self.userMetadata = userMetadata
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(appMetadata, forKey: .appMetadata)
+    // GoTrue reads "none" as "lift the ban".
+    try container.encodeIfPresent(
+      banDuration.map { $0 == .zero ? "none" : $0.goDurationString }, forKey: .banDuration)
+    try container.encodeIfPresent(email, forKey: .email)
+    try container.encodeIfPresent(confirmsEmail, forKey: .confirmsEmail)
+    try container.encodeIfPresent(id, forKey: .id)
+    try container.encodeIfPresent(nonce, forKey: .nonce)
+    try container.encodeIfPresent(password, forKey: .password)
+    try container.encodeIfPresent(passwordHash, forKey: .passwordHash)
+    try container.encodeIfPresent(phone, forKey: .phone)
+    try container.encodeIfPresent(confirmsPhone, forKey: .confirmsPhone)
+    try container.encodeIfPresent(role, forKey: .role)
+    try container.encodeIfPresent(userMetadata, forKey: .userMetadata)
+  }
+}
+
+extension Duration {
+  /// The duration in the format of Go's `time.ParseDuration`.
+  var goDurationString: String {
+    let (seconds, attoseconds) = components
+    let (scaled, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
+    if attoseconds == 0, !overflow { return "\(seconds)s" }
+    let (sum, sumOverflow) = scaled.addingReportingOverflow(attoseconds / 1_000_000_000)
+    // Go's Duration is an Int64 count of nanoseconds, and ParseDuration rejects a larger value,
+    // so a longer duration saturates at about 292 years.
+    var nanoseconds = overflow || sumOverflow ? (self > .zero ? Int64.max : Int64.min) : sum
+    // A non-zero duration under 1 ns must not become 0, which GoTrue reads as "no ban".
+    if nanoseconds == 0 { nanoseconds = self > .zero ? 1 : -1 }
+    return "\(nanoseconds)ns"
   }
 }
 
@@ -1821,25 +1855,25 @@ public struct PageParams: Hashable, Sendable {
   }
 }
 
-/// A paginated list of users returned by ``AuthAdmin/listUsers(params:)``.
-public struct ListUsersPaginatedResponse: Hashable, Sendable {
-  /// The users on the current page.
+/// One page of users, returned by ``AuthAdminClient/listUsers(page:perPage:)``.
+public struct UserPage: Hashable, Sendable {
+  /// The users on this page.
   public let users: [User]
 
   /// The audience the users belong to.
   public let audience: String
 
-  /// The page number of the next page, if one exists.
-  public var nextPage: Int?
+  /// The number of the next page, or `nil` on the last page.
+  public let nextPage: Int?
 
-  /// The page number of the last page.
-  public var lastPage: Int
+  /// The number of the last page.
+  public let lastPage: Int
 
-  /// The total number of users matching the query.
-  public var total: Int
+  /// The total number of users.
+  public let total: Int
 }
 
-/// The parameters for ``AuthAdmin/generateLink(params:)``.
+/// The parameters for ``AuthAdminClient/generateLink(_:)``.
 public struct GenerateLinkParams: Sendable {
   struct Body: Encodable {
     var type: GenerateLinkType
@@ -1948,7 +1982,7 @@ public struct GenerateLinkParams: Sendable {
   }
 }
 
-/// The response from the ``AuthAdmin/generateLink(params:)`` function.
+/// The response from ``AuthAdminClient/generateLink(_:)``.
 public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
   /// The properties related to the email link generated.
   public let properties: GenerateLinkProperties
@@ -1971,8 +2005,8 @@ public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
   public let emailOTP: String
   /// The hashed token appended to the action link.
   public let hashedToken: String
-  /// The URL appended to the action link.
-  public let redirectTo: URL
+  /// The URL appended to the action link, or `nil` when the server sent none.
+  public let redirectTo: URL?
   /// The verification type that the emaillink is associated to.
   public let verificationType: GenerateLinkType
 
@@ -1988,7 +2022,7 @@ public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
   }
 }
 
-/// The type of link generated by ``AuthAdmin/generateLink(params:)``.
+/// The type of link generated by ``AuthAdminClient/generateLink(_:)``.
 public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable {
   public let rawValue: String
 
