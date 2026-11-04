@@ -18,6 +18,12 @@ struct AuthRedirectTests {
   private static let implicitFragment =
     "access_token=a&refresh_token=r&token_type=bearer&expires_in=3600&expires_at=1800003600&sb="
 
+  private static let emailChangeAccepted =
+    "Confirmation link accepted. Please proceed to confirm link sent to the other email"
+
+  private static let emailChangeAcceptedEncoded =
+    "Confirmation+link+accepted.+Please+proceed+to+confirm+link+sent+to+the+other+email"
+
   private static let linkExpired = AuthError.oauthFlowFailed(
     "Link expired", errorCode: ErrorCode("otp_expired"))
 
@@ -56,6 +62,13 @@ struct AuthRedirectTests {
       "myapp://cb?message=Confirmation+link+accepted&sb=",
       .emailChangePending(message: "Confirmation link accepted")
     ),
+    (
+      "myapp://cb?message=\(emailChangeAcceptedEncoded)#message=\(emailChangeAcceptedEncoded)&sb=",
+      .emailChangePending(message: emailChangeAccepted)
+    ),
+    ("myapp://cb#message=\(emailChangeAcceptedEncoded)", nil),
+    ("myapp://chat?message=hello", nil),
+    ("myapp://chat#message=hello", nil),
     ("myapp://cb#sb=", .error(.oauthFlowFailed("Supabase redirect without a result"))),
     ("myapp://cb#sb", .error(.oauthFlowFailed("Supabase redirect without a result"))),
     (
