@@ -13,3 +13,5 @@ permissions:
 jobs:
   validate:
     uses: supabase/sdk/.github/workflows/validate-sdk-compliance-swift.yml@a87c7cad984b0d8d48983d64d93095de257841bd # capability-matrix/v2.1.0
+    with:
+      runner: blacksmith-6vcpu-macos-latest
