@@ -719,12 +719,12 @@ public final class AuthClient: Sendable {
   ) async throws -> Session {
     // A sign-out while the page is open must win over the callback.
     let signOuts = await sessionStore.signOuts
-    let callbackScheme = Self.oauthRedirectURL(
-      redirectTo: redirectTo, configured: configuration.redirectToURL)?.scheme
+    let redirectURL = Self.oauthRedirectURL(
+      redirectTo: redirectTo, configured: configuration.redirectToURL)
 
     let callback: URL
     do {
-      callback = try await presenter.authenticate(url: flow.url, callbackScheme: callbackScheme)
+      callback = try await presenter.authenticate(url: flow.url, redirectURL: redirectURL)
     } catch {
       await removeFlow(flow.id)
       throw error

@@ -442,7 +442,12 @@ try await supabase.auth.signInWithOAuth(
 )
 ```
 
-A user who cancels now gets `CancellationError`.
+A user who cancels now gets `CancellationError`. Cancelling the task that awaits the call closes
+the page and throws `CancellationError` too.
+
+An HTTPS `redirectTo`, a universal link, works on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1,
+and watchOS 10.4 and later. It needs the `webcredentials:` associated domain for the host of the
+redirect URL. Only one page can be open at a time.
 
 ## `linkIdentity` shows the page and returns a session
 
