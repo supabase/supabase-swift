@@ -346,7 +346,7 @@ jobs:
       # Sticky disks are Linux-only, so macOS keeps actions/cache.
       - name: "Mount Swift build disk"
         if: runner.os == 'Linux'
-        uses: useblacksmith/stickydisk@b6cb58d1d31d6d32a25248fab12493d831f7bd48 # v1.7.2
+        uses: useblacksmith/stickydisk@3f6be1451e3cad893b778bc93495c80452a5da26 # v1.7.2
         with:
           key: ${{ github.repository }}-integration-${{ matrix.name }}
           path: .build
@@ -505,6 +505,8 @@ jobs:
         run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
       - name: Forbid yield loops in Realtime tests
         run: ./scripts/check-no-yield-loops.sh
+      - name: Check main-actor call sites cover the Auth API
+        run: ./scripts/check-auth-isolation-coverage.sh
 
   lint:
     name: SwiftLint

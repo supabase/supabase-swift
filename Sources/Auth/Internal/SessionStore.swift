@@ -386,7 +386,7 @@ actor SessionStore {
 
       let session: Session
       do {
-        session = try await request(refreshToken)
+        session = try await RefreshSignpost.interval { try await request(refreshToken) }
       } catch {
         // Only a sign-out cancels a flight. A transport can report that cancel as another error,
         // such as `URLError.cancelled` from a response body.
@@ -513,7 +513,7 @@ actor SessionStore {
           now().duration(since: $0.date))
         ? $0.error : nil
     }
-    autoRefreshTask = Task { [weak self] in
+    autoRefreshTask = Task.named("supabase.auth.refresher") { [weak self] in
       await Refresher.run(for: session, driver: driver, now: now, afterFailure: recentFailure) {
         guard let self else { throw CancellationError() }
         try await self.refreshHeldSessionIgnoringCachedFailure(

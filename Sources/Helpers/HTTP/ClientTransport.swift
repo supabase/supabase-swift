@@ -26,6 +26,15 @@ public import HTTPTypes
 /// ```
 ///
 /// The default implementation is ``URLSessionTransport``.
+///
+/// ## Isolation
+///
+/// The SDK enables `NonisolatedNonsendingByDefault`, so it calls ``send(_:body:)`` on the actor
+/// that started the request: the main actor when your UI code calls the SDK, or an internal SDK
+/// actor for a request the SDK starts itself, such as a token refresh. When your `send` is
+/// `nonisolated(nonsending)`, the default in a module that enables the same feature, it runs on
+/// that actor until it first suspends. Do not block in it: await asynchronous I/O, and move
+/// CPU-heavy work to a `@concurrent` function.
 public protocol ClientTransport: Sendable {
   /// Sends a request and returns the response head as soon as it arrives. The body streams.
   ///
@@ -61,6 +70,9 @@ public protocol ClientTransport: Sendable {
 ///
 /// A middleware that retries must check ``HTTPBody/iterationBehavior`` and skip the retry
 /// when it is ``HTTPBody/IterationBehavior/single``.
+///
+/// Like a ``ClientTransport``, a middleware can run on the actor that started the request until
+/// it first suspends, so it must not block.
 public protocol ClientMiddleware: Sendable {
   /// Handles one exchange.
   ///

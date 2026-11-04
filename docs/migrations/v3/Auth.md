@@ -44,6 +44,14 @@ Changes that still compile but behave differently. Check each one by hand.
 - **String interpolation.** `"\(provider)"` on those structs prints
   `Provider(rawValue: "apple")`, not `apple`. `"\(error)"` on an `AuthError` prints
   `AuthError(server): …`, not the case name. Use `.rawValue` or `.message`.
+- **Auth logs and descriptions hide secrets.** The Auth logger removes access, refresh, provider
+  and ID tokens, PKCE verifiers, authorization codes, OTP codes and passwords from every line, and
+  cuts the query and fragment off logged URLs. `"\(session)"` prints
+  `Session(user_id: …, expires_at: …)` and `"\(change)"` on an `AuthChange` prints its masked
+  session. Read `session.accessToken` or `session.refreshToken` when you need a token. `dump(_:)` and
+  `customDump(_:)` still print every field. Search for
+  code that parses a printed `Session` or `AuthChange`, or that reads a token or URL query from
+  an Auth log line.
 - **A rejected session has its own kind.** When the server rejects the session or its refresh
   token (`refresh_token_not_found`, `refresh_token_already_used`, `session_expired`,
   `session_not_found`, `user_banned`), the error kind is `.sessionInvalidated`, not

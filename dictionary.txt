@@ -9,6 +9,7 @@ Apikey
 appex
 AQAB
 Ascii
+authcode
 autocapitalization
 Autocapitalization
 autocorrection
@@ -27,8 +28,10 @@ bytea
 caseless
 chan
 checkmark
+clientsecret
 Cloudflare
 cloudflare
+codeverifier
 conformances
 confirmer
 cooldown
@@ -51,6 +54,7 @@ dont
 dragarcia
 dummysignature
 ecdsa
+emailotp
 halfvec
 emaillink
 enotconn
@@ -76,11 +80,13 @@ GoTrue
 Guilherme
 Gxlbmdl
 Hashability
+hashedtoken
 heartbeating
 Heartbeating
 HMAC
 hostnames
 HTTPURL
+idtoken
 Ilike
 ilike
 imatch
@@ -163,6 +169,7 @@ Postgrest
 PostgREST
 preconcurrency
 prorows
+providertoken
 questionmark
 radiowaves
 Ranbir
@@ -179,6 +186,7 @@ Rvci
 sadcat
 secp256k1
 setof
+signposter
 siwe
 SIWE
 siws
@@ -207,6 +215,7 @@ sysexits
 testpath
 testuser
 timestamptz
+tokenhash
 totp
 Totp
 TOTP

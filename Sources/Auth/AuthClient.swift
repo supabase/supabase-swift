@@ -272,7 +272,7 @@ public final class AuthClient: Sendable {
     sessionStore: SessionStore,
     autoRefresh: AutoRefreshController?
   ) -> Task<Void, Never> {
-    Task {
+    Task.named("supabase.auth.lifecycle") {
       for await event in await platform.lifecycleEvents() {
         if event == .protectedDataDidBecomeAvailable {
           try? await sessionStore.load()

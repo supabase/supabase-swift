@@ -156,6 +156,8 @@ extension AuthClient {
       self.headers = headers
       self.storage = storage ?? AuthPlatform.defaultStorage
       self.redirectTo = redirectTo
+      var logger = logger.redactingSecrets()
+      logger[metadataKey: "system"] = "auth"
       self.logger = logger
       self.http = http
       self.autoRefresh = autoRefresh

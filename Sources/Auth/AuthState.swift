@@ -88,3 +88,11 @@ public struct AuthChange: Hashable, Sendable {
     self.status = status
   }
 }
+
+extension AuthChange: CustomStringConvertible {
+  /// The event and the status. A session in the status prints as ``Session/description``, with no
+  /// token.
+  public var description: String {
+    "AuthChange(event: \(event.rawValue), status: \(status))"
+  }
+}

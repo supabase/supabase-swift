@@ -45,6 +45,13 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
   }
 }
 
+extension PendingFlowRecord: CustomStringConvertible {
+  /// Leaves out the PKCE verifier, and the redirect URL, whose query can hold a state value.
+  var description: String {
+    "PendingFlowRecord(id: \(id), purpose: \(purpose.rawValue), created_at: \(createdAt))"
+  }
+}
+
 extension PendingFlowRecord.Purpose {
   /// How a finished flow of this purpose commits its session.
   ///

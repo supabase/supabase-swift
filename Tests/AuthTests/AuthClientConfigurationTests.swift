@@ -138,4 +138,19 @@ struct AuthClientConfigurationTests {
     let request = try #require(requests.value.first)
     #expect(request.headerFields[HTTPField.Name("X-Client-Info")!] == "my-wrapper/1.0")
   }
+
+  @Test
+  func loggerRedactsSecretsBeforeTheCallersHandlerSeesThem() {
+    let recorder = LogRecorder()
+    let configuration = AuthClient.Configuration(
+      url: URL(string: "http://localhost")!,
+      storageKey: "key",
+      storage: InMemoryAuthStorage(),
+      logger: recorder.makeLogger()
+    )
+
+    configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
+
+    #expect(recorder.entries == ["refresh failed: refresh_token=<redacted> system=auth"])
+  }
 }
