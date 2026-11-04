@@ -289,7 +289,7 @@ extension Session: CustomStringConvertible {
   /// The user ID and the expiry of the session. It holds no token, so logging a session does
   /// not leak one.
   public var description: String {
-    "Session(user_id: \(user.id), expires_at: \(expiresAt))"
+    "Session(user_id: \(user.id), expires_at: \(expiresAt.timeIntervalSince1970))"
   }
 }
 
