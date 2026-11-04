@@ -226,13 +226,14 @@ struct SupabaseClientTests {
   @Test
   func clientInitWithDefaultOptions() async {
     // A test bundle has no Keychain entitlement, so reading the stored session reports it. The
-    // client reads it in a task it starts, so the test waits for that read inside the known issue.
+    // client reads it in a task it starts, so the test reads the session inside the known issue.
+    // `initialization()` is no option: it never returns while the read fails.
     await withKnownIssue(isIntermittent: true) {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://default-options.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY"
       )
-      await client.auth.initialization()
+      _ = try? await client.auth.session()
     } matching: { issue in
       issue.comments.contains { $0.rawValue.contains("errSecMissingEntitlement") }
     }
