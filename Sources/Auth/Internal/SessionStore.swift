@@ -524,6 +524,7 @@ actor SessionStore {
       return
     }
     let armedGeneration = generation
+    let now = now
     // A refresh of this token that failed a moment ago, as the startup one can, gets a backoff
     // before the next, not an immediate second request.
     let recentFailure = lastRefreshFailure.flatMap {
@@ -531,7 +532,6 @@ actor SessionStore {
         && (0..<Self.refreshFailureCooldown).contains(now().timeIntervalSince($0.date))
         ? $0.error : nil
     }
-    let now = now
     autoRefreshTask = Task { [weak self] in
       await Refresher.run(for: received, driver: driver, now: now, afterFailure: recentFailure) {
         guard let self else { throw CancellationError() }
