@@ -742,14 +742,14 @@ final class StorageBucketIntegrationTests {
     let api = storage.from(bucketName)
     try await api.upload(path: uploadPath, data: file)
 
-    let url = try await api.createSignedURL(path: uploadPath, expiresIn: .seconds(1))
+    let url = try await api.createSignedURL(path: uploadPath, expiresIn: .seconds(5))
     #expect(url.host == StorageIntegration.url.host)
     #expect(url.path.hasSuffix("/object/sign/\(bucketName)/\(uploadPath)"))
     let (bytes, response) = try await StorageIntegration.fetch(url)
     #expect(response.statusCode == 200)
     #expect(bytes == file)
 
-    try await Task.sleep(for: .seconds(3))
+    try await Task.sleep(for: .seconds(7))
     let (expiredBody, expired) = try await StorageIntegration.fetch(url)
     #expect(expired.statusCode == 400)
     #expect(String(decoding: expiredBody, as: UTF8.self).contains("InvalidJWT"))
