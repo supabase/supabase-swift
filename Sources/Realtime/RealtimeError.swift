@@ -66,6 +66,10 @@ public struct RealtimeError: SupabaseError {
     public static let payloadTooLarge: Kind = "payloadTooLarge"
     /// The server closed the channel while a subscribe was in flight.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
+    /// The call used a channel that ``RealtimeClient/removeChannel(_:)`` removed or that the
+    /// server closed (`phx_close`), or the removal ended a subscribe in flight. Get a new channel
+    /// from ``RealtimeClient/channel(_:configure:)``.
+    public static let channelRemoved: Kind = "channelRemoved"
     /// The server answered a join or REST broadcast with an error this SDK has no narrower kind
     /// for. Read ``RealtimeError/serverCode`` and ``RealtimeError/message``, or
     /// ``RealtimeError/response`` on the REST path.
@@ -244,6 +248,12 @@ extension RealtimeError {
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
 
+  /// The channel was removed with ``RealtimeClient/removeChannel(_:)``, or the server closed it.
+  static let channelRemoved = RealtimeError(
+    kind: .channelRemoved,
+    message: "The channel was removed from the client or closed by the server.",
+    isRetryable: false)
+
   static let accessTokenMissing = RealtimeError(
     kind: .accessTokenMissing, message: "Access token is required for httpSend()",
     isRetryable: false)
@@ -380,4 +390,72 @@ extension RealtimeError {
   var joinRecovery: JoinRecovery {
     isRetryable ? JoinRecovery(serverCode: serverCode, reason: message) : .fail
   }
+}
+
+extension RealtimeError {
+  /// The channel is not subscribed, so the push cannot be delivered.
+  static let notSubscribed = RealtimeError(
+    kind: .notSubscribed,
+    message: "The channel is not subscribed. Call `subscribe()` first, or use `httpSend()`.",
+    isRetryable: false
+  )
+
+  /// The channel's client was released, so the channel can never connect again.
+  static let clientReleased = RealtimeError(
+    kind: .notConnected, message: "The realtime client was released.", isRetryable: false)
+
+  /// `subscribe()` found no connection and `connectOnSubscribe` is off.
+  static let notConnectedToSubscribe = RealtimeError(
+    kind: .notConnected,
+    message:
+      "The realtime client is not connected and `connectOnSubscribe` is off. Call `connect()` first.",
+    isRetryable: false
+  )
+
+  /// The server confirmed the join with `postgres_changes` the client cannot decode. A retry
+  /// gets the same reply.
+  static func unreadableJoinReply(_ error: any Error) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server's join reply has `postgres_changes` the client cannot read: \(error)",
+      isRetryable: false
+    )
+  }
+
+  /// ``RealtimeClient/disconnect(code:reason:)`` was called while the channel was subscribing.
+  static let disconnectedWhileSubscribing = RealtimeError(
+    kind: .notConnected,
+    message: "The realtime client was disconnected while the channel was subscribing.",
+    isRetryable: false
+  )
+
+  /// The server did not report "Subscribed to PostgreSQL" within
+  /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``.
+  static let postgresChangesTimeout = RealtimeError(
+    kind: .timeout,
+    message:
+      "The server did not set up the channel's Postgres changes within the subscription timeout.",
+    isRetryable: false
+  )
+
+  /// The server could not set up the channel's Postgres changes bindings.
+  package static func postgresChangesFailed(reason: String) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server could not set up the channel's Postgres changes: \(reason)",
+      isRetryable: false
+    )
+  }
+
+  /// The server did not confirm a `phx_join` within the client's configured timeout.
+  static let joinTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not confirm the join within the timeout.")
+
+  /// The socket is not connected, so the push cannot be answered.
+  static let notConnected = RealtimeError(
+    kind: .notConnected, message: "The realtime client is not connected.")
+
+  /// No `phx_reply` arrived for the push within the client's configured timeout.
+  static let pushTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not reply to the push within the timeout.")
 }

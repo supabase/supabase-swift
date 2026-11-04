@@ -75,6 +75,7 @@ nonisolated struct Tick: Decodable {
 ```
 
 Do this for every type you decode in a `@concurrent` function, on another actor, or in a task
-group child, such as the loop in <doc:HighRateFeeds>. Do it also for every type you send with
-``RealtimeChannel/broadcast(event:payload:encoder:)`` or ``RealtimeChannel/track(_:encoder:)``,
-because the channel encodes it on its own executor. <doc:Isolation> explains why.
+group child, such as the loop in <doc:HighRateFeeds>. Types you send follow the same rule:
+``RealtimeChannel/broadcast(event:payload:encoder:)`` and ``RealtimeChannel/track(_:encoder:)``
+encode on the caller's actor, so a main actor conformance works when you call them from the
+main actor. <doc:Isolation> explains why.

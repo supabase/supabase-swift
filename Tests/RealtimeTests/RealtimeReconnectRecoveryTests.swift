@@ -104,7 +104,8 @@ struct RealtimeReconnectRecoveryTests {
 
     try? await Task.sleep(nanoseconds: 300_000_000)
     #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(await sut.channelsByTopic[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(
+      await sut.liveChannel(for: channel.topic) != nil, "Stale phx_close removed the channel")
 
     socket.reply(
       RealtimeMessage(
@@ -197,7 +198,8 @@ struct RealtimeReconnectRecoveryTests {
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
     await waitUntil(timeout: 2) { await sut.status == .disconnected }
     #expect(await sut.status == .disconnected)
-    #expect(await channel.status == .subscribed)
+    // The channel waits for the next socket to rejoin.
+    #expect(await channel.status == .subscribing)
 
     let start = ContinuousClock.now
     await sut.removeChannel(channel)
@@ -206,6 +208,7 @@ struct RealtimeReconnectRecoveryTests {
       elapsed < .seconds(1.5),
       "removeChannel on a dead socket stalled waiting for phx_close (\(elapsed))"
     )
+    // A removed channel reads `.unsubscribed`.
     #expect(await channel.status == .unsubscribed)
 
     try await sut.connect()
@@ -283,7 +286,7 @@ struct RealtimeReconnectRecoveryTests {
     }
     #expect(strayJoins.isEmpty, "The reconnect rejoined the channel being removed: \(strayJoins)")
     #expect(await removed.status == .unsubscribed)
-    #expect(await sut.channelsByTopic[removed.topic] == nil)
+    #expect(await !sut.channels.contains { $0 === removed })
 
     // The app joins the topic again; the channel must survive the server's handling of any
     // earlier join of the topic on this socket, and any retry of it.
@@ -297,7 +300,7 @@ struct RealtimeReconnectRecoveryTests {
     try? await Task.sleep(nanoseconds: 1_500_000_000)
 
     #expect(await next.status == .subscribed)
-    #expect(await sut.channelsByTopic[next.topic] === next, "The topic's next channel was unmapped")
+    #expect(await sut.channels.contains { $0 === next }, "The topic's next channel was removed")
     let joins = newSocket.sentMessages.filter { $0.event == "phx_join" }
     #expect(joins.allSatisfy { $0.joinRef != nil }, "A phx_join went out without a join_ref")
 

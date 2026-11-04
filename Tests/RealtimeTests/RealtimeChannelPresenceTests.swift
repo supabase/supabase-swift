@@ -96,7 +96,7 @@ struct RealtimeChannelPresenceTests {
     _ = await changes.next()
 
     try await dropSocketAndRejoin(channel, after: firstJoin, on: host)
-    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u2"])
+    #expect(await Set(channel.presenceState.entries.keys) == ["u1", "u2"])
     sendPresenceState(
       ["u1": metas([("r1", "ana")]), "u3": metas([("r3", "cy")])], on: channel, host: host
     )
@@ -104,7 +104,7 @@ struct RealtimeChannelPresenceTests {
     let change = try #require(await changes.next())
     #expect(Set(change.joins.keys) == ["u3"])
     #expect(Set(change.leaves.keys) == ["u2"])
-    #expect(Set(await channel.presenceState.entries.keys) == ["u1", "u3"])
+    #expect(await Set(channel.presenceState.entries.keys) == ["u1", "u3"])
   }
 
   @Test

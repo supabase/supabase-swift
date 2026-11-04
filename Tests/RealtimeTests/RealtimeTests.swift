@@ -91,7 +91,7 @@ final class RealtimeTests: Sendable {
 
   @Test
   func behavior() async throws {
-    try await withMainSerialExecutor {
+    await withMainSerialExecutor {
       let channel = await sut.channel("public:messages")
 
       let inserts = await channel.postgresChanges(event: .insert, table: "messages")
@@ -122,7 +122,7 @@ final class RealtimeTests: Sendable {
       }
       defer { serverTask.cancel() }
 
-      let channelStatuses = collect(await channel.statusChanges())
+      let channelStatuses = await collect(channel.statusChanges())
       defer { channelStatuses.task.cancel() }
 
       do {
@@ -231,7 +231,7 @@ final class RealtimeTests: Sendable {
       try await sut.connect()
       await testClock.advance(by: heartbeatInterval)
 
-      Task {
+      _ = Task {
         try await channel.subscribe()
       }
 
@@ -913,9 +913,24 @@ final class RealtimeTests: Sendable {
   }
 
   @Test
-  func deferredDisconnect_cancelledByNewChannel() async throws {
+  func deferredDisconnect_cancelledBySubscribe() async throws {
     try await withMainSerialExecutor {
       let deferredSut = makeClientWithDeferredDisconnect(delay: .seconds(5))
+      let serverTask = Task { [server] in
+        for await event in server.events {
+          guard let msg = event.realtimeMessage, msg.event == "phx_join" else { continue }
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: msg.topic,
+              event: "phx_reply",
+              payload: ["response": ["postgres_changes": .array([])], "status": "ok"]
+            )
+          )
+        }
+      }
+      defer { serverTask.cancel() }
 
       try await deferredSut.connect()
 
@@ -926,7 +941,10 @@ final class RealtimeTests: Sendable {
       let pendingTask = await deferredSut.pendingDisconnectTask
       #expect(pendingTask != nil)
 
-      _ = await deferredSut.channel("test:new")
+      let newChannel = await deferredSut.channel("test:new")
+      #expect(await deferredSut.pendingDisconnectTask != nil)
+
+      try await newChannel.subscribe()
 
       #expect(await deferredSut.pendingDisconnectTask == nil)
       #expect(pendingTask?.isCancelled ?? false)
@@ -989,13 +1007,11 @@ final class RealtimeTests: Sendable {
   }
 }
 
-/// The loop tasks by their old names, read out of the client's `TaskStorage`.
+/// The loop tasks by their old names, read out of the client's shell.
 extension RealtimeClient {
-  fileprivate var messageTask: Task<Void, Never>? { tasks.tasks(at: .socketReader).first }
-  fileprivate var heartbeatTask: Task<Void, Never>? { tasks.tasks(at: .heartbeat).first }
-  fileprivate var pendingDisconnectTask: Task<Void, Never>? {
-    tasks.tasks(at: .idleDisconnect).first
-  }
+  fileprivate var messageTask: Task<Void, Never>? { reader }
+  fileprivate var heartbeatTask: Task<Void, Never>? { timers.task(for: .heartbeat) }
+  fileprivate var pendingDisconnectTask: Task<Void, Never>? { timers.task(for: .idleDisconnect) }
 }
 
 extension RealtimeMessage {

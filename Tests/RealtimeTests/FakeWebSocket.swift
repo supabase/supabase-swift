@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import TestHelpers
 
 @testable import Realtime
 
@@ -29,6 +30,19 @@ final class FakeWebSocket: WebSocketConnection {
     mutableState.value.sentEvents
   }
 
+  /// The binary frames sent so far, waiting up to `timeout` for the first one: the client's
+  /// writer sends a frame after the call that queued it returns.
+  func sentBinaryFrames(timeout: Duration = .seconds(5)) async -> [Data] {
+    await waitUntil(timeout: timeout.timeInterval) { !self.binaryFrames.isEmpty }
+    return binaryFrames
+  }
+
+  private var binaryFrames: [Data] {
+    sentEvents.compactMap { event in
+      if case .frame(.binary(let data)) = event { data } else { nil }
+    }
+  }
+
   var receivedEvents: [WebSocketEvent] {
     mutableState.value.receivedEvents
   }
@@ -42,20 +56,17 @@ final class FakeWebSocket: WebSocketConnection {
   }
 
   func close(code: Int?, reason: String?) {
-    mutableState.withValue { s in
-      if s.isClosed { return }
-
-      let event = WebSocketEvent.closed(
-        code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
+    let event = WebSocketEvent.closed(
+      code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
+    let peer = mutableState.withValue { s -> FakeWebSocket? in
+      if s.isClosed { return nil }
       s.sentEvents.append(event)
-
       s.isClosed = true
       s.closeCode = code
       s.closeReason = reason
-      if s.other?.isClosed == false {
-        s.other?._trigger(event)
-      }
+      return s.other
     }
+    deliver(event, to: peer)
   }
 
   func close(code: WebSocketCloseCode, reason: String?) {
@@ -82,15 +93,19 @@ final class FakeWebSocket: WebSocketConnection {
   }
 
   private func send(frame: WebSocketFrame) {
-    mutableState.withValue {
-      guard !$0.isClosed else { return }
-
-      $0.sentEvents.append(.frame(frame))
-
-      if $0.other?.isClosed == false {
-        $0.other?._trigger(.frame(frame))
-      }
+    let peer = mutableState.withValue { s -> FakeWebSocket? in
+      guard !s.isClosed else { return nil }
+      s.sentEvents.append(.frame(frame))
+      return s.other
     }
+    deliver(.frame(frame), to: peer)
+  }
+
+  /// Hands `event` to `peer` after this socket's lock is released. Holding it would take both
+  /// locks in opposite orders when the two ends send at once, and deadlock.
+  private func deliver(_ event: WebSocketEvent, to peer: FakeWebSocket?) {
+    guard let peer, !peer.isClosed else { return }
+    peer._trigger(event)
   }
 
   var isClosed: Bool {

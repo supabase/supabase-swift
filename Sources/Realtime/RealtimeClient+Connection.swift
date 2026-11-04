@@ -7,584 +7,423 @@
 
 import Foundation
 import Helpers
-import IssueReporting
 import Logging
 
-// MARK: - The state machine
+// MARK: - Apply loop
+
+/// What the batch of a ``RealtimeClient/disconnect(code:reason:)`` stopped: the outbox of the
+/// socket, which still holds the frames queued before the call, and the close of that socket.
+struct StoppedSocket {
+  var outbox: Outbox?
+  var close: (() -> Void)?
+}
 
 extension RealtimeClient {
-  /// Everything that can move the connection. Events come from the public API, from the
-  /// connect attempt, from the timers, and from the socket reader.
-  enum Event {
-    /// `connect()` was called.
-    case connectRequested
-    /// The transport handed back an open socket.
-    case socketOpened(any WebSocketConnection)
-    /// The transport failed to open a socket.
-    case socketOpenFailed(RealtimeError)
-    /// `disconnect(code:reason:)` was called.
-    case disconnectRequested(code: Int?, reason: String?)
-    /// The remote closed the current socket.
-    case socketClosed(code: Int?, reason: String?)
-    /// The current socket failed (for now, a heartbeat that was never acknowledged).
-    case socketFailed(RealtimeError)
-    /// The backoff wait before the next reconnect attempt is over.
-    case retryTimerFired
-    /// A hint that the network may be back (the app came to the foreground). Cuts a backoff
-    /// wait short; ignored in every other state.
-    case wake
-    /// The last channel was removed; disconnect after `disconnectAfter` unless one is added.
-    case lastChannelRemoved(disconnectAfter: Duration)
-    /// A channel was added.
-    case channelAdded
-  }
-
-  /// What the transition asks the actor to do once the state is updated. Effects run in order,
-  /// after `connection` has its new value, so nothing observes a half-applied transition.
-  enum Effect: Equatable {
-    /// Start a connect attempt.
-    case openSocket
-    /// Start the reader and heartbeat loops and flush buffered frames. After an automatic
-    /// reconnect, also rejoin the channels.
-    case installSocket(any WebSocketConnection, rejoinChannels: Bool)
-    /// Close a socket, either the current one or one that opened too late.
-    case closeSocket(any WebSocketConnection, code: Int?, reason: String)
-    /// Stop the reader and heartbeat loops of the socket that just went away.
-    case stopSocketLoops
-    /// Cancel every task the client owns, including a connect attempt in flight.
-    case cancelAllTasks
-    /// Fire `.retryTimerFired` after `after`.
-    case scheduleRetry(after: Duration)
-    case cancelRetry
-    /// Disconnect after `after`.
-    case scheduleIdleDisconnect(after: Duration)
-    case cancelIdleDisconnect
-
-    static func == (lhs: Effect, rhs: Effect) -> Bool {
-      switch (lhs, rhs) {
-      case (.openSocket, .openSocket), (.stopSocketLoops, .stopSocketLoops),
-        (.cancelAllTasks, .cancelAllTasks), (.cancelRetry, .cancelRetry),
-        (.cancelIdleDisconnect, .cancelIdleDisconnect):
-        return true
-      case (.installSocket(let a, let ra), .installSocket(let b, let rb)):
-        return a === b && ra == rb
-      case (.closeSocket(let a, let ca, let ra), .closeSocket(let b, let cb, let rb)):
-        return a === b && ca == cb && ra == rb
-      case (.scheduleRetry(let a), .scheduleRetry(let b)),
-        (.scheduleIdleDisconnect(let a), .scheduleIdleDisconnect(let b)):
-        return a == b
-      default:
-        return false
-      }
+  /// Hands `event` to the core and runs the effects it returns, in order. It never suspends, and
+  /// no effect hands the core an event, so the core never sees two events at once. A waiter the
+  /// core resolves resumes as its effect runs; it continues on this actor, so only once the
+  /// whole batch is applied, and it reads the state the batch left.
+  func apply(_ event: RealtimeCore.Event) {
+    let elapsed = elapsed()
+    let date = startDate.addingTimeInterval(elapsed.timeInterval)
+    let effects = core.handle(event, at: CoreTime(elapsed: elapsed, date: date))
+    for effect in effects {
+      run(effect)
     }
   }
 
-  /// The pure transition table. It never touches the actor: given the current state and an
-  /// event, it updates the state and says which effects follow. `retryDelay(n)` is the wait
-  /// after the n-th attempt failed.
-  static func transition(
-    _ state: inout ConnectionState, _ event: Event, retryDelay: (_ attempt: Int) -> Duration
-  ) -> [Effect] {
-    func waitToRetry(after attempt: Int, _ error: RealtimeError) -> Effect {
-      let delay = retryDelay(attempt)
-      state = .reconnecting(attempt: attempt, retryIn: delay, lastError: error)
-      return .scheduleRetry(after: delay)
-    }
+  // MARK: Inbox
 
-    switch (state, event) {
-    // connect()
-    case (.disconnected, .connectRequested):
-      state = .connecting(attempt: 1)
-      return [.openSocket]
-    case (.reconnecting(let attempt, _, _), .connectRequested),
-      (.reconnecting(let attempt, _, _), .wake):
-      state = .connecting(attempt: attempt + 1)
-      return [.cancelRetry, .openSocket]
-    case (_, .connectRequested), (_, .wake):
-      return []
-
-    case (.reconnecting(let attempt, _, _), .retryTimerFired):
-      state = .connecting(attempt: attempt + 1)
-      return [.openSocket]
-    case (_, .retryTimerFired):
-      return []
-
-    // The transport answered.
-    case (.connecting(let attempt), .socketOpened(let conn)):
-      state = .connected(conn)
-      return [.installSocket(conn, rejoinChannels: attempt > 1)]
-    case (_, .socketOpened(let conn)):
-      // `disconnect()` ran while the handshake was in flight and already moved on.
-      return [.closeSocket(conn, code: nil, reason: "Connection cancelled")]
-    case (.connecting(let attempt), .socketOpenFailed(let error)):
-      // The user's own `connect()` reports the failure and stops; so does a retry that can
-      // never succeed. Any other failed retry waits longer and tries again.
-      guard attempt > 1, error.isRetryable else {
-        state = .disconnected(error)
-        return []
+  /// Applies one input from an edge. The pump calls this once per input, in the order the edges
+  /// yielded them. An input whose stamp no longer matches, because the work that yielded it was
+  /// replaced or stopped, is dropped.
+  func receive(_ input: Input) {
+    switch input {
+    case .socket(let input, let generation):
+      guard generation == self.generation else {
+        logger.debug("Ignoring event from a stale connection: \(input)")
+        return
       }
-      return [waitToRetry(after: attempt, error)]
-    case (_, .socketOpenFailed):
-      return []
-
-    // disconnect()
-    case (.connected(let conn), .disconnectRequested(let code, let reason)):
-      state = .disconnected(nil)
-      return [
-        .cancelAllTasks, .closeSocket(conn, code: code, reason: reason ?? "Client disconnect"),
-      ]
-    case (_, .disconnectRequested):
-      state = .disconnected(nil)
-      return [.cancelAllTasks]
-
-    // The socket went away.
-    case (.connected, .socketClosed(let code, let reason)):
-      let error = RealtimeError.socketClosed(
-        code: code.map(WebSocketCloseCode.init(rawValue:)), reason: reason)
-      // Application-level close codes (4000–4999) typically signal auth or protocol errors.
-      // Reconnecting with the same bad token would loop; the caller must re-authenticate.
-      if let code, code >= 4000 {
-        state = .disconnected(error)
-        return [.stopSocketLoops]
+      switch input {
+      case .frame(let message):
+        apply(.frame(message))
+      case .binaryBroadcast(let broadcast):
+        apply(.binaryBroadcast(broadcast))
+      case .closed(let code, let reason):
+        logger.debug(
+          "WebSocket closed. Code: \(code?.description ?? "<none>"), Reason: \(reason ?? "<none>")"
+        )
+        apply(.socketClosed(code: code, reason: reason))
       }
-      return [.stopSocketLoops, waitToRetry(after: 1, error)]
-    case (.connected(let conn), .socketFailed(let error)):
-      return [
-        // 1001 rather than a normal closure: the client gives up on a connection that failed.
-        .closeSocket(conn, code: 1001, reason: "error: \(error.message)"),
-        .stopSocketLoops,
-        waitToRetry(after: 1, error),
-      ]
-    case (_, .socketClosed), (_, .socketFailed):
-      // Not connected: the socket this came from is already gone.
-      return []
 
-    // Channels come and go.
-    case (.disconnected, .lastChannelRemoved):
-      return []
-    case (_, .lastChannelRemoved(let delay)):
-      return [.scheduleIdleDisconnect(after: delay)]
-    case (_, .channelAdded):
-      return [.cancelIdleDisconnect]
+    case .connectEnded(let result, let attempt):
+      connectAttemptEnded(result, attempt: attempt)
+
+    case .timerFired(let id, let token):
+      guard timers.claimFire(id, token: token) else { return }
+      apply(.timerFired(id))
+
+    case .tokenFetched(let token, let generation):
+      tokenFetchEnded(token, generation: generation)
+
+    case .streamEnded(let id):
+      streamEnded(id)
+
+    case .waiterCancelled(let id):
+      apply(.waiterCancelled(id))
+
+    case .tokenWaitCancelled(let id):
+      tokenFetchWaiters.removeValue(forKey: id)?.resume()
+
+    case .appBackground:
+      handleAppBackground()
+
+    case .appForeground:
+      handleAppForeground()
+
+    case .flush(let continuation):
+      continuation.resume()
     }
   }
 
-  /// Applies `event` in two phases: the pure transition first, then its effects. An event
-  /// raised while effects are running is queued and applied right after them, so the table
-  /// always sees one event at a time.
-  func apply(_ event: Event) {
-    pendingEvents.append(event)
-    guard !isApplying else {
-      reportIssue(
-        "RealtimeClient.apply(_:) re-entered while applying an event; the new event was queued. Effects must not apply events synchronously."
-      )
-      return
+  /// Handles an input the pump reads after the client was released: closes a socket that opened
+  /// too late and resumes a flush. Every other input has nothing left to act on.
+  nonisolated static func receiveAfterRelease(_ input: Input) {
+    switch input {
+    case .connectEnded(.success(let conn), _):
+      conn.close(code: .normalClosure, reason: "Client deallocated")
+    case .flush(let continuation):
+      continuation.resume()
+    default:
+      break
     }
-    isApplying = true
-    defer { isApplying = false }
+  }
 
-    while !pendingEvents.isEmpty {
-      let next = pendingEvents.removeFirst()
-      let previous = connection
-      let effects = Self.transition(&connection, next) { [reconnectBackoff, jitter] attempt in
-        reconnectBackoff.delay(forAttempt: attempt, random: jitter)
-      }
-      logger.debug("Connection → \(connection) on \(next)")
-      if connection != previous {
-        connectionDidChange()
-      }
-      for effect in effects {
-        run(effect)
+  /// Returns once the pump has applied every input yielded before this call. Tests use it to wait
+  /// for the pump; nothing in the SDK calls it.
+  nonisolated func flushInbox() async {
+    await withCheckedContinuation { continuation in
+      if case .terminated = inbox.yield(.flush(continuation)) {
+        continuation.resume()
       }
     }
   }
 
-  private func run(_ effect: Effect) {
+  // MARK: Waiters
+
+  /// Parks the caller until the core resolves the waiter that `make` hands the event. The
+  /// waiter is parked and the event applied in one actor step, so the core can resolve it in
+  /// the same batch. A cancelled caller throws `CancellationError`: the cancel only yields
+  /// ``Input/waiterCancelled(_:)``, which the pump applies after the current actor job, so it
+  /// never overtakes its own park.
+  ///
+  /// A caller that is already cancelled throws before the core sees the event, unless
+  /// `evenIfCancelled` is set: then the event is applied, and only the wait ends at once.
+  func wait(
+    evenIfCancelled: Bool = false, _ make: @Sendable (WaiterID) -> RealtimeCore.Event
+  ) async throws {
+    if !evenIfCancelled {
+      try Task.checkCancellation()
+    }
+    let id = waiters.next()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        waiters.park(id, continuation)
+        apply(make(id))
+      }
+    } onCancel: { [inbox] in
+      inbox.yield(.waiterCancelled(id))
+    }
+  }
+
+  /// ``wait(evenIfCancelled:_:)`` for an action of `channel`. The check runs here, on the actor,
+  /// so an action cannot slip past a ``removeChannel(_:)`` that ran since the caller checked.
+  ///
+  /// - Throws: ``RealtimeError/Kind-swift.struct/channelRemoved`` when `channel` is spent, and
+  ///   what the wait throws otherwise.
+  func wait(
+    on channel: RealtimeChannel, evenIfCancelled: Bool = false,
+    _ make: @Sendable (WaiterID) -> RealtimeCore.Event
+  ) async throws {
+    guard state(of: channel) != nil else { throw RealtimeError.channelRemoved }
+    try await wait(evenIfCancelled: evenIfCancelled, make)
+  }
+
+  /// Runs one effect. It never hands an event to the core: the tasks it starts yield their
+  /// inputs into the inbox, and the pump applies them later.
+  private func run(_ effect: RealtimeCore.Effect) {
     switch effect {
     case .openSocket:
-      connectAttempt = Task { try await openSocket() }
+      openSocket()
 
-    case .installSocket(let conn, let rejoinChannels):
-      generation += 1
-      // A heartbeat awaiting an ack on the previous connection can never be acknowledged on
-      // this one. Clearing the pending ref prevents the new connection's first heartbeat from
-      // misreading it as a timeout and tearing down a healthy socket.
-      pendingHeartbeatRef = nil
-      listenForMessages(on: conn)
-      startHeartbeating()
-      let generation = generation
-      Task.immediateIfAvailable {
-        await self.flushSendBuffer(on: conn)
-        // A disconnect or a newer socket during the flush owns the channels now.
-        guard rejoinChannels, generation == self.generation else { return }
-        await self.rejoinChannels()
-      }
+    case .installSocket(let conn):
+      stopSocketLoops()
+      socket = conn
+      outbox = Outbox(connection: conn, serializer: serializer, logger: logger)
+      reader = listen(to: conn, generation: generation)
 
     case .closeSocket(let conn, let code, let reason):
       // A `nil` code is a normal closure.
-      conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason)
+      let close = { conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason) }
+      if stoppedByDisconnect != nil {
+        stoppedByDisconnect?.close = close
+      } else {
+        close()
+      }
 
     case .stopSocketLoops:
-      tasks.cancel(at: .socketReader)
-      tasks.cancel(at: .heartbeat)
-      pendingHeartbeatRef = nil
+      stopSocketLoops()
 
     case .cancelAllTasks:
-      tasks.cancelAll()
-      connectAttempt?.cancel()
+      stopSocketLoops()
+      connectAttempt?.task.cancel()
       connectAttempt = nil
-      pendingHeartbeatRef = nil
-      generation += 1
+      // The `accessToken` call goes on: it is bounded by the request timeout, and the core waits
+      // for its `.tokenFetched`.
+      timers.cancelAll()
 
-    case .scheduleRetry(let delay):
-      if case .reconnecting(let attempt, _, let error) = connection {
-        logger.debug(
-          "Reconnect attempt \(attempt + 1) in \(delay) after: \(error.message)")
+    case .send(let message):
+      guard let outbox else {
+        logger.debug("Dropping \(message.event) on '\(message.topic)': no socket")
+        return
       }
-      tasks.replace([timer(after: delay) { $0.fireRetryTimer() }], at: .connection)
+      outbox.enqueue(message)
 
-    case .cancelRetry:
-      tasks.cancel(at: .connection)
+    case .sendBroadcast(let joinRef, let ref, let topic, let event, let payload):
+      sendBroadcast(joinRef: joinRef, ref: ref, topic: topic, event: event, payload: payload)
 
-    case .scheduleIdleDisconnect(let delay):
-      tasks.replace(
-        [timer(after: delay) { await $0.fireIdleDisconnect() }], at: .idleDisconnect)
+    case .schedule(let id, let delay):
+      scheduleTimer(id, after: delay)
 
-    case .cancelIdleDisconnect:
-      tasks.cancel(at: .idleDisconnect)
+    case .cancel(let id):
+      timers.cancel(id)
+
+    case .resume(let id, let outcome):
+      waiters.resume(id, with: outcome)
+
+    case .publishClientStatus(let status):
+      statusFanout.yield(status)
+
+    case .publishHeartbeat(let event):
+      heartbeatFanout.yield(event)
+
+    case .publishChannelStatus(let id, let status):
+      // A spent channel has no state; its handle reads `.unsubscribed`.
+      channelStates[id]?.publishStatus(status)
+
+    case .deliver(let id, let delivery):
+      channelStates[id]?.deliver(delivery)
+
+    case .finishChannel(let id):
+      // The server closed the channel, which spends it. After `removeChannel(_:)` the state is
+      // already gone.
+      channelStates.removeValue(forKey: id)?.finishAll()
+
+    case .fetchAccessToken(let generation):
+      fetchAccessToken(generation: generation)
     }
   }
 
-  /// Sleeps `delay`, then runs `fire` on the client.
-  ///
-  /// Detached and weak: the sleep must not keep a released client alive until it ends.
-  private func timer(
-    after delay: Duration,
-    fire: @escaping @Sendable (isolated RealtimeClient) async -> Void
-  ) -> Task<Void, Never> {
-    Task.detached { [weak self, clock] in
-      try? await clock.sleep(for: delay)
-      guard let self else { return }
-      await fire(self)
-    }
-  }
-
-  /// Checks cancellation here, on the actor: a timer cancelled after its sleep ended but
-  /// before it got here must not fire.
-  private func fireRetryTimer() {
-    guard !Task.isCancelled else { return }
-    apply(.retryTimerFired)
-  }
-
-  private func fireIdleDisconnect() async {
-    guard !Task.isCancelled else { return }
-    await disconnect()
-  }
-}
-
-// MARK: - Public API
-
-extension RealtimeClient {
-  /// Opens the WebSocket connection and suspends until it is established.
-  ///
-  /// Calling this method when already connected is a no-op, and calling it while a connection
-  /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
-  /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
-  /// automatic reconnect carries on. If
-  /// ``RealtimeClientOptions/connectOnSubscribe`` is `true` (the default), this is called
-  /// automatically when a channel is subscribed to.
-  ///
-  /// ```swift
-  /// try await client.connect()
-  /// ```
-  ///
-  /// - Throws: ``RealtimeError`` with kind `.transport` when the socket could not be opened, or
-  ///   `CancellationError` when the calling task is cancelled or ``disconnect(code:reason:)``
-  ///   interrupts the attempt.
-  public func connect() async throws {
-    logger.debug("Connecting...")
-
-    switch connection {
-    case .connected:
-      logger.debug("Already connected")
-
-    case .connecting:
-      logger.debug("Connection already in progress, waiting...")
-      try await awaitConnectAttempt()
-
-    case .reconnecting, .disconnected:
-      logger.debug("Initiating new connection")
-      apply(.connectRequested)
-      try await awaitConnectAttempt()
-    }
-  }
-
-  /// Closes the WebSocket connection.
-  ///
-  /// Cancels pending tasks, clears the send buffer, fails every push still waiting for a reply
-  /// with ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
-  /// Channels stay registered, and subscribed ones become
-  /// ``RealtimeChannelStatus/unsubscribed``. The next ``connect()`` does not rejoin them; call
-  /// ``RealtimeChannel/subscribe()`` again, and the join emits
-  /// ``RealtimeChannelEvent/resubscribed``.
-  ///
-  /// - Parameters:
-  ///   - code: An optional numeric close code to send to the server.
-  ///   - reason: An optional reason string to send to the server.
-  public func disconnect(code: Int? = nil, reason: String? = nil) async {
-    logger.debug("Closing WebSocket connection")
-    ref = 0
-    sendBuffer = []
-    // A developer-initiated disconnect should not be undone on the next foreground event.
-    wasConnectedBeforeBackground = false
-
-    apply(.disconnectRequested(code: code, reason: reason))
-
-    for channel in channelsByTopic.values {
-      await channel.socketDidDisconnect()
-    }
-  }
-
-  // MARK: - App lifecycle
-
-  /// Records that the app is entering the background. Captures whether the socket was connected
-  /// at that moment so ``handleAppForeground()`` knows whether to attempt recovery when the app
-  /// returns to the foreground.
-  ///
-  /// Invoked automatically by ``RealtimeLifecycleManager`` when
-  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
-  func handleAppBackground() {
-    wasConnectedBeforeBackground = status.isConnected
-  }
-
-  /// Recover the connection on app foregrounding: reconnect and re-join existing channels if the
-  /// socket was connected before the app backgrounded and has since been torn down. No-op if the
-  /// socket was already disconnected at background time, or if it is still connected now.
-  ///
-  /// Invoked automatically by ``RealtimeLifecycleManager`` when
-  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
-  func handleAppForeground() async {
-    // Read-modify-write in one synchronous stretch, so two rapid foreground notifications
-    // can't both observe `true`.
-    let wasConnected = wasConnectedBeforeBackground
-    wasConnectedBeforeBackground = false
-
-    guard wasConnected else { return }
-    switch connection {
-    case .connected, .connecting:
-      // An attempt in flight drives `rejoinChannels()` itself when it completes.
-      return
-    case .reconnecting:
-      // The network is likely back; do not wait out the rest of the backoff.
-      apply(.wake)
-      return
-    case .disconnected:
-      break
-    }
-
-    let hadChannels = !channelsByTopic.isEmpty
-    try? await connect()
-
-    if hadChannels, status.isConnected {
-      await rejoinChannels()
-    }
-  }
-}
-
-// MARK: - Effects
-
-extension RealtimeClient {
-  /// Waits for the `connect()` attempt started by `.openSocket`. Cancelling the caller ends its
-  /// wait at once but not the attempt: `connectAttempt.value` alone ignores the caller's
-  /// cancellation, so it would wait out a socket that never opens.
-  private func awaitConnectAttempt() async throws {
-    guard let connectAttempt else {
-      throw RealtimeError.transport("Connection failed")
-    }
-    let (outcome, continuation) = AsyncThrowingStream<Void, any Error>.makeStream()
-    Task.detached {
-      continuation.yield(with: await connectAttempt.result)
-      continuation.finish()
-    }
-    do {
-      for try await _ in outcome { return }
-      throw CancellationError()
-    } catch {
-      throw Self.connectionError(error)
-    }
-  }
-
-  /// Runs the transport for one connect attempt and reports the outcome to the machine. Every
-  /// caller that awaits this task observes `.connected` once it returns.
-  ///
-  /// `.cancelAllTasks` and `.cancelRetry` cancel this task but cannot stop the transport call
-  /// already in flight. A cancelled attempt drops its outcome here instead of handing it to
-  /// whichever attempt is current by then.
-  private func openSocket() async throws {
-    let conn: any WebSocketConnection
-    do {
-      conn = try await openConnection()
-    } catch {
-      logger.error("Connection failed: \(error)")
-      if !Task.isCancelled {
-        apply(.socketOpenFailed(Self.realtimeError(error)))
-      }
-      throw error
-    }
-
-    apply(.socketOpened(conn))
-    guard case .connected = connection else {
-      throw CancellationError()
-    }
-    logger.debug("Connected to realtime WebSocket")
-  }
-
-  /// Asks the transport for a connection. One that opens after the calling task was cancelled
-  /// is closed here, since nothing else will ever see it.
-  private func openConnection() async throws -> any WebSocketConnection {
-    let conn = try await transport.connect(to: webSocketURL, headerFields: headers)
-    if Task.isCancelled {
-      conn.close(code: .normalClosure, reason: "Connection cancelled")
-      throw CancellationError()
-    }
-    return conn
-  }
-
-  func rejoinChannels() async {
-    for channel in channelsByTopic.values {
-      // Not awaited, and detached so it does not hold `self`: a join retries until it succeeds,
-      // and a task that waited for it would keep a released client alive.
-      Task.detached { try? await channel.rejoinAfterReconnect() }
-    }
-  }
-
-  /// Reads the socket until it closes or fails.
-  ///
-  /// Detached, and `self` is resolved per event: a loop task isolated to this actor would retain
-  /// it for as long as the socket stays open, so a client released while connected could never
-  /// reach `deinit` and would leak itself, the socket and its `URLSession`.
-  private func listenForMessages(on connection: any WebSocketConnection) {
-    let stream = connection.events
-    let generation = generation
-    let reader = Task.detached { [weak self] in
-      for await event in stream {
-        if Task.isCancelled { return }
-        guard let self else { return }
-        await self.handleSocketEvent(event, generation: generation)
-      }
-    }
-    tasks.replace([reader], at: .socketReader)
-  }
-
-  private func startHeartbeating() {
-    let generation = generation
-    let heartbeat = Task.detached { [weak self, clock, interval = options.heartbeatInterval] in
-      while !Task.isCancelled {
-        try? await clock.sleep(for: interval)
-        guard !Task.isCancelled, let self else { return }
-        await self.sendHeartbeat(generation: generation)
-      }
-    }
-    tasks.replace([heartbeat], at: .heartbeat)
-  }
-
-  private func sendHeartbeat(generation: Int) async {
-    guard generation == self.generation, case .connected = connection else {
-      // Don't leak `.disconnected` to `heartbeats` consumers — it's not a heartbeat outcome,
-      // just this cycle bailing out early.
-      return
-    }
-
-    if pendingHeartbeatRef != nil {
-      // Previous heartbeat was never acknowledged.
-      logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      recordHeartbeat(.timedOut)
-      pendingHeartbeatRef = nil
-      pendingHeartbeatSentAt = nil
-      apply(.socketFailed(.heartbeatTimeout))
-      return
-    }
-
-    let heartbeatRef = makeRef()
-    pendingHeartbeatRef = heartbeatRef
-    pendingHeartbeatSentAt = elapsed()
-    recordHeartbeat(.sent)
-    // Not awaited: a write stalled on a half-open socket must not hold up the loop, or the
-    // next tick never reports the missing acknowledgement.
-    Task.immediateIfAvailable {
-      await self.push(
-        RealtimeMessage(
-          joinRef: nil,
-          ref: heartbeatRef,
-          topic: "phoenix",
-          event: "heartbeat",
-          payload: [:]
-        )
-      )
-      await self.setAuth()
-    }
-  }
-
-  // MARK: Socket events
-
-  /// Applies one frame from the socket installed at `generation`. Frames from an older socket
-  /// are dropped: a reconnect already replaced it, and its close must not tear down the
-  /// healthy connection.
-  func handleSocketEvent(_ event: WebSocketEvent, generation: Int) async {
-    guard generation == self.generation else {
-      logger.debug("Ignoring event from a stale connection: \(event)")
-      return
-    }
-
-    switch event {
-    case .frame(.binary(let data)):
-      do {
-        let broadcast = try serializer.decodeBinary(data)
-        logger.debug(
-          "Received binary broadcast for topic \(broadcast.topic), event \(broadcast.event)"
-        )
-        await channel(forWireTopic: broadcast.topic)?.handleBinaryBroadcast(broadcast)
-      } catch {
-        logger.error("Failed to decode binary frame: \(error)")
-      }
-
-    case .frame(.text(let text)):
-      do {
-        await onMessage(try serializer.decodeText(text))
-      } catch {
-        logger.error("Failed to decode text frame: \(error)")
-      }
-
-    case .closed(let code, let reason):
-      logger.debug(
-        "WebSocket closed. Code: \(code?.rawValue.description ?? "<none>"), Reason: \(reason ?? "<none>")"
-      )
-      apply(.socketClosed(code: code?.rawValue, reason: reason))
-    }
-  }
-
-  private func onMessage(_ message: RealtimeMessage) async {
-    if let ref = message.ref, ref == pendingHeartbeatRef {
-      pendingHeartbeatRef = nil
-      let sentAt = pendingHeartbeatSentAt
-      pendingHeartbeatSentAt = nil
-      // Any reply proves the socket is alive, which is all a heartbeat checks.
-      if message.status != .ok {
-        logger.warning("The server answered the heartbeat with: \(message.payload)")
-      }
-      recordHeartbeat(.acknowledged(latency: sentAt.map { elapsed() - $0 } ?? .zero))
+  private func stopSocketLoops() {
+    generation += 1
+    reader?.cancel()
+    reader = nil
+    if stoppedByDisconnect != nil {
+      if let outbox { stoppedByDisconnect?.outbox = outbox }
     } else {
-      logger.debug("Received event \(message.event) for channel \(message.topic)")
+      outbox?.close()
     }
-
-    await channel(forWireTopic: message.topic)?.onMessage(message)
+    outbox = nil
+    socket = nil
   }
 
-  private func channel(forWireTopic wireTopic: String) -> RealtimeChannel? {
-    RealtimeChannel.topic(forWireTopic: wireTopic).flatMap { channelsByTopic[$0] }
+  // MARK: Timers
+
+  /// Starts the core's timer `id`, replacing the one already scheduled for `id`. Its fire
+  /// yields ``Input/timerFired(_:token:)``.
+  func scheduleTimer(_ id: TimerID, after delay: Duration) {
+    timers.schedule(id, after: delay, clock: clock) { [inbox] id, token in
+      inbox.yield(.timerFired(id, token: token))
+    }
   }
 
-  // MARK: Reconnect
+  // MARK: Socket
+
+  /// Starts a connect attempt. Its result is applied unless `.cancelAllTasks` or a newer
+  /// attempt replaced it first; a socket that opens too late is closed.
+  private func openSocket() {
+    connectAttempt?.task.cancel()
+    lastConnectAttempt += 1
+    let attempt = lastConnectAttempt
+    connectAttempt = (attempt, connect(attempt: attempt))
+  }
+
+  /// An edge: opens a socket and yields ``Input/connectEnded(_:attempt:)``. A socket that opens
+  /// after the client was released is closed.
+  private nonisolated func connect(attempt: Int) -> Task<Void, Never> {
+    Task(priority: .medium) { [inbox, transport, webSocketURL, headers] in
+      let result: Result<any WebSocketConnection, any Error>
+      do {
+        result = .success(try await transport.connect(to: webSocketURL, headerFields: headers))
+      } catch {
+        result = .failure(error)
+      }
+      if case .terminated = inbox.yield(.connectEnded(result, attempt: attempt)),
+        case .success(let conn) = result
+      {
+        conn.close(code: .normalClosure, reason: "Client deallocated")
+      }
+    }
+  }
+
+  private func connectAttemptEnded(
+    _ result: Result<any WebSocketConnection, any Error>, attempt: Int
+  ) {
+    let isCurrent = connectAttempt?.id == attempt
+    if isCurrent {
+      connectAttempt = nil
+    }
+    switch result {
+    case .success(let conn):
+      guard isCurrent else {
+        conn.close(code: .normalClosure, reason: "Connection cancelled")
+        return
+      }
+      logger.debug("Connected to realtime WebSocket")
+      apply(.socketOpened(conn))
+    case .failure(let error):
+      logger.error("Connection failed: \(error)")
+      guard isCurrent else { return }
+      apply(.socketOpenFailed(Self.realtimeError(error)))
+    }
+  }
+
+  /// An edge: reads the socket until it closes or fails, decodes each event off the actor, and
+  /// yields it stamped with `generation`. A frame that fails to decode is logged and dropped.
+  ///
+  /// It holds only the inbox, never the client: a task that retained the client for as long as
+  /// the socket stays open would keep a released client from reaching `deinit`, leaking it, the
+  /// socket, and its `URLSession`.
+  private nonisolated func listen(
+    to connection: any WebSocketConnection, generation: Int
+  ) -> Task<Void, Never> {
+    let events = connection.events
+    return Task(priority: .medium) { [inbox, serializer, logger] in
+      for await event in events {
+        if Task.isCancelled { return }
+        let input: SocketInput
+        switch event {
+        case .frame(.binary(let data)):
+          do {
+            input = .binaryBroadcast(try serializer.decodeBinary(data))
+          } catch {
+            logger.error("Failed to decode binary frame: \(error)")
+            continue
+          }
+        case .frame(.text(let text)):
+          do {
+            input = .frame(try serializer.decodeText(text))
+          } catch {
+            logger.error("Failed to decode text frame: \(error)")
+            continue
+          }
+        case .closed(let code, let reason):
+          input = .closed(code: code?.rawValue, reason: reason)
+        }
+        if case .terminated = inbox.yield(.socket(input, generation: generation)) { return }
+      }
+    }
+  }
+
+  private func sendBroadcast(
+    joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload
+  ) {
+    guard let outbox else {
+      logger.debug("Dropping broadcast '\(event)' on '\(topic)': no socket")
+      return
+    }
+    do {
+      let data =
+        switch payload {
+        case .json(let object):
+          try serializer.encodeBroadcastPush(
+            joinRef: joinRef, ref: ref, topic: topic, event: event, jsonPayload: object)
+        case .binary(let binary):
+          try serializer.encodeBroadcastPush(
+            joinRef: joinRef, ref: ref, topic: topic, event: event, binaryPayload: binary)
+        }
+      outbox.enqueue(.binary(data))
+    } catch {
+      logger.error(
+        """
+        Failed to send binary broadcast:
+        topic=\(topic), event=\(event)
+
+        Error:
+        \(error)
+        """
+      )
+    }
+  }
+
+  // MARK: Access token
+
+  /// Starts two edges that race to yield ``Input/tokenFetched(_:generation:)``: the
+  /// `accessToken` callback call, which reports `nil` when the call fails, and a timer that
+  /// reports `nil` after `requestTimeout`. The first to arrive for the fetch wins, and the
+  /// actor cancels the other.
+  private func fetchAccessToken(generation: Int) {
+    tokenFetch?.call.cancel()
+    tokenFetch?.timeout.cancel()
+    tokenFetch = (
+      generation, callAccessToken(generation: generation),
+      accessTokenTimeout(generation: generation)
+    )
+  }
+
+  private nonisolated func callAccessToken(generation: Int) -> Task<Void, Never> {
+    let provider = options.accessToken
+    return Task(priority: .medium) { [inbox, logger] in
+      var token: String?
+      if let provider {
+        do {
+          token = try await provider()
+        } catch {
+          logger.error("Failed to fetch access token: \(error)")
+        }
+      }
+      inbox.yield(.tokenFetched(token, generation: generation))
+    }
+  }
+
+  private nonisolated func accessTokenTimeout(generation: Int) -> Task<Void, Never> {
+    let timeout = options.requestTimeout
+    // A local, because the existential in `self.clock` is not opened when passed directly.
+    let clock = clock
+    return sleepThenRun(on: clock, after: timeout) { [inbox, logger] in
+      logger.error("The access token callback did not return within \(timeout)")
+      inbox.yield(.tokenFetched(nil, generation: generation))
+    }
+  }
+
+  /// Applies the first result for the fetch in flight and cancels both of its edges, so
+  /// `.tokenFetched` reaches the core once per fetch. The callers of ``refreshAccessToken()``
+  /// resume after it.
+  private func tokenFetchEnded(_ token: String?, generation: Int) {
+    guard let fetch = tokenFetch, fetch.generation == generation else { return }
+    // Cleared before the event: the core may start the next fetch while it applies it.
+    tokenFetch = nil
+    fetch.call.cancel()
+    fetch.timeout.cancel()
+    apply(.tokenFetched(token: token, generation: generation))
+    let waiting = tokenFetchWaiters.values
+    tokenFetchWaiters = [:]
+    for waiter in waiting {
+      waiter.resume()
+    }
+  }
+
+  // MARK: Errors
 
   /// The transport's failure as the error the connection state carries.
   static func realtimeError(_ error: any Error) -> RealtimeError {
@@ -594,11 +433,6 @@ extension RealtimeClient {
   /// `CancellationError` and `RealtimeError` pass through; anything else the transport threw
   /// becomes a `.transport` error.
   static func connectionError(_ error: any Error) -> any Error {
-    switch error {
-    case is CancellationError, is RealtimeError:
-      return error
-    default:
-      return RealtimeError.transport(error.localizedDescription, underlyingError: error)
-    }
+    error is CancellationError ? error : realtimeError(error)
   }
 }

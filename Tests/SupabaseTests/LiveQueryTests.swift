@@ -476,7 +476,7 @@ struct SupabaseClientStreamTests {
 
     let channels = await supabase.realtime.channels
     #expect(channels.count == 1)
-    let bindings = await channels.first?.clientChanges
+    let bindings = await supabase.realtime.bindings(of: channels.first)
     #expect(
       bindings == [
         PostgresJoinConfig(event: .all, schema: "public", table: "items", filter: "list_id=eq.7"),
@@ -495,7 +495,7 @@ struct SupabaseClientStreamTests {
     let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     withExtendedLifetime(source) {}
 
-    let bindings = await supabase.realtime.channels.first?.clientChanges
+    let bindings = await supabase.realtime.bindings(of: supabase.realtime.channels.first)
     #expect(bindings == [PostgresJoinConfig(event: .all, schema: "public", table: "items")])
     await source.finish()
   }
@@ -712,5 +712,12 @@ struct LiveQueryObservableTests {
     await run.value
     #expect(sut.error is URLError)
     #expect(sut.isLive == false)
+  }
+}
+
+extension RealtimeClient {
+  /// The Postgres bindings of the open streams of `channel`, in registration order.
+  fileprivate func bindings(of channel: RealtimeChannel?) -> [PostgresJoinConfig]? {
+    channel.flatMap { state(of: $0)?.joinSnapshot.bindings }
   }
 }

@@ -1,0 +1,305 @@
+//
+//  RealtimeCore.swift
+//  Realtime
+//
+
+import Foundation
+import Helpers
+import Logging
+
+/// The Realtime protocol as a synchronous state machine: the connection, the channels, the refs,
+/// and the heartbeat.
+///
+/// It decides everything and does nothing. ``handle(_:at:)`` updates the state and returns the
+/// effects for the shell to run, in order. It has no clock, no tasks, and no continuations, so a
+/// test drives it event by event and compares the effects with `==`.
+struct RealtimeCore {
+  struct Options {
+    /// How long a join, a leave, or a push waits for the server's reply.
+    var timeout: Duration
+    var heartbeatInterval: Duration
+    var connectOnSubscribe: Bool
+    var disconnectOnEmptyChannelsAfter: Duration
+    /// Whether the app set an `accessToken` callback.
+    var hasAccessTokenProvider: Bool
+    /// The shortest wait between two `accessToken` callback calls.
+    var accessTokenRefreshInterval: Duration
+    /// How long before the token's `exp` to ask for a new one.
+    var accessTokenRefreshLeeway: Duration
+    /// The wait after connection attempt `attempt` failed, jitter included.
+    var retryDelay: (_ attempt: Int) -> Duration
+    /// The wait after join attempt `attempt` failed.
+    var rejoinDelay: (_ attempt: Int) -> Duration
+    /// The `version` a join sends: the client's `X-Client-Info` header.
+    var version: String? = nil
+    /// Whether the client still registers a channel, read when the last channel record goes. A
+    /// channel that never subscribed has no record, but it keeps the connection open.
+    var hasRegisteredChannels: () -> Bool = { false }
+  }
+
+  enum Event {
+    // Connection
+    /// `connect()` was called. The waiter, if any, is resumed once the attempt ends.
+    case connect(waiter: WaiterID?)
+    /// The transport handed back an open socket.
+    case socketOpened(any WebSocketConnection)
+    /// The transport failed to open a socket.
+    case socketOpenFailed(RealtimeError)
+    /// `disconnect(code:reason:)` was called.
+    case disconnectRequested(code: Int?, reason: String?)
+    /// The remote closed the current socket.
+    case socketClosed(code: Int?, reason: String?)
+    /// The current socket failed, for example a heartbeat that was never acknowledged.
+    case socketFailed(RealtimeError)
+    /// A hint that the network may be back. Cuts a backoff wait short; ignored otherwise.
+    case wake
+    /// The last channel was removed; disconnect after `disconnectAfter` unless a channel
+    /// subscribes first.
+    case lastChannelRemoved(disconnectAfter: Duration)
+    case appBackground
+    case appForeground
+
+    // Commands
+    /// `topic` is the topic the channel joins. The core reads it when it creates the record.
+    case subscribe(
+      channel: ChannelID, topic: String, configuration: RealtimeChannelConfiguration,
+      waiter: WaiterID, snapshot: JoinSnapshot)
+    case unsubscribe(channel: ChannelID, waiter: WaiterID)
+    case push(channel: ChannelID, event: String, payload: JSONObject, waiter: WaiterID?)
+    case broadcast(
+      channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID)
+    case removeChannel(channel: ChannelID, waiter: WaiterID)
+    case bindingsChanged(channel: ChannelID, snapshot: JoinSnapshot)
+    case setAuth(token: String?)
+
+    // Inbound and timers
+    case frame(RealtimeMessage)
+    case binaryBroadcast(DecodedBroadcast)
+    case timerFired(TimerID)
+    case tokenFetched(token: String?, generation: Int)
+    case waiterCancelled(WaiterID)
+  }
+
+  /// What the shell does once the state is updated. Effects run in the order the core emits them.
+  enum Effect: Equatable {
+    // Connection
+    /// Start a connect attempt.
+    case openSocket
+    /// Start reading the socket. The core sends the rejoins itself, so the shell must not join
+    /// the channels again.
+    case installSocket(any WebSocketConnection)
+    /// Close a socket, either the current one or one that opened too late.
+    case closeSocket(any WebSocketConnection, code: Int?, reason: String)
+    /// Stop reading the socket that just went away.
+    case stopSocketLoops
+    /// Cancel every task the client owns, including a connect attempt in flight.
+    case cancelAllTasks
+
+    /// Write a frame to the current socket.
+    case send(RealtimeMessage)
+    /// Write a broadcast as a binary frame. `topic` is the wire topic.
+    case sendBroadcast(
+      joinRef: Ref?, ref: Ref, topic: String, event: String, payload: BroadcastPushPayload)
+    /// Apply `.timerFired(id)` after `after`, replacing the pending timer with this id.
+    case schedule(TimerID, after: Duration)
+    case cancel(TimerID)
+    case resume(WaiterID, WaiterOutcome)
+    case publishClientStatus(RealtimeClientStatus)
+    case publishHeartbeat(HeartbeatEvent)
+    /// Publish the status of a channel.
+    case publishChannelStatus(ChannelID, RealtimeChannelStatus)
+    case deliver(ChannelID, Delivery)
+    /// End every stream of a channel.
+    case finishChannel(ChannelID)
+    /// Call the `accessToken` callback and apply `.tokenFetched` with `generation`, which is
+    /// unique to this fetch. The shell applies it once, also after `cancelAllTasks`: with `nil`
+    /// when the call fails or is cancelled. Until then, no other fetch starts and no waiting
+    /// channel joins. A `.tokenFetched` with any other generation is ignored.
+    case fetchAccessToken(generation: Int)
+
+    /// Connections compare by identity, and errors with `isSameFailure(as:)`.
+    static func == (lhs: Effect, rhs: Effect) -> Bool {
+      switch (lhs, rhs) {
+      case (.openSocket, .openSocket), (.stopSocketLoops, .stopSocketLoops),
+        (.cancelAllTasks, .cancelAllTasks):
+        return true
+      case (.installSocket(let a), .installSocket(let b)):
+        return a === b
+      case (.closeSocket(let a, let ca, let ra), .closeSocket(let b, let cb, let rb)):
+        return a === b && ca == cb && ra == rb
+      case (.send(let a), .send(let b)):
+        return a == b
+      case (
+        .sendBroadcast(let ja, let ra, let ta, let ea, let pa),
+        .sendBroadcast(let jb, let rb, let tb, let eb, let pb)
+      ):
+        return ja == jb && ra == rb && ta == tb && ea == eb && pa == pb
+      case (.schedule(let a, let da), .schedule(let b, let db)):
+        return a == b && da == db
+      case (.cancel(let a), .cancel(let b)):
+        return a == b
+      case (.resume(let a, let oa), .resume(let b, let ob)):
+        return a == b && oa == ob
+      case (.publishClientStatus(let a), .publishClientStatus(let b)):
+        return a.isSame(as: b)
+      case (.publishHeartbeat(let a), .publishHeartbeat(let b)):
+        return a == b
+      case (.publishChannelStatus(let ca, let a), .publishChannelStatus(let cb, let b)):
+        return ca == cb && a.isSame(as: b)
+      case (.deliver(let ca, let a), .deliver(let cb, let b)):
+        return ca == cb && a == b
+      case (.finishChannel(let a), .finishChannel(let b)):
+        return a == b
+      case (.fetchAccessToken(let a), .fetchAccessToken(let b)):
+        return a == b
+      default:
+        return false
+      }
+    }
+  }
+
+  let options: Options
+  let logger: Logger
+
+  // Read-only outside the core. Not `private(set)`: the core's extensions in other files write
+  // them, and Swift has no setter access level for that.
+  var connection: RealtimeClient.ConnectionState = .disconnected(nil)
+  var channels: [ChannelID: ChannelRecord] = [:]
+
+  var tokens = TokenState()
+  /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.
+  var lastTokenFetch: Duration?
+  /// The generation of the ``Effect/fetchAccessToken(generation:)`` that waits for its
+  /// `.tokenFetched`. Each fetch gets a new generation, so a result for another fetch is ignored.
+  var tokenFetchGeneration: Int?
+  var tokenFetchInFlight: Bool { tokenFetchGeneration != nil }
+  /// Whether a channel whose token expired waits for a fetch that starts after the one in
+  /// flight, which may return the refused token. A queued refetch makes every channel in
+  /// `refreshingToken` wait for it.
+  var tokenRefetchQueued = false
+  /// Whether a `.tokenRefresh` timer is scheduled, so leaving `.connected` cancels it.
+  var tokenRefreshScheduled = false
+  /// The time of the event being handled. Only ``handle(_:at:)`` writes it.
+  var now = CoreTime(elapsed: .zero, date: .distantPast)
+  /// The last ref ``makeRef()`` made.
+  var lastRef: UInt64 = 0
+  /// The heartbeat sent on the current socket that the server has not acknowledged yet, and
+  /// when it was sent, as `CoreTime.elapsed`.
+  var pendingHeartbeat: (ref: Ref, sentAt: Duration)?
+  /// The `connect()` callers waiting for the attempt in flight.
+  var connectWaiters: [WaiterID] = []
+  /// Whether the socket was connected when the app last went to the background.
+  var wasConnectedBeforeBackground = false
+  /// Whether an idle disconnect is scheduled, so the next `subscribe` cancels it.
+  var idleDisconnectPending = false
+
+  init(options: Options, logger: Logger, initialToken: String?) {
+    self.options = options
+    self.logger = logger
+    _ = tokens.apply(initialToken, generation: tokens.generation)
+  }
+
+  /// A new message ref: `"1"`, `"2"`, … A disconnect starts the count again.
+  mutating func makeRef() -> Ref {
+    lastRef += 1
+    return lastRef.description
+  }
+
+  mutating func handle(_ event: Event, at time: CoreTime) -> [Effect] {
+    now = time
+    switch event {
+    case .connect(let waiter):
+      return connect(waiter: waiter)
+    case .socketOpened, .socketOpenFailed:
+      let previous = connection
+      let effects = transitionConnection(event)
+      return connection == previous ? effects : effects + connectAttemptEnded()
+    case .socketClosed, .socketFailed:
+      return socketWentAway(event)
+    case .disconnectRequested:
+      return transitionConnection(event) + disconnectChannels()
+    case .timerFired(.idleDisconnect):
+      return transitionConnection(.disconnectRequested(code: nil, reason: nil))
+        + disconnectChannels()
+    case .timerFired(.reconnect), .wake, .lastChannelRemoved:
+      return transitionConnection(event)
+    case .appBackground:
+      return enterBackground()
+    case .appForeground:
+      return enterForeground()
+    case .timerFired(.heartbeat):
+      return heartbeatTimerFired()
+    case .frame(let message) where message.topic == "phoenix":
+      return receiveHeartbeatReply(message)
+    case .frame(let message) where message.event == ChannelEvent.system:
+      return receiveSystem(message)
+    case .frame(let message)
+    where message.event == ChannelEvent.close || message.event == ChannelEvent.error:
+      return receiveClose(message)
+    case .frame(let message):
+      return receiveFrame(message)
+    case .binaryBroadcast(let broadcast):
+      return receiveBinaryBroadcast(broadcast)
+
+    case .subscribe(let channel, let topic, let configuration, let waiter, let snapshot):
+      return subscribe(
+        channel: channel, topic: topic, configuration: configuration, waiter: waiter,
+        snapshot: snapshot)
+    case .timerFired(.joinTimeout(let channel, let ref)):
+      return joinTimedOut(channel, ref: ref)
+    case .timerFired(.rejoin(let channel)):
+      return rejoinTimerFired(channel)
+    case .timerFired(.postgresTimeout(let channel, let ref)):
+      return postgresTimedOut(channel, ref: ref)
+    case .bindingsChanged(let channel, let snapshot):
+      return bindingsChanged(channel, snapshot: snapshot)
+    case .unsubscribe(let channel, let waiter):
+      return unsubscribe(channel, waiter: waiter)
+    case .timerFired(.leaveTimeout(let channel, let ref)):
+      return leaveTimedOut(channel, ref: ref)
+    case .removeChannel(let channel, let waiter):
+      return removeChannel(channel, waiter: waiter)
+    case .push(let channel, let event, let payload, let waiter):
+      return push(channel, event: event, payload: payload, waiter: waiter)
+    case .broadcast(let channel, let event, let payload, let waiter):
+      return broadcast(channel, event: event, payload: payload, waiter: waiter)
+    case .timerFired(.pushTimeout(let channel, let ref)):
+      return pushTimedOut(channel, ref: ref)
+
+    case .setAuth(let token):
+      return setAuth(token)
+    case .tokenFetched(let token, let generation):
+      return tokenFetched(token, generation: generation)
+    case .timerFired(.tokenRefresh):
+      return tokenRefreshTimerFired()
+
+    case .waiterCancelled(let waiter):
+      return cancelWaiter(waiter)
+    }
+  }
+
+  /// Ends the wait of a caller whose task was cancelled, once: a later event never resumes it.
+  /// The work the caller started goes on, except a subscribe: once its last caller is gone, the
+  /// join rolls back. A waiter the core already resumed is unknown, so nothing happens.
+  mutating func cancelWaiter(_ waiter: WaiterID) -> [Effect] {
+    if let index = connectWaiters.firstIndex(of: waiter) {
+      connectWaiters.remove(at: index)
+      return [.resume(waiter, .cancelled)]
+    }
+    for (channel, record) in channels {
+      if let ref = record.pendingPushes.first(where: { $0.value == waiter })?.key {
+        channels[channel]?.pendingPushes[ref] = nil
+        return [.resume(waiter, .cancelled), .cancel(.pushTimeout(channel: channel, ref: ref))]
+      }
+      if let index = record.leaveWaiters.firstIndex(of: waiter) {
+        channels[channel]?.leaveWaiters.remove(at: index)
+        return [.resume(waiter, .cancelled)]
+      }
+      if let index = record.subscribeWaiters.firstIndex(of: waiter) {
+        channels[channel]?.subscribeWaiters.remove(at: index)
+        return [.resume(waiter, .cancelled)] + rollBackJoinWithoutCallers(channel)
+      }
+    }
+    return []
+  }
+}

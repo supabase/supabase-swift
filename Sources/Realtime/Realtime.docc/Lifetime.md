@@ -6,7 +6,7 @@ the task ends.
 ## Overview
 
 A stream ends when the task that iterates it is cancelled, or when its channel is removed. When
-the stream ends, the channel removes its listener. Breaking out of the loop alone does not end a
+the stream ends, the client removes its listener. Breaking out of the loop alone does not end a
 stream that you still hold, so it keeps buffering events. The channel itself stays joined until
 you call ``RealtimeChannel/unsubscribe()`` or ``RealtimeClient/removeChannel(_:)``. So the task
 that iterates the streams also owns the channel, and removes it on the way out.
@@ -69,8 +69,17 @@ issue.
 
 Dropping your reference does not leave the channel; the client keeps it in
 ``RealtimeClient/channels``. ``RealtimeClient/removeChannel(_:)`` leaves the topic and ends every
-stream opened on the channel. Do not use a removed handle again: ask the client for a new
-channel instead.
+stream opened on the channel. ``RealtimeChannel/unsubscribe()`` only leaves the topic: the
+channel and its streams stay, and ``RealtimeChannel/subscribe()`` joins again.
+
+A removed handle is spent. Its actions throw ``RealtimeError/Kind-swift.struct/channelRemoved``,
+its status reads ``RealtimeChannelStatus/unsubscribed``, its presence state is empty, and a new
+stream on it ends at once. Ask the client for a new channel instead. The new handle can
+subscribe at once, even while the old one still leaves the topic.
+
+The channel holds its client weakly. Keep the client, or the `SupabaseClient`, alive while you
+use its channels. After the client is released, a channel reads the same as a spent one, and
+its actions throw ``RealtimeError/Kind-swift.struct/notConnected``.
 
 ### Streams that shape the join
 

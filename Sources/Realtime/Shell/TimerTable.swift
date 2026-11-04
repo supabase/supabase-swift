@@ -1,0 +1,94 @@
+//
+//  TimerTable.swift
+//  Realtime
+//
+
+import Foundation
+
+/// The timers the core started with ``RealtimeCore/Effect/schedule(_:after:)``. The actor owns the
+/// table, so it needs no lock.
+///
+/// Every timer has a token. A timer that was replaced or cancelled can still deliver a `fire` that
+/// was already on its way, so the actor checks ``claimFire(_:token:)`` before it acts on one.
+struct TimerTable {
+  private struct Entry {
+    let token: UInt64
+    let task: Task<Void, Never>
+  }
+
+  private var lastToken: UInt64 = 0
+  private var entries: [TimerID: Entry] = [:]
+
+  /// Starts a timer for `id` that calls `fire` with the id and its token after `delay`. A timer
+  /// already scheduled for `id` is cancelled and replaced.
+  mutating func schedule(
+    _ id: TimerID,
+    after delay: Duration,
+    clock: any Clock<Duration>,
+    fire: @escaping @Sendable (TimerID, UInt64) async -> Void
+  ) {
+    entries[id]?.task.cancel()
+    lastToken += 1
+    let token = lastToken
+    let task = sleepThenRun(on: clock, after: delay) { await fire(id, token) }
+    entries[id] = Entry(token: token, task: task)
+  }
+
+  mutating func cancel(_ id: TimerID) {
+    entries.removeValue(forKey: id)?.task.cancel()
+  }
+
+  /// Cancels every timer and leaves the table empty.
+  mutating func cancelAll() {
+    for entry in entries.values {
+      entry.task.cancel()
+    }
+    entries.removeAll()
+  }
+
+  /// Whether `token` belongs to the timer now scheduled for `id`.
+  func isCurrent(_ id: TimerID, token: UInt64) -> Bool {
+    entries[id]?.token == token
+  }
+
+  /// The token of the timer scheduled for `id`, if any. Test hook: `entries` is private, so a
+  /// test cannot read the token any other way, and nothing in the SDK calls it.
+  func token(for id: TimerID) -> UInt64? {
+    entries[id]?.token
+  }
+
+  /// The task of the timer scheduled for `id`, if any.
+  func task(for id: TimerID) -> Task<Void, Never>? {
+    entries[id]?.task
+  }
+
+  /// Returns whether the fire of `token` is the current timer for `id`, and drops that timer:
+  /// a timer fires once. The entry is dropped without a cancel, because the timer's task has
+  /// already yielded its fire.
+  mutating func claimFire(_ id: TimerID, token: UInt64) -> Bool {
+    guard isCurrent(id, token: token) else { return false }
+    entries[id] = nil
+    return true
+  }
+}
+
+/// Starts a task that sleeps until `delay` from now on `clock`, then runs `operation` unless it
+/// was cancelled. The deadline is read here, not inside the task, so a task that starts late
+/// still wakes `delay` after it was scheduled. The task is an edge of the client, so it runs at
+/// `.medium` priority.
+func sleepThenRun(
+  on clock: some Clock<Duration>,
+  after delay: Duration,
+  _ operation: @escaping @Sendable () async -> Void
+) -> Task<Void, Never> {
+  let deadline = clock.now.advanced(by: delay)
+  return Task(priority: .medium) {
+    do {
+      try await clock.sleep(until: deadline, tolerance: nil)
+    } catch {
+      return
+    }
+    guard !Task.isCancelled else { return }
+    await operation()
+  }
+}

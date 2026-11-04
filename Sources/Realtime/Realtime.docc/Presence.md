@@ -10,13 +10,12 @@ set and sends it to every client on the channel. Read it with
 ``RealtimeChannel/presenceChanges()``.
 
 ```swift
-nonisolated struct Status: Codable {
+struct Status: Codable {
   var name: String
   var typing: Bool
 }
 
-let key = userID.uuidString
-let channel = await supabase.channel("room:42") { $0.presence.key = key }
+let channel = await supabase.channel("room:42") { $0.presence.key = userID.uuidString }
 let online = await channel.presenceStates()
 
 try await channel.subscribe()
@@ -28,8 +27,8 @@ for await state in online {
 }
 ```
 
-`Status` is `nonisolated` because the channel encodes it on its own executor. See
-<doc:Isolation>.
+``RealtimeChannel/track(_:encoder:)`` encodes `Status` on the caller's actor, so `Status` needs
+no `nonisolated` in an app with default main actor isolation. See <doc:Isolation>.
 
 ### Turning presence on
 

@@ -72,4 +72,4 @@ the next message. Add a timer if the feed can go quiet.
 ``RealtimeClient/statusChanges()`` and ``RealtimeChannel/statusChanges()`` also buffer every
 value. They change only when the connection or the join changes, so reading them on the main
 actor is fine. To get only the latest status, read ``RealtimeClient/status`` or
-``RealtimeChannel/status`` when you need it.
+``RealtimeChannel/status`` with one `await` when you need it.

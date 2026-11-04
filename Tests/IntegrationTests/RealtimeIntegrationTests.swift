@@ -219,7 +219,10 @@
 
         await client.realtime.removeChannel(channel)
 
+        // A removed handle reads `.unsubscribed`; its actions throw `channelRemoved`.
         #expect(await channel.status == .unsubscribed)
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .channelRemoved)
         let topics = await client.realtime.channels.map(\.topic)
         #expect(!topics.contains(channel.topic))
       }
@@ -239,9 +242,12 @@
 
         await client.realtime.removeAllChannels()
 
-        #expect(await channel1.status == .unsubscribed)
-        #expect(await channel2.status == .unsubscribed)
-        #expect(await channel3.status == .unsubscribed)
+        // A removed handle reads `.unsubscribed`; its actions throw `channelRemoved`.
+        for channel in [channel1, channel2, channel3] {
+          #expect(await channel.status == .unsubscribed)
+          let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+          #expect(error?.kind == .channelRemoved)
+        }
         #expect(await client.realtime.channels.count == 0)
 
         #expect(
@@ -753,14 +759,6 @@
         await channel.unsubscribe()
       }
     }
-
-    //      try await client.realtime.connect()
-    //      let channel = await client.realtime.channel("invalid-channel-test")
-    //        try await channel.subscribe()
-    //      let channel1 = await client.realtime.channel("broadcast-no-sub")
-    //      let channel2 = await client2.realtime.channel("broadcast-no-sub")
-    //        await channel2.broadcasts(event: "test").prefix(1).collect()
-    //      try await channel2.subscribe()
 
     @Test
     func realApplicationScenario_BroadcastAndPresence() async throws {

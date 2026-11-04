@@ -5,8 +5,9 @@ Broadcast, presence and Postgres changes over one WebSocket, as async streams.
 ## Overview
 
 ``RealtimeClient`` owns the socket. Get it from `supabase.realtime`, or build one with
-``RealtimeClient/init(url:options:)``. A ``RealtimeChannel`` is one topic on that socket. Both
-types are actors, so you `await` their members (see <doc:Isolation>).
+``RealtimeClient/init(url:options:)``. A ``RealtimeChannel`` is one topic on that socket. The
+client is an actor that owns the state of every channel. A channel is a handle to that state,
+so you `await` its reads and stream methods too (see <doc:Isolation>).
 
 Every subscription is an `AsyncStream`. Open the streams, subscribe the channel, then iterate:
 
