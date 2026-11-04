@@ -74,7 +74,7 @@ Use standard file headers with copyright:
 - Don't hand-write `encode(to:)`/`init(from:)` for the unused direction "for
   symmetry" — dead coders accumulate and mislead readers about how the type
   is actually used. See `docs/migrations/v3/` for prior cleanup along these
-  lines (`VerifyOTPResponse`, and the broader SDK-1473 pass).
+  lines (the SDK-1473 pass).
 
 ## Error Handling
 

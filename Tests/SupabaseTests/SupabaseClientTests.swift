@@ -765,7 +765,7 @@ struct SupabaseClientTests {
     _ = try await client.from("todos").select().execute()
     _ = try? await client.storage.listBuckets()
     _ = try? await client.functions.invoke("hello")
-    _ = try? await client.auth.resetPasswordForEmail("a@b.c")
+    _ = try? await client.auth.resetPassword(email: "a@b.c")
 
     for prefix in [
       "/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello", "/auth/v1/recover",

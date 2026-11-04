@@ -470,10 +470,35 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOTP
+    supporting_symbols:
+      - EmailOTPOptions
+      - EmailOTPOptions.init
+      - EmailOTPOptions.shouldCreateUser
+      - EmailOTPOptions.userMetadata
+      - EmailOTPOptions.redirectTo
+      - EmailOTPOptions.captchaToken
+      - PhoneOTPOptions
+      - PhoneOTPOptions.init
+      - PhoneOTPOptions.shouldCreateUser
+      - PhoneOTPOptions.userMetadata
+      - PhoneOTPOptions.channel
+      - PhoneOTPOptions.captchaToken
+      - MessageID
+      - MessageID.init
+      - MessageID.rawValue
   auth.sign_in.sign_in_with_sso:
     status: implemented
     symbols:
       - AuthClient.signInWithSSO
+      - AuthClient.ssoSignInURL
+    supporting_symbols:
+      - SSOTarget
+      - SSOTarget.domain
+      - SSOTarget.providerID
+      - SSOOptions
+      - SSOOptions.init
+      - SSOOptions.redirectTo
+      - SSOOptions.captchaToken
   auth.sign_in.sign_in_with_id_token:
     status: implemented
     symbols:
@@ -517,19 +542,14 @@ features:
     symbols:
       - AuthClient.verifyOTP
     supporting_symbols:
-      - VerifyOTPResponse
-      - VerifyOTPResponse.session
-      - VerifyOTPResponse.emailChangeConfirmationPending
-      - VerifyOTPResponse.init
-      - EmailChangeConfirmation
-      - EmailChangeConfirmation.message
-      - EmailChangeConfirmation.code
-      - EmailChangeConfirmation.init
-      - MobileOTPType
-      - MobileOTPType.init
-      - MobileOTPType.rawValue
-      - MobileOTPType.sms
-      - MobileOTPType.phoneChange
+      - VerifyOTPResult
+      - VerifyOTPResult.signedIn
+      - VerifyOTPResult.emailChangePending
+      - PhoneOTPType
+      - PhoneOTPType.init
+      - PhoneOTPType.rawValue
+      - PhoneOTPType.sms
+      - PhoneOTPType.phoneChange
       - EmailOTPType
       - EmailOTPType.init
       - EmailOTPType.rawValue
@@ -549,15 +569,15 @@ features:
       - ResendEmailType.rawValue
       - ResendEmailType.signup
       - ResendEmailType.emailChange
-      - ResendMobileType
-      - ResendMobileType.init
-      - ResendMobileType.rawValue
-      - ResendMobileType.sms
-      - ResendMobileType.phoneChange
+      - ResendPhoneType
+      - ResendPhoneType.init
+      - ResendPhoneType.rawValue
+      - ResendPhoneType.sms
+      - ResendPhoneType.phoneChange
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
-      - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -1593,7 +1613,7 @@ features:
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
   # source — this is how SupabaseClient itself wires it.
-  functions.invocation.set_auth_token:
+  functions.invocation.auth_token:
     status: implemented
     symbols:
       - FunctionsClient.Configuration.accessToken
