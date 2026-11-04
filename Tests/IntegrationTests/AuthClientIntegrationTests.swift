@@ -303,10 +303,10 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInWithEmailOTPAndVerifyIt() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
-    try await admin.admin.createUser(
-      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
     )
 
     try await authClient.signInWithOTP(
@@ -337,7 +337,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func signInWithOTPCreatesAUserWithItsMetadata() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
 
     try await authClient.signInWithOTP(
@@ -355,8 +355,8 @@ struct AuthClientIntegrationTests {
 
   /// The local stack's magic link email has no code, and the native stack cannot serve a custom
   /// template. A new magic link from the admin API carries the code instead.
-  private func emailOTP(for email: String, admin: AuthClient) async throws -> String {
-    try await admin.admin.generateLink(params: .magicLink(email: email)).properties.emailOTP
+  private func emailOTP(for email: String, admin: AuthAdminClient) async throws -> String {
+    try await admin.generateLink(.magicLink(email: email)).properties.emailOTP
   }
 
   @Test
