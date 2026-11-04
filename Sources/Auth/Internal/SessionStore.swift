@@ -695,7 +695,11 @@ actor SessionStore {
 
   private func update(to next: State, event: AuthEvent) {
     generation += 1
-    published.withValue { current in
+    // The yield runs after the lock is released. A yield can resume a consumer, which takes the
+    // lock of that consumer's task, while cancelling that task takes the same lock and then ends
+    // its stream, which takes this one. The store is an actor, so yields keep the order of
+    // updates, and a subscriber that joins after the snapshot starts from the new status.
+    let (changes, subscribers) = published.withValue { current in
       var changes = [AuthChange(event: event, status: next.status)]
       // A subscriber that joined while loading has seen nothing, so it first gets the initial
       // session, even when a commit, not the load, ended loading. The commit's own event follows.
@@ -703,10 +707,11 @@ actor SessionStore {
         changes.insert(AuthChange(event: .initialSession, status: next.status), at: 0)
       }
       current.state = next
-      for continuation in current.subscribers.values {
-        for change in changes {
-          continuation.yield(change)
-        }
+      return (changes, Array(current.subscribers.values))
+    }
+    for continuation in subscribers {
+      for change in changes {
+        continuation.yield(change)
       }
     }
     armRefresher()
