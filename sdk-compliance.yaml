@@ -1477,7 +1477,7 @@ features:
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
   # source — this is how SupabaseClient itself wires it.
-  functions.invocation.set_auth_token:
+  functions.invocation.auth_token:
     status: implemented
     symbols:
       - FunctionsClient.Configuration.accessToken
