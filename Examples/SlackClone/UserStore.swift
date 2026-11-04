@@ -30,7 +30,7 @@ final class UserStore {
         let statusChange = await channel.statusChanges()
         for await _ in statusChange.filter(\.isSubscribed) {
           do {
-            let userId = try await supabase.auth.session.user.id
+            let userId = try await supabase.auth.session().user.id
             try await channel.track(UserPresence(userId: userId, onlineAt: Date()))
           } catch {
             Logger.main.error("Failed to track presence: \(error.localizedDescription)")

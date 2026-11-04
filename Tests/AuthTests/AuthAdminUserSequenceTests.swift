@@ -42,8 +42,9 @@ struct AuthAdminUserSequenceTests {
     return "</admin/users?page=\(next)&per_page=>; rel=\"next\", " + lastLink
   }
 
-  private func makeSUT(pages: [(emails: [String], next: Int?)]) -> (AuthClient, RecordingTransport)
-  {
+  private func makeSUT(
+    pages: [(emails: [String], next: Int?)]
+  ) -> (AuthAdminClient, RecordingTransport) {
     let served = LockIsolated(0)
     let transport = RecordingTransport { _, _ in
       let index = served.withValue { value -> Int in
@@ -61,16 +62,7 @@ struct AuthAdminUserSequenceTests {
       return (response, self.page(page.emails))
     }
 
-    let client = AuthClient(
-      configuration: AuthClient.Configuration(
-        url: clientURL,
-        headers: ["apikey": "supabase.publishable.key"],
-        storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
-        http: .init(transport: transport)
-      )
-    )
-    return (client, transport)
+    return (.testing(http: transport), transport)
   }
 
   @Test
@@ -84,7 +76,7 @@ struct AuthAdminUserSequenceTests {
     )
 
     var emails: [String] = []
-    for try await user in sut.admin.users() {
+    for try await user in sut.users() {
       emails.append(user.email ?? "")
     }
 
@@ -99,7 +91,7 @@ struct AuthAdminUserSequenceTests {
       pages: [(["a@example.com"], 2), (["b@example.com"], 3), (["c@example.com"], nil)]
     )
 
-    for try await _ in sut.admin.users(perPage: 1) {}
+    for try await _ in sut.users(perPage: 1) {}
 
     let pageParams = transport.requests.map { request in
       URLComponents(string: request.head.url?.absoluteString ?? "")?
@@ -117,7 +109,7 @@ struct AuthAdminUserSequenceTests {
     let (sut, transport) = makeSUT(pages: [(["only@example.com"], nil)])
 
     var emails: [String] = []
-    for try await user in sut.admin.users() {
+    for try await user in sut.users() {
       emails.append(user.email ?? "")
     }
 
@@ -134,7 +126,7 @@ struct AuthAdminUserSequenceTests {
       ]
     )
 
-    for try await user in sut.admin.users() where user.email == "a@example.com" {
+    for try await user in sut.users() where user.email == "a@example.com" {
       break
     }
 
@@ -146,7 +138,7 @@ struct AuthAdminUserSequenceTests {
     let (sut, transport) = makeSUT(pages: [([], nil)])
 
     var count = 0
-    for try await _ in sut.admin.users() { count += 1 }
+    for try await _ in sut.users() { count += 1 }
 
     expectNoDifference(count, 0)
     expectNoDifference(transport.requests.count, 1)
@@ -157,17 +149,10 @@ struct AuthAdminUserSequenceTests {
     struct Boom: Error {}
 
     let transport = RecordingTransport { _, _ in throw Boom() }
-    let sut = AuthClient(
-      configuration: AuthClient.Configuration(
-        url: clientURL,
-        storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
-        http: .init(transport: transport)
-      )
-    )
+    let sut = AuthAdminClient.testing(http: transport)
 
     await #expect(throws: Boom.self) {
-      for try await _ in sut.admin.users() {}
+      for try await _ in sut.users() {}
     }
   }
 }

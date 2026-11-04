@@ -120,24 +120,6 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
-  func adminOutlivesClient() async throws {
-    let (admin, transport) = releasedClientSubClient(\.admin)
-
-    try await admin.deleteUser(id: UUID())
-
-    #expect(transport.requests.count == 1)
-  }
-
-  @Test
-  func adminOAuthOutlivesClient() async throws {
-    let (oauth, transport) = releasedClientSubClient(\.admin.oauth)
-
-    try await oauth.deleteClient(id: UUID())
-
-    #expect(transport.requests.count == 1)
-  }
-
-  @Test
   func oauthServerOutlivesClient() async throws {
     let (oauthServer, transport) = releasedClientSubClient(\.oauthServer)
     try await oauthServer.client.seedSession(.valid)
@@ -150,13 +132,13 @@ struct AuthClientMultipleInstancesTests {
   @Test
   func mfaOutlivesClient() async throws {
     let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-    let (mfa, _) = releasedClientSubClient(
+    let (mfa, transport) = releasedClientSubClient(
       \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
-    try await mfa.client.seedSession(.valid)
+    try await mfa.dependencies.seedSession(.valid)
 
-    let response = try await mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
+    try await mfa.unenroll(factorID: factorId)
 
-    #expect(response.id == factorId)
+    #expect(transport.requests.count == 1)
   }
 
   @Test

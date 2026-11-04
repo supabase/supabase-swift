@@ -25,35 +25,132 @@ import Testing
 struct AuthClientIntegrationTests {
   let authClient = makeClient()
 
-  static func makeClient(serviceRole: Bool = false) -> AuthClient {
+  static let authURL = URL(string: "\(DotEnv.supabaseURL)/auth/v1")!
+
+  static func makeAdminClient() -> AuthAdminClient {
+    AuthAdminClient(url: authURL, secretKey: DotEnv.supabaseSecretKey)
+  }
+
+  static func makeClient(
+    serviceRole: Bool = false,
+    localStorage: any AuthLocalStorage = InMemoryLocalStorage(),
+    storageKey: String? = nil
+  ) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
     return AuthClient(
       configuration: AuthClient.Configuration(
-        url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
+        url: authURL,
         headers: [
           "apikey": key,
           "Authorization": "Bearer \(key)",
         ],
-        localStorage: InMemoryLocalStorage()
+        storageKey: storageKey,
+        localStorage: localStorage
       )
     )
   }
 
   @Test
-  func multipleAuthInstances() async throws {
+  func anExpiredStoredSessionIsRefreshedBeforeTheInitialSession() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    let signedIn = try await authClient.session()
+    let (storage, key) = try storing(signedIn, expiredBy: 60)
+
+    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    var changes = client.events().makeAsyncIterator()
+
+    let initial = try #require(await changes.next())
+    #expect(initial.event == .initialSession)
+    let refreshed = try #require(initial.session)
+    #expect(refreshed.refreshToken != signedIn.refreshToken)
+    #expect(refreshed.user.id == signedIn.user.id)
+    #expect(!refreshed.isExpired)
+  }
+
+  @Test
+  func aRejectedRefreshTokenSignsOutInTheInitialSession() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    var rejected = try await authClient.session()
+    // A well-formed token the server does not know. A malformed one is a `validation_failed`
+    // answer, which is not a rejection of the session.
+    rejected.refreshToken = "aaaaaaaaaaaa"
+    let (storage, key) = try storing(rejected, expiredBy: 60)
+
+    let client = Self.makeClient(localStorage: storage, storageKey: key)
+    var changes = client.events().makeAsyncIterator()
+
+    let initial = try #require(await changes.next())
+    #expect(initial.event == .initialSession)
+    #expect(initial.status == .signedOut(.sessionExpired))
+    #expect(try storage.retrieve(key: key) == nil)
+  }
+
+  /// A storage that holds `session` as one that a client received `seconds` after it expired.
+  private func storing(
+    _ session: Session, expiredBy seconds: TimeInterval
+  ) throws -> (storage: InMemoryLocalStorage, key: String) {
+    let storage = InMemoryLocalStorage()
+    let key = "sb-startup-refresh-\(UUID().uuidString)-auth-token"
+    let receivedAt = Date().addingTimeInterval(-session.expiresIn - seconds)
+    try storage.store(
+      key: key,
+      value: PersistedSessionCodec.encode(ReceivedSession(session: session, receivedAt: receivedAt))
+    )
+    return (storage, key)
+  }
+
+  @Test
+  func importSessionSignsInASecondClientOnce() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
     let client2 = Self.makeClient()
+    await client2.initialization()
+    let events = client2.events()
 
-    let sessionFromClient1 = try await authClient.session
-    let sessionFromClient2 = try await client2.setSession(
+    let sessionFromClient1 = try await authClient.session()
+    let sessionFromClient2 = try await client2.importSession(
       accessToken: sessionFromClient1.accessToken,
       refreshToken: sessionFromClient1.refreshToken
     )
+    client2.dependencies.sessionStore.finishChanges()
 
     expectNoDifference(sessionFromClient1.accessToken, sessionFromClient2.accessToken)
     expectNoDifference(sessionFromClient1.refreshToken, sessionFromClient2.refreshToken)
     expectNoDifference(sessionFromClient1.expiresAt, sessionFromClient2.expiresAt)
+    let changes = await events.collect()
+    expectNoDifference(changes.map(\.event), [.initialSession, .signedIn])
+  }
+
+  @Test
+  func signOutLocalKeepsTheOtherSessionsOfTheUser() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut()
+
+    #expect(thisDevice.status == .signedOut(.userInitiated))
+    _ = try await otherDevice.refreshSession()
+  }
+
+  @Test
+  func signOutGlobalEndsEveryOtherSessionOfTheUser() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut(scope: .global)
+
+    #expect(thisDevice.status == .signedOut(.userInitiated))
+    let error = await #expect(throws: AuthError.self) { try await otherDevice.refreshSession() }
+    #expect(error?.kind == .sessionInvalidated)
+  }
+
+  @Test
+  func signOutOthersKeepsThisSession() async throws {
+    let (thisDevice, otherDevice) = try await signInOnTwoDevices()
+
+    try await thisDevice.signOut(scope: .others)
+
+    _ = try await thisDevice.refreshSession()
+    let error = await #expect(throws: AuthError.self) { try await otherDevice.refreshSession() }
+    #expect(error?.kind == .sessionInvalidated)
   }
 
   @Test
@@ -210,7 +307,8 @@ struct AuthClientIntegrationTests {
       password: mockPassword()
     )
 
-    let user = try await authClient.user(jwt: firstUserSession?.accessToken)
+    let accessToken = try #require(firstUserSession?.accessToken)
+    let user = try await authClient.user(jwt: accessToken)
 
     #expect(user.id == firstUserSession?.user.id)
     #expect(user.id != secondUserSession.user.id)
@@ -221,19 +319,19 @@ struct AuthClientIntegrationTests {
     try await expectAuthEvents([.initialSession, .signedIn, .userUpdated]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      let updatedUser = try await authClient.update(
-        user: .init(userMetadata: ["test": .integer(42)]))
+      let updatedUser = try await authClient.updateUser(
+        .init(userMetadata: ["test": .integer(42)]))
       #expect(updatedUser.userMetadata["test"] == 42)
     }
   }
 
   @Test
-  func userIdentities() async throws {
+  func identities() async throws {
     let session = try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
-    let identities = try await authClient.userIdentities()
+    let identities = try await authClient.identities()
     expectNoDifference(
-      session.user.identities?.map(\.identityId) ?? [],
-      identities.map(\.identityId)
+      session.user.identities?.map(\.id) ?? [],
+      identities.map(\.id)
     )
   }
 
@@ -252,9 +350,76 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func resetPasswordForEmail() async throws {
+  func resetPassword() async throws {
     let email = mockEmail()
-    try await authClient.resetPasswordForEmail(email)
+    try await authClient.resetPassword(email: email)
+  }
+
+  @Test
+  func signInWithEmailOTPAndVerifyIt() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    try await authClient.signInWithOTP(
+      email: email, options: EmailOTPOptions(shouldCreateUser: false))
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+
+    let result = LockIsolated<VerifyOTPResult?>(nil)
+    try await expectAuthEvents([.initialSession, .signedIn]) {
+      let value = try await authClient.verifyOTP(email: email, token: token, type: .email)
+      result.setValue(value)
+    }
+    guard case .signedIn(let session) = result.value else {
+      Issue.record("Expected .signedIn, got \(String(describing: result.value))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(authClient.currentSession == session)
+  }
+
+  @Test
+  func signInWithOTPWithoutCreatingAUserFailsForAnUnknownEmail() async throws {
+    await #expect(throws: AuthError.self) {
+      try await authClient.signInWithOTP(
+        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
+    }
+  }
+
+  @Test
+  func signInWithOTPCreatesAUserWithItsMetadata() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+
+    try await authClient.signInWithOTP(
+      email: email, options: EmailOTPOptions(userMetadata: ["plan": "free"]))
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+    let result = try await authClient.verifyOTP(email: email, token: token, type: .email)
+
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(session.user.userMetadata["plan"] == "free")
+  }
+
+  /// The local stack's magic link email has no code, and the native stack cannot serve a custom
+  /// template. A new magic link from the admin API carries the code instead.
+  private func emailOTP(for email: String, admin: AuthAdminClient) async throws -> String {
+    try await admin.generateLink(.magicLink(email: email)).properties.emailOTP
+  }
+
+  @Test
+  func resendEmailSucceeds() async throws {
+    let email = mockEmail()
+    try await authClient.signInWithOTP(email: email)
+
+    try await authClient.resend(
+      email: email, type: .signup, redirectTo: URL(string: "http://localhost:3000")!)
   }
 
   @Test
@@ -263,7 +428,7 @@ struct AuthClientIntegrationTests {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let refreshedSession = try await authClient.refreshSession()
-      let currentStoredSession = try await authClient.session
+      let currentStoredSession = try await authClient.session()
 
       #expect(currentStoredSession.accessToken == refreshedSession.accessToken)
     }
@@ -295,7 +460,7 @@ struct AuthClientIntegrationTests {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
-      let user = try await authClient.update(user: UserAttributes(email: email))
+      let user = try await authClient.updateUser(UserAttributes(email: email))
 
       #expect(user.email == email)
     }
@@ -323,15 +488,14 @@ struct AuthClientIntegrationTests {
   func linkIdentity() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    try await authClient.linkIdentity(provider: .apple) { url in
-      #expect(url.absoluteString.contains("apple.com"))
-    }
+    let url = try await authClient.linkIdentityURL(.apple).url
+    #expect(url.absoluteString.contains("apple.com"))
   }
 
   @Test(.disabled("Requires secret key and pre-seeded users"))
   func listUsers() async throws {
-    let client = Self.makeClient(serviceRole: true)
-    let pagination = try await client.admin.listUsers(params: PageParams(perPage: 10))
+    let admin = Self.makeAdminClient()
+    let pagination = try await admin.listUsers(perPage: 10)
     #expect(pagination.users.count == 10)
     #expect(pagination.audience == "authenticated")
     #expect(pagination.nextPage == 2)
@@ -342,10 +506,10 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
-    let session = try await authClient.session
+    let session = try await authClient.session()
 
-    let client = Self.makeClient(serviceRole: true)
-    let passkeys = try await client.admin.listPasskeys(forUser: session.user.id)
+    let admin = Self.makeAdminClient()
+    let passkeys = try await admin.passkeys.list(forUser: session.user.id)
     #expect(passkeys.isEmpty)
   }
 
@@ -354,11 +518,11 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
-    let session = try await authClient.session
+    let session = try await authClient.session()
 
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     do {
-      try await client.admin.deletePasskey(id: UUID(), forUser: session.user.id)
+      try await admin.passkeys.delete(id: UUID(), forUser: session.user.id)
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
@@ -367,17 +531,83 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func passkeyAuthenticationOptionsAreTheBarePublicKey() async throws {
+    let options = try await authClient.passkeys.authenticationOptions()
+
+    let publicKey = try WebAuthnRequestOptions(publicKey: options.options)
+    #expect(publicKey.rpID == "localhost")
+    #expect(!publicKey.challenge.isEmpty)
+  }
+
+  @Test
+  func passkeyRegistrationOptionsAreTheBarePublicKey() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+    let session = try await authClient.session()
+
+    let options = try await authClient.passkeys.registrationOptions()
+
+    let publicKey = try WebAuthnCreationOptions(publicKey: options.options)
+    #expect(publicKey.rpID == "localhost")
+    #expect(publicKey.userID == Data(session.user.id.uuidString.lowercased().utf8))
+    #expect(publicKey.excludedCredentialIDs.isEmpty)
+  }
+
+  @Test
+  func passkeyVerifyAuthenticationAcceptsTheChallengeIDAndRejectsAForgedCredential() async throws {
+    let options = try await authClient.passkeys.authenticationOptions()
+
+    await #expect {
+      try await authClient.passkeys.verifyAuthentication(
+        challengeID: options.challengeID,
+        credential: [
+          "id": "Zm9yZ2Vk", "rawId": "Zm9yZ2Vk", "type": "public-key",
+          "response": [
+            "clientDataJSON": "e30", "authenticatorData": "AA", "signature": "AA",
+            "userHandle": "AA",
+          ],
+        ]
+      )
+    } throws: { error in
+      // A malformed challenge ID would fail first with "challenge_id must be a valid UUID".
+      let error = error as? AuthError
+      return error?.kind == .server && error?.message.contains("challenge_id") == false
+    }
+  }
+
+  @Test
+  func mfaWebAuthnChallengeWrapsPublicKeyAndVerifyAcceptsTheType() async throws {
+    try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
+
+    let factorID = try await authClient.mfa.enrollWebAuthnFactor(friendlyName: "Laptop")
+    let challenge = try await authClient.mfa.challenge(factorID: factorID)
+    let webauthn = try #require(challenge.webauthn)
+
+    #expect(webauthn.type == .create)
+    let publicKey = try WebAuthnCreationOptions(publicKey: webauthn.publicKeyOptions())
+    #expect(publicKey.rpID == "localhost")
+
+    await #expect {
+      try await authClient.mfa.verify(
+        factorID: factorID, challengeID: challenge.id, type: webauthn.type,
+        credentialResponse: ["id": "Zm9yZ2Vk", "type": "public-key"])
+    } throws: { error in
+      // Without `webauthn.type` the server answers "WebAuthn type must be create or request".
+      (error as? AuthError)?.message == "Invalid credential_response"
+    }
+  }
+
+  @Test
   func signOut() async throws {
     let changes = try await expectAuthEvents([.initialSession, .signedIn, .signedOut]) {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-      _ = try await authClient.session
+      _ = try await authClient.session()
       #expect(authClient.currentSession != nil)
 
       try await authClient.signOut()
 
       do {
-        _ = try await authClient.session
+        _ = try await authClient.session()
         Issue.record("Expected to throw AuthError.sessionMissing")
       } catch let error as AuthError {
         #expect(error.kind == .sessionMissing)
@@ -389,13 +619,115 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func pkceRecoveryLinkSignsInThroughHandleRedirect() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    try await authClient.resetPassword(
+      email: email,
+      redirectTo: URL(string: "http://localhost:3000")!
+    )
+    let link = try await MailCatcher().latestLink(to: email)
+    let location = try await redirectLocation(of: link)
+    let items = URLComponents(url: location, resolvingAgainstBaseURL: false)?.queryItems
+    #expect(items?.contains { $0.name == "code" } == true)
+
+    let redirectResult = LockIsolated<RedirectResult?>(nil)
+    try await expectAuthEvents([.initialSession, .passwordRecovery]) {
+      let value = try await authClient.handleRedirect(location)
+      redirectResult.setValue(value)
+    }
+    let result = redirectResult.value
+    guard case .signedIn(let session, let verification) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(verification == .recovery)
+
+    let replay = try await authClient.handleRedirect(location)
+    #expect(replay == result)
+  }
+
+  /// An email link carries no flow ID, so the client tries the newest flow first. The server
+  /// rejects its verifier, and the client must then finish the magic-link flow and keep the
+  /// recovery flow for its own link.
+  ///
+  /// The reset goes to another user: the server keeps one recovery token per user, so a reset for
+  /// the same user makes the magic link itself invalid, before any code exchange.
+  @Test
+  func anEarlierMagicLinkFinishesAfterALaterPasswordReset() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    let otherEmail = mockEmail()
+    let redirectTo = URL(string: "http://localhost:3000")!
+    for address in [email, otherEmail] {
+      try await admin.createUser(
+        AdminUserAttributes(
+          email: address, confirmsEmail: true, password: mockPassword())
+      )
+    }
+
+    try await authClient.signInWithOTP(
+      email: email, options: EmailOTPOptions(redirectTo: redirectTo))
+    let magicLinkFlow = try #require(
+      try await authClient.dependencies.flowStore.pendingFlows().first)
+    try await authClient.resetPassword(email: otherEmail, redirectTo: redirectTo)
+    let recoveryFlow = try #require(
+      try await authClient.dependencies.flowStore.pendingFlows().first)
+    #expect(recoveryFlow.id != magicLinkFlow.id)
+
+    let magicLink = try await MailCatcher().latestLink(to: email)
+    let location = try await redirectLocation(of: magicLink)
+    let result = try await authClient.handleRedirect(location)
+
+    guard case .signedIn(let session, let verification) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+    #expect(verification == nil)
+    let pending = try await authClient.dependencies.flowStore.pendingFlows()
+    #expect(pending.map(\.id) == [recoveryFlow.id])
+  }
+
+  @Test
+  func implicitMagicLinkSignsInThroughHandleRedirect() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    let link = try await admin.generateLink(.magicLink(email: email))
+    let location = try await redirectLocation(of: link.properties.actionLink)
+    #expect(location.fragment?.contains("access_token=") == true)
+
+    let result = try await authClient.handleRedirect(location)
+    guard case .signedIn(let session, _) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(session.user.email == email)
+  }
+
+  @Test
+  func unrelatedURLIsNotAnAuthRedirect() async throws {
+    let result = try await authClient.handleRedirect(URL(string: "http://localhost:3000/profile")!)
+    #expect(result == nil)
+  }
+
+  @Test
   func generateLinkSignUp() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
-    let link = try await client.admin.generateLink(
-      params: .signUp(
+    let link = try await admin.generateLink(
+      .signUp(
         email: email,
         password: password,
         data: ["full_name": "John Doe"]
@@ -409,15 +741,15 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkMagicLink() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
-    try await client.admin.createUser(
-      attributes: AdminUserAttributes(email: email, password: password)
+    try await admin.createUser(
+      AdminUserAttributes(email: email, password: password)
     )
 
-    let link = try await client.admin.generateLink(params: .magicLink(email: email))
+    let link = try await admin.generateLink(.magicLink(email: email))
 
     expectNoDifference(link.properties.verificationType, .magiclink)
   }
@@ -425,23 +757,24 @@ struct AuthClientIntegrationTests {
   @Test
   func generateLinkRecovery() async throws {
     let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
 
     _ = try await client.signUp(email: email, password: password)
 
-    let link = try await client.admin.generateLink(params: .recovery(email: email))
+    let link = try await admin.generateLink(.recovery(email: email))
 
     expectNoDifference(link.properties.verificationType, .recovery)
   }
 
   @Test
   func verifyOTPForRecoveryEmitsPasswordRecovery() async throws {
-    let admin = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
-    _ = try await admin.admin.createUser(
-      attributes: AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
-    let link = try await admin.admin.generateLink(params: .recovery(email: email))
+    _ = try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
+    let link = try await admin.generateLink(.recovery(email: email))
 
     try await expectAuthEvents([.initialSession, .passwordRecovery]) {
       try await authClient.verifyOTP(tokenHash: link.properties.hashedToken, type: .recovery)
@@ -452,20 +785,20 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkInvite() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
 
-    let link = try await client.admin.generateLink(params: .invite(email: email))
+    let link = try await admin.generateLink(.invite(email: email))
 
     expectNoDifference(link.properties.verificationType, .invite)
   }
 
   @Test
-  func inviteUserByEmail() async throws {
-    let client = Self.makeClient(serviceRole: true)
+  func inviteUser() async throws {
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
 
-    let user = try await client.admin.inviteUserByEmail(email)
+    let user = try await admin.inviteUser(email: email)
 
     expectNoDifference(user.email, email)
     #expect(user.invitedAt != nil)
@@ -474,6 +807,7 @@ struct AuthClientIntegrationTests {
   @Test
   func verifyOTPForSecureEmailChange() async throws {
     let client = Self.makeClient(serviceRole: true)
+    let admin = Self.makeAdminClient()
     let email = mockEmail()
     let newEmail = mockEmail()
     let password = mockPassword()
@@ -487,22 +821,23 @@ struct AuthClientIntegrationTests {
     #expect(user.identities?.isEmpty == false)
     #expect(client.currentSession == nil)
 
-    let currentEmailLink = try await client.admin.generateLink(
-      params: .emailChangeCurrent(email: email, newEmail: newEmail)
+    let currentEmailLink = try await admin.generateLink(
+      .emailChangeCurrent(email: email, newEmail: newEmail)
     )
-    let newEmailLink = try await client.admin.generateLink(
-      params: .emailChangeNew(email: email, newEmail: newEmail)
+    let newEmailLink = try await admin.generateLink(
+      .emailChangeNew(email: email, newEmail: newEmail)
     )
 
     let firstConfirmation = try await client.verifyOTP(
       tokenHash: currentEmailLink.properties.hashedToken,
       type: .emailChange
     )
-    guard case .emailChangeConfirmationPending(let confirmation) = firstConfirmation else {
-      Issue.record("Expected .emailChangeConfirmationPending, got \(firstConfirmation)")
+    guard case .emailChangePending(let message) = firstConfirmation else {
+      Issue.record("Expected .emailChangePending, got \(firstConfirmation)")
       return
     }
-    #expect(confirmation.code == "200")
+    #expect(!message.isEmpty)
+    #expect(client.currentSession == nil)
 
     // GoTrue's admin/generate_link response has a bug for `email_change_new`: `hashedToken` is
     // computed from the current email, not the new one, so it never matches what's actually
@@ -512,7 +847,10 @@ struct AuthClientIntegrationTests {
       token: newEmailLink.properties.emailOTP,
       type: .emailChange
     )
-    let session = try #require(secondConfirmation.session)
+    guard case .signedIn(let session) = secondConfirmation else {
+      Issue.record("Expected .signedIn, got \(secondConfirmation)")
+      return
+    }
     expectNoDifference(session.user.email, newEmail)
   }
 
@@ -524,16 +862,15 @@ struct AuthClientIntegrationTests {
     let session = try await signUpIfNeededOrSignIn(email: email, password: password).session
     let accessToken = try #require(session?.accessToken)
 
-    let adminClient = Self.makeClient(serviceRole: true)
-    try await adminClient.admin.signOut(jwt: accessToken)
-    withExtendedLifetime(adminClient) {}
+    let admin = Self.makeAdminClient()
+    try await admin.signOut(jwt: accessToken)
   }
 
   @Test
   func wellKnownJWKSServesES256Key() async throws {
     let url = URL(string: "\(DotEnv.supabaseURL)/auth/v1/.well-known/jwks.json")!
     let (data, _) = try await URLSession.shared.data(from: url)
-    let jwks = try AuthClient.Configuration.jsonDecoder.decode(JWKS.self, from: data)
+    let jwks = try JSONDecoder().decode(JWKS.self, from: data)
 
     let jwk = try #require(jwks.keys.first { $0.alg == "ES256" })
     expectNoDifference(jwk.kty, "EC")
@@ -543,12 +880,12 @@ struct AuthClientIntegrationTests {
     expectNoDifference(Base64URL.decode(try #require(jwk.x))?.count, 32)
     expectNoDifference(Base64URL.decode(try #require(jwk.y))?.count, 32)
 
-    expectNoDifference(JWTAlgorithm(rawValue: try #require(jwk.alg)), .es256)
+    expectNoDifference(JWTVerifier.algorithm(for: jwk), .es256)
     #expect(jwk.p256PublicKey != nil)
   }
 
   @Test
-  func getClaimsWithLiveES256Session() async throws {
+  func claimsVerifiesES256LocallyAgainstJWKS() async throws {
     let email = mockEmail()
     let session = try #require(
       try await authClient.signUp(email: email, password: mockPassword()).session
@@ -562,13 +899,14 @@ struct AuthClientIntegrationTests {
     let result = try await authClient.claims()
 
     expectNoDifference(result.header.alg, "ES256")
-    expectNoDifference(result.claims.sub, session.user.id.uuidString.lowercased())
-    expectNoDifference(result.claims.email, email)
-    expectNoDifference(result.claims.role, "authenticated")
+    #expect(result.header.kid != nil)
+    expectNoDifference(result.subject, session.user.id.uuidString.lowercased())
+    expectNoDifference(result.email, email)
+    expectNoDifference(result.role, "authenticated")
   }
 
   @Test
-  func getClaimsRejectsTamperedLiveES256Token() async throws {
+  func claimsRejectsTamperedPayload() async throws {
     let session = try #require(
       try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
     )
@@ -590,7 +928,59 @@ struct AuthClientIntegrationTests {
     #expect(error?.message == "Invalid JWT signature")
   }
 
+  @Test
+  func claimsRejectsTamperedSignature() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    var parts = session.accessToken.split(separator: ".").map(String.init)
+    let signature = parts[2]
+    let flipped: Character = signature.first == "A" ? "B" : "A"
+    parts[2] = String(flipped) + signature.dropFirst()
+    let tamperedJWT = parts.joined(separator: ".")
+
+    let error = await #expect(throws: AuthError.self) {
+      _ = try await authClient.claims(jwt: tamperedJWT)
+    }
+    #expect(error?.kind == .jwtVerificationFailed)
+    #expect(error?.message == "Invalid JWT signature")
+  }
+
+  @Test
+  func userReturnsSignedInUser() async throws {
+    let session = try #require(
+      try await authClient.signUp(email: mockEmail(), password: mockPassword()).session
+    )
+
+    let user = try await authClient.user()
+
+    expectNoDifference(user.id, session.user.id)
+  }
+
+  @Test
+  func updateUserWithCurrentPassword() async throws {
+    let email = mockEmail()
+    try await authClient.signUp(email: email, password: "pass-1")
+
+    try await authClient.updateUser(UserAttributes(password: "pass-2", currentPassword: "pass-1"))
+    try await authClient.signOut()
+
+    let session = try await authClient.signIn(email: email, password: "pass-2")
+    expectNoDifference(session.user.email, email)
+  }
+
   @discardableResult
+  /// Signs one user in on two clients, so the user has two sessions on the server.
+  private func signInOnTwoDevices() async throws -> (AuthClient, AuthClient) {
+    let email = mockEmail()
+    let password = mockPassword()
+    try await signUpIfNeededOrSignIn(email: email, password: password)
+    let otherDevice = Self.makeClient()
+    try await otherDevice.signIn(email: email, password: password)
+    return (authClient, otherDevice)
+  }
+
   private func signUpIfNeededOrSignIn(
     email: String,
     password: String

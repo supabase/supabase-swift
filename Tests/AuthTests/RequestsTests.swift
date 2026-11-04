@@ -106,10 +106,12 @@ struct RequestsTests {
     await assert {
       try await sut.signInWithOTP(
         email: "example@mail.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: EmailOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -119,11 +121,13 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.signInWithOTP(
+      _ = try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: PhoneOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -131,16 +135,19 @@ struct RequestsTests {
   @Test
   func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try sut.oauthSignInURL(
-      provider: .github, scopes: "read,write",
-      redirectTo: URL(string: "https://dummy-url.com/redirect")!,
-      queryParams: [("extra_key", "extra_value")]
+    let flow = try await sut.oauthSignInURL(
+      .github,
+      options: OAuthOptions(
+        scopes: ["read", "write"],
+        redirectTo: URL(string: "https://dummy-url.com/redirect")!,
+        queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
+      )
     )
     #expect(
-      url
+      flow.url
         == URL(
           string:
-            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read,write&redirect_to=https://dummy-url.com/redirect&extra_key=extra_value"
+            "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=challenge&code_challenge_method=s256&extra_key=extra_value"
         )!
     )
   }
@@ -148,8 +155,11 @@ struct RequestsTests {
   @Test
   func refreshSession() async {
     let sut = makeSUT()
+    var session = Session.valid
+    session.refreshToken = "refresh-token"
+    try? await sut.seedSession(session)
     await assert {
-      try await sut.refreshSession(refreshToken: "refresh-token")
+      try await sut.refreshSession()
     }
   }
 
@@ -172,7 +182,7 @@ struct RequestsTests {
           "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken&token_type=bearer"
       )!
 
-      let session = try await sut.session(from: url)
+      let result = try await sut.handleRedirect(url)
       let expectedSession = Session(
         accessToken: "accesstoken",
         tokenType: "bearer",
@@ -181,7 +191,7 @@ struct RequestsTests {
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )
-      #expect(session == expectedSession)
+      #expect(result == .signedIn(expectedSession, verification: nil))
     }
   #endif
 
@@ -194,17 +204,14 @@ struct RequestsTests {
         "https://dummy-url.com/callback#access_token=accesstoken&expires_in=60&refresh_token=refreshtoken"
     )!
 
-    do {
-      _ = try await sut.session(from: url)
-    } catch {
-      let authError = error as? AuthError
-      #expect(authError?.kind == .oauthFlowFailed)
-      #expect(authError?.message == "No session defined in URL")
+    let error = await #expect(throws: AuthError.self) {
+      try await sut.handleRedirect(url)
     }
+    #expect(error?.kind == .oauthFlowFailed)
   }
 
   @Test
-  func setSessionWithAFutureExpirationDate() async throws {
+  func importSessionWithAFutureExpirationDate() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -212,29 +219,29 @@ struct RequestsTests {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func setSessionWithAExpiredToken() async throws {
+  func importSessionWithAnExpiredToken() async throws {
     let sut = makeSUT()
 
     let accessToken =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNjQ4NjQwMDIxLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.CGr5zNE5Yltlbn_3Ms2cjSLs_AW9RKM3lxh7cTQrg0w"
 
     await assert {
-      try await sut.setSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
+      try await sut.importSession(accessToken: accessToken, refreshToken: "dummy-refresh-token")
     }
   }
 
   @Test
-  func signOut() async throws {
+  func signOutWithGlobalScope() async throws {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.signOut()
+      try await sut.signOut(scope: .global)
     }
   }
 
@@ -267,9 +274,7 @@ struct RequestsTests {
       try await sut.verifyOTP(
         email: "example@mail.com",
         token: "123456",
-        type: .magiclink,
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+        type: .magiclink
       )
     }
   }
@@ -282,8 +287,7 @@ struct RequestsTests {
       try await sut.verifyOTP(
         phone: "+1 202-918-2132",
         token: "123456",
-        type: .sms,
-        captchaToken: "captcha-token"
+        type: .sms
       )
     }
   }
@@ -307,8 +311,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.update(
-        user: UserAttributes(
+      try await sut.updateUser(
+        UserAttributes(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
@@ -320,11 +324,24 @@ struct RequestsTests {
   }
 
   @Test
-  func resetPasswordForEmail() async {
+  func updateUserWithCurrentPassword() async throws {
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    await assert {
+      try await sut.updateUser(
+        UserAttributes(password: "new-pass", currentPassword: "old-pass")
+      )
+    }
+  }
+
+  @Test
+  func resetPassword() async {
     let sut = makeSUT()
     await assert {
-      try await sut.resetPasswordForEmail(
-        "example@mail.com",
+      try await sut.resetPassword(
+        email: "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
@@ -339,7 +356,7 @@ struct RequestsTests {
       try await sut.resend(
         email: "example@mail.com",
         type: .emailChange,
-        emailRedirectTo: URL(string: "https://supabase.com"),
+        redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
     }
@@ -350,7 +367,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.resend(
+      _ = try await sut.resend(
         phone: "+1 202-918-2132",
         type: .phoneChange,
         captchaToken: "captcha-token"
@@ -360,32 +377,32 @@ struct RequestsTests {
 
   @Test
   func deleteUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      try await sut.admin.deleteUser(id: id)
+      try await sut.deleteUser(id: id)
     }
   }
 
   @Test
   func adminListPasskeys() async throws {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.admin.listPasskeys(forUser: userId)
+      _ = try await sut.passkeys.list(forUser: userId)
     }
   }
 
   @Test
   func adminDeletePasskey() async throws {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.admin.deletePasskey(id: passkeyId, forUser: userId)
+      try await sut.passkeys.delete(id: passkeyId, forUser: userId)
     }
   }
 
@@ -409,11 +426,10 @@ struct RequestsTests {
     await assert {
       try await sut.unlinkIdentity(
         UserIdentity(
-          id: "5923044",
-          identityId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          userId: UUID(),
-          identityData: [:],
-          provider: "email",
+          id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+          providerUserID: "5923044",
+          userID: UUID(),
+          provider: .email,
           createdAt: Date(),
           lastSignInAt: Date(),
           updatedAt: Date()
@@ -423,27 +439,31 @@ struct RequestsTests {
   }
 
   @Test
-  func signInWithSSOUsingDomain() async {
+  func ssoSignInURLUsingDomain() async {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.signInWithSSO(
-        domain: "supabase.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      _ = try await sut.ssoSignInURL(
+        .domain("supabase.com"),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
     }
   }
 
   @Test
-  func signInWithSSOUsingProviderId() async {
+  func ssoSignInURLUsingProviderID() async {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.signInWithSSO(
-        providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      _ = try await sut.ssoSignInURL(
+        .providerID(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
     }
   }
@@ -468,23 +488,13 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.linkIdentityURL(
-        provider: .github,
-        scopes: "user:email",
-        redirectTo: URL(string: "https://supabase.com"),
-        queryParams: [("extra_key", "extra_value")]
+        .github,
+        options: OAuthOptions(
+          scopes: ["user:email"],
+          redirectTo: URL(string: "https://supabase.com"),
+          queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
+        )
       )
-    }
-  }
-
-  @Test
-  func mfaEnrollLegacy() async throws {
-    let sut = makeSUT()
-
-    try await sut.seedSession(.valid)
-
-    await assert {
-      _ = try await sut.mfa.enroll(
-        params: MFATotpEnrollParams(issuer: "supabase.com", friendlyName: "test"))
     }
   }
 
@@ -495,7 +505,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .totp(issuer: "supabase.com", friendlyName: "test"))
+      _ = try await sut.mfa.enrollTOTP(issuer: "supabase.com", friendlyName: "test")
     }
   }
 
@@ -506,7 +516,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .phone(friendlyName: "test", phone: "+1 202-918-2132"))
+      _ = try await sut.mfa.enrollPhone("+1 202-918-2132", friendlyName: "test")
     }
   }
 
@@ -518,7 +528,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -530,9 +540,7 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
-      )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!, channel: .whatsapp)
     }
   }
 
@@ -544,10 +552,9 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          code: "123456"))
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        code: "123456")
     }
   }
 
@@ -558,8 +565,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.unenroll(
-        params: .init(factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!))
+      try await sut.mfa.unenroll(
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!)
     }
   }
 
@@ -570,7 +577,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.mfa.enroll(params: .webAuthn(friendlyName: "My Passkey"))
+      _ = try await sut.mfa.enrollWebAuthnFactor(friendlyName: "My Passkey")
     }
   }
 
@@ -582,10 +589,8 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.challenge(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
       )
     }
   }
@@ -598,19 +603,18 @@ struct RequestsTests {
 
     await assert {
       _ = try await sut.mfa.verify(
-        params: .init(
-          factorId: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-          challengeId: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-          credentialResponse: [
-            "id": "credential-id",
-            "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
-            "type": "public-key",
-            "response": [
-              "clientDataJSON": "Y2xpZW50LWRhdGE",
-              "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
-            ],
-          ]
-        )
+        factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        type: .create,
+        credentialResponse: [
+          "id": "credential-id",
+          "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
+          "type": "public-key",
+          "response": [
+            "clientDataJSON": "Y2xpZW50LWRhdGE",
+            "attestationObject": "YXR0ZXN0YXRpb24tb2JqZWN0",
+          ],
+        ]
       )
     }
   }
@@ -622,7 +626,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.passkeyRegistrationOptions()
+      _ = try await sut.passkeys.registrationOptions()
     }
   }
 
@@ -633,9 +637,9 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.verifyPasskeyRegistration(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyRegistration(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -653,7 +657,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.passkeyAuthenticationOptions()
+      _ = try await sut.passkeys.authenticationOptions()
     }
   }
 
@@ -662,9 +666,9 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.verifyPasskeyAuthentication(
-        challengeId: "challenge-1",
-        credentialResponse: [
+      _ = try await sut.passkeys.verifyAuthentication(
+        challengeID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        credential: [
           "id": "credential-id",
           "rawId": "cmF3LWNyZWRlbnRpYWwtaWQ",
           "type": "public-key",
@@ -686,7 +690,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.listPasskeys()
+      _ = try await sut.passkeys.list()
     }
   }
 
@@ -697,7 +701,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      _ = try await sut.renamePasskey(
+      _ = try await sut.passkeys.rename(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
         friendlyName: "Renamed Passkey"
       )
@@ -711,7 +715,7 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.deletePasskey(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
+      try await sut.passkeys.delete(id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
@@ -737,7 +741,8 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.exchangeCodeForSession(authCode: "auth-code")
+      _ = try await sut.oauthSignInURL(.github)
+      try await sut.exchangeCodeForSession("auth-code")
     }
   }
 
@@ -766,8 +771,8 @@ struct RequestsTests {
     try await sut.seedSession(.valid)
 
     await assert {
-      try await sut.linkIdentityWithIDToken(
-        IDTokenCredentials(
+      try await sut.linkIdentity(
+        idToken: IDTokenCredentials(
           provider: .google,
           idToken: "id-token",
           nonce: "nonce"
@@ -779,9 +784,9 @@ struct RequestsTests {
   @Test
   func fetchJWKS() async {
     let sut = makeSUT()
-    // RS256 header with a key id no cached key set holds, so the keys are fetched.
+    // RS256 header with a key id, so the client fetches the key set.
     let jwt =
-      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJleHAiOjQ4NTIxNjM1OTN9.c2ln"
+      "eyJhbGciOiJSUzI1NiIsImtpZCI6InJlcXVlc3RzLXRlc3RzLWtleSJ9.eyJzdWIiOiJyZXF1ZXN0cy10ZXN0cyIsImV4cCI6NDg1MjE2MzU5M30.c2ln"
 
     await assert {
       _ = try await sut.claims(jwt: jwt)
@@ -891,45 +896,45 @@ struct RequestsTests {
 
   @Test
   func adminGetUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.user(id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
+      _ = try await sut.user(id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     }
   }
 
   @Test
   func adminUpdateUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.updateUserById(
-        UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-        attributes: AdminUserAttributes(banDuration: "24h", email: "new@mail.com")
+      try await sut.updateUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        attributes: AdminUserAttributes(banDuration: .seconds(86_400), email: "new@mail.com")
       )
     }
   }
 
   @Test
   func adminCreateUser() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.createUser(
-        attributes: AdminUserAttributes(
+      try await sut.createUser(
+        AdminUserAttributes(
           email: "example@mail.com", confirmsEmail: true, password: "the.pass")
       )
     }
   }
 
   @Test
-  func adminInviteUserByEmail() async {
-    let sut = makeSUT()
+  func adminInviteUser() async {
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.inviteUserByEmail(
-        "example@mail.com",
-        data: ["custom_key": .string("custom_value")],
+      try await sut.inviteUser(
+        email: "example@mail.com",
+        userMetadata: ["custom_key": .string("custom_value")],
         redirectTo: URL(string: "https://supabase.com")
       )
     }
@@ -937,29 +942,29 @@ struct RequestsTests {
 
   @Test
   func adminSignOut() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.signOut(jwt: "user-jwt", scope: .others)
+      try await sut.signOut(jwt: "user-jwt", scope: .others)
     }
   }
 
   @Test
   func adminListUsers() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.listUsers(params: PageParams(page: 2, perPage: 10))
+      _ = try await sut.listUsers(page: 2, perPage: 10)
     }
   }
 
   @Test
   func adminGenerateLink() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.generateLink(
-        params: .magicLink(
+      _ = try await sut.generateLink(
+        .magicLink(
           email: "example@mail.com", redirectTo: URL(string: "https://supabase.com"))
       )
     }
@@ -967,20 +972,20 @@ struct RequestsTests {
 
   @Test
   func adminListFactors() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.mfa.listFactors(
+      _ = try await sut.mfa.listFactors(
         forUser: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     }
   }
 
   @Test
   func adminDeleteFactor() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.mfa.deleteFactor(
+      try await sut.mfa.deleteFactor(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
         forUser: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
       )
@@ -989,19 +994,19 @@ struct RequestsTests {
 
   @Test
   func adminListOAuthClients() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.listClients(params: PageParams(page: 1, perPage: 5))
+      _ = try await sut.oauth.listClients(params: PageParams(page: 1, perPage: 5))
     }
   }
 
   @Test
   func adminCreateOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.createClient(
+      try await sut.oauth.createClient(
         params: CreateOAuthClientParams(
           clientName: "Example", redirectUris: ["https://example.com/callback"])
       )
@@ -1010,20 +1015,20 @@ struct RequestsTests {
 
   @Test
   func adminGetOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.client(
+      _ = try await sut.oauth.client(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
   @Test
   func adminUpdateOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.admin.oauth.updateClient(
+      _ = try await sut.oauth.updateClient(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
         params: UpdateOAuthClientParams(clientName: "Renamed")
       )
@@ -1032,21 +1037,103 @@ struct RequestsTests {
 
   @Test
   func adminDeleteOAuthClient() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.deleteClient(
+      try await sut.oauth.deleteClient(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
     }
   }
 
   @Test
   func adminRegenerateOAuthClientSecret() async {
-    let sut = makeSUT()
+    let sut = makeAdminSUT()
 
     await assert {
-      try await sut.admin.oauth.regenerateClientSecret(
+      try await sut.oauth.regenerateClientSecret(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!)
+    }
+  }
+
+  @Test
+  func adminLiftBan() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.updateUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
+        attributes: AdminUserAttributes(banDuration: .zero)
+      )
+    }
+  }
+
+  @Test
+  func adminSoftDeleteUser() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.deleteUser(
+        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!, softDelete: true)
+    }
+  }
+
+  @Test
+  func adminListCustomProviders() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      _ = try await sut.customProviders.list(type: .oidc)
+    }
+  }
+
+  @Test
+  func adminCreateCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    var params = CreateCustomProviderParams.oauth2(
+      identifier: "custom:acme",
+      name: "Acme",
+      clientID: "client-id",
+      clientSecret: "client-secret",
+      authorizationURL: URL(string: "https://acme.example.com/authorize")!,
+      tokenURL: URL(string: "https://acme.example.com/token")!,
+      userinfoURL: URL(string: "https://acme.example.com/userinfo")!
+    )
+    params.scopes = ["openid", "email"]
+    params.customClaimsAllowlist = ["groups"]
+
+    await assert {
+      try await sut.customProviders.create(params)
+    }
+  }
+
+  @Test
+  func adminGetCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      _ = try await sut.customProviders.provider(identifier: "custom:acme")
+    }
+  }
+
+  @Test
+  func adminUpdateCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.customProviders.update(
+        identifier: "custom:acme",
+        params: UpdateCustomProviderParams(name: "Acme Inc.", customClaimsAllowlist: [])
+      )
+    }
+  }
+
+  @Test
+  func adminDeleteCustomProvider() async {
+    let sut = makeAdminSUT()
+
+    await assert {
+      try await sut.customProviders.delete(identifier: "custom:acme")
     }
   }
 
@@ -1059,9 +1146,51 @@ struct RequestsTests {
     }
   }
 
+  private func makeAdminSUT(
+    file: StaticString = #filePath,
+    testName: String = #function,
+    line: UInt = #line
+  ) -> AuthAdminClient {
+    AuthAdminClient(
+      url: clientURL,
+      secretKey: "dummy.secret.key",
+      http: .init(
+        transport: snapshotTransport(
+          record: false, fetch: nil, file: file, testName: testName, line: line))
+    )
+  }
+
+  private func snapshotTransport(
+    record: Bool,
+    fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))?,
+    file: StaticString,
+    testName: String,
+    line: UInt
+  ) -> ClosureTransport {
+    ClosureTransport { request, body in
+      guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
+      if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+      await MainActor.run {
+        assertSnapshot(
+          of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
+        )
+      }
+
+      if let fetch {
+        let (data, response) = try await fetch(urlRequest)
+        guard let head = (response as? HTTPURLResponse)?.httpResponse else {
+          throw URLError(.badServerResponse)
+        }
+        return (head, data.isEmpty ? nil : HTTPBody(data))
+      }
+
+      throw UnimplementedError()
+    }
+  }
+
   private func makeSUT(
     record: Bool = false,
-    flowType: AuthFlowType = .implicit,
     fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
     date: @escaping @Sendable () -> Date = { Date() },
     file: StaticString = #filePath,
@@ -1071,34 +1200,19 @@ struct RequestsTests {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       headers: ["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"],
-      flowType: flowType,
       storageKey: uniqueStorageKey(),
       localStorage: InMemoryLocalStorage(),
       http: .init(
-        transport: ClosureTransport { request, body in
-          guard var urlRequest = URLRequest(httpRequest: request) else { throw URLError(.badURL) }
-          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
-
-          await MainActor.run {
-            assertSnapshot(
-              of: urlRequest, as: ._curl, record: record, file: file, testName: testName, line: line
-            )
-          }
-
-          if let fetch {
-            let (data, response) = try await fetch(urlRequest)
-            guard let head = (response as? HTTPURLResponse)?.httpResponse else {
-              throw URLError(.badServerResponse)
-            }
-            return (head, data.isEmpty ? nil : HTTPBody(data))
-          }
-
-          throw UnimplementedError()
-        }),
+        transport: snapshotTransport(
+          record: record, fetch: fetch, file: file, testName: testName, line: line)),
       autoRefresh: .manual
     )
 
-    return AuthClient(configuration: configuration, date: date, pkce: .live, platform: .live)
+    let pkce = PKCE(
+      generateCodeVerifier: { "verifier" },
+      generateCodeChallenge: { _ in "challenge" }
+    )
+    return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: .live)
   }
 }
 

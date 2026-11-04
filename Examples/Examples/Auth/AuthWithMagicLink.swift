@@ -5,6 +5,7 @@
 //  Demonstrates passwordless authentication using magic links sent via email
 //
 
+import Supabase
 import SwiftUI
 
 struct AuthWithMagicLink: View {
@@ -114,7 +115,7 @@ struct AuthWithMagicLink: View {
       Result { @Sendable in
         try await supabase.auth.signInWithOTP(
           email: email,
-          redirectTo: Constants.redirectToURL
+          options: EmailOTPOptions(redirectTo: Constants.redirectToURL)
         )
       }
     )
@@ -126,7 +127,7 @@ struct AuthWithMagicLink: View {
     actionState = .inFlight
     actionState = await .result(
       Result { @Sendable in
-        try await supabase.auth.session(from: url)
+        try await supabase.auth.handleRedirect(url)
       }
     )
   }

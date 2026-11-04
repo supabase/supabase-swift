@@ -52,22 +52,16 @@ struct AuthAPITests {
       api.exchangeCodeForSession(authCode: "c", codeVerifier: "v").head,
       api.refreshSession(refreshToken: "r").head,
       api.signOut(accessToken: token, scope: .global).head,
-      api.signInWithOTP(
-        email: "a@b.c", redirectTo: nil, shouldCreateUser: true, userMetadata: [:],
-        captchaToken: nil, pkce: nil
-      ).head,
-      api.signInWithOTP(
-        phone: "1", channel: .sms, shouldCreateUser: true, userMetadata: [:], captchaToken: nil
-      ).head,
-      api.verifyOTP(email: "a@b.c", token: "1", type: .email, redirectTo: nil, captchaToken: nil)
-        .head,
-      api.verifyOTP(phone: "1", token: "1", type: .sms, captchaToken: nil).head,
+      api.signInWithOTP(email: "a@b.c", options: EmailOTPOptions(), pkce: nil).head,
+      api.signInWithOTP(phone: "1", options: PhoneOTPOptions()).head,
+      api.verifyOTP(email: "a@b.c", token: "1", type: .email).head,
+      api.verifyOTP(phone: "1", token: "1", type: .sms).head,
       api.verifyOTP(tokenHash: "h", type: .email).head,
       api.resend(email: "a@b.c", type: .signup, redirectTo: nil, captchaToken: nil, pkce: nil).head,
       api.resend(phone: "1", type: .sms, captchaToken: nil).head,
-      api.resetPasswordForEmail("a@b.c", redirectTo: nil, captchaToken: nil, pkce: nil).head,
+      api.resetPassword(email: "a@b.c", redirectTo: nil, captchaToken: nil, pkce: nil).head,
       api.reauthenticate(accessToken: token).head,
-      api.signInWithSSO(domain: "d", redirectTo: nil, captchaToken: nil, pkce: nil).head,
+      api.signInWithSSO(.domain("d"), redirectTo: nil, captchaToken: nil, pkce: nil).head,
       api.linkIdentityURL(
         provider: .github, scopes: nil, redirectTo: nil, queryParams: [], pkce: nil,
         accessToken: token
@@ -75,9 +69,7 @@ struct AuthAPITests {
       api.user(accessToken: token).head,
       api.updateUser(UserAttributes(), redirectTo: nil, pkce: nil, accessToken: token).head,
       api.unlinkIdentity(
-        UserIdentity(
-          id: "1", identityId: id, userId: id, identityData: [:], provider: "email",
-          createdAt: Date(), lastSignInAt: Date(), updatedAt: Date()),
+        UserIdentity(id: id, providerUserID: "1", userID: id, provider: .email),
         accessToken: token
       ).head,
       api.jwks().head,
@@ -85,12 +77,10 @@ struct AuthAPITests {
       api.oauthConsent(authorizationId: "a", action: "approve", accessToken: token).head,
       api.oauthGrants(accessToken: token).head,
       api.revokeOAuthGrant(clientId: id, accessToken: token).head,
-      api.enrollFactor(MFATotpEnrollParams(), accessToken: token).head,
-      api.challengeFactor(MFAChallengeParams(factorId: id), accessToken: token).head,
-      api.verifyFactor(
-        MFAVerifyParams(factorId: id, challengeId: id, code: "1"), accessToken: token
-      ).head,
-      api.unenrollFactor(MFAUnenrollParams(factorId: id), accessToken: token).head,
+      api.enrollFactor(.totp(), decoding: TOTPEnrollment.self, accessToken: token).head,
+      api.challengeFactor(factorID: id, channel: nil, webAuthn: nil, accessToken: token).head,
+      api.verifyFactor(factorID: id, challengeID: id, code: "1", accessToken: token).head,
+      api.unenrollFactor(factorID: id, accessToken: token).head,
       api.recoveryCodesStatus(accessToken: token).head,
       api.generateRecoveryCodes(friendlyName: nil, accessToken: token).head,
       api.verifyRecoveryCode("c", accessToken: token).head,
@@ -98,19 +88,19 @@ struct AuthAPITests {
       api.unenrollRecoveryCodes(accessToken: token).head,
       api.passkeyRegistrationOptions(accessToken: token).head,
       api.verifyPasskeyRegistration(
-        challengeId: "c", credentialResponse: credential, accessToken: token
+        challengeID: id, credential: credential, accessToken: token
       ).head,
       api.passkeyAuthenticationOptions().head,
-      api.verifyPasskeyAuthentication(challengeId: "c", credentialResponse: credential).head,
+      api.verifyPasskeyAuthentication(challengeID: id, credential: credential).head,
       api.listPasskeys(accessToken: token).head,
       api.renamePasskey(id: id, friendlyName: "n", accessToken: token).head,
       api.deletePasskey(id: id, accessToken: token).head,
       api.adminUser(id: id).head,
       api.adminUpdateUser(id: id, attributes: AdminUserAttributes()).head,
       api.adminCreateUser(attributes: AdminUserAttributes()).head,
-      api.adminInviteUser(email: "a@b.c", data: nil, redirectTo: nil).head,
-      api.adminDeleteUser(id: id, shouldSoftDelete: false).head,
-      api.adminListUsers(params: nil).head,
+      api.adminInviteUser(email: "a@b.c", userMetadata: [:], redirectTo: nil).head,
+      api.adminDeleteUser(id: id, softDelete: false).head,
+      api.adminListUsers(page: nil, perPage: nil).head,
       api.adminGenerateLink(params: .magicLink(email: "a@b.c")).head,
       api.adminListFactors(userId: id).head,
       api.adminDeleteFactor(id: id, userId: id).head,
@@ -124,6 +114,16 @@ struct AuthAPITests {
       api.adminUpdateOAuthClient(id: id, params: UpdateOAuthClientParams()).head,
       api.adminDeleteOAuthClient(id: id).head,
       api.adminRegenerateOAuthClientSecret(id: id).head,
+      api.adminListCustomProviders(type: nil).head,
+      api.adminCreateCustomProvider(
+        params: CreateCustomProviderParams(
+          providerType: .oidc, identifier: "custom:a", name: "n", clientID: "c",
+          clientSecret: "s")
+      ).head,
+      api.adminCustomProvider(identifier: "custom:a").head,
+      api.adminUpdateCustomProvider(identifier: "custom:a", params: UpdateCustomProviderParams())
+        .head,
+      api.adminDeleteCustomProvider(identifier: "custom:a").head,
     ]
   }
 
@@ -174,12 +174,11 @@ struct AuthAPITests {
       ])
 
     let otp = try api.signInWithOTP(
-      email: "a@b.c", redirectTo: nil, shouldCreateUser: false, userMetadata: [:],
-      captchaToken: nil, pkce: nil)
+      email: "a@b.c", options: EmailOTPOptions(shouldCreateUser: false), pkce: nil)
     #expect(try body(otp) == ["email": "a@b.c", "create_user": false])
 
     let sso = try api.signInWithSSO(
-      domain: "example.com", redirectTo: nil, captchaToken: nil, pkce: nil)
+      .domain("example.com"), redirectTo: nil, captchaToken: nil, pkce: nil)
     #expect(sso.head.path == "/auth/v1/sso")
     #expect(
       try body(sso) == [
@@ -187,14 +186,9 @@ struct AuthAPITests {
         "skip_http_redirect": true,
       ])
 
-    let verify = try api.verifyOTP(
-      email: "a@b.c", token: "1", type: .email, redirectTo: nil, captchaToken: nil)
+    let verify = try api.verifyOTP(email: "a@b.c", token: "1", type: .email)
     #expect(query(verify).isEmpty)
-    #expect(
-      try body(verify) == [
-        "email": "a@b.c", "token": "1", "type": "email",
-        "redirect_to": "https://example.com/callback",
-      ])
+    #expect(try body(verify) == ["email": "a@b.c", "token": "1", "type": "email"])
 
     let link = try api.linkIdentityURL(
       provider: .github, scopes: nil, redirectTo: nil, queryParams: [], pkce: nil,
@@ -210,7 +204,7 @@ struct AuthAPITests {
   @Test
   func errorResponseDecodesThroughErrorDecoder() throws {
     let request = try api.signInWithOTP(
-      phone: "1", channel: .sms, shouldCreateUser: false, userMetadata: [:], captchaToken: nil)
+      phone: "1", options: PhoneOTPOptions(shouldCreateUser: false))
 
     let error = try #require(throws: AuthError.self) {
       try request.decode(
@@ -226,7 +220,7 @@ struct AuthAPITests {
 
   @Test
   func listUsersReadsPaginationFromHeaders() throws {
-    let response = try api.adminListUsers(params: nil).decode(
+    let response = try api.adminListUsers(page: nil, perPage: nil).decode(
       HTTPTypes.HTTPResponse(
         status: .ok,
         headerFields: [
@@ -259,9 +253,7 @@ struct AuthAPITests {
     #expect(try body(anonymous) == ["data": ["name": "Jane"]])
     #expect(try body(api.signInAnonymously(userMetadata: [:], captchaToken: nil)) == [:])
 
-    let otp = try api.signInWithOTP(
-      phone: "1", channel: .sms, shouldCreateUser: true, userMetadata: metadata,
-      captchaToken: nil)
+    let otp = try api.signInWithOTP(phone: "1", options: PhoneOTPOptions(userMetadata: metadata))
     #expect(
       try body(otp) == [
         "phone": "1", "channel": "sms", "create_user": true, "data": ["name": "Jane"],
@@ -353,18 +345,35 @@ struct AuthAPITests {
   }
 
   @Test
-  func verifyOTPDecodesASessionOrAnEmailChangeConfirmation() throws {
+  func verifyOTPDecodesASessionOrAPendingEmailChange() throws {
     let request = try api.verifyOTP(tokenHash: "h", type: .emailChange)
 
     let session = try request.decode(ok, json(named: "session"))
-    #expect(session.session != nil)
-
-    let pending = try request.decode(ok, json(named: "email-change-single-confirmation"))
-    guard case .emailChangeConfirmationPending(let confirmation) = pending else {
-      Issue.record("Expected .emailChangeConfirmationPending, got \(pending)")
+    guard case .signedIn = session else {
+      Issue.record("Expected .signedIn, got \(session)")
       return
     }
-    #expect(confirmation.code == "200")
+
+    let pending = try request.decode(ok, json(named: "email-change-single-confirmation"))
+    #expect(
+      pending
+        == .emailChangePending(
+          message:
+            "Confirmation link accepted. Please proceed to confirm link sent to the other email"))
+
+    #expect(throws: (any Error).self) { try request.decode(ok, json(named: "user")) }
+  }
+
+  @Test
+  func phoneVerifyOTPDecodesOnlyASession() throws {
+    let request = try api.verifyOTP(phone: "1", token: "1", type: .phoneChange)
+
+    let session = try request.decode(ok, json(named: "session"))
+    #expect(session.accessToken.isEmpty == false)
+
+    #expect(throws: (any Error).self) {
+      try request.decode(ok, json(named: "email-change-single-confirmation"))
+    }
   }
 
   @Test

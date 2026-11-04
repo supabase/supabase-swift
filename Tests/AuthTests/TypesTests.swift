@@ -17,6 +17,16 @@ struct TypesTests {
   }
 
   @Test
+  func jwkDecodesKeyOps() throws {
+    let json = Data(
+      #"{"kty":"EC","key_ops":["verify"],"alg":"ES256","kid":"k1","crv":"P-256","x":"AQAB","y":"AQAB"}"#
+        .utf8
+    )
+    let jwk = try JSONDecoder().decode(JWK.self, from: json)
+    #expect(jwk.keyOps == ["verify"])
+  }
+
+  @Test
   func factorStatusDecodesUnknownValue() throws {
     let json = Data(#"{"status":"pending_review"}"#.utf8)
     let decoded = try JSONDecoder().decode(FactorStatusContainer.self, from: json)
@@ -75,21 +85,21 @@ struct TypesTests {
   }
 
   @Test
-  func mobileOTPTypeEncodesAsRawString() throws {
-    let data = try JSONEncoder().encode(MobileOTPType.phoneChange)
+  func phoneOTPTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(PhoneOTPType.phoneChange)
     #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
   }
 
   @Test
-  func mobileOTPTypeStringLiteral() {
-    let type: MobileOTPType = "new_channel"
+  func phoneOTPTypeStringLiteral() {
+    let type: PhoneOTPType = "new_channel"
     #expect(type.rawValue == "new_channel")
   }
 
   @Test
-  func mobileOTPTypeHashability() {
-    let type1: MobileOTPType = .sms
-    let type2: MobileOTPType = "sms"
+  func phoneOTPTypeHashability() {
+    let type1: PhoneOTPType = .sms
+    let type2: PhoneOTPType = "sms"
     #expect(type1 == type2)
   }
 
@@ -125,28 +135,21 @@ struct TypesTests {
   }
 
   @Test
-  func resendMobileTypeEncodesAsRawString() throws {
-    let data = try JSONEncoder().encode(ResendMobileType.phoneChange)
+  func resendPhoneTypeEncodesAsRawString() throws {
+    let data = try JSONEncoder().encode(ResendPhoneType.phoneChange)
     #expect(String(decoding: data, as: UTF8.self) == "\"phone_change\"")
   }
 
   @Test
-  func resendMobileTypeStringLiteral() {
-    let type: ResendMobileType = "new_resend_kind"
+  func resendPhoneTypeStringLiteral() {
+    let type: ResendPhoneType = "new_resend_kind"
     #expect(type.rawValue == "new_resend_kind")
   }
 
   @Test
-  func signOutScopeStringLiteral() {
-    let scope: SignOutScope = "future_scope"
-    #expect(scope.rawValue == "future_scope")
-  }
-
-  @Test
-  func signOutScopeHashability() {
-    let scope1: SignOutScope = .global
-    let scope2: SignOutScope = "global"
-    #expect(scope1 == scope2)
+  func messageIDDecodesFromAString() throws {
+    let id = try JSONDecoder().decode(MessageID.self, from: Data(#""SM123""#.utf8))
+    #expect(id == MessageID(rawValue: "SM123"))
   }
 
   @Test
@@ -179,38 +182,83 @@ struct TypesTests {
   }
 
   @Test
-  func identityWithoutIdentityIDFailsDecoding() {
-    let json = Data(
-      #"""
-      {
-        "id": "105012345678901234567",
-        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
-        "provider": "google"
-      }
-      """#.utf8
-    )
+  func userIdentityMapsIDs() throws {
+    let identity = try decodeIdentity()
 
-    #expect(throws: DecodingError.self) {
-      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    #expect(identity.id == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+    #expect(identity.providerUserID == "1234567890")
+    #expect(identity.userID == UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b"))
+    #expect(identity.provider == .google)
+    #expect(identity.identityData == ["email": "jane@example.com"])
+    #expect(identity.email == "jane@example.com")
+  }
+
+  @Test
+  func userIdentityMissingEmailIsNil() throws {
+    let identity = try decodeIdentity(dropping: "email")
+
+    #expect(identity.email == nil)
+  }
+
+  @Test
+  func userIdentityMissingIdentityIDThrows() {
+    do {
+      _ = try decodeIdentity(dropping: "identity_id")
+      Issue.record("Expected a DecodingError")
+    } catch DecodingError.keyNotFound(let key, _) {
+      #expect(key.stringValue == "identityId")
+    } catch {
+      Issue.record("Unexpected error: \(error)")
     }
   }
 
   @Test
-  func identityDecodesIdentityID() throws {
-    let json = Data(
-      #"""
-      {
-        "id": "105012345678901234567",
-        "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
-        "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
-        "provider": "google"
-      }
-      """#.utf8
+  func userIdentityMissingIdentityDataIsEmpty() throws {
+    let identity = try decodeIdentity(dropping: "identity_data")
+
+    #expect(identity.identityData == [:])
+  }
+
+  @Test
+  func userIdentityRoundTrips() throws {
+    let identity = UserIdentity(
+      id: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
+      providerUserID: "1234567890",
+      userID: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+      provider: .github,
+      identityData: ["email": "jane@example.com"],
+      email: "jane@example.com",
+      createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+      lastSignInAt: Date(timeIntervalSince1970: 1_700_000_100),
+      updatedAt: Date(timeIntervalSince1970: 1_700_000_200)
     )
 
-    let identity = try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: json)
+    let data = try AuthClient.Configuration.jsonEncoder.encode(identity)
+    let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-    #expect(identity.identityId == UUID(uuidString: "6c69f399-be1b-467a-9c53-d3753abdd2df"))
+    #expect(object["identity_id"] as? String == "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")
+    #expect(object["id"] as? String == "1234567890")
+    #expect(object["user_id"] as? String == "859F402D-B3DE-4105-A1B9-932836D9193B")
+    #expect(object["provider"] as? String == "github")
+    #expect(object["email"] as? String == "jane@example.com")
+    #expect(
+      try AuthClient.Configuration.jsonDecoder.decode(UserIdentity.self, from: data) == identity)
+  }
+
+  private func decodeIdentity(dropping key: String? = nil) throws -> UserIdentity {
+    var fields: [String: Any] = [
+      "id": "1234567890",
+      "identity_id": "6c69f399-be1b-467a-9c53-d3753abdd2df",
+      "user_id": "859f402d-b3de-4105-a1b9-932836d9193b",
+      "provider": "google",
+      "identity_data": ["email": "jane@example.com"],
+      "email": "jane@example.com",
+    ]
+    if let key {
+      fields[key] = nil
+    }
+    return try AuthClient.Configuration.jsonDecoder.decode(
+      UserIdentity.self, from: JSONSerialization.data(withJSONObject: fields))
   }
 
   @Test
@@ -219,14 +267,72 @@ struct TypesTests {
 
     #expect(
       AMREntry(value: object, issuedAt: 1_700_000_000)
-        == AMREntry(method: "totp", timestamp: 1_700_000_100)
+        == AMREntry(method: .totp, timestamp: Date(timeIntervalSince1970: 1_700_000_100))
     )
     #expect(
       AMREntry(value: "pwd", issuedAt: 1_700_000_000)
-        == AMREntry(method: "pwd", timestamp: 1_700_000_000)
+        == AMREntry(method: "pwd", timestamp: Date(timeIntervalSince1970: 1_700_000_000))
     )
     #expect(AMREntry(value: "pwd", issuedAt: nil) == nil)
     #expect(AMREntry(value: 42, issuedAt: 1_700_000_000) == nil)
+  }
+
+  @Test
+  func factorTypeDecodesKnownAndUnknownValues() throws {
+    let decoded = try AuthClient.Configuration.jsonDecoder.decode(
+      [FactorType].self, from: Data(#"["totp","phone","webauthn","recovery_code","sms_v2"]"#.utf8))
+
+    #expect(decoded == [.totp, .phone, .webAuthn, .recoveryCode, "sms_v2"])
+    #expect(
+      try AuthClient.Configuration.jsonEncoder.encode(FactorType.recoveryCode)
+        == Data(#""recovery_code""#.utf8))
+  }
+
+  @Test
+  func authenticationMethodWireValues() {
+    let methods: [AuthenticationMethod] = [
+      .oauth, .password, .otp, .totp, .recovery, .invite, .ssoSAML, .magicLink, .emailSignup,
+      .emailChange, .tokenRefresh, .anonymous, .mfaPhone, .mfaWebAuthn, .mfaRecoveryCode, .web3,
+      .oauthProviderAuthorizationCode, .passkey,
+    ]
+
+    #expect(
+      methods.map(\.rawValue) == [
+        "oauth", "password", "otp", "totp", "recovery", "invite", "sso/saml", "magiclink",
+        "email/signup", "email_change", "token_refresh", "anonymous", "mfa/phone", "mfa/webauthn",
+        "mfa/recovery_code", "web3", "oauth_provider/authorization_code", "passkey",
+      ])
+  }
+
+  @Test
+  func mfaChallengeDecodesExpiresAtFromUnixSeconds() throws {
+    let challenge = try AuthClient.Configuration.jsonDecoder.decode(
+      MFAChallenge.self,
+      from: Data(
+        #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"totp","expires_at":1700000000}"#.utf8
+      )
+    )
+
+    #expect(challenge.expiresAt == Date(timeIntervalSince1970: 1_700_000_000))
+    #expect(challenge.factorType == .totp)
+  }
+
+  @Test
+  func userMetadataAsDecodesTypedValue() throws {
+    struct Meta: Decodable {
+      let display_name: String
+      let age: Int
+    }
+    struct WrongShape: Decodable {
+      let age: String
+    }
+    let user = try decodeUser(#""user_metadata": {"display_name": "Ada", "age": 36}"#)
+
+    let meta = try user.userMetadata(as: Meta.self)
+
+    #expect(meta.display_name == "Ada")
+    #expect(meta.age == 36)
+    #expect(throws: DecodingError.self) { try user.userMetadata(as: WrongShape.self) }
   }
 
   private func decodeUser(_ fields: String) throws -> User {

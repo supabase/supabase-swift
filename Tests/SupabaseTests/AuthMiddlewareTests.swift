@@ -2,6 +2,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import Helpers
+import Logging
 import TestHelpers
 import Testing
 
@@ -394,7 +395,8 @@ struct AuthMiddlewareTests {
       next: { [http] in try await http.send($0, body: $1) }
     )
     await retryReadTheToken.arrivals(1)
-    try await auth.refreshSession(refreshToken: "refresh-1")
+    _ = try await auth.dependencies.sessionStore.refresh(
+      "refresh-1", using: auth.dependencies.refreshRequest)
     retryReadTheToken.open()
     #expect(try await response.0.status == .ok)
 
@@ -434,6 +436,140 @@ struct AuthMiddlewareTests {
 
     #expect(suite.dataAuthorizations("/rest/v1/todos") == ["Bearer token-1", "Bearer token-2"])
     #expect(suite.refreshCount == 1)
+  }
+}
+
+/// Holds a retry after the middleware found its token still held and before the session layer
+/// reads the held refresh token. Nothing suspends between the two, so the only seam is the
+/// synchronous `begin` trace log, and its handler blocks the thread. The suite runs apart from
+/// the `withMainSerialExecutor` suites, which would run the blocked task on the main thread.
+@Suite(.timeLimit(.minutes(1)), .mainSerialExecutorSerialized)
+struct AuthMiddlewareRefreshRaceTests {
+  @Test
+  func refreshThatCommitsAfterTheRetryChoseToRefreshIsNotRepeated() async throws {
+    let http = RecordingTransport()
+    let refreshSent = Gate()
+    http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, _ in
+      (HTTPResponse(status: .ok), sessionJSON(accessToken: "token-1", refreshToken: "refresh-1"))
+    }
+    http.respond(when: { $0.path == "/auth/v1/token?grant_type=refresh_token" }) { _, body in
+      await refreshSent.pass()
+      let redeemed = body.map { String(decoding: $0, as: UTF8.self) } ?? ""
+      return redeemed.contains("refresh-1")
+        ? (
+          HTTPResponse(status: .ok), sessionJSON(accessToken: "token-2", refreshToken: "refresh-2")
+        )
+        : (
+          HTTPResponse(status: .ok), sessionJSON(accessToken: "token-3", refreshToken: "refresh-3")
+        )
+    }
+    http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { request, _ in
+      request.headerFields[.authorization] == "Bearer token-1"
+        ? (invalidTokenUnauthorized, Data())
+        : (HTTPResponse(status: .ok), Data("[]".utf8))
+    }
+    let secondRefresh = HeldSecondRefresh()
+    let auth = AuthClient(
+      configuration: AuthClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
+        storageKey: "sb-test-\(UUID().uuidString)-auth-token",
+        localStorage: InMemoryLocalStorage(),
+        logger: Logging.Logger(label: "test") { _ in
+          HoldingSecondRefreshLogHandler(secondRefresh: secondRefresh)
+        },
+        http: HTTPClientConfiguration(transport: http),
+        autoRefresh: .manual,
+        observesAppLifecycle: false
+      ),
+      date: { Date() },
+      pkce: .live,
+      platform: .live
+    )
+    _ = try await auth.signIn(email: "a@b.c", password: "x")
+    let middleware = AuthMiddleware(
+      auth: auth, fallbackToken: nil, staleTokenRejection: .postgrest, autoRefresh: .manual)
+    let todos = HTTPRequest(
+      method: .get, scheme: "https", authority: "project-ref.supabase.co", path: "/rest/v1/todos")
+    let next: @Sendable (HTTPRequest, HTTPBody?) async throws -> (HTTPResponse, HTTPBody?) = {
+      [http] in try await http.send($0, body: $1)
+    }
+
+    async let first = middleware.intercept(todos, body: nil, next: next)
+    await refreshSent.arrivals(1)
+    async let second = middleware.intercept(todos, body: nil, next: next)
+    await secondRefresh.arrival()
+    refreshSent.open()
+    #expect(try await first.0.status == .ok)
+    secondRefresh.release()
+    #expect(try await second.0.status == .ok)
+
+    let redeemed = http.requests.filter {
+      $0.head.path == "/auth/v1/token?grant_type=refresh_token"
+    }
+    .map { $0.body.map { String(decoding: $0, as: UTF8.self) } ?? "" }
+    #expect(redeemed.count == 1)
+    #expect(redeemed.allSatisfy { $0.contains("refresh-1") })
+    #expect(
+      http.requests.filter { $0.head.path == "/rest/v1/todos" }
+        .map { $0.head.headerFields[.authorization] }
+        == ["Bearer token-1", "Bearer token-1", "Bearer token-2", "Bearer token-2"]
+    )
+  }
+}
+
+/// Blocks the second refresh the session manager begins until ``release()``.
+private final class HeldSecondRefresh: Sendable {
+  private let begun = LockIsolated(0)
+  private let released = DispatchSemaphore(value: 0)
+  private let arrived: AsyncStream<Void>
+  private let arrivedContinuation: AsyncStream<Void>.Continuation
+
+  init() {
+    (arrived, arrivedContinuation) = AsyncStream.makeStream()
+  }
+
+  func begin() {
+    let count = begun.withValue {
+      $0 += 1
+      return $0
+    }
+    guard count == 2 else { return }
+    arrivedContinuation.yield()
+    _ = released.wait(timeout: .now() + 30)
+  }
+
+  func arrival() async {
+    for await _ in arrived { return }
+  }
+
+  func release() {
+    released.signal()
+  }
+}
+
+private struct HoldingSecondRefreshLogHandler: LogHandler {
+  let secondRefresh: HeldSecondRefresh
+  var metadata: Logging.Logger.Metadata = [:]
+  var logLevel: Logging.Logger.Level = .trace
+
+  subscript(metadataKey key: String) -> Logging.Logger.Metadata.Value? {
+    get { metadata[key] }
+    set { metadata[key] = newValue }
+  }
+
+  func log(
+    level: Logging.Logger.Level,
+    message: Logging.Logger.Message,
+    metadata: Logging.Logger.Metadata?,
+    source: String,
+    file: String,
+    function: String,
+    line: UInt
+  ) {
+    guard file.hasSuffix("SessionManager.swift"), function.hasPrefix("refreshSession"),
+      message.description == "begin"
+    else { return }
+    secondRefresh.begin()
   }
 }
 

@@ -267,7 +267,7 @@ struct ErrorDecoderTests {
     try await sut.seedSession(.valid)
 
     let error = await #expect(throws: AuthError.self) {
-      try await sut.mfa.unenroll(params: MFAUnenrollParams(factorId: UUID()))
+      try await sut.mfa.unenroll(factorID: UUID())
     }
     #expect(error?.kind == .decoding)
   }

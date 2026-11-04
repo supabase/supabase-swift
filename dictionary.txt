@@ -41,6 +41,7 @@ datastructure
 Dedup
 dedup
 dedupe
+deduplicator
 decoratee
 deeplinking
 deno
@@ -79,6 +80,7 @@ Gxlbmdl
 Hashability
 heartbeating
 Heartbeating
+HMAC
 hostnames
 HTTPURL
 Ilike
@@ -110,6 +112,7 @@ lnbm
 Lukas
 magiclink
 magnifyingglass
+Mailpit
 matview
 metamask
 metas
@@ -134,6 +137,7 @@ OIDC
 posix
 omitempty
 openssl
+otpauth
 opentelemetry
 parameterless
 passout
@@ -343,3 +347,6 @@ Synchronizable
 Fanout
 fanout
 Fanouts
+
+# OAuth 2.0 / OIDC userinfo endpoint, used by the custom provider admin API.
+userinfo

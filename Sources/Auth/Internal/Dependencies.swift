@@ -11,14 +11,17 @@ struct Dependencies: Sendable {
   let http: HTTPClient
   /// Builds every request and decodes every response.
   let authAPI: AuthAPI
-  /// Session-free requests. What `AuthAdmin` runs on.
-  let api: APIClient
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
-  let codeVerifierStorage: CodeVerifierStorage
+  /// The pending PKCE flows, one stored record each.
+  let flowStore: FlowStore
+  /// Makes a repeated delivery of one redirect reuse the first result.
+  let redirectDeduplicator: RedirectDeduplicator<RedirectResult>
   /// Owns the session.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
+  /// Sends one refresh request. Stores nothing and emits no event.
+  let refreshRequest: @Sendable (_ refreshToken: String) async throws -> Session
   let autoRefresh: AutoRefreshController
   let date: @Sendable () -> Date
   let platform: AuthPlatform
@@ -51,15 +54,22 @@ extension Dependencies {
     let api = APIClient(http: http)
     let storageKey = configuration.storageKey ?? defaultStorageKey
     let localStorage = MisconfigurationReportingStorage(configuration.localStorage)
-    let sessionStore = SessionStore(
-      storage: AuthLocalStorageAdapter(localStorage: localStorage),
-      key: storageKey,
-      now: date,
-      initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
-    )
+    let storage = AuthLocalStorageAdapter(localStorage: localStorage)
     let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
       try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
     }
+    let startupRefresh: SessionStore.StartupRefresh? =
+      configuration.autoRefresh == .automatic && configuration.initialRefreshTimeout > .zero
+      ? SessionStore.StartupRefresh(
+        request: refresh, clock: configuration.clock, deadline: configuration.initialRefreshTimeout)
+      : nil
+    let sessionStore = SessionStore(
+      storage: storage,
+      key: storageKey,
+      now: date,
+      startupRefresh: startupRefresh,
+      initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
+    )
     let sessionManager = SessionManager.live(
       policy: configuration.autoRefresh,
       sessionStore: sessionStore,
@@ -78,12 +88,19 @@ extension Dependencies {
       configuration: configuration,
       http: http,
       authAPI: authAPI,
-      api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, sessionStore: sessionStore),
-      codeVerifierStorage: .live(configuration: configuration, localStorage: localStorage),
+      flowStore: FlowStore(
+        storage: storage,
+        storageKey: storageKey,
+        pkce: pkce,
+        now: date,
+        logger: logger
+      ),
+      redirectDeduplicator: RedirectDeduplicator(),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
+      refreshRequest: refresh,
       autoRefresh: autoRefresh,
       date: date,
       platform: platform,

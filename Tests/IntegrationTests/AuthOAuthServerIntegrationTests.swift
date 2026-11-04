@@ -67,16 +67,16 @@ struct AuthOAuthServerIntegrationTests {
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
 
-    let serviceRoleClient = AuthClientIntegrationTests.makeClient(serviceRole: true)
+    let admin = AuthClientIntegrationTests.makeAdminClient()
     let redirectUri = "https://example.com/callback"
-    let oauthClient = try await serviceRoleClient.admin.oauth.createClient(
+    let oauthClient = try await admin.oauth.createClient(
       params: CreateOAuthClientParams(
         clientName: "Integration Test Client",
         redirectUris: [redirectUri]
       )
     )
 
-    let session = try await authClient.session
+    let session = try await authClient.session()
     let authorizationId = try await createPendingAuthorization(
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
@@ -107,7 +107,7 @@ struct AuthOAuthServerIntegrationTests {
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
     #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
 
-    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
+    try await admin.oauth.deleteClient(id: oauthClient.clientId)
   }
 
   @Test
@@ -116,16 +116,16 @@ struct AuthOAuthServerIntegrationTests {
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
 
-    let serviceRoleClient = AuthClientIntegrationTests.makeClient(serviceRole: true)
+    let admin = AuthClientIntegrationTests.makeAdminClient()
     let redirectUri = "https://example.com/callback"
-    let oauthClient = try await serviceRoleClient.admin.oauth.createClient(
+    let oauthClient = try await admin.oauth.createClient(
       params: CreateOAuthClientParams(
         clientName: "Integration Test Client (deny)",
         redirectUris: [redirectUri]
       )
     )
 
-    let session = try await authClient.session
+    let session = try await authClient.session()
     let authorizationId = try await createPendingAuthorization(
       accessToken: session.accessToken,
       clientId: oauthClient.clientId,
@@ -144,7 +144,7 @@ struct AuthOAuthServerIntegrationTests {
     )
     #expect(denyRedirect.redirectURL.query?.contains("error=access_denied") == true)
 
-    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
+    try await admin.oauth.deleteClient(id: oauthClient.clientId)
   }
 
   @discardableResult

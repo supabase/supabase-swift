@@ -122,7 +122,7 @@ struct ResetPasswordView: View {
     actionState = .inFlight
 
     do {
-      try await supabase.auth.resetPasswordForEmail(email)
+      try await supabase.auth.resetPassword(email: email)
       actionState = .result(.success(()))
     } catch {
       actionState = .result(.failure(error))

@@ -21,25 +21,6 @@ import Testing
 extension AuthMockerTests {
   @Suite(.mockerSerialized)
   struct AuthAdminSignOutTests {
-    let storage = InMemoryLocalStorage()
-
-    private func makeSUT() -> AuthClient {
-      let sessionConfiguration = URLSessionConfiguration.default
-      sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-      let session = URLSession(configuration: sessionConfiguration)
-
-      let configuration = AuthClient.Configuration(
-        url: clientURL,
-        headers: [
-          "apikey": "supabase.publishable.key",
-          "Authorization": "Bearer supabase.secret.key",
-        ],
-        storageKey: uniqueStorageKey(),
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
-
-      return AuthClient(configuration: configuration)
-    }
 
     @Test
     func signOutDefaultScope() async throws {
@@ -56,15 +37,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/logout?scope=global"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      try await sut.admin.signOut(jwt: "users.access.token")
+      try await sut.signOut(jwt: "users.access.token")
     }
 
     @Test
@@ -82,15 +63,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/logout?scope=local"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      try await sut.admin.signOut(jwt: "users.access.token", scope: .local)
+      try await sut.signOut(jwt: "users.access.token", scope: .local)
     }
 
     @Test
@@ -108,15 +89,15 @@ extension AuthMockerTests {
         	--header "Authorization: Bearer users.access.token" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
+        	--header "apikey: supabase.secret.key" \
         	"http://localhost:54321/auth/v1/logout?scope=others"
         """#
       }
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
-      try await sut.admin.signOut(jwt: "users.access.token", scope: .others)
+      try await sut.signOut(jwt: "users.access.token", scope: .others)
     }
 
     @Test
@@ -136,10 +117,10 @@ extension AuthMockerTests {
       )
       .register()
 
-      let sut = makeSUT()
+      let sut = AuthAdminClient.mocked()
 
       do {
-        try await sut.admin.signOut(jwt: "invalid.access.token")
+        try await sut.signOut(jwt: "invalid.access.token")
         Issue.record("Expected signOut to throw")
       } catch let error as AuthError {
         #expect(error.kind == .server)

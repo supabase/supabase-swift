@@ -315,6 +315,35 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func stringifyRedactsSecretsAtAnyDepth() {
+    let json = """
+      {
+        "name": "Acme",
+        "client_secret": "provider-secret",
+        "users": [{"email": "a@example.com", "password": "hunter2"}],
+        "session": {"access_token": "jwt", "refresh_token": "rt"},
+        "verify": {"token": "123456", "token_hash": "th"},
+        "properties": {
+          "email_otp": "654321", "hashed_token": "ht", "action_link": "https://link.example"
+        }
+      }
+      """.data(using: .utf8)!
+
+    let result = stringify(json)
+
+    #expect(result.contains("Acme"))
+    #expect(result.contains("a@example.com"))
+    let secrets = [
+      "provider-secret", "hunter2", "\"jwt\"", "\"rt\"", "123456", "\"th\"", "654321",
+      "\"ht\"", "link.example",
+    ]
+    for secret in secrets {
+      #expect(!result.contains(secret))
+    }
+    #expect(result.contains("<redacted>"))
+  }
+
+  @Test
   func stringifyWithNullJSON() {
     let nullJSON = #"{"value": null}"#.data(using: .utf8)!
     let result = stringify(nullJSON)

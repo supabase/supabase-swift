@@ -21,7 +21,6 @@ extension AuthClient {
   /// ### Networking
   /// - ``url``
   /// - ``headers``
-  /// - ``flowType``
   /// - ``redirectToURL``
   /// - ``http``
   ///
@@ -39,7 +38,6 @@ extension AuthClient {
   /// - ``clock``
   ///
   /// ### Defaults
-  /// - ``defaultFlowType``
   /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The URL of the Auth server.
@@ -47,9 +45,6 @@ extension AuthClient {
 
     /// Any additional headers to send to the Auth server.
     public var headers: [String: String]
-
-    /// The OAuth / sign-in flow type to use (``AuthFlowType/implicit`` or ``AuthFlowType/pkce``).
-    public let flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
     public let redirectToURL: URL?
@@ -96,7 +91,7 @@ extension AuthClient {
     /// tvOS, visionOS, and Mac Catalyst the client reads storage again when protected data becomes
     /// available, so a session that a locked Keychain hid at launch loads once the device unlocks.
     /// watchOS, macOS, and other platforms post no such notification. There, the client reads
-    /// storage again only when a call needs the session: ``AuthClient/session``,
+    /// storage again only when a call needs the session: ``AuthClient/session()``,
     /// ``AuthClient/refreshSessionIfNeeded()``, a request that sends the session's access token, a
     /// new ``AuthClient/events()`` stream, or ``AuthClient/initialization()``.
     public let observesAppLifecycle: Bool
@@ -109,12 +104,23 @@ extension AuthClient {
     /// yourself, as this package does not export it.
     public let clock: any Clock<Duration>
 
+    /// How long the client waits, when it is created with an expired stored session, for one
+    /// refresh of that session before it delivers ``AuthEvent/initialSession``.
+    ///
+    /// Defaults to 5 seconds. A refresh that finishes in time makes the initial session the
+    /// refreshed one. A refresh that fails, or does not finish in time, makes it the expired
+    /// session. A refresh that is still running then commits as ``AuthEvent/tokenRefreshed``. The
+    /// wait uses ``clock``.
+    ///
+    /// The client refreshes at start-up only under ``AuthClient/AutoRefreshPolicy/automatic``. A
+    /// value of zero or less turns it off.
+    public let initialRefreshTimeout: Duration
+
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
     /// - Parameters:
     ///   - url: The base URL of the Auth server.
     ///   - headers: Custom headers to be included in requests.
-    ///   - flowType: The authentication flow type.
     ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
     ///   - storageKey: Optional key name used for storing tokens in local storage.
     ///   - localStorage: The storage mechanism for local data.
@@ -124,10 +130,11 @@ extension AuthClient {
     ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
     ///     foreground.
     ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+    ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
+    ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
     public init(
       url: URL? = nil,
       headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
@@ -135,12 +142,12 @@ extension AuthClient {
       http: HTTPClientConfiguration = .init(),
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      clock: any Clock<Duration> = ContinuousClock(),
+      initialRefreshTimeout: Duration = .seconds(5)
     ) {
       self.init(
         url: url,
         headers: headers,
-        flowType: flowType,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: localStorage,
@@ -150,7 +157,8 @@ extension AuthClient {
         http: http,
         autoRefresh: autoRefresh,
         observesAppLifecycle: observesAppLifecycle,
-        clock: clock
+        clock: clock,
+        initialRefreshTimeout: initialRefreshTimeout
       )
     }
 
@@ -161,7 +169,6 @@ extension AuthClient {
     init(
       url: URL? = nil,
       headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       localStorage: any AuthLocalStorage,
@@ -171,13 +178,13 @@ extension AuthClient {
       http: HTTPClientConfiguration = .init(),
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      clock: any Clock<Duration> = ContinuousClock(),
+      initialRefreshTimeout: Duration = .seconds(5)
     ) {
       let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
 
       self.url = url ?? defaultAuthURL
       self.headers = headers
-      self.flowType = flowType
       self.redirectToURL = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
@@ -190,6 +197,7 @@ extension AuthClient {
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
       self.clock = clock
+      self.initialRefreshTimeout = initialRefreshTimeout
     }
   }
 
@@ -198,7 +206,6 @@ extension AuthClient {
   /// - Parameters:
   ///   - url: The base URL of the Auth server.
   ///   - headers: Custom headers to be included in requests.
-  ///   - flowType: The authentication flow type..
   ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
   ///   - storageKey: Optional key name used for storing tokens in local storage.
   ///   - localStorage: The storage mechanism for local data..
@@ -208,10 +215,11 @@ extension AuthClient {
   ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
   ///     foreground.
   ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+  ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
+  ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
   public convenience init(
     url: URL? = nil,
     headers: [String: String] = [:],
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
     redirectToURL: URL? = nil,
     storageKey: String? = nil,
     localStorage: any AuthLocalStorage,
@@ -219,13 +227,13 @@ extension AuthClient {
     http: HTTPClientConfiguration = .init(),
     autoRefresh: AutoRefreshPolicy = .automatic,
     observesAppLifecycle: Bool = true,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    initialRefreshTimeout: Duration = .seconds(5)
   ) {
     self.init(
       configuration: Configuration(
         url: url,
         headers: headers,
-        flowType: flowType,
         redirectToURL: redirectToURL,
         storageKey: storageKey,
         localStorage: localStorage,
@@ -233,7 +241,8 @@ extension AuthClient {
         http: http,
         autoRefresh: autoRefresh,
         observesAppLifecycle: observesAppLifecycle,
-        clock: clock
+        clock: clock,
+        initialRefreshTimeout: initialRefreshTimeout
       )
     )
   }

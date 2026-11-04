@@ -223,13 +223,64 @@ supporting_symbols:
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
   - ErrorCode.~=
-  # AuthAdmin.init (SDK-1983) creates the standalone admin client that every
+  # AuthAdminClient (SDK-2074) is the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
-  - AuthAdmin.init
+  - AuthAdminClient
+  - AuthAdminClient.init
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
-  - AuthAdmin.mfa
+  - AuthAdminClient.mfa
   - AuthAdminMFA
+  # The admin OAuth namespace is shared by every auth.oauth_admin.* capability.
+  - AuthAdminClient.oauth
+  # AdminUserAttributes is the request body of both auth.admin.create_user and
+  # auth.admin.update_user; its encoder maps banDuration to a Go duration string.
+  - AdminUserAttributes.encode
+  # The custom providers namespace and its types are shared by every
+  # auth.admin.*_provider capability rather than owned by one.
+  - AuthAdminClient.customProviders
+  - AuthAdminCustomProviders
+  - CustomProvider
+  - CustomProvider.init
+  - CustomProvider.id
+  - CustomProvider.providerType
+  - CustomProvider.identifier
+  - CustomProvider.name
+  - CustomProvider.clientID
+  - CustomProvider.acceptableClientIDs
+  - CustomProvider.scopes
+  - CustomProvider.customClaimsAllowlist
+  - CustomProvider.pkceEnabled
+  - CustomProvider.attributeMapping
+  - CustomProvider.authorizationParams
+  - CustomProvider.enabled
+  - CustomProvider.emailOptional
+  - CustomProvider.issuer
+  - CustomProvider.discoveryURL
+  - CustomProvider.skipNonceCheck
+  - CustomProvider.authorizationURL
+  - CustomProvider.tokenURL
+  - CustomProvider.userinfoURL
+  - CustomProvider.jwksURI
+  - CustomProvider.discoveryDocument
+  - CustomProvider.createdAt
+  - CustomProvider.updatedAt
+  - CustomProviderType
+  - CustomProviderType.init
+  - CustomProviderType.rawValue
+  - CustomProviderType.oauth2
+  - CustomProviderType.oidc
+  - OIDCDiscoveryDocument
+  - OIDCDiscoveryDocument.init
+  - OIDCDiscoveryDocument.issuer
+  - OIDCDiscoveryDocument.authorizationEndpoint
+  - OIDCDiscoveryDocument.tokenEndpoint
+  - OIDCDiscoveryDocument.userinfoEndpoint
+  - OIDCDiscoveryDocument.jwksURI
+  - OIDCDiscoveryDocument.scopesSupported
+  - OIDCDiscoveryDocument.responseTypesSupported
+  - OIDCDiscoveryDocument.grantTypesSupported
+  - OIDCDiscoveryDocument.subjectTypesSupported
   # The recovery codes namespace is shared by every auth.mfa_recovery_codes.*
   # capability rather than owned by one, and its generate response is returned
   # by both generate and regenerate.
@@ -370,6 +421,25 @@ features:
       - AuthClient.signInWithOAuth
       - AuthClient.oauthSignInURL
     supporting_symbols:
+      - WebAuthPresenter
+      - WebAuthPresenter.authenticate
+      - WebAuthPresenter.default
+      - ClosurePresenter
+      - ClosurePresenter.init
+      - ClosurePresenter.authenticate
+      - ASWebAuthenticationSessionPresenter
+      - ASWebAuthenticationSessionPresenter.init
+      - ASWebAuthenticationSessionPresenter.authenticate
+      - ASWebAuthenticationSessionPresenter.prefersEphemeralWebBrowserSession
+      - OAuthOptions
+      - OAuthOptions.init
+      - OAuthOptions.scopes
+      - OAuthOptions.redirectTo
+      - OAuthOptions.queryItems
+      - OAuthFlow
+      - OAuthFlow.init
+      - OAuthFlow.id
+      - OAuthFlow.url
       - Provider
       - Provider.init
       - Provider.rawValue
@@ -401,10 +471,35 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOTP
+    supporting_symbols:
+      - EmailOTPOptions
+      - EmailOTPOptions.init
+      - EmailOTPOptions.shouldCreateUser
+      - EmailOTPOptions.userMetadata
+      - EmailOTPOptions.redirectTo
+      - EmailOTPOptions.captchaToken
+      - PhoneOTPOptions
+      - PhoneOTPOptions.init
+      - PhoneOTPOptions.shouldCreateUser
+      - PhoneOTPOptions.userMetadata
+      - PhoneOTPOptions.channel
+      - PhoneOTPOptions.captchaToken
+      - MessageID
+      - MessageID.init
+      - MessageID.rawValue
   auth.sign_in.sign_in_with_sso:
     status: implemented
     symbols:
       - AuthClient.signInWithSSO
+      - AuthClient.ssoSignInURL
+    supporting_symbols:
+      - SSOTarget
+      - SSOTarget.domain
+      - SSOTarget.providerID
+      - SSOOptions
+      - SSOOptions.init
+      - SSOOptions.redirectTo
+      - SSOOptions.captchaToken
   auth.sign_in.sign_in_with_id_token:
     status: implemented
     symbols:
@@ -448,19 +543,14 @@ features:
     symbols:
       - AuthClient.verifyOTP
     supporting_symbols:
-      - VerifyOTPResponse
-      - VerifyOTPResponse.session
-      - VerifyOTPResponse.emailChangeConfirmationPending
-      - VerifyOTPResponse.init
-      - EmailChangeConfirmation
-      - EmailChangeConfirmation.message
-      - EmailChangeConfirmation.code
-      - EmailChangeConfirmation.init
-      - MobileOTPType
-      - MobileOTPType.init
-      - MobileOTPType.rawValue
-      - MobileOTPType.sms
-      - MobileOTPType.phoneChange
+      - VerifyOTPResult
+      - VerifyOTPResult.signedIn
+      - VerifyOTPResult.emailChangePending
+      - PhoneOTPType
+      - PhoneOTPType.init
+      - PhoneOTPType.rawValue
+      - PhoneOTPType.sms
+      - PhoneOTPType.phoneChange
       - EmailOTPType
       - EmailOTPType.init
       - EmailOTPType.rawValue
@@ -480,15 +570,15 @@ features:
       - ResendEmailType.rawValue
       - ResendEmailType.signup
       - ResendEmailType.emailChange
-      - ResendMobileType
-      - ResendMobileType.init
-      - ResendMobileType.rawValue
-      - ResendMobileType.sms
-      - ResendMobileType.phoneChange
+      - ResendPhoneType
+      - ResendPhoneType.init
+      - ResendPhoneType.rawValue
+      - ResendPhoneType.sms
+      - ResendPhoneType.phoneChange
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
-      - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -501,7 +591,6 @@ features:
     status: implemented
     symbols:
       - AuthClient.exchangeCodeForSession
-      - OAuthResponse.flowId
 
   auth.session.get_session:
     status: implemented
@@ -513,10 +602,35 @@ features:
     symbols:
       - AuthClient.currentUser
       - AuthClient.user
+    supporting_symbols:
+      - User.userMetadata
   auth.session.get_claims:
     status: implemented
     symbols:
       - AuthClient.claims
+    supporting_symbols:
+      - ClaimsOptions
+      - ClaimsOptions.allowsExpired
+      - ClaimsOptions.init
+      - ClaimsOptions.jwks
+      - VerifiedClaims
+      - VerifiedClaims.additionalClaims
+      - VerifiedClaims.amr
+      - VerifiedClaims.appMetadata
+      - VerifiedClaims.assuranceLevel
+      - VerifiedClaims.audience
+      - VerifiedClaims.email
+      - VerifiedClaims.expiresAt
+      - VerifiedClaims.header
+      - VerifiedClaims.isAnonymous
+      - VerifiedClaims.issuedAt
+      - VerifiedClaims.issuer
+      - VerifiedClaims.phone
+      - VerifiedClaims.role
+      - VerifiedClaims.sessionID
+      - VerifiedClaims.signature
+      - VerifiedClaims.subject
+      - VerifiedClaims.userMetadata
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -525,7 +639,7 @@ features:
   auth.session.set_session:
     status: implemented
     symbols:
-      - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -533,17 +647,17 @@ features:
     supporting_symbols:
       - SignOutScope
       - SignOutScope.init
-      - SignOutScope.rawValue
       - SignOutScope.global
       - SignOutScope.local
       - SignOutScope.others
   auth.session.update_user:
     status: implemented
     symbols:
-      - AuthClient.update
+      - AuthClient.updateUser
     supporting_symbols:
       - UserAttributes
       - UserAttributes.userMetadata
+      - UserAttributes.currentPassword
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -577,6 +691,7 @@ features:
       - AuthClient.stopAutoRefresh
       - AuthClient.Configuration.autoRefresh
       - AuthClient.Configuration.observesAppLifecycle
+      - AuthClient.Configuration.initialRefreshTimeout
       - AuthClient.AutoRefreshPolicy
       - AuthClient.AutoRefreshPolicy.automatic
       - AuthClient.AutoRefreshPolicy.manual
@@ -601,7 +716,6 @@ features:
     symbols:
       - AuthClient.linkIdentity
       - AuthClient.linkIdentityURL
-      - AuthClient.linkIdentityWithIDToken
   auth.identities.unlink_identity:
     status: implemented
     symbols:
@@ -609,17 +723,40 @@ features:
   auth.identities.list_identities:
     status: implemented
     symbols:
-      - AuthClient.userIdentities
+      - AuthClient.identities
+    supporting_symbols:
+      - UserIdentity.email
+      - UserIdentity.providerUserID
+      - UserIdentity.userID
 
   auth.mfa.enroll:
     status: implemented
     symbols:
-      - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
+    supporting_symbols:
+      - TOTPEnrollment
+      - TOTPEnrollment.init
+      - TOTPEnrollment.id
+      - TOTPEnrollment.friendlyName
+      - TOTPEnrollment.qrCode
+      - TOTPEnrollment.secret
+      - TOTPEnrollment.uri
+      - PhoneEnrollment
+      - PhoneEnrollment.init
+      - PhoneEnrollment.id
+      - PhoneEnrollment.friendlyName
+      - PhoneEnrollment.phone
   auth.mfa.challenge:
     status: implemented
     symbols:
       - AuthMFA.challenge
     supporting_symbols:
+      - MFAChallenge
+      - MFAChallenge.init
+      - MFAChallenge.id
+      - MFAChallenge.factorType
+      - MFAChallenge.expiresAt
       - MessagingChannel
       - MessagingChannel.init
       - MessagingChannel.rawValue
@@ -633,6 +770,9 @@ features:
     status: implemented
     symbols:
       - AuthMFA.unenroll
+    supporting_symbols:
+      - AuthMFAUnenrollResponse
+      - AuthMFAUnenrollResponse.id
   auth.mfa.challenge_and_verify:
     status: implemented
     symbols:
@@ -640,8 +780,19 @@ features:
   auth.mfa.list_factors:
     status: implemented
     symbols:
-      - AuthMFA.listFactors
+      - AuthMFA.factors
     supporting_symbols:
+      - MFAFactors
+      - MFAFactors.verified
+      - MFAFactors.unverified
+      - MFAFactors.all
+      - FactorType
+      - FactorType.init
+      - FactorType.rawValue
+      - FactorType.totp
+      - FactorType.phone
+      - FactorType.webAuthn
+      - FactorType.recoveryCode
       - FactorStatus
       - FactorStatus.init
       - FactorStatus.rawValue
@@ -650,7 +801,41 @@ features:
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
-      - AuthMFA.authenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
+    supporting_symbols:
+      - AssuranceLevelInfo
+      - AssuranceLevelInfo.currentLevel
+      - AssuranceLevelInfo.nextLevel
+      - AssuranceLevelInfo.currentAuthenticationMethods
+      - AuthenticatorAssuranceLevel
+      - AuthenticatorAssuranceLevel.init
+      - AuthenticatorAssuranceLevel.rawValue
+      - AuthenticatorAssuranceLevel.aal1
+      - AuthenticatorAssuranceLevel.aal2
+      - AMREntry
+      - AMREntry.method
+      - AMREntry.timestamp
+      - AuthenticationMethod
+      - AuthenticationMethod.init
+      - AuthenticationMethod.rawValue
+      - AuthenticationMethod.oauth
+      - AuthenticationMethod.password
+      - AuthenticationMethod.otp
+      - AuthenticationMethod.totp
+      - AuthenticationMethod.recovery
+      - AuthenticationMethod.invite
+      - AuthenticationMethod.ssoSAML
+      - AuthenticationMethod.magicLink
+      - AuthenticationMethod.emailSignup
+      - AuthenticationMethod.emailChange
+      - AuthenticationMethod.tokenRefresh
+      - AuthenticationMethod.anonymous
+      - AuthenticationMethod.mfaPhone
+      - AuthenticationMethod.mfaWebAuthn
+      - AuthenticationMethod.mfaRecoveryCode
+      - AuthenticationMethod.web3
+      - AuthenticationMethod.oauthProviderAuthorizationCode
+      - AuthenticationMethod.passkey
 
   auth.mfa_recovery_codes.generate:
     status: implemented
@@ -682,42 +867,48 @@ features:
   auth.admin.create_user:
     status: implemented
     symbols:
-      - AuthAdmin.createUser
+      - AuthAdminClient.createUser
   auth.admin.delete_user:
     status: implemented
     symbols:
-      - AuthAdmin.deleteUser
+      - AuthAdminClient.deleteUser
   auth.admin.update_user:
     status: implemented
     symbols:
-      - AuthAdmin.updateUserById
+      - AuthAdminClient.updateUser
   auth.admin.get_user:
     status: implemented
     symbols:
-      - AuthAdmin.user
+      - AuthAdminClient.user
   auth.admin.list_users:
     status: implemented
     symbols:
-      - AuthAdmin.listUsers
-      - AuthAdmin.users
+      - AuthAdminClient.listUsers
+      - AuthAdminClient.users
     supporting_symbols:
-      - AuthAdmin.UserSequence
-      - AuthAdmin.UserSequence.Element
-      - AuthAdmin.UserSequence.makeAsyncIterator
-      - AuthAdmin.UserSequence.AsyncIterator
-      - AuthAdmin.UserSequence.AsyncIterator.next
+      - UserPage
+      - UserPage.users
+      - UserPage.audience
+      - UserPage.nextPage
+      - UserPage.lastPage
+      - UserPage.total
+      - AuthAdminClient.UserSequence
+      - AuthAdminClient.UserSequence.Element
+      - AuthAdminClient.UserSequence.makeAsyncIterator
+      - AuthAdminClient.UserSequence.AsyncIterator
+      - AuthAdminClient.UserSequence.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
-      - AuthAdmin.inviteUserByEmail
+      - AuthAdminClient.inviteUser
   auth.admin.sign_out:
     status: implemented
     symbols:
-      - AuthAdmin.signOut
+      - AuthAdminClient.signOut
   auth.admin.generate_link:
     status: implemented
     symbols:
-      - AuthAdmin.generateLink
+      - AuthAdminClient.generateLink
       - GenerateLinkParams
       - GenerateLinkParams.signUp
       - GenerateLinkParams.invite
@@ -753,13 +944,72 @@ features:
     status: implemented
     symbols:
       - AuthAdminMFA.deleteFactor
-  auth.admin.create_provider: not_implemented
-  auth.admin.delete_provider: not_implemented
-  auth.admin.update_provider: not_implemented
-  auth.admin.get_provider: not_implemented
-  auth.admin.list_providers: not_implemented
+  auth.admin.create_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.create
+      - CreateCustomProviderParams
+      - CreateCustomProviderParams.init
+      - CreateCustomProviderParams.oauth2
+      - CreateCustomProviderParams.oidc
+      - CreateCustomProviderParams.providerType
+      - CreateCustomProviderParams.identifier
+      - CreateCustomProviderParams.name
+      - CreateCustomProviderParams.clientID
+      - CreateCustomProviderParams.clientSecret
+      - CreateCustomProviderParams.acceptableClientIDs
+      - CreateCustomProviderParams.scopes
+      - CreateCustomProviderParams.customClaimsAllowlist
+      - CreateCustomProviderParams.pkceEnabled
+      - CreateCustomProviderParams.attributeMapping
+      - CreateCustomProviderParams.authorizationParams
+      - CreateCustomProviderParams.enabled
+      - CreateCustomProviderParams.emailOptional
+      - CreateCustomProviderParams.issuer
+      - CreateCustomProviderParams.discoveryURL
+      - CreateCustomProviderParams.skipNonceCheck
+      - CreateCustomProviderParams.authorizationURL
+      - CreateCustomProviderParams.tokenURL
+      - CreateCustomProviderParams.userinfoURL
+      - CreateCustomProviderParams.jwksURI
+  auth.admin.delete_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.delete
+  auth.admin.update_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.update
+      - UpdateCustomProviderParams
+      - UpdateCustomProviderParams.init
+      - UpdateCustomProviderParams.name
+      - UpdateCustomProviderParams.clientID
+      - UpdateCustomProviderParams.clientSecret
+      - UpdateCustomProviderParams.acceptableClientIDs
+      - UpdateCustomProviderParams.scopes
+      - UpdateCustomProviderParams.customClaimsAllowlist
+      - UpdateCustomProviderParams.pkceEnabled
+      - UpdateCustomProviderParams.attributeMapping
+      - UpdateCustomProviderParams.authorizationParams
+      - UpdateCustomProviderParams.enabled
+      - UpdateCustomProviderParams.emailOptional
+      - UpdateCustomProviderParams.issuer
+      - UpdateCustomProviderParams.discoveryURL
+      - UpdateCustomProviderParams.skipNonceCheck
+      - UpdateCustomProviderParams.authorizationURL
+      - UpdateCustomProviderParams.tokenURL
+      - UpdateCustomProviderParams.userinfoURL
+      - UpdateCustomProviderParams.jwksURI
+  auth.admin.get_provider:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.provider
+  auth.admin.list_providers:
+    status: implemented
+    symbols:
+      - AuthAdminCustomProviders.list
 
-  # AuthClient+Passkey.swift and AuthAdmin+Passkey.swift methods are all
+  # AuthPasskeys and AuthAdminPasskeys methods are all
   # @_spi(Experimental), so the public symbol graph the compliance scanner reads
   # from never contains them.
   auth.passkey.register_passkey: implemented
@@ -862,21 +1112,20 @@ features:
     note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.events() and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
     symbols:
       - AuthClient.events
-  client.authentication_integration.oauth_flow_type:
-    status: implemented
-    symbols:
-      - SupabaseClientOptions.AuthOptions.flowType
-      - AuthClient.Configuration.flowType
-    supporting_symbols:
-      - AuthFlowType
-      - AuthFlowType.implicit
-      - AuthFlowType.pkce
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handle(_:)/AuthClient.handle(_:) manually and unconditionally from its own URL-handling entry point. That explicit call is how redirect handling works in Swift."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."
     symbols:
-      - SupabaseClient.handle
-      - AuthClient.handle
+      - SupabaseClient.handleRedirect
+      - AuthClient.handleRedirect
+      - AuthClient.isAuthRedirect
+    supporting_symbols:
+      - RedirectResult
+      - RedirectResult.signedIn
+      - RedirectResult.emailChangePending
+  client.authentication_integration.oauth_flow_type:
+    status: not_applicable
+    note: "PKCE is always used; the flow type is not configurable."
 
   client.session_management.custom_storage:
     status: implemented
@@ -1366,7 +1615,7 @@ features:
   # closure at construction time and re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
   # source — this is how SupabaseClient itself wires it.
-  functions.invocation.set_auth_token:
+  functions.invocation.auth_token:
     status: implemented
     symbols:
       - FunctionsClient.Configuration.accessToken

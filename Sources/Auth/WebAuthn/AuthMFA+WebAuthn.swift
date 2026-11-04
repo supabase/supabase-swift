@@ -5,111 +5,120 @@
 //  Created by Guilherme Souza on 11/06/26.
 //
 
-import Foundation
+public import Foundation
 
-#if canImport(AuthenticationServices)
+#if canImport(AuthenticationServices) && !os(watchOS)
   public import AuthenticationServices
-#endif
 
-#if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)
   extension AuthMFA {
-    /// Enrolls a new WebAuthn (passkey) factor, driving the full ceremony: enrolls the factor,
-    /// requests a challenge, presents the native passkey registration UI via
-    /// `AuthenticationServices`, and verifies the credential with the backend.
+    /// Enrolls a WebAuthn second factor: enrolls the factor, requests a challenge, shows the
+    /// system passkey sheet, and verifies the new credential.
     ///
-    /// The relying-party identifier is read from the `rp.id` field of the W3C creation options
-    /// returned by the server — no client-side configuration needed.
+    /// The relying party is the `rp.id` the server returns, so the app's Associated Domains
+    /// entitlement must list `webcredentials:<rp.id>`.
+    ///
+    /// When the ceremony or the verification fails, the server keeps the new factor as
+    /// unverified, and its name blocks a new enrollment with the same name. Find it in
+    /// ``MFAFactors/unverified`` of ``factors()`` and remove it with ``unenroll(factorID:)``.
     ///
     /// - Parameters:
-    ///   - friendlyName: Human readable name assigned to the factor.
-    ///   - presentationAnchor: The window to present the passkey UI from.
+    ///   - friendlyName: A name for the factor.
+    ///   - anchor: The window to show the sheet from. `nil` uses the app's key window. An app
+    ///     extension has no key window to find, so pass one there.
+    /// - Returns: The session, now at `aal2`.
+    /// - Throws: `CancellationError` when the user dismisses the sheet. An error of kind
+    ///   ``AuthError/Kind-swift.struct/passkeyCeremonyFailed`` when the authenticator fails.
     @_spi(Experimental)
     @discardableResult
     @MainActor
-    public func enrollWebAuthnFactor(
-      friendlyName: String,
-      presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
-      try await _enrollWebAuthnFactor(
-        friendlyName: friendlyName,
-        presentationAnchor: presentationAnchor,
-        authenticator: .live
-      )
+    public func enrollWebAuthn(
+      friendlyName: String? = nil,
+      anchor: ASPresentationAnchor? = nil
+    ) async throws -> Session {
+      try await enrollWebAuthn(friendlyName: friendlyName, anchor: anchor, authenticator: .live)
     }
 
     @MainActor
-    func _enrollWebAuthnFactor(
-      friendlyName: String,
-      presentationAnchor: ASPresentationAnchor,
+    func enrollWebAuthn(
+      friendlyName: String?,
+      anchor: ASPresentationAnchor?,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let enrolled = try await enroll(params: .webAuthn(friendlyName: friendlyName))
-      let challengeResponse = try await challenge(
-        params: MFAChallengeParams(factorId: enrolled.id)
-      )
-      guard let webauthn = challengeResponse.webauthn else {
-        throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
+    ) async throws -> Session {
+      let factorID = try await enrollWebAuthnFactor(friendlyName: friendlyName)
+      let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factorID)
+      guard webauthn.type == .create else {
+        throw unexpectedChallengeType(webauthn.type)
       }
-      let rpId = try webauthn.credentialOptions.webAuthnCreationRpId()
-      let credentialResponse = try await authenticator.register(
-        webauthn.credentialOptions, rpId, presentationAnchor
-      )
+      let credential = try await authenticator.register(
+        WebAuthnCreationOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
       return try await verify(
-        params: MFAVerifyParams(
-          factorId: enrolled.id,
-          challengeId: challengeResponse.id,
-          credentialResponse: credentialResponse
-        )
+        factorID: factorID, challengeID: challengeID, type: .create, credentialResponse: credential
       )
     }
 
-    /// Authenticates an existing WebAuthn (passkey) factor, driving the full ceremony: requests a
-    /// challenge, presents the native passkey assertion UI via `AuthenticationServices`, and
-    /// verifies the credential with the backend.
+    /// Steps the session up to `aal2` with a verified WebAuthn factor: requests a challenge, shows
+    /// the system passkey sheet, and verifies the assertion.
     ///
-    /// The relying-party identifier is read from the `rpId` field of the W3C assertion options
-    /// returned by the server — no client-side configuration needed.
+    /// This method never registers a credential. For a factor that is not verified, the server
+    /// asks for a new credential instead of an assertion, so this method throws before it shows
+    /// the sheet. Register a factor with ``enrollWebAuthn(friendlyName:anchor:)``.
     ///
     /// - Parameters:
-    ///   - factorId: The ID of the factor to verify.
-    ///   - presentationAnchor: The window to present the passkey UI from.
+    ///   - factorID: ``Factor/id`` of a verified `webauthn` factor.
+    ///   - anchor: The window to show the sheet from. `nil` uses the app's key window. An app
+    ///     extension has no key window to find, so pass one there.
+    /// - Returns: The session, now at `aal2`.
+    /// - Throws: An error of kind ``AuthError/Kind-swift.struct/mfaFactorNotVerified`` when the
+    ///   factor is not verified. `CancellationError` when the user dismisses the sheet. An error
+    ///   of kind ``AuthError/Kind-swift.struct/passkeyCeremonyFailed`` when the authenticator
+    ///   fails.
     @_spi(Experimental)
     @discardableResult
     @MainActor
-    public func verifyWebAuthnFactor(
-      factorId: UUID,
-      presentationAnchor: ASPresentationAnchor
-    ) async throws -> AuthMFAVerifyResponse {
-      try await _verifyWebAuthnFactor(
-        factorId: factorId,
-        presentationAnchor: presentationAnchor,
-        authenticator: .live
-      )
+    public func verifyWebAuthn(
+      factorID: UUID,
+      anchor: ASPresentationAnchor? = nil
+    ) async throws -> Session {
+      try await verifyWebAuthn(factorID: factorID, anchor: anchor, authenticator: .live)
     }
 
     @MainActor
-    func _verifyWebAuthnFactor(
-      factorId: UUID,
-      presentationAnchor: ASPresentationAnchor,
+    func verifyWebAuthn(
+      factorID: UUID,
+      anchor: ASPresentationAnchor?,
       authenticator: WebAuthnAuthenticator
-    ) async throws -> AuthMFAVerifyResponse {
-      let challengeResponse = try await challenge(
-        params: MFAChallengeParams(factorId: factorId)
+    ) async throws -> Session {
+      let (challengeID, webauthn) = try await webAuthnChallenge(factorID: factorID)
+      switch webauthn.type {
+      case .request:
+        break
+      case .create:
+        // A `create` challenge registers a new credential, which only enrollment may do.
+        throw AuthError(
+          kind: .mfaFactorNotVerified,
+          message: "The WebAuthn factor is not verified. Enroll a factor with enrollWebAuthn.")
+      default:
+        throw unexpectedChallengeType(webauthn.type)
+      }
+      let credential = try await authenticator.authenticate(
+        WebAuthnRequestOptions(publicKey: try webauthn.publicKeyOptions()), anchor)
+      return try await verify(
+        factorID: factorID, challengeID: challengeID, type: .request, credentialResponse: credential
       )
-      guard let webauthn = challengeResponse.webauthn else {
+    }
+
+    private func webAuthnChallenge(
+      factorID: UUID
+    ) async throws -> (UUID, WebAuthnChallengeResponseData) {
+      let challenge = try await challenge(factorID: factorID)
+      guard let webauthn = challenge.webauthn else {
         throw AuthError.decoding("The MFA challenge response has no 'webauthn' field.")
       }
-      let rpId = try webauthn.credentialOptions.webAuthnAssertionRpId()
-      let credentialResponse = try await authenticator.authenticate(
-        webauthn.credentialOptions, rpId, presentationAnchor
-      )
-      return try await verify(
-        params: MFAVerifyParams(
-          factorId: factorId,
-          challengeId: challengeResponse.id,
-          credentialResponse: credentialResponse
-        )
-      )
+      return (challenge.id, webauthn)
+    }
+
+    private func unexpectedChallengeType(_ type: WebAuthnChallengeType) -> AuthError {
+      AuthError.decoding("Unexpected WebAuthn challenge type '\(type.rawValue)'.")
     }
   }
 #endif
