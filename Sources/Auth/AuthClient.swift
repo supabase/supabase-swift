@@ -54,10 +54,6 @@ typealias AuthClientID = Int
 /// - ``IDTokenCredentials``
 /// - ``Nonce``
 /// - ``signInWithWeb3(_:)``
-/// - ``signInWithOTP(email:redirectTo:shouldCreateUser:userMetadata:captchaToken:)``
-/// - ``signInWithOTP(phone:channel:shouldCreateUser:userMetadata:captchaToken:)``
-/// - ``signInWithSSO(domain:redirectTo:captchaToken:)``
-/// - ``signInWithSSO(providerId:redirectTo:captchaToken:)``
 /// - ``signInWithOAuth(_:options:presenter:)``
 /// - ``oauthSignInURL(_:options:)``
 /// - ``OAuthOptions``
@@ -65,6 +61,30 @@ typealias AuthClientID = Int
 /// - ``WebAuthPresenter``
 /// - ``ClosurePresenter``
 /// - ``ASWebAuthenticationSessionPresenter``
+///
+/// ### One-time passwords and magic links
+/// - ``signInWithOTP(email:options:)``
+/// - ``signInWithOTP(phone:options:)``
+/// - ``EmailOTPOptions``
+/// - ``PhoneOTPOptions``
+/// - ``MessagingChannel``
+/// - ``MessageID``
+/// - ``verifyOTP(email:token:type:)``
+/// - ``verifyOTP(phone:token:type:)``
+/// - ``verifyOTP(tokenHash:type:)``
+/// - ``EmailOTPType``
+/// - ``PhoneOTPType``
+/// - ``VerifyOTPResult``
+/// - ``resend(email:type:redirectTo:captchaToken:)``
+/// - ``resend(phone:type:captchaToken:)``
+/// - ``ResendEmailType``
+/// - ``ResendPhoneType``
+///
+/// ### Single sign-on
+/// - ``signInWithSSO(_:options:presenter:)``
+/// - ``ssoSignInURL(_:options:)``
+/// - ``SSOTarget``
+/// - ``SSOOptions``
 ///
 /// ### Handling redirects
 /// - ``handleRedirect(_:)``
@@ -88,13 +108,8 @@ typealias AuthClientID = Int
 /// - ``user(jwt:)``
 /// - ``updateUser(_:redirectTo:)``
 /// - ``UserAttributes``
-/// - ``verifyOTP(email:token:type:redirectTo:captchaToken:)``
-/// - ``verifyOTP(phone:token:type:captchaToken:)``
-/// - ``verifyOTP(tokenHash:type:)``
-/// - ``resend(email:type:emailRedirectTo:captchaToken:)``
-/// - ``resend(phone:type:captchaToken:)``
 /// - ``reauthenticate()``
-/// - ``resetPasswordForEmail(_:redirectTo:captchaToken:)``
+/// - ``resetPassword(email:redirectTo:captchaToken:)``
 ///
 /// ### Identities
 /// - ``identities()``
@@ -360,7 +375,7 @@ public final class AuthClient: Sendable {
   /// When phone confirmation is off, the user is signed in at once: the client stores the session
   /// and emits ``AuthEvent/signedIn``. When it is on, the server sends a code over
   /// ``SignUpOptions/channel`` and the user stays signed out until
-  /// ``verifyOTP(phone:token:type:captchaToken:)``.
+  /// ``verifyOTP(phone:token:type:)``.
   ///
   /// - Parameters:
   ///   - phone: The user's phone number, with the international prefix.
@@ -488,118 +503,134 @@ public final class AuthClient: Sendable {
     return session
   }
 
-  /// Log in user using magic link.
+  /// Sends a one-time code or a magic link to an email address.
   ///
-  /// If the `{{ .ConfirmationURL }}` variable is specified in the email template, a magic link will
-  /// be sent.
-  /// If the `{{ .Token }}` variable is specified in the email template, an OTP will be sent.
+  /// The email template decides what the user gets: `{{ .ConfirmationURL }}` sends a magic link,
+  /// and `{{ .Token }}` sends a code. Pass the code to
+  /// ``verifyOTP(email:token:type:)``, or the redirect URL of the link to
+  /// ``handleRedirect(_:)``. The client stores a PKCE flow for the link before the request.
+  ///
   /// - Parameters:
-  ///   - email: User's email address.
-  ///   - redirectTo: Redirect URL embedded in the email link.
-  ///   - shouldCreateUser: Creates a new user, defaults to `true`.
-  ///   - userMetadata: Data to store on the user if the call creates one.
-  ///   - captchaToken: Captcha verification token.
-  public func signInWithOTP(
-    email: String,
-    redirectTo: URL? = nil,
-    shouldCreateUser: Bool = true,
-    userMetadata: JSONObject = [:],
-    captchaToken: String? = nil
-  ) async throws {
-    try await withFlow(.signIn, redirectTo: redirectTo) {
+  ///   - email: The user's email address.
+  ///   - options: Whether to create the user, its metadata, the redirect URL of the link, and the
+  ///     captcha token.
+  public func signInWithOTP(email: String, options: EmailOTPOptions = .init()) async throws {
+    try await withFlow(.signIn, redirectTo: options.redirectTo) {
       try await api.execute(
-        authAPI.signInWithOTP(
-          email: email,
-          redirectTo: redirectTo,
-          shouldCreateUser: shouldCreateUser,
-          userMetadata: userMetadata,
-          captchaToken: captchaToken,
-          pkce: $0.challenge
-        )
-      )
+        authAPI.signInWithOTP(email: email, options: options, pkce: $0.challenge))
     }
   }
 
-  /// Log in user using a one-time password (OTP)..
+  /// Sends a one-time code to a phone number by SMS or WhatsApp.
+  ///
+  /// Pass the code to ``verifyOTP(phone:token:type:)`` with
+  /// ``PhoneOTPType/sms``.
   ///
   /// - Parameters:
-  ///   - phone: User's phone with international prefix.
-  ///   - channel: Messaging channel to use (e.g `whatsapp` or `sms`), defaults to `sms`.
-  ///   - shouldCreateUser: Creates a new user, defaults to `true`.
-  ///   - userMetadata: Data to store on the user if the call creates one.
-  ///   - captchaToken: Captcha verification token.
-  ///
-  /// - Note: You need to configure a WhatsApp sender on Twilio if you are using phone sign in with the `whatsapp` channel.
+  ///   - phone: The user's phone number, with the international prefix.
+  ///   - options: Whether to create the user, its metadata, the channel, and the captcha token.
+  /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
+  ///   none.
+  @discardableResult
   public func signInWithOTP(
     phone: String,
-    channel: MessagingChannel = .sms,
-    shouldCreateUser: Bool = true,
-    userMetadata: JSONObject = [:],
-    captchaToken: String? = nil
-  ) async throws {
-    try await api.execute(
-      authAPI.signInWithOTP(
-        phone: phone,
-        channel: channel,
-        shouldCreateUser: shouldCreateUser,
-        userMetadata: userMetadata,
-        captchaToken: captchaToken
-      )
-    )
+    options: PhoneOTPOptions = .init()
+  ) async throws -> MessageID? {
+    try await api.execute(authAPI.signInWithOTP(phone: phone, options: options))
   }
 
-  /// Attempts a single-sign on using an enterprise Identity Provider.
+  /// Returns the URL that starts a SAML single sign-on with an identity provider.
+  ///
+  /// Use it when you present the identity provider page yourself. The client stores a new PKCE
+  /// flow before it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or
+  /// pass the code and ``OAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
+  ///
   /// - Parameters:
-  ///   - domain: The email domain to use for signing in.
-  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party provider.
-  ///   - captchaToken: The captcha token to be used for captcha verification.
-  /// - Returns: A URL that you can use to initiate the provider's authentication flow.
-  public func signInWithSSO(
-    domain: String,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
-  ) async throws -> SSOResponse {
-    try await withFlow(.signIn, redirectTo: redirectTo) {
-      try await api.execute(
+  ///   - target: The email domain or the ID of the identity provider.
+  ///   - options: The redirect URL and the captcha token.
+  /// - Returns: The flow that this call started, with the URL to open.
+  public func ssoSignInURL(
+    _ target: SSOTarget,
+    options: SSOOptions = .init()
+  ) async throws -> OAuthFlow {
+    let redirectTo = Self.oauthRedirectURL(
+      redirectTo: options.redirectTo, configured: configuration.redirectToURL)
+    return try await withFlow(.signIn, redirectTo: redirectTo, sendsEmail: false) { started in
+      let url = try await api.execute(
         authAPI.signInWithSSO(
-          domain: domain,
+          target,
           redirectTo: redirectTo,
-          captchaToken: captchaToken,
-          pkce: $0.challenge
+          captchaToken: options.captchaToken,
+          pkce: started.challenge
         )
       )
+      return OAuthFlow(id: started.flow.id, url: url)
     }
   }
 
-  /// Attempts a single-sign on using an enterprise Identity Provider.
-  /// - Parameters:
-  ///   - providerId: The ID of the SSO provider to use for signing in.
-  ///   - redirectTo: The URL to redirect the user to after they sign in with the third-party
-  /// provider.
-  ///   - captchaToken: The captcha token to be used for captcha verification.
-  /// - Returns: A URL that you can use to initiate the provider's authentication flow.
-  public func signInWithSSO(
-    providerId: String,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
-  ) async throws -> SSOResponse {
-    try await withFlow(.signIn, redirectTo: redirectTo) {
-      try await api.execute(
-        authAPI.signInWithSSO(
-          providerId: providerId,
-          redirectTo: redirectTo,
-          captchaToken: captchaToken,
-          pkce: $0.challenge
-        )
-      )
+  #if canImport(AuthenticationServices)
+    /// Signs in with SAML single sign-on, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the identity provider page with `presenter`, and
+    /// exchanges the code from the callback URL. It emits ``AuthEvent/signedIn``.
+    ///
+    /// ```swift
+    /// try await supabase.auth.signInWithSSO(
+    ///   .domain("example.com"),
+    ///   options: SSOOptions(redirectTo: URL(string: "myapp://login-callback"))
+    /// )
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - target: The email domain or the ID of the identity provider.
+    ///   - options: The redirect URL and the captcha token.
+    ///   - presenter: Shows the identity provider page. The default is
+    ///     ``ASWebAuthenticationSessionPresenter``.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
+    @discardableResult
+    public func signInWithSSO(
+      _ target: SSOTarget,
+      options: SSOOptions = .init(),
+      presenter: some WebAuthPresenter = .default
+    ) async throws -> Session {
+      try await present(
+        ssoSignInURL(target, options: options), redirectTo: options.redirectTo, with: presenter)
     }
-  }
+  #else
+    /// Signs in with SAML single sign-on, and stores the session.
+    ///
+    /// The client starts a PKCE flow, shows the identity provider page with `presenter`, and
+    /// exchanges the code from the callback URL. It emits ``AuthEvent/signedIn``.
+    ///
+    /// - Parameters:
+    ///   - target: The email domain or the ID of the identity provider.
+    ///   - options: The redirect URL and the captcha token.
+    ///   - presenter: Shows the identity provider page.
+    /// - Returns: The new session.
+    /// - Throws: `CancellationError` when the user cancels. Else the error of `presenter`, or an
+    ///   error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when the callback URL is
+    ///   not an auth redirect or reports an error. The client removes the flow when `presenter`
+    ///   throws.
+    @discardableResult
+    public func signInWithSSO(
+      _ target: SSOTarget,
+      options: SSOOptions = .init(),
+      presenter: some WebAuthPresenter
+    ) async throws -> Session {
+      try await present(
+        ssoSignInURL(target, options: options), redirectTo: options.redirectTo, with: presenter)
+    }
+  #endif
 
   /// Returns the URL that starts an OAuth sign-in with a third-party provider.
   ///
   /// Use it when you present the provider page yourself. The client stores a new PKCE flow before
   /// it returns. Pass the redirect URL that comes back to ``handleRedirect(_:)``, or pass the code
-  /// and `flowID` to ``exchangeCodeForSession(_:flowID:)``.
+  /// and ``OAuthFlow/id`` to ``exchangeCodeForSession(_:flowID:)``.
   ///
   /// - Parameters:
   ///   - provider: The third-party provider.
@@ -653,7 +684,7 @@ public final class AuthClient: Sendable {
       presenter: some WebAuthPresenter = .default
     ) async throws -> Session {
       try await present(
-        oauthSignInURL(provider, options: options), options: options, with: presenter)
+        oauthSignInURL(provider, options: options), redirectTo: options.redirectTo, with: presenter)
     }
   #else
     /// Signs in with a third-party provider, and stores the session.
@@ -677,20 +708,20 @@ public final class AuthClient: Sendable {
       presenter: some WebAuthPresenter
     ) async throws -> Session {
       try await present(
-        oauthSignInURL(provider, options: options), options: options, with: presenter)
+        oauthSignInURL(provider, options: options), redirectTo: options.redirectTo, with: presenter)
     }
   #endif
 
   /// Shows `flow.url` with `presenter`, then finishes the flow with the callback URL.
   private func present(
     _ flow: OAuthFlow,
-    options: OAuthOptions,
+    redirectTo: URL?,
     with presenter: some WebAuthPresenter
   ) async throws -> Session {
     // A sign-out while the page is open must win over the callback.
     let signOuts = await sessionStore.signOuts
     let callbackScheme = Self.oauthRedirectURL(
-      redirectTo: options.redirectTo, configured: configuration.redirectToURL)?.scheme
+      redirectTo: redirectTo, configured: configuration.redirectToURL)?.scheme
 
     let callback: URL
     do {
@@ -739,7 +770,7 @@ public final class AuthClient: Sendable {
   /// Exchanges an authorization code for a session, and stores the session.
   ///
   /// The client emits one auth event, chosen by the call that started the flow:
-  /// ``AuthEvent/passwordRecovery`` for ``resetPasswordForEmail(_:redirectTo:captchaToken:)``,
+  /// ``AuthEvent/passwordRecovery`` for ``resetPassword(email:redirectTo:captchaToken:)``,
   /// ``AuthEvent/userUpdated`` for an email change or an identity link, and
   /// ``AuthEvent/signedIn`` otherwise.
   ///
@@ -749,8 +780,9 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - code: The authorization code from the redirect URL.
   ///   - flowID: The ID of the flow that produced `code`: the ``OAuthFlow/id`` that
-  ///     ``oauthSignInURL(_:options:)`` or ``linkIdentityURL(_:options:)`` returned. When `nil`, the
-  ///     client tries the pending flows newest first.
+  ///     ``oauthSignInURL(_:options:)``, ``linkIdentityURL(_:options:)``, or
+  ///     ``ssoSignInURL(_:options:)`` returned. When `nil`, the client tries the pending flows
+  ///     newest first.
   /// - Returns: The new session.
   /// - Throws: An error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed`` when no pending
   ///   flow matches, without a request.
@@ -1111,52 +1143,71 @@ public final class AuthClient: Sendable {
     } catch let error as AuthError where error.meansNothingLeftToRevoke(for: scope) {}
   }
 
-  /// Log in an user given a User supplied OTP received via email.
+  /// Verifies a one-time code from an email, and stores the session.
+  ///
+  /// The client emits one auth event, chosen by `type`: ``AuthEvent/passwordRecovery`` for
+  /// ``EmailOTPType/recovery``, ``AuthEvent/userUpdated`` for an ``EmailOTPType/emailChange`` of
+  /// the signed-in user, and ``AuthEvent/signedIn`` otherwise. The first confirmation of a secure
+  /// email change returns ``VerifyOTPResult/emailChangePending(message:)``, with no session and no
+  /// event.
+  ///
+  /// - Parameters:
+  ///   - email: The email address that got the code.
+  ///   - token: The code from the email.
+  ///   - type: The kind of email that sent the code.
+  /// - Returns: The session, or the pending state of a secure email change.
   @discardableResult
   public func verifyOTP(
     email: String,
     token: String,
-    type: EmailOTPType,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
-  ) async throws -> VerifyOTPResponse {
+    type: EmailOTPType
+  ) async throws -> VerifyOTPResult {
     try await _verifyOTP(
-      authAPI.verifyOTP(
-        email: email,
-        token: token,
-        type: type,
-        redirectTo: redirectTo,
-        captchaToken: captchaToken
-      ),
-      transition: { Self.verifiedTransition($0, for: type) }
+      authAPI.verifyOTP(email: email, token: token, type: type),
+      type: type
     )
   }
 
-  /// Log in an user given a User supplied OTP received via mobile.
+  /// Verifies a one-time code from an SMS or WhatsApp message, and stores the session.
+  ///
+  /// The client emits ``AuthEvent/userUpdated`` for a ``PhoneOTPType/phoneChange`` of the
+  /// signed-in user, and ``AuthEvent/signedIn`` otherwise.
+  ///
+  /// - Parameters:
+  ///   - phone: The phone number that got the code.
+  ///   - token: The code from the message.
+  ///   - type: The kind of message that sent the code.
+  /// - Returns: The session.
   @discardableResult
   public func verifyOTP(
     phone: String,
     token: String,
-    type: MobileOTPType,
-    captchaToken: String? = nil
-  ) async throws -> VerifyOTPResponse {
-    try await _verifyOTP(
-      authAPI.verifyOTP(phone: phone, token: token, type: type, captchaToken: captchaToken),
-      transition: {
-        type == .phoneChange ? .userChangeVerified($0) : .signedIn($0, event: .signedIn)
-      }
-    )
+    type: PhoneOTPType
+  ) async throws -> Session {
+    let session = try await api.execute(
+      authAPI.verifyOTP(phone: phone, token: token, type: type))
+    try await sessionStore.commit(
+      type == .phoneChange ? .userChangeVerified(session) : .signedIn(session, event: .signedIn))
+    return session
   }
 
-  /// Log in an user given a token hash received via email.
+  /// Verifies the token hash of an email link, and stores the session.
+  ///
+  /// Use it when your email template links to your own page with `{{ .TokenHash }}`. The client
+  /// emits the same events as ``verifyOTP(email:token:type:)``.
+  ///
+  /// - Parameters:
+  ///   - tokenHash: The token hash from the link.
+  ///   - type: The kind of email that sent the link.
+  /// - Returns: The session, or the pending state of a secure email change.
   @discardableResult
   public func verifyOTP(
     tokenHash: String,
     type: EmailOTPType
-  ) async throws -> VerifyOTPResponse {
+  ) async throws -> VerifyOTPResult {
     try await _verifyOTP(
       authAPI.verifyOTP(tokenHash: tokenHash, type: type),
-      transition: { Self.verifiedTransition($0, for: type) }
+      type: type
     )
   }
 
@@ -1172,34 +1223,41 @@ public final class AuthClient: Sendable {
   }
 
   private func _verifyOTP(
-    _ request: AuthRequest<VerifyOTPResponse>,
-    transition: (Session) -> SessionStore.Transition
-  ) async throws -> VerifyOTPResponse {
-    let response = try await api.execute(request)
+    _ request: AuthRequest<VerifyOTPResult>,
+    type: EmailOTPType
+  ) async throws -> VerifyOTPResult {
+    let result = try await api.execute(request)
 
-    if let session = response.session {
-      try await sessionStore.commit(transition(session))
+    if case .signedIn(let session) = result {
+      try await sessionStore.commit(Self.verifiedTransition(session, for: type))
     }
 
-    return response
+    return result
   }
 
-  /// Resends an existing signup confirmation email or email change email.
+  /// Sends a sign-up confirmation or an email change confirmation again.
   ///
-  /// To obfuscate whether such the email already exists in the system this method succeeds in both
-  /// cases.
+  /// The client stores a new PKCE flow for the link before the request. The call succeeds for an
+  /// unknown email too, so it does not show which addresses have an account.
+  ///
+  /// - Parameters:
+  ///   - email: The email address to send to.
+  ///   - type: The kind of email to send again.
+  ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
+  ///     ``Configuration/redirectToURL``.
+  ///   - captchaToken: The captcha verification token.
   public func resend(
     email: String,
     type: ResendEmailType,
-    emailRedirectTo: URL? = nil,
+    redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
-    try await withFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: emailRedirectTo) {
+    try await withFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: redirectTo) {
       try await api.execute(
         authAPI.resend(
           email: email,
           type: type,
-          redirectTo: emailRedirectTo,
+          redirectTo: redirectTo,
           captchaToken: captchaToken,
           pkce: $0.challenge
         )
@@ -1207,22 +1265,30 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Resends an existing SMS OTP or phone change OTP.
-  /// - Returns: An object containing the unique ID of the message as reported by the SMS sending
-  /// provider. Useful for tracking deliverability problems.
+  /// Sends a phone sign-in code or a phone change code again.
   ///
-  /// To obfuscate whether such the phone number already exists in the system this method succeeds
-  /// in both cases.
+  /// The call succeeds for an unknown phone number too, so it does not show which numbers have an
+  /// account.
+  ///
+  /// - Parameters:
+  ///   - phone: The phone number to send to, with the international prefix.
+  ///   - type: The kind of code to send again.
+  ///   - captchaToken: The captcha verification token.
+  /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
+  ///   none.
   @discardableResult
   public func resend(
     phone: String,
-    type: ResendMobileType,
+    type: ResendPhoneType,
     captchaToken: String? = nil
-  ) async throws -> ResendMobileResponse {
+  ) async throws -> MessageID? {
     try await api.execute(authAPI.resend(phone: phone, type: type, captchaToken: captchaToken))
   }
 
-  /// Sends a re-authentication OTP to the user's email or phone number.
+  /// Sends a one-time code to the email or phone of the signed-in user.
+  ///
+  /// Pass the code as ``UserAttributes/nonce`` to ``updateUser(_:redirectTo:)`` when the project
+  /// needs a recent sign-in to change the password.
   public func reauthenticate() async throws {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
@@ -1385,7 +1451,8 @@ public final class AuthClient: Sendable {
       presenter: some WebAuthPresenter = .default
     ) async throws -> Session {
       try await present(
-        linkIdentityURL(provider, options: options), options: options, with: presenter)
+        linkIdentityURL(provider, options: options), redirectTo: options.redirectTo,
+        with: presenter)
     }
   #else
     /// Links an OAuth identity to the signed-in user.
@@ -1409,7 +1476,8 @@ public final class AuthClient: Sendable {
       presenter: some WebAuthPresenter
     ) async throws -> Session {
       try await present(
-        linkIdentityURL(provider, options: options), options: options, with: presenter)
+        linkIdentityURL(provider, options: options), redirectTo: options.redirectTo,
+        with: presenter)
     }
   #endif
 
@@ -1425,16 +1493,31 @@ public final class AuthClient: Sendable {
       .identityUnlinked(identity.id, userID: identity.userID))
   }
 
-  /// Sends a reset request to an email address.
-  public func resetPasswordForEmail(
-    _ email: String,
+  /// Sends a password reset email.
+  ///
+  /// The email holds a link, or a code when the template uses `{{ .Token }}`. Pass the redirect
+  /// URL of the link to ``handleRedirect(_:)``, or the code to
+  /// ``verifyOTP(email:token:type:)`` with ``EmailOTPType/recovery``. Both sign the
+  /// user in and emit ``AuthEvent/passwordRecovery``. Then set the new password with
+  /// ``updateUser(_:redirectTo:)``.
+  ///
+  /// The call succeeds for an unknown email too, so it does not show which addresses have an
+  /// account.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
+  ///     ``Configuration/redirectToURL``.
+  ///   - captchaToken: The captcha verification token.
+  public func resetPassword(
+    email: String,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
     try await withFlow(.recovery, redirectTo: redirectTo) {
       try await api.execute(
-        authAPI.resetPasswordForEmail(
-          email,
+        authAPI.resetPassword(
+          email: email,
           redirectTo: redirectTo,
           captchaToken: captchaToken,
           pkce: $0.challenge
@@ -1519,9 +1602,13 @@ public final class AuthClient: Sendable {
   /// code without a flow ID is exchanged with. A transport error or a cancellation keeps it: the
   /// request may have reached the server, and its email may already be out. A decoding error keeps
   /// it too: it follows a 2xx, so the server accepted the request.
+  /// - Parameter sendsEmail: Whether the request sends an email with a link. Only then can a
+  ///   code come back for the flow after the request fails, so only then does a failure that may
+  ///   have reached the server keep the flow.
   private func withFlow<Result>(
     _ purpose: PendingFlowRecord.Purpose,
     redirectTo: URL?,
+    sendsEmail: Bool = true,
     _ request: (_ started: (flow: PendingFlowRecord, challenge: PKCEChallenge)) async throws ->
       Result
   ) async throws -> Result {
@@ -1532,7 +1619,7 @@ public final class AuthClient: Sendable {
     do {
       return try await request(started)
     } catch {
-      if !Self.mayHaveReachedServer(error) {
+      if !sendsEmail || !Self.mayHaveReachedServer(error) {
         await removeFlow(started.flow.id)
       }
       throw error

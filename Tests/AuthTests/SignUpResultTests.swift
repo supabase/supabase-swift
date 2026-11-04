@@ -43,39 +43,11 @@ struct SignUpResultTests {
   }
 
   @Test
-  func emailChangeSingleConfirmation() throws {
-    let response = try AuthClient.Configuration.jsonDecoder.decode(
-      VerifyOTPResponse.self,
-      from: json(named: "email-change-single-confirmation")
-    )
-    #expect(response.session == nil)
-    guard case .emailChangeConfirmationPending(let confirmation) = response else {
-      Issue.record("Expected .emailChangeConfirmationPending, got \(response)")
-      return
-    }
-    #expect(confirmation.code == "200")
-    #expect(
-      confirmation.message
-        == "Confirmation link accepted. Please proceed to confirm link sent to the other email"
-    )
-  }
-
-  @Test
   func emailChangeSingleConfirmation_isNotAValidSignUpResult() {
     #expect(throws: (any Error).self) {
       try AuthClient.Configuration.jsonDecoder.decode(
         SignUpResult.self,
         from: json(named: "email-change-single-confirmation")
-      )
-    }
-  }
-
-  @Test
-  func bareUser_isNotAValidVerifyOTPResponse() {
-    #expect(throws: (any Error).self) {
-      try AuthClient.Configuration.jsonDecoder.decode(
-        VerifyOTPResponse.self,
-        from: json(named: "user")
       )
     }
   }

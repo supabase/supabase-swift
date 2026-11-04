@@ -11,6 +11,18 @@ struct SessionStoreTests {
   private let receivedAt = Date(timeIntervalSince1970: 1_700_000_000)
 
   @Test
+  func aSignOutCommitCountsOneSignOut() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    try await store.load()
+    try await store.commit(.signedIn(.valid, event: .signedIn))
+    let before = await store.signOuts
+
+    try await store.commit(.signedOut(.userInitiated, event: .signedOut))
+
+    #expect(await store.signOuts == before + 1)
+  }
+
+  @Test
   func identityUnlinkedRemovesTheIdentityFromTheHeldUser() async throws {
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
     try await store.load()

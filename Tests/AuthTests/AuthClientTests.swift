@@ -291,10 +291,10 @@ extension AuthMockerTests {
 
         try await sut.seedSession(.valid)
 
-        let response = try await sut.linkIdentityURL(.github)
+        let flow = try await sut.linkIdentityURL(.github)
 
-        expectNoDifference(response.url, URL(string: url)!)
-        #expect(try await sut.dependencies.flowStore.flow(id: response.id) != nil)
+        expectNoDifference(flow.url, URL(string: url)!)
+        #expect(try await sut.dependencies.flowStore.flow(id: flow.id) != nil)
       }
     }
 
@@ -765,10 +765,12 @@ extension AuthMockerTests {
 
       try await sut.signInWithOTP(
         email: "example@mail.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: EmailOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
       )
     }
 
@@ -778,18 +780,18 @@ extension AuthMockerTests {
         url: clientURL.appendingPathComponent("otp"),
         ignoreQuery: true,
         statusCode: 200,
-        data: [.post: Data()]
+        data: [.post: Data(#"{"message_id":"SM123"}"#.utf8)]
       )
       .snapshotRequest {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 156" \
+        	--header "Content-Length: 161" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"channel\":\"sms\",\"create_user\":true,\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"phone\":\"+1 202-918-2132\"}" \
+        	--data "{\"channel\":\"whatsapp\",\"create_user\":true,\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"phone\":\"+1 202-918-2132\"}" \
         	"http://localhost:54321/auth/v1/otp"
         """#
       }
@@ -797,27 +799,46 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.signInWithOTP(
+      let messageID = try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: PhoneOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          channel: .whatsapp,
+          captchaToken: "dummy-captcha"
+        )
       )
+
+      #expect(messageID == MessageID(rawValue: "SM123"))
+    }
+
+    @Test
+    func signInWithOTPUsingPhoneWithoutAMessageID() async throws {
+      Mock(
+        url: clientURL.appendingPathComponent("otp"),
+        statusCode: 200,
+        data: [.post: Data("{}".utf8)]
+      ).register()
+      let sut = makeSUT()
+
+      let messageID = try await sut.signInWithOTP(phone: "+1 202-918-2132")
+
+      #expect(messageID == nil)
     }
 
     @Test
     func oauthSignInURL() async throws {
       let sut = makeSUT()
-      let url = try await sut.oauthSignInURL(
+      let flow = try await sut.oauthSignInURL(
         .github,
         options: OAuthOptions(
           scopes: ["read", "write"],
           redirectTo: URL(string: "https://dummy-url.com/redirect")!,
           queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
         )
-      ).url
+      )
       expectNoDifference(
-        url,
+        flow.url,
         URL(
           string:
             "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&extra_key=extra_value"
@@ -969,12 +990,12 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 160" \
+        	--header "Content-Length: 64" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"redirect_to\":\"https:\/\/supabase.com\",\"token\":\"123456\",\"type\":\"magiclink\"}" \
+        	--data "{\"email\":\"example@mail.com\",\"token\":\"123456\",\"type\":\"magiclink\"}" \
         	"http://localhost:54321/auth/v1/verify"
         """#
       }
@@ -982,13 +1003,17 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      try await sut.verifyOTP(
+      let result = try await sut.verifyOTP(
         email: "example@mail.com",
         token: "123456",
-        type: .magiclink,
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+        type: .magiclink
       )
+
+      guard case .signedIn(let session) = result else {
+        Issue.record("Expected .signedIn, got \(result)")
+        return
+      }
+      #expect(sut.currentSession == session)
     }
 
     @Test
@@ -1003,12 +1028,12 @@ extension AuthMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "Content-Length: 114" \
+        	--header "Content-Length: 57" \
         	--header "Content-Type: application/json" \
         	--header "X-Client-Info: auth-swift/0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"phone\":\"+1 202-918-2132\",\"token\":\"123456\",\"type\":\"sms\"}" \
+        	--data "{\"phone\":\"+1 202-918-2132\",\"token\":\"123456\",\"type\":\"sms\"}" \
         	"http://localhost:54321/auth/v1/verify"
         """#
       }
@@ -1019,8 +1044,7 @@ extension AuthMockerTests {
       try await sut.verifyOTP(
         phone: "+1 202-918-2132",
         token: "123456",
-        type: .sms,
-        captchaToken: "captcha-token"
+        type: .sms
       )
     }
 
@@ -1124,11 +1148,11 @@ extension AuthMockerTests {
     }
 
     @Test(arguments: [
-      (MobileOTPType.phoneChange, AuthEvent.signedIn),
-      (MobileOTPType.sms, AuthEvent.signedIn),
+      (PhoneOTPType.phoneChange, AuthEvent.signedIn),
+      (PhoneOTPType.sms, AuthEvent.signedIn),
     ])
     func verifyOTPWithPhoneEmitsTheEventForItsType(
-      type: MobileOTPType, event: AuthEvent
+      type: PhoneOTPType, event: AuthEvent
     ) async throws {
       Mock(
         url: clientURL.appendingPathComponent("verify"),
@@ -1156,21 +1180,20 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.verifyOTP(
-        tokenHash: "abc-def",
-        type: .emailChange
+      let result = try await assertAuthStateChanges(
+        sut: sut,
+        action: { try await sut.verifyOTP(tokenHash: "abc-def", type: .emailChange) },
+        expectedEvents: [.initialSession]
       )
 
-      #expect(response.session == nil)
-      guard case .emailChangeConfirmationPending(let confirmation) = response else {
-        Issue.record("Expected .emailChangeConfirmationPending, got \(response)")
-        return
-      }
-      #expect(confirmation.code == "200")
       #expect(
-        confirmation.message
-          == "Confirmation link accepted. Please proceed to confirm link sent to the other email"
+        result
+          == .emailChangePending(
+            message:
+              "Confirmation link accepted. Please proceed to confirm link sent to the other email"
+          )
       )
+      #expect(sut.currentSession == nil)
     }
 
     @Test
@@ -1212,7 +1235,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func resetPasswordForEmail() async throws {
+    func resetPassword() async throws {
       Mock(
         url: clientURL.appendingPathComponent("recover"),
         ignoreQuery: true,
@@ -1235,15 +1258,15 @@ extension AuthMockerTests {
       .register()
 
       let sut = makeSUT()
-      try await sut.resetPasswordForEmail(
-        "example@mail.com",
+      try await sut.resetPassword(
+        email: "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
     }
 
     @Test
-    func pkceExchangeAfterResetPasswordForEmailEmitsPasswordRecovery() async throws {
+    func pkceExchangeAfterResetPasswordEmitsPasswordRecovery() async throws {
       Mock(
         url: clientURL.appendingPathComponent("recover"),
         ignoreQuery: true,
@@ -1258,7 +1281,7 @@ extension AuthMockerTests {
       ).register()
       let sut = makeSUT()
 
-      try await sut.resetPasswordForEmail("example@mail.com")
+      try await sut.resetPassword(email: "example@mail.com")
 
       try await assertAuthStateChanges(
         sut: sut,
@@ -1363,7 +1386,7 @@ extension AuthMockerTests {
       try await sut.resend(
         email: "example@mail.com",
         type: .emailChange,
-        emailRedirectTo: URL(string: "https://supabase.com"),
+        redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
     }
@@ -1396,7 +1419,7 @@ extension AuthMockerTests {
       try await sut.resend(
         email: "example@mail.com",
         type: .emailChange,
-        emailRedirectTo: URL(string: "https://supabase.com"),
+        redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
     }
@@ -1426,13 +1449,13 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.resend(
+      let messageID = try await sut.resend(
         phone: "+1 202-918-2132",
         type: .phoneChange,
         captchaToken: "captcha-token"
       )
 
-      expectNoDifference(response.messageId, "12345")
+      #expect(messageID == MessageID(rawValue: "12345"))
     }
 
     @Test
@@ -1697,7 +1720,7 @@ extension AuthMockerTests {
     }
 
     @Test
-    func signInWithSSOUsingDomain() async throws {
+    func ssoSignInURLUsingDomain() async throws {
       Mock(
         url: clientURL.appendingPathComponent("sso"),
         ignoreQuery: true,
@@ -1721,17 +1744,19 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.signInWithSSO(
-        domain: "supabase.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      let flow = try await sut.ssoSignInURL(
+        .domain("supabase.com"),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
 
-      expectNoDifference(response.url, URL(string: "https://supabase.com")!)
+      expectNoDifference(flow.url, URL(string: "https://supabase.com")!)
     }
 
     @Test
-    func signInWithSSOUsingProviderId() async throws {
+    func ssoSignInURLUsingProviderID() async throws {
       Mock(
         url: clientURL.appendingPathComponent("sso"),
         ignoreQuery: true,
@@ -1755,13 +1780,15 @@ extension AuthMockerTests {
 
       let sut = makeSUT()
 
-      let response = try await sut.signInWithSSO(
-        providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      let flow = try await sut.ssoSignInURL(
+        .providerID(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
 
-      expectNoDifference(response.url, URL(string: "https://supabase.com")!)
+      expectNoDifference(flow.url, URL(string: "https://supabase.com")!)
     }
 
     @Test

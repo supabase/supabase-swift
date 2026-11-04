@@ -106,10 +106,12 @@ struct RequestsTests {
     await assert {
       try await sut.signInWithOTP(
         email: "example@mail.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: EmailOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -119,11 +121,13 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.signInWithOTP(
+      _ = try await sut.signInWithOTP(
         phone: "+1 202-918-2132",
-        shouldCreateUser: true,
-        userMetadata: ["custom_key": .string("custom_value")],
-        captchaToken: "dummy-captcha"
+        options: PhoneOTPOptions(
+          shouldCreateUser: true,
+          userMetadata: ["custom_key": .string("custom_value")],
+          captchaToken: "dummy-captcha"
+        )
       )
     }
   }
@@ -131,16 +135,16 @@ struct RequestsTests {
   @Test
   func oauthSignInURL() async throws {
     let sut = makeSUT()
-    let url = try await sut.oauthSignInURL(
+    let flow = try await sut.oauthSignInURL(
       .github,
       options: OAuthOptions(
         scopes: ["read", "write"],
         redirectTo: URL(string: "https://dummy-url.com/redirect")!,
         queryItems: [URLQueryItem(name: "extra_key", value: "extra_value")]
       )
-    ).url
+    )
     #expect(
-      url
+      flow.url
         == URL(
           string:
             "http://localhost:54321/auth/v1/authorize?provider=github&scopes=read%20write&redirect_to=https://dummy-url.com/redirect&code_challenge=challenge&code_challenge_method=s256&extra_key=extra_value"
@@ -270,9 +274,7 @@ struct RequestsTests {
       try await sut.verifyOTP(
         email: "example@mail.com",
         token: "123456",
-        type: .magiclink,
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+        type: .magiclink
       )
     }
   }
@@ -285,8 +287,7 @@ struct RequestsTests {
       try await sut.verifyOTP(
         phone: "+1 202-918-2132",
         token: "123456",
-        type: .sms,
-        captchaToken: "captcha-token"
+        type: .sms
       )
     }
   }
@@ -336,11 +337,11 @@ struct RequestsTests {
   }
 
   @Test
-  func resetPasswordForEmail() async {
+  func resetPassword() async {
     let sut = makeSUT()
     await assert {
-      try await sut.resetPasswordForEmail(
-        "example@mail.com",
+      try await sut.resetPassword(
+        email: "example@mail.com",
         redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
@@ -355,7 +356,7 @@ struct RequestsTests {
       try await sut.resend(
         email: "example@mail.com",
         type: .emailChange,
-        emailRedirectTo: URL(string: "https://supabase.com"),
+        redirectTo: URL(string: "https://supabase.com"),
         captchaToken: "captcha-token"
       )
     }
@@ -366,7 +367,7 @@ struct RequestsTests {
     let sut = makeSUT()
 
     await assert {
-      try await sut.resend(
+      _ = try await sut.resend(
         phone: "+1 202-918-2132",
         type: .phoneChange,
         captchaToken: "captcha-token"
@@ -438,27 +439,31 @@ struct RequestsTests {
   }
 
   @Test
-  func signInWithSSOUsingDomain() async {
+  func ssoSignInURLUsingDomain() async {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.signInWithSSO(
-        domain: "supabase.com",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      _ = try await sut.ssoSignInURL(
+        .domain("supabase.com"),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
     }
   }
 
   @Test
-  func signInWithSSOUsingProviderId() async {
+  func ssoSignInURLUsingProviderID() async {
     let sut = makeSUT()
 
     await assert {
-      _ = try await sut.signInWithSSO(
-        providerId: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-        redirectTo: URL(string: "https://supabase.com"),
-        captchaToken: "captcha-token"
+      _ = try await sut.ssoSignInURL(
+        .providerID(UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!),
+        options: SSOOptions(
+          redirectTo: URL(string: "https://supabase.com"),
+          captchaToken: "captcha-token"
+        )
       )
     }
   }
