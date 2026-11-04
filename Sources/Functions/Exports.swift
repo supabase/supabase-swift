@@ -6,3 +6,4 @@
 //
 
 @_exported import Helpers
+// ci-test: sdk#322
