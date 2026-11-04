@@ -1,0 +1,82 @@
+//
+//  AuthModel.swift
+//  Auth
+//
+//  Created by Guilherme Souza on 04/11/26.
+//
+
+#if canImport(Observation)
+  public import Observation
+
+  /// An observable mirror of an ``AuthClient``'s ``AuthStatus``, for SwiftUI and other
+  /// Observation-based UI.
+  ///
+  /// Create one model for the app and read its properties in a view body. SwiftUI re-renders the
+  /// view when a property it read changes.
+  ///
+  /// ```swift
+  /// @State private var auth = AuthModel(client: supabase.auth)
+  ///
+  /// var body: some View {
+  ///   switch auth.status {
+  ///   case .loading: ProgressView()
+  ///   case .signedIn: HomeView()
+  ///   case .signedOut: SignInView()
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// The model subscribes to ``AuthClient/events()`` when you create it. It stops when the model is
+  /// released. Apps that support iOS 16 or earlier consume ``AuthClient/events()`` in `.task`
+  /// instead.
+  ///
+  /// The model keeps the status of each ``AuthChange`` and drops its ``AuthChange/event``. A change
+  /// that leaves the status as it was does nothing. To react to an event such as
+  /// ``AuthEvent/passwordRecovery``, consume ``AuthClient/events()`` as well.
+  ///
+  /// The model updates on the main actor after the client has changed. Right after an `await` on a
+  /// sign-in, read ``AuthClient/status`` for the state the client holds now.
+  @available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *)
+  @MainActor @Observable
+  public final class AuthModel {
+    /// Whether a user is signed in.
+    ///
+    /// It starts as the client's current ``AuthClient/status``, then follows every
+    /// ``AuthChange``, starting with ``AuthEvent/initialSession``.
+    public private(set) var status: AuthStatus
+
+    /// The current session, or `nil` when no user is signed in or the client is still
+    /// ``AuthStatus/loading``. The session may be expired; check ``Session/isExpired``.
+    public var session: Session? { status.session }
+
+    /// The signed-in user, or `nil` when no user is signed in.
+    public var user: User? { session?.user }
+
+    /// Whether the client has not read its storage yet, so ``status`` is ``AuthStatus/loading``.
+    public var isLoading: Bool { status == .loading }
+
+    @ObservationIgnored private var task: Task<Void, Never>?
+
+    /// Creates a model that follows `client`.
+    ///
+    /// The model does not retain `client`, and the stream it consumes ends when the client is
+    /// released. Keep the client alive for as long as you use the model.
+    ///
+    /// - Parameter client: The client whose ``AuthClient/events()`` the model consumes.
+    public init(client: AuthClient) {
+      status = client.status
+      let changes = client.events()
+      task = Task { [weak self] in
+        for await change in changes {
+          guard let self else { return }
+          // Observation invalidates readers on every write, equal value or not.
+          if status != change.status { status = change.status }
+        }
+      }
+    }
+
+    isolated deinit {
+      task?.cancel()
+    }
+  }
+#endif

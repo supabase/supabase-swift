@@ -115,6 +115,28 @@ struct AuthClientIntegrationTests {
     expectNoDifference(changes.map(\.event), [.initialSession, .signedIn])
   }
 
+  #if canImport(Observation)
+    @MainActor
+    @Test
+    func authModelFollowsASignInAndASignOut() async throws {
+      guard #available(iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1, *) else { return }
+
+      let model = AuthModel(client: authClient)
+      try #require(await waitUntil { await !model.isLoading })
+      #expect(model.status == .signedOut(.sessionMissing))
+
+      let email = mockEmail()
+      try await signUpIfNeededOrSignIn(email: email, password: mockPassword())
+      try #require(await waitUntil { await model.session != nil })
+      #expect(model.session == authClient.currentSession)
+      #expect(model.user?.email == email)
+
+      try await authClient.signOut()
+      try #require(await waitUntil { await model.session == nil })
+      #expect(model.status == .signedOut(.userInitiated))
+    }
+  #endif
+
   @Test
   func signOutLocalKeepsTheOtherSessionsOfTheUser() async throws {
     let (thisDevice, otherDevice) = try await signInOnTwoDevices()
