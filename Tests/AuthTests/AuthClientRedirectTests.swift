@@ -74,6 +74,20 @@ struct AuthClientRedirectTests {
   }
 
   @Test
+  func aTransportErrorOnTheLinkIdentityRequestRemovesItsFlow() async throws {
+    // Not `.timedOut`: a GET retries it, and the retry waits on a test clock that never advances.
+    race.answer(.get, "user/identities/authorize") { throw URLError(.cannotParseResponse) }
+    let client = race.makeClient()
+    try await client.signIn(email: "user@example.com", password: "secret")
+
+    await #expect {
+      try await client.linkIdentityURL(.github)
+    } throws: { ($0 as? AuthError)?.kind == .transport }
+
+    #expect(try pendingFlowCount() == 0)
+  }
+
+  @Test
   func duplicateDeliveryExchangesOnce() async throws {
     let gate = Gate()
     let exchanges = LockIsolated(0)

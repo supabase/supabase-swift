@@ -1412,7 +1412,8 @@ public final class AuthClient: Sendable {
   ) async throws -> OAuthFlow {
     let redirectTo = Self.oauthRedirectURL(
       redirectTo: options.redirectTo, configured: configuration.redirectToURL)
-    return try await withFlow(.linkIdentity, redirectTo: redirectTo) { started in
+    return try await withFlow(.linkIdentity, redirectTo: redirectTo, sendsEmail: false) {
+      started in
       let url = try await api.authorizedExecute {
         try authAPI.linkIdentityURL(
           provider: provider,
