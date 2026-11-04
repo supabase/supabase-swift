@@ -167,7 +167,7 @@ struct SessionLifecycleRaceTests {
     let storage = LockedLocalStorage()
     try storage.store(
       key: race.storageKey,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: stored, receivedAt: race.now()))
+      value: PersistedSessionCodec.encode(stored)
     )
     storage.isLocked.setValue(true)
     let client = race.makeClient(storage: storage)

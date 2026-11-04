@@ -137,7 +137,7 @@ extension AuthMockerTests {
     @Test
     func signInAnonymously() async throws {
       try await withMainSerialExecutor {
-        let session = Session(fromMockNamed: "anonymous-sign-in-response")
+        let session = Session(fromMockNamed: "anonymous-sign-in-response").received(at: Self.now)
 
         Mock(
           url: clientURL.appendingPathComponent("signup"),
@@ -916,8 +916,9 @@ extension AuthMockerTests {
         let expectedSession = Session(
           accessToken: "accesstoken",
           tokenType: "bearer",
-          expiresIn: 60,
-          expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
+          expiresIn: .seconds(60),
+          expiresAt: currentDate.addingTimeInterval(60),
+          receivedAt: currentDate,
           refreshToken: "refreshtoken",
           user: User(fromMockNamed: "user")
         )
@@ -1118,7 +1119,8 @@ extension AuthMockerTests {
       ).register()
       let sut = makeSUT()
       let held = try AuthClient.Configuration.jsonDecoder.decode(
-        Session.self, from: MockData.session)
+        Session.self, from: MockData.session
+      ).received(at: Self.now)
       try await sut.seedSession(held)
 
       try await assertAuthStateChanges(
@@ -1325,7 +1327,8 @@ extension AuthMockerTests {
       ).register()
       let sut = makeSUT()
       let held = try AuthClient.Configuration.jsonDecoder.decode(
-        Session.self, from: MockData.session)
+        Session.self, from: MockData.session
+      ).received(at: Self.now)
       try await sut.seedSession(held)
       let flow = try await sut.dependencies.flowStore.start(purpose: .emailChange, redirectTo: nil)
 
@@ -3779,7 +3782,8 @@ extension AuthMockerTests {
       #expect(result.audience == ["authenticated"])
       #expect(result.expiresAt.timeIntervalSince1970 == 9_999_999_999)
       #expect(result.issuedAt?.timeIntervalSince1970 == 1_516_239_022)
-      #expect(result.additionalClaims["nbf"] == 1_516_239_022)
+      #expect(result.notBefore?.timeIntervalSince1970 == 1_516_239_022)
+      #expect(result.additionalClaims["nbf"] == nil)
       #expect(result.additionalClaims["jti"] == "test-jti")
       #expect(result.role == "authenticated")
       #expect(result.email == "test@example.com")
@@ -3916,10 +3920,13 @@ extension AuthMockerTests {
       return requests
     }
 
+    /// The time `makeSUT` stamps on every session its client receives by default.
+    private static let now = Date()
+
     private func makeSUT(
       url: URL = clientURL,
       storageKey: String = uniqueStorageKey(),
-      date: @escaping @Sendable () -> Date = { Date() },
+      date: @escaping @Sendable () -> Date = { Self.now },
       platform: AuthPlatform = .live
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default

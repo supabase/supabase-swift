@@ -20,7 +20,7 @@ struct PersistedSessionLoaderTests {
 
     let first = try await PersistedSessionLoader.load(from: storage, key: key)
 
-    expectNoDifference(first?.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(first, PersistedSessionFixtures.expectedSession)
     #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == nil)
     let stored = try #require(try await storage.load(key: key))
     #expect(try PersistedSessionCodec.decode(stored).isCurrentSchema)
@@ -45,7 +45,7 @@ struct PersistedSessionLoaderTests {
 
     let first = try await PersistedSessionLoader.load(from: storage, key: key)
 
-    expectNoDifference(first?.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(first, PersistedSessionFixtures.expectedSession)
     #expect(first?.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
     #expect(storage.saves.value == [key])
 

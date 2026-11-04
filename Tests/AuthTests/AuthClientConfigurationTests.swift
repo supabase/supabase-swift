@@ -68,7 +68,7 @@ struct AuthClientConfigurationTests {
   func configuredStorageIsTheOneTheClientWritesTo() async throws {
     let storage = InMemoryAuthStorage()
     try await storage.save(
-      PersistedSessionCodec.encode(ReceivedSession(session: .valid)), key: "custom-key")
+      PersistedSessionCodec.encode(Session.valid), key: "custom-key")
     let configuration = AuthClient.Configuration(
       url: url, storageKey: "custom-key", storage: storage)
 

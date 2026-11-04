@@ -43,7 +43,7 @@ struct StartupRefreshTests {
     await client.initialization()
 
     let stored = try #require(try localStorage.retrieve(key: key))
-    expectNoDifference(try PersistedSessionCodec.decode(stored).session.session, Self.refreshed)
+    expectNoDifference(try PersistedSessionCodec.decode(stored).session, Self.refreshed)
   }
 
   @Test
@@ -186,7 +186,7 @@ struct StartupRefreshTests {
   func aSessionThatIsStillValidMakesNoRequest() async throws {
     http.respond { _, _ in Self.refreshResponse }
     try localStorage.store(
-      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: Self.valid)))
+      key: key, value: PersistedSessionCodec.encode(Self.valid))
 
     let client = makeClient()
     await client.initialization()
@@ -296,8 +296,9 @@ struct StartupRefreshTests {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: 3600,
-      expiresAt: receivedAt.addingTimeInterval(3600).timeIntervalSince1970,
+      expiresIn: .seconds(3600),
+      expiresAt: receivedAt.addingTimeInterval(3600),
+      receivedAt: receivedAt,
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )
@@ -306,8 +307,7 @@ struct StartupRefreshTests {
   private func storeExpiredSession() throws {
     try localStorage.store(
       key: key,
-      value: PersistedSessionCodec.encode(
-        ReceivedSession(session: Self.expired, receivedAt: Self.now.addingTimeInterval(-3700))))
+      value: PersistedSessionCodec.encode(Self.expired))
   }
 
   private func makeClient(

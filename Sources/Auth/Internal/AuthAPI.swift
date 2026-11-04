@@ -27,13 +27,16 @@ struct AuthAPI: Sendable {
   let defaultRedirectURL: URL?
   let encoder: JSONEncoder
   let decoder: JSONDecoder
+  /// Stamps the session of a response with the time the client received it.
+  let now: @Sendable () -> Date
 
   init(
     url: URL,
     headers: HTTPFields,
     defaultRedirectURL: URL?,
     encoder: JSONEncoder,
-    decoder: JSONDecoder
+    decoder: JSONDecoder,
+    now: @escaping @Sendable () -> Date
   ) {
     var headers = headers
     if headers[.apiVersionHeaderName] == nil {
@@ -44,6 +47,7 @@ struct AuthAPI: Sendable {
     self.defaultRedirectURL = defaultRedirectURL
     self.encoder = encoder
     self.decoder = decoder
+    self.now = now
   }
 }
 
@@ -103,6 +107,10 @@ extension AuthAPI {
       head.headerFields[.authorization] = authorization
     }
     return AuthRequest(head: head, body: body, decodeBody: decode)
+  }
+
+  func decodingSession() -> @Sendable (HTTPResponse, Data) throws -> Session {
+    decoding(Session.self) { [now] in $0.received(at: now()) }
   }
 
   func decoding<T: Decodable>(_: T.Type) -> @Sendable (HTTPResponse, Data) throws -> T {
@@ -166,7 +174,7 @@ extension AuthAPI {
           codeChallengeMethod: pkce?.codeChallengeMethod
         )
       ),
-      decode: decoding(SignUpResult.self)
+      decode: decoding(SignUpResult.self) { [now] in $0.received(at: now()) }
     )
   }
 
@@ -188,7 +196,7 @@ extension AuthAPI {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(SignUpResult.self)
+      decode: decoding(SignUpResult.self) { [now] in $0.received(at: now()) }
     )
   }
 
@@ -206,7 +214,7 @@ extension AuthAPI {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -226,7 +234,7 @@ extension AuthAPI {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -249,7 +257,7 @@ extension AuthAPI {
           linkIdentity: accessToken != nil
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -264,7 +272,7 @@ extension AuthAPI {
           gotrueMetaSecurity: credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -275,7 +283,7 @@ extension AuthAPI {
     try token(
       grantType: "pkce",
       body: encoder.encode(["auth_code": authCode, "code_verifier": codeVerifier]),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -283,7 +291,7 @@ extension AuthAPI {
     try token(
       grantType: "refresh_token",
       body: encoder.encode(UserCredentials(refreshToken: refreshToken)),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -345,7 +353,7 @@ extension AuthAPI {
       body: encoder.encode(
         VerifyOTPParams.email(VerifyEmailOTPParams(email: email, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPBody.self) { $0.result }
+      decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
     )
   }
 
@@ -359,7 +367,7 @@ extension AuthAPI {
       body: encoder.encode(
         VerifyOTPParams.phone(VerifyPhoneOTPParams(phone: phone, token: token, type: type))
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -369,7 +377,7 @@ extension AuthAPI {
       body: encoder.encode(
         VerifyOTPParams.tokenHash(VerifyTokenHashParams(tokenHash: tokenHash, type: type))
       ),
-      decode: decoding(VerifyOTPBody.self) { $0.result }
+      decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
     )
   }
 

@@ -10,7 +10,7 @@ import Foundation
 /// - That snake_case session wrapped as `{"session": …, "expiration_date": …}`.
 enum PersistedSessionCodec {
   struct Decoded {
-    var session: ReceivedSession
+    var session: Session
     /// `false` when the data is a v2 shape that the caller should rewrite as schema 1.
     var isCurrentSchema: Bool
   }
@@ -19,7 +19,7 @@ enum PersistedSessionCodec {
     switch try JSONDecoder().decode(Shape.self, from: data) {
     case .schema(PersistedSession.currentSchema):
       let persisted = try PersistedJSON.decoder.decode(PersistedSession.self, from: data)
-      return Decoded(session: persisted.receivedSession, isCurrentSchema: true)
+      return Decoded(session: try persisted.session(), isCurrentSchema: true)
 
     case .schema(let schema):
       throw DecodingError.dataCorrupted(
@@ -31,19 +31,19 @@ enum PersistedSessionCodec {
 
     case .v2Wrapped:
       let wrapped = try v2SnakeCaseDecoder.decode(V2WrappedSession.self, from: data)
-      return Decoded(session: ReceivedSession(session: wrapped.session), isCurrentSchema: false)
+      return Decoded(session: wrapped.session, isCurrentSchema: false)
 
     case .v2SnakeCase:
       let session = try v2SnakeCaseDecoder.decode(Session.self, from: data)
-      return Decoded(session: ReceivedSession(session: session), isCurrentSchema: false)
+      return Decoded(session: session, isCurrentSchema: false)
 
     case .v2CamelCase:
       let session = try JSONDecoder().decode(Session.self, from: data)
-      return Decoded(session: ReceivedSession(session: session), isCurrentSchema: false)
+      return Decoded(session: session, isCurrentSchema: false)
     }
   }
 
-  static func encode(_ session: ReceivedSession) throws -> Data {
+  static func encode(_ session: Session) throws -> Data {
     try PersistedJSON.encoder.encode(PersistedSession(session))
   }
 

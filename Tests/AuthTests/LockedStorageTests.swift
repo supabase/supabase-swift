@@ -15,9 +15,10 @@ struct LockedStorageTests {
   @Test
   func twoFailedLoadsEmitNothingAndTheThirdEmitsOneInitialSession() async throws {
     let storage = LockedAuthStorage(failingLoads: 2)
-    let stored = ReceivedSession(session: makeSession("stored"), receivedAt: Date())
+    let stored = makeSession("stored")
     try await storage.save(PersistedSessionCodec.encode(stored), key: key)
-    let store = SessionStore(storage: storage, key: key)
+    let store = SessionStore(
+      storage: storage, key: key, now: { Date(timeIntervalSince1970: 1_700_000_000) })
     var changes = store.changes().makeAsyncIterator()
 
     for _ in 0..<2 {
@@ -37,7 +38,8 @@ struct LockedStorageTests {
   @Test
   func failedSaveOfARefreshKeepsTheSessionAndSignsNothingOut() async throws {
     let storage = LockedAuthStorage()
-    let store = SessionStore(storage: storage, key: key)
+    let store = SessionStore(
+      storage: storage, key: key, now: { Date(timeIntervalSince1970: 1_700_000_000) })
     try await store.load()
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
     var changes = store.changes().makeAsyncIterator()
@@ -51,7 +53,7 @@ struct LockedStorageTests {
     #expect(error?.kind == .storageUnavailable)
     #expect(store.currentStatus == .signedIn(makeSession("a")))
     let saved = try await storage.load(key: key).map { try PersistedSessionCodec.decode($0) }
-    #expect(saved?.session.session == makeSession("a"))
+    #expect(saved?.session == makeSession("a"))
     try await store.commit(.signedOut(.userInitiated, event: .signedOut))
     let signedOut = AuthChange(event: .signedOut, status: .signedOut(.userInitiated))
     #expect(await changes.next() == signedOut)
@@ -66,7 +68,7 @@ struct LockedStorageTests {
     let storage = LockedLocalStorage()
     try storage.store(
       key: key,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: issued, receivedAt: world.now()))
+      value: PersistedSessionCodec.encode(issued)
     )
     storage.isLocked.setValue(true)
     let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
@@ -98,7 +100,7 @@ struct LockedStorageTests {
     let storage = LockedLocalStorage()
     try storage.store(
       key: key,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: issued, receivedAt: world.now()))
+      value: PersistedSessionCodec.encode(issued)
     )
     storage.isLocked.setValue(true)
     let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
@@ -194,7 +196,7 @@ struct LockedStorageTests {
     func missingEntitlementOnTheRemoveOfASignOutIsReported() async throws {
       let entitlementError = KeychainError(code: .init(rawValue: errSecMissingEntitlement))
       let world = World()
-      let stored = ReceivedSession(session: world.issueSession(), receivedAt: world.now())
+      let stored = world.issueSession()
       let storage = KeychainStorage(
         keychain: FakeKeychain(
           items: [key: try PersistedSessionCodec.encode(stored)],
@@ -265,8 +267,9 @@ private func makeSession(_ name: String) -> Session {
   Session(
     accessToken: name,
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 1_700_003_600,
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 1_700_003_600),
+    receivedAt: Date(timeIntervalSince1970: 1_700_000_000),
     refreshToken: "refresh-\(name)",
     user: User(fromMockNamed: "user")
   )

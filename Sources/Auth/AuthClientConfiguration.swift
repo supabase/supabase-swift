@@ -93,6 +93,9 @@ extension AuthClient {
 
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.
     ///
+    /// Keep it in step with ``now``: the refresh deadline sleeps on this clock, and expiry checks
+    /// read ``now``.
+    ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target

@@ -38,6 +38,23 @@ struct VerifiedClaimsTests {
   }
 
   @Test
+  func notBeforeIsADate() throws {
+    let jwt = try decode(payload: #"{"sub":"user-1","exp":1735689600,"nbf":1735686000}"#)
+
+    let claims = try VerifiedClaims(jwt)
+
+    #expect(claims.notBefore == Date(timeIntervalSince1970: 1_735_686_000))
+    #expect(claims.additionalClaims["nbf"] == nil)
+  }
+
+  @Test
+  func notBeforeIsNilWhenTheClaimIsAbsent() throws {
+    let jwt = try decode(payload: #"{"sub":"user-1","exp":1735689600}"#)
+
+    #expect(try VerifiedClaims(jwt).notBefore == nil)
+  }
+
+  @Test
   func audienceStringBecomesSingleElementArray() throws {
     let jwt = try decode(payload: #"{"sub":"user-1","exp":1735689600,"aud":"authenticated"}"#)
 

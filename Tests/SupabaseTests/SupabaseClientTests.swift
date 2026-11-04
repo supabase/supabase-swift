@@ -404,8 +404,9 @@ struct SupabaseClientTests {
     let stored = Auth.Session(
       accessToken: "stored-access-token",
       tokenType: "bearer",
-      expiresIn: 30,
-      expiresAt: now.addingTimeInterval(30).timeIntervalSince1970,
+      expiresIn: .seconds(30),
+      expiresAt: now.addingTimeInterval(30),
+      receivedAt: now,
       refreshToken: "stored-refresh-token",
       user: Auth.User(
         id: UUID(),
@@ -417,7 +418,7 @@ struct SupabaseClientTests {
       )
     )
     let storage = StoredSessionStorage(
-      data: try PersistedSessionCodec.encode(ReceivedSession(session: stored, receivedAt: now))
+      data: try PersistedSessionCodec.encode(stored)
     )
 
     let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
@@ -885,8 +886,8 @@ extension Session {
     Session(
       accessToken: accessToken,
       tokenType: "bearer",
-      expiresIn: 3600,
-      expiresAt: 4_102_444_800,
+      expiresIn: .seconds(3600),
+      expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
       refreshToken: "refresh-token",
       user: User(
         id: UUID(),

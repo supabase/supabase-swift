@@ -89,8 +89,9 @@ struct Race: Sendable {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: lifetime,
-      expiresAt: Self.epoch.addingTimeInterval(elapsed + lifetime).timeIntervalSince1970,
+      expiresIn: .seconds(lifetime),
+      expiresAt: Self.epoch.addingTimeInterval(elapsed + lifetime),
+      receivedAt: now(),
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )

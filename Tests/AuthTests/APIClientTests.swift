@@ -135,7 +135,8 @@ struct APIClientTests {
     headers: [:],
     defaultRedirectURL: nil,
     encoder: AuthClient.Configuration.jsonEncoder,
-    decoder: AuthClient.Configuration.jsonDecoder
+    decoder: AuthClient.Configuration.jsonDecoder,
+    now: { Date(timeIntervalSince1970: 1_700_000_000) }
   )
 
   private func makeClient(

@@ -102,11 +102,18 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
   public let options: JSONValue
 
-  /// Unix timestamp (seconds since epoch) when the challenge expires.
-  public let expiresAt: TimeInterval
+  /// When the challenge expires.
+  public let expiresAt: Date
 
   private enum CodingKeys: String, CodingKey {
     case challengeID = "challengeId", options, expiresAt
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    challengeID = try container.decode(UUID.self, forKey: .challengeID)
+    options = try container.decode(JSONValue.self, forKey: .options)
+    expiresAt = try container.decodeUnixDate(forKey: .expiresAt)
   }
 }
 
@@ -121,10 +128,17 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
   public let options: JSONValue
 
-  /// Unix timestamp (seconds since epoch) when the challenge expires.
-  public let expiresAt: TimeInterval
+  /// When the challenge expires.
+  public let expiresAt: Date
 
   private enum CodingKeys: String, CodingKey {
     case challengeID = "challengeId", options, expiresAt
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    challengeID = try container.decode(UUID.self, forKey: .challengeID)
+    options = try container.decode(JSONValue.self, forKey: .options)
+    expiresAt = try container.decodeUnixDate(forKey: .expiresAt)
   }
 }

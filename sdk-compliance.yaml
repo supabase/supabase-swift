@@ -625,6 +625,7 @@ features:
       - VerifiedClaims.isAnonymous
       - VerifiedClaims.issuedAt
       - VerifiedClaims.issuer
+      - VerifiedClaims.notBefore
       - VerifiedClaims.phone
       - VerifiedClaims.role
       - VerifiedClaims.sessionID

@@ -65,7 +65,7 @@ struct AuthClientIntegrationTests {
     let refreshed = try #require(initial.session)
     #expect(refreshed.refreshToken != signedIn.refreshToken)
     #expect(refreshed.user.id == signedIn.user.id)
-    #expect(!refreshed.isExpired)
+    #expect(!refreshed.isExpired())
   }
 
   @Test
@@ -92,10 +92,10 @@ struct AuthClientIntegrationTests {
   ) throws -> (storage: InMemoryTestStorage, key: String) {
     let storage = InMemoryTestStorage()
     let key = "sb-startup-refresh-\(UUID().uuidString)-auth-token"
-    let receivedAt = Date().addingTimeInterval(-session.expiresIn - seconds)
+    let receivedAt = Date().addingTimeInterval(-session.expiresIn.timeInterval - seconds)
     try storage.store(
       key: key,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: session, receivedAt: receivedAt))
+      value: PersistedSessionCodec.encode(session.received(at: receivedAt))
     )
     return (storage, key)
   }

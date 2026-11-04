@@ -76,7 +76,8 @@ public struct AuthAdminClient: Sendable {
       headers: headers,
       defaultRedirectURL: nil,
       encoder: AuthClient.Configuration.jsonEncoder,
-      decoder: AuthClient.Configuration.jsonDecoder
+      decoder: AuthClient.Configuration.jsonDecoder,
+      now: { Date() }
     )
     var logger = logger
     logger[metadataKey: "system"] = "auth"

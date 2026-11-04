@@ -17,7 +17,7 @@ struct StoredSessionTests {
   func currentSessionAfterInitializationIsTheStoredSession() async throws {
     let localStorage = InMemoryTestStorage()
     try localStorage.store(
-      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
+      key: key, value: PersistedSessionCodec.encode(Session.valid))
 
     let sut = makeSUT(localStorage)
     await sut.initialization()
@@ -89,7 +89,7 @@ struct StoredSessionTests {
     #expect(sut.currentSession == nil)
 
     try localStorage.store(
-      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
+      key: key, value: PersistedSessionCodec.encode(Session.valid))
 
     #expect(sut.currentSession == nil)
   }
@@ -112,7 +112,7 @@ struct StoredSessionTests {
   func unreadableStorageSurfacesOnSessionInsteadOfSigningOut() async throws {
     let localStorage = FailingLocalStorage()
     try localStorage.store(
-      key: key, value: PersistedSessionCodec.encode(ReceivedSession(session: .valid)))
+      key: key, value: PersistedSessionCodec.encode(Session.valid))
     localStorage.failsReads.setValue(true)
 
     let sut = makeSUT(localStorage)

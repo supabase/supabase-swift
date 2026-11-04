@@ -9,7 +9,7 @@ import Foundation
 enum PersistedSessionLoader {
   static let legacyKey = "supabase.session"
 
-  static func load(from storage: any AuthStorage, key: String) async throws -> ReceivedSession? {
+  static func load(from storage: any AuthStorage, key: String) async throws -> Session? {
     let stored = try await storage.load(key: key)
     let legacy = stored == nil ? try await storage.load(key: legacyKey) : nil
     let migration: Migration
@@ -33,7 +33,7 @@ enum PersistedSessionLoader {
     case remove(key: String)
   }
 
-  private typealias Migration = (session: ReceivedSession?, writes: [Write])
+  private typealias Migration = (session: Session?, writes: [Write])
 
   /// `legacy` is what the legacy key holds, read only when `key` holds nothing.
   private static func migrate(

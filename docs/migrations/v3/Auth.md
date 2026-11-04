@@ -25,7 +25,7 @@ Changes that still compile but behave differently. Check each one by hand.
     `.signedOut`.
 
   With `.manual` or `.disabled`, `.initialSession` fires at once with the stored session. Check
-  `session.isExpired` in handlers that switch on `.initialSession`.
+  `session.isExpired()` in handlers that switch on `.initialSession`.
 - **The stored session loads asynchronously.** `AuthStorage` is `async`, so a new client has
   `status == .loading` and `currentSession == nil` until it has read storage. v2 read storage
   before `init` returned. Call `await auth.initialization()`, or wait for the first
@@ -88,7 +88,7 @@ Changes that still compile but behave differently. Check each one by hand.
     options: .init(auth: .init(storage: InMemoryAuthStorage()))
   )
   ```
-- **The stored session is read once.** The client reads `storage` when it is created and
+- **The stored session is read once.** The client reads `storage` once, right after it is created, and
   keeps the session in memory. `currentSession` no longer reads storage, so a session that other
   code (an app extension, another process) writes to the same storage is not seen until the next
   client is created.
@@ -138,8 +138,7 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Expiry follows the local clock, and auto refresh runs on a deadline.** The client judges
   expiry from the local time it received the session plus `expiresIn`, not from `expiresAt`
   against the device clock. On a device whose clock is wrong, `session()` no longer refreshes on
-  every call. `Session.isExpired` still compares `expiresAt` with the device clock, so on such a
-  device it can disagree with the client. `startAutoRefresh()` no longer checks the session every
+  every call, and `Session.isExpired(at:leeway:)` agrees with it. `startAutoRefresh()` no longer checks the session every
   30 seconds. It refreshes once, 90 seconds before the access token expires, and retries a failed
   refresh with a capped exponential backoff. A session stored by v2 counts as received at
   `expiresAt - expiresIn`.
@@ -284,6 +283,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthMFAVerifyResponse` | `Session` |
 | `typealias FactorType = String`, `AuthenticatorAssuranceLevels`, `AMREntry.Method` | `RawRepresentable` structs `FactorType`, `AuthenticatorAssuranceLevel`, `AuthenticationMethod` |
 | `AMREntry.timestamp: TimeInterval` | `Date` |
+| `Session.expiresAt: TimeInterval`, `Session.expiresIn: TimeInterval` | `expiresAt: Date`, `expiresIn: Duration`; see below |
+| `Session.isExpired: Bool` | `Session.isExpired(at:leeway:)`; see below |
+| `PasskeyRegistrationOptions.expiresAt: TimeInterval`, `PasskeyAuthenticationOptions.expiresAt: TimeInterval` | `Date` |
 | `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:secretKey:)`; see below |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
@@ -723,14 +725,31 @@ let flow = try await supabase.auth.ssoSignInURL(
   .providerID(UUID(uuidString: providerID)!))
 ```
 
+## `Session` times are `Date` and `Duration`
+
+`expiresAt` is a `Date` and `expiresIn` is a `Duration`, not `TimeInterval`s. A new `receivedAt`
+is the time the client received the session. The client judges expiry from it, so
+`isExpired(at:leeway:)` replaces the `isExpired` property and takes the clock and the margin.
+A `Session` decoded without `receivedAt`, as every session that v2 stored, counts as received at
+`expiresAt - expiresIn`. The stored session format does not change.
+
+```swift
+// v2
+let remaining = session.expiresAt - Date().timeIntervalSince1970
+let needsRefresh = session.isExpired
+// v3
+let remaining = session.expiresAt.timeIntervalSinceNow
+let needsRefresh = session.isExpired(leeway: .seconds(60))
+```
+
 ## `JWTClaimsResponse` and `JWTClaims` are `VerifiedClaims`
 
 `claims(options:)` and `claims(jwt:options:)` return `VerifiedClaims` instead of
 `JWTClaimsResponse`. The claims are top-level properties with full names, and `header` and
 `signature` stay. `sub` and `exp` are required, so `subject` and `expiresAt` are not optional,
 and a token without them fails verification. `aud` is always a `[String]`, `exp` and `iat` are `Date`s, `aal` is an
-`AuthenticatorAssuranceLevel`, and `AudienceClaim` is gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, and the `amr` entries fill
-their typed properties. `nbf`, `jti`, and every other claim are in `additionalClaims`.
+`AuthenticatorAssuranceLevel`, and `AudienceClaim` is gone. `session_id`, `is_anonymous`, `app_metadata`, `user_metadata`, `nbf` (as the `Date` `notBefore`), and the `amr` entries fill
+their typed properties. `jti` and every other claim are in `additionalClaims`.
 
 ```swift
 // v2
@@ -758,7 +777,7 @@ for await (event, session) in supabase.auth.authStateChanges {
 }
 // v3
 for await change in supabase.auth.events() {
-  if change.event == .initialSession, let session = change.session, !session.isExpired {
+  if change.event == .initialSession, let session = change.session, !session.isExpired() {
     signIn(user: session.user)
   }
 }

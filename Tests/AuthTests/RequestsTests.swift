@@ -186,8 +186,9 @@ struct RequestsTests {
       let expectedSession = Session(
         accessToken: "accesstoken",
         tokenType: "bearer",
-        expiresIn: 60,
-        expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
+        expiresIn: .seconds(60),
+        expiresAt: currentDate.addingTimeInterval(60),
+        receivedAt: currentDate,
         refreshToken: "refreshtoken",
         user: User(fromMockNamed: "user")
       )

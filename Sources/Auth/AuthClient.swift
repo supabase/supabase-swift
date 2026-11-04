@@ -147,7 +147,7 @@ public final class AuthClient: Sendable {
 
   var configuration: AuthClient.Configuration { dependencies.configuration }
 
-  private var date: @Sendable () -> Date { dependencies.date }
+  private let now: @Sendable () -> Date
   private var sessionManager: SessionManager { dependencies.sessionManager }
   private var sessionStore: SessionStore { dependencies.sessionStore }
   private var logger: Logging.Logger {
@@ -241,6 +241,7 @@ public final class AuthClient: Sendable {
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
     )
     self.dependencies = dependencies
+    self.now = configuration.now
     self.mfa = AuthMFA(dependencies: dependencies)
     jwksCache = JWKSCache(
       fetch: { [api = dependencies.sessionAPI, authAPI = dependencies.authAPI] in
@@ -959,14 +960,15 @@ public final class AuthClient: Sendable {
       for: sessionOwnership(ofAccessToken: tokens.accessToken)
     )
 
+    let receivedAt = now()
     let session = Session(
       providerToken: tokens.providerToken,
       providerRefreshToken: tokens.providerRefreshToken,
       accessToken: tokens.accessToken,
       tokenType: tokens.tokenType,
       expiresIn: tokens.expiresIn,
-      expiresAt: tokens.expiresAt
-        ?? date().addingTimeInterval(tokens.expiresIn).timeIntervalSince1970,
+      expiresAt: tokens.expiresAt ?? receivedAt.adding(tokens.expiresIn),
+      receivedAt: receivedAt,
       refreshToken: tokens.refreshToken,
       user: user
     )
@@ -998,18 +1000,19 @@ public final class AuthClient: Sendable {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
 
-    let now = date()
+    let receivedAt = now()
     let expiresAt = Date(timeIntervalSince1970: exp)
     let session: Session
-    if expiresAt <= now {
+    if expiresAt <= receivedAt {
       session = try await dependencies.refreshRequest(refreshToken)
     } else {
       let user = try await api.execute(authAPI.user(accessToken: accessToken))
       session = Session(
         accessToken: accessToken,
         tokenType: "bearer",
-        expiresIn: expiresAt.timeIntervalSince(now),
-        expiresAt: exp,
+        expiresIn: expiresAt.duration(since: receivedAt),
+        expiresAt: expiresAt,
+        receivedAt: receivedAt,
         refreshToken: refreshToken,
         user: user
       )
@@ -1066,10 +1069,10 @@ public final class AuthClient: Sendable {
     await dependencies.redirectDeduplicator.removeAll()
     guard let removed else { return }
 
-    var accessToken = removed.session.accessToken
-    if removed.isExpired(at: date(), leeway: defaultExpiryMargin) {
+    var accessToken = removed.accessToken
+    if removed.isExpired(at: now(), leeway: defaultExpiryMargin) {
       do {
-        accessToken = try await dependencies.refreshRequest(removed.session.refreshToken)
+        accessToken = try await dependencies.refreshRequest(removed.refreshToken)
           .accessToken
       } catch let error as AuthError where error.endsSessionForGood {
         return
@@ -1672,7 +1675,7 @@ public final class AuthClient: Sendable {
     }
 
     let claims = try VerifiedClaims(decodedJWT)
-    if !options.allowsExpired, claims.expiresAt <= date() {
+    if !options.allowsExpired, claims.expiresAt <= now() {
       throw AuthError.jwtVerificationFailed("JWT has expired")
     }
 

@@ -47,7 +47,7 @@ extension AuthAPI {
     try request(
       .post, "passkeys/authentication/verify",
       body: encoder.encode(VerifyBody(challengeId: challengeID, credential: credential)),
-      decode: decoding(Session.self))
+      decode: decodingSession())
   }
 
   func listPasskeys(accessToken: String) -> AuthRequest<[PasskeyListItem]> {

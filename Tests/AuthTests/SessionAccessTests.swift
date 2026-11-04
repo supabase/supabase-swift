@@ -93,7 +93,7 @@ import Testing
     let key = uniqueStorageKey()
     try storage.store(
       key: key,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: .valid, receivedAt: Date()))
+      value: PersistedSessionCodec.encode(Session.valid)
     )
     storage.isLocked.setValue(true)
     http.respond { _, _ in try sessionResponse(.valid) }

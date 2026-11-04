@@ -23,13 +23,9 @@ struct Dependencies: Sendable {
   /// Sends one refresh request. Stores nothing and emits no event.
   let refreshRequest: @Sendable (_ refreshToken: String) async throws -> Session
   let autoRefresh: AutoRefreshController
-  let date: @Sendable () -> Date
   let platform: AuthPlatform
   let pkce: PKCE
   let logger: Logging.Logger
-
-  var resolvedEncoder: JSONEncoder { AuthClient.Configuration.jsonEncoder }
-  var resolvedDecoder: JSONDecoder { AuthClient.Configuration.jsonDecoder }
 }
 
 extension Dependencies {
@@ -48,7 +44,8 @@ extension Dependencies {
       headers: AuthClient.Configuration.defaultHeaders.merging(with: configuration.headers),
       defaultRedirectURL: configuration.redirectTo,
       encoder: AuthClient.Configuration.jsonEncoder,
-      decoder: AuthClient.Configuration.jsonDecoder
+      decoder: AuthClient.Configuration.jsonDecoder,
+      now: configuration.now
     )
     let api = APIClient(http: http)
     let storageKey = configuration.storageKey
@@ -99,7 +96,6 @@ extension Dependencies {
       sessionManager: sessionManager,
       refreshRequest: refresh,
       autoRefresh: autoRefresh,
-      date: configuration.now,
       platform: platform,
       pkce: pkce,
       logger: logger
