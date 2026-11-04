@@ -38,6 +38,12 @@ supporting_symbols:
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
   - RealtimeClientOptions.clock
+  # The default redirect URL every Auth call uses when it does not pass its own, and the members
+  # of `Session` that record and encode when the client received it. Shared across Auth features,
+  # not a capability of one.
+  - AuthClient.Configuration.redirectTo
+  - Session.receivedAt
+  - Session.encode
   # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
   # knob, not a capability.
   - SupabaseClientOptions.FunctionsOptions.logger
