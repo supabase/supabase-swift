@@ -239,12 +239,13 @@ extension RealtimeCore {
       return effects
 
     case .error:
-      // On a subscribed channel the join stands, so broadcast and presence keep working.
+      // On a subscribed channel the join stands, so broadcast and presence keep working. A
+      // join in flight, or one that timed out while the channel waits to rejoin, fails.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic(of: channel))' reported an error: \(reason)")
       var effects: [Effect] = []
-      if isPostgresChanges, isForCurrentJoin, record.awaitsPostgresChanges,
-        case .joining(let ref, _, _) = record.phase, let timer = record.phase.timer(for: channel)
+      if isPostgresChanges, isForCurrentJoin, record.awaitsPostgresChanges, let ref = joinRef,
+        let timer = record.phase.timer(for: channel)
       {
         effects =
           failPostgresChanges(channel, ref: ref, with: .postgresChangesFailed(reason: reason))

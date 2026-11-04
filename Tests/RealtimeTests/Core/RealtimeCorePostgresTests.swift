@@ -208,6 +208,51 @@ struct RealtimeCorePostgresTests {
   }
 
   @Test
+  func postgresFailureForATimedOutJoinLeavesAndFails() {
+    var harness = CoreHarness.connected()
+    let first = harness.waiter()
+    let second = harness.waiter()
+    _ = harness.send(Self.subscribe(first, snapshot: Self.withMessages))
+    _ = harness.send(Self.subscribe(second, snapshot: Self.withMessages))
+    _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
+    let failure = RealtimeError.postgresChangesFailed(reason: "boom")
+
+    #expect(
+      harness.send(
+        .frame(Self.system(joinRef: "1", extension: "postgres_changes", error: "boom"))) == [
+          .send(Self.leave(joinRef: "1", ref: "2")),
+          .resume(first, .failure(failure)),
+          .resume(second, .failure(failure)),
+          .publishChannelStatus(.room, .failed(failure)),
+          .cancel(.rejoin(channel: .room)),
+          .deliver(.room, .event(.postgresChangesFailed("boom"))),
+        ])
+    #expect(harness.core.channels[.room]?.phase == .failed(failure))
+    #expect(harness.core.channels[.room]?.subscribeWaiters == [])
+
+    #expect(harness.send(.timerFired(.rejoin(channel: .room))) == [])
+    #expect(harness.send(.frame(Self.reply(ref: "1"))) == [])
+    #expect(harness.send(.frame(Self.system(joinRef: "1", extension: "postgres_changes"))) == [])
+    #expect(harness.core.channels[.room]?.phase == .failed(failure))
+  }
+
+  @Test
+  func stalePostgresFailureDuringTheRejoinBackoffIsIgnored() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w, snapshot: Self.withMessages))
+    _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
+
+    #expect(
+      harness.send(
+        .frame(Self.system(joinRef: "9", extension: "postgres_changes", error: "boom"))) == [])
+    #expect(
+      harness.core.channels[.room]?.phase
+        == .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: .joinTimeout))
+    #expect(harness.core.channels[.room]?.subscribeWaiters == [w])
+  }
+
+  @Test
   func timedOutJoinRefIsForgottenWhileWaitingForTheSocket() {
     var harness = CoreHarness.connected()
     _ = harness.send(Self.subscribe(harness.waiter(), snapshot: Self.noStreams))
