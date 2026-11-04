@@ -10,8 +10,9 @@
   /// ``OAuthOptions/redirectTo`` or ``AuthClient/Configuration/redirectToURL``.
   ///
   /// Cancelling the task that awaits ``authenticate(url:redirectURL:)`` closes the page and throws
-  /// `CancellationError`. So does the user closing it. Only one page can be open at a time: a
-  /// second call while one is open throws an error of kind
+  /// `CancellationError`. So does the user closing it. On tvOS, the system cannot close the page
+  /// for the app: the call throws at once, and the page stays until the user dismisses it. Only
+  /// one page can be open at a time: a second call while one is open throws an error of kind
   /// ``AuthError/Kind-swift.struct/oauthFlowFailed``.
   ///
   /// ## Choose the redirect URL
@@ -99,6 +100,7 @@
           """
         )
       }
+      try Task.checkCancellation()
       guard activeSession.begin() else {
         throw AuthError.oauthFlowFailed(
           "Another sign-in page is already open. Wait for it to close, then try again."
@@ -110,19 +112,23 @@
 
       return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { continuation in
+          let pending = PendingResult(continuation)
           let session = makeSession(url, callback, prefersEphemeralWebBrowserSession) {
             url, error in
             if let result = Self.callbackResult(url: url, error: error) {
-              continuation.resume(with: result)
+              pending.resume(with: result)
             } else {
               reportIssue(Self.sessionContractViolation)
-              continuation.resume(
-                throwing: AuthError.oauthFlowFailed(Self.sessionContractViolation)
-              )
+              pending.resume(
+                with: .failure(AuthError.oauthFlowFailed(Self.sessionContractViolation)))
             }
           }
-          handle.hold(session)
-          session.start()
+          handle.hold(session, pending: pending)
+          if !session.start() {
+            pending.resume(
+              with: .failure(
+                AuthError.oauthFlowFailed("The system could not open the sign-in page.")))
+          }
         }
       } onCancel: {
         Task { @MainActor in handle.cancel() }
@@ -142,7 +148,8 @@
     static func callback(for redirectURL: URL, httpsCallbacksAvailable: Bool) -> WebAuthCallback? {
       guard let scheme = redirectURL.scheme else { return nil }
       if httpsCallbacksAvailable, scheme.lowercased() == "https", let host = redirectURL.host {
-        return .https(host: host, path: redirectURL.path)
+        let path = redirectURL.path(percentEncoded: false)
+        return .https(host: host, path: path.isEmpty ? "/" : path)
       }
       return .scheme(scheme)
     }
@@ -193,7 +200,8 @@
   /// in tests, because the system session needs a window and a user.
   @MainActor
   protocol WebAuthSession: AnyObject {
-    func start()
+    /// Returns `false` when the session cannot start.
+    func start() -> Bool
     func cancel()
   }
 
@@ -206,14 +214,40 @@
       _ completion: @escaping @Sendable (URL?, (any Error)?) -> Void
     ) -> any WebAuthSession
 
+  /// Resumes the awaiting call once. The system does not promise a completion call after
+  /// `cancel()`, and it may still call after the presenter gave up, so the first result wins.
+  final class PendingResult: Sendable {
+    private let continuation: LockIsolated<CheckedContinuation<URL, any Error>?>
+
+    init(_ continuation: CheckedContinuation<URL, any Error>) {
+      self.continuation = LockIsolated(continuation)
+    }
+
+    func resume(with result: Result<URL, any Error>) {
+      let taken = continuation.withValue { continuation in
+        defer { continuation = nil }
+        return continuation
+      }
+      taken?.resume(with: result)
+    }
+  }
+
   /// Lets the cancellation handler, which runs anywhere, reach the session on the main actor. It
   /// also holds the session until `authenticate` returns.
   @MainActor
   final class WebAuthSessionHandle {
     private var session: (any WebAuthSession)?
+    private var pending: PendingResult?
 
-    func hold(_ session: any WebAuthSession) { self.session = session }
-    func cancel() { session?.cancel() }
+    func hold(_ session: any WebAuthSession, pending: PendingResult) {
+      self.session = session
+      self.pending = pending
+    }
+
+    func cancel() {
+      session?.cancel()
+      pending?.resume(with: .failure(CancellationError()))
+    }
   }
 
   /// Tracks whether a page is open, so a second one does not start on top of it.
@@ -268,8 +302,14 @@
         on: session)
     }
 
-    func start() { session.start() }
-    func cancel() { session.cancel() }
+    func start() -> Bool { session.start() }
+
+    /// `cancel()` does not exist on tvOS. There, the page stays until the user closes it.
+    func cancel() {
+      #if !os(tvOS)
+        session.cancel()
+      #endif
+    }
   }
 
   #if !os(tvOS) && !os(watchOS)

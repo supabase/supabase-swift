@@ -32,6 +32,9 @@ public protocol WebAuthPresenter: Sendable {
 }
 
 extension WebAuthPresenter {
+  /// Opens `url` and returns the callback URL, with the scheme of `redirectURL`.
+  ///
+  /// This implementation calls ``authenticate(url:callbackScheme:)`` with `redirectURL?.scheme`.
   @MainActor
   public func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
     try await authenticate(url: url, callbackScheme: redirectURL?.scheme)

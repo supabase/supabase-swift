@@ -759,8 +759,7 @@ public final class AuthClient: Sendable {
   /// client-wide ``Configuration/redirectToURL``.
   ///
   /// Both halves of the flow have to agree on this — the authorize request tells the provider
-  /// where to send the user, and `ASWebAuthenticationSession` is told which scheme to listen
-  /// on. They are resolved in different places, and writing the rule out twice is exactly how
+  /// where to send the user, and the presenter is told which URL to listen for. They are resolved in different places, and writing the rule out twice is exactly how
   /// they drifted apart and stopped agreeing (SDK-1873), so it lives here once instead.
   static func oauthRedirectURL(redirectTo: URL?, configured: URL?) -> URL? {
     redirectTo ?? configured

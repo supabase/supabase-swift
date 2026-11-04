@@ -20,6 +20,8 @@ import Testing
     let callback: WebAuthCallback
     let prefersEphemeralWebBrowserSession: Bool
     private let completion: @Sendable (URL?, (any Error)?) -> Void
+    private let startResult: Bool
+    private let completesOnCancel: Bool
     private(set) var startCount = 0
     private(set) var cancelCount = 0
 
@@ -27,22 +29,30 @@ import Testing
       url: URL,
       callback: WebAuthCallback,
       prefersEphemeralWebBrowserSession: Bool,
+      startResult: Bool,
+      completesOnCancel: Bool,
       completion: @escaping @Sendable (URL?, (any Error)?) -> Void
     ) {
       self.url = url
       self.callback = callback
       self.prefersEphemeralWebBrowserSession = prefersEphemeralWebBrowserSession
+      self.startResult = startResult
+      self.completesOnCancel = completesOnCancel
       self.completion = completion
     }
 
-    func start() {
+    func start() -> Bool {
       startCount += 1
+      return startResult
     }
 
-    /// Like the system session: cancelling reports `canceledLogin` to the completion handler.
+    /// The system documents that `cancel()` dismisses the page. It does not promise a call to the
+    /// completion handler, so `completesOnCancel` lets a test run without one.
     func cancel() {
       cancelCount += 1
-      completion(nil, ASWebAuthenticationSessionError(.canceledLogin))
+      if completesOnCancel {
+        completion(nil, ASWebAuthenticationSessionError(.canceledLogin))
+      }
     }
 
     func complete(with url: URL) {
@@ -57,6 +67,8 @@ import Testing
   @MainActor
   final class FakeWebAuthSessions {
     private(set) var created: [FakeWebAuthSession] = []
+    var startResult = true
+    var completesOnCancel = true
 
     func make(
       url: URL,
@@ -68,6 +80,8 @@ import Testing
         url: url,
         callback: callback,
         prefersEphemeralWebBrowserSession: prefersEphemeralWebBrowserSession,
+        startResult: startResult,
+        completesOnCancel: completesOnCancel,
         completion: completion
       )
       created.append(session)
@@ -83,7 +97,7 @@ import Testing
     }
   }
 
-  @Suite
+  @Suite(.timeLimit(.minutes(1)))
   struct ASWebAuthenticationSessionPresenterTests {
     static let authorizeURL = URL(string: "https://example.supabase.co/auth/v1/authorize")!
     static let redirectURL = URL(string: "myapp://callback")
@@ -127,7 +141,7 @@ import Testing
 
     @Test
     @MainActor
-    func aTaskCancelledBeforeItStartsStillCancelsTheSession() async throws {
+    func aTaskCancelledBeforeItStartsOpensNoSession() async throws {
       let sessions = FakeWebAuthSessions()
       let presenter = makePresenter(sessions)
 
@@ -138,7 +152,45 @@ import Testing
       task.cancel()
 
       await #expect(throws: CancellationError.self) { try await task.value }
-      #expect(sessions.created.map(\.cancelCount) == [1])
+      #expect(sessions.created.isEmpty)
+    }
+
+    @Test
+    @MainActor
+    func cancellingStillThrowsWhenTheSessionNeverCallsBack() async throws {
+      let sessions = FakeWebAuthSessions()
+      sessions.completesOnCancel = false
+      let presenter = makePresenter(sessions)
+
+      let task = Task {
+        try await presenter.authenticate(
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      let session = await sessions.started()
+      task.cancel()
+
+      await #expect(throws: CancellationError.self) { try await task.value }
+      #expect(session.cancelCount == 1)
+    }
+
+    @Test
+    @MainActor
+    func aSessionThatCannotStartThrowsAndFreesTheSlot() async throws {
+      let sessions = FakeWebAuthSessions()
+      sessions.startResult = false
+      let presenter = makePresenter(sessions)
+
+      let error = await #expect(throws: AuthError.self) {
+        try await presenter.authenticate(url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      #expect(error?.kind == .oauthFlowFailed)
+
+      sessions.startResult = true
+      let second = Task {
+        try await presenter.authenticate(url: Self.authorizeURL, redirectURL: Self.redirectURL)
+      }
+      await sessions.started(2).complete(with: Self.callbackURL)
+      #expect(try await second.value == Self.callbackURL)
     }
 
     @Test
@@ -219,6 +271,18 @@ import Testing
       )
 
       #expect(callback == .https(host: "example.com", path: "/auth/callback"))
+    }
+
+    @Test(arguments: [
+      ("https://example.com/auth/callback/", "/auth/callback/"),
+      ("https://example.com", "/"),
+      ("https://example.com/my%20app/callback", "/my app/callback"),
+    ])
+    func anHTTPSCallbackKeepsThePathAsTheRedirectWritesIt(redirect: String, path: String) {
+      let callback = ASWebAuthenticationSessionPresenter.callback(
+        for: URL(string: redirect)!, httpsCallbacksAvailable: true)
+
+      #expect(callback == .https(host: "example.com", path: path))
     }
 
     @Test
