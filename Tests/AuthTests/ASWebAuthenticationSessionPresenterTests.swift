@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 04/11/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import Testing
 
@@ -85,6 +86,7 @@ import Testing
   @Suite
   struct ASWebAuthenticationSessionPresenterTests {
     static let authorizeURL = URL(string: "https://example.supabase.co/auth/v1/authorize")!
+    static let redirectURL = URL(string: "myapp://callback")
     static let callbackURL = URL(string: "myapp://callback?code=abc")!
 
     @MainActor
@@ -98,10 +100,7 @@ import Testing
         prefersEphemeralWebBrowserSession: prefersEphemeralWebBrowserSession,
         httpsCallbacksAvailable: httpsCallbacksAvailable,
         activeSession: activeSession,
-        makeSession: {
-          sessions.make(
-            url: $0, callback: $1, prefersEphemeralWebBrowserSession: $2, completion: $3)
-        }
+        makeSession: sessions.make
       )
     }
 
@@ -115,7 +114,7 @@ import Testing
 
       let task = Task {
         try await presenter.authenticate(
-          url: Self.authorizeURL, redirectURL: URL(string: "myapp://callback"))
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
       }
       let session = await sessions.started()
       #expect(session.cancelCount == 0)
@@ -134,7 +133,7 @@ import Testing
 
       let task = Task {
         try await presenter.authenticate(
-          url: Self.authorizeURL, redirectURL: URL(string: "myapp://callback"))
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
       }
       task.cancel()
 
@@ -150,7 +149,7 @@ import Testing
 
       let task = Task {
         try await presenter.authenticate(
-          url: Self.authorizeURL, redirectURL: URL(string: "myapp://callback"))
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
       }
       let session = await sessions.started()
       session.fail(with: ASWebAuthenticationSessionError(.canceledLogin))
@@ -169,7 +168,7 @@ import Testing
 
       let task = Task {
         try await presenter.authenticate(
-          url: Self.authorizeURL, redirectURL: URL(string: "myapp://callback"))
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
       }
       let session = await sessions.started()
       #expect(session.url == Self.authorizeURL)
@@ -186,7 +185,7 @@ import Testing
 
       let task = Task {
         try await presenter.authenticate(
-          url: Self.authorizeURL, redirectURL: URL(string: "myapp://callback"))
+          url: Self.authorizeURL, redirectURL: Self.redirectURL)
       }
       let session = await sessions.started()
       session.complete(with: Self.callbackURL)
@@ -289,7 +288,7 @@ import Testing
     func aSecondSessionWhileOneIsOpenThrows() async throws {
       let sessions = FakeWebAuthSessions()
       let presenter = makePresenter(sessions)
-      let redirectURL = URL(string: "myapp://callback")
+      let redirectURL = Self.redirectURL
 
       let first = Task {
         try await presenter.authenticate(url: Self.authorizeURL, redirectURL: redirectURL)
@@ -311,7 +310,7 @@ import Testing
     func aNewSessionCanStartOnceTheLastOneFinished() async throws {
       let sessions = FakeWebAuthSessions()
       let presenter = makePresenter(sessions)
-      let redirectURL = URL(string: "myapp://callback")
+      let redirectURL = Self.redirectURL
 
       let first = Task {
         try await presenter.authenticate(url: Self.authorizeURL, redirectURL: redirectURL)
@@ -341,15 +340,14 @@ import Testing
         }
       }
 
-      final class Received: @unchecked Sendable { var schemes: [String?] = [] }
-      let received = Received()
-      let presenter = SchemeRecorder { received.schemes.append($0) }
+      let received = LockIsolated<[String?]>([])
+      let presenter = SchemeRecorder { scheme in received.withValue { $0.append(scheme) } }
 
       _ = try await presenter.authenticate(
         url: Self.authorizeURL, redirectURL: URL(string: "https://example.com/callback"))
       _ = try await presenter.authenticate(url: Self.authorizeURL, redirectURL: nil)
 
-      #expect(received.schemes == ["https", nil])
+      #expect(received.value == ["https", nil])
     }
   }
 #endif

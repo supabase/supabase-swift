@@ -107,7 +107,6 @@
       defer { activeSession.end() }
 
       let handle = WebAuthSessionHandle()
-      defer { handle.release() }
 
       return try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation { continuation in
@@ -208,14 +207,13 @@
     ) -> any WebAuthSession
 
   /// Lets the cancellation handler, which runs anywhere, reach the session on the main actor. It
-  /// also holds the session until the presenter is done with it.
+  /// also holds the session until `authenticate` returns.
   @MainActor
   final class WebAuthSessionHandle {
     private var session: (any WebAuthSession)?
 
     func hold(_ session: any WebAuthSession) { self.session = session }
     func cancel() { session?.cancel() }
-    func release() { session = nil }
   }
 
   /// Tracks whether a page is open, so a second one does not start on top of it.
