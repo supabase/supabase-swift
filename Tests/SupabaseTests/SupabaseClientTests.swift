@@ -224,14 +224,15 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func clientInitWithDefaultOptions() {
-    // A test bundle on a simulator has no Keychain entitlement, so creating the client reports
-    // it. macOS reads the file-based Keychain and reports nothing.
-    withKnownIssue(isIntermittent: true) {
-      _ = SupabaseClient(
+  func clientInitWithDefaultOptions() async {
+    // A test bundle has no Keychain entitlement, so reading the stored session reports it. The
+    // client reads it in a task it starts, so the test waits for that read inside the known issue.
+    await withKnownIssue(isIntermittent: true) {
+      let client = SupabaseClient(
         supabaseURL: URL(string: "https://default-options.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY"
       )
+      await client.auth.initialization()
     } matching: { issue in
       issue.comments.contains { $0.rawValue.contains("errSecMissingEntitlement") }
     }
