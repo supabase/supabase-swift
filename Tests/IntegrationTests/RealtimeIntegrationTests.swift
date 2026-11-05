@@ -10,6 +10,7 @@
 #if !os(Android) && !os(Linux)
   import Clocks
   import ConcurrencyExtras
+  import Crypto
   import CustomDump
   import Foundation
   import Logging
@@ -476,6 +477,42 @@
       }
     }
 
+    /// A database trigger sends the message with `realtime.send`, not a client. See
+    /// `20261105000000_realtime_trigger_broadcast.sql`. The row it inserts and deletes reaches
+    /// every Postgres changes stream on `key_value_storage` that joins right after, so no such
+    /// test may follow this one closely.
+    @Test
+    func aMessageTheDatabaseBroadcastsFromATriggerArrives() async throws {
+      let client = client
+      let key = "trigger-broadcast:\(UUID().uuidString)"
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel(key)
+        let messages = await channel.broadcasts(event: "row_inserted")
+        try await channel.subscribe()
+
+        _ = try await client.from("key_value_storage")
+          .insert(["key": key, "value": "from the trigger"]).execute()
+
+        let received = try await withTimeout(.seconds(10)) {
+          await messages.first(where: { _ in true })
+        }
+
+        #expect(received?.event == "row_inserted")
+        // `realtime.send` adds the message's `id` to the payload.
+        guard case .json(let payload)? = received?.payload else {
+          Issue.record("Expected a JSON payload, got \(String(describing: received?.payload))")
+          return
+        }
+        #expect(payload.objectValue?["key"] == .string(key))
+        #expect(payload.objectValue?["value"] == .string("from the trigger"))
+
+        await channel.unsubscribe()
+        _ = try await client.from("key_value_storage").delete().eq("key", value: key).execute()
+      }
+    }
+
     /// No RLS policy on `realtime.messages` lets the anon role read a private channel, so the
     /// server refuses the join. `testClock` never advances: `subscribe()` must throw on the
     /// refusal itself, not after a timeout.
@@ -495,6 +532,96 @@
         #expect(error?.isRetryable == false)
         #expect(await channel.status == .failed)
         #expect(await channel.status.error?.serverCode == .unauthorized)
+      }
+    }
+
+    /// The server refuses a Postgres changes binding on a table that does not exist. The join
+    /// is still in flight when it does, so `subscribe()` throws and the channel ends `failed`;
+    /// `events()` carries the server's message.
+    @Test
+    func aPostgresChangesBindingTheServerRefusesFailsTheSubscribe() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-refused-binding")
+        // Dropping the stream removes the binding, so it must outlive the subscribe.
+        let changes = await channel.postgresChanges(
+          event: .insert, schema: "public", table: "no_such_table")
+        let events = await channel.events()
+
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .server)
+        #expect(error?.isRetryable == false)
+        #expect(await channel.status == .failed)
+
+        let event = try await withTimeout(.seconds(5)) {
+          await events.first(where: {
+            if case .postgresChangesFailed = $0 { true } else { false }
+          })
+        }
+        guard case .postgresChangesFailed(let reason)? = event else {
+          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
+          return
+        }
+        #expect(reason.contains("no_such_table"))
+        withExtendedLifetime(changes) {}
+      }
+    }
+
+    /// The server refuses a join whose token expired. The client fetches the token again, once,
+    /// and joins with the new one. `testClock` never advances, so no timer drives the refresh.
+    @Test
+    func anExpiredTokenOnJoinRefreshesOnceAndRejoins() async throws {
+      let expired = signedToken(expiringIn: -60)
+      let fresh = signedToken(expiringIn: 3600)
+      let fetched = LockIsolated<[String]>([])
+      let realtime = makeRealtimeClient {
+        fetched.withValue { tokens in
+          let token = tokens.isEmpty ? expired : fresh
+          tokens.append(token)
+          return token
+        }
+      }
+      try await withMainSerialExecutor {
+        try await realtime.connect()
+
+        let channel = await realtime.channel("token-expired-on-join")
+        try await channel.subscribe()
+
+        #expect(await channel.status == .subscribed)
+        #expect(fetched.value == [expired, fresh])
+
+        await realtime.removeAllChannels()
+        await realtime.disconnect()
+      }
+    }
+
+    /// The server closes a joined channel when its token expires, and the client does not join it
+    /// again: the channel is spent, as after `removeChannel(_:)`.
+    @Test
+    func aTokenThatExpiresWhileJoinedClosesTheChannel() async throws {
+      let token = signedToken(expiringIn: 5)
+      let realtime = makeRealtimeClient { token }
+      try await withMainSerialExecutor {
+        try await realtime.connect()
+
+        let channel = await realtime.channel("token-expires-while-joined")
+        try await channel.subscribe()
+        #expect(await channel.status == .subscribed)
+
+        // The stream starts at the current status, `.subscribed`.
+        let statuses = await channel.statusChanges()
+        _ = try await withTimeout(.seconds(20)) {
+          await statuses.first(where: { $0 == .unsubscribed })
+        }
+
+        #expect(await channel.status == .unsubscribed)
+        #expect(await realtime.channels.isEmpty)
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .channelRemoved)
+
+        await realtime.disconnect()
       }
     }
 
@@ -1107,6 +1234,36 @@
 
     private struct KeyValueEntry: Decodable {
       let key: String
+    }
+
+    /// A `RealtimeClient` on the local stack that joins with the token `accessToken` returns,
+    /// on `testClock`.
+    private func makeRealtimeClient(
+      accessToken: @escaping @Sendable () async throws -> String?
+    ) -> RealtimeClient {
+      RealtimeClient(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        options: RealtimeClientOptions(
+          headers: ["apikey": DotEnv.supabasePublishableKey],
+          accessToken: accessToken,
+          handleAppLifecycle: false,
+          clock: testClock
+        )
+      )
+    }
+
+    /// An `anon` token the local stack accepts, signed with its JWT secret, that expires
+    /// `seconds` from now. A negative value mints a token that has already expired.
+    private func signedToken(expiringIn seconds: TimeInterval) -> String {
+      let header = Base64URL.encode(Data(#"{"alg":"HS256","typ":"JWT"}"#.utf8))
+      let claims: [String: Any] = [
+        "iss": "supabase-demo", "role": "anon", "exp": Int(Date().timeIntervalSince1970 + seconds),
+      ]
+      let payload = Base64URL.encode(try! JSONSerialization.data(withJSONObject: claims))
+      let signingInput = Data("\(header).\(payload)".utf8)
+      let signature = HMAC<SHA256>.authenticationCode(
+        for: signingInput, using: SymmetricKey(data: Data(DotEnv.jwtSecret.utf8)))
+      return "\(header).\(payload).\(Base64URL.encode(Data(signature)))"
     }
 
     private func waitForPresence(

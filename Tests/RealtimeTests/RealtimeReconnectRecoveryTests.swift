@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
@@ -17,6 +18,27 @@ struct RealtimeReconnectRecoveryTests {
       requestTimeout: timeout,
       accessToken: { "token" }
     )
+  }
+
+  /// Returns once the client has handled every frame `socket` delivered before this call.
+  ///
+  /// The client reads a socket's frames in order, so a broadcast that reaches `barrier` shows
+  /// that a stale frame sent before it has already been handled, and a test can check that the
+  /// frame had no effect without waiting a fixed time. `barrier` is the stream of
+  /// `broadcasts(event: "barrier")` on `channel`, opened before the stale frame.
+  private func settled(
+    _ barrier: AsyncStream<BroadcastMessage>, after socket: AsyncFakeWebSocket,
+    on channel: RealtimeChannel
+  ) async throws {
+    socket.reply(
+      RealtimeMessage(
+        joinRef: nil, ref: nil, topic: channel.wireTopic, event: "broadcast",
+        payload: ["type": "broadcast", "event": "barrier", "payload": [:]]
+      )
+    )
+    _ = try await withTimeout(.seconds(5)) {
+      await barrier.first(where: { _ in true })
+    }
   }
 
   /// stale latch could bite. Now `RealtimeClient` keeps retrying with
@@ -92,6 +114,7 @@ struct RealtimeReconnectRecoveryTests {
     let joinRef = socket.sentMessages.first { $0.event == "phx_join" }?.ref
     #expect(joinRef != nil)
 
+    let barrier = await channel.broadcasts(event: "barrier")
     socket.reply(
       RealtimeMessage(
         joinRef: "stale-join-ref",
@@ -102,7 +125,7 @@ struct RealtimeReconnectRecoveryTests {
       )
     )
 
-    try? await Task.sleep(nanoseconds: 300_000_000)
+    try await settled(barrier, after: socket, on: channel)
     #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
     #expect(
       await sut.liveChannel(for: channel.topic) != nil, "Stale phx_close removed the channel")
@@ -145,6 +168,7 @@ struct RealtimeReconnectRecoveryTests {
     #expect(await channel.status == .subscribed)
 
     let socket = sockets.value[0]
+    let barrier = await channel.broadcasts(event: "barrier")
     socket.reply(
       RealtimeMessage(
         joinRef: "stale-join-ref",
@@ -155,7 +179,7 @@ struct RealtimeReconnectRecoveryTests {
       )
     )
 
-    try? await Task.sleep(nanoseconds: 300_000_000)
+    try await settled(barrier, after: socket, on: channel)
     #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
 
     socket.reply(
@@ -213,7 +237,9 @@ struct RealtimeReconnectRecoveryTests {
 
     try await sut.connect()
     #expect(await sut.status == .connected)
-    try? await Task.sleep(nanoseconds: 200_000_000)
+    // The client writes frames in order, so a join queued now follows a stale leave, if any.
+    let probe = await sut.channel("room-probe")
+    try await probe.subscribe()
 
     let leaves = sockets.value[1].sentMessages.filter { $0.event == "phx_leave" }
     #expect(leaves.isEmpty, "Stale phx_leave was flushed into the new connection")
@@ -278,7 +304,9 @@ struct RealtimeReconnectRecoveryTests {
       return await other.status == .subscribed
     }
     try #require(rejoined, "The other channel did not rejoin after the reconnect")
-    try? await Task.sleep(nanoseconds: 300_000_000)
+    // The client writes frames in order, so a join queued now follows a stray one, if any.
+    let probe = await sut.channel("probe")
+    try await probe.subscribe()
 
     let newSocket = sockets.value[1]
     let strayJoins = newSocket.sentMessages.filter {
@@ -289,7 +317,7 @@ struct RealtimeReconnectRecoveryTests {
     #expect(await !sut.channels.contains { $0 === removed })
 
     // The app joins the topic again; the channel must survive the server's handling of any
-    // earlier join of the topic on this socket, and any retry of it.
+    // earlier join of the topic on this socket. No stray join went out, so none is retried.
     let next = await sut.channel("room")
     #expect(next !== removed)
     do {
@@ -297,7 +325,6 @@ struct RealtimeReconnectRecoveryTests {
     } catch {
       Issue.record("The topic's next channel failed to subscribe: \(error)")
     }
-    try? await Task.sleep(nanoseconds: 1_500_000_000)
 
     #expect(await next.status == .subscribed)
     #expect(await sut.channels.contains { $0 === next }, "The topic's next channel was removed")

@@ -390,9 +390,6 @@ supporting_symbols:
   - RealtimeClientOptions.defaultConnectOnSubscribe
   # The options type itself.
   - RealtimeClientOptions
-  # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
-  # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
-  - Trait.requiresMainSerialExecutor
 
 features:
 

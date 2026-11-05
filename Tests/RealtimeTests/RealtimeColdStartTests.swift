@@ -20,7 +20,8 @@ struct RealtimeColdStartTests {
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in
-        try await Task.sleep(nanoseconds: 20_000_000)
+        // The socket opens asynchronously, as it would after a network round trip.
+        await Task {}.value
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),

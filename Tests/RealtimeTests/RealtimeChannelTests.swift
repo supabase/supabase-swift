@@ -318,12 +318,12 @@ struct RealtimeChannelTests {
     }
   }
 
-  @Test
+  @Test(.timeLimit(.minutes(1)))
   func httpSendThrowsCancellationErrorWhenTheTaskIsCancelled() async {
     let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
     let httpClient = RecordingTransport { _, _ in
       onRequestStarted.yield()
-      try? await Task.sleep(for: .seconds(10))
+      await Gate().pass()
       throw URLError(.cancelled)
     }
     let (client, _) = FakeWebSocket.fakes()
@@ -810,23 +810,12 @@ extension RealtimeChannelTests {
   private func waitForEvents(
     in socket: FakeWebSocket,
     event: String,
-    timeout: TimeInterval,
-    pollInterval: UInt64 = 10_000_000
+    timeout: TimeInterval
   ) async -> [RealtimeMessage] {
-    let deadline = Date().addingTimeInterval(timeout)
-
-    while Date() < deadline {
-      let events = socket.receivedEvents.compactMap { $0.realtimeMessage }.filter {
-        $0.event == event
-      }
-
-      if !events.isEmpty {
-        return events
-      }
-
-      try? await Task.sleep(nanoseconds: pollInterval)
+    @Sendable func events() -> [RealtimeMessage] {
+      socket.receivedEvents.compactMap { $0.realtimeMessage }.filter { $0.event == event }
     }
-
-    return []
+    await waitUntil(timeout: timeout) { !events().isEmpty }
+    return events()
   }
 }
