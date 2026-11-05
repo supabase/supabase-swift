@@ -8,9 +8,10 @@
 import ConcurrencyExtras
 import CustomDump
 import Foundation
+import HTTPTypes
+import HTTPTypesFoundation
 import Helpers
 import InlineSnapshotTesting
-import Mocker
 import TestHelpers
 import Testing
 
@@ -34,32 +35,28 @@ struct AuthClientTests {
 
   @Test
   func eventsStartWithInitialSession() async throws {
-    try await withMainSerialExecutor {
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      let change = await sut.events().first { _ in true }
+    let change = await sut.events().first { _ in true }
 
-      expectNoDifference(change, AuthChange(event: .initialSession, status: .signedIn(.valid)))
-      expectNoDifference(sut.status, .signedIn(.valid))
-    }
+    expectNoDifference(change, AuthChange(event: .initialSession, status: .signedIn(.valid)))
+    expectNoDifference(sut.status, .signedIn(.valid))
   }
 
   @Test
   func eventsKeepAChangeAppliedBeforeTheFirstRead() async throws {
-    try await withMainSerialExecutor {
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      let events = sut.events()
-      try await sut.dependencies.sessionStore.commit(
-        .signedOut(.userInitiated, event: .signedOut))
-      let changes = await events.prefix(2).collect()
+    let events = sut.events()
+    try await sut.dependencies.sessionStore.commit(
+      .signedOut(.userInitiated, event: .signedOut))
+    let changes = await events.prefix(2).collect()
 
-      expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
-      expectNoDifference(changes.last?.signOutReason, .userInitiated)
-      expectNoDifference(sut.status, .signedOut(.userInitiated))
-    }
+    expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
+    expectNoDifference(changes.last?.signOutReason, .userInitiated)
+    expectNoDifference(sut.status, .signedOut(.userInitiated))
   }
 
   @Test
@@ -77,326 +74,220 @@ struct AuthClientTests {
 
   @Test
   func eventsReleaseTheSubscriberWhenCancelledBeforeTheFirstRead() async throws {
-    await withMainSerialExecutor {
-      let sut = makeSUT()
-      let store = sut.dependencies.sessionStore
-      let subscribersBefore = store.subscriberCount
+    let sut = makeSUT()
+    let store = sut.dependencies.sessionStore
+    let subscribersBefore = store.subscriberCount
 
-      let stream = sut.events()
+    let stream = sut.events()
 
-      expectNoDifference(store.subscriberCount, subscribersBefore + 1)
+    expectNoDifference(store.subscriberCount, subscribersBefore + 1)
 
-      let consumer = Task {
-        for await _ in stream {}
-      }
-      consumer.cancel()
-
-      await Task.megaYield()
-
-      expectNoDifference(store.subscriberCount, subscribersBefore)
+    let consumer = Task {
+      for await _ in stream {}
     }
+    consumer.cancel()
+
+    await consumer.value
+
+    expectNoDifference(store.subscriberCount, subscribersBefore)
   }
 
   @Test
   func globalSignOutKeepsASessionSignedInWhileLoggingOut() async throws {
-    try await withMainSerialExecutor {
-      let sut = makeSUT()
+    let sut = makeSUT()
 
-      var nextSession = Session.valid
-      nextSession.accessToken = "next-access-token"
-      nextSession.refreshToken = "next-refresh-token"
+    var nextSession = Session.valid
+    nextSession.accessToken = "next-access-token"
+    nextSession.refreshToken = "next-refresh-token"
 
-      var mock = Mock(
-        url: clientURL.appendingPathComponent("logout"),
-        ignoreQuery: true,
-        statusCode: 204,
-        data: [.post: Data()]
-      )
-      mock.onRequestHandler = OnRequestHandler(requestCallback: { [nextSession] _ in
-        let signedIn = DispatchSemaphore(value: 0)
-        Task {
-          try? await sut.seedSession(nextSession)
-          signedIn.signal()
-        }
-        _ = signedIn.wait(timeout: .now() + 5)
-      })
-      mock.register()
-
-      try await sut.seedSession(.valid)
-
-      try await sut.signOut(scope: .global)
-
-      expectNoDifference(sut.currentSession, nextSession)
+    transport.stub(.post, "logout") { [nextSession] _, _ in
+      try await sut.seedSession(nextSession)
+      return noContent
     }
+
+    try await sut.seedSession(.valid)
+
+    try await sut.signOut(scope: .global)
+
+    expectNoDifference(sut.currentSession, nextSession)
   }
 
   @Test
   func signInAnonymously() async throws {
-    try await withMainSerialExecutor {
-      let session = Session(fromMockNamed: "anonymous-sign-in-response").received(at: Self.now)
+    let session = Session(fromMockNamed: "anonymous-sign-in-response").received(at: Self.now)
 
-      Mock(
-        url: clientURL.appendingPathComponent("signup"),
-        statusCode: 200,
-        data: [
-          .post: MockData.anonymousSignInResponse
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 2" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{}" \
-        	"http://localhost:54321/auth/v1/signup"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-
-      try await assertAuthStateChanges(
-        sut: sut,
-        action: { try await sut.signInAnonymously() },
-        expectedEvents: [.initialSession, .signedIn],
-        expectedSessions: [nil, session]
-      )
-
-      expectNoDifference(sut.currentSession, session)
-      expectNoDifference(sut.currentUser, session.user)
+    transport.stub(.post, "signup", data: MockData.anonymousSignInResponse) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 2" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{}" \
+      	"http://localhost:54321/auth/v1/signup"
+      """#
     }
+
+    let sut = makeSUT()
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.signInAnonymously() },
+      expectedEvents: [.initialSession, .signedIn],
+      expectedSessions: [nil, session]
+    )
+
+    expectNoDifference(sut.currentSession, session)
+    expectNoDifference(sut.currentUser, session.user)
   }
 
   @Test
   func oauthSignInThroughHandleRedirect() async throws {
-    try await withMainSerialExecutor {
-      Mock(
-        url: clientURL.appendingPathComponent("token").appendingQueryItems([
-          URLQueryItem(name: "grant_type", value: "pkce")
-        ]),
-        statusCode: 200,
-        data: [
-          .post: MockData.session
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Content-Length: 126" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"auth_code\":\"12345\",\"code_verifier\":\"nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA\"}" \
-        	"http://localhost:54321/auth/v1/token?grant_type=pkce"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-
-      let eventsTask = Task {
-        await sut.events().prefix(2).collect()
-      }
-
-      await Task.megaYield()
-
-      _ = try await sut.oauthSignInURL(
-        .google, options: OAuthOptions(redirectTo: URL(string: "supabase://auth-callback")))
-      try await sut.handleRedirect(URL(string: "supabase://auth-callback?code=12345")!)
-
-      let events = await eventsTask.value.map(\.event)
-
-      expectNoDifference(events, [.initialSession, .signedIn])
+    transport.stub(.post, "token", query: ["grant_type": "pkce"], data: MockData.session) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Content-Length: 126" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"auth_code\":\"12345\",\"code_verifier\":\"nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA\"}" \
+      	"http://localhost:54321/auth/v1/token?grant_type=pkce"
+      """#
     }
+
+    let sut = makeSUT()
+
+    let changes = sut.events()
+
+    _ = try await sut.oauthSignInURL(
+      .google, options: OAuthOptions(redirectTo: URL(string: "supabase://auth-callback")))
+    try await sut.handleRedirect(URL(string: "supabase://auth-callback?code=12345")!)
+
+    let events = await changes.prefix(2).collect().map(\.event)
+
+    expectNoDifference(events, [.initialSession, .signedIn])
   }
 
   @Test
   func concurrentPKCEFlowsKeepIndependentVerifiers() async throws {
-    try await withMainSerialExecutor {
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      Mock(
-        url: clientURL.appendingPathComponent("user/identities/authorize"),
-        ignoreQuery: true,
-        statusCode: 200,
-        data: [
-          .get: Data(#"{"url": "https://github.com/login/oauth/authorize"}"#.utf8)
-        ]
-      )
-      .register()
+    transport.stub(
+      .get, "user/identities/authorize",
+      data: Data(#"{"url": "https://github.com/login/oauth/authorize"}"#.utf8))
 
-      let flowA = try await sut.linkIdentityURL(.github).id
+    let flowA = try await sut.linkIdentityURL(.github).id
 
-      let flowB = try await sut.linkIdentityURL(.google).id
+    let flowB = try await sut.linkIdentityURL(.google).id
 
-      #expect(flowA != flowB)
+    #expect(flowA != flowB)
 
-      Mock(
-        url: clientURL.appendingPathComponent("token").appendingQueryItems([
-          URLQueryItem(name: "grant_type", value: "pkce")
-        ]),
-        statusCode: 200,
-        data: [
-          .post: MockData.session
-        ]
-      )
-      .register()
+    transport.stub(.post, "token", query: ["grant_type": "pkce"], data: MockData.session)
 
-      _ = try await sut.exchangeCodeForSession("code-a", flowID: flowA)
+    _ = try await sut.exchangeCodeForSession("code-a", flowID: flowA)
 
-      #expect(try await sut.dependencies.flowStore.flow(id: flowA) == nil)
-      #expect(try await sut.dependencies.flowStore.flow(id: flowB) != nil)
-    }
+    #expect(try await sut.dependencies.flowStore.flow(id: flowA) == nil)
+    #expect(try await sut.dependencies.flowStore.flow(id: flowB) != nil)
   }
 
   @Test
   func linkIdentityURL() async throws {
-    try await withMainSerialExecutor {
-      let url =
-        "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
-      let sut = makeSUT()
+    let url =
+      "https://github.com/login/oauth/authorize?client_id=1234&redirect_to=com.supabase.swift-examples://&redirect_uri=http://127.0.0.1:54321/auth/v1/callback&response_type=code&scope=user:email&skip_http_redirect=true&state=jwt"
+    let sut = makeSUT()
 
-      Mock(
-        url: clientURL.appendingPathComponent("user/identities/authorize"),
-        ignoreQuery: true,
-        statusCode: 200,
-        data: [
-          .get: Data(
-            """
-            {
-              "url": "\(url)"
-            }
-            """.utf8
-          )
-        ]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&provider=github&skip_http_redirect=true"
-        """#
-      }
-      .register()
-
-      try await sut.seedSession(.valid)
-
-      let flow = try await sut.linkIdentityURL(.github)
-
-      expectNoDifference(flow.url, URL(string: url)!)
-      #expect(try await sut.dependencies.flowStore.flow(id: flow.id) != nil)
+    transport.stub(
+      .get, "user/identities/authorize",
+      data: Data(
+        """
+        {
+          "url": "\(url)"
+        }
+        """.utf8)
+    ) {
+      #"""
+      curl \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&provider=github&skip_http_redirect=true"
+      """#
     }
+
+    try await sut.seedSession(.valid)
+
+    let flow = try await sut.linkIdentityURL(.github)
+
+    expectNoDifference(flow.url, URL(string: url)!)
+    #expect(try await sut.dependencies.flowStore.flow(id: flow.id) != nil)
   }
 
   @Test
   func linkIdentityIDTokenEmitsUserUpdated() async throws {
-    try await withMainSerialExecutor {
-      Mock(
-        url: clientURL.appendingPathComponent("token"),
-        ignoreQuery: true,
-        statusCode: 200,
-        data: [.post: MockData.session]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 166" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-        	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":true,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
-        	"http://localhost:54321/auth/v1/token?grant_type=id_token"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-
-      try await sut.seedSession(.valid)
-
-      let updatedSession = try await assertAuthStateChanges(
-        sut: sut,
-        action: {
-          try await sut.linkIdentity(
-            idToken: IDTokenCredentials(
-              provider: .apple,
-              idToken: "id-token",
-              nonce: "nonce",
-              accessToken: "access-token",
-              captchaToken: "captcha-token"
-            )
-          )
-        },
-        expectedEvents: [.initialSession, .userUpdated]
-      )
-
-      expectNoDifference(sut.currentSession, updatedSession)
+    transport.stub(.post, "token", data: MockData.session) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "Content-Length: 166" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":true,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
+      	"http://localhost:54321/auth/v1/token?grant_type=id_token"
+      """#
     }
+
+    let sut = makeSUT()
+
+    try await sut.seedSession(.valid)
+
+    let updatedSession = try await assertAuthStateChanges(
+      sut: sut,
+      action: {
+        try await sut.linkIdentity(
+          idToken: IDTokenCredentials(
+            provider: .apple,
+            idToken: "id-token",
+            nonce: "nonce",
+            accessToken: "access-token",
+            captchaToken: "captcha-token"
+          )
+        )
+      },
+      expectedEvents: [.initialSession, .userUpdated]
+    )
+
+    expectNoDifference(sut.currentSession, updatedSession)
   }
 
   @Test
   func adminListUsers() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: MockData.listUsersResponse
-      ],
-      additionalHeaders: [
-        "X-Total-Count": "669",
-        "Link":
-          "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
-      ]
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
-      	--header "X-Supabase-Api-Version: 2024-01-01" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/auth/v1/admin/users"
-      """#
+    transport.stub(.get, "admin/users") { _, _ in
+      let response = HTTPResponse(
+        status: .ok,
+        headerFields: [
+          .init("X-Total-Count")!: "669",
+          .init("Link")!:
+            "</admin/users?page=2&per_page=>; rel=\"next\", </admin/users?page=14&per_page=>; rel=\"last\"",
+        ])
+      return (response, MockData.listUsersResponse)
     }
-    .register()
 
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
     let response = try await sut.listUsers()
     expectNoDifference(response.total, 669)
     expectNoDifference(response.nextPage, 2)
     expectNoDifference(response.lastPage, 14)
-  }
-
-  @Test
-  func adminListUsers_noNextPage() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .get: MockData.listUsersResponse
-      ],
-      additionalHeaders: [
-        "X-Total-Count": "669",
-        "Link": "</admin/users?page=14&per_page=>; rel=\"last\"",
-      ]
-    )
-    .snapshotRequest {
+    try transport.assertFirstRequestSnapshot(.get, "admin/users") {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -406,25 +297,41 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users"
       """#
     }
-    .register()
+  }
 
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+  @Test
+  func adminListUsers_noNextPage() async throws {
+    transport.stub(.get, "admin/users") { _, _ in
+      let response = HTTPResponse(
+        status: .ok,
+        headerFields: [
+          .init("X-Total-Count")!: "669",
+          .init("Link")!: "</admin/users?page=14&per_page=>; rel=\"last\"",
+        ])
+      return (response, MockData.listUsersResponse)
+    }
+
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
     let response = try await sut.listUsers()
     expectNoDifference(response.total, 669)
     #expect(response.nextPage == nil)
     expectNoDifference(response.lastPage, 14)
+    try transport.assertFirstRequestSnapshot(.get, "admin/users") {
+      #"""
+      curl \
+      	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:54321/auth/v1/admin/users"
+      """#
+    }
   }
 
   @Test
   func signUpWithEmailAndPassword() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("signup"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "signup", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -437,7 +344,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/signup?redirect_to=https://supabase.com"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -454,13 +360,7 @@ struct AuthClientTests {
 
   @Test
   func signUpWithPhoneAndPassword() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("signup"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "signup", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -473,7 +373,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/signup"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -489,12 +388,7 @@ struct AuthClientTests {
 
   @Test
   func signUpWhenConfirmationRequired() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("signup"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.signUpConfirmationRequired]
-    ).register()
+    transport.stub(.post, "signup", data: MockData.signUpConfirmationRequired)
 
     let sut = makeSUT()
 
@@ -513,12 +407,7 @@ struct AuthClientTests {
 
   @Test
   func signUpWhenSignedInCommitsTheSession() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("signup"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "signup", data: MockData.session)
 
     let sut = makeSUT()
 
@@ -533,13 +422,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithEmailAndPassword() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -552,7 +435,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=password"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -565,13 +447,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithPhoneAndPassword() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -584,7 +460,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=password"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -597,13 +472,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithIdToken() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -616,7 +485,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=id_token"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -633,13 +501,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithWeb3Ethereum() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -652,7 +514,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=web3"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -670,13 +531,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithWeb3Solana() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -689,7 +544,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=web3"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -705,22 +559,16 @@ struct AuthClientTests {
 
   @Test
   func signInWithWeb3UnsupportedChainError() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 400,
-      data: [
-        .post: Data(
-          """
-          {
-            "error_code": "web3_unsupported_chain",
-            "msg": "Unsupported chain"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .post, "token", status: .badRequest,
+      data: Data(
+        """
+        {
+          "error_code": "web3_unsupported_chain",
+          "msg": "Unsupported chain"
+        }
+        """.utf8)
     )
-    .register()
 
     let sut = makeSUT()
 
@@ -742,13 +590,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithOTPUsingEmail() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("otp"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "otp") {
       #"""
       curl \
       	--request POST \
@@ -761,7 +603,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/otp?redirect_to=https://supabase.com"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -778,13 +619,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithOTPUsingPhone() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("otp"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data(#"{"message_id":"SM123"}"#.utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "otp", data: Data(#"{"message_id":"SM123"}"#.utf8)) {
       #"""
       curl \
       	--request POST \
@@ -797,7 +632,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/otp"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -816,11 +650,7 @@ struct AuthClientTests {
 
   @Test
   func signInWithOTPUsingPhoneWithoutAMessageID() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("otp"),
-      statusCode: 200,
-      data: [.post: Data("{}".utf8)]
-    ).register()
+    transport.stub(.post, "otp", data: Data("{}".utf8))
     let sut = makeSUT()
 
     let messageID = try await sut.signInWithOTP(phone: "+1 202-918-2132")
@@ -850,13 +680,7 @@ struct AuthClientTests {
 
   @Test
   func refreshSession() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -869,7 +693,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=refresh_token"
       """#
     }
-    .register()
 
     let sut = makeSUT()
     var session = Session.valid
@@ -881,13 +704,7 @@ struct AuthClientTests {
   #if !os(Linux) && !os(Windows) && !os(Android)
     @Test
     func sessionFromURL() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("user"),
-        ignoreQuery: true,
-        statusCode: 200,
-        data: [.get: MockData.user]
-      )
-      .snapshotRequest {
+      transport.stub(.get, "user", data: MockData.user) {
         #"""
         curl \
         	--header "Authorization: bearer accesstoken" \
@@ -897,11 +714,10 @@ struct AuthClientTests {
         	"http://localhost:54321/auth/v1/user"
         """#
       }
-      .register()
 
       let currentDate = Date()
 
-      let sut = makeSUT(date: { currentDate })
+      let sut = makeSUT(date: { currentDate }, autoRefresh: .manual)
 
       let url = URL(
         string:
@@ -924,12 +740,7 @@ struct AuthClientTests {
 
   @Test
   func importSessionWithAFutureExpirationDate() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [.get: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.get, "user", data: MockData.user) {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I" \
@@ -939,7 +750,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/user"
       """#
     }
-    .register()
 
     let sut = makeSUT()
     try await sut.seedSession(.valid)
@@ -952,13 +762,7 @@ struct AuthClientTests {
 
   @Test
   func importSessionWithAnExpiredToken() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "token", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -971,7 +775,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/token?grant_type=refresh_token"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -983,13 +786,7 @@ struct AuthClientTests {
 
   @Test
   func verifyOTPUsingEmail() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "verify", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -1002,7 +799,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/verify"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -1021,13 +817,7 @@ struct AuthClientTests {
 
   @Test
   func verifyOTPUsingPhone() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "verify", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -1040,7 +830,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/verify"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -1053,13 +842,7 @@ struct AuthClientTests {
 
   @Test
   func verifyOTPUsingTokenHash() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "verify", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -1072,7 +855,6 @@ struct AuthClientTests {
       	"http://localhost:54321/auth/v1/verify"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -1090,12 +872,7 @@ struct AuthClientTests {
   func verifyOTPWithTokenHashEmitsTheEventForItsType(
     type: EmailOTPType, event: AuthEvent
   ) async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "verify", data: MockData.session)
     let sut = makeSUT()
 
     try await assertAuthStateChanges(
@@ -1107,12 +884,7 @@ struct AuthClientTests {
 
   @Test(arguments: ["email", "phone"])
   func verifyOTPForAChangeOfTheSignedInUserEmitsUserUpdated(channel: String) async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "verify", data: MockData.session)
     let sut = makeSUT()
     let held = try AuthClient.Configuration.jsonDecoder.decode(
       Session.self, from: MockData.session
@@ -1134,12 +906,7 @@ struct AuthClientTests {
 
   @Test
   func verifyOTPWithEmailForRecoveryEmitsPasswordRecovery() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "verify", data: MockData.session)
     let sut = makeSUT()
 
     try await assertAuthStateChanges(
@@ -1158,12 +925,7 @@ struct AuthClientTests {
   func verifyOTPWithPhoneEmitsTheEventForItsType(
     type: PhoneOTPType, event: AuthEvent
   ) async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "verify", data: MockData.session)
     let sut = makeSUT()
 
     try await assertAuthStateChanges(
@@ -1175,12 +937,7 @@ struct AuthClientTests {
 
   @Test
   func verifyOTPForEmailChangeSingleConfirmation() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("verify"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.emailChangeSingleConfirmation]
-    ).register()
+    transport.stub(.post, "verify", data: MockData.emailChangeSingleConfirmation)
 
     let sut = makeSUT()
 
@@ -1200,7 +957,6 @@ struct AuthClientTests {
     #expect(sut.currentSession == nil)
   }
 
-
   func mockJWKS(_ key: JWK, url: URL = clientURL) throws -> LockIsolated<Int> {
     let fields: [String: String?] = [
       "kty": key.kty, "alg": key.alg, "kid": key.kid, "crv": key.crv, "x": key.x, "y": key.y,
@@ -1208,30 +964,30 @@ struct AuthClientTests {
     let data = try JSONSerialization.data(
       withJSONObject: ["keys": [fields.compactMapValues { $0 }]]
     )
-    return countingMock(url: url.appendingPathComponent(".well-known/jwks.json"), data: data)
+    return countGETRequests(to: url.appendingPathComponent(".well-known/jwks.json"), data: data)
   }
 
   func mockUser() throws -> LockIsolated<Int> {
     let user = User(fromMockNamed: "user")
-    return countingMock(
-      url: clientURL.appendingPathComponent("user"),
+    return countGETRequests(
+      to: clientURL.appendingPathComponent("user"),
       data: try AuthClient.Configuration.jsonEncoder.encode(user)
     )
   }
 
-  func countingMock(url: URL, data: Data) -> LockIsolated<Int> {
+  /// Answers every `GET` request to `url`, whatever its query, with `data`, and returns the number
+  /// of requests it has answered.
+  func countGETRequests(to url: URL, data: Data) -> LockIsolated<Int> {
     let requests = LockIsolated(0)
-    var mock = Mock(
-      url: url,
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: data]
-    )
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+    transport.respond(
+      when: { request in
+        request.method == .get && request.url?.host == url.host && request.url?.port == url.port
+          && request.url?.path == url.path
+      }
+    ) { _, _ in
       requests.withValue { $0 += 1 }
-    })
-    mock.register()
+      return (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), data)
+    }
     return requests
   }
 
@@ -1242,7 +998,8 @@ struct AuthClientTests {
     url: URL = clientURL,
     storageKey: String = uniqueStorageKey(),
     date: @escaping @Sendable () -> Date = { Self.now },
-    platform: AuthPlatform = .live
+    platform: AuthPlatform = .live,
+    autoRefresh: AuthClient.AutoRefreshPolicy = .automatic
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: url,
@@ -1250,6 +1007,7 @@ struct AuthClientTests {
       headers: HTTPFields(["apikey": apiKey]),
       storage: storage,
       http: .init(transport: transport),
+      autoRefresh: autoRefresh,
       now: date)
 
     var pkce = PKCE.live
@@ -1275,6 +1033,7 @@ struct AuthClientTests {
     column: UInt = #column
   ) async throws -> T {
     let events = sut.events()
+    try await sut.dependencies.sessionStore.load()
     let result = try await action()
     sut.dependencies.sessionStore.finishChanges()
     let changes = try await withTimeout(timeout) { await events.collect() }
@@ -1321,16 +1080,29 @@ enum MockData {
   )
 }
 
-extension Mock {
-  /// Registers the mock and returns the JSON body of the last request it served.
-  func registerCapturingBody() -> LockIsolated<JSONValue?> {
-    let body = LockIsolated<JSONValue?>(nil)
-    var mock = self
-    mock.onRequestHandler = OnRequestHandler(httpBodyType: JSONValue.self) { _, json in
-      body.setValue(json)
-    }
-    mock.register()
-    return body
+extension RecordingTransport {
+  /// Compares the first `method` request to `path` with an inline snapshot, in curl form, for a
+  /// test whose stub is the closure form of `stub`, which has no snapshot of its own.
+  ///
+  /// Linux skips it, as the curl snapshot differs there.
+  fileprivate func assertFirstRequestSnapshot(
+    _ method: HTTPRequest.Method,
+    _ path: String,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    line: UInt = #line,
+    column: UInt = #column,
+    matches expected: (() -> String)? = nil
+  ) throws {
+    #if !os(Linux) && !os(Android)
+      let (head, body) = try #require(requests(method, path).first)
+      var urlRequest = try #require(URLRequest(httpRequest: head))
+      urlRequest.httpBody = body
+      assertInlineSnapshot(
+        of: urlRequest, as: ._curl, matches: expected,
+        fileID: fileID, file: filePath, function: function, line: line, column: column)
+    #endif
   }
 }
 
@@ -1349,4 +1121,3 @@ extension Mock {
     }
   }
 #endif
-
