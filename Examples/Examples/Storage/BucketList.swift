@@ -49,7 +49,7 @@ struct BucketList: View {
         Button("Add") {
           Task {
             do {
-              try await supabase.storage.createBucket("bucket-\(UUID().uuidString)")
+              try await supabaseClient.storage.createBucket("bucket-\(UUID().uuidString)")
               await load()
             } catch {}
           }
@@ -62,7 +62,7 @@ struct BucketList: View {
   private func load() async {
     do {
       self.buckets = .inFlight
-      let buckets = try await supabase.storage.listBuckets()
+      let buckets = try await supabaseClient.storage.listBuckets()
       self.buckets = .result(.success(buckets))
     } catch {
       buckets = .result(.failure(error))

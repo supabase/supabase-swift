@@ -9,11 +9,7 @@ import Supabase
 import SwiftUI
 
 struct HomeView: View {
-  @Environment(AuthController.self) var auth
-
   var body: some View {
-    @Bindable var auth = auth
-
     TabView {
       NavigationStack {
         DatabaseExamplesView()
@@ -48,31 +44,6 @@ struct HomeView: View {
         .tabItem {
           Label("Profile", systemImage: "person.circle")
         }
-    }
-    .sheet(isPresented: $auth.isPasswordRecoveryFlow) {
-      UpdatePasswordView()
-    }
-  }
-
-  struct UpdatePasswordView: View {
-    @Environment(\.dismiss) var dismiss
-
-    @State var password: String = ""
-
-    var body: some View {
-      Form {
-        SecureField("Password", text: $password)
-          .textContentType(.newPassword)
-
-        Button("Update password") {
-          Task {
-            do {
-              try await supabase.auth.updateUser(UserAttributes(password: password))
-              dismiss()
-            } catch {}
-          }
-        }
-      }
     }
   }
 }

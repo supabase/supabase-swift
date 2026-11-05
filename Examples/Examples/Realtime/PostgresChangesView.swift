@@ -80,7 +80,7 @@ struct PostgresChangesView: View {
   func observeChanges() async {
     // A new topic for each run, so a quick toggle never meets the channel that the previous run is
     // still removing.
-    let channel = await supabase.channel("postgres-changes-example-\(UUID().uuidString)")
+    let channel = await supabaseClient.channel("postgres-changes-example-\(UUID().uuidString)")
     let changes = await channel.postgresChanges(table: "todos")
 
     do {
@@ -108,7 +108,7 @@ struct PostgresChangesView: View {
       }
     }
 
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 }
 

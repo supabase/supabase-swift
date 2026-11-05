@@ -139,7 +139,7 @@ struct BucketOperationsView: View {
         !fileSizeLimit.isEmpty ? Int64(fileSizeLimit).map { ByteCount(bytes: $0) } : nil
       let options = CreateBucketOptions(isPublic: isPublic, fileSizeLimit: sizeLimit)
 
-      try await supabase.storage.createBucket(bucketName, options: options)
+      try await supabaseClient.storage.createBucket(bucketName, options: options)
 
       successMessage = "Bucket '\(bucketName)' created successfully!"
       bucketName = ""
@@ -159,7 +159,7 @@ struct BucketOperationsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
     } catch {
       self.error = error
     }
@@ -176,7 +176,7 @@ struct BucketOperationsView: View {
       let newPublic = !bucket.isPublic
       let options = UpdateBucketOptions(isPublic: newPublic)
 
-      try await supabase.storage.updateBucket(bucket.id, options: options)
+      try await supabaseClient.storage.updateBucket(bucket.id, options: options)
 
       successMessage = "Bucket '\(bucket.name)' is now \(newPublic ? "public" : "private")"
       await loadBuckets()
@@ -193,7 +193,7 @@ struct BucketOperationsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      try await supabase.storage.emptyBucket(bucket.id)
+      try await supabaseClient.storage.emptyBucket(bucket.id)
 
       successMessage = "Bucket '\(bucket.name)' emptied successfully!"
     } catch {
@@ -209,7 +209,7 @@ struct BucketOperationsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      try await supabase.storage.deleteBucket(bucket.id)
+      try await supabaseClient.storage.deleteBucket(bucket.id)
 
       successMessage = "Bucket '\(bucket.name)' deleted successfully!"
       await loadBuckets()

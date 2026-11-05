@@ -238,7 +238,7 @@ struct FileManagementView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -254,7 +254,7 @@ struct FileManagementView: View {
       isLoading = true
       defer { isLoading = false }
 
-      files = try await supabase.storage
+      files = try await supabaseClient.storage
         .from(selectedBucket)
         .list()
     } catch {
@@ -272,7 +272,7 @@ struct FileManagementView: View {
 
       switch selectedOperation {
       case .move:
-        try await supabase.storage
+        try await supabaseClient.storage
           .from(selectedBucket)
           .move(
             from: sourcePath, to: destinationPath,
@@ -280,7 +280,7 @@ struct FileManagementView: View {
         successMessage = "File moved successfully to \(destinationPath)"
 
       case .copy:
-        let copy = try await supabase.storage
+        let copy = try await supabaseClient.storage
           .from(selectedBucket)
           .copy(
             from: sourcePath, to: destinationPath,
@@ -288,7 +288,7 @@ struct FileManagementView: View {
         successMessage = "File copied successfully to \(copy.fullPath)"
 
       case .delete:
-        let removed = try await supabase.storage
+        let removed = try await supabaseClient.storage
           .from(selectedBucket)
           .remove(paths: [sourcePath])
         successMessage = "Deleted \(removed.count) file(s)"

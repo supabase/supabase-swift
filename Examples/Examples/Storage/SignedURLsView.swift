@@ -205,7 +205,7 @@ struct SignedURLsView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -226,7 +226,7 @@ struct SignedURLsView: View {
         throw NSError(domain: "Invalid expiry time", code: -1)
       }
 
-      signedURL = try await supabase.storage
+      signedURL = try await supabaseClient.storage
         .from(selectedBucket)
         .createSignedURL(path: filePath, expiresIn: .seconds(expiresInSeconds))
     } catch {
@@ -242,7 +242,7 @@ struct SignedURLsView: View {
       isLoading = true
       defer { isLoading = false }
 
-      signedUploadURL = try await supabase.storage
+      signedUploadURL = try await supabaseClient.storage
         .from(selectedBucket)
         .createSignedUploadURL(path: filePath)
     } catch {
@@ -256,7 +256,7 @@ struct SignedURLsView: View {
       error = nil
       publicURL = nil
 
-      publicURL = supabase.storage
+      publicURL = supabaseClient.storage
         .from(selectedBucket)
         .publicURL(path: filePath)
     } catch {

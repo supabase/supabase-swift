@@ -31,6 +31,7 @@ private struct WebAuthnSetupNote: View {
 }
 
 struct SignInWithPasskeyView: View {
+  @Environment(\.supabase) private var supabase
   @State private var error: Error?
   @State private var isLoading = false
 
@@ -90,6 +91,7 @@ struct SignInWithPasskeyView: View {
 }
 
 struct WebAuthnPasskeysView: View {
+  @Environment(\.supabase) private var supabase
   @State private var passkeys: [PasskeyListItem] = []
   @State private var webAuthnFactors: [Factor] = []
   @State private var newFactorName = "My Passkey"

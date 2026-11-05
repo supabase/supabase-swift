@@ -73,7 +73,8 @@ struct StreamingChatView: View {
   private func stream(prompt: String) async {
     defer { request = nil }
     do {
-      let response = try await supabase.functions.stream("chat", body: .json(["prompt": prompt]))
+      let response = try await supabaseClient.functions.stream(
+        "chat", body: .json(["prompt": prompt]))
 
       var buffer = Data()
       for try await chunk in response.body {

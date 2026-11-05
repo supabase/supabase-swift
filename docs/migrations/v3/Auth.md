@@ -226,7 +226,8 @@ Changes that still compile but behave differently. Check each one by hand.
 - **No email or phone is `nil`.** `User.email` and `User.phone` are `nil`, not `""`, when the
   user has none. Search for `email == ""`, `phone == ""`, `email?.isEmpty`, and `phone?.isEmpty`.
 - **No MFA factors is `[]`.** `User.factors` is `[]`, not `nil`, when the user has no factors.
-  Search for `factors == nil` and `if let factors`.
+  The type is still `[Factor]?`, so `user.factors ?? []` is the way to read it. Search for
+  `factors == nil` and `if let factors`.
 - **An identity needs `identity_id`.** A `UserIdentity` without `identity_id` now fails to decode,
   and so does the `User` that holds it. v2 filled in the all-zero UUID, which
   `unlinkIdentity(_:)` then sent to the server. Search for `00000000-0000-0000-0000-000000000000`.
@@ -274,6 +275,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
 | `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
 | `AuthClient.Configuration.redirectToURL` | `redirectTo` |
+| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | unchanged; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
 | `AuthClient.Configuration` `let` properties | `var` properties |
 | `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
@@ -464,6 +466,35 @@ try await supabase.auth.signInWithOAuth(
 )
 ```
 
+To show the page with SwiftUI's `webAuthenticationSession` (iOS 16.4 and later), read it from the
+environment and pass it through a `ClosurePresenter`. `callbackScheme` is `nil` when no redirect
+URL is set, so give the system a scheme of your own to fall back on.
+
+```swift
+// v3
+struct SignInView: View {
+  @Environment(\.supabase) private var supabase
+  @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+
+  var body: some View {
+    Button("Sign in with GitHub") {
+      Task {
+        try await supabase.auth.signInWithOAuth(
+          .github,
+          options: OAuthOptions(redirectTo: URL(string: "myapp://login-callback")),
+          presenter: ClosurePresenter { [webAuthenticationSession] url, callbackScheme in
+            try await webAuthenticationSession.authenticate(
+              using: url,
+              callbackURLScheme: callbackScheme ?? "myapp"
+            )
+          }
+        )
+      }
+    }
+  }
+}
+```
+
 A user who cancels now gets `CancellationError`. Cancelling the task that awaits the call closes
 the page and throws `CancellationError` too. On tvOS, the system cannot close the page, so the
 call throws and the page stays until the user dismisses it. A new page cannot open before then.
@@ -549,6 +580,53 @@ if case .signedIn(let session, _)? = try await supabase.auth.handleRedirect(url)
   show(session.user)
 }
 ```
+
+Use `isAuthRedirect(_:)` where several handlers share one URL entry point, for example to keep
+your redirect away from another SDK's URL handler. It reads only the query and the fragment, not
+the scheme or host: any URL with `code`, `error`, or `access_token` counts, and another SDK's
+callback can carry them. Check your own scheme too:
+
+```swift
+// v3
+func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+  guard let url = contexts.first?.url else { return }
+  if url.scheme == "myapp", supabase.auth.isAuthRedirect(url) { return }
+  ThirdPartySDK.open(url)
+}
+```
+
+## Password recovery needs the redirect result or `.passwordRecovery`
+
+A password reset link signs the user in, so a root view that switches on the session shows the
+home screen. To show an "update password" screen, react to the link. `handleRedirect(_:)` returns
+`.signedIn(_, verification: .recovery)` for it, and the client also emits `.passwordRecovery`. With
+PKCE, which v3 always uses, the event fires too; v2 emitted it only in the implicit flow. The event
+also covers `verifyOTP` with type `.recovery`, which has no redirect URL. `verification` is an
+`EmailOTPType?`, and it is `nil` for an OAuth sign-in.
+
+```swift
+// v2
+for await (event, _) in supabase.auth.authStateChanges where event == .passwordRecovery {
+  isPasswordRecovery = true
+}
+// v3
+.onOpenURL { url in
+  Task {
+    if case .signedIn(_, verification: .recovery)? = try await supabase.handleRedirect(url) {
+      isPasswordRecovery = true
+    }
+  }
+}
+.task {
+  for await change in supabase.auth.events() where change.event == .passwordRecovery {
+    isPasswordRecovery = true
+  }
+}
+```
+
+Handle each URL in one place. `handleRedirect(_:)` returns the first result when it sees the same
+code or token again, so a second handler gets the same result and sends no request. It remembers
+only the last few redirects of the running process, so do not rely on it across launches.
 
 ## `flowType` is removed
 
@@ -666,6 +744,36 @@ do {
   if aal.nextLevel != aal.currentLevel { showMFAPrompt() }
 } catch let error as AuthError where error.kind == .sessionMissing {
   showSignIn()
+}
+```
+
+## Sign in with an ID token takes a `Nonce`
+
+`signInWithIDToken(_:)` takes `IDTokenCredentials`. v3 adds `Nonce` to tie the token to one
+attempt. Generate one for each attempt, send `hashed` to the provider, and pass `raw` to the
+server. Apple's `SignInWithAppleButton` uses `request.nonce`. `linkIdentity(idToken:)` takes the
+same credentials.
+
+```swift
+// v2
+SignInWithAppleButton { request in
+  request.requestedScopes = [.email, .fullName]
+} onCompletion: { result in
+  // ...
+  try await supabase.auth.signInWithIdToken(
+    credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken))
+}
+// v3
+@State private var nonce = Nonce.generate()
+
+SignInWithAppleButton { request in
+  nonce = Nonce.generate()
+  request.requestedScopes = [.email, .fullName]
+  request.nonce = nonce.hashed
+} onCompletion: { result in
+  // ...
+  try await supabase.auth.signInWithIDToken(
+    IDTokenCredentials(provider: .apple, idToken: idToken, nonce: nonce.raw))
 }
 ```
 
@@ -836,6 +944,59 @@ let task = Task {
 }
 task.cancel()
 ```
+
+## `AuthModel` replaces a hand-written observable wrapper
+
+`AuthClient` is `Sendable`, not `@Observable`. Many v2 apps wrapped `authStateChanges` in their own
+`@Observable` class. On iOS 17, macOS 14, tvOS 17, watchOS 10, and visionOS 1 or later, use
+`AuthModel` instead. It reads `status` (`.loading`, `.signedOut(SignOutReason?)`,
+`.signedIn(Session)`) and has `session`, `user`, and `isLoading`. It keeps only the status, so consume `events()` too for an
+event such as `.passwordRecovery`. The model does not retain the client; keep the client alive.
+
+The SDK ships no SwiftUI environment key. Declare one with `@Entry` to give views the client. Use the same client as the model.
+
+```swift
+// v2
+@Observable @MainActor final class AuthController {
+  var session: Session?
+  init() {
+    Task {
+      for await (_, session) in supabase.auth.authStateChanges { self.session = session }
+    }
+  }
+}
+// v3
+let supabaseClient = SupabaseClient(supabaseURL: url, supabaseKey: key)
+
+extension EnvironmentValues {
+  @Entry var supabase = supabaseClient
+}
+
+@main struct MyApp: App {
+  @State private var auth = AuthModel(client: supabaseClient.auth)
+
+  var body: some Scene {
+    WindowGroup { RootView().environment(auth) }
+  }
+}
+
+struct RootView: View {
+  @Environment(AuthModel.self) private var auth
+
+  var body: some View {
+    switch auth.status {
+    case .loading: ProgressView()
+    case .signedOut: SignInView()
+    case .signedIn: HomeView()
+    }
+  }
+}
+```
+
+`auth.user?.id` reads the signed-in user without an `await`. The v2 property `try await
+supabase.auth.session` is the method `try await supabase.auth.session()` on the client, not on the
+model; use it when you need a session that is not expired. For iOS 16, see "Support iOS 16" in the DocC article "Observing auth state in
+SwiftUI".
 
 ## `didChangeAuthStateNotification` is removed
 

@@ -61,7 +61,7 @@ struct BroadcastView: View {
   }
 
   func observeMessages() async {
-    let channel = await supabase.channel("broadcast-example") {
+    let channel = await supabaseClient.channel("broadcast-example") {
       $0.broadcast.receiveOwnMessages = true
     }
 
@@ -87,7 +87,7 @@ struct BroadcastView: View {
     }
 
     self.channel = nil
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 
   func sendMessage() {

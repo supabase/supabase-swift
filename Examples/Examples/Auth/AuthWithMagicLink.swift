@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct AuthWithMagicLink: View {
+  @Environment(\.supabase) private var supabase
   @State var email = ""
   @State var actionState: ActionState<Void, Error> = .idle
   @State var successMessage: String?
@@ -103,9 +104,6 @@ struct AuthWithMagicLink: View {
     }
     .navigationTitle("Magic Link")
     .gitHubSourceLink()
-    .onOpenURL { url in
-      Task { await onOpenURL(url) }
-    }
   }
 
   private func signInWithMagicLinkTapped() async {
@@ -117,17 +115,6 @@ struct AuthWithMagicLink: View {
           email: email,
           options: EmailOTPOptions(redirectTo: Constants.redirectToURL)
         )
-      }
-    )
-  }
-
-  private func onOpenURL(_ url: URL) async {
-    debug("received url: \(url)")
-
-    actionState = .inFlight
-    actionState = await .result(
-      Result { @Sendable in
-        try await supabase.auth.handleRedirect(url)
       }
     )
   }

@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct SignInAnonymously: View {
+  @Environment(\.supabase) private var supabase
   @State private var actionState: ActionState<Void, Error> = .idle
 
   var body: some View {
