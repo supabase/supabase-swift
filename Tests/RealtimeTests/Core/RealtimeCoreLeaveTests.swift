@@ -197,16 +197,109 @@ struct RealtimeCoreLeaveTests {
     #expect(harness.core.channels[.room] == nil)
   }
 
-  /// `phx_error` ends the join like `phx_close`, but the channel stays, as today.
+  /// `phx_error` on a subscribed channel fails its pushes, waits, and joins again, as
+  /// supabase-js does. The confirmed rejoin emits `resubscribed`.
   @Test
-  func serverErrorUnsubscribesAndKeepsTheChannel() {
+  func serverErrorWhileSubscribedWaitsAndRejoins() throws {
     var harness = Self.subscribed()
+    let push = harness.waiter()
+    harness.core.channels.update(.room) { $0.pendingPushes["7"] = push }
 
     #expect(
       harness.send(.frame(Self.error(joinRef: "1"))) == [
-        .publishChannelStatus(.room, .unsubscribed)
+        .resume(push, .failure(.channelError)),
+        .cancel(.pushTimeout(channel: .room, ref: "7")),
+        .publishChannelStatus(
+          .room, .resubscribing(attempt: 1, retryIn: .seconds(1), lastError: .channelError)),
+        .schedule(.rejoin(channel: .room), after: .seconds(1)),
       ])
-    #expect(harness.core.channels[.room]?.phase == .unsubscribed)
+    #expect(harness.core.channels[.room]?.currentJoinRef == nil)
+
+    #expect(
+      harness.send(.timerFired(.rejoin(channel: .room))) == [
+        .publishChannelStatus(.room, .subscribing(attempt: 2)),
+        .send(try Self.join(ref: "2")),
+        .schedule(.joinTimeout(channel: .room, ref: "2"), after: .seconds(10)),
+      ])
+    #expect(
+      harness.send(.frame(Self.reply(ref: "2"))) == [
+        .publishChannelStatus(.room, .subscribed),
+        .deliver(.room, .event(.resubscribed)),
+        .cancel(.joinTimeout(channel: .room, ref: "2")),
+      ])
+  }
+
+  /// A rejoin after `phx_error` backs off like any other: the next failure waits 2 s.
+  @Test
+  func serverErrorAgainBacksOff() {
+    var harness = Self.subscribed()
+    _ = harness.send(.frame(Self.error(joinRef: "1")))
+    _ = harness.send(.timerFired(.rejoin(channel: .room)))
+
+    #expect(
+      harness.send(.frame(Self.error(joinRef: "2"))) == [
+        .publishChannelStatus(
+          .room, .resubscribing(attempt: 2, retryIn: .seconds(2), lastError: .channelError)),
+        .schedule(.rejoin(channel: .room), after: .seconds(2)),
+        .cancel(.joinTimeout(channel: .room, ref: "2")),
+      ])
+  }
+
+  /// `phx_error` for a join in flight counts as a failed attempt: the caller keeps waiting.
+  @Test
+  func serverErrorWhileJoiningRetriesAndKeepsTheCaller() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
+
+    #expect(
+      harness.send(.frame(Self.error(joinRef: "1"))) == [
+        .publishChannelStatus(
+          .room, .resubscribing(attempt: 1, retryIn: .seconds(1), lastError: .channelError)),
+        .schedule(.rejoin(channel: .room), after: .seconds(1)),
+        .cancel(.joinTimeout(channel: .room, ref: "1")),
+      ])
+    #expect(harness.core.channels[.room]?.subscribeWaiters == [w])
+  }
+
+  /// A join that timed out can still error on the server. The channel keeps its wait.
+  @Test
+  func serverErrorForATimedOutJoinKeepsTheWait() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(Self.subscribe(w))
+    _ = harness.send(.timerFired(.joinTimeout(channel: .room, ref: "1")))
+    let phase = harness.core.channels[.room]?.phase
+
+    #expect(harness.send(.frame(Self.error(joinRef: "1"))) == [])
+    #expect(harness.core.channels[.room]?.phase == phase)
+    #expect(harness.core.channels[.room]?.currentJoinRef == nil)
+    #expect(harness.core.channels[.room]?.subscribeWaiters == [w])
+  }
+
+  @Test
+  func repeatedServerErrorDuringTheWaitIsIgnored() {
+    var harness = Self.subscribed()
+    _ = harness.send(.frame(Self.error(joinRef: "1")))
+
+    #expect(harness.send(.frame(Self.error(joinRef: "1"))) == [])
+    #expect(
+      harness.core.channels[.room]?.phase
+        == .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: .channelError))
+  }
+
+  @Test
+  func unsubscribeDuringTheWaitAfterServerErrorSendsNoLeave() {
+    var harness = Self.subscribed()
+    _ = harness.send(.frame(Self.error(joinRef: "1")))
+    let w = harness.waiter()
+
+    #expect(
+      harness.send(.unsubscribe(channel: .room, waiter: w)) == [
+        .publishChannelStatus(.room, .unsubscribed),
+        .cancel(.rejoin(channel: .room)),
+        .resume(w, .success),
+      ])
   }
 
   @Test

@@ -737,7 +737,7 @@ struct RealtimeChannelTests {
   #if canImport(Darwin)
     @Test
     @MainActor
-    func channelErrorResetsSubscribedStatus() async throws {
+    func channelErrorWaitsToRejoin() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -776,6 +776,16 @@ struct RealtimeChannelTests {
       try await socket.connect()
       try? await channel.subscribe()
       #expect(await channel.status == .subscribed)
+      // The rejoin runs on the real clock, so read the status stream: it keeps every change.
+      let sawRejoinWait = LockIsolated(false)
+      let statuses = await channel.statusChanges()
+      let watcher = Task {
+        for await status in statuses where status == .resubscribing {
+          sawRejoinWait.setValue(true)
+          return
+        }
+      }
+      defer { watcher.cancel() }
 
       server.send(
         RealtimeMessage(
@@ -787,8 +797,8 @@ struct RealtimeChannelTests {
         )
       )
 
-      await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      #expect(await channel.status == .unsubscribed)
+      await waitUntil(timeout: 2) { sawRejoinWait.value }
+      #expect(sawRejoinWait.value)
 
       await socket.disconnect()
     }

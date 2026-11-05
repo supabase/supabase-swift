@@ -233,9 +233,10 @@ struct RealtimeCore {
       return receiveHeartbeatReply(message)
     case .frame(let message) where message.event == ChannelEvent.system:
       return receiveSystem(message)
-    case .frame(let message)
-    where message.event == ChannelEvent.close || message.event == ChannelEvent.error:
+    case .frame(let message) where message.event == ChannelEvent.close:
       return receiveClose(message)
+    case .frame(let message) where message.event == ChannelEvent.error:
+      return receiveChannelError(message)
     case .frame(let message):
       return receiveFrame(message)
     case .binaryBroadcast(let broadcast):

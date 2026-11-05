@@ -172,8 +172,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// the same channel throws ``RealtimeError/Kind-swift.struct/channelRemoved``. Get a new
   /// channel from ``RealtimeClient/channel(_:configure:)``.
   ///
-  /// There is no attempt limit. After a timeout, a lost connection, or a transient join error,
-  /// the channel joins again after 1, 2 and 5 s, then every 10 s; after a rate limit it waits
+  /// There is no attempt limit. After a timeout, a lost connection, a transient join error, or
+  /// a server channel error (`phx_error`), the channel joins again after 1, 2 and 5 s, then
+  /// every 10 s; after a rate limit it waits
   /// 30 s. An expired token gets one rejoin at once, with a token fetched again from the
   /// `accessToken` callback. Cancel the calling task to stop waiting: when no other caller
   /// waits for the join, the channel leaves the topic.

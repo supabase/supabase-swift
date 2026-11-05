@@ -344,7 +344,7 @@ extension RealtimeCore {
   }
 
   /// Decides what follows a join the server refused: wait and rejoin, or fail the subscribe.
-  private mutating func joinAttemptFailed(
+  mutating func joinAttemptFailed(
     _ channel: ChannelID, attempt: Int, error: RealtimeError
   ) -> [Effect] {
     switch error.joinRecovery {

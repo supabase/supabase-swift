@@ -155,39 +155,72 @@ extension RealtimeCore {
       event: ChannelEvent.leave, payload: [:])
   }
 
-  // MARK: Server close
+  // MARK: Server close and error
 
-  /// Applies `phx_close` or `phx_error` for the current join. A join in flight fails with
-  /// ``RealtimeError/channelClosedByServer``, a leave is over, and any other join ends.
-  /// `phx_close` also finishes the channel's streams and drops the channel, as today's
-  /// `client.remove(self)`. The message goes to the channel its `join_ref` names, or to the live
-  /// channel of its topic when it has none. Either message for an older join matches no channel
-  /// and is dropped.
+  /// Applies `phx_close` for the current join (see ``endJoinClosedByServer(_:)``). Unless it
+  /// answers `phx_leave`, it also finishes the channel's streams and drops the channel, as
+  /// today's `client.remove(self)`. The message goes to the channel its `join_ref` names, or to
+  /// the live channel of its topic when it has none. A close for an older join matches no
+  /// channel and is dropped.
   mutating func receiveClose(_ message: RealtimeMessage) -> [Effect] {
     guard let channel = routedChannel(message, joinRef: message.joinRef),
       let record = channels[channel]
     else { return [] }
-    logger.debug("Server closed channel '\(topic(of: channel))' (\(message.event))")
+    logger.debug("Server closed channel '\(topic(of: channel))'")
+    let effects = endJoinClosedByServer(channel)
+    // The answer to `phx_leave`: the channel stays, so it can subscribe again.
+    if case .leaving = record.phase { return effects }
+    return effects + dropChannel(channel)
+  }
 
-    var effects: [Effect]
+  /// Applies `phx_error` for the current join, as supabase-js does: the server lost the join,
+  /// so a subscribed channel or a join in flight waits and joins again. Routing is as for
+  /// `phx_close`.
+  mutating func receiveChannelError(_ message: RealtimeMessage) -> [Effect] {
+    guard let channel = routedChannel(message, joinRef: message.joinRef),
+      let record = channels[channel]
+    else { return [] }
+    logger.debug("Server reported an error on channel '\(topic(of: channel))'")
+    let attempt: Int
     switch record.phase {
-    case .leaving:
-      // The answer to `phx_leave`: the channel stays, so it can subscribe again.
-      return leaveEnded(channel, pushes: .channelClosedByServer, cancelTimer: true)
-    case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry:
-      effects = endJoin(
+    case .subscribed:
+      // The lost join counts as attempt 1.
+      attempt = 1
+      channels.update(channel) { $0.isAutomaticRejoin = true }
+    case .joining(_, let joinAttempt, _):
+      attempt = joinAttempt
+    case .waitingToRetry:
+      // The join that timed out is gone. The wait for the next attempt goes on.
+      channels.update(channel) { $0.timedOutJoinRef = nil }
+      return []
+    case .waitingForSocket, .refreshingToken:
+      // No join is on the server yet, so the one about to go out is not affected.
+      return []
+    case .unsubscribed, .leaving, .failed:
+      return endJoinClosedByServer(channel)
+    }
+    let timer = record.phase.timer(for: channel)
+    return failPendingPushes(channel, with: .channelError)
+      + joinAttemptFailed(channel, attempt: attempt, error: .channelError)
+      + (timer.map { [.cancel($0)] } ?? [])
+  }
+
+  /// Ends the join the server closed: a leave is over, a join in flight fails with
+  /// ``RealtimeError/channelClosedByServer``, and any other join ends.
+  private mutating func endJoinClosedByServer(_ channel: ChannelID) -> [Effect] {
+    switch channels[channel]?.phase {
+    case .leaving?:
+      leaveEnded(channel, pushes: .channelClosedByServer, cancelTimer: true)
+    case .waitingForSocket?, .refreshingToken?, .joining?, .waitingToRetry?:
+      endJoin(
         channel, subscribers: .failure(.channelClosedByServer), pushes: .channelClosedByServer,
         phase: .failed(.channelClosedByServer))
-    case .subscribed, .failed:
-      effects = endJoin(
+    case .subscribed?, .failed?:
+      endJoin(
         channel, subscribers: .cancelled, pushes: .channelClosedByServer, phase: .unsubscribed)
-    case .unsubscribed:
-      effects = []
+    case .unsubscribed?, nil:
+      []
     }
-
-    guard message.event == ChannelEvent.close else { return effects }
-    channels.setRecord(nil, for: channel)
-    return effects + [.finishChannel(channel)]
   }
 
   // MARK: Socket loss and disconnect

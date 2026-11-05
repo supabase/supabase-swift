@@ -42,6 +42,13 @@ Changes that still compile but behave differently. Check each one by hand.
   a waiting `subscribe()` throws the close error and the channel becomes `.failed`, and a
   subscribed channel stays `.subscribing` until you call `connect()`. Search for
   `.unsubscribed` in code that reads `statusChanges()`.
+- **A server error on a channel (`phx_error`) rejoins it.** A subscribed channel goes to
+  `.resubscribing` with `RealtimeError.Kind.channelError` and joins again after 1, 2 and 5 s,
+  then every 10 s, as supabase-js does. It does not become `.unsubscribed`. The rejoin emits
+  `.resubscribed` on `events()`. Pushes that wait for a reply throw `.channelError`. During a
+  join, a `phx_error` counts as a failed attempt, so `subscribe()` keeps waiting instead of
+  throwing `.channelClosedByServer`. Remove code that calls `subscribe()` again after the
+  status becomes `.unsubscribed`.
 - **Cancelling `subscribe()` stops only that call.** While another `subscribe()` call waits for
   the same channel, the join goes on for it. When the last waiting call is cancelled before the
   join is confirmed, the channel rolls back to `.unsubscribed`, and leaves the topic if a join
