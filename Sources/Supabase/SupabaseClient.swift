@@ -246,7 +246,6 @@ public final class SupabaseClient: Sendable {
       )
     }
 
-    let authHTTP = options.auth.http ?? options.global.http
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       storageKey: options.auth.storageKey ?? defaultStorageKey,
@@ -254,12 +253,10 @@ public final class SupabaseClient: Sendable {
       storage: options.auth.storage,
       redirectTo: options.auth.redirectToURL,
       logger: options.auth.logger ?? options.global.logger,
-      http: HTTPClientConfiguration(
-        transport: authHTTP.transport ?? options.global.http.transport ?? URLSessionTransport(),
-        middlewares: options.global.http.middlewares
-          + (options.auth.http?.middlewares ?? [])
-          + [TraceContextMiddleware()],
-        timeout: authHTTP.timeout ?? options.global.http.timeout
+      http: Self.resolveHTTP(
+        global: options.global.http,
+        override: options.auth.http,
+        sdkMiddlewares: [TraceContextMiddleware()]
       ),
       autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
@@ -430,6 +427,23 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
+  /// A module's HTTP configuration: `override` on top of `global`, field by field.
+  ///
+  /// A `nil` transport or timeout in `override` falls back to the global one, and the transport
+  /// to ``URLSessionTransport`` when neither sets one. The middlewares run in this order: the
+  /// global ones, the module's own, then the SDK's.
+  private static func resolveHTTP(
+    global: HTTPClientConfiguration,
+    override: HTTPClientConfiguration?,
+    sdkMiddlewares: [any ClientMiddleware]
+  ) -> HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: override?.transport ?? global.transport ?? URLSessionTransport(),
+      middlewares: global.middlewares + (override?.middlewares ?? []) + sdkMiddlewares,
+      timeout: override?.timeout ?? global.timeout
+    )
+  }
+
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
     options.global.http.transport ?? URLSessionTransport()
@@ -552,23 +566,20 @@ public final class SupabaseClient: Sendable {
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    let http = options.functions.http ?? options.global.http
-    return FunctionsClient(
+    FunctionsClient(
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,
         region: options.functions.region,
-        http: HTTPClientConfiguration(
-          transport: http.transport ?? transport,
-          middlewares: options.global.http.middlewares
-            + (options.functions.http?.middlewares ?? [])
-            + [
-              TraceContextMiddleware(),
-              bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
-                APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
-              },
-            ],
-          timeout: http.timeout ?? options.global.http.timeout
+        http: Self.resolveHTTP(
+          global: options.global.http,
+          override: options.functions.http,
+          sdkMiddlewares: [
+            TraceContextMiddleware(),
+            bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
+              APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+            },
+          ]
         ),
         logger: options.functions.logger ?? options.global.logger,
         decoder: options.functions.decoder
