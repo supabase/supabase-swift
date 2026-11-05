@@ -94,7 +94,6 @@ let package = Package(
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
-        "Mocker",
         "TestHelpers",
       ],
       exclude: [

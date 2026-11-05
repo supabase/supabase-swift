@@ -10,7 +10,6 @@ import Foundation
 import HTTPTypes
 import TestHelpers
 import IssueReporting
-import Mocker
 
 @testable import Auth
 
@@ -27,15 +26,6 @@ extension AuthAdminClient {
   ) -> AuthAdminClient {
     AuthAdminClient(
       url: clientURL, secretKey: secretKey, http: .init(transport: transport))
-  }
-
-  /// An admin client whose requests go to Mocker's registered mocks.
-  static func mocked(secretKey: String = "supabase.secret.key") -> AuthAdminClient {
-    let sessionConfiguration = URLSessionConfiguration.default
-    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    return testing(
-      secretKey: secretKey,
-      http: URLSessionTransport(session: URLSession(configuration: sessionConfiguration)))
   }
 }
 

@@ -78,11 +78,14 @@ struct JWKSCacheTests {
     }
   }
 
-  private static func waitUntil(_ condition: @Sendable () -> Bool) async {
-    while !condition() {
+  /// Returns once `count` callers have started or joined a fetch of `cache`, and fails the test
+  /// when they have not within 10 seconds.
+  private static func waitForJoins(_ count: Int, in cache: JWKSCache) async {
+    let deadline = ContinuousClock.now + .seconds(10)
+    while await cache.joinedFetchCount < count, ContinuousClock.now < deadline {
       await Task.yield()
     }
-    await Task.megaYield()
+    #expect(await cache.joinedFetchCount >= count, "Not every caller joined the fetch.")
   }
 
   @Test
@@ -112,16 +115,12 @@ struct JWKSCacheTests {
   func concurrentMissesShareOneFetch() async throws {
     let gate = Gate()
     let fixture = Fixture(gate: { _ in await gate.wait() })
-    let started = LockIsolated(0)
 
     try await withThrowingTaskGroup(of: JWK?.self) { group in
       for _ in 0..<20 {
-        group.addTask {
-          started.withValue { $0 += 1 }
-          return try await fixture.cache.key(for: "k1")
-        }
+        group.addTask { try await fixture.cache.key(for: "k1") }
       }
-      await Self.waitUntil { started.value == 20 && fixture.fetchCount.value >= 1 }
+      await Self.waitForJoins(20, in: fixture.cache)
       gate.open()
 
       for try await key in group {
@@ -140,16 +139,13 @@ struct JWKSCacheTests {
       }
     })
     _ = try await fixture.cache.key(for: "k1")
-    let started = LockIsolated(0)
 
     try await withThrowingTaskGroup(of: JWK?.self) { group in
       for _ in 0..<20 {
-        group.addTask {
-          started.withValue { $0 += 1 }
-          return try await fixture.cache.key(for: "unknown")
-        }
+        group.addTask { try await fixture.cache.key(for: "unknown") }
       }
-      await Self.waitUntil { started.value == 20 && fixture.fetchCount.value >= 2 }
+      // The priming call above counts as the first join.
+      await Self.waitForJoins(21, in: fixture.cache)
       gate.open()
 
       for try await key in group {
@@ -230,12 +226,10 @@ struct JWKSCacheTests {
       },
       failure: { $0 == 1 }
     )
-    let started = LockIsolated(0)
 
     await withTaskGroup(of: Bool.self) { group in
       for _ in 0..<5 {
         group.addTask {
-          started.withValue { $0 += 1 }
           do {
             _ = try await fixture.cache.key(for: "k1")
             return false
@@ -244,7 +238,7 @@ struct JWKSCacheTests {
           }
         }
       }
-      await Self.waitUntil { started.value == 5 && fixture.fetchCount.value >= 1 }
+      await Self.waitForJoins(5, in: fixture.cache)
       gate.open()
 
       for await threw in group {
@@ -261,19 +255,14 @@ struct JWKSCacheTests {
   func cancelledWaiterLeavesSharedFetchRunning() async throws {
     let gate = Gate()
     let fixture = Fixture(gate: { _ in await gate.wait() })
-    let started = LockIsolated(0)
     let cancelledReturned = LockIsolated(false)
 
     let cancelled = Task {
-      started.withValue { $0 += 1 }
       defer { cancelledReturned.setValue(true) }
       return try await fixture.cache.key(for: "k1")
     }
-    let waiting = Task {
-      started.withValue { $0 += 1 }
-      return try await fixture.cache.key(for: "k1")
-    }
-    await Self.waitUntil { started.value == 2 && fixture.fetchCount.value >= 1 }
+    let waiting = Task { try await fixture.cache.key(for: "k1") }
+    await Self.waitForJoins(2, in: fixture.cache)
 
     cancelled.cancel()
     let deadline = ContinuousClock.now + .seconds(5)
