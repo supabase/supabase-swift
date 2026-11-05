@@ -32,6 +32,7 @@
 		795FA98E2DF354B000F67AFF /* FacebookLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 795FA98D2DF354B000F67AFF /* FacebookLogin */; };
 		7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */ = {isa = PBXBuildFile; productRef = 7962989C2AEBC6F9000AA957 /* SVGView */; };
 		79719ECE2ADF26C400737804 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 79719ECD2ADF26C400737804 /* Supabase */; };
+		79A0D5C12F0000010000AA01 /* PostgrestMacros in Frameworks */ = {isa = PBXBuildFile; productRef = 79A0D5C12F0000010000AA02 /* PostgrestMacros */; };
 		797D664A2B46A1D8007592ED /* Dependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797D66492B46A1D8007592ED /* Dependencies.swift */; };
 		7993B8A92B3C673A009B610B /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8A82B3C673A009B610B /* AuthView.swift */; };
 		7993B8AB2B3C67E0009B610B /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993B8AA2B3C67E0009B610B /* Toast.swift */; };
@@ -225,6 +226,7 @@
 				79E2B55A2B97890F0042CD21 /* GoogleSignInSwift in Frameworks */,
 				7962989D2AEBC6F9000AA957 /* SVGView in Frameworks */,
 				79719ECE2ADF26C400737804 /* Supabase in Frameworks */,
+				79A0D5C12F0000010000AA01 /* PostgrestMacros in Frameworks */,
 				E23A07C8FCD6A470BA41A3F9 /* metamask-ios-sdk in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -402,6 +404,7 @@
 				7956406C2955B3500088A06F /* SwiftUINavigation */,
 				7956406F2955B5190088A06F /* IdentifiedCollections */,
 				79719ECD2ADF26C400737804 /* Supabase */,
+				79A0D5C12F0000010000AA02 /* PostgrestMacros */,
 				7962989C2AEBC6F9000AA957 /* SVGView */,
 				79E2B5572B97890F0042CD21 /* GoogleSignIn */,
 				79E2B5592B97890F0042CD21 /* GoogleSignInSwift */,
@@ -1088,6 +1091,10 @@
 		79719ECD2ADF26C400737804 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
+		};
+		79A0D5C12F0000010000AA02 /* PostgrestMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PostgrestMacros;
 		};
 		79B8F4232B5FED7C0000E839 /* IdentifiedCollections */ = {
 			isa = XCSwiftPackageProductDependency;

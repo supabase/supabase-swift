@@ -10,8 +10,7 @@ import SwiftUI
 
 struct PostgresChangesView: View {
   @State var events: [RealtimeEvent] = []
-  @State var channel: RealtimeChannel?
-  @State var isSubscribed = false
+  @State var isListening = false
   @State var error: Error?
 
   var body: some View {
@@ -23,15 +22,11 @@ struct PostgresChangesView: View {
       }
 
       Section {
-        Button(isSubscribed ? "Unsubscribe" : "Subscribe to Changes") {
-          if isSubscribed {
-            unsubscribe()
-          } else {
-            subscribe()
-          }
+        Button(isListening ? "Unsubscribe" : "Subscribe to Changes") {
+          isListening.toggle()
         }
 
-        if isSubscribed {
+        if isListening {
           Label("Listening for changes...", systemImage: "antenna.radiowaves.left.and.right")
             .foregroundColor(.green)
             .font(.caption)
@@ -75,97 +70,45 @@ struct PostgresChangesView: View {
     }
     .navigationTitle("Postgres Changes")
     .gitHubSourceLink()
-    .onDisappear {
-      unsubscribe()
+    // The task starts when `isListening` turns on, and ends when it turns off or the view goes away.
+    .task(id: isListening) {
+      guard isListening else { return }
+      await observeChanges()
     }
   }
 
-  func subscribe() {
-    Task {
-      do {
-        let channel = await supabase.channel("postgres-changes-example")
+  func observeChanges() async {
+    // A new topic for each run, so a quick toggle never meets the channel that the previous run is
+    // still removing.
+    let channel = await supabase.channel("postgres-changes-example-\(UUID().uuidString)")
+    let changes = await channel.postgresChanges(table: "todos")
 
-        let insertions = await channel.postgresChanges(
-          event: .insert,
-          schema: "public",
-          table: "todos"
+    do {
+      error = nil
+      try await channel.subscribe()
+
+      for await change in changes {
+        // A delete has no `record`; the old row holds the primary key.
+        events.insert(
+          RealtimeEvent(
+            type: change.kind.rawValue,
+            description: (change.record ?? change.oldRecord)?.values.description,
+            timestamp: Date()
+          ),
+          at: 0
         )
-
-        let updates = await channel.postgresChanges(
-          event: .update,
-          schema: "public",
-          table: "todos"
-        )
-
-        let deletes = await channel.postgresChanges(
-          event: .delete,
-          schema: "public",
-          table: "todos"
-        )
-
-        try await channel.subscribe()
-
-        self.channel = channel
-        isSubscribed = true
-
-        Task {
-          for await insertion in insertions {
-            await MainActor.run {
-              events.insert(
-                RealtimeEvent(
-                  type: "INSERT",
-                  description: insertion.record?.values.description ?? "",
-                  timestamp: Date()
-                ),
-                at: 0
-              )
-            }
-          }
+        if events.count > 50 {
+          events.removeLast(events.count - 50)
         }
-
-        Task {
-          for await update in updates {
-            await MainActor.run {
-              events.insert(
-                RealtimeEvent(
-                  type: "UPDATE",
-                  description: update.record?.values.description ?? "",
-                  timestamp: Date()
-                ),
-                at: 0
-              )
-            }
-          }
-        }
-
-        Task {
-          for await _ in deletes {
-            await MainActor.run {
-              events.insert(
-                RealtimeEvent(
-                  type: "DELETE",
-                  description: "Todo deleted",
-                  timestamp: Date()
-                ),
-                at: 0
-              )
-            }
-          }
-        }
+      }
+    } catch {
+      if !Task.isCancelled {
+        self.error = error
+        isListening = false
       }
     }
-  }
 
-  func unsubscribe() {
-    Task {
-      if let channel {
-        await supabase.removeChannel(channel)
-      }
-      await MainActor.run {
-        self.channel = nil
-        isSubscribed = false
-      }
-    }
+    await supabase.removeChannel(channel)
   }
 }
 

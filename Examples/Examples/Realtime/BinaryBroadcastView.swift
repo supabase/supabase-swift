@@ -62,25 +62,18 @@ struct BinaryBroadcastView: View {
         Button("Send") {
           sendBinary()
         }
-        .disabled(inputText.isEmpty)
+        .disabled(inputText.isEmpty || channel == nil)
       }
       .padding()
     }
     .navigationTitle("Binary Broadcast")
     .gitHubSourceLink()
     .task {
-      await subscribe()
-    }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
+      await observeFrames()
     }
   }
 
-  func subscribe() async {
+  func observeFrames() async {
     let channel = await supabase.channel("binary-broadcast-example") {
       $0.broadcast.receiveOwnMessages = true
     }
@@ -88,6 +81,7 @@ struct BinaryBroadcastView: View {
     let messages = await channel.broadcasts(event: "binary_message")
 
     do {
+      error = nil
       try await channel.subscribe()
       self.channel = channel
 
@@ -102,24 +96,26 @@ struct BinaryBroadcastView: View {
         receivedFrames.append(frame)
       }
     } catch {
-      self.error = error
+      if !Task.isCancelled {
+        self.error = error
+      }
     }
+
+    self.channel = nil
+    await supabase.removeChannel(channel)
   }
 
   func sendBinary() {
-    guard !inputText.isEmpty else { return }
+    guard let channel, !inputText.isEmpty else { return }
+
+    let data = Data(inputText.utf8)
 
     Task {
-      let data = Data(inputText.utf8)
       do {
-        try await channel?.broadcast(event: "binary_message", data: data)
-        await MainActor.run {
-          inputText = ""
-        }
+        try await channel.broadcast(event: "binary_message", data: data)
+        inputText = ""
       } catch {
-        await MainActor.run {
-          self.error = error
-        }
+        self.error = error
       }
     }
   }

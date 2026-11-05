@@ -17,8 +17,8 @@ import SwiftUI
 struct AppLifecycleView: View {
   @State private var socketStatus: RealtimeClientStatus = .disconnected(nil)
   @State private var channelStatus: RealtimeChannelStatus = .unsubscribed
+  @State private var heartbeat: HeartbeatEvent?
   @State private var events: [LifecycleEvent] = []
-  @State private var channel: RealtimeChannel?
 
   private let channelName = "app-lifecycle-example"
 
@@ -39,6 +39,7 @@ struct AppLifecycleView: View {
       Section("Current state") {
         LabeledContent("Socket", value: description(of: socketStatus))
         LabeledContent("Channel", value: description(of: channelStatus))
+        LabeledContent("Heartbeat", value: description(of: heartbeat))
       }
 
       Section("Events") {
@@ -63,14 +64,6 @@ struct AppLifecycleView: View {
     .task {
       await observe()
     }
-    .onDisappear {
-      let channel = channel
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
-    }
     #if canImport(UIKit)
       .onReceive(
         NotificationCenter.default.publisher(
@@ -87,35 +80,56 @@ struct AppLifecycleView: View {
     #endif
   }
 
-  @MainActor
   private func observe() async {
     let channel = await supabase.channel(channelName)
-    self.channel = channel
 
-    let socketStatusStream = await supabase.realtime.statusChanges()
-    let channelStatusStream = await channel.statusChanges()
+    let socketStatuses = await supabase.realtime.statusChanges()
+    let channelStatuses = await channel.statusChanges()
+    let heartbeats = await supabase.realtime.heartbeats()
 
-    async let socketStream: Void = { @MainActor in
-      for await status in socketStatusStream {
-        socketStatus = status
-        log("Socket → \(description(of: status))")
-      }
-    }()
+    // The statuses must keep showing while `subscribe()` retries or fails, so the streams are
+    // iterated next to it, not after it.
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { await subscribe(channel) }
+      group.addTask { await showSocketStatus(from: socketStatuses) }
+      group.addTask { await showChannelStatus(from: channelStatuses) }
+      group.addTask { await showHeartbeat(from: heartbeats) }
+    }
 
-    async let channelStream: Void = { @MainActor in
-      for await status in channelStatusStream {
-        channelStatus = status
-        log("Channel → \(description(of: status))")
-      }
-    }()
+    await supabase.removeChannel(channel)
+  }
 
+  private func subscribe(_ channel: RealtimeChannel) async {
     do {
       try await channel.subscribe()
     } catch {
-      log("Subscribe failed: \(error.localizedDescription)")
+      if !Task.isCancelled {
+        log("Subscribe failed: \(error.localizedDescription)")
+      }
     }
+  }
 
-    _ = await (socketStream, channelStream)
+  private func showSocketStatus(from statuses: AsyncStream<RealtimeClientStatus>) async {
+    for await status in statuses {
+      socketStatus = status
+      if !status.isConnected {
+        heartbeat = nil
+      }
+      log("Socket → \(description(of: status))")
+    }
+  }
+
+  private func showChannelStatus(from statuses: AsyncStream<RealtimeChannelStatus>) async {
+    for await status in statuses {
+      channelStatus = status
+      log("Channel → \(description(of: status))")
+    }
+  }
+
+  private func showHeartbeat(from events: AsyncStream<HeartbeatEvent>) async {
+    for await event in events {
+      heartbeat = event
+    }
   }
 
   private func log(_ message: String) {
@@ -145,6 +159,16 @@ struct AppLifecycleView: View {
       "Resubscribing (attempt \(attempt + 1) in \(retryIn))"
     case .unsubscribing: "Unsubscribing"
     case .failed(let error): "Failed: \(error.message)"
+    }
+  }
+
+  private func description(of event: HeartbeatEvent?) -> String {
+    switch event {
+    case nil: "Waiting for the first heartbeat"
+    case .sent: "Sent, waiting for the server"
+    case .acknowledged(let latency):
+      "Acknowledged in \(latency.formatted(.units(allowed: [.milliseconds], width: .abbreviated)))"
+    case .timedOut: "Timed out"
     }
   }
 }

@@ -6,20 +6,21 @@
 //
 
 import IdentifiedCollections
-import Supabase
+@_spi(Experimental) import Supabase
 import SwiftUI
 
 struct TodoRealtimeView: View {
   @State var todos: IdentifiedArrayOf<Todo> = []
-  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
     List {
       Section {
-        Text("This list updates automatically when todos change")
-          .font(.caption)
-          .foregroundColor(.secondary)
+        Text(
+          "This list updates automatically when todos change. It does not recover changes missed while the channel was away: see Resubscribe or Live Query."
+        )
+        .font(.caption)
+        .foregroundColor(.secondary)
       }
 
       if let error {
@@ -45,96 +46,38 @@ struct TodoRealtimeView: View {
     .navigationTitle("Live Todo List")
     .gitHubSourceLink()
     .task {
-      await loadInitialTodos()
-      await subscribeToChanges()
-    }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
+      await observeTodos()
     }
   }
 
-  @MainActor
-  func loadInitialTodos() async {
+  func observeTodos() async {
+    let channel = await supabase.channel("live-todos")
+    let changes = await channel.postgresChanges(for: Todo.self)
+
     do {
       error = nil
-      todos = try await IdentifiedArrayOf(
-        uniqueElements: supabase.from("todos")
-          .select()
-          .order("created_at", ascending: false)
-          .execute()
-          .value as [Todo]
-      )
-    } catch {
-      self.error = error
-    }
-  }
-
-  func subscribeToChanges() async {
-    let channel = await supabase.channel("live-todos")
-
-    let insertions = await channel.postgresChanges(
-      of: Todo.self,
-      event: .insert,
-      schema: "public",
-      table: "todos",
-      decoder: PostgrestClient.Configuration.jsonDecoder
-    )
-
-    let updates = await channel.postgresChanges(
-      of: Todo.self,
-      event: .update,
-      schema: "public",
-      table: "todos",
-      decoder: PostgrestClient.Configuration.jsonDecoder
-    )
-
-    let deletes = await channel.postgresChanges(
-      of: Todo.self,
-      event: .delete,
-      schema: "public",
-      table: "todos",
-      decoder: PostgrestClient.Configuration.jsonDecoder
-    )
-
-    do {
       try await channel.subscribe()
+      // Fetch after the join, so a change made in between reaches the stream.
+      do {
+        todos = try await .fetchTodos()
+      } catch {
+        // The stream still delivers changes, so a failed fetch does not end the screen.
+        self.error = error
+      }
+      for await change in changes {
+        do {
+          try todos.apply(change)
+        } catch {
+          self.error = error
+        }
+      }
     } catch {
-      print("Error: \(error)")
-      return
+      // Leaving the view cancels the task, and that is not an error to show.
+      if !Task.isCancelled {
+        self.error = error
+      }
     }
-    self.channel = channel
 
-    async let insertionObservation: () = { @MainActor in
-      for await insertion in insertions {
-        try todos.insert(insertion.row(), at: 0)
-      }
-    }()
-
-    async let updatesObservation: () = { @MainActor in
-      for await update in updates {
-        let record = try update.row()
-        todos[id: record.id] = record
-      }
-    }()
-
-    async let deletesObservation: () = { @MainActor in
-      for await delete in deletes {
-        guard
-          let id = delete.oldRecord?["id"]?.stringValue.flatMap(UUID.init(uuidString:))
-        else { return }
-        todos.remove(id: id)
-      }
-    }()
-
-    do {
-      _ = try await (insertionObservation, updatesObservation, deletesObservation)
-    } catch {
-      print(error)
-    }
+    await supabase.removeChannel(channel)
   }
-
 }
