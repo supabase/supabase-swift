@@ -3,7 +3,6 @@ import CustomDump
 import Foundation
 import Helpers
 import InlineSnapshotTesting
-import Mocker
 import TestHelpers
 import Testing
 
@@ -22,12 +21,10 @@ extension AuthClientTests {
   func mfaUnenroll() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)"),
-      statusCode: 200,
-      data: [.delete: Data(#"{"id":"00000000-0000-0000-0000-000000000123"}"#.utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .delete, "factors/\(factorID)",
+      data: Data(#"{"id":"00000000-0000-0000-0000-000000000123"}"#.utf8)
+    ) {
       #"""
       curl \
       	--request DELETE \
@@ -38,7 +35,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -54,12 +50,7 @@ extension AuthClientTests {
   func mfaUnenrollUndecodableSuccessBodyThrowsDecoding() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)"),
-      statusCode: 200,
-      data: [.delete: Data("{}".utf8)]
-    )
-    .register()
+    transport.stub(.delete, "factors/\(factorID)", data: Data("{}".utf8))
 
     let sut = makeSUT()
 
@@ -75,22 +66,18 @@ extension AuthClientTests {
   func mfaChallengeAndVerify() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
-            "type": "totp",
-            "expires_at": 12345678
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, "factors/\(factorID)/challenge",
+      data: Data(
+        """
+        {
+          "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
+          "type": "totp",
+          "expires_at": 12345678
+        }
+        """.utf8
+      )
+    ) {
       #"""
       curl \
       	--request POST \
@@ -104,16 +91,8 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
       """#
     }
-    .register()
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/verify"),
-      statusCode: 200,
-      data: [
-        .post: MockData.session
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "factors/\(factorID)/verify", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -127,7 +106,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -168,12 +146,7 @@ extension AuthClientTests {
     var user = User(fromMockNamed: "user")
     user.factors = [totpVerified, phoneUnverified, recoveryCodes]
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [.get: try AuthClient.Configuration.jsonEncoder.encode(user)]
-    )
-    .register()
+    transport.stub(.get, "user", data: try AuthClient.Configuration.jsonEncoder.encode(user))
 
     let sut = makeSUT()
 
@@ -189,12 +162,7 @@ extension AuthClientTests {
 
   @Test
   func mfaFactorsWhenUserHasNoFactorsReturnsEmpty() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [.get: MockData.user]
-    )
-    .register()
+    transport.stub(.get, "user", data: MockData.user)
 
     let sut = makeSUT()
 
@@ -207,27 +175,23 @@ extension AuthClientTests {
 
   @Test
   func passkeyRegistrationOptionsDecodeTheChallengeID() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("passkeys/registration/options"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "challenge_id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
-            "expires_at": 1705312800,
-            "options": {
-              "challenge": "Y2hhbGxlbmdl",
-              "rp": { "id": "example.com", "name": "Example" },
-              "user": { "id": "dXNlci1pZA", "name": "user@example.com", "displayName": "User" },
-              "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
-            }
+    transport.stub(
+      .post, "passkeys/registration/options",
+      data: Data(
+        """
+        {
+          "challenge_id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
+          "expires_at": 1705312800,
+          "options": {
+            "challenge": "Y2hhbGxlbmdl",
+            "rp": { "id": "example.com", "name": "Example" },
+            "user": { "id": "dXNlci1pZA", "name": "user@example.com", "displayName": "User" },
+            "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
           }
-          """.utf8
-        )
-      ]
+        }
+        """.utf8
+      )
     )
-    .register()
 
     let sut = makeSUT()
     try await sut.seedSession(.valid)
@@ -242,31 +206,27 @@ extension AuthClientTests {
 
   @Test
   func listPasskeysReturnsItems() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("passkeys/"),
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          [
-            {
-              "id": "11111111-1111-1111-1111-111111111111",
-              "friendly_name": "Work Laptop",
-              "created_at": "2024-01-15T10:00:00.000Z",
-              "last_used_at": "2024-02-01T08:30:00.000Z"
-            },
-            {
-              "id": "22222222-2222-2222-2222-222222222222",
-              "friendly_name": null,
-              "created_at": "2024-01-16T10:00:00.000Z",
-              "last_used_at": null
-            }
-          ]
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "passkeys/",
+      data: Data(
+        """
+        [
+          {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "friendly_name": "Work Laptop",
+            "created_at": "2024-01-15T10:00:00.000Z",
+            "last_used_at": "2024-02-01T08:30:00.000Z"
+          },
+          {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "friendly_name": null,
+            "created_at": "2024-01-16T10:00:00.000Z",
+            "last_used_at": null
+          }
+        ]
+        """.utf8
+      )
     )
-    .register()
 
     let sut = makeSUT()
     try await sut.seedSession(.valid)
@@ -287,12 +247,7 @@ extension AuthClientTests {
 
   @Test
   func verifyPasskeyAuthenticationUpdatesSession() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("passkeys/authentication/verify"),
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .register()
+    transport.stub(.post, "passkeys/authentication/verify", data: MockData.session)
 
     let sut = makeSUT()
 
@@ -317,22 +272,13 @@ extension AuthClientTests {
     @Test
     @MainActor
     func passkeySignInForwardsBareOptionsAndCommitsSession() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("passkeys/authentication/options"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com","allowCredentials":[{"id":"Y3JlZA","type":"public-key"}]}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "passkeys/authentication/options",
+        data: Data(
+          #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com","allowCredentials":[{"id":"Y3JlZA","type":"public-key"}]}}"#
+            .utf8)
       )
-      .register()
-      let verifyBody = Mock(
-        url: clientURL.appendingPathComponent("passkeys/authentication/verify"),
-        statusCode: 200,
-        data: [.post: MockData.session]
-      )
-      .registerCapturingBody()
+      transport.stub(.post, "passkeys/authentication/verify", data: MockData.session)
 
       let forwardedOptions = LockIsolated<WebAuthnRequestOptions?>(nil)
       let authenticator = WebAuthnAuthenticator.fake(
@@ -356,7 +302,7 @@ extension AuthClientTests {
         )
       )
       expectNoDifference(
-        verifyBody.value,
+        try transport.lastJSONBody(.post, "passkeys/authentication/verify"),
         ["challenge_id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F", "credential": ["id": "cred"]]
       )
     }
@@ -364,26 +310,18 @@ extension AuthClientTests {
     @Test
     @MainActor
     func passkeyRegisterForwardsBareOptions() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("passkeys/registration/options"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"},"excludeCredentials":[{"id":"b2xk","type":"public-key"}]}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "passkeys/registration/options",
+        data: Data(
+          #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","expires_at":1705312800,"options":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"},"excludeCredentials":[{"id":"b2xk","type":"public-key"}]}}"#
+            .utf8)
       )
-      .register()
-      Mock(
-        url: clientURL.appendingPathComponent("passkeys/registration/verify"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"id":"11111111-1111-1111-1111-111111111111","friendly_name":"iCloud Keychain","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "passkeys/registration/verify",
+        data: Data(
+          #"{"id":"11111111-1111-1111-1111-111111111111","friendly_name":"iCloud Keychain","created_at":"2024-01-15T10:00:00.000Z","last_used_at":null}"#
+            .utf8)
       )
-      .register()
 
       let forwardedOptions = LockIsolated<WebAuthnCreationOptions?>(nil)
       let authenticator = WebAuthnAuthenticator.fake(
@@ -414,32 +352,18 @@ extension AuthClientTests {
     @Test
     @MainActor
     func mfaEnrollWebAuthnUnwrapsPublicKeyAndSendsCreateType() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("factors"),
-        statusCode: 200,
-        data: [
-          .post: Data(#"{"id":"00000000-0000-0000-0000-000000000001","type":"webauthn"}"#.utf8)
-        ]
+      transport.stub(
+        .post, "factors",
+        data: Data(#"{"id":"00000000-0000-0000-0000-000000000001","type":"webauthn"}"#.utf8)
       )
-      .register()
-      Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/challenge"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/challenge",
+        data: Data(
+          #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
+            .utf8)
       )
-      .register()
-      let verifyBody = Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/verify"),
-        statusCode: 200,
-        data: [.post: MockData.session]
-      )
-      .registerCapturingBody()
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/verify", data: MockData.session)
 
       let forwardedRpID = LockIsolated<String?>(nil)
       let authenticator = WebAuthnAuthenticator.fake(
@@ -461,7 +385,8 @@ extension AuthClientTests {
       expectNoDifference(sut.currentSession, session)
       expectNoDifference(forwardedRpID.value, "example.com")
       expectNoDifference(
-        verifyBody.value?.objectValue?["webauthn"],
+        try transport.lastJSONBody(
+          .post, "factors/00000000-0000-0000-0000-000000000001/verify")?.objectValue?["webauthn"],
         ["type": "create", "credential_response": ["id": "cred"]]
       )
     }
@@ -469,24 +394,14 @@ extension AuthClientTests {
     @Test
     @MainActor
     func mfaVerifyWebAuthnUnwrapsPublicKeyAndSendsRequestType() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/challenge"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/challenge",
+        data: Data(
+          #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}}"#
+            .utf8)
       )
-      .register()
-      let verifyBody = Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/verify"),
-        statusCode: 200,
-        data: [.post: MockData.session]
-      )
-      .registerCapturingBody()
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/verify", data: MockData.session)
 
       let forwardedRpID = LockIsolated<String?>(nil)
       let authenticator = WebAuthnAuthenticator.fake(
@@ -508,7 +423,8 @@ extension AuthClientTests {
       expectNoDifference(sut.currentSession, session)
       expectNoDifference(forwardedRpID.value, "example.com")
       expectNoDifference(
-        verifyBody.value?.objectValue?["webauthn"],
+        try transport.lastJSONBody(
+          .post, "factors/00000000-0000-0000-0000-000000000001/verify")?.objectValue?["webauthn"],
         ["type": "request", "credential_response": ["id": "cred"]]
       )
     }
@@ -516,24 +432,14 @@ extension AuthClientTests {
     @Test
     @MainActor
     func mfaVerifyWebAuthnThrowsWhenTheFactorIsNotVerified() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/challenge"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/challenge",
+        data: Data(
+          #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"create","credential_options":{"publicKey":{"challenge":"Y2hhbGxlbmdl","rp":{"id":"example.com"},"user":{"id":"dXNlci1pZA","name":"u@e.com"}}}}}"#
+            .utf8)
       )
-      .register()
-      let verifyBody = Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/verify"),
-        statusCode: 200,
-        data: [.post: MockData.session]
-      )
-      .registerCapturingBody()
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/verify", data: MockData.session)
       let sheetShown = LockIsolated(false)
 
       let sut = makeSUT()
@@ -557,23 +463,19 @@ extension AuthClientTests {
       }
       #expect(error?.kind == .mfaFactorNotVerified)
       #expect(!sheetShown.value)
-      #expect(verifyBody.value == nil)
+      #expect(
+        transport.requests(.post, "factors/00000000-0000-0000-0000-000000000001/verify").isEmpty)
     }
 
     @Test
     @MainActor
     func mfaVerifyWebAuthnThrowsDecodingWhenPublicKeyIsMissing() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent(
-          "factors/00000000-0000-0000-0000-000000000001/challenge"),
-        statusCode: 200,
-        data: [
-          .post: Data(
-            #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
-              .utf8)
-        ]
+      transport.stub(
+        .post, "factors/00000000-0000-0000-0000-000000000001/challenge",
+        data: Data(
+          #"{"id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","type":"webauthn","expires_at":12345678,"webauthn":{"type":"request","credential_options":{"challenge":"Y2hhbGxlbmdl","rpId":"example.com"}}}"#
+            .utf8)
       )
-      .register()
 
       let sut = makeSUT()
       try await sut.seedSession(.valid)
@@ -609,12 +511,7 @@ extension AuthClientTests {
       )
     ]
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [.get: try AuthClient.Configuration.jsonEncoder.encode(user)]
-    )
-    .register()
+    transport.stub(.get, "user", data: try AuthClient.Configuration.jsonEncoder.encode(user))
 
     let sut = makeSUT()
 
@@ -663,14 +560,9 @@ extension AuthClientTests {
   @Test
   func getUserById() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(id)"),
-      statusCode: 200,
-      data: [.get: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.get, "admin/users/\(id)", data: MockData.user) {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -680,7 +572,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users/859F402D-B3DE-4105-A1B9-932836D9193B"
       """#
     }
-    .register()
 
     let user = try await sut.user(id: id)
 
@@ -690,14 +581,9 @@ extension AuthClientTests {
   @Test
   func adminUpdateUser() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(id)"),
-      statusCode: 200,
-      data: [.put: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.put, "admin/users/\(id)", data: MockData.user) {
       #"""
       curl \
       	--request PUT \
@@ -711,7 +597,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users/859F402D-B3DE-4105-A1B9-932836D9193B"
       """#
     }
-    .register()
 
     let attributes = AdminUserAttributes(
       phone: "1234567890",
@@ -727,14 +612,9 @@ extension AuthClientTests {
 
   @Test
   func createUser() async throws {
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users"),
-      statusCode: 200,
-      data: [.post: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "admin/users", data: MockData.user) {
       #"""
       curl \
       	--request POST \
@@ -748,7 +628,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users"
       """#
     }
-    .register()
 
     let attributes = AdminUserAttributes(
       email: "test@example.com",
@@ -762,14 +641,9 @@ extension AuthClientTests {
 
   @Test
   func createUserConfirmingEmailAndPhone() async throws {
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users"),
-      statusCode: 200,
-      data: [.post: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "admin/users", data: MockData.user) {
       #"""
       curl \
       	--request POST \
@@ -783,7 +657,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users"
       """#
     }
-    .register()
 
     let attributes = AdminUserAttributes(
       email: "test@example.com",
@@ -799,14 +672,9 @@ extension AuthClientTests {
   @Test
   func adminUpdateUserConfirmingEmail() async throws {
     let id = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(id)"),
-      statusCode: 200,
-      data: [.put: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.put, "admin/users/\(id)", data: MockData.user) {
       #"""
       curl \
       	--request PUT \
@@ -820,7 +688,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users/859F402D-B3DE-4105-A1B9-932836D9193B"
       """#
     }
-    .register()
 
     let user = try await sut.updateUser(
       id: id,
@@ -832,15 +699,9 @@ extension AuthClientTests {
 
   @Test
   func adminInviteUser() async throws {
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    Mock(
-      url: clientURL.appendingPathComponent("invite"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "invite", data: MockData.user) {
       #"""
       curl \
       	--request POST \
@@ -854,7 +715,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/invite?redirect_to=https://example.com"
       """#
     }
-    .register()
 
     _ = try await sut.inviteUser(
       email: "test@example.com",
@@ -867,21 +727,17 @@ extension AuthClientTests {
   func removeSessionAndSignoutIfSessionNotFoundErrorReturned() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
@@ -905,22 +761,17 @@ extension AuthClientTests {
   func signInRejectedAsBannedKeepsStoredSession() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 403,
-      data: [
-        .post: Data(
-          """
-          {
-            "error_code": "user_banned",
-            "msg": "User is banned"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .post, "token", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "user_banned",
+          "msg": "User is banned"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
@@ -944,21 +795,17 @@ extension AuthClientTests {
   func userWithForeignJWTKeepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
@@ -982,21 +829,19 @@ extension AuthClientTests {
   func userWithForeignJWTWhileSignedOutKeepsTheSignOutReason() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
+
+    await sut.initialization()
 
     try await assertAuthStateChanges(
       sut: sut,
@@ -1018,21 +863,17 @@ extension AuthClientTests {
   func userWithStoredJWTRemovesSessionIfSessionNotFoundErrorReturned() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
@@ -1058,21 +899,17 @@ extension AuthClientTests {
   {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
@@ -1097,25 +934,20 @@ extension AuthClientTests {
   }
 
   @Test
-  func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws
-  {
+  func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 403,
-      data: [
-        .get: Data(
-          """
-          {
-            "error_code": "session_not_found",
-            "message": "Session not found"
-          }
-          """.utf8
-        )
-      ]
+    transport.stub(
+      .get, "user", status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "session_not_found",
+          "message": "Session not found"
+        }
+        """.utf8
+      )
     )
-    .register()
 
     try await sut.seedSession(.valid)
 
