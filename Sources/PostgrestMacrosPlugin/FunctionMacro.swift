@@ -20,9 +20,11 @@ public struct FunctionMacro: ExtensionMacro {
       context.error("@Function can only be applied to a struct", at: node)
       return []
     }
-    if let relationship = declaration.postgrestRelationshipAttribute() {
+    if let attribute = declaration.postgrestSelectionOnlyAttribute() {
       context.error(
-        "@Relationship belongs on a @SelectionOf type, not on @Function", at: relationship)
+        "@\(attribute.attributeName.trimmedDescription) belongs on a @SelectionOf type, not on @Function",
+        at: attribute
+      )
       return []
     }
     if declaration.postgrestDiagnoseUnannotatedProperties(macro: "@Function", in: context) {
