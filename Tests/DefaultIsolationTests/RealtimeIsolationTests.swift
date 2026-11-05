@@ -82,3 +82,54 @@ struct RealtimeIsolationTests {
     #expect(await channel.status.error == nil)
   }
 }
+
+/// Calls every public Realtime API that a main-actor caller awaits: the async functions and
+/// properties, and every member of the `RealtimeClient` actor. This target compiles with
+/// `.defaultIsolation(MainActor.self)`, so each call starts on the main actor. Nothing here runs:
+/// if a call stops compiling, the build fails. `scripts/check-isolation-coverage.sh` checks that
+/// each API has a call.
+extension RealtimeIsolationTests {
+  static func client(_ client: RealtimeClient) async throws {
+    _ = await client.status
+    _ = await client.channels
+    for await _ in await client.statusChanges() {}
+    for await _ in await client.heartbeats() {}
+    try await client.connect()
+    await client.disconnect()
+    await client.disconnect(code: 1000, reason: "done")
+    _ = await client.channel("room")
+    let channel = await client.channel("room") { $0.isPrivate = true }
+    await client.setAuth()
+    await client.setAuth("jwt")
+    await client.removeChannel(channel)
+    await client.removeAllChannels()
+  }
+
+  static func channel(_ channel: RealtimeChannel) async throws {
+    _ = await channel.status
+    _ = await channel.presenceState
+    for await _ in await channel.statusChanges() {}
+    for await _ in await channel.events() {}
+    for await _ in await channel.presenceChanges() {}
+    for await _ in await channel.presenceStates() {}
+    for await _ in await channel.broadcasts(event: "ping") {}
+    for await _ in await channel.postgresChanges(event: .insert, table: "rooms") {}
+    for await change in await channel.postgresChanges(of: Row.self, table: "rooms") {
+      _ = try change.row()
+    }
+    try await channel.subscribe()
+    try await channel.broadcast(event: "message", payload: ChatMessage(text: "hi"))
+    try await channel.broadcast(event: "binary", data: Data())
+    try await channel.track(ChatMessage(text: "here"))
+    try await channel.untrack()
+    try await channel.httpSend(event: "message", payload: ChatMessage(text: "hi"))
+    try await channel.httpSend(event: "binary", data: Data())
+    await channel.unsubscribe()
+  }
+
+  static func transport(_ transport: URLSessionWebSocketTransport, url: URL) async throws {
+    let connection = try await transport.connect(to: url, headerFields: [:])
+    try await connection.send(.text("ping"))
+    connection.close(code: .normalClosure, reason: nil)
+  }
+}
