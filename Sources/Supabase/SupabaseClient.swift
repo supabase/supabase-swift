@@ -325,11 +325,6 @@ public final class SupabaseClient: Sendable {
     try rest.rpc(fn, count: count)
   }
 
-  /// Returns a database client scoped to the given Postgres schema.
-  ///
-  /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
-  /// - Parameter schema: The schema to query.
-  /// - Returns: A ``PostgrestClient`` configured for the given schema.
   /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
@@ -351,6 +346,11 @@ public final class SupabaseClient: Sendable {
     fatalError()
   }
 
+  /// Returns a database client scoped to the given Postgres schema.
+  ///
+  /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
+  /// - Parameter schema: The schema to query.
+  /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
   }

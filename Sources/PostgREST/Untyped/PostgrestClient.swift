@@ -295,9 +295,7 @@ public struct PostgrestClient: Sendable {
         )
       }
 
-      for (key, value) in json {
-        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
-      }
+      request.leadingQuery.append(contentsOf: queryItems(for: json))
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -354,7 +352,14 @@ public struct PostgrestClient: Sendable {
     return PostgrestClient(configuration: configuration, clock: clock)
   }
 
-  func queryValue(for value: JSONValue) -> String {
+  /// One query item per argument, in key order, for a `GET` call's arguments.
+  func queryItems(for arguments: [String: JSONValue]) -> [URLQueryItem] {
+    arguments.sorted { $0.key < $1.key }.map { key, value in
+      URLQueryItem(name: key, value: queryValue(for: value))
+    }
+  }
+
+  private func queryValue(for value: JSONValue) -> String {
     switch value {
     case .null:
       return "null"

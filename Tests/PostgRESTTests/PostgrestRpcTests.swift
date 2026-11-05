@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 07/10/26.
 //
 
+import ConcurrencyExtras
 import Foundation
 import IssueReporting
 import Testing
@@ -160,7 +161,7 @@ struct PostgrestRpcTests {
     let call = try capture.client.rpc(Pair())
     let reporter = RecordingIssueReporter()
     let readOnly = withIssueReporters([reporter]) { call.readOnly() }
-    #expect(reporter.messages.withLock { $0.count } == 1)
+    #expect(reporter.messages.value.count == 1)
     _ = try await readOnly.execute()
     #expect(capture.httpMethod == "POST")
     #expect(capture.bodyString == "[1,2]")
@@ -168,7 +169,7 @@ struct PostgrestRpcTests {
 }
 
 private final class RecordingIssueReporter: IssueReporter {
-  let messages = NSLockedValue<[String]>([])
+  let messages = LockIsolated<[String]>([])
 
   func reportIssue(
     _ message: @autoclosure () -> String?,
@@ -179,19 +180,6 @@ private final class RecordingIssueReporter: IssueReporter {
     column: UInt
   ) {
     let message = message() ?? ""
-    messages.withLock { $0.append(message) }
-  }
-}
-
-private final class NSLockedValue<Value>: @unchecked Sendable {
-  private let lock = NSLock()
-  private var value: Value
-
-  init(_ value: Value) { self.value = value }
-
-  func withLock<T>(_ body: (inout Value) -> T) -> T {
-    lock.lock()
-    defer { lock.unlock() }
-    return body(&value)
+    messages.withValue { $0.append(message) }
   }
 }
