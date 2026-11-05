@@ -160,7 +160,7 @@ extension AuthEventMatrixTests.Row {
         try storage.store(
           key: world.storageKey, value: PersistedSessionCodec.encode(session))
       }
-      let client = world.makeClient(storage: storage)
+      let client = world.makeClient(autoRefresh: .automatic, storage: storage)
       var changes = client.events().makeAsyncIterator()
 
       let launched = await changes.next()
@@ -218,7 +218,7 @@ extension AuthEventMatrixTests.Row {
     let storage = InMemoryTestStorage()
     try storage.store(
       key: world.storageKey, value: PersistedSessionCodec.encode(expiredSession(world)))
-    let client = world.makeClient(storage: storage)
+    let client = world.makeClient(autoRefresh: .automatic, storage: storage)
     var changes = client.events().makeAsyncIterator()
 
     // The refresh retries the network failure on the client's clock, inside the launch deadline.
@@ -471,6 +471,7 @@ extension AuthEventMatrixTests.Row {
       emits: [.tokenRefreshed], leaves: .signedIn
     ) { world, client in
       world.answerRefresh { try Race.ok(world.issue("refreshed")) }
+      #expect(await waitUntil { await client.dependencies.autoRefresh.isRegistered })
       await world.waitForTheScheduledRefresh()
       await world.advance(to: Race.lifetime - Refresher.refreshLeadTime.timeInterval)
       #expect(
