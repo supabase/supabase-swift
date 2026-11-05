@@ -5,10 +5,12 @@
 //  Demonstrates password reset functionality via email
 //
 
+import Supabase
 import SwiftUI
 import SwiftUINavigation
 
 struct ResetPasswordView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
 
   @State private var email: String = ""

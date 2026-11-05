@@ -208,7 +208,7 @@ struct ImageTransformView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -225,7 +225,7 @@ struct ImageTransformView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let data = try await supabase.storage
+      let data = try await supabaseClient.storage
         .from(selectedBucket)
         .download(path: imagePath)
         .data()
@@ -254,7 +254,7 @@ struct ImageTransformView: View {
         format: format == .original ? nil : .webp
       )
 
-      let data = try await supabase.storage
+      let data = try await supabaseClient.storage
         .from(selectedBucket)
         .download(path: imagePath, transform: options)
         .data()

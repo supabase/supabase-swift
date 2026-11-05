@@ -85,7 +85,7 @@ struct FilteringView: View {
   }
 
   var currentQueryCode: String {
-    var code = "let query = supabase.from(\"todos\")\n  .select()"
+    var code = "let query = supabaseClient.from(\"todos\")\n  .select()"
 
     switch filterComplete {
     case .all:
@@ -113,7 +113,7 @@ struct FilteringView: View {
     do {
       error = nil
 
-      var filtered = supabase.from("todos").select()
+      var filtered = supabaseClient.from("todos").select()
 
       switch filterComplete {
       case .all:

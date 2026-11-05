@@ -25,7 +25,11 @@ Comprehensive authentication examples with multiple sign-in methods:
   - Sign in with Apple (native integration)
   - Sign in with Google (using Google Sign-In SDK)
   - Sign in with Facebook
-  - Generic OAuth flow for other providers
+  - Generic OAuth flow for other providers, with the default presenter
+  - OAuth with a `ClosurePresenter` and SwiftUI's `webAuthenticationSession`
+  - SAML single sign-on by email domain
+- **Session handling**: `AuthModel` drives the root view, one `onOpenURL` calls
+  `handleRedirect(_:)`, and `importSession` signs in with existing tokens
 - **Anonymous Sign-In**: Temporary guest access with account conversion
 - **Multi-Factor Authentication (MFA)**:
   - TOTP enrollment with QR codes
@@ -348,7 +352,11 @@ Examples/
 │   │   ├── SignInAnonymously.swift          # Anonymous auth
 │   │   ├── SignInWithApple.swift            # Apple Sign In
 │   │   ├── SignInWithFacebook.swift         # Facebook auth
-│   │   ├── SignInWithOAuth.swift            # Generic OAuth
+│   │   ├── SignInWithOAuth.swift            # Generic OAuth, default presenter
+│   │   ├── SignInWithOAuthClosurePresenter.swift # OAuth with a ClosurePresenter
+│   │   ├── SignInWithSSO.swift              # SAML single sign-on
+│   │   ├── ImportSessionView.swift          # importSession
+│   │   ├── UpdatePasswordView.swift         # Password recovery
 │   │   └── GoogleSignInSDKFlow.swift        # Google Sign-In SDK
 │   │
 │   ├── Database/          # PostgREST database examples

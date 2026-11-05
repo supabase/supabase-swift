@@ -51,7 +51,7 @@ struct TodoRealtimeView: View {
   }
 
   func observeTodos() async {
-    let channel = await supabase.channel("live-todos")
+    let channel = await supabaseClient.channel("live-todos")
     let changes = await channel.postgresChanges(for: Todo.self)
 
     do {
@@ -78,6 +78,6 @@ struct TodoRealtimeView: View {
       }
     }
 
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 }

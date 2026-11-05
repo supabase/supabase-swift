@@ -81,11 +81,11 @@ struct AppLifecycleView: View {
   }
 
   private func observe() async {
-    let channel = await supabase.channel(channelName)
+    let channel = await supabaseClient.channel(channelName)
 
-    let socketStatuses = await supabase.realtime.statusChanges()
+    let socketStatuses = await supabaseClient.realtime.statusChanges()
     let channelStatuses = await channel.statusChanges()
-    let heartbeats = await supabase.realtime.heartbeats()
+    let heartbeats = await supabaseClient.realtime.heartbeats()
 
     // The statuses must keep showing while `subscribe()` retries or fails, so the streams are
     // iterated next to it, not after it.
@@ -96,7 +96,7 @@ struct AppLifecycleView: View {
       group.addTask { await showHeartbeat(from: heartbeats) }
     }
 
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 
   private func subscribe(_ channel: RealtimeChannel) async {

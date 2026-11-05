@@ -49,6 +49,7 @@ struct MFAFlow: View {
 }
 
 struct MFAEnrollView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
   @State private var verificationCode = ""
 
@@ -228,6 +229,7 @@ struct MFAEnrollView: View {
 }
 
 struct MFAVerifyView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
   @State private var verificationCode = ""
   @State private var error: Error?
@@ -339,11 +341,11 @@ struct MFAVerifyView: View {
 }
 
 struct MFAVerifiedView: View {
-  @Environment(AuthController.self) var auth
+  @Environment(\.supabase) private var supabase
+  @Environment(AuthModel.self) private var auth
 
-  @MainActor
   var factors: [Factor] {
-    auth.session?.user.factors ?? []
+    auth.user?.factors ?? []
   }
 
   var body: some View {
@@ -410,8 +412,8 @@ struct MFAVerifiedView: View {
             // List all MFA factors
             let factors = try await supabase.auth.mfa.factors()
 
-            // Access current user's factors
-            let userFactors = supabase.auth.session?.user.factors
+            // Read the current user's factors from the observable model
+            let userFactors = auth.user?.factors ?? []
             """
         )
 

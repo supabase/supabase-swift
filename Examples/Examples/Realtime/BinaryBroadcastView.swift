@@ -74,7 +74,7 @@ struct BinaryBroadcastView: View {
   }
 
   func observeFrames() async {
-    let channel = await supabase.channel("binary-broadcast-example") {
+    let channel = await supabaseClient.channel("binary-broadcast-example") {
       $0.broadcast.receiveOwnMessages = true
     }
 
@@ -102,7 +102,7 @@ struct BinaryBroadcastView: View {
     }
 
     self.channel = nil
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 
   func sendBinary() {

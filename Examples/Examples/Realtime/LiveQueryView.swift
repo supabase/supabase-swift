@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct LiveQueryView: View {
-  @State private var todos = LiveQuery(supabase, Todo.self, animation: .default)
+  @State private var todos = LiveQuery(supabaseClient, Todo.self, animation: .default)
 
   var body: some View {
     List {

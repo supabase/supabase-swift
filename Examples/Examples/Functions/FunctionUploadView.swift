@@ -92,7 +92,7 @@ struct FunctionUploadView: View {
       isUploading = true
       defer { isUploading = false }
 
-      result = try await supabase.functions.invoke(
+      result = try await supabaseClient.functions.invoke(
         "upload",
         body: .stream(try HTTPBody(fileURL: fileURL), contentType: "image/jpeg"),
         options: .init(timeout: .seconds(300))

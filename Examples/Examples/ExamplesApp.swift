@@ -40,6 +40,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     guard let url = URLContexts.first?.url else { return }
 
+    let isSupabaseRedirect =
+      url.scheme == Constants.redirectScheme && supabaseClient.auth.isAuthRedirect(url)
+    guard !isSupabaseRedirect else { return }
+
     ApplicationDelegate.shared.application(
       UIApplication.shared,
       open: url,
@@ -53,27 +57,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 struct ExamplesApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+  @State private var auth = AuthModel(client: supabaseClient.auth)
+
   var body: some Scene {
     WindowGroup {
       RootView()
-        .environment(AuthController())
-        .onOpenURL { url in
-          Task {
-            do {
-              try await supabase.handleRedirect(url)
-            } catch {
-              debug("Failed to handle a redirect: \(error)")
-            }
-          }
-        }
+        .environment(auth)
         .task {
-          _ = try? await supabase.storage.resumableUploads.resumeAll()
+          _ = try? await supabaseClient.storage.resumableUploads.resumeAll()
         }
     }
   }
 }
 
-let supabase = SupabaseClient(
+extension EnvironmentValues {
+  @Entry var supabase = supabaseClient
+}
+
+let supabaseClient = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
   options: .init(
