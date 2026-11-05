@@ -15,6 +15,10 @@ actor JWKSCache {
   private var backoff: Duration = .zero
   private var forcedFetchAllowedAt: Date?
 
+  /// The number of callers that have started or joined a fetch. Tests read it to know that
+  /// concurrent callers share one fetch before they let it finish.
+  private(set) var joinedFetchCount = 0
+
   init(
     ttl: Duration = .seconds(600),
     fetch: @escaping @Sendable () async throws -> JWKS,
@@ -40,6 +44,7 @@ actor JWKSCache {
 
   private func fetchKey(for kid: String, forced: Bool) async throws -> JWK? {
     let task = inFlight ?? startFetch(for: kid, forced: forced)
+    joinedFetchCount += 1
     return try await cancellableValue(of: task).key(for: kid)
   }
 
