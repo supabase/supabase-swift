@@ -55,7 +55,7 @@ extension AuthAPI {
     return try request(
       .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
       body: encoder.encode(Params(factorId: factorID, challengeId: challengeID, code: code)),
-      decode: decoding(Session.self))
+      decode: decodingSession())
   }
 
   func verifyFactor(
@@ -83,7 +83,7 @@ extension AuthAPI {
         Params(
           factorId: factorID, challengeId: challengeID,
           webauthn: WebAuthn(type: type.rawValue, credentialResponse: credentialResponse))),
-      decode: decoding(Session.self))
+      decode: decodingSession())
   }
 
   func unenrollFactor(
@@ -133,7 +133,7 @@ extension AuthAPI {
 
     return try request(
       .post, "\(Self.recoveryCodes)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(Params(code: code)), decode: decoding(Session.self))
+      body: encoder.encode(Params(code: code)), decode: decodingSession())
   }
 
   func regenerateRecoveryCodes(

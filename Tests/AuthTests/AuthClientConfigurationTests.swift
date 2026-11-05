@@ -5,7 +5,10 @@
 //  Created by Guilherme Souza on 13/08/26.
 //
 
+import ConcurrencyExtras
 import Foundation
+import HTTPTypes
+import Helpers
 import Logging
 import TestHelpers
 import Testing
@@ -14,22 +17,73 @@ import Testing
 
 @Suite
 struct AuthClientConfigurationTests {
-  @Test
-  func loggerIsTaggedWithSystemMetadata() {
-    let configuration = AuthClient.Configuration(
-      url: URL(string: "http://localhost")!,
-      localStorage: InMemoryLocalStorage(),
-      logger: Logging.Logger(label: "test")
-    )
+  private let url = URL(string: "http://localhost:54321/auth/v1")!
 
-    #expect(configuration.logger[metadataKey: "system"] == "auth")
+  @Test
+  func defaultsMatchTheDocumentedValues() {
+    let configuration = AuthClient.Configuration(url: url, storageKey: "key")
+
+    #expect(configuration.url == url)
+    #expect(configuration.storageKey == "key")
+    #expect(configuration.headers.isEmpty)
+    #expect(configuration.redirectTo == nil)
+    #expect(configuration.autoRefresh == .automatic)
+    #expect(configuration.observesAppLifecycle)
+    #expect(configuration.initialRefreshTimeout == .seconds(5))
   }
 
   @Test
-  func loggerKeepsSystemTagAlongsideClientIDTag() {
+  func propertiesAreMutableAfterInit() {
+    var configuration = AuthClient.Configuration(url: url, storageKey: "key")
+    let redirect = URL(string: "app://login")!
+
+    configuration.redirectTo = redirect
+    configuration.autoRefresh = .manual
+    configuration.headers[HTTPField.Name("X-Test")!] = "1"
+
+    #expect(configuration.redirectTo == redirect)
+    #expect(configuration.autoRefresh == .manual)
+    #expect(configuration.headers[HTTPField.Name("X-Test")!] == "1")
+  }
+
+  @Test
+  func nowDefaultsToTheSystemClock() {
+    let configuration = AuthClient.Configuration(url: url, storageKey: "key")
+
+    #expect(abs(configuration.now().timeIntervalSinceNow) < 5)
+  }
+
+  @Test
+  func platformDefaultStoragePersists() {
+    let configuration = AuthClient.Configuration(url: url, storageKey: "key")
+
+    #if canImport(Security)
+      #expect(configuration.storage is KeychainStorage)
+    #else
+      #expect(configuration.storage is InMemoryAuthStorage)
+    #endif
+  }
+
+  @Test
+  func configuredStorageIsTheOneTheClientWritesTo() async throws {
+    let storage = InMemoryAuthStorage()
+    try await storage.save(
+      PersistedSessionCodec.encode(Session.valid), key: "custom-key")
     let configuration = AuthClient.Configuration(
-      url: URL(string: "http://localhost")!,
-      localStorage: InMemoryLocalStorage(),
+      url: url, storageKey: "custom-key", storage: storage)
+
+    let sut = AuthClient(configuration: configuration)
+    await sut.initialization()
+
+    #expect(sut.currentSession == .valid)
+  }
+
+  @Test
+  func loggerIsTaggedWithSystemMetadataByTheClient() {
+    let configuration = AuthClient.Configuration(
+      url: url,
+      storageKey: "key",
+      storage: InMemoryAuthStorage(),
       logger: Logging.Logger(label: "test")
     )
 
@@ -41,11 +95,57 @@ struct AuthClientConfigurationTests {
   }
 
   @Test
+  func requestsCarryTheClientInfoHeaderAndTheConfiguredHeaders() async throws {
+    let requests = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    var configuration = AuthClient.Configuration(
+      url: url,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryAuthStorage(),
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          requests.withValue { $0.append(request) }
+          return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("{}".utf8)))
+        })
+    )
+    configuration.headers[HTTPField.Name("apikey")!] = "publishable"
+    let sut = AuthClient(configuration: configuration)
+
+    _ = try? await sut.user(jwt: "token")
+
+    let request = try #require(requests.value.first)
+    #expect(request.headerFields[HTTPField.Name("apikey")!] == "publishable")
+    #expect(request.headerFields[HTTPField.Name("X-Client-Info")!] == "auth-swift/\(version)")
+  }
+
+  @Test
+  func aConfiguredClientInfoHeaderWinsOverTheDefault() async throws {
+    let requests = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    var configuration = AuthClient.Configuration(
+      url: url,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryAuthStorage(),
+      http: .init(
+        transport: ClosureTransport { request, _ in
+          requests.withValue { $0.append(request) }
+          return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("{}".utf8)))
+        })
+    )
+    configuration.headers[HTTPField.Name("X-Client-Info")!] = "my-wrapper/1.0"
+    let sut = AuthClient(configuration: configuration)
+
+    _ = try? await sut.user(jwt: "token")
+
+    let request = try #require(requests.value.first)
+    #expect(request.headerFields[HTTPField.Name("X-Client-Info")!] == "my-wrapper/1.0")
+  }
+
+  @Test
   func loggerRedactsSecretsBeforeTheCallersHandlerSeesThem() {
     let recorder = LogRecorder()
     let configuration = AuthClient.Configuration(
       url: URL(string: "http://localhost")!,
-      localStorage: InMemoryLocalStorage(),
+      storageKey: "key",
+      storage: InMemoryAuthStorage(),
       logger: recorder.makeLogger()
     )
 

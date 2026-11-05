@@ -11,8 +11,8 @@ struct AuthRedirectTests {
     accessToken: "a",
     refreshToken: "r",
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 1_800_003_600
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 1_800_003_600)
   )
 
   private static let implicitFragment =
@@ -26,6 +26,20 @@ struct AuthRedirectTests {
 
   private static let linkExpired = AuthError.oauthFlowFailed(
     "Link expired", errorCode: ErrorCode("otp_expired"))
+
+  @Test(arguments: ["inf", "nan", "1e30"])
+  func anExpiryOutOfRangeIsAnErrorNotACrash(expiresIn: String) throws {
+    let url = try #require(
+      URL(
+        string:
+          "myapp://cb#access_token=a&refresh_token=r&token_type=bearer&expires_in=\(expiresIn)"
+      ))
+
+    guard case .error = AuthRedirect.parse(url) else {
+      Issue.record("Expected an error for expires_in=\(expiresIn).")
+      return
+    }
+  }
 
   static let cases: [(String, AuthRedirect?)] = [
     ("myapp://cb?code=abc", .code("abc", flowID: nil)),

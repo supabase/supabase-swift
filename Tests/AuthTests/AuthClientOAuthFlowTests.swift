@@ -63,7 +63,7 @@ import Testing
 
       #expect(error?.kind == .oauthFlowFailed)
       #expect(error?.message.contains("redirectTo") == true)
-      #expect(error?.message.contains("AuthClient.Configuration.redirectToURL") == true)
+      #expect(error?.message.contains("AuthClient.Configuration.redirectTo") == true)
     }
 
     @Test

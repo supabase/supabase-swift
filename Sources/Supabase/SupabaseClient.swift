@@ -246,12 +246,12 @@ public final class SupabaseClient: Sendable {
       )
     }
 
-    _auth = AuthClient(
+    let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: _headers.dictionary,
-      redirectToURL: options.auth.redirectToURL,
       storageKey: options.auth.storageKey ?? defaultStorageKey,
-      localStorage: options.auth.storage,
+      headers: _headers,
+      storage: options.auth.storage,
+      redirectTo: options.auth.redirectToURL,
       logger: options.global.logger,
       http: HTTPClientConfiguration(
         transport: options.global.http.transport ?? URLSessionTransport(),
@@ -262,6 +262,7 @@ public final class SupabaseClient: Sendable {
       observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: clock
     )
+    _auth = AuthClient(configuration: authConfiguration)
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()

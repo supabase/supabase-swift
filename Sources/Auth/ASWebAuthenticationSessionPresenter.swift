@@ -7,7 +7,7 @@
   /// A presenter that shows the provider page in an `ASWebAuthenticationSession`.
   ///
   /// It is the default presenter on Apple platforms. The client must have a redirect URL, from
-  /// ``OAuthOptions/redirectTo`` or ``AuthClient/Configuration/redirectToURL``.
+  /// ``OAuthOptions/redirectTo`` or ``AuthClient/Configuration/redirectTo``.
   ///
   /// Cancelling the task that awaits ``authenticate(url:redirectURL:)`` closes the page and throws
   /// `CancellationError`. So does the user closing it. On tvOS, the system cannot close the page
@@ -97,7 +97,7 @@
         throw AuthError.oauthFlowFailed(
           """
           Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-          or globally through `AuthClient.Configuration.redirectToURL`.
+          or globally through `AuthClient.Configuration.redirectTo`.
           """
         )
       }

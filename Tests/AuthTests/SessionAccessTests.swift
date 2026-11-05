@@ -93,15 +93,14 @@ import Testing
     let key = uniqueStorageKey()
     try storage.store(
       key: key,
-      value: PersistedSessionCodec.encode(ReceivedSession(session: .valid, receivedAt: Date()))
+      value: PersistedSessionCodec.encode(Session.valid)
     )
     storage.isLocked.setValue(true)
     http.respond { _, _ in try sessionResponse(.valid) }
     let sut = AuthClient(
       configuration: .init(
-        url: clientURL, storageKey: key, localStorage: storage, http: .init(transport: http),
+        url: clientURL, storageKey: key, storage: storage, http: .init(transport: http),
         autoRefresh: .manual),
-      date: { Date() },
       pkce: .live,
       platform: .live
     )

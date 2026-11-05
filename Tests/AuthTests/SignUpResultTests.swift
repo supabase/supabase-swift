@@ -1,4 +1,4 @@
-import Auth
+@testable import Auth
 import Foundation
 import Testing
 

@@ -21,10 +21,11 @@ import Testing
 struct AuthAPITests {
   let api = AuthAPI(
     url: URL(string: "http://localhost:54321/auth/v1")!,
-    headers: ["apikey": "dummy.api.key"],
+    headers: [HTTPField.Name("apikey")!: "dummy.api.key"],
     defaultRedirectURL: URL(string: "https://example.com/callback"),
     encoder: AuthClient.Configuration.jsonEncoder,
-    decoder: AuthClient.Configuration.jsonDecoder
+    decoder: AuthClient.Configuration.jsonDecoder,
+    now: { Date(timeIntervalSince1970: 1_700_000_000) }
   )
 
   let pkce = PKCEChallenge(codeChallenge: "challenge", codeChallengeMethod: "s256")
@@ -139,10 +140,11 @@ struct AuthAPITests {
   func configuredAPIVersionIsKept() {
     let api = AuthAPI(
       url: URL(string: "http://localhost:54321/auth/v1")!,
-      headers: ["X-Supabase-Api-Version": "2025-01-01"],
+      headers: [.apiVersionHeaderName: "2025-01-01"],
       defaultRedirectURL: nil,
       encoder: JSONEncoder(),
-      decoder: JSONDecoder()
+      decoder: JSONDecoder(),
+      now: { Date(timeIntervalSince1970: 1_700_000_000) }
     )
 
     #expect(api.jwks().head.headerFields[.apiVersionHeaderName] == "2025-01-01")

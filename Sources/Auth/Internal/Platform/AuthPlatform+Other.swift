@@ -12,6 +12,6 @@
       }
     )
 
-    static var defaultLocalStorage: any AuthLocalStorage { EphemeralLocalStorage() }
+    static var defaultStorage: any AuthStorage { InMemoryAuthStorage() }
   }
 #endif

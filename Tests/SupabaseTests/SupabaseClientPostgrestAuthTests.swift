@@ -48,7 +48,7 @@ struct SupabaseClientPostgrestAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -71,7 +71,7 @@ struct SupabaseClientPostgrestAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -95,7 +95,7 @@ struct SupabaseClientPostgrestAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(

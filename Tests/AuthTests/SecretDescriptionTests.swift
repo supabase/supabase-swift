@@ -10,8 +10,9 @@ struct SecretDescriptionTests {
     providerRefreshToken: "provider-refresh-secret",
     accessToken: "access-token-secret",
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 4_102_444_800,
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
+    receivedAt: Date(timeIntervalSince1970: 4_102_444_800 - 3600),
     refreshToken: "refresh-token-secret",
     user: User(fromMockNamed: "user")
   )
@@ -60,7 +61,7 @@ struct SecretDescriptionTests {
   @Test
   func authStatusInsideAnyContainerIsMasked() {
     expectNoSecrets("\(AuthStatus.signedIn(Self.session))")
-    expectNoSecrets("\(ReceivedSession(session: Self.session))")
+    expectNoSecrets("\(Self.session)")
   }
 
   @Test

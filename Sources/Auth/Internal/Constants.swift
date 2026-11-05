@@ -8,11 +8,9 @@
 import Foundation
 import HTTPTypes
 
-let defaultAuthURL = URL(string: "http://localhost:9999")!
 let defaultExpiryMargin: Duration = .seconds(30)
 
-let defaultStorageKey = "supabase.auth.token"
-
 extension HTTPField.Name {
+  static let apikeyHeaderName = HTTPField.Name("apikey")!
   static let apiVersionHeaderName = HTTPField.Name("X-Supabase-Api-Version")!
 }

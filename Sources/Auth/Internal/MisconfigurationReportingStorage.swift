@@ -7,29 +7,29 @@ import IssueReporting
 ///
 /// A read cannot be the only trigger. Without the Keychain entitlement, the macOS
 /// data-protection Keychain answers a read with "no item" and fails only on the first write.
-struct MisconfigurationReportingStorage: AuthLocalStorage {
-  let base: any AuthLocalStorage
+struct MisconfigurationReportingStorage: AuthStorage {
+  let base: any AuthStorage
   private let hasReported = LockIsolated(false)
 
-  init(_ base: any AuthLocalStorage) {
+  init(_ base: any AuthStorage) {
     self.base = base
   }
 
-  func store(key: String, value: Data) throws {
-    try reporting { try base.store(key: key, value: value) }
+  func save(_ data: Data, key: String) async throws {
+    try await reporting { try await base.save(data, key: key) }
   }
 
-  func retrieve(key: String) throws -> Data? {
-    try reporting { try base.retrieve(key: key) }
+  func load(key: String) async throws -> Data? {
+    try await reporting { try await base.load(key: key) }
   }
 
-  func remove(key: String) throws {
-    try reporting { try base.remove(key: key) }
+  func remove(key: String) async throws {
+    try await reporting { try await base.remove(key: key) }
   }
 
-  private func reporting<T>(_ operation: () throws -> T) throws -> T {
+  private func reporting<T>(_ operation: () async throws -> T) async throws -> T {
     do {
-      return try operation()
+      return try await operation()
     } catch let error as AuthError where error.kind == .storageMisconfigured {
       let isFirst = hasReported.withValue { reported in
         defer { reported = true }

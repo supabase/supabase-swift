@@ -12,7 +12,7 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
     case linkIdentity = "link_identity"
   }
 
-  static let timeToLive: TimeInterval = 60 * 60
+  static let timeToLive: Duration = .seconds(60 * 60)
 
   var id: UUID
   var verifier: String
@@ -33,7 +33,7 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
   }
 
   static func isExpired(createdAt: Date, at now: Date) -> Bool {
-    now.timeIntervalSince(createdAt) >= timeToLive
+    now.duration(since: createdAt) >= timeToLive
   }
 
   static func decode(_ data: Data) throws -> PendingFlowRecord {

@@ -24,7 +24,7 @@ struct AuthMiddlewareTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: InMemoryLocalStorage(),
+          storage: InMemoryTestStorage(),
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: autoRefresh
         ),
@@ -291,7 +291,7 @@ struct AuthMiddlewareTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: InMemoryLocalStorage(),
+          storage: InMemoryTestStorage(),
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: .manual
         ),
@@ -374,12 +374,11 @@ struct AuthMiddlewareTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
         storageKey: "sb-test-\(UUID().uuidString)-auth-token",
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: HTTPClientConfiguration(transport: http),
         autoRefresh: .manual,
         observesAppLifecycle: false
       ),
-      date: { Date() },
       pkce: .live,
       platform: .live,
       beforeRefreshingHeldSession: { await retryReadTheToken.pass() }
@@ -473,7 +472,7 @@ struct AuthMiddlewareRefreshRaceTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
         storageKey: "sb-test-\(UUID().uuidString)-auth-token",
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         logger: Logging.Logger(label: "test") { _ in
           HoldingSecondRefreshLogHandler(secondRefresh: secondRefresh)
         },
@@ -481,7 +480,6 @@ struct AuthMiddlewareRefreshRaceTests {
         autoRefresh: .manual,
         observesAppLifecycle: false
       ),
-      date: { Date() },
       pkce: .live,
       platform: .live
     )

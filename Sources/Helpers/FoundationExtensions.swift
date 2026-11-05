@@ -25,6 +25,22 @@ extension Duration {
   }
 }
 
+extension Date {
+  /// The time from `other` to this date, limited to about 30,000 years either way, so a date
+  /// that a server sent far out of range cannot trap in `Duration.seconds`.
+  package func duration(since other: Date) -> Duration {
+    let limit: TimeInterval = 1e12
+    let interval = timeIntervalSince(other)
+    guard interval.isFinite else { return .seconds(interval > 0 ? limit : -limit) }
+    return .seconds(min(max(interval, -limit), limit))
+  }
+
+  /// This date moved forward by `duration`.
+  package func adding(_ duration: Duration) -> Date {
+    addingTimeInterval(duration.timeInterval)
+  }
+}
+
 extension Result {
   package var value: Success? {
     if case .success(let value) = self {

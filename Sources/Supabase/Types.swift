@@ -62,8 +62,9 @@ public struct SupabaseClientOptions: Sendable {
 
   /// Options for the Auth sub-client.
   public struct AuthOptions: Sendable {
-    /// A storage provider. Used to store the logged-in session.
-    public let storage: any AuthLocalStorage
+    /// A storage provider. Used to store the logged-in session. `nil` uses the platform's default
+    /// storage. See ``AuthClient/Configuration/storage``.
+    public let storage: (any AuthStorage)?
 
     /// Default URL to be used for redirect on the flows that requires it.
     public let redirectToURL: URL?
@@ -87,7 +88,7 @@ public struct SupabaseClientOptions: Sendable {
     public let accessToken: (@Sendable () async throws -> String?)?
 
     public init(
-      storage: any AuthLocalStorage,
+      storage: (any AuthStorage)? = nil,
       redirectToURL: URL? = nil,
       storageKey: String? = nil,
       autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
@@ -245,24 +246,5 @@ extension SupabaseClientOptions {
     self.functions = functions
     self.realtime = realtime
     self.storage = storage
-  }
-}
-
-extension SupabaseClientOptions.AuthOptions {
-  public init(
-    redirectToURL: URL? = nil,
-    storageKey: String? = nil,
-    autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
-    observesAppLifecycle: Bool = true,
-    accessToken: (@Sendable () async throws -> String?)? = nil
-  ) {
-    self.init(
-      storage: AuthClient.Configuration.defaultLocalStorage,
-      redirectToURL: redirectToURL,
-      storageKey: storageKey,
-      autoRefresh: autoRefresh,
-      observesAppLifecycle: observesAppLifecycle,
-      accessToken: accessToken
-    )
   }
 }

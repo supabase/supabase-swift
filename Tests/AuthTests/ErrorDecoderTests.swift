@@ -255,7 +255,7 @@ struct ErrorDecoderTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in
             (
