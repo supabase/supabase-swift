@@ -69,10 +69,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `Storage.File`, `Storage.FormData` | removed |
 | any other API marked deprecated in v2 | removed; apply the v2 fix-it first |
 
-## `setHeader` takes an `HTTPField.Name` and returns a new value
+## `setHeader` is `settingHeader` and returns a new value
 
 `StorageClientConfiguration.headers` is `HTTPFields`. `setHeader(_:forKey:)` is
-`setHeader(name:value:)`. It no longer changes the receiver: it returns a copy with the header.
+`settingHeader(name:value:)`. It no longer changes the receiver: it returns a copy with the header.
 Use the returned value.
 
 ```swift
@@ -82,7 +82,7 @@ storage.setHeader("v", forKey: "X-Custom")
 try await storage.from("avatars").list()
 // v3
 StorageClientConfiguration(url: url, headers: [HTTPField.Name("apikey")!: key])
-let custom = storage.setHeader(name: HTTPField.Name("X-Custom")!, value: "v")
+let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v")
 try await custom.from("avatars").list()
 ```
 

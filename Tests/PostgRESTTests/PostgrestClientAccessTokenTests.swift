@@ -122,7 +122,7 @@ struct PostgrestClientAccessTokenTests {
 
     try await sut.from("todos")
       .select()
-      .setHeader(name: "Authorization", value: "Bearer explicit")
+      .settingHeader(name: .authorization, value: "Bearer explicit")
       .execute()
 
     #expect(capturedHeaders.value[.authorization] == "Bearer explicit")

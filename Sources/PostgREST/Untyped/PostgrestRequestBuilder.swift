@@ -6,15 +6,15 @@
 //
 
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 import Logging
 
 /// A marker protocol conformed to by every phase whose builder can execute a request and set
 /// per-request headers/retry behavior.
 ///
 /// Conform a phase type to this — or, more commonly, to ``PostgrestTransformablePhase`` or
-/// ``PostgrestFilterablePhase``, both of which refine it — to grant `setHeader`/`retry`/`execute`
-/// on ``PostgrestRequestBuilder`` when `Phase` is that type.
+/// ``PostgrestFilterablePhase``, both of which refine it — to grant
+/// `settingHeader`/`retry`/`execute` on ``PostgrestRequestBuilder`` when `Phase` is that type.
 public protocol PostgrestExecutablePhase {}
 
 /// A marker protocol for phases that can still apply ordering, pagination, and response-format
@@ -50,7 +50,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 /// ``PostgrestQueryBuilder``, ``PostgrestFilterBuilder``, and ``PostgrestTransformBuilder``. The
 /// `Phase` parameter is a compile-time-only marker (never constructed) that determines which
 /// methods are available: filter methods require ``PostgrestFilterablePhase``, transform methods
-/// require ``PostgrestTransformablePhase``, and `setHeader`/`retry`/`execute` require
+/// require ``PostgrestTransformablePhase``, and `settingHeader`/`retry`/`execute` require
 /// ``PostgrestExecutablePhase``. You don't construct this type directly — call
 /// ``PostgrestClient/from(_:)->PostgrestQueryBuilder`` or ``PostgrestClient/rpc(_:params:head:get:count:)`` and chain
 /// from there.
@@ -59,7 +59,7 @@ public enum PostgrestTransformPhase: PostgrestTransformablePhase {}
 ///
 /// ### Setting Headers
 ///
-/// - ``setHeader(name:value:)``
+/// - ``settingHeader(name:value:)``
 ///
 /// ### Configuring Retries
 ///
@@ -303,20 +303,26 @@ extension PostgrestRequestBuilder: PostgrestExecutableBuilder
 where Phase: PostgrestExecutablePhase {}
 
 extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
-  /// Adds or replaces a custom HTTP header on the request.
+  /// Returns a new builder with an HTTP header added to the request, or replaced if the request
+  /// already has it.
   ///
   /// Use this method to attach arbitrary headers — for example, to pass custom PostgREST
-  /// `Prefer` values or to forward user-supplied metadata.
+  /// `Prefer` values or to forward user-supplied metadata. Because the builder is a value type,
+  /// this method does not mutate `self` — it returns a new builder. Discarding the return value
+  /// is a no-op, so always use the result:
+  ///
+  /// ```swift
+  /// try await client.from("todos")
+  ///   .select()
+  ///   .settingHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
+  ///   .execute()
+  /// ```
   ///
   /// - Parameters:
-  ///   - name: The header field name.
-  ///   - value: The header field value.
-  /// - Returns: The same builder value so calls can be chained.
-  public func setHeader(name: String, value: String) -> Self {
-    setHeader(name: .init(name)!, value: value)
-  }
-
-  func setHeader(name: HTTPField.Name, value: String) -> Self {
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new builder with the header set.
+  public func settingHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
     copy.request.headerFields[name] = value
     return copy
