@@ -10,7 +10,6 @@ import CustomDump
 import Foundation
 import Helpers
 import InlineSnapshotTesting
-import Mocker
 import TestHelpers
 import Testing
 
@@ -20,183 +19,341 @@ import Testing
   import FoundationNetworking
 #endif
 
-extension AuthMockerTests {
-  @Suite(.mockerSerialized)
-  struct AuthOAuthServerTests {
-    let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-    let userId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
+@Suite
+struct AuthOAuthServerTests {
+  let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+  let userId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
 
-    let storage = InMemoryTestStorage()
+  let transport = RecordingTransport()
+  let storage = InMemoryTestStorage()
 
-    init() {
-      Mocker.removeAll()
-    }
-
-    private func makeSUT() -> AuthClient {
-      let sessionConfiguration = URLSessionConfiguration.default
-      sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-      let session = URLSession(configuration: sessionConfiguration)
-
-      let configuration = AuthClient.Configuration(
+  private func makeSUT() -> AuthClient {
+    AuthClient(
+      configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
         headers: HTTPFields(["apikey": "supabase.publishable.key"]),
         storage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
+        http: .init(transport: transport),
+        autoRefresh: .manual),
+      pkce: .live,
+      platform: .live)
+  }
 
-      return AuthClient(configuration: configuration)
+  @Test
+  func decodeOAuthAuthorizationDetails() throws {
+    let json = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "\(clientId)",
+          "name": "Test Client",
+          "uri": "https://example.com",
+          "logo_uri": "https://example.com/logo.png"
+        },
+        "user": {
+          "id": "\(userId)",
+          "email": "user@example.com"
+        },
+        "scope": "read write"
+      }
+      """.data(using: .utf8)!
+
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      OAuthAuthorizationDetailsResponse.self, from: json
+    )
+
+    guard case .details(let details) = response else {
+      Issue.record("Expected .details case, got \(response)")
+      return
     }
 
-    @Test
-    func decodeOAuthAuthorizationDetails() throws {
-      let json = """
-        {
-          "authorization_id": "abc123def456",
-          "redirect_uri": "https://example.com/callback",
-          "client": {
-            "id": "\(clientId)",
-            "name": "Test Client",
-            "uri": "https://example.com",
-            "logo_uri": "https://example.com/logo.png"
-          },
-          "user": {
-            "id": "\(userId)",
-            "email": "user@example.com"
-          },
-          "scope": "read write"
-        }
-        """.data(using: .utf8)!
+    #expect(details.authorizationId == "abc123def456")
+    #expect(details.redirectUri == URL(string: "https://example.com/callback"))
+    #expect(details.client.id == clientId)
+    #expect(details.client.name == "Test Client")
+    #expect(details.client.uri == URL(string: "https://example.com"))
+    #expect(details.client.logoUri == URL(string: "https://example.com/logo.png"))
+    #expect(details.user.id == userId)
+    #expect(details.user.email == "user@example.com")
+    #expect(details.scope == "read write")
+  }
 
-      let response = try AuthClient.Configuration.jsonDecoder.decode(
+  @Test
+  func decodeOAuthAuthorizationDetailsWithMissingOptionalClientFields() throws {
+    let json = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "\(clientId)",
+          "name": "Test Client"
+        },
+        "user": {
+          "id": "\(userId)",
+          "email": "user@example.com"
+        },
+        "scope": "read"
+      }
+      """.data(using: .utf8)!
+
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      OAuthAuthorizationDetailsResponse.self, from: json
+    )
+
+    guard case .details(let details) = response else {
+      Issue.record("Expected .details case, got \(response)")
+      return
+    }
+
+    #expect(details.client.uri == nil)
+    #expect(details.client.logoUri == nil)
+  }
+
+  @Test
+  func decodeOAuthAuthorizationDetailsWithoutClientNameUserEmailOrScope() throws {
+    let json = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "\(clientId)"
+        },
+        "user": {
+          "id": "\(userId)"
+        }
+      }
+      """.data(using: .utf8)!
+
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      OAuthAuthorizationDetailsResponse.self, from: json
+    )
+
+    guard case .details(let details) = response else {
+      Issue.record("Expected .details case, got \(response)")
+      return
+    }
+
+    #expect(details.authorizationId == "abc123def456")
+    #expect(details.client.id == clientId)
+    #expect(details.client.name == nil)
+    #expect(details.user.id == userId)
+    #expect(details.user.email == nil)
+    #expect(details.scope == nil)
+  }
+
+  @Test
+  func decodeOAuthAuthorizationDetailsAutoApproveRedirect() throws {
+    let json = """
+      { "redirect_url": "https://example.com/callback?code=abc123" }
+      """.data(using: .utf8)!
+
+    let response = try AuthClient.Configuration.jsonDecoder.decode(
+      OAuthAuthorizationDetailsResponse.self, from: json
+    )
+
+    guard case .redirect(let redirect) = response else {
+      Issue.record("Expected .redirect case, got \(response)")
+      return
+    }
+
+    #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
+  }
+
+  @Test
+  func decodeOAuthAuthorizationDetailsResponseSurfacesTheDetailsError() throws {
+    let json = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "not-a-uuid",
+          "name": "Test Client"
+        },
+        "user": {
+          "id": "\(userId)",
+          "email": "user@example.com"
+        },
+        "scope": "email"
+      }
+      """.data(using: .utf8)!
+
+    let error = try #require(throws: DecodingError.self) {
+      try AuthClient.Configuration.jsonDecoder.decode(
         OAuthAuthorizationDetailsResponse.self, from: json
       )
+    }
+    #expect("\(error)".lowercased().contains("uuid"), "got \(error)")
+  }
 
-      guard case .details(let details) = response else {
-        Issue.record("Expected .details case, got \(response)")
-        return
+  @Test
+  func decodeOAuthGrant() throws {
+    let json = """
+      {
+        "client": {
+          "id": "\(clientId)",
+          "name": "Test Client",
+          "uri": "https://example.com",
+          "logo_uri": "https://example.com/logo.png"
+        },
+        "scopes": ["read", "write"],
+        "granted_at": "2024-01-01T00:00:00.000Z"
       }
+      """.data(using: .utf8)!
 
-      #expect(details.authorizationId == "abc123def456")
-      #expect(details.redirectUri == URL(string: "https://example.com/callback"))
-      #expect(details.client.id == clientId)
-      #expect(details.client.name == "Test Client")
-      #expect(details.client.uri == URL(string: "https://example.com"))
-      #expect(details.client.logoUri == URL(string: "https://example.com/logo.png"))
-      #expect(details.user.id == userId)
-      #expect(details.user.email == "user@example.com")
-      #expect(details.scope == "read write")
+    let grant = try AuthClient.Configuration.jsonDecoder.decode(OAuthGrant.self, from: json)
+
+    #expect(grant.client.id == clientId)
+    #expect(grant.scopes == ["read", "write"])
+  }
+
+  @Test
+  func authorizationDetails() async throws {
+    let responseData = """
+      {
+        "authorization_id": "abc123def456",
+        "redirect_uri": "https://example.com/callback",
+        "client": {
+          "id": "\(clientId)",
+          "name": "Test Client",
+          "uri": "https://example.com",
+          "logo_uri": "https://example.com/logo.png"
+        },
+        "user": {
+          "id": "\(userId)",
+          "email": "user@example.com"
+        },
+        "scope": "read write"
+      }
+      """.data(using: .utf8)!
+
+    transport.stub(.get, "oauth/authorizations/abc123def456", data: responseData) {
+      #"""
+      curl \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.publishable.key" \
+      	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456"
+      """#
     }
 
-    @Test
-    func decodeOAuthAuthorizationDetailsWithMissingOptionalClientFields() throws {
-      let json = """
-        {
-          "authorization_id": "abc123def456",
-          "redirect_uri": "https://example.com/callback",
-          "client": {
-            "id": "\(clientId)",
-            "name": "Test Client"
-          },
-          "user": {
-            "id": "\(userId)",
-            "email": "user@example.com"
-          },
-          "scope": "read"
-        }
-        """.data(using: .utf8)!
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      let response = try AuthClient.Configuration.jsonDecoder.decode(
-        OAuthAuthorizationDetailsResponse.self, from: json
-      )
+    let response = try await sut.oauthServer.authorizationDetails(
+      id: "abc123def456"
+    )
 
-      guard case .details(let details) = response else {
-        Issue.record("Expected .details case, got \(response)")
-        return
-      }
-
-      #expect(details.client.uri == nil)
-      #expect(details.client.logoUri == nil)
+    guard case .details(let details) = response else {
+      Issue.record("Expected .details case, got \(response)")
+      return
     }
 
-    @Test
-    func decodeOAuthAuthorizationDetailsWithoutClientNameUserEmailOrScope() throws {
-      let json = """
-        {
-          "authorization_id": "abc123def456",
-          "redirect_uri": "https://example.com/callback",
-          "client": {
-            "id": "\(clientId)"
-          },
-          "user": {
-            "id": "\(userId)"
-          }
-        }
-        """.data(using: .utf8)!
+    #expect(details.authorizationId == "abc123def456")
+    #expect(details.client.name == "Test Client")
+  }
 
-      let response = try AuthClient.Configuration.jsonDecoder.decode(
-        OAuthAuthorizationDetailsResponse.self, from: json
-      )
+  @Test
+  func getAuthorizationDetailsSessionMissing() async throws {
+    let sut = makeSUT()
 
-      guard case .details(let details) = response else {
-        Issue.record("Expected .details case, got \(response)")
-        return
-      }
+    do {
+      _ = try await sut.oauthServer.authorizationDetails(id: "abc123def456")
+      Issue.record("Expected AuthError.sessionMissing")
+    } catch let error as AuthError where error.kind == .sessionMissing {
+    }
+  }
 
-      #expect(details.authorizationId == "abc123def456")
-      #expect(details.client.id == clientId)
-      #expect(details.client.name == nil)
-      #expect(details.user.id == userId)
-      #expect(details.user.email == nil)
-      #expect(details.scope == nil)
+  @Test
+  func getAuthorizationDetailsNotFound() async throws {
+    let responseData = """
+      { "error_code": "oauth_authorization_not_found", "msg": "Authorization not found" }
+      """.data(using: .utf8)!
+
+    transport.stub(.get, "oauth/authorizations/missing", status: .notFound, data: responseData)
+
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
+
+    do {
+      _ = try await sut.oauthServer.authorizationDetails(id: "missing")
+      Issue.record("Expected AuthError.server")
+    } catch let error as AuthError {
+      #expect(error.kind == .server)
+      #expect(error.errorCode == .oauthAuthorizationNotFound)
+    }
+  }
+
+  @Test
+  func approveAuthorization() async throws {
+    let responseData = """
+      { "redirect_url": "https://example.com/callback?code=abc123" }
+      """.data(using: .utf8)!
+
+    transport.stub(.post, "oauth/authorizations/abc123def456/consent", data: responseData) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "Content-Length: 20" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.publishable.key" \
+      	--data "{\"action\":\"approve\"}" \
+      	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
+      """#
     }
 
-    @Test
-    func decodeOAuthAuthorizationDetailsAutoApproveRedirect() throws {
-      let json = """
-        { "redirect_url": "https://example.com/callback?code=abc123" }
-        """.data(using: .utf8)!
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      let response = try AuthClient.Configuration.jsonDecoder.decode(
-        OAuthAuthorizationDetailsResponse.self, from: json
-      )
+    let redirect = try await sut.oauthServer.approveAuthorization(
+      id: "abc123def456"
+    )
 
-      guard case .redirect(let redirect) = response else {
-        Issue.record("Expected .redirect case, got \(response)")
-        return
+    #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
+  }
+
+  @Test
+  func denyAuthorization() async throws {
+    let responseData = """
+      {
+        "redirect_url": "https://example.com/callback?error=access_denied&error_description=User+denied+the+request"
       }
+      """.data(using: .utf8)!
 
-      #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
+    transport.stub(.post, "oauth/authorizations/abc123def456/consent", data: responseData) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "Content-Length: 17" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.publishable.key" \
+      	--data "{\"action\":\"deny\"}" \
+      	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
+      """#
     }
 
-    @Test
-    func decodeOAuthAuthorizationDetailsResponseSurfacesTheDetailsError() throws {
-      let json = """
-        {
-          "authorization_id": "abc123def456",
-          "redirect_uri": "https://example.com/callback",
-          "client": {
-            "id": "not-a-uuid",
-            "name": "Test Client"
-          },
-          "user": {
-            "id": "\(userId)",
-            "email": "user@example.com"
-          },
-          "scope": "email"
-        }
-        """.data(using: .utf8)!
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      let error = try #require(throws: DecodingError.self) {
-        try AuthClient.Configuration.jsonDecoder.decode(
-          OAuthAuthorizationDetailsResponse.self, from: json
-        )
-      }
-      #expect("\(error)".lowercased().contains("uuid"), "got \(error)")
-    }
+    // Denial must NOT throw — it's a successful API call, per RFC 6749 the
+    // OAuth error is embedded in the redirect URL's query string.
+    let redirect = try await sut.oauthServer.denyAuthorization(id: "abc123def456")
 
-    @Test
-    func decodeOAuthGrant() throws {
-      let json = """
+    #expect(redirect.redirectURL.query?.contains("error=access_denied") == true)
+  }
+
+  @Test
+  func listGrants() async throws {
+    let responseData = """
+      [
         {
           "client": {
             "id": "\(clientId)",
@@ -207,274 +364,67 @@ extension AuthMockerTests {
           "scopes": ["read", "write"],
           "granted_at": "2024-01-01T00:00:00.000Z"
         }
-        """.data(using: .utf8)!
+      ]
+      """.data(using: .utf8)!
 
-      let grant = try AuthClient.Configuration.jsonDecoder.decode(OAuthGrant.self, from: json)
-
-      #expect(grant.client.id == clientId)
-      #expect(grant.scopes == ["read", "write"])
+    transport.stub(.get, "user/oauth/grants", data: responseData) {
+      #"""
+      curl \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.publishable.key" \
+      	"http://localhost:54321/auth/v1/user/oauth/grants"
+      """#
     }
 
-    @Test
-    func authorizationDetails() async throws {
-      let responseData = """
-        {
-          "authorization_id": "abc123def456",
-          "redirect_uri": "https://example.com/callback",
-          "client": {
-            "id": "\(clientId)",
-            "name": "Test Client",
-            "uri": "https://example.com",
-            "logo_uri": "https://example.com/logo.png"
-          },
-          "user": {
-            "id": "\(userId)",
-            "email": "user@example.com"
-          },
-          "scope": "read write"
-        }
-        """.data(using: .utf8)!
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      Mock(
-        url: clientURL.appendingPathComponent("oauth/authorizations/abc123def456"),
-        statusCode: 200,
-        data: [.get: responseData]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
-        	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456"
-        """#
-      }
-      .register()
+    let grants = try await sut.oauthServer.listGrants()
 
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
+    #expect(grants.count == 1)
+    #expect(grants[0].client.id == clientId)
+    #expect(grants[0].scopes == ["read", "write"])
+  }
 
-      let response = try await sut.oauthServer.authorizationDetails(
-        id: "abc123def456"
-      )
-
-      guard case .details(let details) = response else {
-        Issue.record("Expected .details case, got \(response)")
-        return
-      }
-
-      #expect(details.authorizationId == "abc123def456")
-      #expect(details.client.name == "Test Client")
+  @Test
+  func revokeGrant() async throws {
+    transport.stub(.delete, "user/oauth/grants", status: .noContent) {
+      #"""
+      curl \
+      	--request DELETE \
+      	--header "Authorization: Bearer accesstoken" \
+      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Supabase-Api-Version: 2024-01-01" \
+      	--header "apikey: supabase.publishable.key" \
+      	"http://localhost:54321/auth/v1/user/oauth/grants?client_id=E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
+      """#
     }
 
-    @Test
-    func getAuthorizationDetailsSessionMissing() async throws {
-      let sut = makeSUT()
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      do {
-        _ = try await sut.oauthServer.authorizationDetails(id: "abc123def456")
-        Issue.record("Expected AuthError.sessionMissing")
-      } catch let error as AuthError where error.kind == .sessionMissing {
-      }
-    }
+    try await sut.oauthServer.revokeGrant(id: clientId)
+  }
 
-    @Test
-    func getAuthorizationDetailsNotFound() async throws {
-      let responseData = """
-        { "error_code": "oauth_authorization_not_found", "msg": "Authorization not found" }
-        """.data(using: .utf8)!
+  @Test
+  func revokeGrantNotFound() async throws {
+    let responseData = """
+      { "error_code": "oauth_consent_not_found", "msg": "No active grant found" }
+      """.data(using: .utf8)!
 
-      Mock(
-        url: clientURL.appendingPathComponent("oauth/authorizations/missing"),
-        statusCode: 404,
-        data: [.get: responseData]
-      )
-      .register()
+    transport.stub(.delete, "user/oauth/grants", status: .notFound, data: responseData)
 
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
 
-      do {
-        _ = try await sut.oauthServer.authorizationDetails(id: "missing")
-        Issue.record("Expected AuthError.server")
-      } catch let error as AuthError {
-        #expect(error.kind == .server)
-        #expect(error.errorCode == .oauthAuthorizationNotFound)
-      }
-    }
-
-    @Test
-    func approveAuthorization() async throws {
-      let responseData = """
-        { "redirect_url": "https://example.com/callback?code=abc123" }
-        """.data(using: .utf8)!
-
-      Mock(
-        url: clientURL.appendingPathComponent("oauth/authorizations/abc123def456/consent"),
-        statusCode: 200,
-        data: [.post: responseData]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 20" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
-        	--data "{\"action\":\"approve\"}" \
-        	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
-
-      let redirect = try await sut.oauthServer.approveAuthorization(
-        id: "abc123def456"
-      )
-
-      #expect(redirect.redirectURL == URL(string: "https://example.com/callback?code=abc123"))
-    }
-
-    @Test
-    func denyAuthorization() async throws {
-      let responseData = """
-        {
-          "redirect_url": "https://example.com/callback?error=access_denied&error_description=User+denied+the+request"
-        }
-        """.data(using: .utf8)!
-
-      Mock(
-        url: clientURL.appendingPathComponent("oauth/authorizations/abc123def456/consent"),
-        statusCode: 200,
-        data: [.post: responseData]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request POST \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "Content-Length: 17" \
-        	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
-        	--data "{\"action\":\"deny\"}" \
-        	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456/consent"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
-
-      // Denial must NOT throw — it's a successful API call, per RFC 6749 the
-      // OAuth error is embedded in the redirect URL's query string.
-      let redirect = try await sut.oauthServer.denyAuthorization(id: "abc123def456")
-
-      #expect(redirect.redirectURL.query?.contains("error=access_denied") == true)
-    }
-
-    @Test
-    func listGrants() async throws {
-      let responseData = """
-        [
-          {
-            "client": {
-              "id": "\(clientId)",
-              "name": "Test Client",
-              "uri": "https://example.com",
-              "logo_uri": "https://example.com/logo.png"
-            },
-            "scopes": ["read", "write"],
-            "granted_at": "2024-01-01T00:00:00.000Z"
-          }
-        ]
-        """.data(using: .utf8)!
-
-      Mock(
-        url: clientURL.appendingPathComponent("user/oauth/grants"),
-        statusCode: 200,
-        data: [.get: responseData]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
-        	"http://localhost:54321/auth/v1/user/oauth/grants"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
-
-      let grants = try await sut.oauthServer.listGrants()
-
-      #expect(grants.count == 1)
-      #expect(grants[0].client.id == clientId)
-      #expect(grants[0].scopes == ["read", "write"])
-    }
-
-    @Test
-    func revokeGrant() async throws {
-      Mock(
-        url: clientURL.appendingPathComponent("user/oauth/grants"),
-        ignoreQuery: true,
-        statusCode: 204,
-        data: [.delete: Data()]
-      )
-      .snapshotRequest {
-        #"""
-        curl \
-        	--request DELETE \
-        	--header "Authorization: Bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
-        	--header "X-Supabase-Api-Version: 2024-01-01" \
-        	--header "apikey: supabase.publishable.key" \
-        	"http://localhost:54321/auth/v1/user/oauth/grants?client_id=E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
-        """#
-      }
-      .register()
-
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
-
+    do {
       try await sut.oauthServer.revokeGrant(id: clientId)
-    }
-
-    @Test
-    func revokeGrantNotFound() async throws {
-      let responseData = """
-        { "error_code": "oauth_consent_not_found", "msg": "No active grant found" }
-        """.data(using: .utf8)!
-
-      Mock(
-        url: clientURL.appendingPathComponent("user/oauth/grants"),
-        ignoreQuery: true,
-        statusCode: 404,
-        data: [.delete: responseData]
-      )
-      .register()
-
-      let sut = makeSUT()
-      try await sut.seedSession(.valid)
-
-      do {
-        try await sut.oauthServer.revokeGrant(id: clientId)
-        Issue.record("Expected AuthError.server")
-      } catch let error as AuthError {
-        #expect(error.kind == .server)
-        #expect(error.errorCode == .oauthConsentNotFound)
-      }
+      Issue.record("Expected AuthError.server")
+    } catch let error as AuthError {
+      #expect(error.kind == .server)
+      #expect(error.errorCode == .oauthConsentNotFound)
     }
   }
 }
