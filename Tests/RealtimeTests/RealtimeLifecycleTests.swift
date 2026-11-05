@@ -144,6 +144,7 @@ struct RealtimeLifecycleTests {
   func wakeCutsABackoffShort() async throws {
     let sut = makeClient(reconnectBackoff: .steps([.seconds(30)]))
     try await sut.connect()
+    await testClock.advance(by: .seconds(3))
     let statusUpdates = await sut.statusChanges()
     servers.value.last?.close(code: nil, reason: "network change")
     _ = await statusUpdates.first { $0 == .reconnecting }
@@ -154,6 +155,30 @@ struct RealtimeLifecycleTests {
 
     #expect(servers.value.count == 2)
     #expect(testClock.now == start)
+  }
+
+  /// A path that flaps right after an attempt started cannot start another at once: the wake
+  /// retries when 2 s have passed since that attempt, long before the 30 s backoff ends.
+  @Test
+  func wakeJustAfterAnAttemptWaitsForTheCooldown() async throws {
+    let sut = makeClient(reconnectBackoff: .steps([.seconds(30)]))
+    try await sut.connect()
+    let statusUpdates = await sut.statusChanges()
+    servers.value.last?.close(code: nil, reason: "network change")
+    _ = await statusUpdates.first { $0 == .reconnecting }
+    let start = testClock.now
+
+    sut.inbox.yield(.wake)
+    sut.inbox.yield(.wake)
+    await sut.flushInbox()
+    #expect(servers.value.count == 1)
+    #expect(await sut.status == .reconnecting)
+
+    await testClock.advance(by: .seconds(2))
+    _ = await statusUpdates.first { $0 == .connected }
+
+    #expect(servers.value.count == 2)
+    #expect(start.duration(to: testClock.now) == .seconds(2))
   }
 
   @Test

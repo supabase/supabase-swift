@@ -37,6 +37,14 @@ extension RealtimeCore {
     guard connection != previous else { return effects }
 
     logger.debug("Connection → \(connection) on \(event)")
+    switch connection {
+    case .connecting:
+      lastAttemptStart = now.elapsed
+    case .reconnecting(_, let retryIn, _):
+      reconnectDueAt = now.elapsed + retryIn
+    case .connected, .disconnected:
+      break
+    }
     // A heartbeat pending on the old socket can never be acknowledged on the new one.
     pendingHeartbeat = nil
 
@@ -177,6 +185,26 @@ extension RealtimeCore {
   mutating func enterBackground() -> [Effect] {
     wasConnectedBeforeBackground = connection.status.isConnected
     return []
+  }
+
+  /// The shortest time between the start of an attempt and the start of the next one that a
+  /// wake hint causes.
+  static let wakeCooldown: Duration = .seconds(2)
+
+  /// Handles a hint that the network may be back. A hint that comes less than ``wakeCooldown``
+  /// after the last attempt started moves the retry to the end of the cooldown instead of
+  /// starting it, so a path that flaps cannot start an attempt per report. It never makes the
+  /// wait longer than the backoff. The probe and the foreground retry at once and do not come
+  /// through here.
+  mutating func wakeHint() -> [Effect] {
+    guard case .reconnecting = connection, let lastAttemptStart, let reconnectDueAt else {
+      return transitionConnection(.wake)
+    }
+    let retryAt = lastAttemptStart + Self.wakeCooldown
+    guard retryAt > now.elapsed else { return transitionConnection(.wake) }
+    guard retryAt < reconnectDueAt else { return [] }
+    self.reconnectDueAt = retryAt
+    return [.schedule(.reconnect, after: retryAt - now.elapsed)]
   }
 
   /// How long the heartbeat sent on a return to the foreground waits for its reply.

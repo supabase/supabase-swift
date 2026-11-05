@@ -583,6 +583,97 @@ struct RealtimeCoreConnectionTests {
     #expect(harness.send(.appForeground) == [])
   }
 
+  // MARK: Wake cooldown
+
+  /// A harness that connected at time zero and lost the socket at `lostAt`, with a 30 s backoff,
+  /// so a wake is the only thing that ends the wait early.
+  static func waitingToRetry(lostAt: Duration) -> CoreHarness {
+    var options = RealtimeCore.Options.test
+    options.retryDelay = { _ in .seconds(30) }
+    var harness = CoreHarness.connected(options: options)
+    harness.advance(by: lostAt)
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    return harness
+  }
+
+  /// A path that flaps in bad reception reports "back" again and again. A wake that comes less
+  /// than the cooldown after the last attempt started waits for the cooldown to end.
+  @Test
+  func wakeInsideTheCooldownRetriesWhenItEnds() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(1))
+    harness.advance(by: .milliseconds(500))
+
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(500))])
+    #expect(
+      harness.core.connection
+        == .reconnecting(
+          attempt: 1, retryIn: .seconds(30), lastError: .socketClosed(code: nil, reason: nil)))
+
+    harness.advance(by: .milliseconds(500))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  @Test
+  func wakeAfterTheCooldownRetriesAtOnce() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(3))
+
+    let effects = harness.send(.wake)
+
+    #expect(effects.contains(.cancel(.reconnect)))
+    #expect(effects.contains(.openSocket))
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  /// The wake never lengthens a wait: when the backoff ends before the cooldown does, the
+  /// backoff timer stays as it is.
+  @Test
+  func wakeInsideTheCooldownNeverDelaysTheBackoff() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    harness.advance(by: .milliseconds(200))
+
+    #expect(harness.send(.wake) == [])
+
+    harness.advance(by: .milliseconds(800))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+  }
+
+  /// Hints that pile up inside one cooldown schedule one retry, and a retry that fails quickly
+  /// is followed by the next at least a cooldown after it started.
+  @Test
+  func flappingHintsStartOneAttemptPerCooldown() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(1))
+    harness.advance(by: .milliseconds(200))
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(800))])
+    harness.advance(by: .milliseconds(200))
+    #expect(harness.send(.wake) == [])
+    #expect(harness.send(.wake) == [])
+
+    // The retry starts at 2 s and fails at once.
+    harness.advance(by: .milliseconds(600))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+    harness.advance(by: .milliseconds(100))
+    _ = harness.send(.socketOpenFailed(Self.unreachable))
+
+    // 2.1 s: the next attempt may not start before 4 s.
+    harness.advance(by: .milliseconds(400))
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(1500))])
+  }
+
+  /// Returning to the foreground is not a flapping path: it retries at once, whatever the
+  /// last attempt's age.
+  @Test
+  func foregroundWhileWaitingRetriesInsideTheCooldown() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appBackground)
+    harness.advance(by: .milliseconds(500))
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    harness.advance(by: .milliseconds(100))
+
+    #expect(harness.send(.appForeground).contains(.openSocket))
+  }
+
   // MARK: Helpers
 
   static func heartbeat(ref: Ref) -> RealtimeMessage {

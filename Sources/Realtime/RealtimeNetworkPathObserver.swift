@@ -37,8 +37,8 @@ import Foundation
   ///
   /// The monitor reports the current path as soon as it starts. That report is a baseline, not a
   /// change, so it never wakes the client. Every later satisfied report does; the core ignores the
-  /// hint unless a backoff wait is running. `.requiresConnection` is not satisfied: it says a
-  /// connection attempt may bring a path up.
+  /// hint unless a backoff wait is running, and holds it back until the wake cooldown has passed.
+  /// `.requiresConnection` is not satisfied: it says a connection attempt may bring a path up.
   final class NetworkPathWakeHint: Sendable {
     private let inbox: AsyncStream<Input>.Continuation
     private let hasReported = LockIsolated(false)

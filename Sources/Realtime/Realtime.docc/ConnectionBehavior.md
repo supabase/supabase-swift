@@ -120,8 +120,10 @@ keeps its connection.
 With ``RealtimeClientOptions/monitorsNetworkPath`` on (the default on iOS, macOS, tvOS and
 visionOS), the client watches the network path. When the path becomes satisfied while the client
 is waiting before a reconnect attempt, it tries again at once instead of sleeping out the rest of
-the wait. The client never waits for this hint: it keeps retrying on its backoff schedule when
-the path monitor reports no network.
+the wait. A path that flaps in bad reception cannot start an attempt per report: a hint never
+starts an attempt less than 2 seconds after the last one started, and a hint that comes sooner
+waits until that time. The client never waits for this hint: it keeps retrying on its backoff
+schedule when the path monitor reports no network.
 
 ### Closing the socket in the background
 

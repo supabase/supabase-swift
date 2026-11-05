@@ -112,9 +112,10 @@ public struct RealtimeClientOptions: Sendable {
   /// Whether to watch the network path and reconnect as soon as the network is back.
   ///
   /// When enabled, a report that the network path is satisfied cuts the wait before the next
-  /// reconnect attempt short. The hint only shortens a wait: the client never refuses to connect
-  /// because the monitor reports no path, and it ignores the hint while it is connected,
-  /// connecting, or disconnected.
+  /// reconnect attempt short, but never to less than 2 seconds after the last attempt started, so
+  /// a path that flaps cannot start an attempt per report. The hint only shortens a wait: the
+  /// client never refuses to connect because the monitor reports no path, and it ignores the
+  /// hint while it is connected, connecting, or disconnected.
   ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms. watchOS
   /// keeps reporting an unsatisfied path to ordinary apps, so the hint may never fire there.

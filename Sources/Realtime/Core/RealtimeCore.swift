@@ -51,7 +51,8 @@ struct RealtimeCore {
     case socketClosed(code: Int?, reason: String?)
     /// The current socket failed, for example a heartbeat that was never acknowledged.
     case socketFailed(RealtimeError)
-    /// A hint that the network may be back. Cuts a backoff wait short; ignored otherwise.
+    /// A hint that the network may be back. Cuts a backoff wait short, but never to less than
+    /// ``wakeCooldown`` after the last attempt started; ignored otherwise.
     case wake
     /// The last channel was removed; disconnect after `disconnectAfter` unless a channel
     /// subscribes first.
@@ -188,6 +189,11 @@ struct RealtimeCore {
   var pendingHeartbeat: (ref: Ref, sentAt: Duration)?
   /// Whether a `.livenessProbe` timer is scheduled, so a reply or leaving `.connected` cancels it.
   var livenessProbeScheduled = false
+  /// When the last connection attempt started, as `CoreTime.elapsed`.
+  var lastAttemptStart: Duration?
+  /// When the `.reconnect` timer is due while the connection is `.reconnecting`, as
+  /// `CoreTime.elapsed`.
+  var reconnectDueAt: Duration?
   /// The `connect()` callers waiting for the attempt in flight.
   var connectWaiters: [WaiterID] = []
   /// Whether the socket was connected when the app last went to the background.
@@ -223,8 +229,10 @@ struct RealtimeCore {
     case .timerFired(.idleDisconnect):
       return transitionConnection(.disconnectRequested(code: nil, reason: nil))
         + disconnectChannels()
-    case .timerFired(.reconnect), .wake, .lastChannelRemoved:
+    case .timerFired(.reconnect), .lastChannelRemoved:
       return transitionConnection(event)
+    case .wake:
+      return wakeHint()
     case .appBackground:
       return enterBackground()
     case .appForeground:
