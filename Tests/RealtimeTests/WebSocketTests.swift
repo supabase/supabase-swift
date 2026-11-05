@@ -7,6 +7,7 @@
 
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
@@ -86,20 +87,21 @@ struct WebSocketTests {
 
       let url = URL(string: "ws://127.0.0.1:\(port)")!
 
-      try await confirmation("sockets deallocated", expectedCount: 5) { deallocated in
-        for _ in 0..<5 {
-          let connection = try await URLSessionWebSocketTransport()
-            .connect(to: url, headerFields: [:])
-          objc_setAssociatedObject(
-            connection as AnyObject,
-            &deinitNotifierKey,
-            DeinitNotifier { deallocated() },
-            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
-          )
-          connection.close(code: .normalClosure, reason: nil)
-        }
+      let (deallocations, deallocated) = AsyncStream<Void>.makeStream()
+      for _ in 0..<5 {
+        let connection = try await URLSessionWebSocketTransport()
+          .connect(to: url, headerFields: [:])
+        objc_setAssociatedObject(
+          connection as AnyObject,
+          &deinitNotifierKey,
+          DeinitNotifier { deallocated.yield() },
+          .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        connection.close(code: .normalClosure, reason: nil)
+      }
 
-        try await Task.sleep(for: .seconds(1))
+      try await withTimeout(.seconds(10)) {
+        for await _ in deallocations.prefix(5) {}
       }
     }
 
@@ -137,9 +139,11 @@ struct WebSocketTests {
       let first = try await transport.connect(to: url, headerFields: [:])
       first.close(code: .normalClosure, reason: nil)
 
-      // `finishTasksAndInvalidate()` invalidates asynchronously via a delegate callback;
-      // give it time to take effect before checking whether the session still works.
-      try await Task.sleep(for: .milliseconds(200))
+      // The connection finishes its events once the close is handled, and invalidates its own
+      // session right after; connect again only then.
+      try await withTimeout(.seconds(5)) {
+        for await _ in first.events {}
+      }
 
       let second = try await transport.connect(to: url, headerFields: [:])
       second.close(code: .normalClosure, reason: nil)

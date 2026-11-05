@@ -8,6 +8,7 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Helpers
 import TestHelpers
 import Testing
 
@@ -238,10 +239,16 @@ struct URLSessionWebSocketTransportTests {
       defer { server.stop() }
       let transport = URLSessionWebSocketTransport(isWatchOS: false, handshakeTimeout: 0.2)
 
+      let (finished, didFinish) = AsyncStream<Void>.makeStream()
       let task = Task {
-        try await transport.connect(to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+        defer { didFinish.yield() }
+        return try await transport.connect(
+          to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
       }
-      try await Task.sleep(for: .milliseconds(600))
+      // The 0.2 s watchOS handshake deadline would have ended the connect within this wait.
+      await #expect(throws: TimeoutError.self) {
+        try await withTimeout(.milliseconds(600)) { await finished.first(where: { _ in true }) }
+      }
       task.cancel()
 
       await #expect(throws: CancellationError.self) {
@@ -249,14 +256,15 @@ struct URLSessionWebSocketTransportTests {
       }
     }
 
-    @Test
+    @Test(.timeLimit(.minutes(1)))
     func cancellingConnectRethrowsCancellationError() async throws {
-      let server = try LoopbackTCPServer.stalling()
+      let (accepted, didAccept) = AsyncStream<Void>.makeStream()
+      let server = try LoopbackTCPServer { _ in didAccept.yield() }
       let port = try server.start()
       defer { server.stop() }
 
       let task = Task { try await connect(port: port) }
-      try await Task.sleep(for: .milliseconds(100))
+      for await _ in accepted { break }
       task.cancel()
 
       await #expect(throws: CancellationError.self) {

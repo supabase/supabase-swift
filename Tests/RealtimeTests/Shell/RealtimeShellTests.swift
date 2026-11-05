@@ -169,13 +169,20 @@ struct RealtimeShellTests {
     try await host.subscribe(channel)
     let socket = try #require(host.sockets.last)
     let server = try #require(host.server)
-    // Each send stays in flight for a moment, as on a slow network, so the broadcasts queue up.
-    socket.onSend { _ in try? await Task.sleep(for: .milliseconds(20)) }
+    // The first send stays in flight until the gate opens, as on a slow network, so the
+    // broadcasts queue up behind it.
+    let gate = Gate()
+    socket.onSend { _ in await gate.pass() }
 
     for index in 0..<5 {
       try await channel.broadcast(event: "queued", payload: ["n": index])
     }
-    await host.client.disconnect()
+    let disconnect = Task { await host.client.disconnect() }
+    await host.waitUntil {
+      if case .disconnected = await host.client.status { true } else { false }
+    }
+    gate.open()
+    await disconnect.value
 
     let events = server.receivedEvents
     let broadcasts = events.filter {
