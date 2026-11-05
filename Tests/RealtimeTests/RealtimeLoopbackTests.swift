@@ -51,6 +51,49 @@ import Testing
     }
 
     @Test
+    func watchOSWithoutOptInFailsConnectAndSubscribeWithoutRetrying() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let joins = script(server)
+
+      let client = makeClient(port: port, transport: URLSessionWebSocketTransport(isWatchOS: true))
+
+      let connectError = await #expect(throws: RealtimeError.self) { try await client.connect() }
+      #expect(connectError?.kind == .transport)
+      #expect(connectError?.isRetryable == false)
+      #expect(connectError?.message.contains("TN3135") == true)
+      #expect(await client.status == .disconnected)
+
+      let channel = await client.channel("room")
+      let subscribeError = await #expect(throws: RealtimeError.self) {
+        try await channel.subscribe()
+      }
+      #expect(subscribeError?.kind == .transport)
+      #expect(subscribeError?.message.contains("TN3135") == true)
+      #expect(joins.value == 0)
+    }
+
+    @Test
+    func watchOSWithOptInConnectsAndJoins() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let joins = script(server)
+
+      let client = makeClient(
+        port: port,
+        transport: URLSessionWebSocketTransport(allowsWatchOSConnections: true, isWatchOS: true))
+      try await client.connect()
+      let channel = await client.channel("room")
+      try await channel.subscribe()
+
+      #expect(await channel.status == .subscribed)
+      #expect(joins.value == 1)
+      await client.disconnect()
+    }
+
+    @Test
     func reconnectsAndRejoinsAfterTheServerCloses() async throws {
       let server = try LoopbackWebSocketServer()
       let port = try server.start()
@@ -85,7 +128,9 @@ import Testing
 
     // MARK: - Helpers
 
-    private func makeClient(port: UInt16) -> RealtimeClient {
+    private func makeClient(
+      port: UInt16, transport: URLSessionWebSocketTransport = URLSessionWebSocketTransport()
+    ) -> RealtimeClient {
       let options = RealtimeClientOptions(
         heartbeatInterval: .seconds(30),
         requestTimeout: .seconds(10),
@@ -94,7 +139,7 @@ import Testing
       return RealtimeClient(
         url: URL(string: "http://127.0.0.1:\(port)")!,
         options: options,
-        transport: URLSessionWebSocketTransport(),
+        transport: transport,
         http: HTTPClient(configuration: options.http, appending: []),
         clock: options.clock,
         reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))

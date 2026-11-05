@@ -15,9 +15,22 @@ that streams audio. See Apple's
 [TN3135: Low-level networking on watchOS](https://developer.apple.com/documentation/technotes/tn3135-low-level-networking-on-watchos).
 Outside those cases the system refuses the connection.
 
-The client does not check for this. Each attempt to open the socket fails with a
-``RealtimeError/Kind-swift.struct/transport`` error, and ``RealtimeChannel/subscribe()`` keeps
-retrying the join.
+``URLSessionWebSocketTransport`` fails fast on watchOS. ``RealtimeClient/connect()`` throws a
+``RealtimeError/Kind-swift.struct/transport`` error that cites TN3135 and has
+``RealtimeError/isRetryable`` set to `false`, so ``RealtimeChannel/subscribe()`` fails with the
+same error instead of retrying the join. Without the check the connection would wait forever.
+
+If your app runs in a context that TN3135 allows, such as audio streaming, opt in:
+
+```swift
+var options = RealtimeClientOptions()
+options.webSocketTransport = URLSessionWebSocketTransport(allowsWatchOSConnections: true)
+```
+
+With the opt-in, the transport also gives up on a handshake that does not finish within the
+`timeoutIntervalForRequest` of its configuration (60 seconds by default). It throws a retryable
+``RealtimeError/Kind-swift.struct/transport`` error that cites TN3135, because on watchOS the
+system may not time out the connection itself.
 
 For a watch app, get live data through the paired iPhone app, for example with
 WatchConnectivity, or poll over HTTP.
