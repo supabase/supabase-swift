@@ -629,6 +629,23 @@ struct SessionStoreTests {
   }
 
   @Test
+  func rejectedRefreshKeepsASessionWithANewerSchemaAnotherStoreSaved() async throws {
+    let storage = InMemoryAuthStorage()
+    try await storage.save(PersistedSessionCodec.encode(makeSession("s1")), key: key)
+    let store = try await loadedStore(
+      storage: storage, now: { receivedAt.addingTimeInterval(7200) })
+    let newer = Data(#"{"schema":2,"access_token":"s2"}"#.utf8)
+    try await storage.save(newer, key: key)
+
+    await #expect(throws: AuthError.self) {
+      try await store.refresh("refresh-s1") { _ in throw alreadyUsed }
+    }
+
+    #expect(store.currentSession == nil)
+    #expect(try await storage.load(key: key) == newer)
+  }
+
+  @Test
   func rejectedRefreshAdoptsAnotherUsersStoredSessionAsASignIn() async throws {
     let storage = InMemoryAuthStorage()
     try await storage.save(PersistedSessionCodec.encode(makeSession("s1")), key: key)

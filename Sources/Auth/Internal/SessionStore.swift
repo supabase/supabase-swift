@@ -462,6 +462,8 @@ actor SessionStore {
   /// Another store over the same storage key may have redeemed `refreshToken` first and saved the
   /// session it got. Removing storage would sign that store out at the next launch, so when storage
   /// holds a session with another refresh token, this store adopts it instead of signing out.
+  /// When storage holds a session that a newer SDK wrote, this store signs out in memory only and
+  /// keeps that session.
   ///
   /// A storage read error changes nothing, as a failed write does. The rejection stays cached, so
   /// the next refresh of `refreshToken` tries the sign-out again.
@@ -469,10 +471,17 @@ actor SessionStore {
     _ reason: SignOutReason, refreshToken: String
   ) async throws {
     guard let held, held.refreshToken == refreshToken else { return }
-    if let data = try await storage.load(key: key),
-      let stored = try? PersistedSessionCodec.decode(data).session,
-      stored.refreshToken != refreshToken
-    {
+    let stored: Session?
+    do {
+      stored = try await storage.load(key: key).map { try PersistedSessionCodec.decode($0).session }
+    } catch is PersistedSessionCodec.NewerSchema {
+      update(to: .signedOut(reason), event: startupEvent(.signedOut))
+      replacedRefreshTokens = []
+      return
+    } catch is DecodingError {
+      stored = nil
+    }
+    if let stored, stored.refreshToken != refreshToken {
       let sameUser = stored.user.id == held.user.id
       update(to: .signedIn(stored), event: startupEvent(sameUser ? .tokenRefreshed : .signedIn))
       if sameUser {
