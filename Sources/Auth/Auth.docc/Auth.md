@@ -15,7 +15,14 @@ Read the current state with ``AuthClient/status``. Follow every change with
 
 ### Essentials
 
+- <doc:AuthAndSwiftConcurrency>
 - <doc:ObservingAuthStateInSwiftUI>
+
+### Guides
+
+- <doc:HandlingRedirectsAndDeepLinks>
+- <doc:SharingASessionWithAnAppExtension>
+- <doc:ImportingASessionOnTvOS>
 
 ### Client
 
