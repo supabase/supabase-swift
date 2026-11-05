@@ -98,7 +98,10 @@ extension RecordingTransport {
     let isSnapshotting = snapshot != nil
     return { request, body in
       #if !os(Linux) && !os(Android)
-        if isSnapshotting, var urlRequest = URLRequest(httpRequest: request) {
+        if isSnapshotting {
+          guard var urlRequest = URLRequest(httpRequest: request) else {
+            throw URLError(.badURL)
+          }
           urlRequest.httpBody = body
           if let body, urlRequest.value(forHTTPHeaderField: "Content-Length") == nil {
             urlRequest.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")

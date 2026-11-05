@@ -717,7 +717,7 @@ struct AuthClientTests {
 
       let currentDate = Date()
 
-      let sut = makeSUT(date: { currentDate }, autoRefresh: .manual)
+      let sut = makeSUT(date: { currentDate })
 
       let url = URL(
         string:
@@ -957,40 +957,6 @@ struct AuthClientTests {
     #expect(sut.currentSession == nil)
   }
 
-  func mockJWKS(_ key: JWK, url: URL = clientURL) throws -> LockIsolated<Int> {
-    let fields: [String: String?] = [
-      "kty": key.kty, "alg": key.alg, "kid": key.kid, "crv": key.crv, "x": key.x, "y": key.y,
-    ]
-    let data = try JSONSerialization.data(
-      withJSONObject: ["keys": [fields.compactMapValues { $0 }]]
-    )
-    return countGETRequests(to: url.appendingPathComponent(".well-known/jwks.json"), data: data)
-  }
-
-  func mockUser() throws -> LockIsolated<Int> {
-    let user = User(fromMockNamed: "user")
-    return countGETRequests(
-      to: clientURL.appendingPathComponent("user"),
-      data: try AuthClient.Configuration.jsonEncoder.encode(user)
-    )
-  }
-
-  /// Answers every `GET` request to `url`, whatever its query, with `data`, and returns the number
-  /// of requests it has answered.
-  func countGETRequests(to url: URL, data: Data) -> LockIsolated<Int> {
-    let requests = LockIsolated(0)
-    transport.respond(
-      when: { request in
-        request.method == .get && request.url?.host == url.host && request.url?.port == url.port
-          && request.url?.path == url.path
-      }
-    ) { _, _ in
-      requests.withValue { $0 += 1 }
-      return (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), data)
-    }
-    return requests
-  }
-
   /// The time `makeSUT` stamps on every session its client receives by default.
   static let now = Date()
 
@@ -999,7 +965,7 @@ struct AuthClientTests {
     storageKey: String = uniqueStorageKey(),
     date: @escaping @Sendable () -> Date = { Self.now },
     platform: AuthPlatform = .live,
-    autoRefresh: AuthClient.AutoRefreshPolicy = .automatic
+    autoRefresh: AuthClient.AutoRefreshPolicy = .manual
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: url,

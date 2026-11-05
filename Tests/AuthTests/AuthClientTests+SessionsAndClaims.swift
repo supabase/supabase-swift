@@ -36,10 +36,7 @@ extension AuthClientTests {
           _ = try await sut.session()
           Issue.record("Expected failure")
         } catch {
-          // `.initialSession` starts a background refresh of the expired session. If it
-          // finishes first, nothing is stored when `session` runs.
-          let kind = (error as? AuthError)?.kind
-          #expect(kind == .sessionInvalidated || kind == .sessionMissing)
+          #expect((error as? AuthError)?.kind == .sessionInvalidated)
         }
       },
       expectedEvents: expectedEvents

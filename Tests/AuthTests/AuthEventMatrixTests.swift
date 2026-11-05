@@ -46,6 +46,7 @@ struct AuthEventMatrixTests {
     /// What the status is after the operation.
     enum Status: Sendable {
       case signedIn
+      case signedInAs(String)
       case signedInExpired
       case signedOut(SignOutReason)
       case loading
@@ -84,6 +85,13 @@ struct AuthEventMatrixTests {
           Issue.record("Expected a signed-in status, got \(observation.statusAfter)")
           return
         }
+        #expect(!session.isExpired(at: observation.now))
+      case .signedInAs(let name):
+        guard case .signedIn(let session) = observation.statusAfter else {
+          Issue.record("Expected a signed-in status, got \(observation.statusAfter)")
+          return
+        }
+        #expect(session.accessToken == "\(name)-access")
         #expect(!session.isExpired(at: observation.now))
       case .signedInExpired:
         guard case .signedIn(let session) = observation.statusAfter else {
@@ -164,11 +172,11 @@ extension AuthEventMatrixTests.Row {
       var changes = client.events().makeAsyncIterator()
 
       let launched = await changes.next()
-      #expect(launched?.event == .initialSession)
-
       client.dependencies.sessionStore.finishChanges()
+      var rest: [AuthEvent] = []
+      while let change = await changes.next() { rest.append(change.event) }
       return Observation(
-        events: [AuthEvent.initialSession],
+        events: [launched?.event].compactMap { $0 } + rest,
         statusBefore: .loading,
         statusAfter: client.status,
         now: world.now())
@@ -179,7 +187,7 @@ extension AuthEventMatrixTests.Row {
     launch(
       "Client init, stored valid session",
       stored: { $0.issue("stored") },
-      emits: [.initialSession], leaves: .signedIn),
+      emits: [.initialSession], leaves: .signedInAs("stored")),
 
     launch(
       "Client init, stored expired session, refresh succeeds",
@@ -187,7 +195,7 @@ extension AuthEventMatrixTests.Row {
       server: { world in
         world.answerRefresh { try Race.ok(world.issue("refreshed")) }
       },
-      emits: [.initialSession], leaves: .signedIn),
+      emits: [.initialSession], leaves: .signedInAs("refreshed")),
 
     offlineLaunch,
 
@@ -221,14 +229,15 @@ extension AuthEventMatrixTests.Row {
     let client = world.makeClient(autoRefresh: .automatic, storage: storage)
     var changes = client.events().makeAsyncIterator()
 
-    // The refresh retries the network failure on the client's clock, inside the launch deadline.
+    // The launch deadline and the retry of the failed refresh both sleep on the client's clock.
+    #expect(await waitUntil { world.clock.pendingSleepCount >= 2 })
     await world.clock.advance(by: .seconds(2))
     let launched = await changes.next()
-    #expect(launched?.event == .initialSession)
-
     client.dependencies.sessionStore.finishChanges()
+    var rest: [AuthEvent] = []
+    while let change = await changes.next() { rest.append(change.event) }
     return Observation(
-      events: [AuthEvent.initialSession],
+      events: [launched?.event].compactMap { $0 } + rest,
       statusBefore: .loading,
       statusAfter: client.status,
       now: world.now())
@@ -246,19 +255,23 @@ extension AuthEventMatrixTests.Row {
     storage.isLocked.setValue(true)
     let (lifecycle, lifecycleEvents) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
     let client = world.makeClient(storage: storage, lifecycleEvents: { lifecycle })
-    let store = client.dependencies.sessionStore
-    var changes = store.changes().makeAsyncIterator()
+    var changes = client.dependencies.sessionStore.changes().makeAsyncIterator()
 
     #expect(await waitUntil { storage.failedReads.value >= 1 })
-    let whileLocked = Observation(
-      events: [], statusBefore: .loading, statusAfter: client.status, now: world.now())
+    let statusWhileLocked = client.status
 
     storage.isLocked.setValue(false)
     lifecycleEvents.yield(.protectedDataDidBecomeAvailable)
     let launched = await changes.next()
     #expect(launched?.event == .initialSession)
-    store.finishChanges()
-    return whileLocked
+    client.dependencies.sessionStore.finishChanges()
+    var rest: [AuthEvent] = []
+    while let change = await changes.next() { rest.append(change.event) }
+    return Observation(
+      events: [launched?.event].compactMap { $0 }.filter { $0 != .initialSession } + rest,
+      statusBefore: .loading,
+      statusAfter: statusWhileLocked,
+      now: world.now())
   }
 }
 
@@ -275,7 +288,8 @@ extension AuthEventMatrixTests.Row {
   }
 
   static let signUpsAndSignIns: [Self] = [
-    operation("signUp, auto-confirmed", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signUp, auto-confirmed", emits: [.signedIn], leaves: .signedInAs("signed-up")) {
+      world, client in
       answer(world, .post, "signup", with: world.issue("signed-up"))
       let result = try await client.signUp(email: "user@example.com", password: "secret")
       guard case .signedIn = result else {
@@ -293,34 +307,39 @@ extension AuthEventMatrixTests.Row {
       }
     },
 
-    operation("signIn(email:password:)", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signIn(email:password:)", emits: [.signedIn], leaves: .signedInAs("password")) {
+      world, client in
       answer(world, .post, "token", grant: "password", with: world.issue("password"))
       try await client.signIn(email: "user@example.com", password: "secret")
     },
 
-    operation("signIn(phone:password:)", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signIn(phone:password:)", emits: [.signedIn], leaves: .signedInAs("password")) {
+      world, client in
       answer(world, .post, "token", grant: "password", with: world.issue("password"))
       try await client.signIn(phone: "+15555550100", password: "secret")
     },
 
-    operation("signInAnonymously", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signInAnonymously", emits: [.signedIn], leaves: .signedInAs("anonymous")) {
+      world, client in
       answer(world, .post, "signup", with: world.issue("anonymous"))
       try await client.signInAnonymously()
     },
 
-    operation("signInWithIDToken", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signInWithIDToken", emits: [.signedIn], leaves: .signedInAs("id-token")) {
+      world, client in
       answer(world, .post, "token", grant: "id_token", with: world.issue("id-token"))
       try await client.signInWithIDToken(IDTokenCredentials(provider: .apple, idToken: "token"))
     },
 
-    operation("signInWithWeb3", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("signInWithWeb3", emits: [.signedIn], leaves: .signedInAs("web3")) { world, client in
       answer(world, .post, "token", grant: "web3", with: world.issue("web3"))
       try await client.signInWithWeb3(
         Web3Credentials(chain: .solana, message: "message", signature: "signature"))
     },
 
     operation(
-      "signInWithOAuth, finished by exchangeCodeForSession", emits: [.signedIn], leaves: .signedIn
+      "signInWithOAuth, finished by exchangeCodeForSession", emits: [.signedIn],
+      leaves: .signedInAs("oauth")
     ) {
       world, client in
       answer(world, .post, "token", grant: "pkce", with: world.issue("oauth"))
@@ -329,7 +348,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "signInWithSSO, finished by exchangeCodeForSession", emits: [.signedIn], leaves: .signedIn
+      "signInWithSSO, finished by exchangeCodeForSession", emits: [.signedIn],
+      leaves: .signedInAs("sso")
     ) {
       world, client in
       world.transport.stub(.post, "sso") { _, _ in
@@ -340,7 +360,29 @@ extension AuthEventMatrixTests.Row {
       _ = try await client.exchangeCodeForSession("one-time-code", flowID: flow.id)
     },
 
-    operation("exchangeCodeForSession", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation(
+      "signInWithOAuth with a presenter", emits: [.signedIn], leaves: .signedInAs("presented")
+    ) {
+      world, client in
+      answer(world, .post, "token", grant: "pkce", with: world.issue("presented"))
+      let presenter = ClosurePresenter { _, _ in URL(string: "\(callback)?code=one-time-code")! }
+      try await client.signInWithOAuth(.github, presenter: presenter)
+    },
+
+    operation(
+      "signInWithSSO with a presenter", emits: [.signedIn], leaves: .signedInAs("presented")
+    ) {
+      world, client in
+      world.transport.stub(.post, "sso") { _, _ in
+        try Race.ok(["url": URL(string: "https://idp.example.com/sso")!])
+      }
+      answer(world, .post, "token", grant: "pkce", with: world.issue("presented"))
+      let presenter = ClosurePresenter { _, _ in URL(string: "\(callback)?code=one-time-code")! }
+      try await client.signInWithSSO(.domain("example.com"), presenter: presenter)
+    },
+
+    operation("exchangeCodeForSession", emits: [.signedIn], leaves: .signedInAs("exchanged")) {
+      world, client in
       answer(world, .post, "token", grant: "pkce", with: world.issue("exchanged"))
       _ = try await client.oauthSignInURL(.github)
       _ = try await client.exchangeCodeForSession("one-time-code")
@@ -348,7 +390,7 @@ extension AuthEventMatrixTests.Row {
 
     operation(
       "signUp while signed in replaces the session", starting: .signedIn, emits: [.signedIn],
-      leaves: .signedIn
+      leaves: .signedInAs("signed-up")
     ) {
       world, client in
       answer(world, .post, "signup", with: world.issue("signed-up"))
@@ -373,7 +415,9 @@ extension AuthEventMatrixTests.Row {
   }
 
   static let verifications: [Self] = [
-    operation("verifyOTP(type: .recovery)", emits: [.passwordRecovery], leaves: .signedIn) {
+    operation(
+      "verifyOTP(type: .recovery)", emits: [.passwordRecovery], leaves: .signedInAs("recovery")
+    ) {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("recovery")) }
       try await client.verifyOTP(email: "user@example.com", token: "123456", type: .recovery)
@@ -381,7 +425,7 @@ extension AuthEventMatrixTests.Row {
 
     operation(
       "verifyOTP(type: .emailChange), session", starting: .signedIn, emits: [.userUpdated],
-      leaves: .signedIn
+      leaves: .signedInAs("changed")
     ) {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("changed")) }
@@ -390,7 +434,7 @@ extension AuthEventMatrixTests.Row {
 
     operation(
       "verifyOTP(type: .phoneChange), session", starting: .signedIn, emits: [.userUpdated],
-      leaves: .signedIn
+      leaves: .signedInAs("changed")
     ) {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("changed")) }
@@ -410,32 +454,41 @@ extension AuthEventMatrixTests.Row {
       }
     },
 
-    operation("verifyOTP(email:), other type", emits: [.signedIn], leaves: .signedIn) {
+    operation("verifyOTP(email:), other type", emits: [.signedIn], leaves: .signedInAs("verified"))
+    {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("verified")) }
       try await client.verifyOTP(email: "user@example.com", token: "123456", type: .email)
     },
 
-    operation("verifyOTP(phone:), other type", emits: [.signedIn], leaves: .signedIn) {
+    operation("verifyOTP(phone:), other type", emits: [.signedIn], leaves: .signedInAs("verified"))
+    {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("verified")) }
       try await client.verifyOTP(phone: "+15555550100", token: "123456", type: .sms)
     },
 
-    operation("verifyOTP(tokenHash:), other type", emits: [.signedIn], leaves: .signedIn) {
+    operation(
+      "verifyOTP(tokenHash:), other type", emits: [.signedIn], leaves: .signedInAs("verified")
+    ) {
       world, client in
       world.transport.stub(.post, "verify") { _, _ in try Race.ok(world.issue("verified")) }
       try await client.verifyOTP(tokenHash: "hash", type: .magiclink)
     },
 
-    operation("handleRedirect with type=recovery", emits: [.passwordRecovery], leaves: .signedIn) {
+    operation(
+      "handleRedirect with type=recovery", emits: [.passwordRecovery],
+      leaves: .signedInAs("redirected")
+    ) {
       world, client in
       world.answerUser(world.issue("redirected").user)
       _ = try await client.handleRedirect(implicitRedirect(type: "recovery", world: world))
     },
 
-    operation("handleRedirect with a recovery flow", emits: [.passwordRecovery], leaves: .signedIn)
-    {
+    operation(
+      "handleRedirect with a recovery flow", emits: [.passwordRecovery],
+      leaves: .signedInAs("recovery")
+    ) {
       world, client in
       world.transport.stub(.post, "recover") { _, _ in (HTTPResponse(status: .ok), Data("{}".utf8))
       }
@@ -444,25 +497,33 @@ extension AuthEventMatrixTests.Row {
       _ = try await client.handleRedirect(URL(string: "\(callback)?code=one-time-code")!)
     },
 
-    operation("handleRedirect, other redirect", emits: [.signedIn], leaves: .signedIn) {
+    operation(
+      "handleRedirect, other redirect", emits: [.signedIn], leaves: .signedInAs("redirected")
+    ) {
       world, client in
       world.answerUser(world.issue("redirected").user)
       _ = try await client.handleRedirect(implicitRedirect(type: nil, world: world))
     },
 
-    operation("handleRedirect, other redirect with a code", emits: [.signedIn], leaves: .signedIn) {
+    operation(
+      "handleRedirect, other redirect with a code", emits: [.signedIn], leaves: .signedInAs("coded")
+    ) {
       world, client in
       world.answerCodeExchange { try Race.ok(world.issue("coded")) }
       _ = try await client.oauthSignInURL(.github)
       _ = try await client.handleRedirect(URL(string: "\(callback)?code=one-time-code")!)
     },
 
-    operation("importSession", emits: [.signedIn], leaves: .signedIn) { world, client in
+    operation("importSession", emits: [.signedIn], leaves: .signedIn) {
+      world, client in
       world.answerUser(world.issue("imported").user)
       try await client.importSession(accessToken: unexpiredAccessToken, refreshToken: "refresh")
     },
 
-    operation("importSession, refreshed, still one event", emits: [.signedIn], leaves: .signedIn) {
+    operation(
+      "importSession, refreshed, still one event", emits: [.signedIn],
+      leaves: .signedInAs("imported")
+    ) {
       world, client in
       world.answerRefresh { try Race.ok(world.issue("imported")) }
       try await client.importSession(accessToken: expiredAccessToken, refreshToken: "refresh")
@@ -475,7 +536,8 @@ extension AuthEventMatrixTests.Row {
 extension AuthEventMatrixTests.Row {
   static let refreshes: [Self] = [
     operation(
-      "lazy refresh succeeds", starting: .expired, emits: [.tokenRefreshed], leaves: .signedIn
+      "lazy refresh succeeds", starting: .expired, emits: [.tokenRefreshed],
+      leaves: .signedInAs("refreshed")
     ) {
       world, client in
       world.answerRefresh { try Race.ok(world.issue("refreshed")) }
@@ -483,7 +545,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "refreshSession succeeds", starting: .signedIn, emits: [.tokenRefreshed], leaves: .signedIn
+      "refreshSession succeeds", starting: .signedIn, emits: [.tokenRefreshed],
+      leaves: .signedInAs("refreshed")
     ) {
       world, client in
       world.answerRefresh { try Race.ok(world.issue("refreshed")) }
@@ -492,7 +555,7 @@ extension AuthEventMatrixTests.Row {
 
     operation(
       "scheduled refresh succeeds", starting: .signedIn, autoRefresh: .automatic,
-      emits: [.tokenRefreshed], leaves: .signedIn
+      emits: [.tokenRefreshed], leaves: .signedInAs("refreshed")
     ) { world, client in
       world.answerRefresh { try Race.ok(world.issue("refreshed")) }
       #expect(await waitUntil { await client.dependencies.autoRefresh.isRegistered })
@@ -552,7 +615,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "linkIdentity(idToken:)", starting: .signedIn, emits: [.userUpdated], leaves: .signedIn
+      "linkIdentity(idToken:)", starting: .signedIn, emits: [.userUpdated],
+      leaves: .signedInAs("linked")
     ) {
       world, client in
       world.transport.stub(.post, "token", query: ["grant_type": "id_token"]) { _, _ in
@@ -570,7 +634,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "linkIdentity via OAuth", starting: .signedIn, emits: [.userUpdated], leaves: .signedIn
+      "linkIdentity via OAuth", starting: .signedIn, emits: [.userUpdated],
+      leaves: .signedInAs("linked")
     ) {
       world, client in
       world.answerIdentityAuthorize(url: URL(string: "https://github.com/login/oauth/authorize")!)
@@ -579,8 +644,9 @@ extension AuthEventMatrixTests.Row {
       _ = try await client.handleRedirect(URL(string: "\(callback)?code=one-time-code")!)
     },
 
-    operation("mfa.verify", starting: .signedIn, emits: [.mfaChallengeVerified], leaves: .signedIn)
-    {
+    operation(
+      "mfa.verify", starting: .signedIn, emits: [.mfaChallengeVerified], leaves: .signedInAs("aal2")
+    ) {
       world, client in
       let factorID = UUID()
       world.transport.stub(.post, "factors/\(factorID.uuidString)/verify") { _, _ in
@@ -590,7 +656,8 @@ extension AuthEventMatrixTests.Row {
     },
 
     operation(
-      "recoveryCodes.verify", starting: .signedIn, emits: [.mfaChallengeVerified], leaves: .signedIn
+      "recoveryCodes.verify", starting: .signedIn, emits: [.mfaChallengeVerified],
+      leaves: .signedInAs("aal2")
     ) {
       world, client in
       world.transport.stub(.post, "factors/recovery-codes/verify") { _, _ in
