@@ -51,6 +51,11 @@ enum Naming {
     "_PostgrestFunctionQuery",
   ]
 
+  /// What a name of a non-`public` schema starts with, so `inventory.books` becomes `inventory_books`.
+  static func schemaPrefix(_ schema: String) -> String {
+    schema == "public" ? "" : schema + "_"
+  }
+
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes
   /// `_1stPlace`, `class` becomes `` `class` ``.
   /// `IN_PROGRESS` becomes `inProgress`.

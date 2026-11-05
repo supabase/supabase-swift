@@ -88,11 +88,16 @@ struct FilePlan {
     var parameters: [ParameterPlan]
     var result: Result
 
+    var usesFoundation: Bool {
+      parameters.contains { $0.type.usesFoundation }
+        || { if case .value(let type) = result { type.usesFoundation } else { false } }()
+    }
+
     enum Result {
       /// The rows of a relation or a function result type, filterable through its columns.
       case rows(String)
-      /// A scalar, an array or a set of scalars, optional because PostgREST answers `null` for a
-      /// scalar function that finds nothing.
+      /// A scalar, or an array of scalars for a set. A scalar is optional, because PostgREST
+      /// answers `null` for a function that finds nothing, and so is each element of a set.
       case value(SwiftType)
       case nothing
     }
@@ -110,6 +115,9 @@ struct FilePlan {
     var type: SwiftType
     /// Whether the parameter is `nil` by default, which leaves the argument out.
     var hasDefault: Bool
+
+    /// ` = nil` for a parameter that is `nil` by default, which leaves the argument out.
+    var defaultClause: String { hasDefault ? " = nil" : "" }
 
     /// The name the method body reads the value by.
     var variable: String { internalName ?? label ?? "body" }
@@ -201,7 +209,7 @@ extension FilePlan {
     var bases: [String] = []
     for declaration in declarations {
       let schema = declaration.name.schema
-      let prefix = schema == "public" ? "" : schema + "_"
+      let prefix = Naming.schemaPrefix(schema)
       let base = Self.unshadowed(
         Naming.typeName(prefix + declaration.name.name), suffix: declaration.suffix,
         label: declaration.label, notes: &notes)
@@ -250,10 +258,9 @@ extension FilePlan {
 
     var resultTypeNames = typeNames.dropFirst(model.relations.count + enumTypes.count)
       .makeIterator()
-    var argumentTypeNames = argumentsTypeNames(
-      of: callables, avoiding: Set(owners.keys).union(typeNames)
-    ).makeIterator()
-    for callable in callables {
+    let argumentTypeNames = argumentsTypeNames(
+      of: callables, avoiding: Set(owners.keys).union(typeNames))
+    for (callable, argumentsTypeName) in zip(callables, argumentTypeNames) {
       var resultTypeName: String?
       if callable.returnsResultRows, let typeName = resultTypeNames.next() {
         let result = DatabaseModel.Relation(
@@ -281,7 +288,7 @@ extension FilePlan {
       }
       functions.append(
         functionPlan(
-          callable, typeName: argumentTypeNames.next() ?? "", resultTypeName: resultTypeName,
+          callable, typeName: argumentsTypeName, resultTypeName: resultTypeName,
           relationTypeNames: relationTypeNames, enumTypeNames: enumTypeNames,
           schemaTypeNames: schemaTypeNames))
     }
@@ -299,7 +306,7 @@ extension FilePlan {
     var taken = taken
     return callables.map { callable in
       let name = callable.function.name
-      let prefix = name.schema == "public" ? "" : name.schema + "_"
+      let prefix = Naming.schemaPrefix(name.schema)
       let base = Naming.typeName(prefix + name.name + "_function")
       guard taken.insert(base).inserted else {
         let numbered = Self.numbered(base, avoiding: taken)
@@ -467,7 +474,7 @@ extension FilePlan {
       let schema = plan.schemaTypeName.flatMap { schemaNames[$0] } ?? "public"
       let qualified = "\(schema).\(plan.function)"
       var name = Naming.propertyName(
-        (schema == "public" ? "" : schema + "_") + plan.function)
+        Naming.schemaPrefix(schema) + plan.function)
       let bare = Naming.unescaped(name)
       if Naming.rpcMembers.contains(bare) {
         name = Naming.identifier(bare + "Function")
@@ -756,10 +763,7 @@ extension FilePlan {
             if case .field(let type) = $0.kind { type.usesFoundation } else { false }
           }
       }
-      || functions.contains { function in
-        function.parameters.contains { $0.type.usesFoundation }
-          || { if case .value(let type) = function.result { type.usesFoundation } else { false } }()
-      }
+      || functions.contains(where: \.usesFoundation)
 
     let file = try SourceFileSyntax {
       // A public declaration needs its types' modules imported publicly under
@@ -925,7 +929,7 @@ extension FilePlan {
           camelToSnakeCase(Naming.unescaped(parameter.variable)) == parameter.argument
           ? "" : "@Column(\(StringLiteralExprSyntax(content: parameter.argument))) "
         DeclSyntax(
-          "\(raw: column)\(access) var \(raw: parameter.variable): \(parameter.type.syntax)\(raw: parameter.hasDefault ? " = nil" : "")"
+          "\(raw: column)\(access) var \(raw: parameter.variable): \(parameter.type.syntax)\(raw: parameter.defaultClause)"
         )
       }
     }
@@ -941,7 +945,7 @@ extension FilePlan {
         case (let label?, let internalName?): "\(label) \(internalName)"
         case (let label?, nil): label
         }
-      return "\(names): \(parameter.type.syntax)\(parameter.hasDefault ? " = nil" : "")"
+      return "\(names): \(parameter.type.syntax)\(parameter.defaultClause)"
     }.joined(separator: ", ")
     let returnType = "_PostgrestFunctionQuery<\(resultType(of: function) ?? "Void")>"
     let arguments = function.parameters.map { "\($0.variable): \($0.variable)" }
