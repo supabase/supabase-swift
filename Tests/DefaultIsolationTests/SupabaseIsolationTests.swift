@@ -6,16 +6,25 @@
 //
 
 import Foundation
-import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-/// A `@Table` type with a primary key, so `LiveQuery` and `SupabaseClient.stream(_:where:)` can
-/// match changes to rows. Under `.defaultIsolation(MainActor.self)` the type opts out with
-/// `nonisolated`, as an app would.
-@Table("rooms")
-nonisolated struct IsolationRoom {
-  @PrimaryKey var id: Int
+/// A keyed relation, so `LiveQuery` and `SupabaseClient.stream(_:where:)` can match changes to
+/// rows. Written out as `@Table("rooms")` would expand it, on a `nonisolated` declaration: see
+/// `IsolationTodo`.
+nonisolated struct IsolationRoom: _PostgrestKeyedRelation {
+  static let relationName = "rooms"
+  static let selectString = "id,name"
+  static let primaryKeyColumns = ["id"]
+
+  var id: Int
   var name: String
+
+  struct Columns: Sendable {
+    let id = _PostgrestColumn<IsolationRoom, Int>("id")
+    let name = _PostgrestColumn<IsolationRoom, String>("name")
+  }
+
+  static let columns = Columns()
 }
 
 /// Calls every public async Supabase API from the main actor, since this target compiles with

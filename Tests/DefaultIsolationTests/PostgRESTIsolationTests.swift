@@ -6,27 +6,66 @@
 //
 
 import Foundation
-import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-/// A `@Table` type declared under `.defaultIsolation(MainActor.self)`. The macro-generated
-/// requirements are nonisolated, so a consumer opts the type out with `nonisolated`, as an app
-/// would. The queries below then run from the main actor.
-@Table("todos")
-nonisolated struct IsolationTodo {
-  @PrimaryKey var id: Int
+/// Written out as `@Table("todos")` would expand it. The macro's extension gets main-actor
+/// isolated conformances under `.defaultIsolation(MainActor.self)`, which the requirements of
+/// `_PostgrestRelation` reject, so the conformances sit on a `nonisolated` declaration. An app
+/// that uses the macro in such a module needs the same until the expansion handles it.
+nonisolated struct IsolationTodo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
+  static let relationName = "todos"
+  static let selectString = "id,title,is_done"
+  static let primaryKeyColumns = ["id"]
+
+  var id: Int
   var title: String
   var isDone: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case id, title
+    case isDone = "is_done"
+  }
+
+  struct Columns: Sendable {
+    let id = _PostgrestColumn<IsolationTodo, Int>("id")
+    let title = _PostgrestColumn<IsolationTodo, String>("title")
+    let isDone = _PostgrestColumn<IsolationTodo, Bool>("is_done")
+  }
+
+  static let columns = Columns()
+
+  struct Draft: Encodable, Sendable {
+    var id: Int
+    var title: String
+    var isDone: Bool
+
+    enum CodingKeys: String, CodingKey {
+      case id, title
+      case isDone = "is_done"
+    }
+  }
 }
 
-@Function("search_todos")
-nonisolated struct IsolationSearchTodos {
+/// A column subset of `IsolationTodo`, written out as `@SelectionOf` would expand it.
+nonisolated struct IsolationTodoTitle: _PostgrestSelection {
+  typealias Source = IsolationTodo
+  static let selectString = "title"
+
+  var title: String
+}
+
+/// A function with a result, written out as `@Function("search_todos")` would expand it.
+nonisolated struct IsolationSearchTodos: _PostgrestFunction {
+  static let functionName = "search_todos"
   typealias Result = [IsolationTodo]
+
   var keyword: String
 }
 
-@Function("reset_todos")
-nonisolated struct IsolationResetTodos {}
+/// A function without a result, written out as `@Function("reset_todos")` would expand it.
+nonisolated struct IsolationResetTodos: _PostgrestFunction {
+  static let functionName = "reset_todos"
+}
 
 /// Calls every public async PostgREST API from the main actor, since this target compiles with
 /// `.defaultIsolation(MainActor.self)`. Nothing here runs: if a call stops compiling, the build
@@ -40,12 +79,6 @@ enum PostgRESTIsolationTests {
 
   /// A payload with a main-actor-isolated `Encodable` conformance.
   struct Payload: Encodable {
-    var title: String
-  }
-
-  /// A narrower read of `IsolationTodo`.
-  @SelectionOf(IsolationTodo.self)
-  nonisolated struct IsolationTodoTitle {
     var title: String
   }
 

@@ -293,7 +293,7 @@ let package = Package(
     ),
     .testTarget(
       name: "DefaultIsolationTests",
-      dependencies: ["PostgrestMacros", "Supabase"]
+      dependencies: ["Supabase"]
     ),
     .target(
       name: "TestHelpers",
