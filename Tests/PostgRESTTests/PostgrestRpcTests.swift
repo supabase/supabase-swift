@@ -119,6 +119,21 @@ struct PostgrestRpcTests {
     #expect(capture.bodyString?.contains(#""keyword":"milk""#) == true)
   }
 
+  /// A generated method is a call to `rpc(_:)`, so it sends the same request.
+  @Test
+  func aGeneratedMethodCallsRpc() async throws {
+    let capture = QueryCapture()
+    _ = try await capture.client.rpc
+      .searchTodos(keyword: "milk", limit: 3, tags: ["a", "b c"])
+      .where { $0.isDone.eq(false) }
+      .order { $0.id.desc() }
+      .execute()
+    #expect(capture.httpMethod == "POST")
+    #expect(capture.path == "/rpc/search_todos")
+    #expect(capture.query == "is_done=eq.false&order=id.desc")
+    #expect(capture.bodyString == #"{"keyword":"milk","limit":3,"tags":["a","b c"]}"#)
+  }
+
   @Test
   func readOnlyKeepsTheArgumentsAheadOfTheFilters() async throws {
     let capture = QueryCapture()
@@ -165,6 +180,15 @@ struct PostgrestRpcTests {
     _ = try await readOnly.execute()
     #expect(capture.httpMethod == "POST")
     #expect(capture.bodyString == "[1,2]")
+  }
+}
+
+/// What the schema generator writes for `search_todos`, next to the `SearchTodos` arguments.
+extension _PostgrestFunctions {
+  fileprivate func searchTodos(keyword: String, limit: Int, tags: [String]) throws
+    -> _PostgrestFunctionQuery<[PostgrestRpcTests.Todo]>
+  {
+    try call(PostgrestRpcTests.SearchTodos(keyword: keyword, limit: limit, tags: tags))
   }
 }
 

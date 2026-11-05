@@ -297,3 +297,269 @@ public struct UsersViewWithMultipleRefsToUsers {
   public var secondId: Int?
   public var secondName: String?
 }
+
+@Table("function_returning_table", readOnly: true)
+public struct FunctionReturningTableRow {
+  public var id: Int?
+  public var name: String?
+}
+
+@Table("function_returning_table_with_args", readOnly: true)
+public struct FunctionReturningTableWithArgsRow {
+  public var id: Int?
+  public var name: String?
+}
+
+@Function("add_interval_to_duration")
+public struct AddIntervalToDurationFunction {
+  public typealias Result = _PostgresInterval?
+  public var additionalInterval: _PostgresInterval
+  public var baseDuration: _PostgresInterval
+}
+
+@Function("function_returning_set_of_rows")
+public struct FunctionReturningSetOfRowsFunction {
+  public typealias Result = [Users]
+}
+
+@Function("function_returning_table")
+public struct FunctionReturningTableFunction {
+  public typealias Result = [FunctionReturningTableRow]
+}
+
+@Function("function_returning_table_with_args")
+public struct FunctionReturningTableWithArgsFunction {
+  public typealias Result = [FunctionReturningTableWithArgsRow]
+  public var userId: Int
+}
+
+@Function("get_composite_type_data")
+public struct GetCompositeTypeDataFunction {
+  public typealias Result = [_PostgresUnmapped?]
+}
+
+@Function("get_single_user_summary_from_view")
+public struct GetSingleUserSummaryFromViewFunction {
+  public typealias Result = [UserTodosSummaryView]
+  public var searchUserId: Int
+}
+
+@Function("get_todos_from_user")
+public struct GetTodosFromUserFunction {
+  public typealias Result = [Todos]
+  public var searchUserId: Int
+}
+
+@Function("get_user_ids")
+public struct GetUserIdsFunction {
+  public typealias Result = [Int?]
+}
+
+@Function("get_user_summary")
+public struct GetUserSummaryFunction {
+  public typealias Result = [_PostgresUnmapped?]
+}
+
+@Function("polymorphic_function_with_no_params_or_unnamed")
+public struct PolymorphicFunctionWithNoParamsOrUnnamedFunction {
+  public typealias Result = Int?
+}
+
+public struct PolymorphicFunctionWithUnnamedJsonFunction: _PostgrestFunction {
+  public static var functionName: String {
+    "polymorphic_function_with_unnamed_json"
+  }
+  public typealias Result = Int?
+  var body: JSONValue
+  public func encode(to encoder: any Encoder) throws {
+    try body.encode(to: encoder)
+  }
+}
+
+public struct PolymorphicFunctionWithUnnamedJsonbFunction: _PostgrestFunction {
+  public static var functionName: String {
+    "polymorphic_function_with_unnamed_jsonb"
+  }
+  public typealias Result = Int?
+  var body: JSONValue
+  public func encode(to encoder: any Encoder) throws {
+    try body.encode(to: encoder)
+  }
+}
+
+@Function("postgres_fdw_disconnect_all")
+public struct PostgresFdwDisconnectAllFunction {
+  public typealias Result = Bool?
+}
+
+@Function("postgres_fdw_get_connections")
+public struct PostgresFdwGetConnectionsFunction {
+  public typealias Result = [_PostgresUnmapped?]
+}
+
+@Function("postgres_fdw_handler")
+public struct PostgresFdwHandlerFunction {
+  public typealias Result = _PostgresUnmapped?
+}
+
+@Function("postgrest_resolvable_with_override_function")
+public struct PostgrestResolvableWithOverrideFunctionFunction {
+}
+
+@Function("postgrest_resolvable_with_override_function")
+public struct PostgrestResolvableWithOverrideFunctionFunction2 {
+  public typealias Result = Int?
+  public var a: String
+}
+
+@Function("postgrest_resolvable_with_override_function")
+public struct PostgrestResolvableWithOverrideFunctionFunction3 {
+  public typealias Result = String?
+  public var b: Int
+}
+
+@Function("postgrest_resolvable_with_override_function")
+public struct PostgrestResolvableWithOverrideFunctionFunction4 {
+  public typealias Result = [Todos]
+  public var completed: Bool
+  public var todoId: Int
+}
+
+@Function("postgrest_resolvable_with_override_function")
+public struct PostgrestResolvableWithOverrideFunctionFunction5 {
+  public typealias Result = [Users]
+  public var userId: Int
+}
+
+@Function("postgrest_unresolvable_function")
+public struct PostgrestUnresolvableFunctionFunction {
+}
+
+@Function("search_todos_by_details")
+public struct SearchTodosByDetailsFunction {
+  public typealias Result = [Todos]
+  public var searchDetails: String
+}
+
+@Function("test_unnamed_row_setof")
+public struct TestUnnamedRowSetofFunction {
+  public typealias Result = [Todos]
+  public var userId: Int
+}
+
+extension _PostgrestFunctions {
+  public func addIntervalToDuration(
+    additionalInterval: _PostgresInterval, baseDuration: _PostgresInterval
+  ) throws -> _PostgrestFunctionQuery<_PostgresInterval?> {
+    try call(
+      AddIntervalToDurationFunction(
+        additionalInterval: additionalInterval, baseDuration: baseDuration))
+  }
+
+  public func functionReturningSetOfRows() throws -> _PostgrestFunctionQuery<[Users]> {
+    try call(FunctionReturningSetOfRowsFunction())
+  }
+
+  public func functionReturningTable() throws -> _PostgrestFunctionQuery<
+    [FunctionReturningTableRow]
+  > {
+    try call(FunctionReturningTableFunction())
+  }
+
+  public func functionReturningTableWithArgs(userId: Int) throws -> _PostgrestFunctionQuery<
+    [FunctionReturningTableWithArgsRow]
+  > {
+    try call(FunctionReturningTableWithArgsFunction(userId: userId))
+  }
+
+  public func getCompositeTypeData() throws -> _PostgrestFunctionQuery<[_PostgresUnmapped?]> {
+    try call(GetCompositeTypeDataFunction())
+  }
+
+  public func getSingleUserSummaryFromView(searchUserId: Int) throws -> _PostgrestFunctionQuery<
+    [UserTodosSummaryView]
+  > {
+    try call(GetSingleUserSummaryFromViewFunction(searchUserId: searchUserId))
+  }
+
+  public func getTodosFromUser(searchUserId: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
+    try call(GetTodosFromUserFunction(searchUserId: searchUserId))
+  }
+
+  public func getUserIds() throws -> _PostgrestFunctionQuery<[Int?]> {
+    try call(GetUserIdsFunction())
+  }
+
+  public func getUserSummary() throws -> _PostgrestFunctionQuery<[_PostgresUnmapped?]> {
+    try call(GetUserSummaryFunction())
+  }
+
+  public func polymorphicFunctionWithNoParamsOrUnnamed() throws -> _PostgrestFunctionQuery<Int?> {
+    try call(PolymorphicFunctionWithNoParamsOrUnnamedFunction())
+  }
+
+  public func polymorphicFunctionWithUnnamedJson(_ body: JSONValue) throws
+    -> _PostgrestFunctionQuery<Int?>
+  {
+    try call(PolymorphicFunctionWithUnnamedJsonFunction(body: body))
+  }
+
+  public func polymorphicFunctionWithUnnamedJsonb(_ body: JSONValue) throws
+    -> _PostgrestFunctionQuery<Int?>
+  {
+    try call(PolymorphicFunctionWithUnnamedJsonbFunction(body: body))
+  }
+
+  public func postgresFdwDisconnectAll() throws -> _PostgrestFunctionQuery<Bool?> {
+    try call(PostgresFdwDisconnectAllFunction())
+  }
+
+  public func postgresFdwGetConnections() throws -> _PostgrestFunctionQuery<[_PostgresUnmapped?]> {
+    try call(PostgresFdwGetConnectionsFunction())
+  }
+
+  public func postgresFdwHandler() throws -> _PostgrestFunctionQuery<_PostgresUnmapped?> {
+    try call(PostgresFdwHandlerFunction())
+  }
+
+  public func postgrestResolvableWithOverrideFunction() throws -> _PostgrestFunctionQuery<Void> {
+    try call(PostgrestResolvableWithOverrideFunctionFunction())
+  }
+
+  public func postgrestResolvableWithOverrideFunction(a: String) throws -> _PostgrestFunctionQuery<
+    Int?
+  > {
+    try call(PostgrestResolvableWithOverrideFunctionFunction2(a: a))
+  }
+
+  public func postgrestResolvableWithOverrideFunction(b: Int) throws -> _PostgrestFunctionQuery<
+    String?
+  > {
+    try call(PostgrestResolvableWithOverrideFunctionFunction3(b: b))
+  }
+
+  public func postgrestResolvableWithOverrideFunction(completed: Bool, todoId: Int) throws
+    -> _PostgrestFunctionQuery<[Todos]>
+  {
+    try call(PostgrestResolvableWithOverrideFunctionFunction4(completed: completed, todoId: todoId))
+  }
+
+  public func postgrestResolvableWithOverrideFunction(userId: Int) throws
+    -> _PostgrestFunctionQuery<[Users]>
+  {
+    try call(PostgrestResolvableWithOverrideFunctionFunction5(userId: userId))
+  }
+
+  public func postgrestUnresolvableFunction() throws -> _PostgrestFunctionQuery<Void> {
+    try call(PostgrestUnresolvableFunctionFunction())
+  }
+
+  public func searchTodosByDetails(searchDetails: String) throws -> _PostgrestFunctionQuery<[Todos]>
+  {
+    try call(SearchTodosByDetailsFunction(searchDetails: searchDetails))
+  }
+
+  public func testUnnamedRowSetof(userId: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
+    try call(TestUnnamedRowSetofFunction(userId: userId))
+  }
+}

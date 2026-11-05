@@ -67,6 +67,46 @@ own schema, and not named like a column (compared as Postgres names). A scalar r
 that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is
 skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
 
+Function calls come from `rpcFunctions`, which postgrest-typegen 0.5.0 and later resolve from
+`functions` the way PostgREST does. Each callable overload becomes two declarations: a `@Function`
+struct that holds the arguments, named `<Function>Function`, and a method in an
+`extension _PostgrestFunctions` that builds the struct and calls it. The call reads
+`client.rpc.searchBooks(query: "dune")`, and because the method goes through the typed `rpc(_:)`,
+`.readOnly()`, `.where`, `.order` and the rest of the typed query API apply. Overloads share the
+method name and differ in their argument labels, which is how PostgREST tells them apart too; each
+gets a struct of its own, and a struct name that would repeat another type's is numbered, with a
+note, as is a method that would repeat another method's labels and types. A function outside
+`public` carries its schema as a prefix, `inventoryRestock(amount:)`, and is called in that
+schema. A defaulted parameter is optional and left out when `nil`, so the function's default
+applies.
+
+The return type decides the struct's `Result`:
+
+| Postgres result | `Result` |
+| --------------- | -------- |
+| `SETOF` a generated relation | `[Relation]`, filterable through its columns |
+| `RETURNS TABLE` or `OUT` parameters | `[<Function>Row]`, a read-only `@Table` struct, filterable through its columns |
+| a scalar, an array, or a set of scalars | `T?`, or `[T?]` for a set |
+| `void` | none, so `Void` |
+
+A `<Function>Row` struct names the function as its relation, so `client.from(_:)` accepts it but
+sends a request for a relation that does not exist: reach its rows through the function's method.
+
+Parameters come in the order postgrest-typegen lists them: required ones first, then the defaulted
+ones, each by name rather than by their position in the function's declaration. A numbered
+overload's number follows the document's order of overloads, so adding an overload can renumber
+the ones after it.
+
+A function whose sole parameter is an unnamed `json` or `jsonb` takes the whole body as
+`_ body: JSONValue`; its struct is written out by hand instead of with `@Function`, because the
+body is not an object. An overload PostgREST cannot resolve, one with another unnamed parameter,
+one that takes a row, one that returns a single row, and one that returns the rows of a relation
+the file does not declare get no method, only a note on standard error. A single row is skipped
+because PostgREST answers a function that finds none with an object whose every field is `null`,
+which a typed call cannot yet decode as `nil`; a computed field is left to its relation's `Columns`
+without a note. A document without `rpcFunctions` still generates, with a note and no function
+calls.
+
 ## Releasing the typegen binary
 
 See "Releasing the typegen binary" in [RELEASE.md](../../RELEASE.md).

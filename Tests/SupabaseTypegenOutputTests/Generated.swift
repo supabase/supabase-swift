@@ -138,3 +138,149 @@ public struct Users {
   public var data: JSONValue?
   @Default public var status: UserStatus?
 }
+
+@Table("channel_message_counts", readOnly: true)
+public struct ChannelMessageCountsRow {
+  public var channelId: Int?
+  public var messageCount: Int?
+  public var slug: String?
+}
+
+@Table("get_username_and_status", readOnly: true)
+public struct GetUsernameAndStatusRow {
+  public var status: UserStatus?
+  public var username: String?
+}
+
+@Function("channel_message_counts")
+public struct ChannelMessageCountsFunction {
+  public typealias Result = [ChannelMessageCountsRow]
+  public var minMessages: Int? = nil
+}
+
+@Function("delete_user")
+public struct DeleteUserFunction {
+}
+
+public struct EchoFunction: _PostgrestFunction {
+  public static var functionName: String {
+    "echo"
+  }
+  public typealias Result = JSONValue?
+  var body: JSONValue
+  public func encode(to encoder: any Encoder) throws {
+    try body.encode(to: encoder)
+  }
+}
+
+@Function("get_array_element")
+public struct GetArrayElementFunction {
+  public typealias Result = Int?
+  public var arr: [Int]
+  public var index: Int
+}
+
+@Function("get_status")
+public struct GetStatusFunction {
+  public typealias Result = String?
+  public var nameParam: String
+}
+
+@Function("get_username_and_status")
+public struct GetUsernameAndStatusFunction {
+  public typealias Result = [GetUsernameAndStatusRow]
+  public var nameParam: String
+}
+
+@Function("message_ids")
+public struct MessageIdsFunction {
+  public typealias Result = [Int?]
+  public var statuses: [UserStatus]
+}
+
+@Function("messages_of")
+public struct MessagesOfFunction {
+  public typealias Result = [Messages]
+  public var channelId: Int
+}
+
+@Function("messages_of")
+public struct MessagesOfFunction2 {
+  public typealias Result = [Messages]
+  public var channelSlug: String
+  public var maxCount: Int
+}
+
+@Function("search_messages")
+public struct SearchMessagesFunction {
+  public typealias Result = [Messages]
+  public var query: String
+  public var channelId: Int? = nil
+}
+
+@Function("sleep_for")
+public struct SleepForFunction {
+  public var seconds: Double
+}
+
+@Function("void_func")
+public struct VoidFuncFunction {
+}
+
+extension _PostgrestFunctions {
+  public func channelMessageCounts(minMessages: Int? = nil) throws -> _PostgrestFunctionQuery<
+    [ChannelMessageCountsRow]
+  > {
+    try call(ChannelMessageCountsFunction(minMessages: minMessages))
+  }
+
+  public func deleteUser() throws -> _PostgrestFunctionQuery<Void> {
+    try call(DeleteUserFunction())
+  }
+
+  public func echo(_ body: JSONValue) throws -> _PostgrestFunctionQuery<JSONValue?> {
+    try call(EchoFunction(body: body))
+  }
+
+  public func getArrayElement(arr: [Int], index: Int) throws -> _PostgrestFunctionQuery<Int?> {
+    try call(GetArrayElementFunction(arr: arr, index: index))
+  }
+
+  public func getStatus(nameParam: String) throws -> _PostgrestFunctionQuery<String?> {
+    try call(GetStatusFunction(nameParam: nameParam))
+  }
+
+  public func getUsernameAndStatus(nameParam: String) throws -> _PostgrestFunctionQuery<
+    [GetUsernameAndStatusRow]
+  > {
+    try call(GetUsernameAndStatusFunction(nameParam: nameParam))
+  }
+
+  public func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {
+    try call(MessageIdsFunction(statuses: statuses))
+  }
+
+  public func messagesOf(channelId: Int) throws -> _PostgrestFunctionQuery<[Messages]> {
+    try call(MessagesOfFunction(channelId: channelId))
+  }
+
+  public func messagesOf(channelSlug: String, maxCount: Int) throws -> _PostgrestFunctionQuery<
+    [Messages]
+  > {
+    try call(MessagesOfFunction2(channelSlug: channelSlug, maxCount: maxCount))
+  }
+
+  public func searchMessages(query: String, channelId: Int? = nil) throws
+    -> _PostgrestFunctionQuery<[Messages]>
+  {
+    try call(SearchMessagesFunction(query: query, channelId: channelId))
+  }
+
+  public func sleepFor(seconds: Double) throws -> _PostgrestFunctionQuery<Void> {
+    try call(SleepForFunction(seconds: seconds))
+  }
+
+  public func voidFunc() throws -> _PostgrestFunctionQuery<Void> {
+    try call(VoidFuncFunction())
+  }
+}
