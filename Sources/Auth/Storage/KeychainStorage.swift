@@ -38,8 +38,12 @@
   ///
   /// ```swift
   /// if !UserDefaults.standard.bool(forKey: "hasLaunchedBefore") {
-  ///   try? await supabase.auth.signOut()
-  ///   UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+  ///   do {
+  ///     try await supabase.auth.signOut()
+  ///     UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+  ///   } catch {
+  ///     // Keep the flag unset, so the next launch tries again.
+  ///   }
   /// }
   /// ```
   ///
