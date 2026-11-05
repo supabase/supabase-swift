@@ -6,7 +6,7 @@
 //
 
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 import Logging
 
 /// A marker protocol conformed to by every phase whose builder can execute a request and set
