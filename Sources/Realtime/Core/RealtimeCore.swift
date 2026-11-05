@@ -164,12 +164,7 @@ struct RealtimeCore {
   // Read-only outside the core. Not `private(set)`: the core's extensions in other files write
   // them, and Swift has no setter access level for that.
   var connection: RealtimeClient.ConnectionState = .disconnected(nil)
-  /// Add or drop a record with ``setRecord(_:for:)``, which keeps ``channelsByWireTopic`` in
-  /// step. A write to a field of a record needs no care: a record's wire topic never changes.
-  var channels: [ChannelID: ChannelRecord] = [:]
-  /// The channels of each wire topic, in creation order, so routing a frame looks only at the
-  /// records of its topic.
-  var channelsByWireTopic: [String: [ChannelID]] = [:]
+  var channels = ChannelTable()
 
   var tokens = TokenState()
   /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.
@@ -293,15 +288,15 @@ struct RealtimeCore {
     }
     for (channel, record) in channels {
       if let ref = record.pendingPushes.first(where: { $0.value == waiter })?.key {
-        channels[channel]?.pendingPushes[ref] = nil
+        channels.update(channel) { $0.pendingPushes[ref] = nil }
         return [.resume(waiter, .cancelled), .cancel(.pushTimeout(channel: channel, ref: ref))]
       }
       if let index = record.leaveWaiters.firstIndex(of: waiter) {
-        channels[channel]?.leaveWaiters.remove(at: index)
+        channels.update(channel) { $0.leaveWaiters.remove(at: index) }
         return [.resume(waiter, .cancelled)]
       }
       if let index = record.subscribeWaiters.firstIndex(of: waiter) {
-        channels[channel]?.subscribeWaiters.remove(at: index)
+        channels.update(channel) { $0.subscribeWaiters.remove(at: index) }
         return [.resume(waiter, .cancelled)] + rollBackJoinWithoutCallers(channel)
       }
     }

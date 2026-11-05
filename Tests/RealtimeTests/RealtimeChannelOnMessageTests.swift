@@ -576,7 +576,7 @@ struct RealtimeChannelOnMessageTests {
 extension RealtimeClient {
   fileprivate func setServerChanges(for topic: String, _ changes: [PostgresJoinConfig]) {
     guard let id = core.channels.first(where: { $0.value.topic == topic })?.key else { return }
-    core.channels[id]?.serverChanges = changes
+    core.channels.update(id) { $0.serverChanges = changes }
   }
 
   /// Delivers `event` the way a `.deliver` effect from the core does.

@@ -50,7 +50,7 @@ struct RealtimeCoreChannelIDTests {
     #expect(!effects.contains(.resume(newWaiter, .failure(.channelRemoved))))
     #expect(harness.core.channels[old]?.isRemoving == true)
     #expect(harness.core.channels[new]?.topic == "room")
-    #expect(harness.core.channelsByWireTopic == ["realtime:room": [old, new]])
+    #expect(harness.core.channels.idsByWireTopic == ["realtime:room": [old, new]])
   }
 
   @Test
@@ -63,7 +63,7 @@ struct RealtimeCoreChannelIDTests {
     #expect(!effects.contains { $0.mentions(new) })
     #expect(
       harness.core.channels[new]?.phase.status.isSame(as: .subscribing(attempt: 1)) == true)
-    #expect(harness.core.channelsByWireTopic == ["realtime:room": [new]])
+    #expect(harness.core.channels.idsByWireTopic == ["realtime:room": [new]])
     #expect(harness.core.liveChannel(forWireTopic: "realtime:room") == new)
   }
 
@@ -97,7 +97,7 @@ struct RealtimeCoreChannelIDTests {
     #expect(!effects.contains { $0.mentions(old) })
     #expect(!effects.contains(.resume(removeWaiter, .success)))
     #expect(harness.core.channels[old]?.phase == .leaving(joinRef: "1", leaveRef: "2"))
-    #expect(harness.core.channelsByWireTopic == ["realtime:room": [old]])
+    #expect(harness.core.channels.idsByWireTopic == ["realtime:room": [old]])
     #expect(harness.core.liveChannel(forWireTopic: "realtime:room") == nil)
     #expect(harness.core.channel(forWireTopic: "realtime:room", joinRef: "1") == old)
   }

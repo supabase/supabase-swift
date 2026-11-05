@@ -1,5 +1,5 @@
 //
-//  RealtimeCoreTopicIndexTests.swift
+//  ChannelTableTests.swift
 //  RealtimeTests
 //
 
@@ -10,10 +10,10 @@ import Testing
 
 @testable import Realtime
 
-/// ``RealtimeCore/channelsByWireTopic`` follows the records as channels are created, removed,
-/// and closed by the server.
+/// ``ChannelTable/idsByWireTopic`` follows the records as channels are created, removed, and
+/// closed by the server.
 @Suite
-struct RealtimeCoreTopicIndexTests {
+struct ChannelTableTests {
   static let noStreams = JoinSnapshot(bindings: [], presenceEnabled: false)
 
   @Test
@@ -27,8 +27,8 @@ struct RealtimeCoreTopicIndexTests {
     _ = harness.send(Self.subscribe(room, topic: "room", waiter: harness.waiter()))
 
     #expect(
-      harness.core.channelsByWireTopic == ["realtime:room": [room], "realtime:lobby": [lobby]])
-    #expect(harness.core.channelsByWireTopic == harness.core.rebuiltTopicIndex)
+      harness.core.channels.idsByWireTopic == ["realtime:room": [room], "realtime:lobby": [lobby]])
+    #expect(harness.core.channels.idsByWireTopic == harness.core.channels.rebuiltIndex)
   }
 
   @Test
@@ -44,14 +44,14 @@ struct RealtimeCoreTopicIndexTests {
     // The record stays until the leave ends.
     _ = harness.send(.removeChannel(channel: lobby, waiter: harness.waiter()))
     #expect(
-      harness.core.channelsByWireTopic == ["realtime:room": [room], "realtime:lobby": [lobby]])
+      harness.core.channels.idsByWireTopic == ["realtime:room": [room], "realtime:lobby": [lobby]])
     _ = harness.send(.timerFired(.leaveTimeout(channel: lobby, ref: "3")))
-    #expect(harness.core.channelsByWireTopic == ["realtime:room": [room]])
+    #expect(harness.core.channels.idsByWireTopic == ["realtime:room": [room]])
 
     _ = harness.send(.removeChannel(channel: room, waiter: harness.waiter()))
     _ = harness.send(.timerFired(.leaveTimeout(channel: room, ref: "4")))
     #expect(harness.core.channels.isEmpty)
-    #expect(harness.core.channelsByWireTopic.isEmpty)
+    #expect(harness.core.channels.idsByWireTopic.isEmpty)
   }
 
   @Test
@@ -67,7 +67,7 @@ struct RealtimeCoreTopicIndexTests {
           joinRef: "1", ref: nil, topic: "realtime:room", event: "phx_close", payload: [:])))
 
     #expect(effects.contains(.finishChannel(room)))
-    #expect(harness.core.channelsByWireTopic.isEmpty)
+    #expect(harness.core.channels.idsByWireTopic.isEmpty)
     #expect(harness.core.liveChannel(forWireTopic: "realtime:room") == nil)
   }
 
@@ -75,24 +75,42 @@ struct RealtimeCoreTopicIndexTests {
   /// when a record arrives out of order.
   @Test
   func channelsOfATopicStayInCreationOrder() {
-    var core = RealtimeCore(options: .test, logger: .silent, initialToken: nil)
+    var table = ChannelTable()
     let first = ChannelID(rawValue: 1)
     let second = ChannelID(rawValue: 2)
     let third = ChannelID(rawValue: 3)
     let record = ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration())
 
-    core.setRecord(record, for: third)
-    core.setRecord(record, for: first)
-    core.setRecord(record, for: second)
-    core.setRecord(record, for: second)
+    table.setRecord(record, for: third)
+    table.setRecord(record, for: first)
+    table.setRecord(record, for: second)
+    table.setRecord(record, for: second)
 
-    #expect(core.channelsByWireTopic == ["realtime:room": [first, second, third]])
-    #expect(core.liveChannel(forWireTopic: "realtime:room") == first)
+    #expect(table.idsByWireTopic == ["realtime:room": [first, second, third]])
+    #expect(table.first(onWireTopic: "realtime:room") { _ in true } == first)
 
-    core.setRecord(nil, for: first)
-    core.setRecord(nil, for: first)
-    #expect(core.channelsByWireTopic == ["realtime:room": [second, third]])
-    #expect(core.liveChannel(forWireTopic: "realtime:room") == second)
+    table.setRecord(nil, for: first)
+    table.setRecord(nil, for: first)
+    #expect(table.idsByWireTopic == ["realtime:room": [second, third]])
+    #expect(table.first(onWireTopic: "realtime:room") { _ in true } == second)
+    #expect(table.idsByWireTopic == table.rebuiltIndex)
+  }
+
+  @Test
+  func updateChangesOnlyAnExistingRecord() {
+    var table = ChannelTable()
+    let room = ChannelID(rawValue: 1)
+    let missing = ChannelID(rawValue: 2)
+    table.setRecord(
+      ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration()), for: room)
+
+    #expect(table.update(room) { $0.isRemoving = true } != nil)
+    #expect(table.update(missing) { $0.isRemoving = true } == nil)
+
+    #expect(table[room]?.isRemoving == true)
+    #expect(table[missing] == nil)
+    #expect(table.idsByWireTopic == ["realtime:room": [room]])
+    #expect(table.first(onWireTopic: "realtime:room") { !$0.isRemoving } == nil)
   }
 
   // MARK: Helpers
@@ -112,9 +130,9 @@ struct RealtimeCoreTopicIndexTests {
   }
 }
 
-extension RealtimeCore {
-  /// ``channelsByWireTopic`` as the records say it should be.
-  var rebuiltTopicIndex: [String: [ChannelID]] {
-    Dictionary(grouping: channels.keys.sorted()) { channels[$0]?.wireTopic ?? "" }
+extension ChannelTable {
+  /// ``idsByWireTopic`` as the records say it should be.
+  var rebuiltIndex: [String: [ChannelID]] {
+    Dictionary(grouping: ids.sorted()) { self[$0]?.wireTopic ?? "" }
   }
 }

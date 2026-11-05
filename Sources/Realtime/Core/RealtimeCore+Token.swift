@@ -58,7 +58,7 @@ extension RealtimeCore {
       logger.debug("Dropping an access token fetched before a newer one was set")
     }
 
-    let waiting = channels.keys.sorted().filter {
+    let waiting = channels.ids.sorted().filter {
       if case .refreshingToken? = channels[$0]?.phase { true } else { false }
     }
     if tokenRefetchQueued {
@@ -84,7 +84,7 @@ extension RealtimeCore {
   /// callback returns after the refusal. A call in flight started before it, so another call
   /// follows that one.
   mutating func rejoinWithFreshToken(_ channel: ChannelID, attempt: Int) -> [Effect] {
-    channels[channel]?.hasRefreshedExpiredToken = true
+    channels.update(channel) { $0.hasRefreshedExpiredToken = true }
     guard options.hasAccessTokenProvider else {
       return sendJoin(channel, attempt: attempt)
     }
@@ -98,7 +98,7 @@ extension RealtimeCore {
   /// Parks join attempt `attempt` until the callback call in flight returns.
   mutating func waitForToken(_ channel: ChannelID, attempt: Int) -> [Effect] {
     // The join after the token replaces any older join.
-    channels[channel]?.timedOutJoinRef = nil
+    channels.update(channel) { $0.timedOutJoinRef = nil }
     return setPhase(.refreshingToken(attempt: attempt), for: channel)
   }
 
@@ -134,7 +134,7 @@ extension RealtimeCore {
   private mutating func pushAccessToken(_ token: String) -> [Effect] {
     guard isConnected else { return [] }
     var effects: [Effect] = []
-    for channel in channels.keys.sorted() {
+    for channel in channels.ids.sorted() {
       guard let record = channels[channel], let joinRef = record.currentJoinRef else { continue }
       let isSubscribed = if case .subscribed = record.phase { true } else { false }
       guard isSubscribed || record.joinAccessToken != token else { continue }
