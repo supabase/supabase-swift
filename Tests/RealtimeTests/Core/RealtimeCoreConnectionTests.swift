@@ -518,16 +518,37 @@ struct RealtimeCoreConnectionTests {
     #expect(harness.core.connection == .connecting(attempt: 2))
   }
 
-  /// A heartbeat already waits for its reply: the probe waits on it and sends no second one.
+  /// A heartbeat already waits for its reply: the probe waits on it and sends no second one. The
+  /// regular tick would fail the socket on that unanswered heartbeat, possibly before the probe's
+  /// deadline, so it pauses until the reply restarts it.
   @Test
   func foregroundWaitsOnAHeartbeatThatIsAlreadyPending() {
     var harness = CoreHarness.connected()
     _ = harness.send(.timerFired(.heartbeat))
+    harness.advance(by: .seconds(24))
 
-    #expect(harness.send(.appForeground) == [Self.probeDeadline])
+    #expect(harness.send(.appForeground) == [.cancel(.heartbeat), Self.probeDeadline])
     #expect(
       harness.send(.frame(Self.heartbeatReply(ref: "1"))) == [
-        .publishHeartbeat(.acknowledged(latency: .zero)), .cancel(.livenessProbe),
+        .publishHeartbeat(.acknowledged(latency: .seconds(24))), .cancel(.livenessProbe),
+        Self.heartbeatEvery,
+      ])
+  }
+
+  /// The pause ends with the socket: a heartbeat on the next socket schedules nothing of its own.
+  @Test
+  func pausedHeartbeatScheduleDoesNotOutliveTheSocket() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.timerFired(.heartbeat))
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(5))
+    _ = harness.send(.timerFired(.livenessProbe))
+    _ = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    _ = harness.send(.timerFired(.heartbeat))
+
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "2"))) == [
+        .publishHeartbeat(.acknowledged(latency: .zero))
       ])
   }
 

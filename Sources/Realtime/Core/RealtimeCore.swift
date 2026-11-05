@@ -189,6 +189,9 @@ struct RealtimeCore {
   var pendingHeartbeat: (ref: Ref, sentAt: Duration)?
   /// Whether a `.livenessProbe` timer is scheduled, so a reply or leaving `.connected` cancels it.
   var livenessProbeScheduled = false
+  /// Whether the probe cancelled the `.heartbeat` timer because a pending heartbeat serves as the
+  /// probe. The reply to that heartbeat schedules the timer again.
+  var heartbeatPausedByProbe = false
   /// When the last connection attempt started, as `CoreTime.elapsed`.
   var lastAttemptStart: Duration?
   /// When the `.reconnect` timer is due while the connection is `.reconnecting`, as

@@ -56,6 +56,7 @@ extension RealtimeCore {
         livenessProbeScheduled = false
         result.append(.cancel(.livenessProbe))
       }
+      heartbeatPausedByProbe = false
       result += cancelTokenRefresh()
     }
     if case .connected = connection {
@@ -274,6 +275,10 @@ extension RealtimeCore {
       livenessProbeScheduled = false
       effects.append(.cancel(.livenessProbe))
     }
+    if heartbeatPausedByProbe {
+      heartbeatPausedByProbe = false
+      effects.append(.schedule(.heartbeat, after: options.heartbeatInterval))
+    }
     return effects
   }
 
@@ -281,10 +286,17 @@ extension RealtimeCore {
 
   /// Sends a heartbeat now, outside the schedule, and gives it ``livenessProbeTimeout`` to be
   /// acknowledged. A heartbeat that already waits for its reply serves as the probe.
+  ///
+  /// The regular tick pauses while a pending heartbeat serves as the probe: it would fail the
+  /// socket on that heartbeat, possibly before the probe's deadline. The reply restarts it.
   private mutating func startLivenessProbe() -> [Effect] {
     livenessProbeScheduled = true
-    let heartbeat = pendingHeartbeat == nil ? sendHeartbeat() : []
-    return heartbeat + [.schedule(.livenessProbe, after: Self.livenessProbeTimeout)]
+    let probeDeadline = Effect.schedule(.livenessProbe, after: Self.livenessProbeTimeout)
+    guard pendingHeartbeat == nil else {
+      heartbeatPausedByProbe = true
+      return [.cancel(.heartbeat), probeDeadline]
+    }
+    return sendHeartbeat() + [probeDeadline]
   }
 
   /// A probe with no reply is a heartbeat timeout, except that the reconnect does not wait out a
