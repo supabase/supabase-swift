@@ -349,9 +349,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
 | `OAuthClient.redirectUris`, `.grantTypes`, `.responseTypes` | optional arrays |
 | `enum MobileOTPType`, `enum ResendMobileType` | `struct PhoneOTPType`, `struct ResendPhoneType`, `RawRepresentable` with the same member names |
-| `resetPasswordForEmail(_:redirectTo:captchaToken:)` | `resetPassword(email:redirectTo:captchaToken:)` |
-| `resend(email:type:emailRedirectTo:captchaToken:)` | `resend(email:type:redirectTo:captchaToken:)` |
-| `resend(phone:type:captchaToken:)` returns `ResendMobileResponse` | returns `MessageID?`; read `.rawValue` for the string |
+| `resetPasswordForEmail(_:redirectTo:captchaToken:)` | `resetPassword(email:options:)` with `ResetPasswordOptions(redirectTo:captchaToken:)` |
+| `resend(email:type:emailRedirectTo:captchaToken:)` | `resend(email:type:options:)` with `ResendEmailOptions(redirectTo:captchaToken:)` |
+| `resend(phone:type:captchaToken:)` returns `ResendMobileResponse` | `resend(phone:type:options:)` with `ResendPhoneOptions(captchaToken:)`; returns `MessageID?`, read `.rawValue` for the string |
 | `verifyOTP(email:token:type:redirectTo:captchaToken:)`, `verifyOTP(phone:token:type:captchaToken:)` | `verifyOTP(email:token:type:)`, `verifyOTP(phone:token:type:)`; the server checks no `redirect_to` and no captcha token on this call |
 | `enum AuthChangeEvent` | `struct AuthEvent` with the same member names; `.userDeleted` is removed, because the client never emitted it |
 | `enum` `FactorStatus`, `MessagingChannel`, `Provider`, `EmailOTPType`, `ResendEmailType` | `RawRepresentable` structs with the same member names |
@@ -817,6 +817,24 @@ try await supabase.auth.signInWithOTP(
   options: EmailOTPOptions(shouldCreateUser: false, redirectTo: callback, captchaToken: token))
 let messageID = try await supabase.auth.signInWithOTP(
   phone: phone, options: PhoneOTPOptions(channel: .whatsapp))
+```
+
+## `resend` and `resetPassword` take options
+
+The redirect URL and the captcha token move into `ResendEmailOptions`, `ResendPhoneOptions`, and
+`ResetPasswordOptions`. `emailRedirectTo:` is `redirectTo:`.
+
+```swift
+// v2
+try await supabase.auth.resend(
+  email: email, type: .signup, emailRedirectTo: callback, captchaToken: token)
+try await supabase.auth.resetPasswordForEmail(email, redirectTo: callback)
+// v3
+try await supabase.auth.resend(
+  email: email, type: .signup,
+  options: ResendEmailOptions(redirectTo: callback, captchaToken: token))
+try await supabase.auth.resetPassword(
+  email: email, options: ResetPasswordOptions(redirectTo: callback))
 ```
 
 ## `verifyOTP` returns `VerifyOTPResult` or a `Session`

@@ -92,7 +92,7 @@ final class VectorIndexClientIntegrationTests {
     ])
 
     let fetched = try await index.vectors(
-      keys: ["a", "b"], returnData: true, returnMetadata: true)
+      keys: ["a", "b"], options: GetVectorsOptions(returnData: true, returnMetadata: true))
     #expect(fetched.count == 2)
     let a = try #require(fetched.first { $0.key == "a" })
     let aData = try #require(a.data?.float32)
@@ -101,7 +101,7 @@ final class VectorIndexClientIntegrationTests {
     }
     #expect(a.metadata?["type"]?.stringValue == "doc")
 
-    let listed = try await index.listVectors(returnData: true).page()
+    let listed = try await index.listVectors(options: ListVectorsOptions(returnData: true)).page()
     #expect(listed.vectors.map(\.key).sorted() == ["a", "b"])
 
     try await index.deleteVectors(keys: ["a"])
@@ -123,10 +123,7 @@ final class VectorIndexClientIntegrationTests {
     ])
 
     let response = try await index.queryVectors(
-      VectorData(float32: [0.9, 0.1]),
-      topK: 2,
-      returnDistance: true
-    )
+      VectorData(float32: [0.9, 0.1]), topK: 2, options: QueryVectorsOptions(returnDistance: true))
     #expect(response.vectors.map(\.key) == ["close", "far"])
     #expect(response.distanceMetric == .cosine)
   }

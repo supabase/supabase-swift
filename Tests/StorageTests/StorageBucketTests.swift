@@ -578,10 +578,8 @@ extension StorageMockerTests {
       .register()
 
       _ = try await storage.from("bucket").createSignedURL(
-        path: "file.txt",
-        expiresIn: .seconds(3600),
-        transform: ImageTransform()
-      )
+        path: "file.txt", expiresIn: .seconds(3600),
+        options: SignedURLOptions(transform: ImageTransform()))
     }
 
     @Test
@@ -647,10 +645,8 @@ extension StorageMockerTests {
       .register()
 
       let url = try await storage.from("bucket").createSignedURL(
-        path: "file.txt",
-        expiresIn: .seconds(3600),
-        download: .withOriginalName
-      )
+        path: "file.txt", expiresIn: .seconds(3600),
+        options: SignedURLOptions(download: .withOriginalName))
       #expect(
         url.absoluteString
           == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
@@ -774,10 +770,8 @@ extension StorageMockerTests {
 
       let paths = ["file.txt", "file2.txt"]
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-        paths: paths,
-        expiresIn: .seconds(3600),
-        download: .withOriginalName
-      )
+        paths: paths, expiresIn: .seconds(3600),
+        options: SignedURLsOptions(download: .withOriginalName))
       #expect(results.count == 2)
       guard case .success(_, let url0) = results[0] else {
         Issue.record("Expected success for file.txt")
@@ -1262,7 +1256,7 @@ extension StorageMockerTests {
       .register()
 
       let response = try await storage.from("bucket")
-        .download(path: "file.txt", transform: ImageTransform())
+        .download(path: "file.txt", options: DownloadOptions(transform: ImageTransform()))
 
       #expect(try await response.data() == Data("hello world".utf8))
     }
@@ -1272,7 +1266,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .publicURL(path: "image.png", transform: ImageTransform())
+        .publicURL(path: "image.png", options: PublicURLOptions(transform: ImageTransform()))
 
       #expect(
         publicURL.absoluteString.contains("/object/public/"),
@@ -1289,7 +1283,8 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let publicURL = try storage.from("bucket")
-        .publicURL(path: "image.png", transform: ImageTransform(width: 200))
+        .publicURL(
+          path: "image.png", options: PublicURLOptions(transform: ImageTransform(width: 200)))
 
       #expect(
         publicURL.absoluteString.contains("/render/image/"),
@@ -1472,9 +1467,7 @@ extension StorageMockerTests {
 
       let response = try await storage.from("bucket")
         .download(
-          path: "sadcat.txt",
-          transform: ImageTransform(resize: .cover)
-        )
+          path: "sadcat.txt", options: DownloadOptions(transform: ImageTransform(resize: .cover)))
 
       #expect(try await response.data() == imageData)
     }
@@ -1975,9 +1968,7 @@ extension StorageMockerTests {
       .register()
 
       let url = try await storage.from("bucket").createSignedURL(
-        path: "file.txt",
-        expiresIn: .seconds(3600),
-        cacheNonce: "abc123"
+        path: "file.txt", expiresIn: .seconds(3600), options: SignedURLOptions(cacheNonce: "abc123")
       )
       #expect(
         url.absoluteString
@@ -2007,10 +1998,8 @@ extension StorageMockerTests {
       .register()
 
       let results: [SignedURLResult] = try await storage.from("bucket").createSignedURLs(
-        paths: ["file.txt"],
-        expiresIn: .seconds(3600),
-        cacheNonce: "abc123"
-      )
+        paths: ["file.txt"], expiresIn: .seconds(3600),
+        options: SignedURLsOptions(cacheNonce: "abc123"))
       guard case .success(_, let url) = results[0] else {
         Issue.record("Expected success for file.txt")
         return
@@ -2025,9 +2014,7 @@ extension StorageMockerTests {
       let storage = makeSUT()
 
       let url = storage.from("bucket").publicURL(
-        path: "file.txt",
-        cacheNonce: "abc123"
-      )
+        path: "file.txt", options: PublicURLOptions(cacheNonce: "abc123"))
       #expect(
         url.absoluteString == "\(self.url)/object/public/bucket/file.txt?cacheNonce=abc123")
     }

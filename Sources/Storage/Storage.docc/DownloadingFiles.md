@@ -4,7 +4,7 @@ Read an object into memory, write it to disk, or process it as it arrives.
 
 ## Overview
 
-``StorageBucket/download(path:transform:options:progress:)`` returns a ``DownloadResponse`` as
+``StorageBucket/download(path:options:progress:)`` returns a ``DownloadResponse`` as
 soon as Storage sends the response headers. Its ``DownloadResponse/body`` streams the object and
 can be read once. Choose how to read it.
 
@@ -60,6 +60,8 @@ print(response.contentType ?? "?", response.contentLength ?? 0)
   `206 Partial Content`.
 - ``DownloadOptions/versionId`` fetches an older version in a bucket with versioning.
 - ``DownloadOptions/cacheNonce`` adds a `cacheNonce` query item, so a CDN serves a fresh copy.
+- ``DownloadOptions/transform`` asks Storage to transform the image first. The request goes to
+  the image route, and the response may have no `Content-Length`.
 - ``DownloadOptions/headers`` go out with the request and win over the SDK's own.
 
 ```swift
@@ -90,14 +92,15 @@ Pass an ``ImageTransform`` to resize or reformat an image on the server before i
 
 ```swift
 let thumbnail = try await avatars
-  .download(path: "user123.png", transform: ImageTransform(width: 128, height: 128))
+  .download(
+    path: "user123.png", options: DownloadOptions(transform: ImageTransform(width: 128, height: 128)))
   .data()
 ```
 
 ### Public buckets
 
 For a public bucket, you do not need to download through the SDK. Load the URL from
-``StorageBucket/publicURL(path:download:transform:versionId:cacheNonce:)`` directly, for example
+``StorageBucket/publicURL(path:options:)`` directly, for example
 with `AsyncImage`. It needs no network call to build.
 
 ### Metadata only

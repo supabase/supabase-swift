@@ -47,7 +47,8 @@ See <doc:ListingObjects>.
 
 ```swift
 let url = try await avatars.createSignedURL(path: "user123.png", expiresIn: .seconds(3600))
-let thumbnail = avatars.publicURL(path: "user123.png", transform: ImageTransform(width: 64))
+let thumbnail = avatars.publicURL(
+  path: "user123.png", options: PublicURLOptions(transform: ImageTransform(width: 64)))
 ```
 
 See <doc:ImageTransformations>.
@@ -85,6 +86,9 @@ Every failure is a ``StorageError`` or a `CancellationError`. See <doc:HandlingE
 - ``DownloadResponse``
 - ``DownloadOptions``
 - ``DownloadBehavior``
+- ``SignedURLOptions``
+- ``SignedURLsOptions``
+- ``PublicURLOptions``
 - ``SignedURLResult``
 
 ### Image transformations

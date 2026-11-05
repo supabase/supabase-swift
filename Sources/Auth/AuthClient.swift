@@ -76,8 +76,8 @@ typealias AuthClientID = Int
 /// - ``EmailOTPType``
 /// - ``PhoneOTPType``
 /// - ``VerifyOTPResult``
-/// - ``resend(email:type:redirectTo:captchaToken:)``
-/// - ``resend(phone:type:captchaToken:)``
+/// - ``resend(email:type:options:)``
+/// - ``resend(phone:type:options:)``
 /// - ``ResendEmailType``
 /// - ``ResendPhoneType``
 ///
@@ -110,7 +110,7 @@ typealias AuthClientID = Int
 /// - ``updateUser(_:redirectTo:)``
 /// - ``UserAttributes``
 /// - ``reauthenticate()``
-/// - ``resetPassword(email:redirectTo:captchaToken:)``
+/// - ``resetPassword(email:options:)``
 ///
 /// ### Identities
 /// - ``identities()``
@@ -769,7 +769,7 @@ public final class AuthClient: Sendable {
   /// Exchanges an authorization code for a session, and stores the session.
   ///
   /// The client emits one auth event, chosen by the call that started the flow:
-  /// ``AuthEvent/passwordRecovery`` for ``resetPassword(email:redirectTo:captchaToken:)``,
+  /// ``AuthEvent/passwordRecovery`` for ``resetPassword(email:options:)``,
   /// ``AuthEvent/userUpdated`` for an email change or an identity link, and
   /// ``AuthEvent/signedIn`` otherwise.
   ///
@@ -1244,22 +1244,22 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - email: The email address to send to.
   ///   - type: The kind of email to send again.
-  ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
-  ///     ``Configuration/redirectTo``.
-  ///   - captchaToken: The captcha verification token.
+  ///   - options: The redirect URL and the captcha token.
   public func resend(
     email: String,
     type: ResendEmailType,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
+    options: ResendEmailOptions = .init()
   ) async throws {
-    try await withFlow(type == .emailChange ? .emailChange : .signIn, redirectTo: redirectTo) {
+    try await withFlow(
+      type == .emailChange ? .emailChange : .signIn,
+      redirectTo: options.redirectTo
+    ) {
       try await api.execute(
         authAPI.resend(
           email: email,
           type: type,
-          redirectTo: redirectTo,
-          captchaToken: captchaToken,
+          redirectTo: options.redirectTo,
+          captchaToken: options.captchaToken,
           pkce: $0.challenge
         )
       )
@@ -1274,16 +1274,17 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - phone: The phone number to send to, with the international prefix.
   ///   - type: The kind of code to send again.
-  ///   - captchaToken: The captcha verification token.
+  ///   - options: The captcha token.
   /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
   ///   none.
   @discardableResult
   public func resend(
     phone: String,
     type: ResendPhoneType,
-    captchaToken: String? = nil
+    options: ResendPhoneOptions = .init()
   ) async throws -> MessageID? {
-    try await api.execute(authAPI.resend(phone: phone, type: type, captchaToken: captchaToken))
+    try await api.execute(
+      authAPI.resend(phone: phone, type: type, captchaToken: options.captchaToken))
   }
 
   /// Sends a one-time code to the email or phone of the signed-in user.
@@ -1508,20 +1509,17 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameters:
   ///   - email: The user's email address.
-  ///   - redirectTo: The URL the link redirects to. When `nil`, the client uses
-  ///     ``Configuration/redirectTo``.
-  ///   - captchaToken: The captcha verification token.
+  ///   - options: The redirect URL and the captcha token.
   public func resetPassword(
     email: String,
-    redirectTo: URL? = nil,
-    captchaToken: String? = nil
+    options: ResetPasswordOptions = .init()
   ) async throws {
-    try await withFlow(.recovery, redirectTo: redirectTo) {
+    try await withFlow(.recovery, redirectTo: options.redirectTo) {
       try await api.execute(
         authAPI.resetPassword(
           email: email,
-          redirectTo: redirectTo,
-          captchaToken: captchaToken,
+          redirectTo: options.redirectTo,
+          captchaToken: options.captchaToken,
           pkce: $0.challenge
         )
       )

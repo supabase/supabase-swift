@@ -49,10 +49,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `createBucket(_:options:)` returns `Void` | returns the stored bucket name (`@discardableResult`) |
 | `getPublicURL(path:...) throws` | `publicURL(path:...)`, does not throw |
 | `upload(_:data:)`, `update(_:data:)`, `uploadToSignedURL(_:token:data:)` | `upload(path:data:)`, `update(path:data:)`, `uploadToSignedURL(path:token:data:)` (same for `fileURL:`) |
-| `download: Bool`, `download: String?` | `download: DownloadBehavior?` (`.withOriginalName`, `.named("a.pdf")`) |
+| `download: Bool`, `download: String?` | `download: DownloadBehavior?` (`.withOriginalName`, `.named("a.pdf")`), in the options type (see below) |
 | `expiresIn: Int` | `expiresIn: Duration`, e.g. `.seconds(60)` |
 | `TransformOptions` | `ImageTransform` |
-| `download(path:options:)`, `getPublicURL(path:options:)` | `download(path:transform:)`, `publicURL(path:transform:)` |
 | `FileOptions` | `UploadOptions` (see below) |
 | `CreateSignedUploadURLOptions(upsert:)` | `createSignedUploadURL(path:upsert:)` |
 | `SignedURL` | removed |
@@ -132,23 +131,49 @@ header value.
 
 ## `download` returns a streaming `DownloadResponse`
 
-`download(path:transform:options:progress:)` returns a `DownloadResponse` as soon as the headers
-arrive. Read the body with `data()`, or write it to disk with `write(to:)`. `query:` and
-`cacheNonce:` move into `DownloadOptions`, which also has `range`, `versionId` and `headers`.
+`download(path:options:progress:)` returns a `DownloadResponse` as soon as the headers
+arrive. Read the body with `data()`, or write it to disk with `write(to:)`. The image transform
+(v2 `options:`), `query:`, and `cacheNonce:` move into `DownloadOptions`, which also has `range`,
+`versionId` and `headers`.
 
 ```swift
 // v2
 let data = try await bucket.download(path: "a.png", cacheNonce: "v2")
+let thumb = try await bucket.download(path: "a.png", options: TransformOptions(width: 64))
 let old = try await bucket.download(
   path: "a.png", query: [URLQueryItem(name: "versionId", value: id)])
 // v3
 let data = try await bucket.download(
   path: "a.png", options: DownloadOptions(cacheNonce: "v2")).data()
+let thumb = try await bucket.download(
+  path: "a.png", options: DownloadOptions(transform: ImageTransform(width: 64))).data()
 let old = try await bucket.download(path: "a.png", options: DownloadOptions(versionId: id)).data()
 try await bucket.download(path: "a.mov").write(to: fileURL)
 ```
 
 The body can be read once.
+
+## `createSignedURL`, `createSignedURLs`, and `publicURL` take options
+
+`download:`, the image transform, and `cacheNonce:` move into `SignedURLOptions`,
+`SignedURLsOptions`, and `PublicURLOptions`. `SignedURLOptions` and `PublicURLOptions` also have
+`versionId`. The transform is `transform:`, not `options:`.
+
+```swift
+// v2
+let url = try await bucket.createSignedURL(
+  path: "a.pdf", expiresIn: 60, download: .withOriginalName)
+let urls = try await bucket.createSignedURLs(paths: ["a.pdf"], expiresIn: 60, cacheNonce: "v2")
+let thumb = try bucket.getPublicURL(path: "a.png", options: TransformOptions(width: 64))
+// v3
+let url = try await bucket.createSignedURL(
+  path: "a.pdf", expiresIn: .seconds(60),
+  options: SignedURLOptions(download: .withOriginalName))
+let urls = try await bucket.createSignedURLs(
+  paths: ["a.pdf"], expiresIn: .seconds(60), options: SignedURLsOptions(cacheNonce: "v2"))
+let thumb = bucket.publicURL(
+  path: "a.png", options: PublicURLOptions(transform: ImageTransform(width: 64)))
+```
 
 ## Object types: `StorageObject` and `ObjectInfo`
 
@@ -225,4 +250,6 @@ Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `Resu
 `StorageClientConfiguration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PagedListing`; call `.page()` for the first page.
+return a `PagedListing`; call `.page()` for the first page. `vectors(keys:)`, `listVectors`, and
+`queryVectors` take their optional settings in `GetVectorsOptions`, `ListVectorsOptions`, and
+`QueryVectorsOptions`.

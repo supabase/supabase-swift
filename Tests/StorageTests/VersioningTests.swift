@@ -39,7 +39,8 @@ struct VersioningTests {
     let bucket = Self.makeBucket(
       sent: sent, response: #"{"signedURL":"/object/sign/bucket/a.png?token=t"}"#)
 
-    _ = try await bucket.createSignedURL(path: "a.png", expiresIn: .seconds(60), versionId: "v1")
+    _ = try await bucket.createSignedURL(
+      path: "a.png", expiresIn: .seconds(60), options: SignedURLOptions(versionId: "v1"))
 
     #expect(sent.value.map(\.body) == [#"{"expiresIn":60,"versionId":"v1"}"#])
   }
@@ -48,7 +49,8 @@ struct VersioningTests {
   func publicURLCarriesTheVersion() {
     let bucket = Self.makeBucket(sent: .init([]), response: "")
 
-    let url = bucket.publicURL(path: "a.png", versionId: "v1", cacheNonce: "n")
+    let url = bucket.publicURL(
+      path: "a.png", options: PublicURLOptions(versionId: "v1", cacheNonce: "n"))
 
     #expect(
       url.absoluteString
