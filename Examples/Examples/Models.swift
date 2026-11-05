@@ -1,14 +1,30 @@
 import Foundation
 import IdentifiedCollections
-import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-@Table("todos")
-nonisolated struct Todo: Identifiable, Hashable {
-  @PrimaryKey let id: UUID
+nonisolated struct Todo: Identifiable, Hashable, Decodable {
+  let id: UUID
   var description: String
   var isComplete: Bool
   let createdAt: Date
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case description
+    case isComplete = "is_complete"
+    case createdAt = "created_at"
+  }
+}
+
+// What `@Table("todos")` would generate, written by hand: the types the macro generates take this
+// target's main-actor default isolation, which fails to build on Xcode 26.
+nonisolated extension Todo: _PostgrestKeyedRelation {
+  static let relationName = "todos"
+  static let selectString = "id,description,is_complete,created_at"
+  static let primaryKeyColumns = ["id"]
+
+  struct Columns: Sendable {}
+  static let columns = Columns()
 }
 
 extension IdentifiedArrayOf<Todo> {
