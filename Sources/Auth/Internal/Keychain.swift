@@ -2,25 +2,47 @@
   import Foundation
   import Security
 
+  /// The `SecItem` functions ``Keychain`` calls, so tests can run without a real Keychain.
+  struct SecItemClient: Sendable {
+    var add: @Sendable (_ query: [String: Any]) -> OSStatus
+    var update: @Sendable (_ query: [String: Any], _ attributes: [String: Any]) -> OSStatus
+    var copyMatching: @Sendable (_ query: [String: Any]) -> (OSStatus, AnyObject?)
+    var delete: @Sendable (_ query: [String: Any]) -> OSStatus
+
+    static let live = SecItemClient(
+      add: { SecItemAdd($0 as CFDictionary, nil) },
+      update: { SecItemUpdate($0 as CFDictionary, $1 as CFDictionary) },
+      copyMatching: { query in
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        return (status, result)
+      },
+      delete: { SecItemDelete($0 as CFDictionary) }
+    )
+  }
+
   struct Keychain {
     let service: String?
     let accessGroup: String?
     let accessibility: KeychainStorage.Accessibility
     let synchronizable: Bool
     let useDataProtectionKeychain: Bool
+    let secItem: SecItemClient
 
     init(
       service: String?,
       accessGroup: String? = nil,
       accessibility: KeychainStorage.Accessibility = .afterFirstUnlock,
       synchronizable: Bool = false,
-      useDataProtectionKeychain: Bool = false
+      useDataProtectionKeychain: Bool = false,
+      secItem: SecItemClient = .live
     ) {
       self.service = service
       self.accessGroup = accessGroup
       self.accessibility = accessibility
       self.synchronizable = synchronizable
       self.useDataProtectionKeychain = useDataProtectionKeychain
+      self.secItem = secItem
     }
 
     private func assertSuccess(forStatus status: OSStatus) throws {
@@ -62,21 +84,20 @@
     }
 
     func data(forKey key: String) throws -> Data? {
-      let query = getOneQuery(byKey: key)
-      var result: AnyObject?
-      let status = SecItemCopyMatching(query as CFDictionary, &result)
+      let (status, result) = secItem.copyMatching(getOneQuery(byKey: key))
       return try Self.mapReadStatus(status, result: result)
     }
 
+    /// Adds the item, or updates the existing one in place.
+    ///
+    /// The update also rewrites `kSecAttrAccessible`, so an item an earlier SDK version wrote
+    /// with another accessibility moves to the current one on the first write. The item is never
+    /// deleted and added again, so no reader sees it missing.
     func set(_ data: Data, forKey key: String) throws {
-      let addItemQuery = setQuery(forKey: key, data: data)
-      let addStatus = SecItemAdd(addItemQuery as CFDictionary, nil)
+      let addStatus = secItem.add(setQuery(forKey: key, data: data))
 
       if addStatus == KeychainError.duplicateItem.status {
-        let updateQuery = baseQuery(withKey: key)
-        let updateAttributes: [String: Any] = [kSecValueData as String: data]
-        let updateStatus = SecItemUpdate(
-          updateQuery as CFDictionary, updateAttributes as CFDictionary)
+        let updateStatus = secItem.update(baseQuery(withKey: key), updateAttributes(data: data))
         try assertSuccess(forStatus: updateStatus)
       } else {
         try assertSuccess(forStatus: addStatus)
@@ -84,11 +105,10 @@
     }
 
     func deleteItem(forKey key: String) throws {
-      let query = baseQuery(withKey: key)
-      try Self.mapDeleteStatus(SecItemDelete(query as CFDictionary))
+      try Self.mapDeleteStatus(secItem.delete(baseQuery(withKey: key)))
     }
 
-    func baseQuery(withKey key: String? = nil, data: Data? = nil) -> [String: Any] {
+    func baseQuery(withKey key: String? = nil) -> [String: Any] {
       var query: [String: Any] = [:]
       query[kSecClass as String] = kSecClassGenericPassword
 
@@ -97,9 +117,6 @@
       }
       if let key {
         query[kSecAttrAccount as String] = key
-      }
-      if let data {
-        query[kSecValueData as String] = data
       }
       if let accessGroup {
         query[kSecAttrAccessGroup as String] = accessGroup
@@ -122,21 +139,27 @@
     }
 
     func setQuery(forKey key: String, data: Data) -> [String: Any] {
-      var query = baseQuery(withKey: key, data: data)
+      baseQuery(withKey: key).merging(updateAttributes(data: data)) { $1 }
+    }
 
+    func updateAttributes(data: Data) -> [String: Any] {
+      var attributes: [String: Any] = [kSecValueData as String: data]
+      if appliesAccessibility {
+        attributes[kSecAttrAccessible as String] = accessibility.secAttrValue
+      }
+      return attributes
+    }
+
+    private var appliesAccessibility: Bool {
       #if os(macOS)
         // kSecAttrAccessible does not apply to the legacy file-based Keychain, which is what
         // SecItem targets on macOS by default. Only send it once the data-protection Keychain
         // or iCloud sync is in use.
         // https://developer.apple.com/documentation/security/ksecattraccessible
-        if useDataProtectionKeychain || synchronizable {
-          query[kSecAttrAccessible as String] = accessibility.secAttrValue
-        }
+        useDataProtectionKeychain || synchronizable
       #else
-        query[kSecAttrAccessible as String] = accessibility.secAttrValue
+        true
       #endif
-
-      return query
     }
   }
 
@@ -278,7 +301,7 @@
     }
   }
 
-  /// The Keychain operations ``KeychainLocalStorage`` and ``KeychainStorage`` depend on.
+  /// The Keychain operations ``KeychainStorage`` depends on.
   ///
   /// Exists so the migration logic can be tested without reaching the real Keychain, which is
   /// not available to an SPM test bundle.
