@@ -81,6 +81,9 @@ extension RealtimeClient {
     case .appForeground:
       handleAppForeground()
 
+    case .wake:
+      apply(.wake)
+
     case .flush(let continuation):
       continuation.resume()
     }

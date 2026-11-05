@@ -35,7 +35,27 @@ struct RealtimeClientOptionsTests {
     #expect(options.connectOnSubscribe)
     #expect(options.disconnectOnEmptyChannelsAfter == .seconds(50))
     #expect(options.handleAppLifecycle == RealtimeClientOptions.defaultHandleAppLifecycle)
+    #expect(options.monitorsNetworkPath == RealtimeClientOptions.defaultMonitorsNetworkPath)
     #expect(options.serverLogLevel == nil)
+  }
+
+  /// watchOS keeps reporting an unsatisfied path to ordinary apps, so the hint is off there.
+  @Test
+  func monitorsNetworkPathDefaultsOnWhereThePathIsReliable() {
+    #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
+      #expect(RealtimeClientOptions.defaultMonitorsNetworkPath)
+    #else
+      #expect(!RealtimeClientOptions.defaultMonitorsNetworkPath)
+    #endif
+  }
+
+  @Test
+  func monitorsNetworkPathCanBeSetInTheInitializerAndAfterwards() {
+    var options = RealtimeClientOptions(monitorsNetworkPath: false)
+    #expect(!options.monitorsNetworkPath)
+
+    options.monitorsNetworkPath = true
+    #expect(options.monitorsNetworkPath)
   }
 
   @Test

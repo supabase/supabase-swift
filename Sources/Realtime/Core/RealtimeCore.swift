@@ -186,6 +186,8 @@ struct RealtimeCore {
   /// The heartbeat sent on the current socket that the server has not acknowledged yet, and
   /// when it was sent, as `CoreTime.elapsed`.
   var pendingHeartbeat: (ref: Ref, sentAt: Duration)?
+  /// Whether a `.livenessProbe` timer is scheduled, so a reply or leaving `.connected` cancels it.
+  var livenessProbeScheduled = false
   /// The `connect()` callers waiting for the attempt in flight.
   var connectWaiters: [WaiterID] = []
   /// Whether the socket was connected when the app last went to the background.
@@ -229,6 +231,8 @@ struct RealtimeCore {
       return enterForeground()
     case .timerFired(.heartbeat):
       return heartbeatTimerFired()
+    case .timerFired(.livenessProbe):
+      return livenessProbeTimerFired()
     case .frame(let message) where message.topic == "phoenix":
       return receiveHeartbeatReply(message)
     case .frame(let message) where message.event == ChannelEvent.system:

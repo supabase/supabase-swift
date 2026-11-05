@@ -58,6 +58,8 @@ enum WaiterOutcome: Equatable, Sendable {
 enum TimerID: Hashable, Sendable {
   /// The next heartbeat is due, and the previous one must have been acknowledged.
   case heartbeat
+  /// The heartbeat sent when the app returned to the foreground had no reply in time.
+  case livenessProbe
   case tokenRefresh
   /// The backoff wait before the next reconnect attempt is over.
   case reconnect

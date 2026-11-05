@@ -448,14 +448,121 @@ struct RealtimeCoreConnectionTests {
   }
 
   @Test
-  func foregroundWhileStillConnectedDoesNothing() {
+  func foregroundWhileStillConnectedDoesNotReconnect() {
     var harness = CoreHarness.connected()
     _ = harness.send(.appBackground)
+    _ = harness.send(.appForeground)
 
-    #expect(harness.send(.appForeground) == [])
+    #expect(harness.core.connection.status.isConnected)
     // The background mark is spent: a later foreground does not reconnect.
     _ = harness.send(.socketClosed(code: 4001, reason: "jwt expired"))
     #expect(harness.send(.appForeground) == [])
+  }
+
+  // MARK: Liveness probe
+
+  static let probeDeadline = Effect.schedule(.livenessProbe, after: .seconds(5))
+
+  /// The socket may be dead after a suspension while the status still says connected: the
+  /// foreground sends a heartbeat now instead of waiting for the next tick.
+  @Test
+  func foregroundWhileConnectedSendsAProbeHeartbeat() {
+    var harness = CoreHarness.connected()
+
+    #expect(
+      harness.send(.appForeground) == [
+        .send(Self.heartbeat(ref: "1")), .publishHeartbeat(.sent), Self.heartbeatEvery,
+        Self.probeDeadline,
+      ])
+  }
+
+  /// A probe needs no earlier background: the platform may not report one, as on macOS wake.
+  @Test
+  func foregroundProbesWithoutAPriorBackground() {
+    var harness = CoreHarness.connected()
+
+    #expect(harness.send(.appForeground).contains(Self.probeDeadline))
+  }
+
+  @Test
+  func probeReplyEndsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(1))
+
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "1"))) == [
+        .publishHeartbeat(.acknowledged(latency: .seconds(1))), .cancel(.livenessProbe),
+      ])
+    // A stale probe timer finds nothing to fail.
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+    #expect(harness.core.connection.status.isConnected)
+  }
+
+  /// No reply within the deadline is a heartbeat timeout, and the reconnect skips the backoff.
+  @Test
+  func probeWithoutReplyFailsTheSocketAndReconnectsAtOnce() throws {
+    var harness = CoreHarness.connected()
+    let socket = try #require(harness.socket)
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(5))
+
+    var expected = harness
+    let failure = expected.send(.socketFailed(.heartbeatTimeout))
+    let wake = expected.send(.wake)
+    #expect(failure.contains(.closeSocket(socket, code: 1001, reason: "error: heartbeat timeout")))
+    #expect(wake.contains(.openSocket))
+
+    #expect(
+      harness.send(.timerFired(.livenessProbe)) == [.publishHeartbeat(.timedOut)] + failure + wake)
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  /// A heartbeat already waits for its reply: the probe waits on it and sends no second one.
+  @Test
+  func foregroundWaitsOnAHeartbeatThatIsAlreadyPending() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.timerFired(.heartbeat))
+
+    #expect(harness.send(.appForeground) == [Self.probeDeadline])
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "1"))) == [
+        .publishHeartbeat(.acknowledged(latency: .zero)), .cancel(.livenessProbe),
+      ])
+  }
+
+  @Test
+  func probeTimerIsIgnoredWithoutAProbe() {
+    var harness = CoreHarness.connected()
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+
+    // A heartbeat in flight is the heartbeat timer's to fail, not the probe's.
+    _ = harness.send(.timerFired(.heartbeat))
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+    #expect(harness.core.connection.status.isConnected)
+  }
+
+  @Test
+  func leavingConnectedCancelsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+
+    #expect(
+      harness.send(.socketClosed(code: 1001, reason: "going away")).contains(
+        .cancel(.livenessProbe)))
+    // The reconnect starts clean: its first heartbeat tick sends, it does not time out.
+    _ = harness.send(.timerFired(.reconnect))
+    _ = harness.send(.socketOpened(other))
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+  }
+
+  @Test
+  func disconnectCancelsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+
+    #expect(
+      harness.send(.disconnectRequested(code: nil, reason: nil)).contains(.cancel(.livenessProbe)))
   }
 
   @Test

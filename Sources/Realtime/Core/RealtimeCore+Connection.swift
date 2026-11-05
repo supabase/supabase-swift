@@ -44,6 +44,10 @@ extension RealtimeCore {
     result += effects
     if case .connected = previous {
       result.append(.cancel(.heartbeat))
+      if livenessProbeScheduled {
+        livenessProbeScheduled = false
+        result.append(.cancel(.livenessProbe))
+      }
       result += cancelTokenRefresh()
     }
     if case .connected = connection {
@@ -175,11 +179,16 @@ extension RealtimeCore {
     return []
   }
 
-  /// Recovers a connection that went away while the app was in the background: skips the rest
-  /// of a backoff wait, or connects again after a failure stopped the client.
+  /// How long the heartbeat sent on a return to the foreground waits for its reply.
+  static let livenessProbeTimeout: Duration = .seconds(5)
+
+  /// Checks a connected socket that the app may have left dead while suspended, and recovers a
+  /// connection that went away while the app was in the background: skips the rest of a backoff
+  /// wait, or connects again after a failure stopped the client.
   mutating func enterForeground() -> [Effect] {
     let wasConnected = wasConnectedBeforeBackground
     wasConnectedBeforeBackground = false
+    if case .connected = connection { return startLivenessProbe() }
     guard wasConnected else { return [] }
 
     switch connection {
@@ -201,9 +210,16 @@ extension RealtimeCore {
 
     if pendingHeartbeat != nil {
       logger.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      return [.publishHeartbeat(.timedOut)] + socketWentAway(.socketFailed(.heartbeatTimeout))
+      return failSocketOnHeartbeatTimeout()
     }
+    return sendHeartbeat()
+  }
 
+  private mutating func failSocketOnHeartbeatTimeout() -> [Effect] {
+    [.publishHeartbeat(.timedOut)] + socketWentAway(.socketFailed(.heartbeatTimeout))
+  }
+
+  private mutating func sendHeartbeat() -> [Effect] {
     let ref = makeRef()
     pendingHeartbeat = (ref, now.elapsed)
     return [
@@ -223,6 +239,34 @@ extension RealtimeCore {
     if message.status != .ok {
       logger.warning("The server answered the heartbeat with: \(message.payload)")
     }
-    return [.publishHeartbeat(.acknowledged(latency: now.elapsed - pending.sentAt))]
+    var effects: [Effect] = [
+      .publishHeartbeat(.acknowledged(latency: now.elapsed - pending.sentAt))
+    ]
+    if livenessProbeScheduled {
+      livenessProbeScheduled = false
+      effects.append(.cancel(.livenessProbe))
+    }
+    return effects
+  }
+
+  // MARK: Liveness probe
+
+  /// Sends a heartbeat now, outside the schedule, and gives it ``livenessProbeTimeout`` to be
+  /// acknowledged. A heartbeat that already waits for its reply serves as the probe.
+  private mutating func startLivenessProbe() -> [Effect] {
+    livenessProbeScheduled = true
+    let heartbeat = pendingHeartbeat == nil ? sendHeartbeat() : []
+    return heartbeat + [.schedule(.livenessProbe, after: Self.livenessProbeTimeout)]
+  }
+
+  /// A probe with no reply is a heartbeat timeout, except that the reconnect does not wait out a
+  /// backoff: the app is in the foreground now, and the user is waiting for data.
+  mutating func livenessProbeTimerFired() -> [Effect] {
+    // A scheduled probe means connected with an unacknowledged heartbeat: a reply, or any
+    // change of `connection`, clears it.
+    guard livenessProbeScheduled else { return [] }
+
+    logger.debug("Liveness probe timeout - no reply after returning to the foreground")
+    return failSocketOnHeartbeatTimeout() + transitionConnection(.wake)
   }
 }

@@ -20,8 +20,12 @@ enum Input: Sendable {
   case waiterCancelled(WaiterID)
   /// A caller of `refreshAccessToken()` waiting for the call in flight was cancelled.
   case tokenWaitCancelled(UUID)
+  /// The app went to the background, or on macOS the Mac is going to sleep.
   case appBackground
+  /// The app came to the foreground, or on macOS the Mac woke from sleep.
   case appForeground
+  /// A hint that the network may be back: the network path became satisfied.
+  case wake
   /// Resumes once every earlier input is applied. Test hook: only `flushInbox()` yields it.
   case flush(CheckedContinuation<Void, Never>)
 }
