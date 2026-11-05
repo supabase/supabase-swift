@@ -325,17 +325,13 @@ public final class SupabaseClient: Sendable {
     try rest.rpc(fn, count: count)
   }
 
-  /// Returns a database client scoped to the given Postgres schema.
-  ///
-  /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
-  /// - Parameter schema: The schema to query.
-  /// - Returns: A ``PostgrestClient`` configured for the given schema.
   /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
   @_spi(Experimental)
-  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F> {
+  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
+  {
     try rest.rpc(function)
   }
 
@@ -346,11 +342,23 @@ public final class SupabaseClient: Sendable {
       "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
   )
   public func rpc<F: _PostgrestFunction>(_ function: F, _: Void = ()) throws
-    -> _PostgrestFunctionQuery<F>
+    -> _PostgrestFunctionQuery<F.Result>
   {
     fatalError()
   }
 
+  /// The generated database function methods. See ``PostgrestClient/rpc``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public var rpc: _PostgrestFunctions { rest.rpc }
+
+  /// Returns a database client scoped to the given Postgres schema.
+  ///
+  /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
+  /// - Parameter schema: The schema to query.
+  /// - Returns: A ``PostgrestClient`` configured for the given schema.
   public func schema(_ schema: String) -> PostgrestClient {
     rest.schema(schema)
   }
