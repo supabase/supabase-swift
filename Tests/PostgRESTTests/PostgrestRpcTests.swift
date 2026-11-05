@@ -159,7 +159,7 @@ struct PostgrestRpcTests {
     let capture = QueryCapture(body: "1")
     let call = try capture.client.rpc(Pair())
     var readOnly = call
-    withExpectedIssue { readOnly = call.readOnly() }
+    withKnownIssue { readOnly = call.readOnly() }
     _ = try await readOnly.execute()
     #expect(capture.httpMethod == "POST")
     #expect(capture.bodyString == "[1,2]")
