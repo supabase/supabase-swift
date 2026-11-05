@@ -393,9 +393,6 @@ supporting_symbols:
   - RealtimeClientOptions
   - RealtimeClientOptions.handleAppLifecycle
   - RealtimeClientOptions.defaultHandleAppLifecycle
-  # Test-only infrastructure (Trait.requiresMainSerialExecutor skips a test on platforms where
-  # withMainSerialExecutor is a no-op) rather than a capability any feature implements.
-  - Trait.requiresMainSerialExecutor
 
 features:
 

@@ -893,7 +893,7 @@ struct RealtimeChannelSubscriptionTests {
     let h = Harness(
       connectOnSubscribe: false,
       onConnect: { attempt in
-        if attempt > 1 { try? await Task.sleep(for: .seconds(3600)) }
+        if attempt > 1 { await TestHelpers.Gate().pass() }
       }
     )
     try await h.client.connect()

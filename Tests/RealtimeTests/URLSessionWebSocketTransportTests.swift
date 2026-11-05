@@ -184,14 +184,15 @@ struct URLSessionWebSocketTransportTests {
       #expect(request.value.lowercased().contains("x-api-key: secret"))
     }
 
-    @Test
+    @Test(.timeLimit(.minutes(1)))
     func cancellingConnectRethrowsCancellationError() async throws {
-      let server = try LoopbackTCPServer.stalling()
+      let (accepted, didAccept) = AsyncStream<Void>.makeStream()
+      let server = try LoopbackTCPServer { _ in didAccept.yield() }
       let port = try server.start()
       defer { server.stop() }
 
       let task = Task { try await connect(port: port) }
-      try await Task.sleep(for: .milliseconds(100))
+      for await _ in accepted { break }
       task.cancel()
 
       await #expect(throws: CancellationError.self) {

@@ -29,12 +29,15 @@ struct OutboxTests {
   func outboxSendsInEnqueueOrder() async throws {
     let (fake, _) = FakeWebSocket.fakes()
     let serializer = serializer
-    fake.onSend { frame in
-      guard case .text(let text) = frame,
-        let index = try? serializer.decodeText(text).ref.flatMap(Int.init)
-      else { return }
-      // Sends take 0, 1 or 2 ms, so a writer that sent concurrently would reorder them.
-      try? await Task.sleep(for: .milliseconds(index % 3))
+    let inFlight = LockIsolated((current: 0, peak: 0))
+    fake.onSend { _ in
+      inFlight.withValue {
+        $0.current += 1
+        $0.peak = max($0.peak, $0.current)
+      }
+      // The send suspends, so a writer that sent concurrently would overlap sends.
+      await Task {}.value
+      inFlight.withValue { $0.current -= 1 }
     }
     let outbox = Outbox(connection: fake, serializer: serializer, logger: .silent)
     defer { outbox.close() }
@@ -46,6 +49,7 @@ struct OutboxTests {
     await waitUntil(timeout: 10) { fake.sentEvents.count == 100 }
 
     #expect(try refs(of: fake) == (0..<100).map(String.init))
+    #expect(inFlight.value.peak == 1)
   }
 
   @Test
@@ -54,7 +58,7 @@ struct OutboxTests {
     let started = AsyncStream.makeStream(of: Void.self)
     fake.onSend { _ in
       started.continuation.yield()
-      try? await Task.sleep(for: .seconds(1_000_000))
+      await Gate().pass()
     }
     let outbox = Outbox(connection: fake, serializer: serializer, logger: .silent)
     defer { outbox.close() }
@@ -93,7 +97,7 @@ struct OutboxTests {
     outbox.close()
     outbox.enqueue(message(1))
     // The drain returns once the writer ends, so nothing can send "1" after this.
-    let deadline = Task { _ = try? await Task.sleep(for: .seconds(5)) }
+    let deadline = Task { await Gate().pass() }
     await outbox.drain(until: deadline)
     deadline.cancel()
 

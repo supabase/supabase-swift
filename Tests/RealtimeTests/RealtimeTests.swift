@@ -198,223 +198,221 @@ final class RealtimeTests: Sendable {
     }
   }
 
-  @Test(.requiresMainSerialExecutor)
+  @Test
   func subscribeTimeout() async throws {
-    try await withMainSerialExecutor {
-      let channel = await sut.channel("public:messages")
-      let joinEventCount = LockIsolated(0)
+    let channel = await sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
 
-      let serverTask = Task { @Sendable [server = server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            server.send(
-              RealtimeMessage(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: ["response": [:]]
-              )
+    let serverTask = Task { @Sendable [server = server] in
+      for await event in server.events {
+        guard let msg = event.realtimeMessage else { continue }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
             )
-          } else if msg.event == "phx_join" {
-            joinEventCount.withValue { $0 += 1 }
-            if joinEventCount.value == 2 {
-              server.send(.messagesSubscribed(to: msg))
-              server.send(.postgresChangesReady(for: msg))
-            }
+          )
+        } else if msg.event == "phx_join" {
+          joinEventCount.withValue { $0 += 1 }
+          if joinEventCount.value == 2 {
+            server.send(.messagesSubscribed(to: msg))
+            server.send(.postgresChangesReady(for: msg))
           }
         }
       }
-      defer { serverTask.cancel() }
+    }
+    defer { serverTask.cancel() }
 
-      try await sut.connect()
-      await testClock.advance(by: heartbeatInterval)
+    try await sut.connect()
+    await testClock.advance(by: heartbeatInterval)
 
-      _ = Task {
-        try await channel.subscribe()
-      }
+    _ = Task {
+      try await channel.subscribe()
+    }
 
-      await testClock.advance(by: timeout)
+    await testClock.advance(by: timeout)
 
-      await testClock.advance(by: .seconds(2.5))
+    await testClock.advance(by: .seconds(2.5))
+    // The retry's join is written on another task after the sleep wakes.
+    try #require(await waitUntil(timeout: 5) { joinEventCount.value == 2 })
 
-      // The heartbeat and the joins share one ref counter on `RealtimeClient`, so the
-      // heartbeat sent above takes ref "1" and the two joins take "2" and "3".
-      let events: [JSONObject] = client.sentEvents.compactMap { $0.realtimeMessage }
-        .filter { $0.event == "phx_join" }
-        .map {
-          [
-            "event": .string($0.event),
-            "join_ref": $0.joinRef.map(JSONValue.string) ?? .null,
-            "payload": .object($0.payload),
-            "ref": $0.ref.map(JSONValue.string) ?? .null,
-            "topic": .string($0.topic),
-          ]
-        }
-      assertInlineSnapshot(of: events, as: .json) {
-        #"""
+    // The heartbeat and the joins share one ref counter on `RealtimeClient`, so the
+    // heartbeat sent above takes ref "1" and the two joins take "2" and "3".
+    let events: [JSONObject] = client.sentEvents.compactMap { $0.realtimeMessage }
+      .filter { $0.event == "phx_join" }
+      .map {
         [
-          {
-            "event" : "phx_join",
-            "join_ref" : "2",
-            "payload" : {
-              "access_token" : "custom.access.token",
-              "config" : {
-                "broadcast" : {
-                  "ack" : false,
-                  "replication_ready" : false,
-                  "self" : false
-                },
-                "postgres_changes" : [
-
-                ],
-                "presence" : {
-                  "enabled" : false,
-                  "key" : ""
-                },
-                "private" : false
-              },
-              "version" : "realtime-swift\/0.0.0"
-            },
-            "ref" : "2",
-            "topic" : "realtime:public:messages"
-          },
-          {
-            "event" : "phx_join",
-            "join_ref" : "3",
-            "payload" : {
-              "access_token" : "custom.access.token",
-              "config" : {
-                "broadcast" : {
-                  "ack" : false,
-                  "replication_ready" : false,
-                  "self" : false
-                },
-                "postgres_changes" : [
-
-                ],
-                "presence" : {
-                  "enabled" : false,
-                  "key" : ""
-                },
-                "private" : false
-              },
-              "version" : "realtime-swift\/0.0.0"
-            },
-            "ref" : "3",
-            "topic" : "realtime:public:messages"
-          }
+          "event": .string($0.event),
+          "join_ref": $0.joinRef.map(JSONValue.string) ?? .null,
+          "payload": .object($0.payload),
+          "ref": $0.ref.map(JSONValue.string) ?? .null,
+          "topic": .string($0.topic),
         ]
-        """#
       }
+    assertInlineSnapshot(of: events, as: .json) {
+      #"""
+      [
+        {
+          "event" : "phx_join",
+          "join_ref" : "2",
+          "payload" : {
+            "access_token" : "custom.access.token",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "replication_ready" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+
+              ],
+              "presence" : {
+                "enabled" : false,
+                "key" : ""
+              },
+              "private" : false
+            },
+            "version" : "realtime-swift\/0.0.0"
+          },
+          "ref" : "2",
+          "topic" : "realtime:public:messages"
+        },
+        {
+          "event" : "phx_join",
+          "join_ref" : "3",
+          "payload" : {
+            "access_token" : "custom.access.token",
+            "config" : {
+              "broadcast" : {
+                "ack" : false,
+                "replication_ready" : false,
+                "self" : false
+              },
+              "postgres_changes" : [
+
+              ],
+              "presence" : {
+                "enabled" : false,
+                "key" : ""
+              },
+              "private" : false
+            },
+            "version" : "realtime-swift\/0.0.0"
+          },
+          "ref" : "3",
+          "topic" : "realtime:public:messages"
+        }
+      ]
+      """#
     }
   }
 
-  @Test(.requiresMainSerialExecutor)
+  @Test
   func subscribeTimeout_successAfterRetries() async throws {
-    try await withMainSerialExecutor {
-      let successAttempt = 3
-      let channel = await sut.channel("public:messages")
-      let joinEventCount = LockIsolated(0)
+    let successAttempt = 3
+    let channel = await sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
 
-      let serverTask = Task { @Sendable [server = server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            server.send(
-              RealtimeMessage(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: ["response": [:]]
-              )
+    let serverTask = Task { @Sendable [server = server] in
+      for await event in server.events {
+        guard let msg = event.realtimeMessage else { continue }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
             )
-          } else if msg.event == "phx_join" {
-            joinEventCount.withValue { $0 += 1 }
-            if joinEventCount.value == successAttempt {
-              server.send(.messagesSubscribed(to: msg))
-              server.send(.postgresChangesReady(for: msg))
-            }
+          )
+        } else if msg.event == "phx_join" {
+          joinEventCount.withValue { $0 += 1 }
+          if joinEventCount.value == successAttempt {
+            server.send(.messagesSubscribed(to: msg))
+            server.send(.postgresChangesReady(for: msg))
           }
         }
       }
-      defer { serverTask.cancel() }
-
-      try await sut.connect()
-      await testClock.advance(by: heartbeatInterval)
-
-      let subscribeTask = Task {
-        _ = try? await channel.subscribe()
-      }
-
-      for attempt in 1..<successAttempt {
-        await testClock.advance(by: timeout)
-        let retryDelay = pow(2.0, Double(attempt))
-        await testClock.advance(by: .seconds(retryDelay))
-      }
-
-      await subscribeTask.value
-
-      let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
-        $0.event == "phx_join"
-      }
-
-      #expect(events.count == successAttempt)
-      #expect(await channel.status == .subscribed)
     }
+    defer { serverTask.cancel() }
+
+    try await sut.connect()
+    await testClock.advance(by: heartbeatInterval)
+
+    let subscribeTask = Task {
+      _ = try? await channel.subscribe()
+    }
+
+    for attempt in 1..<successAttempt {
+      await testClock.advance(by: timeout)
+      let retryDelay = pow(2.0, Double(attempt))
+      await testClock.advance(by: .seconds(retryDelay))
+    }
+
+    await subscribeTask.value
+
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+
+    #expect(events.count == successAttempt)
+    #expect(await channel.status == .subscribed)
   }
 
-  @Test(.requiresMainSerialExecutor)
+  @Test
   func subscribeTimeout_keepsRetryingUntilCancelled() async throws {
-    try await withMainSerialExecutor {
-      let channel = await sut.channel("public:messages")
-      let joinEventCount = LockIsolated(0)
+    let channel = await sut.channel("public:messages")
+    let joinEventCount = LockIsolated(0)
 
-      let serverTask = Task { @Sendable [server = server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            server.send(
-              RealtimeMessage(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: ["response": [:]]
-              )
+    let serverTask = Task { @Sendable [server = server] in
+      for await event in server.events {
+        guard let msg = event.realtimeMessage else { continue }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: ["response": [:]]
             )
-          } else if msg.event == "phx_join" {
-            joinEventCount.withValue { $0 += 1 }
-          }
+          )
+        } else if msg.event == "phx_join" {
+          joinEventCount.withValue { $0 += 1 }
         }
       }
-      defer { serverTask.cancel() }
-
-      try await sut.connect()
-      await testClock.advance(by: heartbeatInterval)
-
-      let subscribeTask = Task {
-        try await channel.subscribe()
-      }
-
-      // No attempt limit: each timed-out join is followed by another after the next step.
-      for step in [1, 2, 5, 10, 10] {
-        await testClock.advance(by: timeout)
-        await testClock.advance(by: .seconds(step))
-      }
-
-      let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
-        $0.event == "phx_join"
-      }
-      #expect(events.count == 6)
-      #expect(await channel.status == .subscribing)
-
-      subscribeTask.cancel()
-      await #expect(throws: CancellationError.self) { try await subscribeTask.value }
-      #expect(await channel.status == .unsubscribed)
     }
+    defer { serverTask.cancel() }
+
+    try await sut.connect()
+    await testClock.advance(by: heartbeatInterval)
+
+    let subscribeTask = Task {
+      try await channel.subscribe()
+    }
+
+    // No attempt limit: each timed-out join is followed by another after the next step.
+    for step in [1, 2, 5, 10, 10] {
+      await testClock.advance(by: timeout)
+      await testClock.advance(by: .seconds(step))
+    }
+
+    // Each join is written on another task after the sleep wakes.
+    try #require(await waitUntil(timeout: 5) { joinEventCount.value == 6 })
+    let events = client.sentEvents.compactMap { $0.realtimeMessage }.filter {
+      $0.event == "phx_join"
+    }
+    #expect(events.count == 6)
+    #expect(await channel.status == .subscribing)
+
+    subscribeTask.cancel()
+    await #expect(throws: CancellationError.self) { try await subscribeTask.value }
+    #expect(await channel.status == .unsubscribed)
   }
 
   @Test
@@ -471,51 +469,49 @@ final class RealtimeTests: Sendable {
     }
   }
 
-  @Test(.requiresMainSerialExecutor)
+  @Test
   func heartbeat() async throws {
-    try await withMainSerialExecutor {
-      let heartbeatCount = LockIsolated(0)
+    let heartbeatCount = LockIsolated(0)
 
-      let serverTask = Task { @Sendable [server = server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            heartbeatCount.withValue { $0 += 1 }
-            server.send(
-              RealtimeMessage(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: [
-                  "response": [:],
-                  "status": "ok",
-                ]
-              )
+    let serverTask = Task { @Sendable [server = server] in
+      for await event in server.events {
+        guard let msg = event.realtimeMessage else { continue }
+        if msg.event == "heartbeat" {
+          heartbeatCount.withValue { $0 += 1 }
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: [
+                "response": [:],
+                "status": "ok",
+              ]
             )
-          }
+          )
         }
       }
-      defer { serverTask.cancel() }
-
-      let heartbeatStatuses = collect(await sut.heartbeats())
-      defer { heartbeatStatuses.task.cancel() }
-
-      try await sut.connect()
-
-      await testClock.advance(by: heartbeatInterval * 2)
-
-      let sawTwoHeartbeats = await waitUntil(timeout: 30) {
-        heartbeatCount.value >= 2 && heartbeatStatuses.values.value.count >= 4
-      }
-      #expect(sawTwoHeartbeats)
-
-      // The server replies before the test clock moves, so the latency reads as zero.
-      expectNoDifference(
-        heartbeatStatuses.values.value,
-        [.sent, .acknowledged(latency: .zero), .sent, .acknowledged(latency: .zero)]
-      )
     }
+    defer { serverTask.cancel() }
+
+    let heartbeatStatuses = collect(await sut.heartbeats())
+    defer { heartbeatStatuses.task.cancel() }
+
+    try await sut.connect()
+
+    await testClock.advance(by: heartbeatInterval * 2)
+
+    let sawTwoHeartbeats = await waitUntil(timeout: 30) {
+      heartbeatCount.value >= 2 && heartbeatStatuses.values.value.count >= 4
+    }
+    #expect(sawTwoHeartbeats)
+
+    // The server replies before the test clock moves, so the latency reads as zero.
+    expectNoDifference(
+      heartbeatStatuses.values.value,
+      [.sent, .acknowledged(latency: .zero), .sent, .acknowledged(latency: .zero)]
+    )
   }
 
   @Test
@@ -590,44 +586,42 @@ final class RealtimeTests: Sendable {
     }
   }
 
-  @Test(.requiresMainSerialExecutor)
+  @Test
   func redundantConnect_doesNotDropIncomingFrames() async throws {
-    try await withMainSerialExecutor {
-      let serverTask = Task { @Sendable [server = server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            server.send(
-              RealtimeMessage(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: [
-                  "response": [:],
-                  "status": "ok",
-                ]
-              )
+    let serverTask = Task { @Sendable [server = server] in
+      for await event in server.events {
+        guard let msg = event.realtimeMessage else { continue }
+        if msg.event == "heartbeat" {
+          server.send(
+            RealtimeMessage(
+              joinRef: msg.joinRef,
+              ref: msg.ref,
+              topic: "phoenix",
+              event: "phx_reply",
+              payload: [
+                "response": [:],
+                "status": "ok",
+              ]
             )
-          }
+          )
         }
       }
-      defer { serverTask.cancel() }
-
-      let heartbeatStatuses = collect(await sut.heartbeats())
-      defer { heartbeatStatuses.task.cancel() }
-
-      try await sut.connect()
-
-      // A redundant connect() — the client is already `.connected`, so it is a
-      // no-op. The socket must keep receiving frames afterwards.
-      try await sut.connect()
-
-      await testClock.advance(by: heartbeatInterval)
-
-      await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
-      #expect(heartbeatStatuses.values.value == [.sent, .acknowledged(latency: .zero)])
     }
+    defer { serverTask.cancel() }
+
+    let heartbeatStatuses = collect(await sut.heartbeats())
+    defer { heartbeatStatuses.task.cancel() }
+
+    try await sut.connect()
+
+    // A redundant connect() — the client is already `.connected`, so it is a
+    // no-op. The socket must keep receiving frames afterwards.
+    try await sut.connect()
+
+    await testClock.advance(by: heartbeatInterval)
+
+    await waitUntil(timeout: 5) { heartbeatStatuses.values.value.count >= 2 }
+    #expect(heartbeatStatuses.values.value == [.sent, .acknowledged(latency: .zero)])
   }
 
   @Test
