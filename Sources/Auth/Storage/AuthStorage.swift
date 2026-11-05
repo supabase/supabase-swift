@@ -6,7 +6,8 @@ public import Foundation
 /// The SDK ships two implementations:
 ///
 /// - ``KeychainStorage`` on Apple platforms.
-/// - ``InMemoryAuthStorage`` for tests and for apps that must not persist a session.
+/// - ``InMemoryAuthStorage`` for tests and for apps that must not persist a session. It is the
+///   default on Linux, Android, and Windows.
 ///
 /// Implement this protocol to store Auth data somewhere else, for example in a file on Linux
 /// or in the Android Keystore.
