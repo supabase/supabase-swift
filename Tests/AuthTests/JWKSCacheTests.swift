@@ -78,11 +78,14 @@ struct JWKSCacheTests {
     }
   }
 
-  /// Returns once `count` callers have started or joined a fetch of `cache`.
+  /// Returns once `count` callers have started or joined a fetch of `cache`, and fails the test
+  /// when they have not within 10 seconds.
   private static func waitForJoins(_ count: Int, in cache: JWKSCache) async {
-    while await cache.joinedFetchCount < count {
+    let deadline = ContinuousClock.now + .seconds(10)
+    while await cache.joinedFetchCount < count, ContinuousClock.now < deadline {
       await Task.yield()
     }
+    #expect(await cache.joinedFetchCount >= count, "Not every caller joined the fetch.")
   }
 
   @Test
