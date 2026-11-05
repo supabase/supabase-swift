@@ -81,6 +81,17 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
+  func resumableUploadOfAMissingFileIsAFileSystemError() throws {
+    let missing = root.appendingPathComponent("missing.mp4")
+
+    let error = #expect(throws: StorageError.self) {
+      try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: missing)
+    }
+
+    #expect(error?.kind == .fileSystem)
+  }
+
+  @Test
   func pendingReturnsTheHandleAlreadyInFlight() async throws {
     respond(.created, headers: [.location: "/storage/v1/upload/resumable/x", .uploadOffset: "0"])
     let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)

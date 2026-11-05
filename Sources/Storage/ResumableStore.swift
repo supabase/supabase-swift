@@ -108,15 +108,19 @@ struct ResumableStore: Sendable {
       return .container(relativePath: String(path.dropFirst(container.path.count + 1)))
     }
     let copy = sandboxCopyURL(fingerprint: fingerprint)
-    try createDirectory()
-    try? FileManager.default.removeItem(at: copy)
-    try FileManager.default.copyItem(at: fileURL, to: copy)
+    try StorageError.withFileSystemErrors {
+      try createDirectory()
+      try? FileManager.default.removeItem(at: copy)
+      try FileManager.default.copyItem(at: fileURL, to: copy)
+    }
     return .sandboxCopy
   }
 
   func prepare(data: Data, fingerprint: String) throws -> ResumableSource {
-    try createDirectory()
-    try data.write(to: sandboxCopyURL(fingerprint: fingerprint), options: .atomic)
+    try StorageError.withFileSystemErrors {
+      try createDirectory()
+      try data.write(to: sandboxCopyURL(fingerprint: fingerprint), options: .atomic)
+    }
     return .sandboxCopy
   }
 
@@ -135,7 +139,9 @@ struct ResumableStore: Sendable {
 
   /// The size and modification date of the file at `url`, as the record keeps them.
   static func attributes(of url: URL) throws -> (size: Int64, modificationDate: Date) {
-    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+    let attributes = try StorageError.withFileSystemErrors {
+      try FileManager.default.attributesOfItem(atPath: url.path)
+    }
     return (
       (attributes[.size] as? NSNumber)?.int64Value ?? 0,
       (attributes[.modificationDate] as? Date) ?? Date(timeIntervalSince1970: 0)
@@ -152,7 +158,8 @@ struct ResumableStore: Sendable {
   func record(fingerprint: String) throws -> ResumableUploadRecord? {
     let url = recordURL(fingerprint: fingerprint)
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-    let record = try Self.decoder.decode(ResumableUploadRecord.self, from: Data(contentsOf: url))
+    let contents = try StorageError.withFileSystemErrors { try Data(contentsOf: url) }
+    let record = try Self.decoder.decode(ResumableUploadRecord.self, from: contents)
     guard !isStale(record) else {
       try remove(record)
       return nil
@@ -163,10 +170,12 @@ struct ResumableStore: Sendable {
   /// Every live record, oldest first. Stale ones are removed on the way.
   func records() throws -> [ResumableUploadRecord] {
     guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-    return try FileManager.default.contentsOfDirectory(atPath: directory.path)
-      .filter { $0.hasSuffix(".json") }
-      .compactMap { try record(fingerprint: String($0.dropLast(".json".count))) }
-      .sorted { $0.createdAt < $1.createdAt }
+    return try StorageError.withFileSystemErrors {
+      try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        .filter { $0.hasSuffix(".json") }
+        .compactMap { try record(fingerprint: String($0.dropLast(".json".count))) }
+        .sorted { $0.createdAt < $1.createdAt }
+    }
   }
 
   func remove(_ record: ResumableUploadRecord) throws {

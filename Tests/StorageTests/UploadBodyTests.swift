@@ -31,6 +31,28 @@ struct UploadBodyTests {
     .from("bucket")
   }
 
+  @Test
+  func aMissingFileIsAFileSystemError() async throws {
+    let bucket = makeBucket(sent: LockIsolated(nil))
+    let missing = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+
+    let uploadError = await #expect(throws: StorageError.self) {
+      try await bucket.upload(path: "a.txt", fileURL: missing)
+    }
+    let updateError = await #expect(throws: StorageError.self) {
+      try await bucket.update(path: "a.txt", fileURL: missing)
+    }
+    let signedError = await #expect(throws: StorageError.self) {
+      try await bucket.uploadToSignedURL(path: "a.txt", token: "t", fileURL: missing)
+    }
+
+    #expect(uploadError?.kind == .fileSystem)
+    #expect(updateError?.kind == .fileSystem)
+    #expect(signedError?.kind == .fileSystem)
+    #expect(uploadError?.underlyingError is CocoaError)
+  }
+
   private func chunks(_ count: Int, of size: Int) -> HTTPBody {
     let chunks = AsyncStream { continuation in
       for index in 0..<count {

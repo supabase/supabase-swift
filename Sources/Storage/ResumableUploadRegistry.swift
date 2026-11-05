@@ -39,7 +39,7 @@ public struct ResumableUploadRegistry: Sendable {
   /// process is returned as the same handle; the others are ``ResumableUpload/State/pending``
   /// until ``ResumableUpload/start()``.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
+  /// - Throws: ``StorageError`` with kind `fileSystem` when the record directory cannot be read.
   public func pending() throws -> [ResumableUpload] {
     try store.records().map { ResumableUpload.handle(record: $0, api: api) }
   }
@@ -47,7 +47,7 @@ public struct ResumableUploadRegistry: Sendable {
   /// ``pending()``, with every upload started or resumed. A refusal by the server does not
   /// throw here; it shows in that upload's ``ResumableUpload/state`` and ``ResumableUpload/result``.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
+  /// - Throws: ``StorageError`` with kind `fileSystem` when the record directory cannot be read.
   public func resumeAll() async throws -> [ResumableUpload] {
     let uploads = try pending()
     for upload in uploads {
@@ -63,7 +63,7 @@ public struct ResumableUploadRegistry: Sendable {
   /// Deletes the record and sandbox copy of every upload that is not in flight in this
   /// process. An upload in flight keeps its files until it completes or is cancelled.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
+  /// - Throws: ``StorageError`` with kind `fileSystem` when the record directory cannot be read.
   public func clear() throws {
     for record in try store.records()
     where !ResumableUpload.isLive(fingerprint: record.fingerprint, api: api) {

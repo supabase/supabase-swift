@@ -171,11 +171,62 @@ struct DownloadTests {
     let response = try await Self.makeBucket { Self.chunks(4, of: 10, length: .unknown) }
       .download(path: "file.bin")
 
-    let error = await #expect(throws: HTTPBodyTooLargeError.self) {
+    let error = await #expect(throws: StorageError.self) {
       try await response.data(upTo: 25)
     }
 
-    #expect(error?.maxBytes == 25)
+    #expect(error?.kind == .bodyTooLarge)
+    #expect((error?.underlyingError as? HTTPBodyTooLargeError)?.maxBytes == 25)
+  }
+
+  @Test
+  func dataKeepsATransportErrorAsIs() async throws {
+    let failure = StorageError(kind: .transport, message: "dropped")
+    let response = try await Self.makeBucket {
+      Self.chunks(1, of: 10, length: .unknown, then: failure)
+    }
+    .download(path: "file.bin")
+
+    let error = await #expect(throws: StorageError.self) {
+      try await response.data()
+    }
+
+    #expect(error?.kind == .transport)
+  }
+
+  @Test
+  func writeWrapsAFileSystemFailure() async throws {
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathComponent("missing-directory")
+      .appendingPathComponent("file.bin")
+    let response = try await Self.makeBucket { Self.chunks(1, of: 10) }
+      .download(path: "file.bin")
+
+    let error = await #expect(throws: StorageError.self) {
+      try await response.write(to: fileURL)
+    }
+
+    #expect(error?.kind == .fileSystem)
+    #expect(error?.underlyingError != nil)
+  }
+
+  @Test
+  func writeKeepsATransportErrorAsIs() async throws {
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: fileURL) }
+    let failure = StorageError(kind: .transport, message: "dropped")
+    let response = try await Self.makeBucket {
+      Self.chunks(1, of: 10, length: .unknown, then: failure)
+    }
+    .download(path: "file.bin")
+
+    let error = await #expect(throws: StorageError.self) {
+      try await response.write(to: fileURL)
+    }
+
+    #expect(error?.kind == .transport)
   }
 
   @Test

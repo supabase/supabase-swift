@@ -184,7 +184,8 @@ public struct StorageBucket: Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
   /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
-  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized, and with kind
+  ///   `fileSystem` if `fileURL` cannot be read.
   @discardableResult
   public func upload(
     path: String,
@@ -193,7 +194,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .post, path: path, body: HTTPBody(fileURL: fileURL),
+      method: .post, path: path, body: Self.fileBody(fileURL),
       options: options.inferringContentType(from: fileURL), progress: progress)
   }
 
@@ -247,7 +248,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.mp4"`.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
-  /// - Throws: ``StorageError`` if `path` is not a valid object path, and the file system's error
+  /// - Throws: ``StorageError`` if `path` is not a valid object path, and with kind `fileSystem`
   ///   if `fileURL` cannot be read.
   @_spi(Experimental)
   public func resumableUpload(
@@ -332,7 +333,8 @@ public struct StorageBucket: Sendable {
   ///     `update` always replaces the object.
   ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
   /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
-  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized, and with
+  ///   kind `fileSystem` if `fileURL` cannot be read.
   @discardableResult
   public func update(
     path: String,
@@ -341,7 +343,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadOrUpdate(
-      method: .put, path: path, body: HTTPBody(fileURL: fileURL),
+      method: .put, path: path, body: Self.fileBody(fileURL),
       options: options.inferringContentType(from: fileURL), progress: progress)
   }
 
@@ -533,6 +535,11 @@ public struct StorageBucket: Sendable {
         return .failure(path: item.path, error: item.error ?? "Unknown error")
       }
     }
+  }
+
+  private static func fileBody(_ fileURL: URL) throws -> HTTPBody {
+    try StorageError.withFileSystemErrors { try HTTPBody(fileURL: fileURL) }
+      .mapError(StorageError.wrappingFileSystemError)
   }
 
   /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
@@ -872,7 +879,8 @@ public struct StorageBucket: Sendable {
   ///   - progress: Called as the bytes are sent; see ``TransferProgress``.
   /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
   ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
-  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails, and with
+  ///   kind `fileSystem` if `fileURL` cannot be read.
   @discardableResult
   public func uploadToSignedURL(
     path: String,
@@ -882,7 +890,7 @@ public struct StorageBucket: Sendable {
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> UploadedObject {
     try await _uploadToSignedURL(
-      path: path, token: token, body: HTTPBody(fileURL: fileURL),
+      path: path, token: token, body: Self.fileBody(fileURL),
       options: options.inferringContentType(from: fileURL), progress: progress)
   }
 

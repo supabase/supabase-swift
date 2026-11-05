@@ -68,12 +68,18 @@ public struct DownloadResponse: Sendable {
   /// let data = try await bucket.download(path: "avatar.png").data()
   /// ```
   ///
-  /// - Parameter maxBytes: Throw `HTTPBodyTooLargeError` once more than this many bytes arrive.
-  ///   No limit by default.
-  /// - Throws: ``StorageError`` with kind `transport` if the network fails while the body
-  ///   streams.
+  /// - Parameter maxBytes: Throw once more than this many bytes arrive. No limit by default.
+  /// - Throws: ``StorageError`` with kind `bodyTooLarge` once more than `maxBytes` arrive, and
+  ///   with kind `transport` if the network fails while the body streams.
   public func data(upTo maxBytes: Int = .max) async throws -> Data {
-    try await Data(collecting: body, upTo: maxBytes)
+    do {
+      return try await Data(collecting: body, upTo: maxBytes)
+    } catch let error as HTTPBodyTooLargeError {
+      throw StorageError(
+        kind: .bodyTooLarge,
+        message: "The download body is larger than \(error.maxBytes) bytes.",
+        underlyingError: error)
+    }
   }
 
   /// Streams the body to a file, so the object never has to fit in memory. See
@@ -84,9 +90,13 @@ public struct DownloadResponse: Sendable {
   /// ```
   ///
   /// - Throws: ``StorageError`` with kind `transport` if the network fails while the body
-  ///   streams, and the file system's error if `fileURL` cannot be written.
+  ///   streams, and with kind `fileSystem` if `fileURL` cannot be written.
   public func write(to fileURL: URL) async throws {
-    try await body.write(to: fileURL)
+    do {
+      try await body.write(to: fileURL)
+    } catch {
+      throw StorageError.wrappingFileSystemError(error)
+    }
   }
 
   /// Parses an IMF-fixdate such as `Tue, 13 Oct 2026 15:00:00 GMT`, the form Storage sends.

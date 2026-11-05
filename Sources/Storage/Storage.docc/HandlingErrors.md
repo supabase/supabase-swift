@@ -7,16 +7,14 @@ Tell a missing file from a network failure, and read what Storage reported.
 Every failure from ``StorageClient`` and ``StorageBucket`` is a ``StorageError`` or a
 `CancellationError`. Check ``StorageError/kind`` first.
 
-A few errors are not Storage's and reach you as themselves: the file system's error when a file
-cannot be read or written, and `HTTPBodyTooLargeError` when ``DownloadResponse/data(upTo:)``
-passes its cap.
-
 | Kind | When | Set |
 | --- | --- | --- |
 | ``StorageError/Kind-swift.struct/server`` | Storage answered with a non-2xx status. | ``StorageError/response``, and usually ``StorageError/code`` |
 | ``StorageError/Kind-swift.struct/transport`` | No response arrived, or the connection dropped while a body streamed. | ``StorageError/underlyingError``, usually a `URLError` |
 | ``StorageError/Kind-swift.struct/decoding`` | A 2xx body could not be used. | ``StorageError/underlyingError``, the `DecodingError` |
 | ``StorageError/Kind-swift.struct/invalidRequest`` | The SDK refused to send, for example an empty path or a `..` segment. | ``StorageError/message`` |
+| ``StorageError/Kind-swift.struct/bodyTooLarge`` | ``DownloadResponse/data(upTo:)`` passed its cap. | ``StorageError/underlyingError``, the `HTTPBodyTooLargeError` |
+| ``StorageError/Kind-swift.struct/fileSystem`` | ``DownloadResponse/write(to:)`` could not write a file, or an upload could not read one. | ``StorageError/underlyingError``, the file system's error |
 
 ``StorageError/Kind-swift.struct`` is an open set. Keep a fallback branch.
 

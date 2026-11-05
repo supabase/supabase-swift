@@ -11,7 +11,8 @@ can be read once. Choose how to read it.
 ### Into memory
 
 ``DownloadResponse/data(upTo:)`` collects the whole body. Pass a cap when the object size is not
-under your control: the read throws `HTTPBodyTooLargeError` once more bytes arrive.
+under your control: the read throws a ``StorageError`` with kind ``StorageError/Kind-swift.struct/bodyTooLarge`` once
+more bytes arrive.
 
 ```swift
 let avatars = supabase.storage.from("avatars")

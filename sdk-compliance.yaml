@@ -150,6 +150,8 @@ supporting_symbols:
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
+  - StorageError.Kind.bodyTooLarge
+  - StorageError.Kind.fileSystem
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode

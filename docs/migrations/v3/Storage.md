@@ -150,6 +150,11 @@ try await bucket.download(path: "a.mov").write(to: fileURL)
 
 The body can be read once.
 
+`data(upTo:)` throws a `StorageError` with kind `bodyTooLarge` when the body passes its cap, and
+`write(to:)` throws one with kind `fileSystem` when the file cannot be written. Uploads that read
+a file throw `fileSystem` too, where v2 threw the file system's own error. Catch `StorageError`
+instead of `CocoaError`.
+
 ## Object types: `StorageObject` and `ObjectInfo`
 
 `list` and `remove` return `[StorageObject]`. `info` returns `ObjectInfo`. Ids are `UUID`, sizes

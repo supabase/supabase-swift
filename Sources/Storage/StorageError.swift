@@ -49,6 +49,14 @@ public struct StorageError: SupabaseError {
     /// The SDK refused to send: an object path was empty or contained a `..` segment, or a
     /// per-call value such as an expiry was out of range. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
+    /// A download body passed the `maxBytes` cap given to ``DownloadResponse/data(upTo:)``.
+    /// Raise the cap or stream the body instead. ``StorageError/underlyingError`` is the
+    /// `HTTPBodyTooLargeError`.
+    public static let bodyTooLarge: Kind = "bodyTooLarge"
+    /// A local file could not be read or written: a download's destination, or an upload's source,
+    /// for example because the directory is missing or the disk is full.
+    /// ``StorageError/underlyingError`` is the file system's error.
+    public static let fileSystem: Kind = "fileSystem"
   }
 
   /// A machine-readable code Storage sends alongside the error body.
@@ -207,6 +215,27 @@ public struct StorageError: SupabaseError {
   /// The kind and the message, plus the HTTP status and request id when a response arrived.
   public var description: String {
     formattedDescription(kind: kind.rawValue)
+  }
+}
+
+extension StorageError {
+  /// `error` as a `fileSystem` ``StorageError`` when the file system reported it, else `error`
+  /// unchanged, so a `StorageError` or a `CancellationError` keeps its type.
+  static func wrappingFileSystemError(_ error: any Error) -> any Error {
+    guard error is CocoaError || error is POSIXError else { return error }
+    return StorageError(
+      kind: .fileSystem, message: error.localizedDescription, underlyingError: error)
+  }
+}
+
+extension StorageError {
+  /// Runs `body`, throwing a `fileSystem` ``StorageError`` for an error the file system reported.
+  static func withFileSystemErrors<T>(_ body: () throws -> T) throws -> T {
+    do {
+      return try body()
+    } catch {
+      throw wrappingFileSystemError(error)
+    }
   }
 }
 

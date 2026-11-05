@@ -430,7 +430,8 @@ public actor ResumableUpload {
   }
 
   private nonisolated func storageError(_ error: any Error) -> StorageError {
-    error as? StorageError
+    let error = StorageError.wrappingFileSystemError(error)
+    return error as? StorageError
       ?? StorageError(
         kind: .invalidRequest, message: "The upload source could not be read.",
         underlyingError: error)
