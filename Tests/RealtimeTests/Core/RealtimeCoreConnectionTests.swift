@@ -448,14 +448,142 @@ struct RealtimeCoreConnectionTests {
   }
 
   @Test
-  func foregroundWhileStillConnectedDoesNothing() {
+  func foregroundWhileStillConnectedDoesNotReconnect() {
     var harness = CoreHarness.connected()
     _ = harness.send(.appBackground)
+    _ = harness.send(.appForeground)
 
-    #expect(harness.send(.appForeground) == [])
+    #expect(harness.core.connection.status.isConnected)
     // The background mark is spent: a later foreground does not reconnect.
     _ = harness.send(.socketClosed(code: 4001, reason: "jwt expired"))
     #expect(harness.send(.appForeground) == [])
+  }
+
+  // MARK: Liveness probe
+
+  static let probeDeadline = Effect.schedule(.livenessProbe, after: .seconds(5))
+
+  /// The socket may be dead after a suspension while the status still says connected: the
+  /// foreground sends a heartbeat now instead of waiting for the next tick.
+  @Test
+  func foregroundWhileConnectedSendsAProbeHeartbeat() {
+    var harness = CoreHarness.connected()
+
+    #expect(
+      harness.send(.appForeground) == [
+        .send(Self.heartbeat(ref: "1")), .publishHeartbeat(.sent), Self.heartbeatEvery,
+        Self.probeDeadline,
+      ])
+  }
+
+  /// A probe needs no earlier background: the platform may not report one, as on macOS wake.
+  @Test
+  func foregroundProbesWithoutAPriorBackground() {
+    var harness = CoreHarness.connected()
+
+    #expect(harness.send(.appForeground).contains(Self.probeDeadline))
+  }
+
+  @Test
+  func probeReplyEndsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(1))
+
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "1"))) == [
+        .publishHeartbeat(.acknowledged(latency: .seconds(1))), .cancel(.livenessProbe),
+      ])
+    // A stale probe timer finds nothing to fail.
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+    #expect(harness.core.connection.status.isConnected)
+  }
+
+  /// No reply within the deadline is a heartbeat timeout, and the reconnect skips the backoff.
+  @Test
+  func probeWithoutReplyFailsTheSocketAndReconnectsAtOnce() throws {
+    var harness = CoreHarness.connected()
+    let socket = try #require(harness.socket)
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(5))
+
+    var expected = harness
+    let failure = expected.send(.socketFailed(.heartbeatTimeout))
+    let wake = expected.send(.wake)
+    #expect(failure.contains(.closeSocket(socket, code: 1001, reason: "error: heartbeat timeout")))
+    #expect(wake.contains(.openSocket))
+
+    #expect(
+      harness.send(.timerFired(.livenessProbe)) == [.publishHeartbeat(.timedOut)] + failure + wake)
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  /// A heartbeat already waits for its reply: the probe waits on it and sends no second one. The
+  /// regular tick would fail the socket on that unanswered heartbeat, possibly before the probe's
+  /// deadline, so it pauses until the reply restarts it.
+  @Test
+  func foregroundWaitsOnAHeartbeatThatIsAlreadyPending() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.timerFired(.heartbeat))
+    harness.advance(by: .seconds(24))
+
+    #expect(harness.send(.appForeground) == [.cancel(.heartbeat), Self.probeDeadline])
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "1"))) == [
+        .publishHeartbeat(.acknowledged(latency: .seconds(24))), .cancel(.livenessProbe),
+        Self.heartbeatEvery,
+      ])
+  }
+
+  /// The pause ends with the socket: a heartbeat on the next socket schedules nothing of its own.
+  @Test
+  func pausedHeartbeatScheduleDoesNotOutliveTheSocket() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.timerFired(.heartbeat))
+    _ = harness.send(.appForeground)
+    harness.advance(by: .seconds(5))
+    _ = harness.send(.timerFired(.livenessProbe))
+    _ = harness.send(.socketOpened(FakeWebSocket.fakes().0))
+    _ = harness.send(.timerFired(.heartbeat))
+
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "2"))) == [
+        .publishHeartbeat(.acknowledged(latency: .zero))
+      ])
+  }
+
+  @Test
+  func probeTimerIsIgnoredWithoutAProbe() {
+    var harness = CoreHarness.connected()
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+
+    // A heartbeat in flight is the heartbeat timer's to fail, not the probe's.
+    _ = harness.send(.timerFired(.heartbeat))
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+    #expect(harness.core.connection.status.isConnected)
+  }
+
+  @Test
+  func leavingConnectedCancelsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+
+    #expect(
+      harness.send(.socketClosed(code: 1001, reason: "going away")).contains(
+        .cancel(.livenessProbe)))
+    // The reconnect starts clean: its first heartbeat tick sends, it does not time out.
+    _ = harness.send(.timerFired(.reconnect))
+    _ = harness.send(.socketOpened(other))
+    #expect(harness.send(.timerFired(.livenessProbe)) == [])
+  }
+
+  @Test
+  func disconnectCancelsTheProbe() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appForeground)
+
+    #expect(
+      harness.send(.disconnectRequested(code: nil, reason: nil)).contains(.cancel(.livenessProbe)))
   }
 
   @Test
@@ -474,6 +602,97 @@ struct RealtimeCoreConnectionTests {
     _ = harness.send(.disconnectRequested(code: nil, reason: nil))
 
     #expect(harness.send(.appForeground) == [])
+  }
+
+  // MARK: Wake cooldown
+
+  /// A harness that connected at time zero and lost the socket at `lostAt`, with a 30 s backoff,
+  /// so a wake is the only thing that ends the wait early.
+  static func waitingToRetry(lostAt: Duration) -> CoreHarness {
+    var options = RealtimeCore.Options.test
+    options.retryDelay = { _ in .seconds(30) }
+    var harness = CoreHarness.connected(options: options)
+    harness.advance(by: lostAt)
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    return harness
+  }
+
+  /// A path that flaps in bad reception reports "back" again and again. A wake that comes less
+  /// than the cooldown after the last attempt started waits for the cooldown to end.
+  @Test
+  func wakeInsideTheCooldownRetriesWhenItEnds() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(1))
+    harness.advance(by: .milliseconds(500))
+
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(500))])
+    #expect(
+      harness.core.connection
+        == .reconnecting(
+          attempt: 1, retryIn: .seconds(30), lastError: .socketClosed(code: nil, reason: nil)))
+
+    harness.advance(by: .milliseconds(500))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  @Test
+  func wakeAfterTheCooldownRetriesAtOnce() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(3))
+
+    let effects = harness.send(.wake)
+
+    #expect(effects.contains(.cancel(.reconnect)))
+    #expect(effects.contains(.openSocket))
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  /// The wake never lengthens a wait: when the backoff ends before the cooldown does, the
+  /// backoff timer stays as it is.
+  @Test
+  func wakeInsideTheCooldownNeverDelaysTheBackoff() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    harness.advance(by: .milliseconds(200))
+
+    #expect(harness.send(.wake) == [])
+
+    harness.advance(by: .milliseconds(800))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+  }
+
+  /// Hints that pile up inside one cooldown schedule one retry, and a retry that fails quickly
+  /// is followed by the next at least a cooldown after it started.
+  @Test
+  func flappingHintsStartOneAttemptPerCooldown() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(1))
+    harness.advance(by: .milliseconds(200))
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(800))])
+    harness.advance(by: .milliseconds(200))
+    #expect(harness.send(.wake) == [])
+    #expect(harness.send(.wake) == [])
+
+    // The retry starts at 2 s and fails at once.
+    harness.advance(by: .milliseconds(600))
+    #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+    harness.advance(by: .milliseconds(100))
+    _ = harness.send(.socketOpenFailed(Self.unreachable))
+
+    // 2.1 s: the next attempt may not start before 4 s.
+    harness.advance(by: .milliseconds(400))
+    #expect(harness.send(.wake) == [.schedule(.reconnect, after: .milliseconds(1500))])
+  }
+
+  /// Returning to the foreground is not a flapping path: it retries at once, whatever the
+  /// last attempt's age.
+  @Test
+  func foregroundWhileWaitingRetriesInsideTheCooldown() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.appBackground)
+    harness.advance(by: .milliseconds(500))
+    _ = harness.send(.socketClosed(code: nil, reason: nil))
+    harness.advance(by: .milliseconds(100))
+
+    #expect(harness.send(.appForeground).contains(.openSocket))
   }
 
   // MARK: Helpers

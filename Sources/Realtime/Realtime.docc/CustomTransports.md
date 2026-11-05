@@ -120,5 +120,7 @@ connection.receive(
 )
 ```
 
-Set ``RealtimeClientOptions/handleAppLifecycle`` to `false` in tests. To control the heartbeat
-timer and the reconnect waits, pass a `TestClock` as ``RealtimeClientOptions/clock``.
+Set ``RealtimeClientOptions/handleAppLifecycle`` and ``RealtimeClientOptions/monitorsNetworkPath``
+to `false` in tests, so a real app notification or network change cannot reach your client. To
+control the heartbeat timer and the reconnect waits, pass a `TestClock` as
+``RealtimeClientOptions/clock``.

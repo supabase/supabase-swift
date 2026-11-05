@@ -82,7 +82,9 @@ follows depends on the message:
 
 The client sends a heartbeat every ``RealtimeClientOptions/heartbeatInterval`` (25 seconds by
 default). When the next heartbeat is due and the server has not answered the last one, the
-client closes the socket and reconnects. So a dead socket is found within two intervals.
+client closes the socket and reconnects. So a dead socket is found within two intervals. When
+the app returns to the foreground, a liveness probe finds it sooner; see
+<doc:ConnectionBehavior#Background-and-foreground-on-iOS>.
 ``RealtimeClient/heartbeats()`` reports each step, with the round-trip latency of each answer.
 
 The heartbeat runs on ``RealtimeClientOptions/clock``, a `ContinuousClock` by default. That
@@ -104,9 +106,26 @@ on (the default on iOS, macOS, tvOS and visionOS), the client checks the socket 
 - If it is waiting before a reconnect attempt, it tries again at once.
 - If the socket was connected before the app went to the background and is now closed, it
   connects and joins every channel again.
+- If the socket looks open, it sends a heartbeat at once as a liveness probe. When the server
+  does not answer within 5 seconds, the client closes the socket and reconnects without waiting
+  out a backoff. A suspended app often leaves the socket dead, so this finds it in seconds
+  instead of after the next heartbeat.
 
-A socket that looks open but is dead is found by the next heartbeat. In each case the channels
-join again and yield ``RealtimeChannelEvent/resubscribed``.
+In each case where the client connects again, the channels join again and yield
+``RealtimeChannelEvent/resubscribed``.
+
+On macOS the signals are the Mac going to sleep and waking, because a Mac app that loses focus
+keeps its connection.
+
+### Network changes
+
+With ``RealtimeClientOptions/monitorsNetworkPath`` on (the default on iOS, macOS, tvOS and
+visionOS), the client watches the network path. When the path becomes satisfied while the client
+is waiting before a reconnect attempt, it tries again at once instead of sleeping out the rest of
+the wait. A path that flaps in bad reception cannot start an attempt per report: a hint never
+starts an attempt less than 2 seconds after the last one started, and a hint that comes sooner
+waits until that time. The client never waits for this hint: it keeps retrying on its backoff
+schedule when the path monitor reports no network.
 
 ### Closing the socket in the background
 

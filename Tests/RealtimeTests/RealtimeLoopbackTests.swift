@@ -126,15 +126,51 @@ import Testing
       await client.disconnect()
     }
 
+    /// The server keeps the socket open and stops answering, as a suspended app finds it. The
+    /// foreground probe reconnects after its 5 s deadline, and the 30 s backoff does not apply.
+    @Test
+    func foregroundProbeReconnectsWhenTheSocketStoppedAnswering() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let answersHeartbeats = LockIsolated(true)
+      let joins = script(server, answersHeartbeats: answersHeartbeats)
+
+      let client = makeClient(port: port, reconnectBackoff: .steps([.seconds(30)]))
+      let channel = await client.channel("room")
+      try await channel.subscribe()
+      #expect(joins.value == 1)
+
+      var clientStatuses = await client.statusChanges().makeAsyncIterator()
+      var channelStatuses = await channel.statusChanges().makeAsyncIterator()
+      #expect(await clientStatuses.next() == .connected)
+      #expect(await channelStatuses.next() == .subscribed)
+
+      answersHeartbeats.setValue(false)
+      await client.handleAppForeground()
+
+      #expect(await clientStatuses.next() == .reconnecting)
+      #expect(await clientStatuses.next() == .connecting)
+      #expect(await clientStatuses.next() == .connected)
+      #expect(await channelStatuses.next() == .subscribing)
+      #expect(await channelStatuses.next() == .subscribed)
+      #expect(joins.value == 2)
+
+      await client.disconnect()
+    }
+
     // MARK: - Helpers
 
     private func makeClient(
-      port: UInt16, transport: URLSessionWebSocketTransport = URLSessionWebSocketTransport()
+      port: UInt16,
+      transport: URLSessionWebSocketTransport = URLSessionWebSocketTransport(),
+      reconnectBackoff: BackoffPolicy = .fullJitter(base: .milliseconds(100), cap: .seconds(30))
     ) -> RealtimeClient {
       let options = RealtimeClientOptions(
         heartbeatInterval: .seconds(30),
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false
+        handleAppLifecycle: false,
+        monitorsNetworkPath: false
       )
       return RealtimeClient(
         url: URL(string: "http://127.0.0.1:\(port)")!,
@@ -142,13 +178,16 @@ import Testing
         transport: transport,
         http: HTTPClient(configuration: options.http, appending: []),
         clock: options.clock,
-        reconnectBackoff: .fullJitter(base: .milliseconds(100), cap: .seconds(30))
+        reconnectBackoff: reconnectBackoff
       )
     }
 
     /// Scripts the server: confirms joins, acknowledges heartbeats and echoes broadcasts back
-    /// to the client. Returns the number of joins received.
-    private func script(_ server: LoopbackWebSocketServer) -> LockIsolated<Int> {
+    /// to the client. Returns the number of joins received. While `answersHeartbeats` is
+    /// `false`, the server ignores heartbeats.
+    private func script(
+      _ server: LoopbackWebSocketServer, answersHeartbeats: LockIsolated<Bool> = LockIsolated(true)
+    ) -> LockIsolated<Int> {
       let joins = LockIsolated(0)
       server.onMessage = { data in
         let serializer = RealtimeSerializer()
@@ -172,6 +211,7 @@ import Testing
               )
             )
           case "heartbeat":
+            guard answersHeartbeats.value else { break }
             send(
               RealtimeMessage(
                 joinRef: nil, ref: message.ref, topic: "phoenix", event: "phx_reply",

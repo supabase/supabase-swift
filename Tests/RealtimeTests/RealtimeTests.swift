@@ -500,10 +500,15 @@ final class RealtimeTests: Sendable {
 
     try await sut.connect()
 
-    await testClock.advance(by: heartbeatInterval * 2)
-
-    let sawTwoHeartbeats = await waitUntil(timeout: 30) {
-      heartbeatCount.value >= 2 && heartbeatStatuses.values.value.count >= 4
+    // One interval at a time: the next heartbeat's timer is scheduled only once the previous
+    // heartbeat went out, so a single jump of two intervals can end before it exists.
+    var sawTwoHeartbeats = true
+    for beat in 1...2 {
+      await testClock.advance(by: heartbeatInterval)
+      sawTwoHeartbeats =
+        await waitUntil(timeout: 30) {
+          heartbeatCount.value >= beat && heartbeatStatuses.values.value.count >= beat * 2
+        } && sawTwoHeartbeats
     }
     #expect(sawTwoHeartbeats)
 

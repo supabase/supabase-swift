@@ -307,15 +307,28 @@ struct InboxTests {
       let host = await RealtimeTestHost(options: RealtimeClientOptions(handleAppLifecycle: true))
       try await host.client.connect()
 
+      #if os(macOS)
+        // A Mac app that loses focus keeps its connection, so it is not a background. This
+        // shares the test with the sleep below: both post to a process-wide notification
+        // center, so two tests would see each other's posts.
+        await MainActor.run {
+          NotificationCenter.default.post(
+            name: NSApplication.didResignActiveNotification, object: nil)
+        }
+        await host.client.flushInbox()
+        #expect(await !host.client.wasConnectedBeforeBackground)
+      #endif
+
       // Only the background notification: a foreground one would wake every other client in
       // the process that is waiting to reconnect.
       await MainActor.run {
         #if canImport(UIKit)
-          let background = UIApplication.didEnterBackgroundNotification
+          NotificationCenter.default.post(
+            name: UIApplication.didEnterBackgroundNotification, object: nil)
         #else
-          let background = NSApplication.didResignActiveNotification
+          NSWorkspace.shared.notificationCenter.post(
+            name: NSWorkspace.willSleepNotification, object: nil)
         #endif
-        NotificationCenter.default.post(name: background, object: nil)
       }
       await host.client.flushInbox()
 

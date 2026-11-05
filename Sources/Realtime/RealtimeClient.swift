@@ -187,7 +187,13 @@ public actor RealtimeClient {
   #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
     /// Yields the app lifecycle changes into ``inbox`` when
     /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
-    let lifecycleManager: RealtimeLifecycleManager?
+    let lifecycleObserver: RealtimeLifecycleObserver?
+  #endif
+
+  #if canImport(Network)
+    /// Yields a wake hint into ``inbox`` when the network path is satisfied, when
+    /// ``RealtimeClientOptions/monitorsNetworkPath`` is `true`.
+    let networkPathObserver: RealtimeNetworkPathObserver?
   #endif
 
   /// The current WebSocket connection status.
@@ -271,7 +277,11 @@ public actor RealtimeClient {
     let (inputs, inbox) = AsyncStream.makeStream(of: Input.self, bufferingPolicy: .unbounded)
     self.inbox = inbox
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      lifecycleManager = options.handleAppLifecycle ? RealtimeLifecycleManager(inbox: inbox) : nil
+      lifecycleObserver = options.handleAppLifecycle ? RealtimeLifecycleObserver(inbox: inbox) : nil
+    #endif
+    #if canImport(Network)
+      networkPathObserver =
+        options.monitorsNetworkPath ? RealtimeNetworkPathObserver(inbox: inbox) : nil
     #endif
 
     // The pump. Not stored: it holds the client weakly, so it never keeps it alive, and it ends
@@ -314,8 +324,8 @@ public actor RealtimeClient {
 
   deinit {
     // No waiter can be parked here: a parked caller runs an isolated method, so it retains the
-    // client. The lifecycle manager removes its observers in its own `deinit`, and the fan-outs
-    // and channel states end their streams in theirs.
+    // client. The lifecycle and network path observers remove themselves in their own `deinit`,
+    // and the fan-outs and channel states end their streams in theirs.
     inbox.finish()
     // Close the live socket: cancelling the tasks alone leaves the underlying WebSocket (and its
     // URLSession) open when a connected client is released without calling `disconnect()`.
@@ -459,16 +469,17 @@ public actor RealtimeClient {
 
   /// Records whether the socket is connected as the app enters the background.
   ///
-  /// Runs when the inbox delivers ``Input/appBackground``, which ``RealtimeLifecycleManager``
+  /// Runs when the inbox delivers ``Input/appBackground``, which ``RealtimeLifecycleObserver``
   /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
     apply(.appBackground)
   }
 
-  /// Recovers the connection on app foregrounding when the socket was connected before the app
-  /// went to the background and has since gone away.
+  /// Checks a connected socket with a liveness probe on app foregrounding, and recovers the
+  /// connection when the socket was connected before the app went to the background and has
+  /// since gone away.
   ///
-  /// Runs when the inbox delivers ``Input/appForeground``, which ``RealtimeLifecycleManager``
+  /// Runs when the inbox delivers ``Input/appForeground``, which ``RealtimeLifecycleObserver``
   /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() {
     apply(.appForeground)

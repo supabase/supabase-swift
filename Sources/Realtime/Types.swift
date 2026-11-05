@@ -38,6 +38,7 @@ public import Logging
 /// ### Behavior
 /// - ``connectOnSubscribe``
 /// - ``handleAppLifecycle``
+/// - ``monitorsNetworkPath``
 /// ### Logging
 /// - ``logger``
 /// - ``serverLogLevel``
@@ -49,8 +50,9 @@ public import Logging
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
 /// - ``defaultHandleAppLifecycle``
+/// - ``defaultMonitorsNetworkPath``
 /// ### Initialization
-/// - ``init(headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:clock:)``
+/// - ``init(headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:serverLogLevel:http:accessToken:logger:webSocketTransport:handleAppLifecycle:monitorsNetworkPath:clock:)``
 public struct RealtimeClientOptions: Sendable {
   /// Headers sent with the WebSocket upgrade request.
   ///
@@ -89,11 +91,16 @@ public struct RealtimeClientOptions: Sendable {
 
   /// Whether to automatically handle app lifecycle changes (background/foreground).
   ///
-  /// When enabled, the client observes platform lifecycle notifications and — on
-  /// foregrounding — reconnects and re-joins any existing channels if the WebSocket
-  /// was closed while the app was backgrounded. The client does not proactively
-  /// disconnect on backgrounding; short background/foreground cycles keep the
-  /// connection alive without churn.
+  /// When enabled, the client observes platform lifecycle notifications. When the app returns to
+  /// the foreground, it checks that a connected socket still answers: it sends a heartbeat at
+  /// once and, if the server does not reply within 5 seconds, closes the socket and reconnects
+  /// without waiting out a backoff. It also reconnects and re-joins any existing channels if the
+  /// WebSocket was closed while the app was backgrounded. The client does not proactively
+  /// disconnect on backgrounding; short background/foreground cycles keep the connection alive
+  /// without churn.
+  ///
+  /// On macOS the foreground signal is the machine waking from sleep, because a Mac app that
+  /// loses focus keeps its connection.
   ///
   /// Disable this to manage the connection yourself with ``RealtimeClient/connect()`` and
   /// ``RealtimeClient/disconnect(code:reason:)``.
@@ -101,6 +108,19 @@ public struct RealtimeClientOptions: Sendable {
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.
   public var handleAppLifecycle: Bool
+
+  /// Whether to watch the network path and reconnect as soon as the network is back.
+  ///
+  /// When enabled, a report that the network path is satisfied cuts the wait before the next
+  /// reconnect attempt short, but never to less than 2 seconds after the last attempt started, so
+  /// a path that flaps cannot start an attempt per report. The hint only shortens a wait: the
+  /// client never refuses to connect because the monitor reports no path, and it ignores the
+  /// hint while it is connected, connecting, or disconnected.
+  ///
+  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms. watchOS
+  /// keeps reporting an unsatisfied path to ordinary apps, so the hint may never fire there.
+  /// Linux has no path monitor, so the option has no effect there.
+  public var monitorsNetworkPath: Bool
 
   /// How much the Realtime server logs for this connection. `nil`, the default, keeps the
   /// server's own level.
@@ -169,6 +189,17 @@ public struct RealtimeClientOptions: Sendable {
     #endif
   }()
 
+  /// Default value for ``monitorsNetworkPath``.
+  ///
+  /// Returns `true` on iOS, macOS, tvOS, and visionOS; `false` on all other platforms.
+  public static let defaultMonitorsNetworkPath: Bool = {
+    #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
+      return true
+    #else
+      return false
+    #endif
+  }()
+
   /// Creates a new ``RealtimeClientOptions`` with the specified configuration.
   ///
   /// - Parameters:
@@ -183,6 +214,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - logger: The logger used for Realtime client diagnostics. Defaults to `nil`, which uses a logger labeled `"io.supabase.realtime"`.
   ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
   ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
+  ///   - monitorsNetworkPath: Whether to reconnect as soon as the network path is satisfied again. Defaults to ``defaultMonitorsNetworkPath``.
   ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
   ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
   ///     test target yourself) to drive them deterministically in tests.
@@ -198,6 +230,7 @@ public struct RealtimeClientOptions: Sendable {
     logger: Logging.Logger? = nil,
     webSocketTransport: (any WebSocketTransport)? = nil,
     handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
+    monitorsNetworkPath: Bool = Self.defaultMonitorsNetworkPath,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
     self.headers = headers
@@ -206,6 +239,7 @@ public struct RealtimeClientOptions: Sendable {
     self.connectOnSubscribe = connectOnSubscribe
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.handleAppLifecycle = handleAppLifecycle
+    self.monitorsNetworkPath = monitorsNetworkPath
     self.serverLogLevel = serverLogLevel
     self.http = http
     self.accessToken = accessToken

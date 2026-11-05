@@ -40,7 +40,8 @@ final class RealtimeTestHost: Sendable {
 
   init(
     url: URL = URL(string: "http://localhost:54321/realtime/v1")!,
-    options: RealtimeClientOptions = RealtimeClientOptions(handleAppLifecycle: false),
+    options: RealtimeClientOptions = RealtimeClientOptions(
+      handleAppLifecycle: false, monitorsNetworkPath: false),
     http: HTTPClient = HTTPClient(transport: RecordingTransport())
   ) async {
     // Newest-1: a wait only needs to know that something changed since it last looked.

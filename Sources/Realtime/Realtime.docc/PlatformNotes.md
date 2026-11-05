@@ -47,6 +47,11 @@ another WebSocket stack, such as one built on SwiftNIO. See <doc:CustomTransport
 ``RealtimeClientOptions/handleAppLifecycle`` works only on iOS, macOS, tvOS and visionOS. On
 watchOS, Linux and Android its default is `false`, and setting it to `true` does nothing.
 
+``RealtimeClientOptions/monitorsNetworkPath`` is on by default on iOS, macOS, tvOS and visionOS.
+On watchOS it is off, because the system keeps reporting an unsatisfied path to ordinary apps,
+so the hint may never fire. Linux and Android have no path monitor, so the option does nothing
+there.
+
 ### Message size
 
 ``URLSessionWebSocketTransport`` accepts frames up to 5,000,000 bytes. That is the largest frame
