@@ -6,66 +6,67 @@
 //
 
 import Foundation
+@_spi(Experimental) import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-/// Written out as `@Table("todos")` would expand it. The macro's extension gets main-actor
-/// isolated conformances under `.defaultIsolation(MainActor.self)`, which the requirements of
-/// `_PostgrestRelation` reject, so the conformances sit on a `nonisolated` declaration. An app
-/// that uses the macro in such a module needs the same until the expansion handles it.
-nonisolated struct IsolationTodo: _PostgrestWritableRelation, _PostgrestKeyedRelation {
-  static let relationName = "todos"
-  static let selectString = "id,title,is_done"
-  static let primaryKeyColumns = ["id"]
-
-  var id: Int
+/// The real macros, on types this target makes main-actor isolated. They compile only if each
+/// expansion opts its conformances and nested types out of that isolation.
+@Table("todos")
+struct IsolationTodo {
+  @PrimaryKey var id: Int
   var title: String
-  var isDone: Bool
-
-  enum CodingKeys: String, CodingKey {
-    case id, title
-    case isDone = "is_done"
-  }
-
-  struct Columns: Sendable {
-    let id = _PostgrestColumn<IsolationTodo, Int>("id")
-    let title = _PostgrestColumn<IsolationTodo, String>("title")
-    let isDone = _PostgrestColumn<IsolationTodo, Bool>("is_done")
-  }
-
-  static let columns = Columns()
-
-  struct Draft: Encodable, Sendable {
-    var id: Int
-    var title: String
-    var isDone: Bool
-
-    enum CodingKeys: String, CodingKey {
-      case id, title
-      case isDone = "is_done"
-    }
-  }
+  @Default var isDone: Bool
+  var priority: IsolationPriority?
+  @Generated var createdAt: Date
 }
 
-/// A column subset of `IsolationTodo`, written out as `@SelectionOf` would expand it.
-nonisolated struct IsolationTodoTitle: _PostgrestSelection {
-  typealias Source = IsolationTodo
-  static let selectString = "title"
+/// A column type with its own main-actor-isolated `Codable` conformance.
+enum IsolationPriority: String, Codable {
+  case low, high
+}
 
+@SelectionOf(IsolationTodo.self)
+struct IsolationTodoTitle {
   var title: String
 }
 
-/// A function with a result, written out as `@Function("search_todos")` would expand it.
-nonisolated struct IsolationSearchTodos: _PostgrestFunction {
-  static let functionName = "search_todos"
+@Table("comments", readOnly: true)
+struct IsolationComment {
+  @PrimaryKey var id: Int
+  var todoID: Int
+  var body: String
+}
+
+@SelectionOf(IsolationComment.self)
+struct IsolationCommentBody {
+  var body: String
+}
+
+/// A computed relationship. The expansion reads it from a nonisolated context, so the extension
+/// has to be `nonisolated`.
+nonisolated extension IsolationTodo.Columns {
+  var recentComments: _PostgrestToManyRelation<IsolationTodo, IsolationComment> {
+    .init("recent_comments")
+  }
+}
+
+/// A selection with embeds, so the expansion also emits its `Embeds` namespace.
+@SelectionOf(IsolationTodo.self)
+struct IsolationTodoWithComments {
+  var title: String
+  @Relationship(\IsolationComment.todoID) var comments: [IsolationCommentBody]
+  @Relationship(computed: \IsolationTodo.Columns.recentComments) var recent: [IsolationCommentBody]
+}
+
+@Function("search_todos")
+struct IsolationSearchTodos {
   typealias Result = [IsolationTodo]
 
   var keyword: String
 }
 
-/// A function without a result, written out as `@Function("reset_todos")` would expand it.
-nonisolated struct IsolationResetTodos: _PostgrestFunction {
-  static let functionName = "reset_todos"
-}
+@Function("reset_todos")
+struct IsolationResetTodos {}
 
 /// Calls every public async PostgREST API from the main actor, since this target compiles with
 /// `.defaultIsolation(MainActor.self)`. Nothing here runs: if a call stops compiling, the build
@@ -116,6 +117,8 @@ enum PostgRESTIsolationTests {
       .execute(count: .exact)
     _ = try await client.from(IsolationTodo.self).select().count(.exact)
     _ = try await client.from(IsolationTodo.self).select(IsolationTodoTitle.self).execute().value
+    _ = try await client.from(IsolationTodo.self).select(IsolationTodoWithComments.self)
+      .execute().value
     _ = try await client.from(IsolationTodo.self).select().csv().execute()
     _ = try await client.from(IsolationTodo.self).select().geojson().execute()
     _ = try await client.from(IsolationTodo.self).select().explain().execute()

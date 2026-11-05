@@ -71,13 +71,7 @@ public struct SelectionOfMacro: ExtensionMacro {
       missing: protocols
     )
     return [
-      try ExtensionDeclSyntax(
-        """
-        extension \(type.trimmed)\(raw: clause) {
-        \(raw: body.joined(separator: "\n\n"))
-        }
-        """
-      )
+      try conformanceExtension(of: type, clause: clause, body: body)
     ]
   }
 
@@ -157,7 +151,7 @@ public struct SelectionOfMacro: ExtensionMacro {
   static func embedsNamespace(
     access: String, relation: String, embeds: [StoredProperty]
   ) -> String {
-    var lines = ["  \(access)struct Embeds: Sendable {"]
+    var lines = ["  \(access)nonisolated struct Embeds: Sendable {"]
     for property in embeds {
       let target: String
       switch property.embed {

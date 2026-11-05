@@ -283,14 +283,14 @@ struct DiagnosticsTests {
         var summary: String { "todo" }
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let task = _PostgrestColumn<Todo, String>("task")
 
@@ -302,16 +302,16 @@ struct DiagnosticsTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
           }

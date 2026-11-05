@@ -35,12 +35,12 @@ struct FunctionMacroTests {
         @Column("only_done") var done: Bool?
       }
 
-      extension SearchTodos {
+      nonisolated extension SearchTodos {
         static let functionName = "search_todos"
 
         typealias Schema = PostgREST._PublicSchema
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case keyword = "keyword"
           case maxResults = "max_results"
           case done = "only_done"
@@ -61,7 +61,7 @@ struct FunctionMacroTests {
       """
       public struct Ping {}
 
-      extension Ping {
+      nonisolated extension Ping {
         public static let functionName = "ping"
 
         public typealias Schema = PrivateSchema

@@ -6,6 +6,7 @@
 //
 
 import SwiftSyntax
+import SwiftSyntaxMacros
 
 /// The `CodingKeys` enum for a property list, or `nil` when there is nothing to map.
 ///
@@ -13,7 +14,7 @@ import SwiftSyntax
 /// the same way.
 func codingKeys(for properties: [StoredProperty], indent: String = "  ") -> String? {
   guard !properties.isEmpty else { return nil }
-  var lines = ["\(indent)enum CodingKeys: String, CodingKey {"]
+  var lines = ["\(indent)nonisolated enum CodingKeys: String, CodingKey {"]
   for property in properties {
     lines.append("\(indent)  case \(property.name) = \"\(postgrestEscaped(property.columnName))\"")
   }
@@ -44,4 +45,24 @@ func inheritanceClause(wanted: [String], missing: [TypeSyntax]) -> String {
   let missing = Set(missing.map(\.trimmedDescription))
   let needed = wanted.filter(missing.contains)
   return needed.isEmpty ? "" : ": \(needed.joined(separator: ", "))"
+}
+
+/// The macro-generated extension that carries a conformance and its witnesses.
+///
+/// The extension is `nonisolated`, and every nested type in `body` must be too. In a module built
+/// with `.defaultIsolation(MainActor.self)`, Swift 6.2 and 6.3 make both main-actor isolated,
+/// and a main-actor conformance cannot satisfy the `Sendable` requirements of the typed API. A
+/// nested type does not inherit `nonisolated` from the extension.
+func conformanceExtension(
+  of type: some TypeSyntaxProtocol,
+  clause: String,
+  body: [String]
+) throws -> ExtensionDeclSyntax {
+  try ExtensionDeclSyntax(
+    """
+    nonisolated extension \(type.trimmed)\(raw: clause) {
+    \(raw: body.joined(separator: "\n\n"))
+    }
+    """
+  )
 }

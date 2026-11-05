@@ -6,25 +6,15 @@
 //
 
 import Foundation
+@_spi(Experimental) import PostgrestMacros
 @_spi(Experimental) import Supabase
 
 /// A keyed relation, so `LiveQuery` and `SupabaseClient.stream(_:where:)` can match changes to
-/// rows. Written out as `@Table("rooms")` would expand it, on a `nonisolated` declaration: see
-/// `IsolationTodo`.
-nonisolated struct IsolationRoom: _PostgrestKeyedRelation {
-  static let relationName = "rooms"
-  static let selectString = "id,name"
-  static let primaryKeyColumns = ["id"]
-
-  var id: Int
+/// rows.
+@Table("rooms")
+struct IsolationRoom {
+  @PrimaryKey var id: Int
   var name: String
-
-  struct Columns: Sendable {
-    let id = _PostgrestColumn<IsolationRoom, Int>("id")
-    let name = _PostgrestColumn<IsolationRoom, String>("name")
-  }
-
-  static let columns = Columns()
 }
 
 /// Calls every public async Supabase API from the main actor, since this target compiles with
