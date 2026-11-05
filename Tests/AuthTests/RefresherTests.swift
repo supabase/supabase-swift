@@ -177,12 +177,8 @@ struct RefresherTests {
 
   private let receivedAt = Date(timeIntervalSince1970: 1_800_000_000)
 
-  private func received(serverOffset: TimeInterval) -> ReceivedSession {
-    ReceivedSession(
-      session: makeSession(
-        expiresAt: receivedAt.addingTimeInterval(Self.lifetime + serverOffset)),
-      receivedAt: receivedAt
-    )
+  private func received(serverOffset: TimeInterval) -> Session {
+    makeSession(expiresAt: receivedAt.addingTimeInterval(Self.lifetime + serverOffset))
   }
 
   @Test
@@ -210,13 +206,6 @@ struct RefresherTests {
   func laterServerExpiryWithinTheToleranceKeepsTheLocalExpiry() {
     let session = received(serverOffset: 45)
     #expect(session.expiryDate == receivedAt.addingTimeInterval(Self.lifetime))
-    #expect(!session.hasClockSkew)
-  }
-
-  @Test
-  func sessionWithoutAReceiptTimeExpiresAtTheServerTime() {
-    let session = ReceivedSession(session: makeSession(expiresAt: receivedAt))
-    #expect(session.expiryDate == receivedAt)
     #expect(!session.hasClockSkew)
   }
 
@@ -300,8 +289,9 @@ struct RefresherTests {
     Session(
       accessToken: "access",
       tokenType: "bearer",
-      expiresIn: Self.lifetime,
-      expiresAt: expiresAt.timeIntervalSince1970,
+      expiresIn: .seconds(Self.lifetime),
+      expiresAt: expiresAt,
+      receivedAt: receivedAt,
       refreshToken: "refresh",
       user: User(fromMockNamed: "user")
     )
@@ -334,7 +324,7 @@ struct World {
       if let failure {
         return (HTTPResponse(status: failure), Data("<html></html>".utf8))
       }
-      let session = Self.session(named: "refreshed-\(count)", issuedAt: elapsed)
+      let session = Self.session(named: "refreshed-\(count)", issuedAt: elapsed, skew: skew)
       return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
     }
   }
@@ -342,8 +332,7 @@ struct World {
   func makeClient(clock sleepClock: (any Clock<Duration>)? = nil) -> Dependencies {
     .live(
       configuration: configuration(clock: sleepClock ?? clock),
-      http: HTTPClient(transport: http),
-      date: now
+      http: HTTPClient(transport: http)
     )
   }
 
@@ -355,11 +344,12 @@ struct World {
     AuthClient.Configuration(
       url: clientURL,
       storageKey: storageKey,
-      localStorage: InMemoryLocalStorage(),
+      storage: InMemoryTestStorage(),
       http: HTTPClientConfiguration(transport: http),
       autoRefresh: autoRefresh,
       observesAppLifecycle: observesAppLifecycle,
-      clock: sleepClock ?? clock
+      clock: sleepClock ?? clock,
+      now: now
     )
   }
 
@@ -370,7 +360,7 @@ struct World {
   }
 
   func issueSession() -> Session {
-    Self.session(named: "issued", issuedAt: Self.elapsed(on: clock, since: start))
+    Self.session(named: "issued", issuedAt: Self.elapsed(on: clock, since: start), skew: skew)
   }
 
   func advance(to elapsed: TimeInterval) async {
@@ -394,12 +384,17 @@ struct World {
     start.duration(to: clock.now).timeInterval
   }
 
-  private static func session(named name: String, issuedAt elapsed: TimeInterval) -> Session {
+  /// A session the server issues `elapsed` seconds after the epoch, which a device clock `skew`
+  /// seconds ahead of the server's receives.
+  private static func session(
+    named name: String, issuedAt elapsed: TimeInterval, skew: TimeInterval
+  ) -> Session {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: 3600,
-      expiresAt: epoch.addingTimeInterval(elapsed + 3600).timeIntervalSince1970,
+      expiresIn: .seconds(3600),
+      expiresAt: epoch.addingTimeInterval(elapsed + 3600),
+      receivedAt: epoch.addingTimeInterval(elapsed + skew),
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )

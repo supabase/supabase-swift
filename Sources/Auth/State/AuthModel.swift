@@ -46,7 +46,7 @@
     public private(set) var status: AuthStatus
 
     /// The current session, or `nil` when no user is signed in or the client is still
-    /// ``AuthStatus/loading``. The session may be expired; check ``Session/isExpired``.
+    /// ``AuthStatus/loading``. The session may be expired; check ``Session/isExpired(at:leeway:)``.
     public var session: Session? { status.session }
 
     /// The signed-in user, or `nil` when no user is signed in.

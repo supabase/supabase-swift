@@ -4,8 +4,8 @@ struct ImplicitTokens: Sendable, Hashable {
   var accessToken: String
   var refreshToken: String
   var tokenType: String
-  var expiresIn: TimeInterval
-  var expiresAt: TimeInterval?
+  var expiresIn: Duration
+  var expiresAt: Date?
   var providerToken: String?
   var providerRefreshToken: String?
 }
@@ -39,6 +39,7 @@ enum AuthRedirect: Sendable, Equatable {
         let refreshToken = items["refresh_token"],
         let tokenType = items["token_type"],
         let expiresIn = items["expires_in"].flatMap(TimeInterval.init)
+          .flatMap(Duration.init(validSeconds:))
       else {
         return .error(
           .oauthFlowFailed(
@@ -49,7 +50,8 @@ enum AuthRedirect: Sendable, Equatable {
         refreshToken: refreshToken,
         tokenType: tokenType,
         expiresIn: expiresIn,
-        expiresAt: items["expires_at"].flatMap(TimeInterval.init),
+        expiresAt: items["expires_at"].flatMap(TimeInterval.init).map(
+          Date.init(timeIntervalSince1970:)),
         providerToken: items["provider_token"],
         providerRefreshToken: items["provider_refresh_token"]
       )

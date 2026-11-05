@@ -131,15 +131,14 @@ struct PersistedFactor: Codable, Sendable {
 }
 
 extension PersistedSession {
-  init(_ received: ReceivedSession) {
-    let session = received.session
+  init(_ session: Session) {
     self.init(
       schema: Self.currentSchema,
-      receivedAt: received.receivedAt,
+      receivedAt: session.receivedAt,
       accessToken: session.accessToken,
       tokenType: session.tokenType,
-      expiresIn: session.expiresIn,
-      expiresAt: session.expiresAt,
+      expiresIn: session.expiresIn.timeInterval,
+      expiresAt: session.expiresAt.timeIntervalSince1970,
       refreshToken: session.refreshToken,
       providerToken: session.providerToken,
       providerRefreshToken: session.providerRefreshToken,
@@ -148,20 +147,23 @@ extension PersistedSession {
     )
   }
 
-  var receivedSession: ReceivedSession {
-    ReceivedSession(
-      session: Session(
-        providerToken: providerToken,
-        providerRefreshToken: providerRefreshToken,
-        accessToken: accessToken,
-        tokenType: tokenType,
-        expiresIn: expiresIn,
-        expiresAt: expiresAt,
-        refreshToken: refreshToken,
-        weakPassword: weakPassword.map { WeakPassword(reasons: $0.reasons) },
-        user: user.user
-      ),
-      receivedAt: receivedAt
+  func session() throws -> Session {
+    guard let expiresIn = Duration(validSeconds: expiresIn) else {
+      throw DecodingError.dataCorrupted(
+        DecodingError.Context(
+          codingPath: [CodingKeys.expiresIn], debugDescription: "expires_in is out of range."))
+    }
+    return Session(
+      providerToken: providerToken,
+      providerRefreshToken: providerRefreshToken,
+      accessToken: accessToken,
+      tokenType: tokenType,
+      expiresIn: expiresIn,
+      expiresAt: Date(timeIntervalSince1970: expiresAt),
+      receivedAt: receivedAt,
+      refreshToken: refreshToken,
+      weakPassword: weakPassword.map { WeakPassword(reasons: $0.reasons) },
+      user: user.user
     )
   }
 }

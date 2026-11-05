@@ -63,18 +63,17 @@ extension AuthClient {
   /// refresh off unless `autoRefresh` says so.
   static func testing(
     http: RecordingTransport,
-    storage: any AuthLocalStorage = InMemoryLocalStorage(),
+    storage: any AuthStorage = InMemoryTestStorage(),
     autoRefresh: AutoRefreshPolicy = .manual
   ) -> AuthClient {
     AuthClient(
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        localStorage: storage,
+        storage: storage,
         http: .init(transport: http),
         autoRefresh: autoRefresh
       ),
-      date: { Date() },
       pkce: .live,
       platform: .live
     )
@@ -97,27 +96,29 @@ func uniqueStorageKey() -> String {
   "sb-test-\(UUID().uuidString)-auth-token"
 }
 
-// The server expiry is a fixed date, not the wall clock when a test first touches the fixture, so
-// a long test run cannot age it. A store judges expiry from its receipt time plus `expiresIn`,
-// and ignores a server expiry this far off.
+// The receipt time is a fixed date, not the wall clock when a test first touches the fixture, so a
+// long test run cannot age it. `valid` was received 120 seconds before its server expiry, in the
+// year 2100; `expired` was received 10 seconds before its server expiry, in 2023.
 extension Session {
-  /// Valid for 120 seconds after a store receives it. Read from storage without a receipt time,
-  /// it never expires.
+  /// Valid for any clock a test uses.
   static let valid = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
-    expiresIn: 120,
-    expiresAt: 4_102_444_800,
+    expiresIn: .seconds(120),
+    expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
+    receivedAt: Date(timeIntervalSince1970: 4_102_444_800 - 120),
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )
 
-  /// Inside the expiry margin as soon as a store receives it.
+  /// Inside the expiry margin for any clock a test uses.
   static let expired = Session(
     accessToken: "accesstoken",
     tokenType: "bearer",
-    expiresIn: defaultExpiryMargin.timeInterval / 3,
-    expiresAt: 1_700_000_000,
+    expiresIn: defaultExpiryMargin / 3,
+    expiresAt: Date(timeIntervalSince1970: 1_700_000_000),
+    receivedAt: Date(timeIntervalSince1970: 1_700_000_000).addingTimeInterval(
+      -(defaultExpiryMargin / 3).timeInterval),
     refreshToken: "refreshtoken",
     user: User(fromMockNamed: "user")
   )

@@ -14,7 +14,7 @@ public enum AuthStatus: Hashable, Sendable {
   case loading
   /// No user is signed in. The reason is `nil` when the client cannot tell why.
   case signedOut(SignOutReason?)
-  /// A user is signed in. The session may be expired; check ``Session/isExpired``.
+  /// A user is signed in. The session may be expired; check ``Session/isExpired(at:leeway:)``.
   case signedIn(Session)
 
   var session: Session? {

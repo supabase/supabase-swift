@@ -262,9 +262,12 @@ struct AutoRefreshTests {
 
   #if !canImport(Darwin)
     @Test
-    func eachDefaultStorageKeepsItsOwnValues() throws {
-      try AuthClient.Configuration.defaultLocalStorage.store(key: "key", value: Data("a".utf8))
-      #expect(try AuthClient.Configuration.defaultLocalStorage.retrieve(key: "key") == nil)
+    func eachDefaultStorageKeepsItsOwnValues() async throws {
+      let url = URL(string: "http://localhost")!
+      try await AuthClient.Configuration(url: url, storageKey: "k").storage.save(
+        Data("a".utf8), key: "key")
+      let other = AuthClient.Configuration(url: url, storageKey: "k").storage
+      #expect(try await other.load(key: "key") == nil)
     }
   #endif
 
@@ -281,7 +284,6 @@ struct AutoRefreshTests {
     platform.lifecycleEvents = { lifecycle }
     return AuthClient(
       configuration: world.configuration(autoRefresh: autoRefresh, observesAppLifecycle: true),
-      date: world.now,
       pkce: .live,
       platform: platform
     )

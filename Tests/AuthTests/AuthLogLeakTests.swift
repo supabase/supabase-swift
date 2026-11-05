@@ -73,7 +73,7 @@ struct AuthLogLeakTests {
     race.answerSignIn { [race] _ in race.issue("stored") }
     try await race.makeClient().signIn(email: "user@example.com", password: password)
 
-    let relaunched = race.relaunch()
+    let relaunched = await race.relaunch()
     _ = try await relaunched.session()
     var changes = relaunched.events().makeAsyncIterator()
     let initial = await changes.next()

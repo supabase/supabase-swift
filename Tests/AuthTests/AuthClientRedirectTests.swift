@@ -168,7 +168,7 @@ struct AuthClientRedirectTests {
       }
       #expect(session.accessToken == "implicit-access")
       #expect(verification == .recovery)
-      #expect(race.relaunch().currentSession?.accessToken == "implicit-access")
+      #expect(await race.relaunch().currentSession?.accessToken == "implicit-access")
     }
 
     #expect(events == [.passwordRecovery])
@@ -616,7 +616,7 @@ struct AuthClientRedirectTests {
 
     await #expect(throws: CancellationError.self) { try await redirect.value }
     #expect(client.currentSession == nil)
-    #expect(race.relaunch().currentSession == nil)
+    #expect(await race.relaunch().currentSession == nil)
   }
 
   @Test(arguments: [SignOutScope.local, .global])
@@ -837,7 +837,7 @@ struct AuthClientRedirectTests {
   @Test
   func theConfiguredRedirectURLIsUsedWithoutAPerCallOne() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
-    let client = race.makeClient(redirectToURL: URL(string: "configured://callback")!)
+    let client = race.makeClient(redirectTo: URL(string: "configured://callback")!)
     let presenter = ClosurePresenter { [self] url, callbackScheme in
       #expect(queryItem("redirect_to", in: url) == "configured://callback")
       #expect(callbackScheme == "configured")
@@ -850,7 +850,7 @@ struct AuthClientRedirectTests {
   @Test
   func aPerCallRedirectURLWinsOverTheConfiguredOne() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
-    let client = race.makeClient(redirectToURL: URL(string: "configured://callback")!)
+    let client = race.makeClient(redirectTo: URL(string: "configured://callback")!)
     let presenter = ClosurePresenter { [self] url, callbackScheme in
       #expect(queryItem("redirect_to", in: url) == "override://callback")
       #expect(callbackScheme == "override")

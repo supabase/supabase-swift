@@ -30,7 +30,7 @@ private let apiKey =
 extension AuthMockerTests {
   @Suite(.mockerSerialized, .mainSerialExecutorSerialized)
   struct AuthClientTests {
-    let storage = InMemoryLocalStorage()
+    let storage = InMemoryTestStorage()
 
     init() {
       Mocker.removeAll()
@@ -69,6 +69,7 @@ extension AuthMockerTests {
     @Test
     func eventsFinishWhenTheClientIsReleased() async throws {
       var sut: AuthClient? = makeSUT()
+      await sut?.initialization()
       let events = try #require(sut).events()
 
       sut = nil
@@ -136,7 +137,7 @@ extension AuthMockerTests {
     @Test
     func signInAnonymously() async throws {
       try await withMainSerialExecutor {
-        let session = Session(fromMockNamed: "anonymous-sign-in-response")
+        let session = Session(fromMockNamed: "anonymous-sign-in-response").received(at: Self.now)
 
         Mock(
           url: clientURL.appendingPathComponent("signup"),
@@ -915,8 +916,9 @@ extension AuthMockerTests {
         let expectedSession = Session(
           accessToken: "accesstoken",
           tokenType: "bearer",
-          expiresIn: 60,
-          expiresAt: currentDate.addingTimeInterval(60).timeIntervalSince1970,
+          expiresIn: .seconds(60),
+          expiresAt: currentDate.addingTimeInterval(60),
+          receivedAt: currentDate,
           refreshToken: "refreshtoken",
           user: User(fromMockNamed: "user")
         )
@@ -1117,7 +1119,8 @@ extension AuthMockerTests {
       ).register()
       let sut = makeSUT()
       let held = try AuthClient.Configuration.jsonDecoder.decode(
-        Session.self, from: MockData.session)
+        Session.self, from: MockData.session
+      ).received(at: Self.now)
       try await sut.seedSession(held)
 
       try await assertAuthStateChanges(
@@ -1324,7 +1327,8 @@ extension AuthMockerTests {
       ).register()
       let sut = makeSUT()
       let held = try AuthClient.Configuration.jsonDecoder.decode(
-        Session.self, from: MockData.session)
+        Session.self, from: MockData.session
+      ).received(at: Self.now)
       try await sut.seedSession(held)
       let flow = try await sut.dependencies.flowStore.start(purpose: .emailChange, redirectTo: nil)
 
@@ -3778,7 +3782,8 @@ extension AuthMockerTests {
       #expect(result.audience == ["authenticated"])
       #expect(result.expiresAt.timeIntervalSince1970 == 9_999_999_999)
       #expect(result.issuedAt?.timeIntervalSince1970 == 1_516_239_022)
-      #expect(result.additionalClaims["nbf"] == 1_516_239_022)
+      #expect(result.notBefore?.timeIntervalSince1970 == 1_516_239_022)
+      #expect(result.additionalClaims["nbf"] == nil)
       #expect(result.additionalClaims["jti"] == "test-jti")
       #expect(result.role == "authenticated")
       #expect(result.email == "test@example.com")
@@ -3915,10 +3920,13 @@ extension AuthMockerTests {
       return requests
     }
 
+    /// The time `makeSUT` stamps on every session its client receives by default.
+    private static let now = Date()
+
     private func makeSUT(
       url: URL = clientURL,
       storageKey: String = uniqueStorageKey(),
-      date: @escaping @Sendable () -> Date = { Date() },
+      date: @escaping @Sendable () -> Date = { Self.now },
       platform: AuthPlatform = .live
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
@@ -3927,12 +3935,11 @@ extension AuthMockerTests {
 
       let configuration = AuthClient.Configuration(
         url: url,
-        headers: [
-          "apikey": apiKey
-        ],
         storageKey: storageKey,
-        localStorage: storage,
-        http: .init(transport: URLSessionTransport(session: session)))
+        headers: HTTPFields(["apikey": apiKey]),
+        storage: storage,
+        http: .init(transport: URLSessionTransport(session: session)),
+        now: date)
 
       var pkce = PKCE.live
       pkce.generateCodeVerifier = {
@@ -3942,7 +3949,7 @@ extension AuthMockerTests {
         "hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY"
       }
 
-      return AuthClient(configuration: configuration, date: date, pkce: pkce, platform: platform)
+      return AuthClient(configuration: configuration, pkce: pkce, platform: platform)
     }
 
     private func assertAuthStateChanges<T>(

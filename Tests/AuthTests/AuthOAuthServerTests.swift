@@ -26,7 +26,7 @@ extension AuthMockerTests {
     let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let userId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
 
-    let storage = InMemoryLocalStorage()
+    let storage = InMemoryTestStorage()
 
     init() {
       Mocker.removeAll()
@@ -39,11 +39,9 @@ extension AuthMockerTests {
 
       let configuration = AuthClient.Configuration(
         url: clientURL,
-        headers: [
-          "apikey": "supabase.publishable.key"
-        ],
         storageKey: uniqueStorageKey(),
-        localStorage: storage,
+        headers: HTTPFields(["apikey": "supabase.publishable.key"]),
+        storage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)

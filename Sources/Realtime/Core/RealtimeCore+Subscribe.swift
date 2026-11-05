@@ -27,7 +27,7 @@ extension RealtimeCore {
     switch record.phase {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
-      channels[channel] = record
+      channels.setRecord(record, for: channel)
       return effects + [.resume(waiter, .success)]
 
     case .unsubscribed, .failed:
@@ -35,13 +35,13 @@ extension RealtimeCore {
       record.subscribeWaiters.append(waiter)
       record.hasRefreshedExpiredToken = false
       record.isAutomaticRejoin = false
-      channels[channel] = record
+      channels.setRecord(record, for: channel)
       return effects + sendJoin(channel, attempt: 1)
 
     case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry, .leaving:
       // The attempt in flight, or the join after the leave, answers this caller too.
       record.subscribeWaiters.append(waiter)
-      channels[channel] = record
+      channels.setRecord(record, for: channel)
       return effects
     }
   }
@@ -72,7 +72,7 @@ extension RealtimeCore {
     record.joinAccessToken = tokens.token
     // A new join waits for its own first presence state.
     record.presence.waitForNextState()
-    channels[channel] = record
+    channels.setRecord(record, for: channel)
     logger.debug(
       "Sending phx_join for channel '\(topic(of: channel))' (ref: \(ref), attempt: \(attempt))")
 
@@ -99,7 +99,7 @@ extension RealtimeCore {
   /// `connectOnSubscribe` allows it.
   private mutating func waitForSocket(_ channel: ChannelID, attempt: Int) -> [Effect] {
     // The next join on the new socket replaces the join that timed out.
-    channels[channel]?.timedOutJoinRef = nil
+    channels.update(channel) { $0.timedOutJoinRef = nil }
     switch connection {
     case .disconnected where !options.connectOnSubscribe:
       return failSubscribe(channel, with: .notConnectedToSubscribe)
@@ -117,7 +117,7 @@ extension RealtimeCore {
   /// failure makes them wait and try again.
   mutating func connectAttemptEnded() -> [Effect] {
     var effects: [Effect] = []
-    for channel in channels.keys.sorted() {
+    for channel in channels.ids.sorted() {
       guard case .waitingForSocket(let attempt)? = channels[channel]?.phase else { continue }
       switch connection {
       case .connected:
@@ -154,7 +154,7 @@ extension RealtimeCore {
     case .subscribed(ref) where message.status == .ok:
       // A `system` message confirmed the join before its reply.
       if let changes = try? serverChanges(in: message) {
-        channels[channel]?.serverChanges = changes
+        channels.update(channel) { $0.serverChanges = changes }
       }
       return []
     default:
@@ -186,7 +186,7 @@ extension RealtimeCore {
   ) -> [Effect] {
     do {
       if let changes = try serverChanges(in: message) {
-        channels[channel]?.serverChanges = changes
+        channels.update(channel) { $0.serverChanges = changes }
       }
     } catch {
       return joinAttemptFailed(channel, attempt: attempt, error: .unreadableJoinReply(error))
@@ -195,7 +195,7 @@ extension RealtimeCore {
       return confirmJoin(channel, ref: ref)
     }
     logger.debug("Channel '\(topic(of: channel))' waits for its Postgres changes (ref: \(ref))")
-    channels[channel]?.timedOutJoinRef = nil
+    channels.update(channel) { $0.timedOutJoinRef = nil }
     return setPhase(.joining(ref: ref, attempt: attempt, stage: .postgres), for: channel)
       + [
         .schedule(
@@ -288,7 +288,7 @@ extension RealtimeCore {
 
   mutating func bindingsChanged(_ channel: ChannelID, snapshot: JoinSnapshot) -> [Effect] {
     guard channels[channel] != nil else { return [] }
-    channels[channel]?.snapshot = snapshot
+    channels.update(channel) { $0.snapshot = snapshot }
     return rejoinIfBindingsChanged(channel)
   }
 
@@ -306,14 +306,14 @@ extension RealtimeCore {
       return []
     }
     logger.debug("Rejoining channel '\(topic(of: channel))' to add Postgres changes bindings")
-    channels[channel]?.isAutomaticRejoin = true
+    channels.update(channel) { $0.isAutomaticRejoin = true }
     return sendLeave(channel, joinRef: joinRef) + sendJoin(channel, attempt: 1)
   }
 
   mutating func joinTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
     guard case .joining(ref, let attempt, .reply)? = channels[channel]?.phase else { return [] }
     logger.debug("Subscribe attempt \(attempt) timed out for channel '\(topic(of: channel))'")
-    channels[channel]?.timedOutJoinRef = ref
+    channels.update(channel) { $0.timedOutJoinRef = ref }
     return waitToRejoin(
       channel, attempt: attempt, delay: options.rejoinDelay(attempt), lastError: .joinTimeout)
   }
@@ -332,7 +332,7 @@ extension RealtimeCore {
     record.hasBeenSubscribed = true
     record.timedOutJoinRef = nil
     record.hasRefreshedExpiredToken = false
-    channels[channel] = record
+    channels.setRecord(record, for: channel)
 
     var effects: [Effect] = waiters.map { .resume($0, .success) }
     effects += setPhase(.subscribed(joinRef: ref), for: channel)
@@ -368,7 +368,7 @@ extension RealtimeCore {
   ) -> [Effect] {
     logger.debug("Retrying subscribe for '\(topic(of: channel))' in \(delay)")
     // Another failure ends the run of expired-token errors.
-    channels[channel]?.hasRefreshedExpiredToken = false
+    channels.update(channel) { $0.hasRefreshedExpiredToken = false }
     return setPhase(
       .waitingToRetry(attempt: attempt, retryIn: delay, lastError: lastError), for: channel)
       + [.schedule(.rejoin(channel: channel), after: delay)]
@@ -378,8 +378,10 @@ extension RealtimeCore {
   /// push waiting for a reply fails with ``RealtimeError/notSubscribed``.
   mutating func failSubscribe(_ channel: ChannelID, with error: RealtimeError) -> [Effect] {
     guard let waiters = channels[channel]?.subscribeWaiters else { return [] }
-    channels[channel]?.subscribeWaiters = []
-    channels[channel]?.timedOutJoinRef = nil
+    channels.update(channel) {
+      $0.subscribeWaiters = []
+      $0.timedOutJoinRef = nil
+    }
     return waiters.map { .resume($0, .failure(error)) }
       + failPendingPushes(channel, with: .notSubscribed)
       + setPhase(.failed(error), for: channel)
@@ -388,7 +390,7 @@ extension RealtimeCore {
   /// Moves `channel` to `phase`, and publishes its status when the status changed.
   mutating func setPhase(_ phase: ChannelRecord.Phase, for channel: ChannelID) -> [Effect] {
     guard let previous = channels[channel]?.phase else { return [] }
-    channels[channel]?.phase = phase
+    channels.update(channel) { $0.phase = phase }
     logger.debug("Channel '\(topic(of: channel))': \(previous) → \(phase)")
     guard !phase.status.isSame(as: previous.status) else { return [] }
     return [.publishChannelStatus(channel, phase.status)]

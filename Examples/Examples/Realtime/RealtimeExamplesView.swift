@@ -34,6 +34,14 @@ struct RealtimeExamplesView: View {
             icon: "checklist"
           )
         }
+
+        NavigationLink(destination: LiveQueryView()) {
+          ExampleRow(
+            title: "Live Query",
+            description: "Rows kept in sync with the LiveQuery observable",
+            icon: "dot.radiowaves.left.and.right"
+          )
+        }
       }
 
       Section("Broadcast") {
@@ -70,6 +78,14 @@ struct RealtimeExamplesView: View {
             title: "App Lifecycle",
             description: "Reconnect and re-join on foreground",
             icon: "arrow.clockwise.circle"
+          )
+        }
+
+        NavigationLink(destination: ResubscribeView()) {
+          ExampleRow(
+            title: "Resubscribe",
+            description: "Fetch again when the channel joins again",
+            icon: "arrow.triangle.2.circlepath"
           )
         }
       }

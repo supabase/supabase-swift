@@ -23,6 +23,9 @@ public struct VerifiedClaims: Sendable, Hashable {
   /// The time the token was issued (`iat` claim).
   public let issuedAt: Date?
 
+  /// The time before which the token is not valid (`nbf` claim).
+  public let notBefore: Date?
+
   /// The Postgres role of the token (`role` claim), for example `"authenticated"`.
   public let role: String?
 
@@ -63,7 +66,7 @@ public struct VerifiedClaims: Sendable, Hashable {
 
 extension VerifiedClaims {
   private static let typedClaimNames: Set<String> = [
-    "sub", "iss", "aud", "exp", "iat", "role", "email", "phone", "aal", "amr", "session_id",
+    "sub", "iss", "aud", "exp", "iat", "nbf", "role", "email", "phone", "aal", "amr", "session_id",
     "is_anonymous", "app_metadata", "user_metadata",
   ]
 
@@ -77,12 +80,14 @@ extension VerifiedClaims {
       throw AuthError.jwtVerificationFailed("JWT is missing the sub claim")
     }
     let issuedAt = payload["iat"].flatMap(Self.timeInterval)
+    let notBefore = payload["nbf"].flatMap(Self.timeInterval)
 
     self.subject = subject
     self.issuer = payload["iss"]?.stringValue
     self.audience = Self.audience(from: payload["aud"])
     self.expiresAt = Date(timeIntervalSince1970: expiresAt)
     self.issuedAt = issuedAt.map(Date.init(timeIntervalSince1970:))
+    self.notBefore = notBefore.map(Date.init(timeIntervalSince1970:))
     self.role = payload["role"]?.stringValue
     self.email = payload["email"]?.stringValue
     self.phone = payload["phone"]?.stringValue

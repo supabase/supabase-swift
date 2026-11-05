@@ -48,7 +48,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -74,7 +74,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -97,7 +97,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "sb_publishable_abc123",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -121,7 +121,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { throw TokenError() }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -143,7 +143,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
         global: SupabaseClientOptions.GlobalOptions(
@@ -166,7 +166,7 @@ struct SupabaseClientFunctionsAuthTests {
       supabaseKey: "sb_publishable_abc123",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { "sb_publishable_abc123" }
         ),
         global: SupabaseClientOptions.GlobalOptions(

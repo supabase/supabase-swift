@@ -1,22 +1,22 @@
 import Foundation
 
-/// Caches one project's JWKS for `ttl` seconds and shares one fetch between concurrent callers.
+/// Caches one project's JWKS for `ttl` and shares one fetch between concurrent callers.
 ///
 /// A lookup for a `kid` that the fresh cache lacks forces a refetch, so rotated keys resolve. Each
 /// unresolved fetch doubles the wait before the next forced refetch, from 1 second up to 16 seconds.
 /// A cancelled caller stops waiting at once; the shared fetch keeps running for the other callers.
 actor JWKSCache {
-  private let ttl: TimeInterval
+  private let ttl: Duration
   private let fetch: @Sendable () async throws -> JWKS
   private let now: @Sendable () -> Date
 
   private var cached: (jwks: JWKS, fetchedAt: Date)?
   private var inFlight: Task<JWKS, any Error>?
-  private var backoff: TimeInterval = 0
+  private var backoff: Duration = .zero
   private var forcedFetchAllowedAt: Date?
 
   init(
-    ttl: TimeInterval = 600,
+    ttl: Duration = .seconds(600),
     fetch: @escaping @Sendable () async throws -> JWKS,
     now: @escaping @Sendable () -> Date
   ) {
@@ -26,7 +26,7 @@ actor JWKSCache {
   }
 
   func key(for kid: String) async throws -> JWK? {
-    guard let cached, now() < cached.fetchedAt.addingTimeInterval(ttl) else {
+    guard let cached, now() < cached.fetchedAt.adding(ttl) else {
       return try await fetchKey(for: kid, forced: false)
     }
     if let key = cached.jwks.key(for: kid) {
@@ -67,7 +67,7 @@ actor JWKSCache {
       if jwks.key(for: kid) == nil {
         applyBackoff()
       } else {
-        backoff = 0
+        backoff = .zero
         forcedFetchAllowedAt = nil
       }
     case .failure:
@@ -78,8 +78,8 @@ actor JWKSCache {
   }
 
   private func applyBackoff() {
-    backoff = backoff == 0 ? 1 : min(backoff * 2, 16)
-    forcedFetchAllowedAt = now().addingTimeInterval(backoff)
+    backoff = backoff == .zero ? .seconds(1) : min(backoff * 2, .seconds(16))
+    forcedFetchAllowedAt = now().adding(backoff)
   }
 }
 

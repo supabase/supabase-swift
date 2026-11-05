@@ -35,7 +35,7 @@
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
-          auth: .init(storage: InMemoryLocalStorage()),
+          auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client1") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")
@@ -48,7 +48,7 @@
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
-          auth: .init(storage: InMemoryLocalStorage()),
+          auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client2") {
               OSLogHandler(label: $0, subsystem: "realtime.integration.tests")

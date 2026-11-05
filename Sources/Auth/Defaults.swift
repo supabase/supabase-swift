@@ -1,30 +1,22 @@
-//
-//  Defaults.swift
-//
-//
-//  Created by Guilherme Souza on 14/12/23.
-//
-
 import ConcurrencyExtras
-public import Foundation
+import Foundation
+import HTTPTypes
 
 extension AuthClient.Configuration {
-  /// The default JSONEncoder instance used by the ``AuthClient``.
-  public static let jsonEncoder: JSONEncoder = {
+  static let jsonEncoder: JSONEncoder = {
     let encoder = JSONEncoder.supabase()
     encoder.keyEncodingStrategy = .convertToSnakeCase
     return encoder
   }()
 
-  /// The default JSONDecoder instance used by the ``AuthClient``.
-  public static let jsonDecoder: JSONDecoder = {
+  static let jsonDecoder: JSONDecoder = {
     let decoder = JSONDecoder.supabase()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     return decoder
   }()
 
-  /// The default headers used by the ``AuthClient``.
-  public static let defaultHeaders: [String: String] = [
-    "X-Client-Info": "auth-swift/\(version)"
+  /// Sent unless the configured headers set the same name.
+  static let defaultHeaders: HTTPFields = [
+    HTTPField.Name.xClientInfo: "auth-swift/\(version)"
   ]
 }

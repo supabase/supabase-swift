@@ -17,7 +17,7 @@ struct Race: Sendable {
 
   let clock = SignalingTestClock()
   let transport = RecordingTransport()
-  let localStorage = InMemoryLocalStorage()
+  let localStorage = InMemoryTestStorage()
   let storageKey = uniqueStorageKey()
   let logger: Logging.Logger
   private let start: SignalingTestClock.Instant
@@ -47,29 +47,31 @@ struct Race: Sendable {
 
   func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
-    storage: (any AuthLocalStorage)? = nil,
-    redirectToURL: URL? = nil,
+    storage: (any AuthStorage)? = nil,
+    redirectTo: URL? = nil,
     clock: (any Clock<Duration>)? = nil,
     lifecycleEvents: (@Sendable () async -> AsyncStream<AppLifecycleEvent>)? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> AuthClient {
     makeClient(
       autoRefresh: autoRefresh, storage: storage ?? localStorage,
-      redirectToURL: redirectToURL, clock: clock ?? self.clock,
+      redirectTo: redirectTo, clock: clock ?? self.clock,
       lifecycleEvents: lifecycleEvents ?? { AsyncStream { $0.finish() } },
       beforeRefreshingHeldSession: beforeRefreshingHeldSession)
   }
 
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
   /// would.
-  func relaunch() -> AuthClient {
-    makeClient(autoRefresh: .manual, storage: localStorage)
+  func relaunch() async -> AuthClient {
+    let client = makeClient(autoRefresh: .manual, storage: localStorage)
+    await client.initialization()
+    return client
   }
 
   private func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy,
-    storage: any AuthLocalStorage,
-    redirectToURL: URL? = nil,
+    storage: any AuthStorage,
+    redirectTo: URL? = nil,
     clock: any Clock<Duration>,
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent>,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
@@ -79,16 +81,16 @@ struct Race: Sendable {
     return AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
-        redirectToURL: redirectToURL,
         storageKey: storageKey,
-        localStorage: storage,
+        storage: storage,
+        redirectTo: redirectTo,
         logger: logger,
         http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
-        clock: clock
+        clock: clock,
+        now: now
       ),
-      date: now,
       pkce: .live,
       platform: platform,
       beforeRefreshingHeldSession: beforeRefreshingHeldSession
@@ -102,8 +104,9 @@ struct Race: Sendable {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: lifetime,
-      expiresAt: Self.epoch.addingTimeInterval(elapsed + lifetime).timeIntervalSince1970,
+      expiresIn: .seconds(lifetime),
+      expiresAt: Self.epoch.addingTimeInterval(elapsed + lifetime),
+      receivedAt: now(),
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )

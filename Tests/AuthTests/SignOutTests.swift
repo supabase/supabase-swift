@@ -117,8 +117,9 @@ import Testing
     expectNoDifference(changes.map(\.event), [.initialSession, .signedOut])
     expectNoDifference(logoutRequests.map(\.authorization), ["Bearer refreshed-access-token"])
     expectNoDifference(sut.currentSession, nil)
-    expectNoDifference(
-      sut.dependencies.configuration.localStorage.hasValue(for: sut.storageKey), false)
+    let hasStoredSession = await sut.dependencies.configuration.storage.hasValue(
+      for: sut.storageKey)
+    expectNoDifference(hasStoredSession, false)
   }
 
   @Test(arguments: ["refresh_token_not_found", "session_not_found", "session_expired"])
@@ -476,14 +477,14 @@ extension Session {
   }()
 }
 
-extension AuthLocalStorage {
-  fileprivate func hasValue(for key: String) -> Bool {
-    (try? retrieve(key: key)) != nil
+extension AuthStorage {
+  fileprivate func hasValue(for key: String) async -> Bool {
+    (try? await load(key: key)) != nil
   }
 }
 
 extension AuthClient {
   fileprivate var storageKey: String {
-    configuration.storageKey ?? defaultStorageKey
+    configuration.storageKey
   }
 }

@@ -20,14 +20,14 @@ struct AuthClientMultipleInstancesTests {
   func multipleAuthClientInstances() {
     let url = URL(string: "http://localhost:54321/auth")!
 
-    let client1Storage = InMemoryLocalStorage()
-    let client2Storage = InMemoryLocalStorage()
+    let client1Storage = InMemoryTestStorage()
+    let client2Storage = InMemoryTestStorage()
 
     let client1 = AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: uniqueStorageKey(),
-        localStorage: client1Storage
+        storage: client1Storage
       )
     )
 
@@ -35,18 +35,18 @@ struct AuthClientMultipleInstancesTests {
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: uniqueStorageKey(),
-        localStorage: client2Storage
+        storage: client2Storage
       )
     )
 
     #expect(client1.clientID != client2.clientID)
 
     #expect(
-      client1.dependencies.configuration.localStorage as? InMemoryLocalStorage
+      client1.dependencies.configuration.storage as? InMemoryTestStorage
         === client1Storage
     )
     #expect(
-      client2.dependencies.configuration.localStorage as? InMemoryLocalStorage
+      client2.dependencies.configuration.storage as? InMemoryTestStorage
         === client2Storage
     )
   }
@@ -62,7 +62,7 @@ struct AuthClientMultipleInstancesTests {
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: storageKey,
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(transport: transport)
       )
     )
@@ -70,7 +70,7 @@ struct AuthClientMultipleInstancesTests {
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: storageKey,
-        localStorage: InMemoryLocalStorage()
+        storage: InMemoryTestStorage()
       )
     )
 
@@ -90,7 +90,7 @@ struct AuthClientMultipleInstancesTests {
         configuration: AuthClient.Configuration(
           url: url,
           storageKey: uniqueStorageKey(),
-          localStorage: InMemoryLocalStorage()
+          storage: InMemoryTestStorage()
         )
       )
       client = owner
@@ -112,7 +112,7 @@ struct AuthClientMultipleInstancesTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost:54321/auth")!,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(transport: transport)
       )
     )
@@ -152,7 +152,7 @@ struct AuthClientMultipleInstancesTests {
         configuration: AuthClient.Configuration(
           url: url,
           storageKey: uniqueStorageKey(),
-          localStorage: InMemoryLocalStorage()
+          storage: InMemoryTestStorage()
         )
       )
       autoRefresh = client.dependencies.autoRefresh

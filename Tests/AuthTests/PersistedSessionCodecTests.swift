@@ -11,7 +11,7 @@ struct PersistedSessionCodecTests {
     let decoded = try PersistedSessionCodec.decode(json(named: fixture))
 
     #expect(!decoded.isCurrentSchema)
-    expectNoDifference(decoded.session.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(decoded.session, PersistedSessionFixtures.expectedSession)
     #expect(decoded.session.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
 
     let reEncoded = try PersistedSessionCodec.encode(decoded.session)
@@ -26,7 +26,7 @@ struct PersistedSessionCodecTests {
     let decoded = try PersistedSessionCodec.decode(json(named: PersistedSessionFixtures.schema1))
 
     #expect(decoded.isCurrentSchema)
-    expectNoDifference(decoded.session.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(decoded.session, PersistedSessionFixtures.expectedSession)
     #expect(decoded.session.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
   }
 
@@ -46,18 +46,16 @@ struct PersistedSessionCodecTests {
     ]
     session.user.identities?[0].identityData = [:]
     session.user.identities?[0].email = "jane@example.com"
-    let received = ReceivedSession(session: session, receivedAt: Date())
-
-    let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(received))
+    let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(session))
 
     #expect(decoded.isCurrentSchema)
-    expectNoDifference(decoded.session, received)
+    expectNoDifference(decoded.session, session)
   }
 
   @Test(arguments: PersistedSessionFixtures.v2Shapes + [PersistedSessionFixtures.schema1])
   func identityIDsMapAfterReshape(fixture: String) throws {
     let decoded = try PersistedSessionCodec.decode(json(named: fixture))
-    let identity = try #require(decoded.session.session.user.identities?.first)
+    let identity = try #require(decoded.session.user.identities?.first)
 
     #expect(identity.id == UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF"))
     #expect(identity.providerUserID == "859f402d-b3de-4105-a1b9-932836d9193b")
@@ -73,6 +71,18 @@ struct PersistedSessionCodecTests {
 
     #expect(throws: DecodingError.self) {
       try PersistedSessionCodec.decode(data)
+    }
+  }
+
+  @Test
+  func schema1WithAnExpiresInOutOfRangeFailsInsteadOfTrapping() throws {
+    let valid = String(
+      decoding: try PersistedSessionCodec.encode(Session.valid), as: UTF8.self)
+    let corrupt = valid.replacingOccurrences(of: #""expires_in":120"#, with: #""expires_in":1e30"#)
+    try #require(corrupt != valid)
+
+    #expect(throws: DecodingError.self) {
+      try PersistedSessionCodec.decode(Data(corrupt.utf8))
     }
   }
 
@@ -109,18 +119,13 @@ struct PersistedSessionCodecTests {
         try AuthClient.Configuration.jsonEncoder.encode(
           V2WrappedSession(
             session: session,
-            expirationDate: Date(timeIntervalSince1970: session.expiresAt)
+            expirationDate: session.expiresAt
           )
         )
       ),
       (
         PersistedSessionFixtures.schema1,
-        try PersistedSessionCodec.encode(
-          ReceivedSession(
-            session: PersistedSessionFixtures.expectedSession,
-            receivedAt: PersistedSessionFixtures.expectedReceivedAt
-          )
-        )
+        try PersistedSessionCodec.encode(PersistedSessionFixtures.expectedSession)
       ),
     ]
 
@@ -147,8 +152,9 @@ enum PersistedSessionFixtures {
     providerRefreshToken: "provider-refresh-token",
     accessToken: "access-token",
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 1_790_074_965,
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 1_790_074_965),
+    receivedAt: Date(timeIntervalSince1970: 1_790_074_965 - 3600),
     refreshToken: "refresh-token",
     weakPassword: WeakPassword(reasons: ["length", "pwned"]),
     user: User(

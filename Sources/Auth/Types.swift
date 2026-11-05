@@ -110,7 +110,7 @@ public struct Session: Codable, Hashable, Sendable {
   /// information on how to obtain the provider refresh token.
   public var providerRefreshToken: String?
 
-  /// A valid JWT that will expire in ``Session/expiresIn`` seconds.
+  /// A valid JWT that will expire ``Session/expiresIn`` after the server issued it.
   ///
   /// It is recommended to set the `JWT_EXPIRY` to a shorter expiry value.
   public var accessToken: String
@@ -118,13 +118,21 @@ public struct Session: Codable, Hashable, Sendable {
   /// The token type. Currently only `bearer` is returned; this may change in the future.
   public var tokenType: String
 
-  /// Number of seconds after which the ``Session/accessToken`` should be renewed by using the
-  /// refresh token with the `refresh_token` grant type.
-  public var expiresIn: TimeInterval
+  /// How long after the server issued the session the ``Session/accessToken`` should be renewed
+  /// by using the refresh token with the `refresh_token` grant type.
+  public var expiresIn: Duration
 
-  /// UNIX timestamp after which the ``Session/accessToken`` should be renewed by using the refresh
-  /// token with the `refresh_token` grant type.
-  public var expiresAt: TimeInterval
+  /// The time after which the ``Session/accessToken`` should be renewed by using the refresh
+  /// token with the `refresh_token` grant type. This is the server's value, on the server's
+  /// clock. ``isExpired(at:leeway:)`` judges expiry from ``receivedAt`` and ``expiresIn``.
+  public var expiresAt: Date
+
+  /// When this client received the session, on the device clock.
+  ///
+  /// The client refreshes the session ``expiresIn`` after this time, so a device clock that
+  /// disagrees with the server's cannot move the refresh. A session you decode yourself has the
+  /// time the server issued it, `expiresAt - expiresIn`.
+  public var receivedAt: Date
 
   /// An opaque string that can be used once to obtain a new access and refresh token.
   public var refreshToken: String
@@ -143,8 +151,9 @@ public struct Session: Codable, Hashable, Sendable {
   ///   - providerRefreshToken: The OAuth provider refresh token.
   ///   - accessToken: A valid JWT access token.
   ///   - tokenType: The token type (e.g. `bearer`).
-  ///   - expiresIn: Number of seconds until the access token expires.
-  ///   - expiresAt: UNIX timestamp at which the access token expires.
+  ///   - expiresIn: How long after the server issued the session the access token expires.
+  ///   - expiresAt: The time at which the access token expires, on the server's clock.
+  ///   - receivedAt: When the session was received. Defaults to now.
   ///   - refreshToken: Opaque refresh token string.
   ///   - weakPassword: Weak-password information returned by the server, if any.
   ///   - user: The authenticated user.
@@ -153,8 +162,9 @@ public struct Session: Codable, Hashable, Sendable {
     providerRefreshToken: String? = nil,
     accessToken: String,
     tokenType: String,
-    expiresIn: TimeInterval,
-    expiresAt: TimeInterval,
+    expiresIn: Duration,
+    expiresAt: Date,
+    receivedAt: Date = .now,
     refreshToken: String,
     weakPassword: WeakPassword? = nil,
     user: User
@@ -165,19 +175,113 @@ public struct Session: Codable, Hashable, Sendable {
     self.tokenType = tokenType
     self.expiresIn = expiresIn
     self.expiresAt = expiresAt
+    self.receivedAt = receivedAt
     self.refreshToken = refreshToken
     self.weakPassword = weakPassword
     self.user = user
   }
 
-  /// Returns `true` if the access token is expired or will expire within the next 30 seconds.
+  /// Returns `true` if the access token is expired or will expire within `leeway`.
   ///
-  /// The 30-second buffer accounts for network latency. This compares the server's
-  /// ``expiresAt`` with the device clock, so a device clock that is wrong gives a wrong answer.
-  /// The client itself does not use it: it judges expiry from the local time it received the
-  /// session, plus ``expiresIn``.
-  public var isExpired: Bool {
-    expiresAt - Date().timeIntervalSince1970 < defaultExpiryMargin.timeInterval
+  /// The leeway accounts for network latency. The expiry is ``receivedAt`` plus ``expiresIn`` on
+  /// the device clock. A server ``expiresAt`` that is up to a minute earlier moves it earlier, to
+  /// cover latency. A server value further off is on another clock, and is ignored.
+  ///
+  /// - Parameters:
+  ///   - date: The time to judge the session at. Defaults to now.
+  ///   - leeway: How long before the expiry the session counts as expired. Defaults to 30 seconds.
+  public func isExpired(at date: Date = .now, leeway: Duration = .seconds(30)) -> Bool {
+    remainingLifetime(at: date) < leeway
+  }
+}
+
+extension Session {
+  static let clockSkewTolerance: Duration = .seconds(60)
+
+  /// When the access token expires, on the device clock.
+  var expiryDate: Date {
+    let local = localExpiryDate
+    // Beyond the tolerance the server value is on another clock. Bounding by it would make a
+    // device clock that runs ahead see every new token as expired and refresh in a loop.
+    if expiresAt < local, local.duration(since: expiresAt) <= Self.clockSkewTolerance {
+      return expiresAt
+    }
+    return local
+  }
+
+  var hasClockSkew: Bool {
+    let skew = localExpiryDate.duration(since: expiresAt)
+    return skew > Self.clockSkewTolerance || skew < .zero - Self.clockSkewTolerance
+  }
+
+  private var localExpiryDate: Date {
+    receivedAt.adding(expiresIn)
+  }
+
+  func remainingLifetime(at date: Date) -> Duration {
+    expiryDate.duration(since: date)
+  }
+
+  /// The session as the client received it at `date`.
+  func received(at date: Date) -> Session {
+    var session = self
+    session.receivedAt = date
+    return session
+  }
+}
+
+extension KeyedDecodingContainer {
+  /// A date that the server sends as seconds since 1970.
+  func decodeUnixDate(forKey key: Key) throws -> Date {
+    Date(timeIntervalSince1970: try decode(TimeInterval.self, forKey: key))
+  }
+}
+
+extension Session {
+  private enum CodingKeys: String, CodingKey {
+    case providerToken, providerRefreshToken, accessToken, tokenType, expiresIn, expiresAt
+    case receivedAt, refreshToken, weakPassword, user
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let seconds = try container.decode(Double.self, forKey: .expiresIn)
+    guard let expiresIn = Duration(validSeconds: seconds) else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .expiresIn, in: container, debugDescription: "expires_in is out of range.")
+    }
+    let expiresAt = try container.decodeUnixDate(forKey: .expiresAt)
+    let receivedAt =
+      try container.decodeIfPresent(TimeInterval.self, forKey: .receivedAt)
+      .map(Date.init(timeIntervalSince1970:))
+      ?? expiresAt.adding(.zero - expiresIn)
+    self.init(
+      providerToken: try container.decodeIfPresent(String.self, forKey: .providerToken),
+      providerRefreshToken: try container.decodeIfPresent(
+        String.self, forKey: .providerRefreshToken),
+      accessToken: try container.decode(String.self, forKey: .accessToken),
+      tokenType: try container.decode(String.self, forKey: .tokenType),
+      expiresIn: expiresIn,
+      expiresAt: expiresAt,
+      receivedAt: receivedAt,
+      refreshToken: try container.decode(String.self, forKey: .refreshToken),
+      weakPassword: try container.decodeIfPresent(WeakPassword.self, forKey: .weakPassword),
+      user: try container.decode(User.self, forKey: .user)
+    )
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(providerToken, forKey: .providerToken)
+    try container.encodeIfPresent(providerRefreshToken, forKey: .providerRefreshToken)
+    try container.encode(accessToken, forKey: .accessToken)
+    try container.encode(tokenType, forKey: .tokenType)
+    try container.encode(expiresIn.timeInterval, forKey: .expiresIn)
+    try container.encode(expiresAt.timeIntervalSince1970, forKey: .expiresAt)
+    try container.encode(receivedAt.timeIntervalSince1970, forKey: .receivedAt)
+    try container.encode(refreshToken, forKey: .refreshToken)
+    try container.encodeIfPresent(weakPassword, forKey: .weakPassword)
+    try container.encode(user, forKey: .user)
   }
 }
 
@@ -185,7 +289,7 @@ extension Session: CustomStringConvertible {
   /// The user ID and the expiry of the session. It holds no token, so logging a session does
   /// not leak one.
   public var description: String {
-    "Session(user_id: \(user.id), expires_at: \(expiresAt))"
+    "Session(user_id: \(user.id), expires_at: \(expiresAt.timeIntervalSince1970))"
   }
 }
 
@@ -710,7 +814,7 @@ public struct EmailOTPOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the email link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -929,6 +1033,13 @@ public enum SignUpResult: Decodable, Hashable, Sendable {
       : .confirmationRequired(User(from: decoder))
   }
 
+  func received(at date: Date) -> SignUpResult {
+    switch self {
+    case .signedIn(let session): .signedIn(session.received(at: date))
+    case .confirmationRequired: self
+    }
+  }
+
   /// The user in either case.
   public var user: User {
     switch self {
@@ -952,7 +1063,7 @@ public struct SignUpOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
-  /// the client uses ``AuthClient/Configuration/redirectToURL``.
+  /// the client uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The channel that delivers the confirmation code. Applies to phone sign-up only.
@@ -1018,6 +1129,13 @@ public enum VerifyOTPResult: Sendable, Hashable {
   /// its link too before the change takes effect. The client stored no session and emitted no
   /// event. `message` comes from the server and is meant for display.
   case emailChangePending(message: String)
+
+  func received(at date: Date) -> VerifyOTPResult {
+    switch self {
+    case .signedIn(let session): .signedIn(session.received(at: date))
+    case .emailChangePending: self
+    }
+  }
 }
 
 /// A `/verify` response body: a session, or the `{"msg": …}` body of the first half of a secure
@@ -1218,6 +1336,14 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 }
 
 extension Duration {
+  /// The duration of `seconds`, or `nil` when it is not a finite number within about 30,000
+  /// years. `Duration.seconds(_:)` traps on such a value, and a server, a URL, or stored data
+  /// can send one.
+  init?(validSeconds seconds: Double) {
+    guard seconds.isFinite, abs(seconds) <= 1e12 else { return nil }
+    self = .seconds(seconds)
+  }
+
   /// The duration in the format of Go's `time.ParseDuration`.
   var goDurationString: String {
     let (seconds, attoseconds) = components
@@ -1421,8 +1547,7 @@ extension MFAChallenge: Decodable {
     self.init(
       id: try container.decode(UUID.self, forKey: .id),
       factorType: try container.decode(FactorType.self, forKey: .type),
-      expiresAt: Date(
-        timeIntervalSince1970: try container.decode(TimeInterval.self, forKey: .expiresAt)),
+      expiresAt: try container.decodeUnixDate(forKey: .expiresAt),
       webauthn: try container.decodeIfPresent(
         WebAuthnChallengeResponseData.self, forKey: .webauthn)
     )
@@ -1738,7 +1863,7 @@ public enum SSOTarget: Sendable, Hashable {
 /// ``AuthClient/ssoSignInURL(_:options:)``.
 public struct SSOOptions: Sendable, Hashable {
   /// The URL the server redirects to after the identity provider step. When `nil`, the client
-  /// uses ``AuthClient/Configuration/redirectToURL``.
+  /// uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -1776,7 +1901,7 @@ public struct OAuthOptions: Sendable, Hashable {
   public var scopes: [String]
 
   /// The URL the server redirects to after the provider step. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// Extra query items to add to the authorize URL, for example `access_type=offline`.

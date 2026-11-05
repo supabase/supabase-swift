@@ -96,7 +96,7 @@ private struct LiveSessionManager: Sendable {
 
       guard let currentSession = sessionStore.currentSession else { return nil }
 
-      let halfLifetime = Duration.seconds(currentSession.expiresIn / 2)
+      let halfLifetime = currentSession.expiresIn / 2
       let minimumValidity = max(Refresher.refreshLeadTime, halfLifetime)
       if let session = sessionStore.validSession(minimumValidity: minimumValidity) {
         return session

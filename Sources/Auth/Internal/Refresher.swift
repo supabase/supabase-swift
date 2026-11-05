@@ -14,21 +14,21 @@ enum Refresher {
   }
 
   static func run(
-    for received: ReceivedSession,
+    for session: Session,
     driver: Driver,
     now: @Sendable () -> Date,
     afterFailure failure: (any Error)? = nil,
     refresh: () async throws -> Void
   ) async {
-    if received.hasClockSkew {
+    if session.hasClockSkew {
       driver.logger.warning(
         "The device clock and the server's disagree; refreshing on the local receipt time.")
     }
 
     var attempt = failure == nil ? 0 : 1
     var delay =
-      failure.map { delayBeforeRetry(attempt: 1, after: $0, for: received, now: now()) }
-      ?? delayBeforeRefresh(of: received, now: now())
+      failure.map { delayBeforeRetry(attempt: 1, after: $0, for: session, now: now()) }
+      ?? delayBeforeRefresh(of: session, now: now())
     while true {
       do {
         if delay > .zero {
@@ -42,26 +42,26 @@ enum Refresher {
         return
       } catch {
         attempt += 1
-        delay = delayBeforeRetry(attempt: attempt, after: error, for: received, now: now())
+        delay = delayBeforeRetry(attempt: attempt, after: error, for: session, now: now())
         driver.logger.debug("auto refresh failed, retrying in \(delay): \(error)")
       }
     }
   }
 
-  static func delayBeforeRefresh(of received: ReceivedSession, now: Date) -> Duration {
-    max(.zero, received.expiresIn(at: now) - refreshLeadTime)
+  static func delayBeforeRefresh(of session: Session, now: Date) -> Duration {
+    max(.zero, session.remainingLifetime(at: now) - refreshLeadTime)
   }
 
   static func delayBeforeRetry(
     attempt: Int,
     after error: any Error,
-    for received: ReceivedSession,
+    for session: Session,
     now: Date
   ) -> Duration {
     let backoff = min(backoffCap, backoffBase * (1 << min(max(attempt - 1, 0), 30)))
     let jittered = backoff / 2 + .seconds(Double.random(in: 0...(backoff / 2).timeInterval))
 
-    let timeUntilExpiry = received.expiresIn(at: now)
+    let timeUntilExpiry = session.remainingLifetime(at: now)
     guard timeUntilExpiry > .zero else { return jittered }
     let retryingIsPointlessUntilExpiry = (error as? AuthError)?.invalidatesSession == true
     if retryingIsPointlessUntilExpiry {

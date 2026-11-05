@@ -49,52 +49,58 @@ struct BroadcastView: View {
         Button("Send") {
           sendMessage()
         }
-        .disabled(messageText.isEmpty)
+        .disabled(messageText.isEmpty || channel == nil)
       }
       .padding()
     }
     .navigationTitle("Broadcast")
     .gitHubSourceLink()
     .task {
-      await subscribe()
-    }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
+      await observeMessages()
     }
   }
 
-  func subscribe() async {
+  func observeMessages() async {
     let channel = await supabase.channel("broadcast-example") {
       $0.broadcast.receiveOwnMessages = true
     }
 
-    do {
-      let broadcast = await channel.broadcasts(event: "message")
+    let broadcasts = await channel.broadcasts(event: "message")
 
+    do {
+      error = nil
       try await channel.subscribe()
       self.channel = channel
 
-      for await message in broadcast {
-        messages.append(try message.decode(as: ChatMessage.self))
+      for await broadcast in broadcasts {
+        // One malformed message should not end the subscription.
+        do {
+          messages.append(try broadcast.decode(as: ChatMessage.self))
+        } catch {
+          self.error = error
+        }
       }
     } catch {
-      print(error)
+      if !Task.isCancelled {
+        self.error = error
+      }
     }
+
+    self.channel = nil
+    await supabase.removeChannel(channel)
   }
 
   func sendMessage() {
-    guard !messageText.isEmpty else { return }
+    guard let channel, !messageText.isEmpty else { return }
+
+    let message = ChatMessage(text: messageText)
 
     Task {
-      let message = ChatMessage(text: messageText, timestamp: Date())
-      try await channel?.broadcast(event: "message", payload: message)
-
-      await MainActor.run {
+      do {
+        try await channel.broadcast(event: "message", payload: message)
         messageText = ""
+      } catch {
+        self.error = error
       }
     }
   }

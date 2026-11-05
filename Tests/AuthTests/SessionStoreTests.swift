@@ -12,7 +12,7 @@ struct SessionStoreTests {
 
   @Test
   func aSignOutCommitCountsOneSignOut() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     try await store.commit(.signedIn(.valid, event: .signedIn))
     let before = await store.signOuts
@@ -24,7 +24,7 @@ struct SessionStoreTests {
 
   @Test
   func identityUnlinkedRemovesTheIdentityFromTheHeldUser() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     try await store.commit(.signedIn(.valid, event: .signedIn))
     let identities = try #require(Session.valid.user.identities)
@@ -46,7 +46,7 @@ struct SessionStoreTests {
     session.user.appMetadata["providers"] = ["email", "github"]
     github.id = UUID()
     session.user.identities?.append(github)
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     try await store.commit(.signedIn(session, event: .signedIn))
 
@@ -61,7 +61,7 @@ struct SessionStoreTests {
 
   @Test
   func userChangeVerifiedUpdatesTheSignedInUser() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     try await store.commit(.signedIn(.valid, event: .signedIn))
     var changes = store.changes().makeAsyncIterator()
@@ -76,7 +76,7 @@ struct SessionStoreTests {
 
   @Test
   func userChangeVerifiedSignsInWhenAnotherUserOrNoneIsSignedIn() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
@@ -92,7 +92,7 @@ struct SessionStoreTests {
 
   @Test
   func identityUnlinkedChangesNothingUnlessItsUserIsSignedIn() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
     let identity = try #require(Session.valid.user.identities?.first)
 
@@ -109,7 +109,7 @@ struct SessionStoreTests {
 
   @Test
   func loadWithNothingStoredSignsOutWithSessionMissing() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     var changes = store.changes().makeAsyncIterator()
 
     try await store.load()
@@ -122,7 +122,7 @@ struct SessionStoreTests {
   @Test
   func loadRestoresTheStoredSessionAndItsReceiptTime() async throws {
     let storage = InMemoryAuthStorage()
-    let stored = ReceivedSession(session: makeSession("stored"), receivedAt: receivedAt)
+    let stored = makeSession("stored")
     try await storage.save(PersistedSessionCodec.encode(stored), key: key)
     let store = SessionStore(storage: storage, key: key, now: { Date.distantFuture })
 
@@ -130,8 +130,8 @@ struct SessionStoreTests {
     try await store.commit(.userUpdated(makeUser(email: "new@example.com"), event: .userUpdated))
 
     var expected = stored
-    expected.session.user = makeUser(email: "new@example.com")
-    #expect(store.currentSession == expected.session)
+    expected.user = makeUser(email: "new@example.com")
+    #expect(store.currentSession == expected)
     #expect(try await storedSession(storage) == expected)
   }
 
@@ -139,7 +139,7 @@ struct SessionStoreTests {
   func loadRemovesACorruptBlobAndSignsOut() async throws {
     let storage = InMemoryAuthStorage()
     try await storage.save(Data("not-json".utf8), key: key)
-    let store = SessionStore(storage: storage, key: key)
+    let store = SessionStore(storage: storage, key: key, now: { receivedAt })
     var changes = store.changes().makeAsyncIterator()
 
     try await store.load()
@@ -152,9 +152,9 @@ struct SessionStoreTests {
   @Test
   func unavailableStorageKeepsLoadingUntilALaterLoadSucceeds() async throws {
     let storage = TestAuthStorage()
-    try await storage.save(PersistedSessionCodec.encode(received("stored")), key: key)
+    try await storage.save(PersistedSessionCodec.encode(makeSession("stored")), key: key)
     storage.failure.setValue(AuthError(kind: .storageUnavailable, message: "locked"))
-    let store = SessionStore(storage: storage, key: key)
+    let store = SessionStore(storage: storage, key: key, now: { receivedAt })
     var changes = store.changes().makeAsyncIterator()
 
     let error = await #expect(throws: AuthError.self) { try await store.load() }
@@ -209,7 +209,7 @@ struct SessionStoreTests {
     #expect(storedOrder.count >= 20)
     #expect(emittedOrder == storedOrder)
     #expect(store.currentSession?.accessToken == storedOrder.last)
-    #expect(try await storedSession(storage)?.session == store.currentSession)
+    #expect(try await storedSession(storage) == store.currentSession)
   }
 
   @Test
@@ -224,7 +224,7 @@ struct SessionStoreTests {
 
     let refreshed = AuthChange(event: .tokenRefreshed, status: .signedIn(makeSession("b")))
     #expect(await changes.next() == refreshed)
-    #expect(try await storedSession(storage) == received("b"))
+    #expect(try await storedSession(storage) == makeSession("b"))
   }
 
   @Test
@@ -260,7 +260,7 @@ struct SessionStoreTests {
     try await store.commit(.refreshed(makeSession("b"), replacing: "refresh-a"))
 
     #expect(store.currentSession == makeSession("b"))
-    #expect(try await storedSession(storage) == received("b"))
+    #expect(try await storedSession(storage) == makeSession("b"))
   }
 
   @Test
@@ -288,14 +288,14 @@ struct SessionStoreTests {
     respond.yield(makeSession("b"))
     _ = try await refresh.value
 
-    var expected = received("b")
-    expected.session.user = user
+    var expected = makeSession("b")
+    expected.user = user
     var updated = makeSession("a")
     updated.user = user
     #expect(await changes.next() == AuthChange(event: .userUpdated, status: .signedIn(updated)))
     #expect(
       await changes.next()
-        == AuthChange(event: .tokenRefreshed, status: .signedIn(expected.session)))
+        == AuthChange(event: .tokenRefreshed, status: .signedIn(expected)))
     #expect(try await storedSession(storage) == expected)
   }
 
@@ -313,7 +313,7 @@ struct SessionStoreTests {
 
     #expect(discarded?.kind == .refreshDiscarded)
     #expect(store.currentSession == makeSession("c"))
-    #expect(try await storedSession(storage) == received("c"))
+    #expect(try await storedSession(storage) == makeSession("c"))
   }
 
   @Test
@@ -329,7 +329,7 @@ struct SessionStoreTests {
 
     #expect(discarded?.kind == .refreshDiscarded)
     #expect(store.currentSession == makeSession("b"))
-    #expect(try await storedSession(storage) == received("b"))
+    #expect(try await storedSession(storage) == makeSession("b"))
   }
 
   @Test
@@ -453,7 +453,7 @@ struct SessionStoreTests {
     #expect(store.currentSession == makeSession("a"))
     #expect(await store.generation == generation)
     storage.failure.setValue(nil)
-    #expect(try await storedSession(storage)?.session == makeSession("a"))
+    #expect(try await storedSession(storage) == makeSession("a"))
     try await store.commit(.signedIn(makeSession("c"), event: .signedIn))
     let signedIn = AuthChange(event: .signedIn, status: .signedIn(makeSession("c")))
     #expect(await changes.next() == signedIn)
@@ -469,9 +469,9 @@ struct SessionStoreTests {
     let user = makeUser(email: "new@example.com")
     try await store.commit(.userUpdated(user, event: .userUpdated))
 
-    var expected = received("b")
-    expected.session.user = user
-    #expect(store.currentSession == expected.session)
+    var expected = makeSession("b")
+    expected.user = user
+    #expect(store.currentSession == expected)
     #expect(try await storedSession(storage) == expected)
   }
 
@@ -488,7 +488,7 @@ struct SessionStoreTests {
 
   @Test
   func commitWhileLoadingIsTheInitialSessionFollowedByItsOwnEvent() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     var changes = store.changes().makeAsyncIterator()
 
     try await store.commit(.signedIn(makeSession("a"), event: .signedIn))
@@ -534,7 +534,7 @@ struct SessionStoreTests {
 
   @Test
   func invalidationWhileLoadingChangesNothing() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key)
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
 
     try await store.commit(.invalidated(.sessionRevoked, refreshToken: "refresh-a"))
 
@@ -579,7 +579,7 @@ struct SessionStoreTests {
   @Test
   func rejectedRefreshKeepsANewerSessionAnotherStoreSaved() async throws {
     let storage = InMemoryAuthStorage()
-    try await storage.save(PersistedSessionCodec.encode(received("s1")), key: key)
+    try await storage.save(PersistedSessionCodec.encode(makeSession("s1")), key: key)
     let expired = receivedAt.addingTimeInterval(7200)
     let storeA = try await loadedStore(storage: storage, now: { expired })
     let storeB = try await loadedStore(storage: storage, now: { expired })
@@ -591,7 +591,7 @@ struct SessionStoreTests {
       try await storeB.refresh("refresh-s1") { _ in throw alreadyUsed }
     }
 
-    #expect(try await storedSession(storage)?.session == makeSession("s2"))
+    #expect(try await storedSession(storage) == makeSession("s2"))
     #expect(storeB.currentSession == makeSession("s2"))
     let refreshed = AuthChange(event: .tokenRefreshed, status: .signedIn(makeSession("s2")))
     #expect(await changes.next() == refreshed)
@@ -600,11 +600,11 @@ struct SessionStoreTests {
   @Test
   func rejectedRefreshAdoptsAnotherUsersStoredSessionAsASignIn() async throws {
     let storage = InMemoryAuthStorage()
-    try await storage.save(PersistedSessionCodec.encode(received("s1")), key: key)
+    try await storage.save(PersistedSessionCodec.encode(makeSession("s1")), key: key)
     let store = try await loadedStore(
       storage: storage, now: { receivedAt.addingTimeInterval(7200) })
-    var other = received("other")
-    other.session.user.id = UUID(uuidString: "0E5B3C7A-2F4D-4E8B-9C1A-6D7E8F9A0B1C")!
+    var other = makeSession("other")
+    other.user.id = UUID(uuidString: "0E5B3C7A-2F4D-4E8B-9C1A-6D7E8F9A0B1C")!
     try await storage.save(PersistedSessionCodec.encode(other), key: key)
     var changes = store.changes().makeAsyncIterator()
     _ = await changes.next()
@@ -614,7 +614,7 @@ struct SessionStoreTests {
     }
 
     #expect(try await storedSession(storage) == other)
-    let signedIn = AuthChange(event: .signedIn, status: .signedIn(other.session))
+    let signedIn = AuthChange(event: .signedIn, status: .signedIn(other))
     #expect(await changes.next() == signedIn)
   }
 
@@ -626,8 +626,8 @@ struct SessionStoreTests {
     try await store.commit(.signedIn(makeSession("s0"), event: .signedIn))
     try await store.commit(.refreshed(makeSession("s1"), replacing: "refresh-s0"))
     clock.setValue(receivedAt.addingTimeInterval(7200))
-    var other = received("other")
-    other.session.user.id = UUID(uuidString: "0E5B3C7A-2F4D-4E8B-9C1A-6D7E8F9A0B1C")!
+    var other = makeSession("other")
+    other.user.id = UUID(uuidString: "0E5B3C7A-2F4D-4E8B-9C1A-6D7E8F9A0B1C")!
     try await storage.save(PersistedSessionCodec.encode(other), key: key)
     await #expect(throws: AuthError.self) {
       try await store.refresh("refresh-s1") { _ in throw alreadyUsed }
@@ -635,13 +635,13 @@ struct SessionStoreTests {
 
     try await store.commit(.revoked(.userInitiated, refreshToken: "refresh-s0"))
 
-    #expect(store.currentSession == other.session)
+    #expect(store.currentSession == other)
   }
 
   @Test
   func rejectedRefreshSignsOutAndRemovesStorageThatHoldsTheRejectedToken() async throws {
     let storage = InMemoryAuthStorage()
-    try await storage.save(PersistedSessionCodec.encode(received("s1")), key: key)
+    try await storage.save(PersistedSessionCodec.encode(makeSession("s1")), key: key)
     let store = try await loadedStore(
       storage: storage, now: { receivedAt.addingTimeInterval(7200) })
 
@@ -674,9 +674,13 @@ struct SessionStoreTests {
   }
 
   @Test
-  func storeStartsWithItsInitialLoad() async throws {
-    let store = SessionStore(
-      storage: InMemoryAuthStorage(), key: key, initialLoad: { received("stored") })
+  func storeStartsLoadingAndLoadReadsTheStoredSession() async throws {
+    let storage = InMemoryAuthStorage()
+    try await storage.save(PersistedSessionCodec.encode(makeSession("stored")), key: key)
+    let store = SessionStore(storage: storage, key: key, now: { receivedAt })
+
+    #expect(store.currentStatus == .loading)
+    try await store.load()
 
     #expect(store.currentSession == makeSession("stored"))
     var changes = store.changes().makeAsyncIterator()
@@ -685,19 +689,26 @@ struct SessionStoreTests {
   }
 
   @Test
-  func storeWithNothingLoadedIsSignedOut() {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, initialLoad: { nil })
+  func storeWithNothingStoredIsSignedOutAfterLoad() async throws {
+    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
+
+    try await store.load()
 
     #expect(store.currentStatus == .signedOut(.sessionMissing))
   }
 
   @Test
-  func failedInitialLoadKeepsTheStoreLoading() {
-    let store = SessionStore(
-      storage: InMemoryAuthStorage(),
-      key: key,
-      initialLoad: { throw AuthError(kind: .storageUnavailable, message: "locked") }
-    )
+  func failedLoadKeepsTheStoreLoading() async {
+    struct LockedStorage: AuthStorage {
+      func load(key: String) async throws -> Data? {
+        throw AuthError(kind: .storageUnavailable, message: "locked")
+      }
+      func save(_ data: Data, key: String) async throws {}
+      func remove(key: String) async throws {}
+    }
+    let store = SessionStore(storage: LockedStorage(), key: key, now: { receivedAt })
+
+    await #expect(throws: AuthError.self) { try await store.load() }
 
     #expect(store.currentStatus == .loading)
   }
@@ -760,18 +771,14 @@ struct SessionStoreTests {
 
   private func loadedStore(
     storage: any AuthStorage = InMemoryAuthStorage(),
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date(timeIntervalSince1970: 1_700_000_000) }
   ) async throws -> SessionStore {
     let store = SessionStore(storage: storage, key: key, now: now)
     try await store.load()
     return store
   }
 
-  private func received(_ token: String) -> ReceivedSession {
-    ReceivedSession(session: makeSession(token), receivedAt: receivedAt)
-  }
-
-  private func storedSession(_ storage: any AuthStorage) async throws -> ReceivedSession? {
+  private func storedSession(_ storage: any AuthStorage) async throws -> Session? {
     try await storage.load(key: key).map { try PersistedSessionCodec.decode($0).session }
   }
 }
@@ -783,8 +790,9 @@ private func makeSession(_ accessToken: String) -> Session {
   Session(
     accessToken: accessToken,
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 1_700_003_600,
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 1_700_003_600),
+    receivedAt: Date(timeIntervalSince1970: 1_700_000_000),
     refreshToken: "refresh-\(accessToken)",
     user: makeUser(email: "user@example.com")
   )
@@ -833,6 +841,6 @@ private final class TestAuthStorage: AuthStorage {
   }
 
   func savedAccessTokens() throws -> [String] {
-    try saves.value.map { try PersistedSessionCodec.decode($0).session.session.accessToken }
+    try saves.value.map { try PersistedSessionCodec.decode($0).session.accessToken }
   }
 }

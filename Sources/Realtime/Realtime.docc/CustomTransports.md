@@ -11,7 +11,7 @@ The client reaches the network only through ``WebSocketTransport``. Set
 ### Pinning certificates
 
 You rarely need a new transport for TLS.
-``URLSessionWebSocketTransport/init(configuration:delegate:)`` takes a `URLSessionDelegate` and
+``URLSessionWebSocketTransport/init(configuration:delegate:allowsWatchOSConnections:)`` takes a `URLSessionDelegate` and
 sends it the TLS challenges of every connection:
 
 ```swift

@@ -32,20 +32,23 @@ struct SessionManagerTests {
     dependencies = Self.makeDependencies(http: http)
   }
 
+  /// The time the default dependencies stamp on every session they receive.
+  private static let now = Date()
+
   private static func makeDependencies(
     http: any ClientTransport,
-    date: @escaping @Sendable () -> Date = { Date() }
+    date: @escaping @Sendable () -> Date = { Self.now }
   ) -> Dependencies {
     .live(
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
-        autoRefresh: .manual
+        storage: InMemoryTestStorage(),
+        autoRefresh: .manual,
+        now: date
       ),
       http: HTTPClient(transport: http),
-      logger: supabaseDefaultLogger(label: "io.supabase.auth"),
-      date: date
+      logger: supabaseDefaultLogger(label: "io.supabase.auth")
     )
   }
 
@@ -144,8 +147,8 @@ struct SessionManagerTests {
     Session(
       accessToken: "\(name)-access",
       tokenType: "bearer",
-      expiresIn: 120,
-      expiresAt: Date().addingTimeInterval(120).timeIntervalSince1970,
+      expiresIn: .seconds(120),
+      expiresAt: Date().addingTimeInterval(120),
       refreshToken: "\(name)-refresh",
       user: User(fromMockNamed: "user")
     )
@@ -153,8 +156,8 @@ struct SessionManagerTests {
 
   private func expiredSession(_ name: String) -> Session {
     var session = session(name)
-    session.expiresIn = defaultExpiryMargin.timeInterval / 3
-    session.expiresAt = Date().addingTimeInterval(session.expiresIn).timeIntervalSince1970
+    session.expiresIn = defaultExpiryMargin / 3
+    session.expiresAt = Date().addingTimeInterval(session.expiresIn.timeInterval)
     return session
   }
 
@@ -249,8 +252,10 @@ struct SessionManagerTests {
     let held = expiredSession("A")
     let rotated = {
       var session = session("A2")
-      session.expiresIn = 3600
-      session.expiresAt = Date().addingTimeInterval(3600).timeIntervalSince1970
+      session.expiresIn = .seconds(3600)
+      // Whole seconds, so the date survives the round trip through Unix seconds exactly.
+      session.expiresAt = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded() + 3600)
+      session.receivedAt = Self.now
       return session
     }()
 
@@ -902,7 +907,7 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let dependencies = Self.makeDependencies(http: http, date: { now.value })
     try await dependencies.seedSession(held)
-    now.withValue { $0.addTimeInterval(held.expiresIn) }
+    now.withValue { $0.addTimeInterval(held.expiresIn.timeInterval) }
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       try RefreshFailure.coded("refresh_token_already_used", status: .badRequest).response()
     }
@@ -918,8 +923,8 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
-      session.expiresIn = 60
-      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      session.expiresIn = .seconds(60)
+      session.expiresAt = now.value.addingTimeInterval(60)
       return session
     }()
     let dependencies = Self.makeDependencies(http: http, date: { now.value })
@@ -963,8 +968,8 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
-      session.expiresIn = 60
-      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      session.expiresIn = .seconds(60)
+      session.expiresAt = now.value.addingTimeInterval(60)
       return session
     }()
     let dependencies = Self.makeDependencies(http: http, date: { now.value })
@@ -994,8 +999,8 @@ struct SessionManagerTests {
     let now = LockIsolated(Date())
     let held = {
       var session = session("A")
-      session.expiresIn = 60
-      session.expiresAt = now.value.addingTimeInterval(60).timeIntervalSince1970
+      session.expiresIn = .seconds(60)
+      session.expiresAt = now.value.addingTimeInterval(60)
       return session
     }()
     let dependencies = Self.makeDependencies(http: http, date: { now.value })
@@ -1026,6 +1031,7 @@ struct SessionManagerTests {
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
       try RefreshFailure.coded("refresh_token_not_found", status: .badRequest).response()
     }
+    try await dependencies.sessionStore.load()
     let (events, stopCollecting) = collectAuthEvents()
     defer { stopCollecting() }
 

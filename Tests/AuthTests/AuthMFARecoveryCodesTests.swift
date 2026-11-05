@@ -23,7 +23,7 @@ extension AuthMockerTests {
   struct AuthMFARecoveryCodesTests {
     let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
-    let storage = InMemoryLocalStorage()
+    let storage = InMemoryTestStorage()
 
     private var recoveryCodesURL: URL {
       clientURL.appendingPathComponent("factors/recovery-codes")
@@ -36,9 +36,9 @@ extension AuthMockerTests {
 
       let configuration = AuthClient.Configuration(
         url: clientURL,
-        headers: ["apikey": "supabase.publishable.key"],
         storageKey: uniqueStorageKey(),
-        localStorage: storage,
+        headers: HTTPFields(["apikey": "supabase.publishable.key"]),
+        storage: storage,
         http: .init(transport: URLSessionTransport(session: session)))
 
       return AuthClient(configuration: configuration)

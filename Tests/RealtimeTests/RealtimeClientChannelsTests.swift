@@ -225,7 +225,7 @@ extension RealtimeClient {
 
   /// Marks the core record of `channel` as joined with presence on.
   fileprivate func turnPresenceOn(in channel: RealtimeChannel) {
-    core.channels[channel.id]?.snapshot.presenceEnabled = true
+    core.channels.update(channel.id) { $0.snapshot.presenceEnabled = true }
   }
 
   /// Whether the next join of `channel` asks for presence.
