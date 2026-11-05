@@ -15,11 +15,22 @@ enum PersistedSessionCodec {
     var isCurrentSchema: Bool
   }
 
+  /// A session that a newer SDK wrote. It is not corrupt, so the caller must keep it: an older
+  /// SDK reads it after a downgrade, or in an app extension on another SDK version.
+  struct NewerSchema: Error, Equatable {
+    var schema: Int
+  }
+
+  /// - Throws: ``NewerSchema`` for a schema above ``PersistedSession/currentSchema``, and
+  ///   `DecodingError` for data that no SDK version wrote.
   static func decode(_ data: Data) throws -> Decoded {
     switch try JSONDecoder().decode(Shape.self, from: data) {
     case .schema(PersistedSession.currentSchema):
       let persisted = try PersistedJSON.decoder.decode(PersistedSession.self, from: data)
       return Decoded(session: try persisted.session(), isCurrentSchema: true)
+
+    case .schema(let schema) where schema > PersistedSession.currentSchema:
+      throw NewerSchema(schema: schema)
 
     case .schema(let schema):
       throw DecodingError.dataCorrupted(

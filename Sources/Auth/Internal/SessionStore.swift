@@ -24,7 +24,9 @@ actor SessionStore {
     /// the session, such as a user update, does not: the server already rotated the refresh token,
     /// so dropping the result would leave the store with a spent one.
     case refreshed(Session, replacing: String?)
-    /// Merged into the session that is current when the commit runs.
+    /// Merged into the session that is current when the commit runs, but only while that
+    /// session's user is this user. Otherwise the commit changes nothing and does not throw, so a
+    /// user who signed in while the request was out keeps their own user.
     case userUpdated(User, event: AuthEvent)
     case signedOut(SignOutReason, event: AuthEvent)
     /// Signs out with ``AuthEvent/signedOut``, but only while the store holds the session
@@ -460,6 +462,8 @@ actor SessionStore {
   /// Another store over the same storage key may have redeemed `refreshToken` first and saved the
   /// session it got. Removing storage would sign that store out at the next launch, so when storage
   /// holds a session with another refresh token, this store adopts it instead of signing out.
+  /// When storage holds a session that a newer SDK wrote, this store signs out in memory only and
+  /// keeps that session.
   ///
   /// A storage read error changes nothing, as a failed write does. The rejection stays cached, so
   /// the next refresh of `refreshToken` tries the sign-out again.
@@ -467,10 +471,17 @@ actor SessionStore {
     _ reason: SignOutReason, refreshToken: String
   ) async throws {
     guard let held, held.refreshToken == refreshToken else { return }
-    if let data = try await storage.load(key: key),
-      let stored = try? PersistedSessionCodec.decode(data).session,
-      stored.refreshToken != refreshToken
-    {
+    let stored: Session?
+    do {
+      stored = try await storage.load(key: key).map { try PersistedSessionCodec.decode($0).session }
+    } catch is PersistedSessionCodec.NewerSchema {
+      update(to: .signedOut(reason), event: startupEvent(.signedOut))
+      replacedRefreshTokens = []
+      return
+    } catch is DecodingError {
+      stored = nil
+    }
+    if let stored, stored.refreshToken != refreshToken {
       let sameUser = stored.user.id == held.user.id
       update(to: .signedIn(stored), event: startupEvent(sameUser ? .tokenRefreshed : .signedIn))
       if sameUser {
@@ -565,6 +576,8 @@ actor SessionStore {
     } catch is DecodingError {
       try await storage.remove(key: key)
       next = .signedOut(.sessionMissing)
+    } catch is PersistedSessionCodec.NewerSchema {
+      next = .signedOut(.sessionMissing)
     }
     if case .signedIn(let session) = next, let startupRefresh,
       session.isExpired(at: now(), leeway: .zero)
@@ -622,6 +635,7 @@ actor SessionStore {
       guard case .signedIn(var current) = published.value.state else {
         throw AuthError.sessionMissing
       }
+      guard current.user.id == user.id else { return }
       current.user = user
       next = .signedIn(current)
       event = userEvent
