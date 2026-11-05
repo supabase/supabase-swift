@@ -14,9 +14,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`order` no longer forces `NULLS LAST`.** `nullsFirst` is now `Bool?` and defaults to `nil`,
   so the database picks the null placement (`NULLS FIRST` on a descending sort). Pass
   `nullsFirst: false` to keep the v2 order.
-- **`setHeader` and `retry` return a new builder.** The builders are structs, so a call whose
-  result you drop has no effect. The compiler only gives an "unused result" warning. Chain the
-  call, or assign its result.
+- **`retry` returns a new builder.** The builders are structs, so a call whose result you drop
+  has no effect. The compiler only gives an "unused result" warning. Chain the call, or assign
+  its result. The same holds for `settingHeader`.
 - **Enum-like values accept any raw value.** `init(rawValue:)` on `PostgrestOperator`,
   `CountOption`, `PostgrestReturningOptions` and `TextSearchType` never returns `nil` now, so an
   `X(rawValue: s) != nil` check is always `true`. String interpolation prints
@@ -37,6 +37,7 @@ Changes that still compile but behave differently. Check each one by hand.
 
 | v2 | v3 |
 | --- | --- |
+| `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
 | `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.init` and `Configuration.init` |
 | `PostgrestClient(… fetch:)`, `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
 | `PostgrestClient.FetchHandler` | `any ClientTransport` |
@@ -70,13 +71,13 @@ client.setAuth(token)
 let client = PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
 ```
 
-An `Authorization` header in `headers:` or from `setHeader` wins over the closure.
+An `Authorization` header in `headers:` or from `settingHeader` wins over the closure.
 
 ## Value-type builders
 
 Code that holds a builder or client as a reference type no longer compiles: `weak`, `unowned`,
-`AnyObject`, `===` and subclasses. `setHeader` and `retry` are not available on the builder that
-`from(_:)` returns; pick an operation first, or set the header on the client.
+`AnyObject`, `===` and subclasses. `settingHeader` and `retry` are not available on the builder
+that `from(_:)` returns; pick an operation first, or set the header on the client.
 
 ```swift
 // v2

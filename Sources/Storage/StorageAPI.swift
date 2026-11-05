@@ -75,7 +75,7 @@ struct StorageAPI: Sendable {
   /// - Parameters:
   ///   - name: The header field.
   ///   - value: The value of the header field.
-  func setHeader(name: HTTPField.Name, value: String) -> Self {
+  func settingHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
     copy.configuration.headers[name] = value
     return copy

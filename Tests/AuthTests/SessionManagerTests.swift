@@ -19,7 +19,7 @@ import Testing
 
 @testable import Auth
 
-@Suite(.serialized, .mainSerialExecutorSerialized)
+@Suite
 struct SessionManagerTests {
   let http = RecordingTransport()
   let dependencies: Dependencies
@@ -58,13 +58,11 @@ struct SessionManagerTests {
 
   @Test
   func session_shouldFailWithSessionNotFound() async {
-    await withMainSerialExecutor {
-      do {
-        _ = try await sut.session()
-        Issue.record("Expected a \(AuthError.sessionMissing) failure")
-      } catch {
-        #expect((error as? AuthError)?.kind == .sessionMissing)
-      }
+    do {
+      _ = try await sut.session()
+      Issue.record("Expected a \(AuthError.sessionMissing) failure")
+    } catch {
+      #expect((error as? AuthError)?.kind == .sessionMissing)
     }
   }
 
@@ -91,56 +89,52 @@ struct SessionManagerTests {
 
   @Test
   func session_shouldReturnValidSession() async throws {
-    try await withMainSerialExecutor {
-      let session = Session.valid
-      try await dependencies.seedSession(session)
+    let session = Session.valid
+    try await dependencies.seedSession(session)
 
-      let returnedSession = try await sut.session()
-      expectNoDifference(returnedSession, session)
-    }
+    let returnedSession = try await sut.session()
+    expectNoDifference(returnedSession, session)
   }
 
   @Test
   func session_shouldRefreshSession_whenCurrentSessionExpired() async throws {
-    try await withMainSerialExecutor {
-      let currentSession = Session.expired
-      try await dependencies.seedSession(currentSession)
+    let currentSession = Session.expired
+    try await dependencies.seedSession(currentSession)
 
-      let validSession = Session.valid
+    let validSession = Session.valid
 
-      let refreshSessionCallCount = LockIsolated(0)
+    let refreshSessionCallCount = LockIsolated(0)
 
-      let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
+    let (refreshSessionStream, refreshSessionContinuation) = AsyncStream<Session>.makeStream()
 
-      http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
-        refreshSessionCallCount.withValue { $0 += 1 }
-        let session = await refreshSessionStream.first(where: { _ in true })!
-        return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
-      }
-
-      let tasks = (0..<10).map { _ in
-        Task {
-          try await sut.session()
-        }
-      }
-
-      await Task.yield()
-
-      refreshSessionContinuation.yield(validSession)
-      refreshSessionContinuation.finish()
-
-      var result: [Result<Session, any Error>] = []
-      for task in tasks {
-        let value = await task.result
-        result.append(value)
-      }
-
-      expectNoDifference(refreshSessionCallCount.value, 1)
-      expectNoDifference(
-        try result.map { try $0.get().accessToken },
-        (0..<10).map { _ in validSession.accessToken }
-      )
+    http.respond(when: { $0.url?.path.contains("/token") == true }) { _, _ in
+      refreshSessionCallCount.withValue { $0 += 1 }
+      let session = await refreshSessionStream.first(where: { _ in true })!
+      return (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(session))
     }
+
+    let tasks = (0..<10).map { _ in
+      Task {
+        try await sut.session()
+      }
+    }
+
+    await Task.yield()
+
+    refreshSessionContinuation.yield(validSession)
+    refreshSessionContinuation.finish()
+
+    var result: [Result<Session, any Error>] = []
+    for task in tasks {
+      let value = await task.result
+      result.append(value)
+    }
+
+    expectNoDifference(refreshSessionCallCount.value, 1)
+    expectNoDifference(
+      try result.map { try $0.get().accessToken },
+      (0..<10).map { _ in validSession.accessToken }
+    )
   }
 
   private func session(_ name: String) -> Session {
@@ -182,26 +176,38 @@ struct SessionManagerTests {
     )
   }
 
-  private func collectAuthEvents(
-    from store: SessionStore? = nil
-  ) -> (events: LockIsolated<[AuthEvent]>, stop: () -> Void) {
+  /// The events a store emits, collected until the test asks for them.
+  private struct AuthEventLog {
     let events = LockIsolated<[AuthEvent]>([])
-    let changes = (store ?? dependencies.sessionStore).changes()
-    let task = Task {
-      for await change in changes {
-        events.withValue { $0.append(change.event) }
+    let store: SessionStore
+    let collector: Task<Void, Never>
+
+    fileprivate init(store: SessionStore) {
+      self.store = store
+      let changes = store.changes()
+      let events = events
+      collector = Task {
+        for await change in changes {
+          events.withValue { $0.append(change.event) }
+        }
       }
     }
-    return (events, { task.cancel() })
   }
 
-  /// The events collected once `count` arrived, after giving any later event the chance to.
-  private func settled(
-    _ events: LockIsolated<[AuthEvent]>, count: Int
-  ) async -> [AuthEvent] {
-    await waitUntil { events.value.count >= count }
-    await Task.megaYield()
-    return events.value
+  private func collectAuthEvents(
+    from store: SessionStore? = nil
+  ) -> (events: AuthEventLog, stop: () -> Void) {
+    let log = AuthEventLog(store: store ?? dependencies.sessionStore)
+    return (log, { log.collector.cancel() })
+  }
+
+  /// The events collected once `count` arrived, and every one that followed: the stream finishes
+  /// after what the store already emitted, so a later event cannot slip past the caller.
+  private func settled(_ log: AuthEventLog, count: Int) async -> [AuthEvent] {
+    await waitUntil { log.events.value.count >= count }
+    log.store.finishChanges()
+    await log.collector.value
+    return log.events.value
   }
 
   @Test

@@ -506,7 +506,9 @@ jobs:
       - name: Forbid yield loops and sleeps in Realtime tests
         run: ./scripts/check-no-yield-loops.sh
       - name: Check main-actor call sites cover the Auth API
-        run: ./scripts/check-auth-isolation-coverage.sh
+        run: ./scripts/check-isolation-coverage.sh Auth Tests/DefaultIsolationTests/AuthIsolationTests.swift
+      - name: Check main-actor call sites cover the Realtime API
+        run: ./scripts/check-isolation-coverage.sh Realtime Tests/DefaultIsolationTests/RealtimeIsolationTests.swift
 
   lint:
     name: SwiftLint

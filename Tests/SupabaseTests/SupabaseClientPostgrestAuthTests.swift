@@ -81,7 +81,7 @@ struct SupabaseClientPostgrestAuthTests {
     )
 
     _ = try await client.from("todos").select()
-      .setHeader(name: "Authorization", value: "Bearer per-call-override").execute()
+      .settingHeader(name: .authorization, value: "Bearer per-call-override").execute()
 
     let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer per-call-override")
