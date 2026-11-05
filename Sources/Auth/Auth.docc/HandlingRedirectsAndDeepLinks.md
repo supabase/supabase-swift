@@ -95,7 +95,7 @@ import AuthenticationServices
 import Supabase
 import SwiftUI
 
-@available(iOS 16.4, macOS 13.3, *)
+@available(iOS 16.4, macOS 13.3, tvOS 16.4, *)
 struct SignInView: View {
   @Environment(\.webAuthenticationSession) private var webAuthenticationSession
 
@@ -143,7 +143,7 @@ universal link, write a presenter that adopts ``WebAuthPresenter/authenticate(ur
 and passes `.https(host:path:)` to `authenticate(using:callback:additionalHeaderFields:)`.
 
 ```swift
-@available(iOS 17.4, macOS 14.4, visionOS 1.1, watchOS 10.4, *)
+@available(iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, watchOS 10.4, *)
 struct UniversalLinkPresenter: WebAuthPresenter {
   let session: WebAuthenticationSession
 

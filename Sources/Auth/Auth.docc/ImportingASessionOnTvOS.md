@@ -37,7 +37,13 @@ it was.
 
 The call throws an ``AuthError`` of kind ``AuthError/Kind-swift.struct/jwtVerificationFailed``
 when the access token is not a JWT with an `exp` claim. The client does not check the signature
-itself. The server does, in the request that the call sends, so a forged token makes the call throw.
+itself. Whether the server checks it depends on the branch:
+
+- With an access token that has not expired, the call sends the access token to fetch the user.
+  The server checks the signature, so a forged token makes the call throw.
+- With an expired access token, the call sends only the refresh token. The server never sees the
+  access token, so a forged expired token with a valid refresh token does not make the call throw.
+  The session that the server returns replaces the token.
 
 ### Keep the tokens safe
 

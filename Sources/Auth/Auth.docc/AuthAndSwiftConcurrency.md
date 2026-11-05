@@ -96,10 +96,18 @@ func observeAuth() async {
 
 ### Cancel work
 
-Auth honors task cancellation. Cancelling the task that awaits
-``AuthClient/signInWithOAuth(_:options:presenter:)`` closes the sign-in page and throws
-`CancellationError`. The streams from ``AuthClient/events()`` finish when the consuming task is
-cancelled, or when the client is released.
+Auth honors task cancellation. The streams from ``AuthClient/events()`` finish when the consuming
+task is cancelled, or when the client is released.
+
+The client awaits the ``WebAuthPresenter`` that you give to
+``AuthClient/signInWithOAuth(_:options:presenter:)``, so what a cancel does depends on the
+presenter:
+
+- ``ASWebAuthenticationSessionPresenter``, the default, closes the sign-in page and throws
+  `CancellationError`. On tvOS the system cannot close the page, so the call throws while the page
+  stays open until the user dismisses it. A new sign-in fails until then.
+- ``ClosurePresenter`` only runs your closure. It cancels as far as the closure does.
+- A presenter that you write must watch for cancellation itself.
 
 ### Write your own storage or presenter
 
