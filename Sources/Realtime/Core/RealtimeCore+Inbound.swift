@@ -11,14 +11,14 @@ extension RealtimeCore {
   /// The channel of the topic a wire topic names that is not being removed, if any. A topic has
   /// at most one: a new channel of the topic joins only once the old one is removing.
   func liveChannel(forWireTopic wireTopic: String) -> ChannelID? {
-    firstChannel(forWireTopic: wireTopic) { !$0.isRemoving }
+    channels.first(onWireTopic: wireTopic) { !$0.isRemoving }
   }
 
   /// The channel of the topic a wire topic names whose frames carry `joinRef`: the channel of
   /// that join, or of the leave that ends it. With no `joinRef`, the live channel of the topic.
   func channel(forWireTopic wireTopic: String, joinRef: Ref?) -> ChannelID? {
     guard let joinRef else { return liveChannel(forWireTopic: wireTopic) }
-    return firstChannel(forWireTopic: wireTopic) { $0.inboundJoinRef == joinRef }
+    return channels.first(onWireTopic: wireTopic) { $0.inboundJoinRef == joinRef }
   }
 
   /// The channel of `message`'s topic whose frames carry `joinRef`, as
@@ -33,17 +33,6 @@ extension RealtimeCore {
     return channel
   }
 
-  /// The first channel in creation order on `wireTopic` whose record matches `predicate`.
-  private func firstChannel(
-    forWireTopic wireTopic: String, where predicate: (ChannelRecord) -> Bool
-  ) -> ChannelID? {
-    var first: ChannelID?
-    for (id, record) in channels where record.wireTopic == wireTopic && predicate(record) {
-      first = min(first ?? id, id)
-    }
-    return first
-  }
-
   /// The topic of `channel`, for log lines. A channel with no record has none.
   func topic(of channel: ChannelID) -> String {
     channels[channel]?.topic ?? channel.description
@@ -56,11 +45,8 @@ extension RealtimeCore {
   mutating func receiveFrame(_ message: RealtimeMessage) -> [Effect] {
     if message.event == ChannelEvent.reply {
       if let ref = message.ref,
-        let channel = firstChannel(
-          forWireTopic: message.topic,
-          where: {
-            $0.pendingPushes[ref] != nil
-          })
+        let channel = channels.first(
+          onWireTopic: message.topic, where: { $0.pendingPushes[ref] != nil })
       {
         return receivePushReply(message, ref: ref, on: channel)
       }
@@ -128,11 +114,14 @@ extension RealtimeCore {
       return []
     }
     // Mutated in place, so the tracker's storage is not copied for each frame.
-    let change =
+    let change = channels.update(channel) {
       message.event == ChannelEvent.presenceState
-      ? channels[channel]?.presence.applyState(message.payload)
-      : channels[channel]?.presence.applyDiff(message.payload)
-    guard let change, !change.isEmpty, let state = channels[channel]?.presence.state else {
+        ? $0.presence.applyState(message.payload)
+        : $0.presence.applyDiff(message.payload)
+    }
+    // A diff that waits for the join's first state changes nothing yet.
+    guard let change = change ?? nil, !change.isEmpty, let state = channels[channel]?.presence.state
+    else {
       return []
     }
     return [.deliver(channel, .presence(change, state))]

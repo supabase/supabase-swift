@@ -101,7 +101,7 @@ struct RealtimeCoreLeaveTests {
     // Inbound presence comes with Task 9.
     var presence = try #require(harness.core.channels[.room]?.presence)
     let joined = presence.applyState(["ana": ["metas": [["phx_ref": "r1"]]]])
-    harness.core.channels[.room]?.presence = presence
+    harness.core.channels.update(.room) { $0.presence = presence }
     let w = harness.waiter()
 
     let effects = harness.send(.unsubscribe(channel: .room, waiter: w))
@@ -232,7 +232,7 @@ struct RealtimeCoreLeaveTests {
     let push = harness.waiter()
     _ = harness.send(Self.subscribe(w))
     // The drop fails whatever waits for a reply.
-    harness.core.channels[.room]?.pendingPushes["7"] = push
+    harness.core.channels.update(.room) { $0.pendingPushes["7"] = push }
     _ = harness.send(.appBackground)
 
     #expect(
@@ -572,7 +572,7 @@ struct RealtimeCoreLeaveTests {
   func removeChannelCancelsPresenceAndFailsPendingPushes() throws {
     var harness = Self.subscribed()
     let pusher = harness.waiter()
-    harness.core.channels[.room]?.pendingPushes["5"] = pusher
+    harness.core.channels.update(.room) { $0.pendingPushes["5"] = pusher }
     let w = harness.waiter()
 
     let effects = harness.send(.removeChannel(channel: .room, waiter: w))

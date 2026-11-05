@@ -22,7 +22,7 @@ extension RealtimeCore {
     guard channels[channel] != nil else {
       return [.resume(waiter, .success)] + disconnectIfNoChannels()
     }
-    channels[channel]?.isRemoving = true
+    channels.update(channel) { $0.isRemoving = true }
     var effects = failPendingPushes(channel, with: .channelRemoved)
     effects += leave(channel, waiter: waiter, removing: true)
     guard case .leaving? = channels[channel]?.phase else {
@@ -41,7 +41,7 @@ extension RealtimeCore {
     record.hasBeenSubscribed = false
     record.isAutomaticRejoin = false
     let cleared = record.presence.clear()
-    channels[channel] = record
+    channels.setRecord(record, for: channel)
     var effects: [Effect] =
       cleared.isEmpty ? [] : [.deliver(channel, .presence(cleared, record.presence.state))]
 
@@ -55,8 +55,8 @@ extension RealtimeCore {
 
     case .leaving:
       // This caller wants the channel to stay unsubscribed.
-      if let waiter { channels[channel]?.leaveWaiters.append(waiter) }
-      channels[channel]?.subscribeWaiters = []
+      if let waiter { channels.update(channel) { $0.leaveWaiters.append(waiter) } }
+      channels.update(channel) { $0.subscribeWaiters = [] }
       return effects + record.subscribeWaiters.map { .resume($0, subscribers) }
 
     case .subscribed(let joinRef) where isConnected,
@@ -65,7 +65,7 @@ extension RealtimeCore {
       // answers the leave, and the channel must not outlive it.
       let leaveRef = makeRef()
       let leaving = ChannelRecord.Phase.leaving(joinRef: joinRef, leaveRef: leaveRef)
-      if let waiter { channels[channel]?.leaveWaiters.append(waiter) }
+      if let waiter { channels.update(channel) { $0.leaveWaiters.append(waiter) } }
       logger.debug(
         "Leaving channel '\(topic(of: channel))' (join_ref: \(joinRef), ref: \(leaveRef))")
       effects.append(.send(leaveMessage(record.wireTopic, joinRef: joinRef, ref: leaveRef)))
@@ -126,7 +126,7 @@ extension RealtimeCore {
     }
     let waiters = record.leaveWaiters
     record.leaveWaiters = []
-    channels[channel] = record
+    channels.setRecord(record, for: channel)
 
     var effects: [Effect] = waiters.map { .resume($0, .success) }
     effects += failPendingPushes(channel, with: pushes)
@@ -186,7 +186,7 @@ extension RealtimeCore {
     }
 
     guard message.event == ChannelEvent.close else { return effects }
-    channels[channel] = nil
+    channels.setRecord(nil, for: channel)
     return effects + [.finishChannel(channel)]
   }
 
@@ -205,7 +205,7 @@ extension RealtimeCore {
   private mutating func failSubscribesIfStopped() -> [Effect] {
     guard case .disconnected(let error?) = connection else { return [] }
     var effects: [Effect] = []
-    for channel in channels.keys.sorted() {
+    for channel in channels.ids.sorted() {
       guard let record = channels[channel], case .waitingForSocket = record.phase,
         !record.subscribeWaiters.isEmpty
       else { continue }
@@ -220,7 +220,7 @@ extension RealtimeCore {
   /// for a reply fails with ``RealtimeError/notConnected``.
   private mutating func channelsLostSocket() -> [Effect] {
     var effects: [Effect] = []
-    for channel in channels.keys.sorted() {
+    for channel in channels.ids.sorted() {
       guard let phase = channels[channel]?.phase else { continue }
       if case .leaving = phase {
         effects += leaveEnded(channel, pushes: .notConnected, cancelTimer: true)
@@ -233,7 +233,7 @@ extension RealtimeCore {
       case .waitingToRetry(let attempt, _, _):
         effects += waitForNextSocket(channel, attempt: attempt + 1)
       case .subscribed:
-        channels[channel]?.isAutomaticRejoin = true
+        channels.update(channel) { $0.isAutomaticRejoin = true }
         effects += waitForNextSocket(channel, attempt: 1)
       case .unsubscribed, .waitingForSocket, .leaving, .failed:
         break
@@ -244,8 +244,10 @@ extension RealtimeCore {
 
   private mutating func waitForNextSocket(_ channel: ChannelID, attempt: Int) -> [Effect] {
     let timer = channels[channel]?.phase.timer(for: channel)
-    channels[channel]?.timedOutJoinRef = nil
-    channels[channel]?.hasRefreshedExpiredToken = false
+    channels.update(channel) {
+      $0.timedOutJoinRef = nil
+      $0.hasRefreshedExpiredToken = false
+    }
     return setPhase(.waitingForSocket(attempt: attempt), for: channel)
       + (timer.map { [.cancel($0)] } ?? [])
   }
@@ -255,13 +257,13 @@ extension RealtimeCore {
   /// over, and a push waiting for a reply fails with ``RealtimeError/notConnected``.
   mutating func disconnectChannels() -> [Effect] {
     var effects: [Effect] = []
-    for channel in channels.keys.sorted() {
+    for channel in channels.ids.sorted() {
       guard var record = channels[channel] else { continue }
       switch record.phase {
       case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry, .subscribed, .leaving:
         let leavers = record.leaveWaiters
         record.leaveWaiters = []
-        channels[channel] = record
+        channels.setRecord(record, for: channel)
         effects += leavers.map { .resume($0, .success) }
         effects += endJoin(
           channel, subscribers: .failure(.disconnectedWhileSubscribing), pushes: .notConnected,
@@ -294,7 +296,7 @@ extension RealtimeCore {
     let waiters = record.subscribeWaiters
     record.subscribeWaiters = []
     record.timedOutJoinRef = nil
-    channels[channel] = record
+    channels.setRecord(record, for: channel)
 
     var effects: [Effect] = waiters.map { .resume($0, subscribers) }
     effects += failPendingPushes(channel, with: pushes)
@@ -307,7 +309,7 @@ extension RealtimeCore {
 
   /// Ends the streams of `channel` and forgets its record.
   private mutating func dropChannel(_ channel: ChannelID) -> [Effect] {
-    channels[channel] = nil
+    channels.setRecord(nil, for: channel)
     return [.finishChannel(channel)]
   }
 
