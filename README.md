@@ -56,7 +56,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "2.0.0"
+            from: "3.0.0-alpha.1"
         ),
     ],
     targets: [
@@ -132,11 +132,16 @@ var body: some View {
 ```
 
 Send every auth link that opens your app to `handleRedirect`. It handles OAuth callbacks,
-magic links, and password-reset links, and it is safe to call twice with the same URL:
+magic links, and password-reset links, and it is safe to call twice with the same URL. A
+password-reset link signs the user in, so check the result to show an "update password" screen:
 
 ```swift
 .onOpenURL { url in
-    Task { try await client.handleRedirect(url) }
+    Task {
+        if case .signedIn(_, verification: .recovery)? = try await client.handleRedirect(url) {
+            isPasswordRecovery = true
+        }
+    }
 }
 ```
 
