@@ -13,6 +13,40 @@
   ///   the keychain-access-groups entitlement. Unsigned tools and test bundles get
   ///   ``AuthError/Kind-swift.struct/storageMisconfigured``; use ``InMemoryAuthStorage`` there.
   ///
+  /// ## Upgrading from an earlier SDK version
+  ///
+  /// A session an earlier version wrote is found in place: the default service is unchanged.
+  /// The first write moves the item to the new accessibility with an in-place update, so the item
+  /// is never missing. On macOS, an item in the legacy file-based Keychain moves to the
+  /// data-protection Keychain on the first load.
+  ///
+  /// ## Choosing other settings
+  ///
+  /// - To keep the session when a backup is restored to a new device, pass
+  ///   `accessibility: .afterFirstUnlock`.
+  /// - For a command-line tool that cannot be signed with the keychain-access-groups
+  ///   entitlement, pass `useDataProtectionKeychain: false`.
+  /// - To ask for Face ID or Touch ID before the app uses the session, gate your app's UI with
+  ///   `LAContext.evaluatePolicy(_:localizedReason:)`. The storage does not gate Keychain reads
+  ///   on biometrics, because background refresh must read the session without the user.
+  ///
+  /// ## Signing out after a reinstall
+  ///
+  /// Keychain items survive when the user deletes the app, so a user who reinstalls it is still
+  /// signed in. To sign out instead, keep a first-launch flag in your app's `UserDefaults`, which
+  /// the system deletes with the app, and sign out when the flag is missing:
+  ///
+  /// ```swift
+  /// if !UserDefaults.standard.bool(forKey: "hasLaunchedBefore") {
+  ///   try? await supabase.auth.signOut()
+  ///   UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+  /// }
+  /// ```
+  ///
+  /// Run it in the main app only. An app extension has its own `UserDefaults`, so the check
+  /// there would sign out the session the app shares with it. Shipping the check in an update
+  /// signs out every existing user once, because none of them has the flag yet.
+  ///
   /// ## Errors
   ///
   /// Every operation throws ``AuthError`` with kind

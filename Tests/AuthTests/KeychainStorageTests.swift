@@ -24,6 +24,17 @@
     }
 
     @Test
+    func clientDefaultStaysOnThisDeviceInTheFileBasedKeychain() throws {
+      let storage = try #require(AuthPlatform.defaultStorage as? KeychainStorage)
+      let keychain = try #require(storage.keychain as? Keychain)
+
+      #expect(keychain.service == "supabase.gotrue.swift")
+      #expect(keychain.accessibility == .afterFirstUnlockThisDeviceOnly)
+      #expect(!keychain.useDataProtectionKeychain)
+      #expect(storage.legacyKeychains.isEmpty)
+    }
+
+    @Test
     func parametersReachTheQuery() throws {
       let storage = KeychainStorage(
         service: "custom",
