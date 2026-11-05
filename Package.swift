@@ -86,7 +86,6 @@ let package = Package(
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Auth",
         "Helpers",
-        "Mocker",
         "TestHelpers",
       ],
       exclude: [

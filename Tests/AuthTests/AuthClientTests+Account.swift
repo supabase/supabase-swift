@@ -3,7 +3,6 @@ import CustomDump
 import Foundation
 import Helpers
 import InlineSnapshotTesting
-import Mocker
 import TestHelpers
 import Testing
 
@@ -20,12 +19,7 @@ import Testing
 extension AuthClientTests {
   @Test
   func updateUser() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [.put: MockData.user]
-    )
-    .snapshotRequest {
+    transport.stub(.put, "user", data: MockData.user) {
       #"""
       curl \
       	--request PUT \
@@ -39,7 +33,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/user"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -58,13 +51,7 @@ extension AuthClientTests {
 
   @Test
   func resetPassword() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("recover"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "recover") {
       #"""
       curl \
       	--request POST \
@@ -77,7 +64,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/recover?redirect_to=https://supabase.com"
       """#
     }
-    .register()
 
     let sut = makeSUT()
     try await sut.resetPassword(
@@ -89,18 +75,8 @@ extension AuthClientTests {
 
   @Test
   func pkceExchangeAfterResetPasswordEmitsPasswordRecovery() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("recover"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    ).register()
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "recover")
+    transport.stub(.post, "token", data: MockData.session)
     let sut = makeSUT()
 
     try await sut.resetPassword(email: "example@mail.com")
@@ -114,12 +90,7 @@ extension AuthClientTests {
 
   @Test
   func pkceExchangeOfASignInFlowEmitsSignedIn() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "token", data: MockData.session)
     let sut = makeSUT()
     _ = try await sut.dependencies.flowStore.start(purpose: .recovery, redirectTo: nil)
     let signIn = try await sut.dependencies.flowStore.start(purpose: .signIn, redirectTo: nil)
@@ -133,12 +104,7 @@ extension AuthClientTests {
 
   @Test
   func pkceExchangeOfAnEmailChangeForTheSignedInUserEmitsUserUpdated() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: MockData.session]
-    ).register()
+    transport.stub(.post, "token", data: MockData.session)
     let sut = makeSUT()
     let held = try AuthClient.Configuration.jsonDecoder.decode(
       Session.self, from: MockData.session
@@ -155,18 +121,8 @@ extension AuthClientTests {
 
   @Test
   func emailChangeRequestsStoreAnEmailChangeFlow() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.put: MockData.user]
-    ).register()
-    Mock(
-      url: clientURL.appendingPathComponent("resend"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    ).register()
+    transport.stub(.put, "user", data: MockData.user)
+    transport.stub(.post, "resend")
     let sut = makeSUT()
     try await sut.seedSession(.valid)
     let flows = sut.dependencies.flowStore
@@ -183,13 +139,7 @@ extension AuthClientTests {
 
   @Test
   func resendEmail() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("resend"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "resend") {
       #"""
       curl \
       	--request POST \
@@ -202,7 +152,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/resend?redirect_to=https://supabase.com"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -216,13 +165,7 @@ extension AuthClientTests {
 
   @Test
   func resendEmailImplicitFlow() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("resend"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "resend") {
       #"""
       curl \
       	--request POST \
@@ -235,7 +178,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/resend?redirect_to=https://supabase.com"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -249,13 +191,7 @@ extension AuthClientTests {
 
   @Test
   func resendPhone() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("resend"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data(#"{"message_id": "12345"}"#.utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "resend", data: Data(#"{"message_id": "12345"}"#.utf8)) {
       #"""
       curl \
       	--request POST \
@@ -268,7 +204,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/resend"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -285,12 +220,7 @@ extension AuthClientTests {
   func deleteUser() async throws {
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(id)"),
-      statusCode: 204,
-      data: [.delete: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.delete, "admin/users/\(id)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -304,9 +234,8 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
       """#
     }
-    .register()
 
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
     try await sut.deleteUser(id: id)
   }
 
@@ -314,33 +243,28 @@ extension AuthClientTests {
   func adminListPasskeysReturnsItems() async throws {
     let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(userId)/passkeys"),
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          [
-            {
-              "id": "11111111-1111-1111-1111-111111111111",
-              "friendly_name": "Work Laptop",
-              "created_at": "2024-01-15T10:00:00.000Z",
-              "last_used_at": "2024-02-01T08:30:00.000Z"
-            },
-            {
-              "id": "22222222-2222-2222-2222-222222222222",
-              "friendly_name": null,
-              "created_at": "2024-01-16T10:00:00.000Z",
-              "last_used_at": null
-            }
-          ]
-          """.utf8
-        )
-      ]
-    )
-    .register()
+    transport.stub(
+      .get, "admin/users/\(userId)/passkeys",
+      data: Data(
+        """
+        [
+          {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "friendly_name": "Work Laptop",
+            "created_at": "2024-01-15T10:00:00.000Z",
+            "last_used_at": "2024-02-01T08:30:00.000Z"
+          },
+          {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "friendly_name": null,
+            "created_at": "2024-01-16T10:00:00.000Z",
+            "last_used_at": null
+          }
+        ]
+        """.utf8
+      ))
 
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
     let passkeys = try await sut.passkeys.list(forUser: userId)
 
@@ -361,12 +285,7 @@ extension AuthClientTests {
     let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let passkeyId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("admin/users/\(userId)/passkeys/\(passkeyId)"),
-      statusCode: 204,
-      data: [.delete: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.delete, "admin/users/\(userId)/passkeys/\(passkeyId)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -377,20 +296,14 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/admin/users/\#(userId)/passkeys/\#(passkeyId)"
       """#
     }
-    .register()
 
-    let sut = AuthAdminClient.mocked(secretKey: apiKey)
+    let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
     try await sut.passkeys.delete(id: passkeyId, forUser: userId)
   }
 
   @Test
   func reauthenticate() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("reauthenticate"),
-      statusCode: 200,
-      data: [.get: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.get, "reauthenticate") {
       #"""
       curl \
       	--header "Authorization: Bearer accesstoken" \
@@ -400,7 +313,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/reauthenticate"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -412,12 +324,7 @@ extension AuthClientTests {
   @Test
   func unlinkIdentity() async throws {
     let identityId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-    Mock(
-      url: clientURL.appendingPathComponent("user/identities/\(identityId.uuidString)"),
-      statusCode: 204,
-      data: [.delete: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.delete, "user/identities/\(identityId.uuidString)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -428,7 +335,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/user/identities/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -451,11 +357,7 @@ extension AuthClientTests {
   func unlinkIdentityEmitsUserUpdatedWithoutTheIdentity() async throws {
     let identities = try #require(Session.valid.user.identities)
     let unlinked = identities[0]
-    Mock(
-      url: clientURL.appendingPathComponent("user/identities/\(unlinked.id.uuidString)"),
-      statusCode: 200,
-      data: [.delete: Data("{}".utf8)]
-    ).register()
+    transport.stub(.delete, "user/identities/\(unlinked.id.uuidString)", data: Data("{}".utf8))
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -472,11 +374,7 @@ extension AuthClientTests {
   func unlinkIdentityOfAnotherUserEmitsNothing() async throws {
     var identity = try #require(Session.valid.user.identities?.first)
     identity.userID = UUID()
-    Mock(
-      url: clientURL.appendingPathComponent("user/identities/\(identity.id.uuidString)"),
-      statusCode: 200,
-      data: [.delete: Data("{}".utf8)]
-    ).register()
+    transport.stub(.delete, "user/identities/\(identity.id.uuidString)", data: Data("{}".utf8))
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -491,23 +389,19 @@ extension AuthClientTests {
 
   @Test
   func identitiesReturnsEmptyWhenNull() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      statusCode: 200,
-      data: [
-        .get: Data(
-          """
-          {
-            "id": "859f402d-b3de-4105-a1b9-932836d9193b",
-            "aud": "authenticated",
-            "identities": null,
-            "created_at": "2022-04-09T11:23:45.874827Z",
-            "updated_at": "2022-04-09T11:57:01.720803Z"
-          }
-          """.utf8
-        )
-      ]
-    ).register()
+    transport.stub(
+      .get, "user",
+      data: Data(
+        """
+        {
+          "id": "859f402d-b3de-4105-a1b9-932836d9193b",
+          "aud": "authenticated",
+          "identities": null,
+          "created_at": "2022-04-09T11:23:45.874827Z",
+          "updated_at": "2022-04-09T11:57:01.720803Z"
+        }
+        """.utf8
+      ))
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
@@ -546,13 +440,7 @@ extension AuthClientTests {
 
   @Test
   func ssoSignInURLUsingDomain() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("sso"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data(#"{"url":"https://supabase.com"}"#.utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "sso", data: Data(#"{"url":"https://supabase.com"}"#.utf8)) {
       #"""
       curl \
       	--request POST \
@@ -565,7 +453,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/sso"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -582,13 +469,7 @@ extension AuthClientTests {
 
   @Test
   func ssoSignInURLUsingProviderID() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("sso"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data(#"{"url":"https://supabase.com"}"#.utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "sso", data: Data(#"{"url":"https://supabase.com"}"#.utf8)) {
       #"""
       curl \
       	--request POST \
@@ -601,7 +482,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/sso"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -618,27 +498,23 @@ extension AuthClientTests {
 
   @Test
   func mfaEnrollTOTP() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("factors"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "00000000-0000-0000-0000-000000012345",
-            "type": "totp",
-            "friendly_name": "test",
-            "totp": {
-              "qr_code": "<svg />",
-              "secret": "SECRET",
-              "uri": "otpauth://totp/supabase.com:user?secret=SECRET"
-            }
+    transport.stub(
+      .post, "factors",
+      data: Data(
+        """
+        {
+          "id": "00000000-0000-0000-0000-000000012345",
+          "type": "totp",
+          "friendly_name": "test",
+          "totp": {
+            "qr_code": "<svg />",
+            "secret": "SECRET",
+            "uri": "otpauth://totp/supabase.com:user?secret=SECRET"
           }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
+        }
+        """.utf8
+      )
+    ) {
       #"""
       curl \
       	--request POST \
@@ -652,7 +528,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -674,12 +549,9 @@ extension AuthClientTests {
 
   @Test
   func mfaEnrollTOTPWithoutTOTPDataThrowsDecoding() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("factors"),
-      statusCode: 200,
-      data: [.post: Data(#"{"id":"00000000-0000-0000-0000-000000012345","type":"totp"}"#.utf8)]
-    )
-    .register()
+    transport.stub(
+      .post, "factors",
+      data: Data(#"{"id":"00000000-0000-0000-0000-000000012345","type":"totp"}"#.utf8))
 
     let sut = makeSUT()
 
@@ -693,23 +565,19 @@ extension AuthClientTests {
 
   @Test
   func mfaEnrollPhone() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("factors"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "00000000-0000-0000-0000-000000012345",
-            "type": "phone",
-            "friendly_name": "test",
-            "phone": "12029182132"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, "factors",
+      data: Data(
+        """
+        {
+          "id": "00000000-0000-0000-0000-000000012345",
+          "type": "phone",
+          "friendly_name": "test",
+          "phone": "12029182132"
+        }
+        """.utf8
+      )
+    ) {
       #"""
       curl \
       	--request POST \
@@ -723,7 +591,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -745,22 +612,18 @@ extension AuthClientTests {
   func mfaChallenge() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
-            "type": "totp",
-            "expires_at": 12345678
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, "factors/\(factorID)/challenge",
+      data: Data(
+        """
+        {
+          "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
+          "type": "totp",
+          "expires_at": 12345678
+        }
+        """.utf8
+      )
+    ) {
       #"""
       curl \
       	--request POST \
@@ -774,7 +637,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -796,22 +658,18 @@ extension AuthClientTests {
   func mfaChallengeWithPhoneType() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
-            "type": "phone",
-            "expires_at": 12345678
-          }
-          """.utf8
-        )
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, "factors/\(factorID)/challenge",
+      data: Data(
+        """
+        {
+          "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
+          "type": "phone",
+          "expires_at": 12345678
+        }
+        """.utf8
+      )
+    ) {
       #"""
       curl \
       	--request POST \
@@ -825,7 +683,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/challenge"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
@@ -847,30 +704,25 @@ extension AuthClientTests {
   func mfaChallengeWebAuthnReturnsCredentialOptions() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/challenge"),
-      statusCode: 200,
-      data: [
-        .post: Data(
-          """
-          {
-            "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
-            "type": "webauthn",
-            "expires_at": 12345678,
-            "webauthn": {
-              "type": "create",
-              "credential_options": {
-                "challenge": "Y2hhbGxlbmdl",
-                "rp": { "id": "example.com", "name": "Example" },
-                "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
-              }
+    transport.stub(
+      .post, "factors/\(factorID)/challenge",
+      data: Data(
+        """
+        {
+          "id": "e621e1f8-c36c-495a-93fc-0c247a3e6e5f",
+          "type": "webauthn",
+          "expires_at": 12345678,
+          "webauthn": {
+            "type": "create",
+            "credential_options": {
+              "challenge": "Y2hhbGxlbmdl",
+              "rp": { "id": "example.com", "name": "Example" },
+              "pubKeyCredParams": [{ "alg": -7, "type": "public-key" }]
             }
           }
-          """.utf8
-        )
-      ]
-    )
-    .register()
+        }
+        """.utf8
+      ))
 
     let sut = makeSUT()
 
@@ -892,12 +744,7 @@ extension AuthClientTests {
   func mfaVerifyReplacesSessionAndEmitsEvent() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
 
-    Mock(
-      url: clientURL.appendingPathComponent("factors/\(factorID)/verify"),
-      statusCode: 200,
-      data: [.post: MockData.session]
-    )
-    .snapshotRequest {
+    transport.stub(.post, "factors/\(factorID)/verify", data: MockData.session) {
       #"""
       curl \
       	--request POST \
@@ -911,7 +758,6 @@ extension AuthClientTests {
       	"http://localhost:54321/auth/v1/factors/00000000-0000-0000-0000-000000000123/verify"
       """#
     }
-    .register()
 
     let sut = makeSUT()
 
