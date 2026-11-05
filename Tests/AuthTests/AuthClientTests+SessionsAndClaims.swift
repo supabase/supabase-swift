@@ -1,9 +1,5 @@
-import ConcurrencyExtras
-import CustomDump
 import Foundation
 import Helpers
-import InlineSnapshotTesting
-import Mocker
 import TestHelpers
 import Testing
 
@@ -13,32 +9,21 @@ import Testing
   import FoundationNetworking
 #endif
 
-#if canImport(AuthenticationServices)
-  import AuthenticationServices
-#endif
-
 extension AuthClientTests {
   @Test
   func removeSessionAndSignoutIfRefreshTokenNotFoundErrorReturned() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("token").appendingQueryItems([
-        URLQueryItem(name: "grant_type", value: "refresh_token")
-      ]),
-      statusCode: 403,
-      data: [
-        .post: Data(
-          """
-          {
-            "error_code": "refresh_token_not_found",
-            "message": "Invalid Refresh Token: Refresh Token Not Found"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .register()
+    transport.stub(
+      .post, "token", query: ["grant_type": "refresh_token"], status: .forbidden,
+      data: Data(
+        """
+        {
+          "error_code": "refresh_token_not_found",
+          "message": "Invalid Refresh Token: Refresh Token Not Found"
+        }
+        """.utf8
+      ))
 
     try await sut.seedSession(.expired)
 
@@ -67,14 +52,9 @@ extension AuthClientTests {
   func refreshToken() async throws {
     let sut = makeSUT()
 
-    Mock(
-      url: clientURL.appendingPathComponent("token").appendingQueryItems([
-        URLQueryItem(name: "grant_type", value: "refresh_token")
-      ]),
-      statusCode: 200,
-      data: [.post: try AuthClient.Configuration.jsonEncoder.encode(Session.valid)]
-    )
-    .register()
+    transport.stub(
+      .post, "token", query: ["grant_type": "refresh_token"],
+      data: try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
 
     try await sut.seedSession(.expired)
 
@@ -96,7 +76,7 @@ extension AuthClientTests {
       header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
       payload: #"{"sub":"1234567890","exp":9999999999,"role":"authenticated"}"#
     )
-    let jwksRequests = try mockJWKS(signer.jwk)
+    try transport.stubJWKS(signer.jwk)
 
     let sut = makeSUT()
 
@@ -104,7 +84,7 @@ extension AuthClientTests {
 
     #expect(result.subject == "1234567890")
     #expect(result.header.kid == "es256-test-kid")
-    #expect(jwksRequests.value == 1)
+    #expect(transport.jwksRequestCount() == 1)
   }
 
   @Test
@@ -114,14 +94,14 @@ extension AuthClientTests {
       header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
       payload: #"{"sub":"1234567890","exp":9999999999}"#
     )
-    let jwksRequests = try mockJWKS(signer.jwk)
+    try transport.stubJWKS(signer.jwk)
 
     let sut = makeSUT()
 
     _ = try await sut.claims(jwt: jwt)
     _ = try await sut.claims(jwt: jwt)
 
-    #expect(jwksRequests.value == 1)
+    #expect(transport.jwksRequestCount() == 1)
   }
 
   @Test
@@ -133,8 +113,7 @@ extension AuthClientTests {
       header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
       payload: #"{"sub":"1234567890","exp":9999999999}"#
     )
-    let firstRequests = try mockJWKS(signer.jwk)
-    let secondRequests = try mockJWKS(signer.jwk, url: otherURL)
+    try transport.stubJWKS(signer.jwk)
 
     let first = makeSUT(storageKey: storageKey)
     let second = makeSUT(url: otherURL, storageKey: storageKey)
@@ -142,8 +121,8 @@ extension AuthClientTests {
     _ = try await first.claims(jwt: jwt)
     _ = try await second.claims(jwt: jwt)
 
-    #expect(firstRequests.value == 1)
-    #expect(secondRequests.value == 1)
+    #expect(transport.jwksRequestCount(host: clientURL.host) == 1)
+    #expect(transport.jwksRequestCount(host: otherURL.host) == 1)
   }
 
   @Test
@@ -153,16 +132,16 @@ extension AuthClientTests {
       header: #"{"alg":"ES256","kid":"rotated-kid","typ":"JWT"}"#,
       payload: #"{"sub":"1234567890","exp":9999999999}"#
     )
-    let jwksRequests = try mockJWKS(signer.jwk)
-    let userRequests = try mockUser()
+    try transport.stubJWKS(signer.jwk)
+    try transport.stubUser()
 
     let sut = makeSUT()
 
     let result = try await sut.claims(jwt: jwt)
 
     #expect(result.subject == "1234567890")
-    #expect(jwksRequests.value == 1)
-    #expect(userRequests.value == 1)
+    #expect(transport.jwksRequestCount() == 1)
+    #expect(transport.userRequestCount == 1)
   }
 
   @Test
@@ -172,8 +151,8 @@ extension AuthClientTests {
       header: #"{"alg":"ES256","kid":"es256-test-kid","typ":"JWT"}"#,
       payload: #"{"sub":"1234567890"}"#
     )
-    let jwksRequests = try mockJWKS(signer.jwk)
-    let userRequests = try mockUser()
+    try transport.stubJWKS(signer.jwk)
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -181,15 +160,15 @@ extension AuthClientTests {
       _ = try await sut.claims(jwt: jwt, options: ClaimsOptions(allowsExpired: true))
     }
     #expect(error?.kind == .jwtVerificationFailed)
-    #expect(jwksRequests.value == 0)
-    #expect(userRequests.value == 0)
+    #expect(transport.jwksRequestCount() == 0)
+    #expect(transport.userRequestCount == 0)
   }
 
   @Test
   func claimsRejectsExpiredUnlessAllowed() async throws {
     let expiredJWT =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6MTUxNjIzOTAyMiwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.aN0HLYHkp7nKZp4xWvBaDqSrCFBxk2tq0KZc4BXGqYs"
-    let userRequests = try mockUser()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -198,7 +177,7 @@ extension AuthClientTests {
     }
     #expect(error?.kind == .jwtVerificationFailed)
     #expect(error?.message == "JWT has expired")
-    #expect(userRequests.value == 0)
+    #expect(transport.userRequestCount == 0)
 
     let result = try await sut.claims(
       jwt: expiredJWT,
@@ -207,28 +186,21 @@ extension AuthClientTests {
 
     #expect(result.subject == "1234567890")
     #expect(result.expiresAt.timeIntervalSince1970 == 1_516_239_022)
-    #expect(userRequests.value == 1)
+    #expect(transport.userRequestCount == 1)
   }
 
   @Test
   func claimsPropagatesRefreshError() async throws {
-    Mock(
-      url: clientURL.appendingPathComponent("token").appendingQueryItems([
-        URLQueryItem(name: "grant_type", value: "refresh_token")
-      ]),
-      statusCode: 400,
-      data: [
-        .post: Data(
-          """
-          {
-            "error_code": "refresh_token_not_found",
-            "message": "Invalid Refresh Token: Refresh Token Not Found"
-          }
-          """.utf8
-        )
-      ]
-    )
-    .register()
+    transport.stub(
+      .post, "token", query: ["grant_type": "refresh_token"], status: .badRequest,
+      data: Data(
+        """
+        {
+          "error_code": "refresh_token_not_found",
+          "message": "Invalid Refresh Token: Refresh Token Not Found"
+        }
+        """.utf8
+      ))
 
     let sut = makeSUT()
     try await sut.seedSession(.expired)
@@ -249,13 +221,13 @@ extension AuthClientTests {
   func claimsFallsBackToUserForHS256() async throws {
     let jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
-    let userRequests = try mockUser()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
     let result = try await sut.claims(jwt: jwt)
 
-    #expect(userRequests.value == 1)
+    #expect(transport.userRequestCount == 1)
     #expect(result.subject == "1234567890")
     #expect(result.issuer == "http://localhost:54321/auth/v1")
     #expect(result.audience == ["authenticated"])
@@ -272,15 +244,7 @@ extension AuthClientTests {
     var session = Session.valid
     session.accessToken = jwt
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
     try await sut.seedSession(session)
@@ -300,13 +264,7 @@ extension AuthClientTests {
         #"{"sub":"1234567890","iss":"http://localhost:54321/auth/v1","aud":"authenticated","exp":9999999999,"iat":1516239022,"role":"authenticated"}"#
     )
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 401,
-      data: [.get: Data()]
-    ).register()
+    transport.stub(.get, "user", status: .unauthorized)
 
     let sut = makeSUT()
 
@@ -343,13 +301,7 @@ extension AuthClientTests {
       k: key.k
     )
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 401,
-      data: [.get: Data()]
-    ).register()
+    transport.stub(.get, "user", status: .unauthorized)
 
     let sut = makeSUT()
 
@@ -386,13 +338,7 @@ extension AuthClientTests {
       k: key.k
     )
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 401,
-      data: [.get: Data()]
-    ).register()
+    transport.stub(.get, "user", status: .unauthorized)
 
     let sut = makeSUT()
 
@@ -418,15 +364,7 @@ extension AuthClientTests {
     )
     let tamperedJWT = "\(parts[0]).\(tamperedPayload).\(parts[2])"
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -445,15 +383,7 @@ extension AuthClientTests {
     let jwt =
       "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.dummysignature"
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -468,15 +398,7 @@ extension AuthClientTests {
     let jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ODc2NTQzMjEiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjU0MzIxL2F1dGgvdjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.YT0NvH-jYKCiN-wrAVcMmTIxZkQ3OtqTVFjJAqGcRuw"
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -508,18 +430,12 @@ extension AuthClientTests {
     let jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.4Adcj0vZKqXRB_mPpDVkWvB3xw7yHYjpzGJLKFQjKEc"
 
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 401,
-      data: [
-        .get: try! AuthClient.Configuration.jsonEncoder.encode([
-          "error": "invalid_token",
-          "error_description": "Invalid JWT",
-        ])
-      ]
-    ).register()
+    transport.stub(
+      .get, "user", status: .unauthorized,
+      data: try AuthClient.Configuration.jsonEncoder.encode([
+        "error": "invalid_token",
+        "error_description": "Invalid JWT",
+      ]))
 
     let sut = makeSUT()
 
@@ -535,15 +451,7 @@ extension AuthClientTests {
     let jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjoiYXV0aGVudGljYXRlZCIsImV4cCI6OTk5OTk5OTk5OSwiaWF0IjoxNTE2MjM5MDIyLCJuYmYiOjE1MTYyMzkwMjIsImp0aSI6InRlc3QtanRpIiwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJwaG9uZSI6IisxMjM0NTY3ODkwIn0.dBYm1Y-TfRjPsxw_gXqHB5zGHSH9hXS0OeFN_wL8HbA"
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -567,15 +475,7 @@ extension AuthClientTests {
     let jwt =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo1NDMyMS9hdXRoL3YxIiwiYXVkIjpbImF1dGhlbnRpY2F0ZWQiLCJzZXJ2aWNlLXJvbGUiXSwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE1MTYyMzkwMjIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.Jz-lHQoR2VsQ_vX8wKyN7mPxT4aU9cF1bYsHqGdWlIk"
 
-    let user = User(fromMockNamed: "user")
-
-    Mock(
-      url: clientURL.appendingPathComponent("user"),
-      ignoreQuery: true,
-      contentType: .json,
-      statusCode: 200,
-      data: [.get: try! AuthClient.Configuration.jsonEncoder.encode(user)]
-    ).register()
+    try transport.stubUser()
 
     let sut = makeSUT()
 
@@ -587,14 +487,7 @@ extension AuthClientTests {
 
   @Test
   func transportFailureIsWrapped() async {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()],
-      requestError: URLError(.notConnectedToInternet)
-    )
-    .register()
+    transport.stub(.post, "token") { _, _ in throw URLError(.notConnectedToInternet) }
 
     let sut = makeSUT()
 
@@ -612,13 +505,8 @@ extension AuthClientTests {
 
   @Test
   func unexpectedResponseBodyIsReported() async {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 502,
-      data: [.post: Data("<html>bad gateway</html>".utf8)]
-    )
-    .register()
+    transport.stub(
+      .post, "token", status: .badGateway, data: Data("<html>bad gateway</html>".utf8))
 
     let sut = makeSUT()
 
@@ -637,13 +525,7 @@ extension AuthClientTests {
 
   @Test
   func undecodableSuccessBodyIsWrapped() async {
-    Mock(
-      url: clientURL.appendingPathComponent("token"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data("not json".utf8)]
-    )
-    .register()
+    transport.stub(.post, "token", data: Data("not json".utf8))
 
     let sut = makeSUT()
 
