@@ -230,7 +230,9 @@ supabase stop
 Tests run on:
 
 - macOS (iOS, macOS, Mac Catalyst, tvOS, watchOS, visionOS simulators)
-- Linux (build only, not fully supported)
+- Linux (build and unit tests, including the Auth suite; not fully supported)
+- Android and Windows are best-effort: CI has no runner for either, so the package is not
+  build-checked there
 - Multiple Xcode versions (latest and legacy)
 
 ### Code Coverage

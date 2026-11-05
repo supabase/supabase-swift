@@ -4,7 +4,8 @@ public import Foundation
 /// An ``AuthStorage`` that keeps values in memory only.
 ///
 /// Values are lost when the process ends. Use it in tests, in command-line tools that are not
-/// signed for Keychain access, and in apps that must not persist a session.
+/// signed for Keychain access, and in apps that must not persist a session. It is the default
+/// storage on Linux, Android, and Windows.
 ///
 /// Copies of an instance share the same values.
 public struct InMemoryAuthStorage: AuthStorage {

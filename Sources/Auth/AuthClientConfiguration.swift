@@ -47,7 +47,9 @@ extension AuthClient {
 
     /// Where the client persists the session and its pending flows. Defaults to
     /// ``KeychainStorage`` on Apple platforms, with the session kept on this device and, on macOS,
-    /// in the file-based Keychain. Defaults to ``InMemoryAuthStorage`` elsewhere.
+    /// in the file-based Keychain. Defaults to ``InMemoryAuthStorage`` elsewhere, on Linux,
+    /// Android, and Windows, so the user signs in again after the process restarts. Pass an
+    /// ``AuthStorage`` that keeps the session, such as a file or the Android Keystore, to avoid it.
     public var storage: any AuthStorage
 
     /// The key the client stores the session under. Clients that share a ``storage`` need
