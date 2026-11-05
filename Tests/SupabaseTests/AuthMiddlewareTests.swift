@@ -187,7 +187,7 @@ struct AuthMiddlewareTests {
 
     await #expect(throws: PostgrestError.self) {
       try await client.from("todos").select()
-        .setHeader(name: "Authorization", value: "Bearer per-call").execute()
+        .settingHeader(name: .authorization, value: "Bearer per-call").execute()
     }
 
     #expect(dataAuthorizations("/rest/v1/todos") == ["Bearer per-call"])

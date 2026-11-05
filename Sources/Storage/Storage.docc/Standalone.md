@@ -40,12 +40,12 @@ such as ``StorageBucket/purgeCache(path:transformationsOnly:)``, need the `secre
 
 ### Extra headers
 
-``StorageClient/setHeader(name:value:)`` and ``StorageBucket/setHeader(name:value:)`` return a
-copy that sends one more header. They do not change the original. Discard the result and the
-call does nothing.
+``StorageClient/settingHeader(name:value:)`` and ``StorageBucket/settingHeader(name:value:)``
+return a copy that sends one more header. They do not change the original. Discard the result
+and the call does nothing.
 
 ```swift
-let traced = storage.setHeader(name: HTTPField.Name("x-trace")!, value: traceID)
+let traced = storage.settingHeader(name: HTTPField.Name("x-trace")!, value: traceID)
 try await traced.from("avatars").upload(path: "a.png", data: data)
 ```
 

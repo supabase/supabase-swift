@@ -219,7 +219,7 @@ struct StorageClientTests {
   }
 
   @Test
-  func setHeader_setsHeaderOnRequest() async throws {
+  func settingHeader_setsHeaderOnRequest() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
     let sut = makeSUT(fetch: { request in
       capturedRequest.setValue(request)
@@ -246,7 +246,7 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader(name: .init("X-Custom-Header")!, value: "custom-value")
+      .settingHeader(name: .init("X-Custom-Header")!, value: "custom-value")
       .list()
 
     #expect(
@@ -254,7 +254,7 @@ struct StorageClientTests {
   }
 
   @Test
-  func setHeader_supportsMethodChaining() async throws {
+  func settingHeader_supportsMethodChaining() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
     let sut = makeSUT(fetch: { request in
       capturedRequest.setValue(request)
@@ -281,8 +281,8 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader(name: .init("X-Header-A")!, value: "value-a")
-      .setHeader(name: .init("X-Header-B")!, value: "value-b")
+      .settingHeader(name: .init("X-Header-A")!, value: "value-a")
+      .settingHeader(name: .init("X-Header-B")!, value: "value-b")
       .list()
 
     #expect(capturedRequest.value?.value(forHTTPHeaderField: "X-Header-A") == "value-a")
@@ -290,7 +290,7 @@ struct StorageClientTests {
   }
 
   @Test
-  func setHeader_overridesExistingHeader() async throws {
+  func settingHeader_overridesExistingHeader() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
     let sut = makeSUT(fetch: { request in
       capturedRequest.setValue(request)
@@ -317,8 +317,8 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader(name: .init("X-Custom-Header")!, value: "initial-value")
-      .setHeader(name: .init("X-Custom-Header")!, value: "updated-value")
+      .settingHeader(name: .init("X-Custom-Header")!, value: "initial-value")
+      .settingHeader(name: .init("X-Custom-Header")!, value: "updated-value")
       .list()
 
     #expect(
@@ -326,7 +326,7 @@ struct StorageClientTests {
   }
 
   @Test
-  func setHeader_doesNotMutateParentClientHeaders() async throws {
+  func settingHeader_doesNotMutateParentClientHeaders() async throws {
     let capturedRequests = LockIsolated<[URLRequest]>([])
 
     let listResponse = """
@@ -357,7 +357,7 @@ struct StorageClientTests {
     })
 
     _ = try await sut.from(bucketId)
-      .setHeader(name: .init("X-Child-Header")!, value: "child-value")
+      .settingHeader(name: .init("X-Child-Header")!, value: "child-value")
       .list()
 
     #expect(
@@ -371,7 +371,7 @@ struct StorageClientTests {
   }
 
   @Test
-  func setHeader_onTopLevelClientPropagatesToFileApi() async throws {
+  func settingHeader_onTopLevelClientPropagatesToFileApi() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
     let sut = makeSUT(fetch: { request in
       capturedRequest.setValue(request)
@@ -399,7 +399,7 @@ struct StorageClientTests {
 
     _ =
       try await sut
-      .setHeader(name: .init("X-Client-Header")!, value: "client-value")
+      .settingHeader(name: .init("X-Client-Header")!, value: "client-value")
       .from(bucketId)
       .list()
 

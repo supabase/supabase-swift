@@ -79,7 +79,7 @@ supporting_symbols:
   - PostgrestRequestBuilder.fullTextSearch
   - PostgrestRequestBuilder.phraseToFullTextSearch
   - PostgrestRequestBuilder.plainToFullTextSearch
-  - PostgrestRequestBuilder.setHeader
+  - PostgrestRequestBuilder.settingHeader
   - PostgrestRequestBuilder.webFullTextSearch
   - PostgrestTransformPhase
   - PostgrestTransformablePhase
@@ -1225,8 +1225,8 @@ features:
     status: implemented
     symbols:
       - SupabaseClientOptions.GlobalOptions.headers
-      - StorageClient.setHeader
-      - StorageBucket.setHeader
+      - StorageClient.settingHeader
+      - StorageBucket.settingHeader
 
   client.observability.trace_propagation:
     status: implemented

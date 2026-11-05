@@ -281,13 +281,13 @@ struct StorageClientIntegrationTests {
   }
 
   @Test
-  func setHeaderReturnsAClientThatSendsIt() async throws {
+  func settingHeaderReturnsAClientThatSendsIt() async throws {
     let name = try await StorageIntegration.newBucket("header")
     defer { StorageIntegration.dropBucket(name) }
     try await StorageIntegration.admin.from(name).upload(path: "seed.txt", data: Data("seed".utf8))
 
     let anon = StorageIntegration.client(headers: [.init("apikey")!: DotEnv.supabasePublishableKey])
-    let elevated = anon.setHeader(
+    let elevated = anon.settingHeader(
       name: .authorization, value: "Bearer \(DotEnv.supabaseSecretKey)")
 
     #expect(try await elevated.from(name).list().map(\.name) == ["seed.txt"])

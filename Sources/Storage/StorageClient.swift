@@ -133,7 +133,7 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(name:value:)``
+/// - ``settingHeader(name:value:)``
 ///
 /// ### Accessing buckets
 ///
@@ -181,7 +181,8 @@ public struct StorageClient: Sendable {
   /// the result:
   ///
   /// ```swift
-  /// let storage = client.storage.setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
+  /// let storage = client.storage.settingHeader(
+  ///   name: .init("X-Custom-Header")!, value: "x-custom-header")
   /// ```
   ///
   /// - Parameters:
@@ -189,8 +190,8 @@ public struct StorageClient: Sendable {
   ///   - value: The value of the header field.
   /// - Returns: A new ``StorageClient`` with the header merged into the configuration's
   ///   headers.
-  public func setHeader(name: HTTPField.Name, value: String) -> Self {
-    StorageClient(api: api.setHeader(name: name, value: value))
+  public func settingHeader(name: HTTPField.Name, value: String) -> Self {
+    StorageClient(api: api.settingHeader(name: name, value: value))
   }
 
   /// Returns a ``StorageBucket`` scoped to the given bucket.

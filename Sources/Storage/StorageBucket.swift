@@ -65,7 +65,7 @@ public import HTTPTypes
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(name:value:)``
+/// - ``settingHeader(name:value:)``
 ///
 /// ### Configuration
 ///
@@ -92,7 +92,7 @@ public struct StorageBucket: Sendable {
   ///
   /// ```swift
   /// storage.from("avatars")
-  ///   .setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
+  ///   .settingHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
   ///   .list()
   /// ```
   ///
@@ -100,8 +100,8 @@ public struct StorageBucket: Sendable {
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: A new ``StorageBucket`` with the header merged into the configuration's headers.
-  public func setHeader(name: HTTPField.Name, value: String) -> Self {
-    StorageBucket(id: id, api: api.setHeader(name: name, value: value))
+  public func settingHeader(name: HTTPField.Name, value: String) -> Self {
+    StorageBucket(id: id, api: api.settingHeader(name: name, value: value))
   }
 
   private struct SignedURLAPIResponse: Decodable {

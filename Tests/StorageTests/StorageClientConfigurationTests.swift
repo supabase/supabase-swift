@@ -107,14 +107,14 @@ struct StorageClientConfigurationTests {
   }
 
   @Test
-  func setHeaderMergesWithoutRebuildingTheClient() async throws {
+  func settingHeaderMergesWithoutRebuildingTheClient() async throws {
     let storage = StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "https://project.supabase.co/storage/v1")!,
         headers: [.xClientInfo: "custom/1"],
         usesNewHostname: true
       )
-    ).setHeader(name: .init("X-Custom")!, value: "value")
+    ).settingHeader(name: .init("X-Custom")!, value: "value")
 
     #expect(
       storage.configuration.url.absoluteString == "https://project.storage.supabase.co/storage/v1")

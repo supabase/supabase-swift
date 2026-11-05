@@ -31,7 +31,7 @@ extension PostgrestMockerTests {
     func customHeaderOnAPerCallBasis() throws {
       let url = URL(string: "http://localhost:54321/rest/v1")!
       let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"])
-      let postgrest2 = try postgrest1.rpc("void_func").setHeader(
+      let postgrest2 = try postgrest1.rpc("void_func").settingHeader(
         name: .init("apikey")!, value: "bar")
 
       #expect(
@@ -375,10 +375,10 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func setHeader() {
+    func settingHeader() {
       let query = sut.from("users")
         .select()
-        .setHeader(name: "key", value: "value")
+        .settingHeader(name: .init("key")!, value: "value")
 
       #expect(query.request.headerFields[.init("key")!] == "value")
     }
