@@ -1711,7 +1711,10 @@ features:
     status: implemented
     no_public_symbols: true
     note: "Always on: the client only speaks protocol 2.0.0 (vsn=2.0.0), so there is no option to select it. Protocol 1.0.0 was removed in v3."
-  realtime.configuration.reconnect_backoff: not_implemented
+  realtime.configuration.reconnect_backoff:
+    status: implemented
+    no_public_symbols: true
+    note: "Always on: reconnects wait a full-jitter delay (1 s base, 30 s cap) with unlimited attempts, and a network-path hint cuts a wait short. The curve is internal and not configurable; there is no public option to change it."
 
   # ── Storage ────────────────────────────────────────────────────────────────
 
