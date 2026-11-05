@@ -114,13 +114,21 @@ struct SupabaseTypegenOutputTests {
         == ["channel_slug": "public", "max_count": 1])
   }
 
+  /// A generated call is a `rpc(_:)` call, so `readOnly()` moves its arguments into the query.
   @Test
-  func generatedFunctionReturningARowFindsNone() async throws {
-    let (client, _) = recordingClient(
-      body: #"{"id":null,"channel_id":null,"data":null,"message":null,"username":null}"#)
-    let message = try await client.rpc.messageById(messageId: 99).execute().value
+  func generatedFunctionCallCanBeReadOnly() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.searchMessages(query: "hello", channelId: 1)
+      .readOnly()
+      .where { $0.channelId.eq(1) }
+      .execute()
 
-    #expect(message == nil)
+    let request = try #require(transport.requests.first)
+    #expect(request.head.method == .get)
+    #expect(request.body == nil)
+    #expect(
+      request.head.path?.removingPercentEncoding
+        == "/rpc/search_messages?channel_id=1&query=hello&channel_id=eq.1")
   }
 
   @Test

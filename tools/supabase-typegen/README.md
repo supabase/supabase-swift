@@ -68,22 +68,26 @@ that returns `void`, `record`, a set of scalars, or a row type the generator doe
 skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
 
 Function calls come from `rpcFunctions`, which postgrest-typegen 0.5.0 and later resolve from
-`functions` the way PostgREST does. Each callable overload becomes one method in an
-`extension _PostgrestRpc`, called as `client.rpc.searchBooks(query: "dune")`. Overloads share the
-method name and differ in their argument labels, which is how PostgREST tells them apart too; an
-overload that would repeat another method's labels and types is numbered, with a note. A function
-outside `public` carries its schema as a prefix, `inventoryRestock(amount:)`, and is called in that
-schema. A defaulted parameter is optional and left out when `nil`, so the function's default applies.
+`functions` the way PostgREST does. Each callable overload becomes two declarations: a `@Function`
+struct that holds the arguments, named `<Function>Function`, and a method in an
+`extension _PostgrestFunctions` that builds the struct and calls it. The call reads
+`client.rpc.searchBooks(query: "dune")`, and because the method goes through the typed `rpc(_:)`,
+`.readOnly()`, `.where`, `.order` and the rest of the typed query API apply. Overloads share the
+method name and differ in their argument labels, which is how PostgREST tells them apart too; each
+gets a struct of its own, and a struct name that would repeat another type's is numbered, with a
+note, as is a method that would repeat another method's labels and types. A function outside
+`public` carries its schema as a prefix, `inventoryRestock(amount:)`, and is called in that
+schema. A defaulted parameter is optional and left out when `nil`, so the function's default
+applies.
 
-The return type picks the entry point:
+The return type decides the struct's `Result`:
 
-| Postgres result | Swift |
-| --------------- | ----- |
-| `SETOF` a generated relation | `_PostgrestQuery<Relation, [Relation]>`, filterable through its columns |
-| a row of a generated relation | `_PostgrestFunctionCall<Relation?>`, `nil` when the function finds none |
-| `RETURNS TABLE` or `OUT` parameters | a read-only `@Table` struct named `<Function>Row`, filterable through its columns |
-| a scalar, an array, or a set of scalars | `_PostgrestFunctionCall<T?>`, or `<[T?]>` for a set |
-| `void` | `_PostgrestFunctionCall<Void>` |
+| Postgres result | `Result` |
+| --------------- | -------- |
+| `SETOF` a generated relation | `[Relation]`, filterable through its columns |
+| `RETURNS TABLE` or `OUT` parameters | `[<Function>Row]`, a read-only `@Table` struct, filterable through its columns |
+| a scalar, an array, or a set of scalars | `T?`, or `[T?]` for a set |
+| `void` | none, so `Void` |
 
 A `<Function>Row` struct names the function as its relation, so `client.from(_:)` accepts it but
 sends a request for a relation that does not exist: reach its rows through the function's method.
@@ -94,9 +98,12 @@ overload's number follows the document's order of overloads, so adding an overlo
 the ones after it.
 
 A function whose sole parameter is an unnamed `json` or `jsonb` takes the whole body as
-`_ body: JSONValue`. An overload PostgREST cannot resolve, one with another unnamed parameter, one
-that takes a row, and one that returns the rows of a relation the file does not declare get no
-method, only a note on standard error; a computed field is left to its relation's `Columns`
+`_ body: JSONValue`; its struct is written out by hand instead of with `@Function`, because the
+body is not an object. An overload PostgREST cannot resolve, one with another unnamed parameter,
+one that takes a row, one that returns a single row, and one that returns the rows of a relation
+the file does not declare get no method, only a note on standard error. A single row is skipped
+because PostgREST answers a function that finds none with an object whose every field is `null`,
+which a typed call cannot yet decode as `nil`; a computed field is left to its relation's `Columns`
 without a note. A document without `rpcFunctions` still generates, with a note and no function
 calls.
 

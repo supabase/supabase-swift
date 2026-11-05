@@ -111,6 +111,8 @@ struct EmitterTests {
       "function public.conflict(a text) is not generated: \(conflict)",
       "function public.elsewhere_rows() is not generated: "
         + "it returns inventory.books, which is not generated",
+      "function public.report() is not generated: it returns one row, which a typed call "
+        + "cannot yet tell from the all-null row PostgREST answers with when it finds none",
       "function public.takes_row(h row1) is not generated: "
         + "it takes a row of row1, which has no Encodable Swift type",
       "function public.unnamed_text(text) is not generated: it has an unnamed parameter, which "
@@ -159,14 +161,15 @@ struct EmitterTests {
       "function public.UserId is named userIdComputed: "
         + "Columns of public.hostile already has userId",
       "function public.get_things is named getThings2: another member is also named getThings",
+      "function public.my_schema_restock(self int4, in text) arguments is named "
+        + "MySchemaRestockFunction2: another type is also named MySchemaRestockFunction",
+      "function public.pick(userId int4) arguments is named PickFunction2: "
+        + "another type is also named PickFunction",
       "function public.labels(user_id int4, userId int4) parameter userId is named userId2: "
         + "another parameter is also named userId",
-      "public.report.columns is named columnsColumn: @Table reserves columns",
-      "public.report.self is named selfColumn: @Table reserves self",
       "function public.my_schema_restock is named mySchemaRestock2: "
         + "another call is also named mySchemaRestock(self:in:)",
       "function public.pick is named pick2: another call is also named pick(userId:)",
-      "function public.rows is named rowsFunction: _PostgrestRpc already has rows",
     ]
     #expect(result.standardError == notes.map { "supabase-typegen: note: \($0)\n" }.joined())
   }
@@ -285,37 +288,52 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("_PostgrestComputedField<T, OtherMood>"))
   }
 
-  /// One method per callable overload of the integration fixture, each calling the entry point
-  /// its result needs: the rows of a relation or of a `RETURNS TABLE` result, one row, a value,
-  /// or nothing.
+  /// One `@Function` struct and one method per callable overload of the integration fixture. The
+  /// result type decides what the method returns: the rows of a relation or of a `RETURNS TABLE`
+  /// result, a value, or nothing.
   @Test
-  func functionsCallTheEntryPointOfTheirResult() {
+  func functionsGenerateAnArgumentsStructAndACall() {
     let result = run(arguments: []) { Fixture.integration }
     #expect(result.exitCode == 0)
     for expected in [
       """
-        func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestQuery<
-          Messages, [Messages]
+      @Function("search_messages")
+      struct SearchMessagesFunction {
+        typealias Result = [Messages]
+        var query: String
+        var channelId: Int? = nil
+      }
+      """,
+      """
+        func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestFunctionQuery<
+          [Messages]
         > {
-          try self.rows("search_messages", arguments: ["query": query, "channel_id": channelId])
+          try call(SearchMessagesFunction(query: query, channelId: channelId))
+        }
+      """,
+      "  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {",
+      "  func getStatus(nameParam: String) throws -> _PostgrestFunctionQuery<String?> {",
+      """
+      @Function("void_func")
+      struct VoidFuncFunction {
+      }
+      """,
+      """
+        func voidFunc() throws -> _PostgrestFunctionQuery<Void> {
+          try call(VoidFuncFunction())
         }
       """,
       """
-        func messageById(messageId: Int) throws -> _PostgrestFunctionCall<Messages?> {
-          try self.row("message_by_id", arguments: ["message_id": messageId])
+      struct EchoFunction: _PostgrestFunction {
+        static var functionName: String {
+          "echo"
         }
-      """,
-      "  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionCall<[Int?]> {",
-      "  func getStatus(nameParam: String) throws -> _PostgrestFunctionCall<String?> {",
-      """
-        func voidFunc() throws -> _PostgrestFunctionCall<Void> {
-          try self.perform("void_func")
+        typealias Result = JSONValue?
+        var body: JSONValue
+        func encode(to encoder: any Encoder) throws {
+          try body.encode(to: encoder)
         }
-      """,
-      """
-        func echo(_ body: JSONValue) throws -> _PostgrestFunctionCall<JSONValue?> {
-          try self.value("echo", arguments: _PostgrestArguments(body))
-        }
+      }
       """,
       """
       @Table("get_username_and_status", readOnly: true)
@@ -327,6 +345,17 @@ struct EmitterTests {
     ] {
       #expect(result.standardOutput.contains(expected), "\(expected)")
     }
+  }
+
+  /// A function that returns one row is left out with a note: PostgREST answers one that finds no
+  /// row with an object whose every field is `null`, which a typed call cannot yet decode as `nil`.
+  @Test
+  func aFunctionReturningOneRowGetsNoCall() {
+    let result = run(arguments: []) { Fixture.integration }
+    #expect(!result.standardOutput.contains("messageById"))
+    #expect(
+      result.standardError.contains(
+        "function public.message_by_id(message_id int4) is not generated: it returns one row"))
   }
 
   /// Overloads PostgREST tells apart by argument names are Swift overloads told apart by labels.
@@ -350,8 +379,16 @@ struct EmitterTests {
     #expect(
       result.standardOutput.contains(
         """
-          public func dateToday() throws -> _PostgrestFunctionCall<Date?> {
-            try self.value("today", schema: DateSchema.self)
+        @Function("today", schema: DateSchema.self)
+        public struct DateTodayFunction {
+          public typealias Result = Date?
+        }
+        """))
+    #expect(
+      result.standardOutput.contains(
+        """
+          public func dateToday() throws -> _PostgrestFunctionQuery<Date?> {
+            try call(DateTodayFunction())
           }
         """))
     #expect(!result.standardOutput.contains("inventoryRestock"))
@@ -365,7 +402,7 @@ struct EmitterTests {
     }
     let result = run(arguments: []) { input }
     #expect(result.exitCode == 0)
-    #expect(!result.standardOutput.contains("_PostgrestRpc"))
+    #expect(!result.standardOutput.contains("_PostgrestFunctions"))
     #expect(
       result.standardError.contains(
         "supabase-typegen: note: the document has no rpcFunctions, so no function calls are "
@@ -418,14 +455,15 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("enum Mood: String,"))
     #expect(
       result.standardOutput.contains(
-        "func moodAt(at: Date) throws -> _PostgrestFunctionCall<Mood?> {"))
+        "func moodAt(at: Date) throws -> _PostgrestFunctionQuery<Mood?> {"))
   }
 
   /// Under `--access-control public` every method of the extension is `public`.
   @Test
   func functionsFollowTheAccessControl() {
     let result = run(arguments: ["--access-control", "public"]) { Fixture.integration }
-    #expect(result.standardOutput.contains("extension _PostgrestRpc {\n  public func"))
+    #expect(result.standardOutput.contains("extension _PostgrestFunctions {\n  public func"))
+    #expect(result.standardOutput.contains("public struct SearchMessagesFunction {"))
     #expect(!result.standardOutput.contains("\n  func voidFunc"))
   }
 

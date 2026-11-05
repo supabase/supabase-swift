@@ -26,8 +26,8 @@ struct FilePlan {
   /// The row types of the functions that return `RETURNS TABLE` or `OUT` parameter rows, in the
   /// order of ``functions``.
   var functionResults: [RelationPlan] = []
-  /// The methods of the `_PostgrestRpc` extension: one per callable overload, by schema, then
-  /// name.
+  /// The arguments struct and the `_PostgrestFunctions` method of each callable overload, by
+  /// schema, then name.
   var functions: [FunctionPlan] = []
   /// One line each, for standard error: renames and types not mapped.
   var notes: [String] = []
@@ -76,8 +76,10 @@ struct FilePlan {
   }
 
   struct FunctionPlan {
-    /// As spelled in source, backticks included.
+    /// The method's name, as spelled in source, backticks included.
     var name: String
+    /// The `@Function` struct that holds the arguments.
+    var typeName: String
     /// The function's name, which PostgREST addresses it by.
     var function: String
     /// The ``SchemaPlan/typeName`` of the function's schema, or `nil` for `public`.
@@ -89,8 +91,8 @@ struct FilePlan {
     enum Result {
       /// The rows of a relation or a function result type, filterable through its columns.
       case rows(String)
-      /// One row, or `nil` when the function finds none.
-      case row(String)
+      /// A scalar, an array or a set of scalars, optional because PostgREST answers `null` for a
+      /// scalar function that finds nothing.
       case value(SwiftType)
       case nothing
     }
@@ -100,7 +102,8 @@ struct FilePlan {
     /// The argument label, backticks included, or `nil` for the whole body of a function whose
     /// sole parameter is an unnamed `json` or `jsonb`.
     var label: String?
-    /// The name the method body reads the value by, when it differs from ``label``.
+    /// The name the struct property and the method body read the value by, when it differs from
+    /// ``label``. A label of `self` cannot name a property.
     var internalName: String?
     /// The Postgres parameter name.
     var argument: String
@@ -247,6 +250,9 @@ extension FilePlan {
 
     var resultTypeNames = typeNames.dropFirst(model.relations.count + enumTypes.count)
       .makeIterator()
+    var argumentTypeNames = argumentsTypeNames(
+      of: callables, avoiding: Set(owners.keys).union(typeNames)
+    ).makeIterator()
     for callable in callables {
       var resultTypeName: String?
       if callable.returnsResultRows, let typeName = resultTypeNames.next() {
@@ -275,10 +281,35 @@ extension FilePlan {
       }
       functions.append(
         functionPlan(
-          callable, resultTypeName: resultTypeName, relationTypeNames: relationTypeNames,
-          enumTypeNames: enumTypeNames, schemaTypeNames: schemaTypeNames))
+          callable, typeName: argumentTypeNames.next() ?? "", resultTypeName: resultTypeName,
+          relationTypeNames: relationTypeNames, enumTypeNames: enumTypeNames,
+          schemaTypeNames: schemaTypeNames))
     }
     nameFunctions()
+  }
+
+  /// The name of each overload's arguments struct.
+  ///
+  /// Unlike a relation, an arguments struct is an implementation detail of its method, so two that
+  /// would share a name are numbered even across schemas, and so is one that would take the name
+  /// of a relation or an enum.
+  private mutating func argumentsTypeNames(
+    of callables: [Callable], avoiding taken: Set<String>
+  ) -> [String] {
+    var taken = taken
+    return callables.map { callable in
+      let name = callable.function.name
+      let prefix = name.schema == "public" ? "" : name.schema + "_"
+      let base = Naming.typeName(prefix + name.name + "_function")
+      guard taken.insert(base).inserted else {
+        let numbered = Self.numbered(base, avoiding: taken)
+        taken.insert(numbered)
+        notes.append(
+          "\(callable.label) arguments is named \(numbered): another type is also named \(base)")
+        return numbered
+      }
+      return base
+    }
   }
 
   /// One overload the generator writes a method for.
@@ -332,6 +363,11 @@ extension FilePlan {
           } else if !isBody && overload.arguments.contains(where: \.name.isEmpty) {
             "it has an unnamed parameter, which PostgREST only passes as the whole body of a "
               + "function whose sole parameter is json or jsonb"
+          } else if !overload.isSetReturning
+            && (overload.returnsRelationRows || overload.columns != nil)
+          {
+            "it returns one row, which a typed call cannot yet tell from the all-null row "
+              + "PostgREST answers with when it finds none"
           } else if overload.returnsRelationRows,
             overload.returnRelation.map(generated.contains) != true
           {
@@ -355,6 +391,7 @@ extension FilePlan {
 
   private mutating func functionPlan(
     _ callable: Callable,
+    typeName: String,
     resultTypeName: String?,
     relationTypeNames: [QualifiedName: String],
     enumTypeNames: [Int: String],
@@ -371,11 +408,11 @@ extension FilePlan {
 
     let result: FunctionPlan.Result
     if let resultTypeName {
-      result = overload.isSetReturning ? .rows(resultTypeName) : .row(resultTypeName)
+      result = .rows(resultTypeName)
     } else if overload.returnsRelationRows, let target = overload.returnRelation,
-      let typeName = relationTypeNames[target]
+      let relationTypeName = relationTypeNames[target]
     {
-      result = overload.isSetReturning ? .rows(typeName) : .row(typeName)
+      result = .rows(relationTypeName)
     } else if overload.returnType?.name == QualifiedName(schema: "pg_catalog", name: "void") {
       result = .nothing
     } else {
@@ -396,7 +433,7 @@ extension FilePlan {
       let labels = numberRepeats(
         in: ordered.map { Naming.propertyName($0.name) }, avoiding: [], kind: "parameter",
         labels: ordered.map { "\(callable.label) parameter \($0.name)" })
-      // `self` as a parameter would hide the `_PostgrestRpc` the method calls through.
+      // `self` cannot name a struct property, so it keeps its label and gets another name inside.
       let selfName =
         labels.contains("selfArgument")
         ? Self.numbered("selfArgument", avoiding: Set(labels)) : "selfArgument"
@@ -413,7 +450,8 @@ extension FilePlan {
     }
 
     return FunctionPlan(
-      name: "", function: name.name, schemaTypeName: schemaTypeNames[name.schema],
+      name: "", typeName: typeName, function: name.name,
+      schemaTypeName: schemaTypeNames[name.schema],
       parameters: parameters, result: result)
   }
 
@@ -433,7 +471,8 @@ extension FilePlan {
       let bare = Naming.unescaped(name)
       if Naming.rpcMembers.contains(bare) {
         name = Naming.identifier(bare + "Function")
-        notes.append("function \(qualified) is named \(name): _PostgrestRpc already has \(bare)")
+        notes.append(
+          "function \(qualified) is named \(name): _PostgrestFunctions already has \(bare)")
       }
       func signature(_ name: String) -> String {
         let labels = plan.parameters.map { "\(Naming.unescaped($0.label ?? "_")):" }.joined()
@@ -797,8 +836,13 @@ extension FilePlan {
         }
       }
 
+      for function in functions {
+        try functionStruct(function, access: access)
+          .with(\.leadingTrivia, .newlines(2))
+      }
+
       if !functions.isEmpty {
-        try ExtensionDeclSyntax("extension _PostgrestRpc") {
+        try ExtensionDeclSyntax("extension _PostgrestFunctions") {
           for (index, function) in functions.enumerated() {
             MemberBlockItemSyntax(
               leadingTrivia: index == 0 ? .newline : .newlines(2),
@@ -819,7 +863,75 @@ extension FilePlan {
     return output
   }
 
-  /// A method that calls the function through the `_PostgrestRpc` entry point its result needs.
+  /// The Swift spelling of what the function's call returns once executed.
+  private func resultType(of function: FunctionPlan) -> String? {
+    switch function.result {
+    case .rows(let row): "[\(row)]"
+    case .value(let type): type.syntax.description
+    case .nothing: nil
+    }
+  }
+
+  /// The struct that holds a function's arguments, which `rpc(_:)` encodes as the request body.
+  ///
+  /// `@Function` writes the conformance. A function whose sole parameter is an unnamed `json` or
+  /// `jsonb` takes the whole body instead of an object, so its conformance is written out.
+  private func functionStruct(_ function: FunctionPlan, access: DeclModifierListSyntax) throws
+    -> StructDeclSyntax
+  {
+    let typeName = TokenSyntax.identifier(function.typeName)
+    let result = resultType(of: function).map { "\(access) typealias Result = \($0)" }
+    if function.parameters.count == 1, function.parameters[0].label == nil {
+      let schema = function.schemaTypeName.map { "typealias Schema = \($0)" }
+      return StructDeclSyntax(
+        modifiers: access,
+        name: typeName,
+        inheritanceClause: InheritanceClauseSyntax {
+          InheritedTypeSyntax(type: TypeSyntax("_PostgrestFunction"))
+        }
+      ) {
+        DeclSyntax(
+          "\(access) static var functionName: String { \(StringLiteralExprSyntax(content: function.function)) }"
+        )
+        if let schema { DeclSyntax("\(access) \(raw: schema)") }
+        if let result { DeclSyntax("\(raw: result)") }
+        DeclSyntax("var body: \(function.parameters[0].type.syntax)")
+        DeclSyntax(
+          """
+          \(access) func encode(to encoder: any Encoder) throws {
+            try body.encode(to: encoder)
+          }
+          """
+        )
+      }
+    }
+
+    let name = StringLiteralExprSyntax(content: function.function)
+    let attribute: AttributeSyntax =
+      if let schema = function.schemaTypeName {
+        "@Function(\(name), schema: \(TokenSyntax.identifier(schema)).self)"
+      } else {
+        "@Function(\(name))"
+      }
+    return try StructDeclSyntax(
+      """
+      \(attribute)
+      \(access) struct \(typeName)
+      """
+    ) {
+      if let result { DeclSyntax("\(raw: result)") }
+      for parameter in function.parameters {
+        let column =
+          camelToSnakeCase(Naming.unescaped(parameter.variable)) == parameter.argument
+          ? "" : "@Column(\(StringLiteralExprSyntax(content: parameter.argument))) "
+        DeclSyntax(
+          "\(raw: column)\(access) var \(raw: parameter.variable): \(parameter.type.syntax)\(raw: parameter.hasDefault ? " = nil" : "")"
+        )
+      }
+    }
+  }
+
+  /// A method that builds the function's arguments struct and calls it.
   private func functionDecl(_ function: FunctionPlan, access: DeclModifierListSyntax) -> DeclSyntax
   {
     let parameters = function.parameters.map { parameter in
@@ -831,32 +943,14 @@ extension FilePlan {
         }
       return "\(names): \(parameter.type.syntax)\(parameter.hasDefault ? " = nil" : "")"
     }.joined(separator: ", ")
-
-    let (entryPoint, returnType): (String, String) =
-      switch function.result {
-      case .rows(let row): ("rows", "_PostgrestQuery<\(row), [\(row)]>")
-      case .row(let row): ("row", "_PostgrestFunctionCall<\(row)?>")
-      case .value(let type): ("value", "_PostgrestFunctionCall<\(type.syntax)>")
-      case .nothing: ("perform", "_PostgrestFunctionCall<Void>")
-      }
-
-    var arguments = [StringLiteralExprSyntax(content: function.function).description]
-    if function.parameters.count == 1, function.parameters[0].label == nil {
-      arguments.append("arguments: _PostgrestArguments(body)")
-    } else if !function.parameters.isEmpty {
-      let entries = function.parameters.map {
-        "\(StringLiteralExprSyntax(content: $0.argument)): \($0.variable)"
-      }
-      arguments.append("arguments: [\(entries.joined(separator: ", "))]")
-    }
-    if let schema = function.schemaTypeName {
-      arguments.append("schema: \(schema).self")
-    }
+    let returnType = "_PostgrestFunctionQuery<\(resultType(of: function) ?? "Void")>"
+    let arguments = function.parameters.map { "\($0.variable): \($0.variable)" }
+      .joined(separator: ", ")
 
     return DeclSyntax(
       """
       \(access) func \(raw: function.name)(\(raw: parameters)) throws -> \(raw: returnType) {
-        try self.\(raw: entryPoint)(\(raw: arguments.joined(separator: ", ")))
+        try call(\(raw: function.typeName)(\(raw: arguments)))
       }
       """
     )

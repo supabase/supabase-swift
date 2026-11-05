@@ -20,9 +20,9 @@ enum Naming {
   /// plus `init()`.
   static let columnsMembers: Set = ["init", "self"]
 
-  /// Method names a function call cannot take in the `_PostgrestRpc` extension: the members it
-  /// calls through, which a generated method of the same name would hide.
-  static let rpcMembers: Set = ["rows", "row", "value", "perform", "client", "init", "self"]
+  /// Method names a function call cannot take in the `_PostgrestFunctions` extension: the members
+  /// it calls through, which a generated method of the same name would hide.
+  static let rpcMembers: Set = ["call", "client", "init", "self"]
 
   /// Case names an enum does not take. They compile, but `Status.init` and `Status.self` name the
   /// initializer and the type itself, and `rawValue` reads as the property every case has.
@@ -47,7 +47,8 @@ enum Naming {
     "_PostgrestToManyRelation",
     "_PostgresRange", "_Int4Range", "_Int8Range", "_NumRange", "_TSRange", "_TSTZRange",
     "_DateRange", "_PostgresInterval", "_PostgresTime", "_PostgresBytes", "_PostgresUnmapped",
-    "Void", "_PostgrestRpc", "_PostgrestQuery", "_PostgrestFunctionCall", "_PostgrestArguments",
+    "Void", "Result", "Function", "_PostgrestFunction", "_PostgrestFunctions",
+    "_PostgrestFunctionQuery",
   ]
 
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes
