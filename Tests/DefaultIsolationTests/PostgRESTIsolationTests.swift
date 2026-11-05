@@ -9,23 +9,24 @@ import Foundation
 import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-/// A `@Table` type declared under `.defaultIsolation(MainActor.self)`: the macro expansion has to
-/// compile with main-actor-isolated conformances.
+/// A `@Table` type declared under `.defaultIsolation(MainActor.self)`. The macro-generated
+/// requirements are nonisolated, so a consumer opts the type out with `nonisolated`, as an app
+/// would. The queries below then run from the main actor.
 @Table("todos")
-struct IsolationTodo {
+nonisolated struct IsolationTodo {
   @PrimaryKey var id: Int
   var title: String
   var isDone: Bool
 }
 
 @Function("search_todos")
-struct IsolationSearchTodos {
+nonisolated struct IsolationSearchTodos {
   typealias Result = [IsolationTodo]
   var keyword: String
 }
 
 @Function("reset_todos")
-struct IsolationResetTodos {}
+nonisolated struct IsolationResetTodos {}
 
 /// Calls every public async PostgREST API from the main actor, since this target compiles with
 /// `.defaultIsolation(MainActor.self)`. Nothing here runs: if a call stops compiling, the build
@@ -44,7 +45,7 @@ enum PostgRESTIsolationTests {
 
   /// A narrower read of `IsolationTodo`.
   @SelectionOf(IsolationTodo.self)
-  struct IsolationTodoTitle {
+  nonisolated struct IsolationTodoTitle {
     var title: String
   }
 

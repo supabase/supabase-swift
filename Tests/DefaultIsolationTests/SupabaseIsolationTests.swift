@@ -10,9 +10,10 @@ import PostgrestMacros
 @_spi(Experimental) import Supabase
 
 /// A `@Table` type with a primary key, so `LiveQuery` and `SupabaseClient.stream(_:where:)` can
-/// match changes to rows. Declared under `.defaultIsolation(MainActor.self)`.
+/// match changes to rows. Under `.defaultIsolation(MainActor.self)` the type opts out with
+/// `nonisolated`, as an app would.
 @Table("rooms")
-struct IsolationRoom {
+nonisolated struct IsolationRoom {
   @PrimaryKey var id: Int
   var name: String
 }
