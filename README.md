@@ -56,7 +56,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "2.0.0"
+            from: "3.0.0-alpha.1"
         ),
     ],
     targets: [
@@ -94,7 +94,7 @@ let client = SupabaseClient(
             schema: "public"
         ),
         auth: .init(
-            storage: MyCustomLocalStorage()
+            storage: MyCustomAuthStorage()
         ),
         global: .init(
             headers: ["x-my-custom-header": "my-app-name"],
@@ -103,6 +103,51 @@ let client = SupabaseClient(
     )
 )
 ```
+
+### Sign in and track the session
+
+```swift
+// Sign in. The session is stored for you.
+try await client.auth.signIn(email: "user@example.com", password: "secret")
+
+// React to every change: sign-in, sign-out, token refresh, and more.
+for await change in client.auth.events() {
+    print(change.event, change.session?.user.email ?? "signed out")
+}
+```
+
+In SwiftUI, `AuthModel` (iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1 or later) is an
+`@Observable` view of the session. Gate your root view on its `status`:
+
+```swift
+@State private var auth = AuthModel(client: client.auth)
+
+var body: some View {
+    switch auth.status {
+    case .loading: ProgressView()
+    case .signedOut: SignInView()
+    case .signedIn: HomeView()
+    }
+}
+```
+
+Send every auth link that opens your app to `handleRedirect`. It handles OAuth callbacks,
+magic links, and password-reset links, and it is safe to call twice with the same URL. A
+password-reset link signs the user in, so check the result to show an "update password" screen:
+
+```swift
+.onOpenURL { url in
+    Task {
+        if case .signedIn(_, verification: .recovery)? = try await client.handleRedirect(url) {
+            isPasswordRecovery = true
+        }
+    }
+}
+```
+
+On Apple platforms the session is stored in the Keychain. On iOS, tvOS, watchOS and visionOS it
+stays on the device. On Linux, Android and Windows the default storage keeps the session in
+memory, so pass your own `AuthStorage` to keep it across launches.
 
 ### Invoke an Edge Function
 

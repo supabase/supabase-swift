@@ -4,9 +4,6 @@ This file covers the changes to `AuthClient`, sessions, MFA, OAuth, `AuthError` 
 from v2 to v3. See [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to
 every module.
 
-> [!NOTE]
-> The Auth API is still being reworked for v3. It may change before v3.0.0.
-
 ## Silent changes
 
 Changes that still compile but behave differently. Check each one by hand.

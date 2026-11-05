@@ -4,7 +4,7 @@ This guide moves an app from supabase-swift v2 (`2.55.4`) to v3. This file cover
 that apply to every module and to `SupabaseClient`; each module has its own file for the rest.
 
 > [!NOTE]
-> v3 is in prerelease (alpha). The Auth API can still change before the final release.
+> v3 is in prerelease (alpha). APIs can still change before the final release.
 
 ## How to migrate
 
@@ -28,7 +28,7 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 
 | Module | Guide | Status |
 | --- | --- | --- |
-| Auth | [Auth.md](docs/migrations/v3/Auth.md) | still changing |
+| Auth | [Auth.md](docs/migrations/v3/Auth.md) | ready for feedback |
 | PostgREST | [PostgREST.md](docs/migrations/v3/PostgREST.md) | ready for feedback |
 | Storage | [Storage.md](docs/migrations/v3/Storage.md) | ready for feedback |
 | Functions | [Functions.md](docs/migrations/v3/Functions.md) | ready for feedback |
@@ -276,6 +276,10 @@ Changes that still compile but behave differently. Check each one by hand.
   `GlobalOptions.logger`.
 - **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
   a Realtime client that already exists. A client built later fetches the current token itself.
+- **Realtime gets the token after every session change.** `SupabaseClient` pushes the access
+  token whenever it differs from the last one it pushed, whatever the event was. In v2 only
+  `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
+  `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
 - **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
   for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
   `URLSessionWebSocketTransport` built from the session.
@@ -303,6 +307,8 @@ Changes that still compile but behave differently. Check each one by hand.
 ### `GlobalOptions.session` is removed
 
 Configure the `URLSession` on the transport. One `http` value covers every sub-client.
+`AuthOptions` also gains `http`, `logger` and `clock` to override the global value for Auth
+alone; `nil` means the global value.
 
 ```swift
 // v2
