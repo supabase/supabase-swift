@@ -158,10 +158,40 @@ struct PostgrestRpcTests {
   func aNonObjectArgumentReportsAndStaysAPost() async throws {
     let capture = QueryCapture(body: "1")
     let call = try capture.client.rpc(Pair())
-    var readOnly = call
-    withKnownIssue { readOnly = call.readOnly() }
+    let reporter = RecordingIssueReporter()
+    let readOnly = withIssueReporters([reporter]) { call.readOnly() }
+    #expect(reporter.messages.withLock { $0.count } == 1)
     _ = try await readOnly.execute()
     #expect(capture.httpMethod == "POST")
     #expect(capture.bodyString == "[1,2]")
+  }
+}
+
+private final class RecordingIssueReporter: IssueReporter {
+  let messages = NSLockedValue<[String]>([])
+
+  func reportIssue(
+    _ message: @autoclosure () -> String?,
+    severity: IssueSeverity,
+    fileID: StaticString,
+    filePath: StaticString,
+    line: UInt,
+    column: UInt
+  ) {
+    let message = message() ?? ""
+    messages.withLock { $0.append(message) }
+  }
+}
+
+private final class NSLockedValue<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value: Value
+
+  init(_ value: Value) { self.value = value }
+
+  func withLock<T>(_ body: (inout Value) -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return body(&value)
   }
 }
