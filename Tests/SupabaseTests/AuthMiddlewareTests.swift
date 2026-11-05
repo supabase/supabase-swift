@@ -595,7 +595,7 @@ private let storageRLSDenialBody = Data(
   #"{"statusCode":"403","error":"Unauthorized","message":"new row violates row-level security policy","code":"AccessDenied"}"#
     .utf8)
 
-private func sessionJSON(
+func sessionJSON(
   accessToken: String,
   refreshToken: String,
   userID: String = "f33d3ec9-a2ee-47c4-80e1-5bd919f3d8b8"

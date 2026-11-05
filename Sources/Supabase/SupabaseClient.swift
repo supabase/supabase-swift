@@ -246,21 +246,24 @@ public final class SupabaseClient: Sendable {
       )
     }
 
+    let authHTTP = options.auth.http ?? options.global.http
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       storageKey: options.auth.storageKey ?? defaultStorageKey,
       headers: _headers,
       storage: options.auth.storage,
       redirectTo: options.auth.redirectToURL,
-      logger: options.global.logger,
+      logger: options.auth.logger ?? options.global.logger,
       http: HTTPClientConfiguration(
-        transport: options.global.http.transport ?? URLSessionTransport(),
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
-        timeout: options.global.http.timeout
+        transport: authHTTP.transport ?? options.global.http.transport ?? URLSessionTransport(),
+        middlewares: options.global.http.middlewares
+          + (options.auth.http?.middlewares ?? [])
+          + [TraceContextMiddleware()],
+        timeout: authHTTP.timeout ?? options.global.http.timeout
       ),
       autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
-      clock: clock
+      clock: options.auth.clock ?? clock
     )
     _auth = AuthClient(configuration: authConfiguration)
 
@@ -521,21 +524,30 @@ public final class SupabaseClient: Sendable {
   /// would install its observers in apps that never use Realtime; a client built later pulls
   /// the current token itself.
   func handleTokenChanged(event: AuthEvent, session: Session?) async {
-    let accessToken: String? = mutableState.withValue {
+    if let accessToken = realtimeTokenToPush(event: event, session: session),
+      let realtime = mutableState.realtime
+    {
+      await realtime.setAuth(accessToken)
+    }
+  }
+
+  /// The token Realtime has to receive for this change, or `nil` when it already has it.
+  ///
+  /// The token is derived from the session, not from the event kind: any event can carry a new
+  /// one. A recovery or email-change verification, an MFA step-up, or a linked identity replaces
+  /// the session without a `.signedIn`. A signed-out change resets Realtime to the API key.
+  ///
+  /// Calling it records the token as pushed, so call it once per change.
+  func realtimeTokenToPush(event: AuthEvent, session: Session?) -> String? {
+    mutableState.withValue {
       if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
       }
 
-      // Any event can carry a new token: a recovery or email-change verification, or an MFA
-      // step-up, replaces the session without a `.signedIn`.
       guard $0.changedAccessToken != session?.accessToken else { return nil }
       $0.changedAccessToken = session?.accessToken
       return session?.accessToken ?? supabaseKey
-    }
-
-    if let accessToken, let realtime = mutableState.realtime {
-      await realtime.setAuth(accessToken)
     }
   }
 
