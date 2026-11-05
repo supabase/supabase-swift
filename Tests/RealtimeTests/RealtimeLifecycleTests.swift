@@ -128,9 +128,10 @@ struct RealtimeLifecycleTests {
   func foregroundProbeOnALiveSocketKeepsTheConnection() async throws {
     let sut = makeClient()
     try await sut.connect()
+    let heartbeats = await sut.heartbeats()
 
     await sut.handleAppForeground()
-    await sut.flushInbox()
+    _ = await heartbeats.first { if case .acknowledged = $0 { true } else { false } }
     await testClock.advance(by: .seconds(5))
     await sut.flushInbox()
 
