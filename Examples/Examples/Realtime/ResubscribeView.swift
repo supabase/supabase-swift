@@ -12,7 +12,7 @@ import SwiftUI
 
 struct ResubscribeView: View {
   @State var todos: IdentifiedArrayOf<Todo> = []
-  @State var refetches: [Refetch] = []
+  @State var reloads: [Reload] = []
   @State var rejoinRequests = 0
   @State var error: Error?
 
@@ -36,12 +36,12 @@ struct ResubscribeView: View {
         }
       }
 
-      Section("Refetches (\(refetches.count))") {
-        ForEach(refetches) { refetch in
+      Section("Reloads (\(reloads.count))") {
+        ForEach(reloads) { reload in
           HStack {
-            Text("Fetched \(refetch.count) todos")
+            Text("Fetched \(reload.count) todos")
             Spacer()
-            Text(refetch.timestamp, style: .time)
+            Text(reload.timestamp, style: .time)
               .font(.caption)
               .foregroundColor(.secondary)
           }
@@ -130,7 +130,7 @@ struct ResubscribeView: View {
   func reload() async {
     do {
       todos = try await .fetchTodos()
-      refetches.insert(Refetch(count: todos.count), at: 0)
+      reloads.insert(Reload(count: todos.count), at: 0)
     } catch {
       if !Task.isCancelled {
         self.error = error
@@ -139,7 +139,7 @@ struct ResubscribeView: View {
   }
 }
 
-struct Refetch: Identifiable {
+struct Reload: Identifiable {
   let id = UUID()
   let count: Int
   let timestamp = Date()
