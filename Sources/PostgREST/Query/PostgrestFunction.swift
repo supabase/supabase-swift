@@ -163,8 +163,7 @@ extension PostgrestClient {
 /// The namespace generated function methods live in, reached as `client.rpc`.
 ///
 /// The schema generator writes one method per database function in an extension of this type.
-/// Each method builds the function's ``_PostgrestFunction`` value and calls
-/// ``PostgrestClient/rpc(_:)``.
+/// Each method builds the function's ``_PostgrestFunction`` value and passes it to ``call(_:)``.
 ///
 /// ```swift
 /// let hits = try await client.rpc.searchTodos(keyword: "milk")
@@ -174,8 +173,16 @@ extension PostgrestClient {
 ///
 /// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
 public struct _PostgrestFunctions: Sendable {
-  /// The client the generated methods call ``PostgrestClient/rpc(_:)`` on.
-  public let client: PostgrestClient
+  let client: PostgrestClient
+
+  /// Calls `function`, which is what every generated method does.
+  ///
+  /// Generated code calls this rather than ``PostgrestClient/rpc(_:)``, so the file it lives in
+  /// does not need `@_spi(Experimental) import`.
+  public func call<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
+  {
+    try client.rpc(function)
+  }
 }
 
 extension PostgrestClient {

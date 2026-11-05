@@ -186,6 +186,6 @@ extension _PostgrestFunctions {
   fileprivate func searchTodos(keyword: String, limit: Int, tags: [String]) throws
     -> _PostgrestFunctionQuery<[PostgrestRpcTests.Todo]>
   {
-    try client.rpc(PostgrestRpcTests.SearchTodos(keyword: keyword, limit: limit, tags: tags))
+    try call(PostgrestRpcTests.SearchTodos(keyword: keyword, limit: limit, tags: tags))
   }
 }
