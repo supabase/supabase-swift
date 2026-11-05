@@ -62,7 +62,7 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
     var copy = self
     guard
       let body = request.body,
-      let parameters = try? JSONDecoder().decode([String: JSONValue].self, from: body)
+      case .object(let parameters)? = try? JSONValue.decoder.decode(JSONValue.self, from: body)
     else {
       // `@Function` always encodes an object. A hand-written conformance that does not cannot be
       // sent as query items, so the call stays a `POST` rather than losing its arguments.
@@ -73,9 +73,7 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
     }
     copy.request.method = .get
     copy.request.body = nil
-    copy.request.leadingQuery = parameters.sorted { $0.key < $1.key }.map { key, value in
-      URLQueryItem(name: key, value: client.queryValue(for: value))
-    }
+    copy.request.leadingQuery = client.queryItems(for: parameters)
     return copy
   }
 }
@@ -138,10 +136,7 @@ extension PostgrestClient {
   @_spi(Experimental)
   public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {
-    let client =
-      configuration.schema == nil && F.Schema.name != _PublicSchema.name
-      ? schema(F.Schema.name)
-      : self
+    let client = scoped(toDeclaredSchema: F.Schema.name)
     var request = client.makeRequest("rpc/\(F.functionName)", method: .post)
     request.body = try PostgrestClient.Configuration.jsonEncoder.encode(function)
     return _PostgrestFunctionQuery(client: client, request: request)
