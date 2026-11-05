@@ -86,8 +86,15 @@ struct PersistedSessionCodecTests {
     }
   }
 
+  @Test
+  func rejectsANewerSchemaWithoutCallingItCorrupt() {
+    #expect(throws: PersistedSessionCodec.NewerSchema(schema: 2)) {
+      try PersistedSessionCodec.decode(Data(#"{"schema":2,"access_token":"a"}"#.utf8))
+    }
+  }
+
   @Test(arguments: [
-    #"{"schema":2,"access_token":"a"}"#,
+    #"{"schema":0,"access_token":"a"}"#,
     #"{"token":"a"}"#,
     "not-json",
   ])

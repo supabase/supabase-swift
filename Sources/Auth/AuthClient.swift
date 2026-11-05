@@ -1331,7 +1331,8 @@ public final class AuthClient: Sendable {
   ///
   /// The client merges the returned user into the current session and emits
   /// ``AuthEvent/userUpdated``. It keeps the tokens of the current session, also when a refresh
-  /// rotates them while the request is in flight.
+  /// rotates them while the request is in flight. When another user signs in while the request is
+  /// in flight, the client keeps that user's session as it is.
   ///
   /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
   /// the current password for that change. When `attributes` changes the email, the client starts

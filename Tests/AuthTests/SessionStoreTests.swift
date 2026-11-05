@@ -150,6 +150,21 @@ struct SessionStoreTests {
   }
 
   @Test
+  func loadKeepsASessionWithANewerSchemaAndSignsOutInMemory() async throws {
+    let storage = InMemoryAuthStorage()
+    let newer = Data(#"{"schema":2,"access_token":"a"}"#.utf8)
+    try await storage.save(newer, key: key)
+    let store = SessionStore(storage: storage, key: key, now: { receivedAt })
+    var changes = store.changes().makeAsyncIterator()
+
+    try await store.load()
+
+    let initial = AuthChange(event: .initialSession, status: .signedOut(.sessionMissing))
+    #expect(await changes.next() == initial)
+    #expect(try await storage.load(key: key) == newer)
+  }
+
+  @Test
   func unavailableStorageKeepsLoadingUntilALaterLoadSucceeds() async throws {
     let storage = TestAuthStorage()
     try await storage.save(PersistedSessionCodec.encode(makeSession("stored")), key: key)
@@ -473,6 +488,22 @@ struct SessionStoreTests {
     expected.user = user
     #expect(store.currentSession == expected)
     #expect(try await storedSession(storage) == expected)
+  }
+
+  @Test
+  func userUpdateForAnotherUserChangesNothing() async throws {
+    let storage = InMemoryAuthStorage()
+    let store = try await loadedStore(storage: storage, now: { receivedAt })
+    try await store.commit(.signedIn(makeSession("b"), event: .signedIn))
+    let signedIn = await store.generation
+
+    var otherUser = makeUser(email: "a@example.com")
+    otherUser.id = UUID()
+    try await store.commit(.userUpdated(otherUser, event: .userUpdated))
+
+    #expect(await store.generation == signedIn)
+    #expect(store.currentSession == makeSession("b"))
+    #expect(try await storedSession(storage) == makeSession("b"))
   }
 
   @Test

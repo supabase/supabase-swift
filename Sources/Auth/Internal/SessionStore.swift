@@ -24,7 +24,9 @@ actor SessionStore {
     /// the session, such as a user update, does not: the server already rotated the refresh token,
     /// so dropping the result would leave the store with a spent one.
     case refreshed(Session, replacing: String?)
-    /// Merged into the session that is current when the commit runs.
+    /// Merged into the session that is current when the commit runs, but only while that
+    /// session's user is this user. Otherwise the commit changes nothing and does not throw, so a
+    /// user who signed in while the request was out keeps their own user.
     case userUpdated(User, event: AuthEvent)
     case signedOut(SignOutReason, event: AuthEvent)
     /// Signs out with ``AuthEvent/signedOut``, but only while the store holds the session
@@ -565,6 +567,8 @@ actor SessionStore {
     } catch is DecodingError {
       try await storage.remove(key: key)
       next = .signedOut(.sessionMissing)
+    } catch is PersistedSessionCodec.NewerSchema {
+      next = .signedOut(.sessionMissing)
     }
     if case .signedIn(let session) = next, let startupRefresh,
       session.isExpired(at: now(), leeway: .zero)
@@ -622,6 +626,7 @@ actor SessionStore {
       guard case .signedIn(var current) = published.value.state else {
         throw AuthError.sessionMissing
       }
+      guard current.user.id == user.id else { return }
       current.user = user
       next = .signedIn(current)
       event = userEvent
