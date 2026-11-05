@@ -30,6 +30,7 @@ bytea
 caseless
 chan
 checkmark
+circlepath
 clientsecret
 Cloudflare
 cloudflare
