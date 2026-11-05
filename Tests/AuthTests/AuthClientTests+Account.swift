@@ -68,8 +68,8 @@ extension AuthClientTests {
     let sut = makeSUT()
     try await sut.resetPassword(
       email: "example@mail.com",
-      redirectTo: URL(string: "https://supabase.com"),
-      captchaToken: "captcha-token"
+      options: .init(
+        redirectTo: URL(string: "https://supabase.com"), captchaToken: "captcha-token")
     )
   }
 
@@ -158,8 +158,8 @@ extension AuthClientTests {
     try await sut.resend(
       email: "example@mail.com",
       type: .emailChange,
-      redirectTo: URL(string: "https://supabase.com"),
-      captchaToken: "captcha-token"
+      options: .init(
+        redirectTo: URL(string: "https://supabase.com"), captchaToken: "captcha-token")
     )
   }
 
@@ -184,8 +184,8 @@ extension AuthClientTests {
     try await sut.resend(
       email: "example@mail.com",
       type: .emailChange,
-      redirectTo: URL(string: "https://supabase.com"),
-      captchaToken: "captcha-token"
+      options: .init(
+        redirectTo: URL(string: "https://supabase.com"), captchaToken: "captcha-token")
     )
   }
 
@@ -210,7 +210,7 @@ extension AuthClientTests {
     let messageID = try await sut.resend(
       phone: "+1 202-918-2132",
       type: .phoneChange,
-      captchaToken: "captcha-token"
+      options: .init(captchaToken: "captcha-token")
     )
 
     #expect(messageID == MessageID(rawValue: "12345"))

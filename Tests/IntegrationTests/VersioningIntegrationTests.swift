@@ -32,13 +32,13 @@ struct VersioningIntegrationTests {
     #expect(missing?.isNotFound == true)
 
     let signed = try await bucket.createSignedURL(
-      path: "a.txt", expiresIn: .seconds(60), versionId: version)
+      path: "a.txt", expiresIn: .seconds(60), options: SignedURLOptions(versionId: version))
     let (signedData, signedResponse) = try await StorageIntegration.fetch(signed)
     #expect(signedResponse.statusCode == 200)
     #expect(signedData == Data("a".utf8))
 
     let (publicData, publicResponse) = try await StorageIntegration.fetch(
-      bucket.publicURL(path: "a.txt", versionId: version))
+      bucket.publicURL(path: "a.txt", options: PublicURLOptions(versionId: version)))
     #expect(publicResponse.statusCode == 200)
     #expect(publicData == Data("a".utf8))
   }

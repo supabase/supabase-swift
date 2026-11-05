@@ -252,15 +252,15 @@ public final class SupabaseClient: Sendable {
       headers: _headers,
       storage: options.auth.storage,
       redirectTo: options.auth.redirectToURL,
-      logger: options.global.logger,
-      http: HTTPClientConfiguration(
-        transport: options.global.http.transport ?? URLSessionTransport(),
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
-        timeout: options.global.http.timeout
+      logger: options.auth.logger ?? options.global.logger,
+      http: Self.resolveHTTP(
+        global: options.global.http,
+        override: options.auth.http,
+        sdkMiddlewares: [TraceContextMiddleware()]
       ),
       autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
       observesAppLifecycle: options.auth.observesAppLifecycle,
-      clock: clock
+      clock: options.auth.clock ?? clock
     )
     _auth = AuthClient(configuration: authConfiguration)
 
@@ -324,6 +324,35 @@ public final class SupabaseClient: Sendable {
   ) throws -> PostgrestFilterBuilder {
     try rest.rpc(fn, count: count)
   }
+
+  /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
+  {
+    try rest.rpc(function)
+  }
+
+  // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func rpc<F: _PostgrestFunction>(_ function: F, _: Void = ()) throws
+    -> _PostgrestFunctionQuery<F.Result>
+  {
+    fatalError()
+  }
+
+  /// The generated database function methods. See ``PostgrestClient/rpc``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public var rpc: _PostgrestFunctions { rest.rpc }
 
   /// Returns a database client scoped to the given Postgres schema.
   ///
@@ -427,6 +456,23 @@ public final class SupabaseClient: Sendable {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
+  /// A module's HTTP configuration: `override` on top of `global`, field by field.
+  ///
+  /// A `nil` transport or timeout in `override` falls back to the global one, and the transport
+  /// to ``URLSessionTransport`` when neither sets one. The middlewares run in this order: the
+  /// global ones, the module's own, then the SDK's.
+  private static func resolveHTTP(
+    global: HTTPClientConfiguration,
+    override: HTTPClientConfiguration?,
+    sdkMiddlewares: [any ClientMiddleware]
+  ) -> HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: override?.transport ?? global.transport ?? URLSessionTransport(),
+      middlewares: global.middlewares + (override?.middlewares ?? []) + sdkMiddlewares,
+      timeout: override?.timeout ?? global.timeout
+    )
+  }
+
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
     options.global.http.transport ?? URLSessionTransport()
@@ -521,42 +567,48 @@ public final class SupabaseClient: Sendable {
   /// would install its observers in apps that never use Realtime; a client built later pulls
   /// the current token itself.
   func handleTokenChanged(event: AuthEvent, session: Session?) async {
-    let accessToken: String? = mutableState.withValue {
+    if let accessToken = realtimeTokenToPush(event: event, session: session),
+      let realtime = mutableState.realtime
+    {
+      await realtime.setAuth(accessToken)
+    }
+  }
+
+  /// The token Realtime has to receive for this change, or `nil` when it already has it.
+  ///
+  /// The token is derived from the session, not from the event kind: any event can carry a new
+  /// one. A recovery or email-change verification, an MFA step-up, or a linked identity replaces
+  /// the session without a `.signedIn`. A signed-out change resets Realtime to the API key.
+  ///
+  /// Calling it records the token as pushed, so call it once per change.
+  func realtimeTokenToPush(event: AuthEvent, session: Session?) -> String? {
+    mutableState.withValue {
       if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
       }
 
-      // Any event can carry a new token: a recovery or email-change verification, or an MFA
-      // step-up, replaces the session without a `.signedIn`.
       guard $0.changedAccessToken != session?.accessToken else { return nil }
       $0.changedAccessToken = session?.accessToken
       return session?.accessToken ?? supabaseKey
     }
-
-    if let accessToken, let realtime = mutableState.realtime {
-      await realtime.setAuth(accessToken)
-    }
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    let http = options.functions.http ?? options.global.http
-    return FunctionsClient(
+    FunctionsClient(
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,
         region: options.functions.region,
-        http: HTTPClientConfiguration(
-          transport: http.transport ?? transport,
-          middlewares: options.global.http.middlewares
-            + (options.functions.http?.middlewares ?? [])
-            + [
-              TraceContextMiddleware(),
-              bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
-                APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
-              },
-            ],
-          timeout: http.timeout ?? options.global.http.timeout
+        http: Self.resolveHTTP(
+          global: options.global.http,
+          override: options.functions.http,
+          sdkMiddlewares: [
+            TraceContextMiddleware(),
+            bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
+              APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+            },
+          ]
         ),
         logger: options.functions.logger ?? options.global.logger,
         decoder: options.functions.decoder

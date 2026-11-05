@@ -101,8 +101,23 @@ struct EmitterTests {
   @Test
   func hostileFixtureReportsEveryRenameAndFallback() {
     let result = run(arguments: GoldenCase.hostile.arguments) { Fixture.data("hostile_metadata") }
+    let conflict =
+      "Could not choose the best candidate function between: public.conflict(a => int4), "
+      + "public.conflict(a => text). Try renaming the parameters or the function itself in the "
+      + "database so function overloading can be resolved"
     let notes = [
       "schema date is named DateSchema: Date would shadow a type the generated code uses",
+      "function public.conflict(a int4) is not generated: \(conflict)",
+      "function public.conflict(a text) is not generated: \(conflict)",
+      "function public.elsewhere_rows() is not generated: "
+        + "it returns inventory.books, which is not generated",
+      "function public.report() is not generated: it returns one row, which a typed call "
+        + "cannot yet tell from the all-null row PostgREST answers with when it finds none",
+      "function public.takes_row(h row1) is not generated: "
+        + "it takes a row of row1, which has no Encodable Swift type",
+      "function public.unnamed_text(text) is not generated: it has an unnamed parameter, which "
+        + "PostgREST only passes as the whole body of a function whose sole parameter is json "
+        + "or jsonb",
       "public.coding_keys is named CodingKeysTable: "
         + "CodingKeys would shadow a type the generated code uses",
       "public.columns is named ColumnsTable: Columns would shadow a type the generated code uses",
@@ -146,6 +161,15 @@ struct EmitterTests {
       "function public.UserId is named userIdComputed: "
         + "Columns of public.hostile already has userId",
       "function public.get_things is named getThings2: another member is also named getThings",
+      "function public.my_schema_restock(self int4, in text) arguments is named "
+        + "MySchemaRestockFunction2: another type is also named MySchemaRestockFunction",
+      "function public.pick(userId int4) arguments is named PickFunction2: "
+        + "another type is also named PickFunction",
+      "function public.labels(user_id int4, userId int4) parameter userId is named userId2: "
+        + "another parameter is also named userId",
+      "function public.my_schema_restock is named mySchemaRestock2: "
+        + "another call is also named mySchemaRestock(self:in:)",
+      "function public.pick is named pick2: another call is also named pick(userId:)",
     ]
     #expect(result.standardError == notes.map { "supabase-typegen: note: \($0)\n" }.joined())
   }
@@ -156,7 +180,7 @@ struct EmitterTests {
   func computedMembersFollowTheReturnType() {
     let result = run(arguments: []) { Fixture.integration }
     #expect(result.exitCode == 0)
-    #expect(!result.standardError.contains("function"), "\(result.standardError)")
+    #expect(!result.standardError.contains("(channels)"), "\(result.standardError)")
     #expect(
       result.standardOutput.contains(
         """
@@ -264,6 +288,186 @@ struct EmitterTests {
     #expect(result.standardOutput.contains("_PostgrestComputedField<T, OtherMood>"))
   }
 
+  /// One `@Function` struct and one method per callable overload of the integration fixture. The
+  /// result type decides what the method returns: the rows of a relation or of a `RETURNS TABLE`
+  /// result, a value, or nothing.
+  @Test
+  func functionsGenerateAnArgumentsStructAndACall() {
+    let result = run(arguments: []) { Fixture.integration }
+    #expect(result.exitCode == 0)
+    for expected in [
+      """
+      @Function("search_messages")
+      struct SearchMessagesFunction {
+        typealias Result = [Messages]
+        var query: String
+        var channelId: Int? = nil
+      }
+      """,
+      """
+        func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestFunctionQuery<
+          [Messages]
+        > {
+          try call(SearchMessagesFunction(query: query, channelId: channelId))
+        }
+      """,
+      "  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {",
+      "  func getStatus(nameParam: String) throws -> _PostgrestFunctionQuery<String?> {",
+      """
+      @Function("void_func")
+      struct VoidFuncFunction {
+      }
+      """,
+      """
+        func voidFunc() throws -> _PostgrestFunctionQuery<Void> {
+          try call(VoidFuncFunction())
+        }
+      """,
+      """
+      struct EchoFunction: _PostgrestFunction {
+        static var functionName: String {
+          "echo"
+        }
+        typealias Result = JSONValue?
+        var body: JSONValue
+        func encode(to encoder: any Encoder) throws {
+          try body.encode(to: encoder)
+        }
+      }
+      """,
+      """
+      @Table("get_username_and_status", readOnly: true)
+      struct GetUsernameAndStatusRow {
+        var status: UserStatus?
+        var username: String?
+      }
+      """,
+    ] {
+      #expect(result.standardOutput.contains(expected), "\(expected)")
+    }
+  }
+
+  /// A function that returns one row is left out with a note: PostgREST answers one that finds no
+  /// row with an object whose every field is `null`, which a typed call cannot yet decode as `nil`.
+  @Test
+  func aFunctionReturningOneRowGetsNoCall() {
+    let result = run(arguments: []) { Fixture.integration }
+    #expect(!result.standardOutput.contains("messageById"))
+    #expect(
+      result.standardError.contains(
+        "function public.message_by_id(message_id int4) is not generated: it returns one row"))
+  }
+
+  /// Overloads PostgREST tells apart by argument names are Swift overloads told apart by labels.
+  /// Overloads it cannot tell apart get no method, only a note.
+  @Test
+  func overloadsDifferInTheirLabels() {
+    let result = run(arguments: []) { Fixture.integration }
+    #expect(result.standardOutput.contains("func messagesOf(channelId: Int) throws"))
+    #expect(
+      result.standardOutput.contains("func messagesOf(channelSlug: String, maxCount: Int) throws"))
+    #expect(!result.standardOutput.contains("priceLabel"))
+    #expect(
+      result.standardError.components(separatedBy: "function public.price_label(amount ").count
+        == 3)
+  }
+
+  /// A function outside `public` carries its schema in the method name and in the call.
+  @Test
+  func functionOfAnotherSchemaNamesItsSchema() {
+    let result = run(arguments: GoldenCase.hostile.arguments) { Fixture.data("hostile_metadata") }
+    #expect(
+      result.standardOutput.contains(
+        """
+        @Function("today", schema: DateSchema.self)
+        public struct DateTodayFunction {
+          public typealias Result = Date?
+        }
+        """))
+    #expect(
+      result.standardOutput.contains(
+        """
+          public func dateToday() throws -> _PostgrestFunctionQuery<Date?> {
+            try call(DateTodayFunction())
+          }
+        """))
+    #expect(!result.standardOutput.contains("inventoryRestock"))
+  }
+
+  /// A document from before postgrest-typegen 0.5.0 still generates, without function calls.
+  @Test
+  func documentWithoutRpcFunctionsGeneratesNoCalls() {
+    let input = Fixture.integration { object in
+      object["rpcFunctions"] = nil
+    }
+    let result = run(arguments: []) { input }
+    #expect(result.exitCode == 0)
+    #expect(!result.standardOutput.contains("_PostgrestFunctions"))
+    #expect(
+      result.standardError.contains(
+        "supabase-typegen: note: the document has no rpcFunctions, so no function calls are "
+          + "generated; it needs postgrest-typegen 0.5.0 or later\n"))
+  }
+
+  /// A function's parameter alone needs `Foundation` when its type is `Date`, and its enum is
+  /// generated even when nothing else uses it.
+  @Test
+  func functionTypesImportFoundationAndTheirEnums() {
+    let input = Fixture.integration { object in
+      object["tables"] = [Any]()
+      for key in ["views", "materializedViews", "foreignTables", "primaryKeys", "columns"] {
+        object[key] = [Any]()
+      }
+      object["types"] = [
+        [
+          "id": 20, "schema": "public", "name": "mood", "enums": ["happy", "sad"],
+          "type_relation_id": NSNull(),
+        ]
+      ]
+      object["rpcFunctions"] = [
+        [
+          "schema": "public", "name": "mood_at",
+          "overloads": [
+            [
+              "function_id": 1,
+              "args": [
+                [
+                  "name": "at", "type_id": 1184, "format": "timestamptz",
+                  "type_schema": "pg_catalog", "mode": "in", "has_default": false,
+                  "relation_id": NSNull(),
+                ]
+              ],
+              "returns": [
+                "type_id": 20, "format": "mood", "type_schema": "public",
+                "relation_id": NSNull(), "columns": NSNull(),
+              ],
+              "is_set_returning": false, "rows_estimate": NSNull(),
+              "setof_options": NSNull(), "computed_field_of": NSNull(), "error": NSNull(),
+            ]
+          ],
+        ]
+      ]
+    }
+    let result = run(arguments: []) { input }
+    #expect(result.exitCode == 0, "\(result.standardError)")
+    #expect(result.standardError.isEmpty, "\(result.standardError)")
+    #expect(result.standardOutput.contains("import Foundation"))
+    #expect(result.standardOutput.contains("enum Mood: String,"))
+    #expect(
+      result.standardOutput.contains(
+        "func moodAt(at: Date) throws -> _PostgrestFunctionQuery<Mood?> {"))
+  }
+
+  /// Under `--access-control public` every method of the extension is `public`.
+  @Test
+  func functionsFollowTheAccessControl() {
+    let result = run(arguments: ["--access-control", "public"]) { Fixture.integration }
+    #expect(result.standardOutput.contains("extension _PostgrestFunctions {\n  public func"))
+    #expect(result.standardOutput.contains("public struct SearchMessagesFunction {"))
+    #expect(!result.standardOutput.contains("\n  func voidFunc"))
+  }
+
+  /// A relation listed twice, here in both `tables` and `views`, is generated once, as the first.
   @Test
   func relationListedTwiceIsGeneratedOnce() {
     let input = Fixture.integration { object in

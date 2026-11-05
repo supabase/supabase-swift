@@ -178,3 +178,101 @@ public struct UserProfiles2 {
 public struct WeIrdName {
   public var id: Int
 }
+
+@Function("today", schema: DateSchema.self)
+public struct DateTodayFunction {
+  public typealias Result = Date?
+}
+
+@Function("restock", schema: MySchema.self)
+public struct MySchemaRestockFunction {
+  public typealias Result = [MySchemaClass]
+  @Column("self") public var selfArgument: Int
+  public var `in`: String? = nil
+}
+
+@Function("labels")
+public struct LabelsFunction {
+  public var userId: Int
+  @Column("userId") public var userId2: Int
+}
+
+@Function("moods")
+public struct MoodsFunction {
+  public typealias Result = [Mood?]
+  public var at: Date
+}
+
+@Function("my_schema_restock")
+public struct MySchemaRestockFunction2 {
+  public typealias Result = [MySchemaClass]
+  @Column("self") public var selfArgument: Int
+  public var `in`: String? = nil
+}
+
+@Function("pick")
+public struct PickFunction {
+  public typealias Result = Int?
+  public var userId: Int
+}
+
+@Function("pick")
+public struct PickFunction2 {
+  public typealias Result = Int?
+  @Column("userId") public var userId: Int
+}
+
+@Function("rows")
+public struct RowsFunction {
+  public typealias Result = Int?
+}
+
+@Function("self_and_argument")
+public struct SelfAndArgumentFunction {
+  @Column("self") public var selfArgument2: Int
+  public var selfArgument: Int
+}
+
+extension _PostgrestFunctions {
+  public func dateToday() throws -> _PostgrestFunctionQuery<Date?> {
+    try call(DateTodayFunction())
+  }
+
+  public func mySchemaRestock(`self` selfArgument: Int, `in`: String? = nil) throws
+    -> _PostgrestFunctionQuery<[MySchemaClass]>
+  {
+    try call(MySchemaRestockFunction(selfArgument: selfArgument, `in`: `in`))
+  }
+
+  public func labels(userId: Int, userId2: Int) throws -> _PostgrestFunctionQuery<Void> {
+    try call(LabelsFunction(userId: userId, userId2: userId2))
+  }
+
+  public func moods(at: Date) throws -> _PostgrestFunctionQuery<[Mood?]> {
+    try call(MoodsFunction(at: at))
+  }
+
+  public func mySchemaRestock2(`self` selfArgument: Int, `in`: String? = nil) throws
+    -> _PostgrestFunctionQuery<[MySchemaClass]>
+  {
+    try call(MySchemaRestockFunction2(selfArgument: selfArgument, `in`: `in`))
+  }
+
+  public func pick(userId: Int) throws -> _PostgrestFunctionQuery<Int?> {
+    try call(PickFunction(userId: userId))
+  }
+
+  public func pick2(userId: Int) throws -> _PostgrestFunctionQuery<Int?> {
+    try call(PickFunction2(userId: userId))
+  }
+
+  public func rows() throws -> _PostgrestFunctionQuery<Int?> {
+    try call(RowsFunction())
+  }
+
+  public func selfAndArgument(`self` selfArgument2: Int, selfArgument: Int) throws
+    -> _PostgrestFunctionQuery<Void>
+  {
+    try call(SelfAndArgumentFunction(selfArgument2: selfArgument2, selfArgument: selfArgument))
+  }
+}

@@ -35,6 +35,51 @@
 - Don't add a `CaseIterable`/`Identifiable` replacement (a `knownCases` array, a custom `Identifiable`) to the SDK type unless something inside this package actually needs one — a consuming app can keep its own list of the values it cares about (see `Examples/Examples/Auth/KnownProviders.swift`).
 - `init(rawValue:)` is intentionally non-failable — it always succeeds, which is what makes constructing/decoding an unrecognized value safe instead of an error. Any breaking-change migration note for a type like this must call out that `if let x = X(rawValue:)` goes from compiling to a compile error, and that interpolating the value directly (`"\(x)"`) silently stops printing the case name.
 
+## Method Parameters: Inline or Options
+
+Use these rules for every public method. Apply them in order.
+
+1. Inline the values that identify the target or the action: the required inputs (`path`,
+   `provider`, `email`, `token`, `type`) and the source and destination of a move or copy
+   (`toBucket`, `sourceVersionId`). These are always inline, even when they are optional. An
+   optional value that only selects a variant of the result, such as `versionId` or `transform`
+   on a URL, is a setting, not an identifier.
+2. Put optional request settings in an `<Action>Options` struct when one of these is true:
+   - The method has three or more optional settings.
+   - The method shares a group of two or more settings with another method. A single shared
+     setting is not a group. For example, `redirectTo` and `captchaToken` together appear in
+     `signInWithSSO`, `resend`, and `resetPassword`. `download` and `cacheNonce` together appear
+     in `createSignedURL`, `createSignedURLs`, and `publicURL`.
+   - The method already takes an options struct. Then all of its optional settings go in that
+     struct, as `transform` does in `DownloadOptions`.
+3. Overloads of one method use the same shape. `resend(phone:type:options:)` takes options
+   because `resend(email:type:options:)` does, even though it has only one setting. This rule
+   wins over rule 4.
+4. Otherwise, one or two optional settings stay inline when the matching supabase-js method has
+   no more optional settings than these. A lone `captchaToken` or `redirectTo` is fine:
+   `signIn(email:password:captchaToken:)`, `signInAnonymously(userMetadata:captchaToken:)`,
+   `updateUser(_:redirectTo:)`, `createSignedUploadURL(path:upsert:)`,
+   `listUsers(page:perPage:)`, `info(path:versionId:)`, `disconnect(code:reason:)`.
+5. The options parameter is named `options` and has a default of an empty value (`.init()` or
+   `XOptions()`). It comes after the required inputs. It comes before the parameters that are not
+   request settings, which always stay inline: `presenter`, `progress`, `as:`, `decoder`,
+   `encoder`, and the payload (`body`, `values`).
+
+Rule 2 decides whether settings go in a struct. It does not mean that methods share one struct.
+Give each method (or each overload family) its own options type, even when two types have the
+same fields today, as `SSOOptions` and `ResetPasswordOptions` do. The server can add a field to
+one action and not the other. Methods that send the same request share a type, as `upload`,
+`update`, and `uploadToSignedURL` share `UploadOptions`. Mirror the field names of supabase-js
+where they exist, and follow the Swift API Design Guidelines for the type and parameter names.
+
+These are deliberate exceptions. They keep their inline parameters:
+
+- PostgREST builder modifiers: `select`, `insert`, `upsert`, `update`, `delete`, `order`,
+  `explain`, `textSearch`, and `rpc`. Each call is one step in a chain, and its labels read like
+  the SQL clause they make.
+- Realtime `postgresChanges(...)`. Its parameters describe the subscription, so rule 1 applies.
+- Initializers of configuration, model, error, and options types.
+
 ## File Headers
 
 Use standard file headers with copyright:

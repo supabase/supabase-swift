@@ -884,7 +884,7 @@ struct SupabaseClientTests {
 }
 
 extension Session {
-  fileprivate static func stub(accessToken: String) -> Session {
+  static func stub(accessToken: String) -> Session {
     Session(
       accessToken: accessToken,
       tokenType: "bearer",

@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct AuthWithEmailAndPassword: View {
+  @Environment(\.supabase) private var supabase
   enum Mode {
     case signIn, signUp
   }
@@ -16,8 +17,6 @@ struct AuthWithEmailAndPassword: View {
   enum Result {
     case needsEmailConfirmation
   }
-
-  @Environment(AuthController.self) var auth
 
   @State var email = ""
   @State var password = ""
@@ -135,11 +134,6 @@ struct AuthWithEmailAndPassword: View {
     }
     .navigationTitle("Email & Password")
     .gitHubSourceLink()
-    .onOpenURL { url in
-      Task {
-        await onOpenURL(url)
-      }
-    }
     .animation(.default, value: mode)
     .sheet(isPresented: $isPresentingResetPassword) {
       ResetPasswordView()
@@ -172,15 +166,6 @@ struct AuthWithEmailAndPassword: View {
   }
 
   @MainActor
-  private func onOpenURL(_ url: URL) async {
-    do {
-      try await supabase.auth.handleRedirect(url)
-    } catch {
-      debug("Fail to init session with url: \(url)")
-    }
-  }
-
-  @MainActor
   private func resendConfirmationButtonTapped() async {
     do {
       try await supabase.auth.resend(email: email, type: .signup)
@@ -192,5 +177,4 @@ struct AuthWithEmailAndPassword: View {
 
 #Preview {
   AuthWithEmailAndPassword()
-    .environment(AuthController())
 }

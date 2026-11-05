@@ -29,7 +29,7 @@ nonisolated extension Todo: _PostgrestKeyedRelation {
 
 extension IdentifiedArrayOf<Todo> {
   static func fetchTodos() async throws -> Self {
-    let todos: [Todo] = try await supabase.from("todos")
+    let todos: [Todo] = try await supabaseClient.from("todos")
       .select()
       .order("created_at", ascending: false)
       .execute()

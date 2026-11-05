@@ -86,7 +86,7 @@ extension StorageMockerTests {
       ).register()
 
       let vectors = try await index.vectors(
-        keys: ["doc-1"], returnData: true, returnMetadata: true)
+        keys: ["doc-1"], options: GetVectorsOptions(returnData: true, returnMetadata: true))
       #expect(vectors.count == 1)
       #expect(vectors[0].key == "doc-1")
       #expect(vectors[0].data?.float32 == [0.1, 0.2, 0.3])
@@ -110,7 +110,7 @@ extension StorageMockerTests {
       ).register()
 
       let response = try await index.listVectors(
-        maxResults: 2, segment: VectorListSegment(count: 4, index: 0)
+        options: ListVectorsOptions(maxResults: 2, segment: VectorListSegment(count: 4, index: 0))
       ).page()
       #expect(response.vectors.map(\.key) == ["doc-1", "doc-2"])
       #expect(response.nextToken == "page-2")
@@ -134,11 +134,8 @@ extension StorageMockerTests {
       ).register()
 
       let response = try await index.queryVectors(
-        VectorData(float32: [0.1, 0.2, 0.3]),
-        topK: 5,
-        filter: ["category": "technical"],
-        returnDistance: true
-      )
+        VectorData(float32: [0.1, 0.2, 0.3]), topK: 5,
+        options: QueryVectorsOptions(filter: ["category": "technical"], returnDistance: true))
       #expect(response.vectors.map(\.key) == ["doc-1", "doc-2"])
       #expect(response.vectors.map(\.distance) == [0.12, 0.34])
       #expect(response.distanceMetric == .cosine)

@@ -150,6 +150,7 @@ let package = Package(
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         "Helpers",
         "Mocker",

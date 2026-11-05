@@ -10,13 +10,14 @@ public import HTTPTypes
 
 /// A downloaded object's body and the response Storage sent with it.
 ///
-/// Returned by ``StorageBucket/download(path:transform:options:progress:)``, where ``body``
+/// Returned by ``StorageBucket/download(path:options:progress:)``, where ``body``
 /// streams the object.
 ///
 /// The common headers have typed properties. Read any other from ``httpResponse``:
 ///
 /// ```swift
-/// let response = try await bucket.download(path: "photo.jpg", transform: ImageTransform(width: 200))
+/// let response = try await bucket.download(
+///   path: "photo.jpg", options: DownloadOptions(transform: ImageTransform(width: 200)))
 /// let applied = response.httpResponse.headerFields[HTTPField.Name("X-Transformations")!]
 /// ```
 public struct DownloadResponse: Sendable {

@@ -29,7 +29,7 @@ struct BucketDetailView: View {
             Button("createSignedUploadURL") {
               Task {
                 do {
-                  let response = try await supabase.storage.from(bucket.id)
+                  let response = try await supabaseClient.storage.from(bucket.id)
                     .createSignedUploadURL(path: "\(UUID().uuidString).txt")
                   lastActionResult = ("createSignedUploadURL", response)
                 } catch {}
@@ -89,7 +89,7 @@ struct BucketDetailView: View {
       }
     }
     .navigationDestination(for: StorageObject.self) {
-      FileObjectDetailView(api: supabase.storage.from(bucket.id), fileObject: $0)
+      FileObjectDetailView(api: supabaseClient.storage.from(bucket.id), fileObject: $0)
     }
   }
 
@@ -98,7 +98,7 @@ struct BucketDetailView: View {
     fileObjects = .inFlight
     fileObjects = await .result(
       Result { @Sendable in
-        try await supabase.storage.from(bucket.id).list()
+        try await supabaseClient.storage.from(bucket.id).list()
       }
     )
   }

@@ -468,7 +468,8 @@ struct AuthClientIntegrationTests {
     try await authClient.signInWithOTP(email: email)
 
     try await authClient.resend(
-      email: email, type: .signup, redirectTo: URL(string: "http://localhost:3000")!)
+      email: email, type: .signup, options: .init(redirectTo: URL(string: "http://localhost:3000")!)
+    )
   }
 
   @Test
@@ -677,7 +678,7 @@ struct AuthClientIntegrationTests {
 
     try await authClient.resetPassword(
       email: email,
-      redirectTo: URL(string: "http://localhost:3000")!
+      options: .init(redirectTo: URL(string: "http://localhost:3000")!)
     )
     let link = try await MailCatcher().latestLink(to: email)
     let location = try await redirectLocation(of: link)
@@ -724,7 +725,7 @@ struct AuthClientIntegrationTests {
       email: email, options: EmailOTPOptions(redirectTo: redirectTo))
     let magicLinkFlow = try #require(
       try await authClient.dependencies.flowStore.pendingFlows().first)
-    try await authClient.resetPassword(email: otherEmail, redirectTo: redirectTo)
+    try await authClient.resetPassword(email: otherEmail, options: .init(redirectTo: redirectTo))
     let recoveryFlow = try #require(
       try await authClient.dependencies.flowStore.pendingFlows().first)
     #expect(recoveryFlow.id != magicLinkFlow.id)

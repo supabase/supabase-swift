@@ -9,7 +9,7 @@ import Supabase
 import SwiftUI
 
 struct PresenceView: View {
-  @Environment(AuthController.self) var auth
+  @Environment(AuthModel.self) var auth
   @State var onlineUsers: [PresenceUser] = []
   @State var error: Error?
 
@@ -47,7 +47,8 @@ struct PresenceView: View {
     .navigationTitle("Presence")
     .gitHubSourceLink()
     .task {
-      await observePresence(of: auth.currentUserID)
+      guard let userID = auth.user?.id else { return }
+      await observePresence(of: userID)
     }
   }
 
@@ -55,7 +56,7 @@ struct PresenceView: View {
     let user = PresenceUser(id: userID.uuidString, username: "User \(userID.uuidString.prefix(8))")
 
     // One key per user, so a user signed in on two devices counts once.
-    let channel = await supabase.channel("presence-example") {
+    let channel = await supabaseClient.channel("presence-example") {
       $0.presence.key = user.id
     }
 
@@ -78,7 +79,7 @@ struct PresenceView: View {
       }
     }
 
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 
   /// The server forgets the tracked payload when the channel joins again.

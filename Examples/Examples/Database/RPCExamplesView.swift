@@ -75,7 +75,7 @@ struct RPCExamplesView: View {
     do {
       error = nil
       let response: HelloWorldResponse =
-        try await supabase
+        try await supabaseClient
         .rpc("hello_world", params: ["name": name])
         .single()
         .execute()
@@ -94,7 +94,7 @@ struct RPCExamplesView: View {
       defer { isLoading = false }
 
       let stats: [UserStats] =
-        try await supabase
+        try await supabaseClient
         .rpc("get_user_stats")
         .execute()
         .value

@@ -249,6 +249,10 @@ public struct DownloadOptions: Sendable {
   /// of a cached one.
   public var cacheNonce: String?
 
+  /// An image transformation that Storage applies before delivery. `nil` (the default) fetches
+  /// the object as stored.
+  public var transform: ImageTransform?
+
   /// Extra HTTP headers to include with the download request. A header set here wins over the
   /// one the SDK would send for the same name.
   public var headers: HTTPFields
@@ -259,17 +263,128 @@ public struct DownloadOptions: Sendable {
   ///   - range: The bytes to fetch, both ends included. Fetches the whole object when `nil`.
   ///   - versionId: The version of the object to fetch. Fetches the current version when `nil`.
   ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  ///   - transform: An image transformation that Storage applies before delivery.
   ///   - headers: Extra HTTP headers for the download request.
   public init(
     range: ClosedRange<Int64>? = nil,
     versionId: String? = nil,
     cacheNonce: String? = nil,
+    transform: ImageTransform? = nil,
     headers: HTTPFields = [:]
   ) {
     self.range = range
     self.versionId = versionId
     self.cacheNonce = cacheNonce
+    self.transform = transform
     self.headers = headers
+  }
+}
+
+/// Options for ``StorageBucket/createSignedURL(path:expiresIn:options:)``.
+///
+/// ```swift
+/// let url = try await bucket.createSignedURL(
+///   path: "report.pdf",
+///   expiresIn: .seconds(60),
+///   options: SignedURLOptions(download: .withOriginalName)
+/// )
+/// ```
+public struct SignedURLOptions: Sendable {
+  /// Controls whether the URL triggers a file download. `nil` (the default) displays the file
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// An image transformation that Storage applies before delivery.
+  public var transform: ImageTransform?
+
+  /// The version the URL serves. `nil` (the default) serves the current version.
+  public var versionId: String?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``SignedURLOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
+  ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
+  ///   - transform: An image transformation that Storage applies before delivery.
+  ///   - versionId: The version the URL serves.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(
+    download: DownloadBehavior? = nil,
+    transform: ImageTransform? = nil,
+    versionId: String? = nil,
+    cacheNonce: String? = nil
+  ) {
+    self.download = download
+    self.transform = transform
+    self.versionId = versionId
+    self.cacheNonce = cacheNonce
+  }
+}
+
+/// Options for ``StorageBucket/createSignedURLs(paths:expiresIn:options:)``.
+public struct SignedURLsOptions: Sendable {
+  /// Controls whether the URLs trigger a file download. `nil` (the default) displays the files
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``SignedURLsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URLs trigger a file download. Pass `.withOriginalName`
+  ///     to download with each file's original name, or `.named("custom")` for a custom name.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(download: DownloadBehavior? = nil, cacheNonce: String? = nil) {
+    self.download = download
+    self.cacheNonce = cacheNonce
+  }
+}
+
+/// Options for ``StorageBucket/publicURL(path:options:)``.
+///
+/// ```swift
+/// let url = bucket.publicURL(path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// ```
+public struct PublicURLOptions: Sendable {
+  /// Controls whether the URL triggers a file download. `nil` (the default) displays the file
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// An image transformation that Storage applies before delivery.
+  public var transform: ImageTransform?
+
+  /// The version the URL serves. `nil` (the default) serves the current version.
+  public var versionId: String?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``PublicURLOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
+  ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
+  ///   - transform: An image transformation that Storage applies before delivery.
+  ///   - versionId: The version the URL serves.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(
+    download: DownloadBehavior? = nil,
+    transform: ImageTransform? = nil,
+    versionId: String? = nil,
+    cacheNonce: String? = nil
+  ) {
+    self.download = download
+    self.transform = transform
+    self.versionId = versionId
+    self.cacheNonce = cacheNonce
   }
 }
 
@@ -326,7 +441,7 @@ public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByS
   }
 }
 
-/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
+/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:options:)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -1417,8 +1532,9 @@ extension SortOrder: Encodable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").publicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .named("annual-2024.pdf")))
 /// ```
 ///
 /// ## Topics
@@ -1575,15 +1691,16 @@ public struct UpdateBucketOptions: Hashable, Sendable {
 
 /// A server-side image transformation applied before the asset is served.
 ///
-/// Pass an ``ImageTransform`` as the `transform:` argument of
-/// ``StorageBucket/download(path:transform:options:progress:)``,
-/// ``StorageBucket/publicURL(path:download:transform:versionId:cacheNonce:)`` or
-/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
+/// Set an ``ImageTransform`` as the `transform` of the options of
+/// ``StorageBucket/download(path:options:progress:)``,
+/// ``StorageBucket/publicURL(path:options:)`` or
+/// ``StorageBucket/createSignedURL(path:expiresIn:options:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
 ///
 /// ```swift
 /// let transform = ImageTransform(width: 200, height: 200, resize: .cover, quality: 80)
-/// let thumbnail = try await storage.from("avatars").download(path: "user.png", transform: transform)
+/// let thumbnail = try await storage.from("avatars").download(
+///   path: "user.png", options: DownloadOptions(transform: transform))
 ///   .data()
 /// ```
 ///

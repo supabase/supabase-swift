@@ -10,8 +10,7 @@ import Supabase
 import SwiftUI
 
 struct UserIdentityList: View {
-  @Environment(\.webAuthenticationSession) private var webAuthenticationSession
-  @Environment(\.openURL) private var openURL
+  @Environment(\.supabase) private var supabase
 
   @State private var identities = ActionState<[UserIdentity], any Error>.idle
   @State private var error: (any Error)?
@@ -162,11 +161,12 @@ struct UserIdentityList: View {
               // Link a new OAuth identity
               try await supabase.auth.linkIdentity(.google)
 
-              // For Apple, use OIDC flow
+              // For Apple, use the ID token flow with a nonce
               try await supabase.auth.linkIdentity(
                 idToken: IDTokenCredentials(
                   provider: .apple,
-                  idToken: appleIDToken
+                  idToken: appleIDToken,
+                  nonce: nonce.raw
                 )
               )
               """
@@ -319,9 +319,11 @@ struct UserIdentityList: View {
   }
 
   private func linkAppleIdentity() async throws {
+    let nonce = Nonce.generate()
     let provider = ASAuthorizationAppleIDProvider()
     let request = provider.createRequest()
     request.requestedScopes = [.email, .fullName]
+    request.nonce = nonce.hashed
 
     let controller = ASAuthorizationController(authorizationRequests: [request])
     let authorization = try await controller.performRequests()
@@ -341,7 +343,8 @@ struct UserIdentityList: View {
     try await supabase.auth.linkIdentity(
       idToken: IDTokenCredentials(
         provider: .apple,
-        idToken: identityToken
+        idToken: identityToken,
+        nonce: nonce.raw
       )
     )
   }

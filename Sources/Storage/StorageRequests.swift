@@ -483,10 +483,8 @@ struct StorageRequests: Sendable {
   }
 
   /// A transform routes to `render/image/authenticated`; the plain object route otherwise.
-  func download(
-    bucket: String, key: ObjectKey, transform: ImageTransform?, options: DownloadOptions
-  ) -> StorageRequest {
-    let transform = transform?.queryItems ?? []
+  func download(bucket: String, key: ObjectKey, options: DownloadOptions) -> StorageRequest {
+    let transform = options.transform?.queryItems ?? []
     let route = transform.isEmpty ? "object" : "render/image/authenticated"
     var query = transform
     if let versionId = options.versionId {

@@ -68,7 +68,7 @@ final class ResumableUploadModel {
 
   func refreshPending() {
     do {
-      pending = try supabase.storage.resumableUploads.pending()
+      pending = try supabaseClient.storage.resumableUploads.pending()
     } catch {
       self.error = error
     }
@@ -224,7 +224,7 @@ struct ResumableUploadView: View {
     .task {
       model.refreshPending()
       do {
-        buckets = try await supabase.storage.listBuckets()
+        buckets = try await supabaseClient.storage.listBuckets()
         selectedBucket = buckets.first?.id ?? ""
       } catch {
         model.error = error
@@ -236,7 +236,7 @@ struct ResumableUploadView: View {
         guard let picked = try? await item.loadTransferable(type: PickedFile.self) else { return }
         selectedPhoto = nil
         await model.start {
-          try supabase.storage.from(selectedBucket)
+          try supabaseClient.storage.from(selectedBucket)
             .resumableUpload(path: filePath, fileURL: picked.url)
         }
         try? FileManager.default.removeItem(at: picked.url)
@@ -248,7 +248,8 @@ struct ResumableUploadView: View {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         await model.start {
-          try supabase.storage.from(selectedBucket).resumableUpload(path: filePath, fileURL: url)
+          try supabaseClient.storage.from(selectedBucket).resumableUpload(
+            path: filePath, fileURL: url)
         }
       }
     }

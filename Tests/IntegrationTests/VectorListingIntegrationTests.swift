@@ -65,7 +65,7 @@ struct VectorListingIntegrationTests {
       (0..<3).map { VectorEntry(key: "k\($0)", data: VectorData(float32: [1, Float($0)])) })
 
     var keys: [String] = []
-    for try await vector in index.listVectors(maxResults: 1) {
+    for try await vector in index.listVectors(options: ListVectorsOptions(maxResults: 1)) {
       keys.append(vector.key)
     }
 

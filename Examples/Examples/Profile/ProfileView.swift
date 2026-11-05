@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct ProfileView: View {
+  @Environment(\.supabase) private var supabase
   @State var user: User?
   @State var error: Error?
   @State var isLoading = false

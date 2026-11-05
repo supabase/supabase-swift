@@ -58,7 +58,7 @@ final class StorageBucketIntegrationTests {
   @Test
   func getPublicURLWithDownloadQueryString() throws {
     let publicURL = storage.from(bucketName).publicURL(
-      path: uploadPath, download: .withOriginalName)
+      path: uploadPath, options: PublicURLOptions(download: .withOriginalName))
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
@@ -68,7 +68,7 @@ final class StorageBucketIntegrationTests {
   @Test
   func getPublicURLWithCustomDownload() throws {
     let publicURL = storage.from(bucketName).publicURL(
-      path: uploadPath, download: .named("test.jpg"))
+      path: uploadPath, options: PublicURLOptions(download: .named("test.jpg")))
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
@@ -92,7 +92,8 @@ final class StorageBucketIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
+      path: uploadPath, expiresIn: .seconds(2000),
+      options: SignedURLOptions(download: .withOriginalName))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -105,7 +106,8 @@ final class StorageBucketIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
+      path: uploadPath, expiresIn: .seconds(2000),
+      options: SignedURLOptions(download: .named("test.jpg")))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -333,12 +335,12 @@ final class StorageBucketIntegrationTests {
   func getPublishURLWithTransformationOptions() throws {
     let res = storage.from(bucketName).publicURL(
       path: uploadPath,
-      transform: ImageTransform(
-        width: 700,
-        height: 300,
-        quality: 70
-      )
-    )
+      options: PublicURLOptions(
+        transform: ImageTransform(
+          width: 700,
+          height: 300,
+          quality: 70
+        )))
 
     #expect(
       res.absoluteString
@@ -781,13 +783,13 @@ final class StorageBucketIntegrationTests {
     try await api.upload(path: uploadPath, data: file)
 
     let signed = try await api.createSignedURL(
-      path: uploadPath, expiresIn: .seconds(60), download: download)
+      path: uploadPath, expiresIn: .seconds(60), options: SignedURLOptions(download: download))
     let (_, signedResponse) = try await StorageIntegration.fetch(signed)
     #expect(
       signedResponse.value(forHTTPHeaderField: "Content-Disposition")?.contains(expected) == true)
 
     let (_, publicResponse) = try await StorageIntegration.fetch(
-      api.publicURL(path: uploadPath, download: download))
+      api.publicURL(path: uploadPath, options: PublicURLOptions(download: download)))
     #expect(
       publicResponse.value(forHTTPHeaderField: "Content-Disposition")?.contains(expected) == true)
   }
@@ -822,7 +824,8 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(60), transform: ImageTransform(width: 10, height: 10))
+      path: uploadPath, expiresIn: .seconds(60),
+      options: SignedURLOptions(transform: ImageTransform(width: 10, height: 10)))
 
     #expect(url.query?.contains("token=") == true)
   }
@@ -835,15 +838,17 @@ final class StorageBucketIntegrationTests {
       api.publicURL(path: "/folder//my file.png").absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/folder/my%20file.png")
     #expect(
-      api.publicURL(path: "a+b.png", download: .named("x y.png")).absoluteString
+      api.publicURL(path: "a+b.png", options: PublicURLOptions(download: .named("x y.png")))
+        .absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/a%2Bb.png?download=x%20y.png"
     )
     #expect(
       api.publicURL(
         path: "img.png",
-        transform: ImageTransform(
-          width: 10, resize: .cover, format: .webp, gravity: .focalPoint,
-          focalPoint: .init(x: 0.5, y: 0.25))
+        options: PublicURLOptions(
+          transform: ImageTransform(
+            width: 10, resize: .cover, format: .webp, gravity: .focalPoint,
+            focalPoint: .init(x: 0.5, y: 0.25)))
       ).absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/render/image/public/\(bucketName)/img.png?width=10&resize=cover&format=webp&gravity=fp&x_offset=0.5&y_offset=0.25"
     )

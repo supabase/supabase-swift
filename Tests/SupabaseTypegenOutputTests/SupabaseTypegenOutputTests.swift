@@ -88,4 +88,55 @@ struct SupabaseTypegenOutputTests {
         + "messages:channel_messages(*),first:first_message(*)&shouted_slug=eq.GENERAL"
     )
   }
+
+  @Test
+  func generatedFunctionCallSendsItsArgumentsAndFilters() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.searchMessages(query: "hello")
+      .where { $0.channelId.eq(1) }
+      .execute()
+
+    let request = try #require(transport.requests.first)
+    #expect(request.head.method == .post)
+    #expect(
+      request.head.path?.removingPercentEncoding == "/rpc/search_messages?channel_id=eq.1")
+    #expect(request.body.map { String(decoding: $0, as: UTF8.self) } == #"{"query":"hello"}"#)
+  }
+
+  @Test
+  func overloadsAreToldApartByTheirLabels() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.messagesOf(channelSlug: "public", maxCount: 1).execute()
+
+    let body = try #require(transport.requests.first?.body)
+    #expect(
+      try JSONDecoder().decode(JSONValue.self, from: body)
+        == ["channel_slug": "public", "max_count": 1])
+  }
+
+  /// A generated call is a `rpc(_:)` call, so `readOnly()` moves its arguments into the query.
+  @Test
+  func generatedFunctionCallCanBeReadOnly() async throws {
+    let (client, transport) = recordingClient()
+    _ = try await client.rpc.searchMessages(query: "hello", channelId: 1)
+      .readOnly()
+      .where { $0.channelId.eq(1) }
+      .execute()
+
+    let request = try #require(transport.requests.first)
+    #expect(request.head.method == .get)
+    #expect(request.body == nil)
+    #expect(
+      request.head.path?.removingPercentEncoding
+        == "/rpc/search_messages?channel_id=1&query=hello&channel_id=eq.1")
+  }
+
+  @Test
+  func generatedFunctionWithAJsonBodySendsItWhole() async throws {
+    let (client, transport) = recordingClient(body: "[1,2]")
+    let echoed = try await client.rpc.echo([1, 2]).execute().value
+
+    #expect(echoed == [1, 2])
+    #expect(transport.requests.first?.body.map { String(decoding: $0, as: UTF8.self) } == "[1,2]")
+  }
 }

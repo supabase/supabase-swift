@@ -4,6 +4,7 @@ import Supabase
 import SwiftUI
 
 struct SignInWithFacebook: View {
+  @Environment(\.supabase) private var supabase
   @State private var actionState = ActionState<Void, Error>.idle
 
   static let logger = Logger(subsystem: "com.supabase.examples", category: "SignInWithFacebook")

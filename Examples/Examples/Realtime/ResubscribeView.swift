@@ -78,12 +78,12 @@ struct ResubscribeView: View {
   /// `disconnect()` leaves a subscribed channel `.unsubscribed`, and `connect()` does not rejoin
   /// it. Subscribing again joins it, and the join emits `.resubscribed`.
   func rejoin() async {
-    await supabase.realtime.disconnect()
+    await supabaseClient.realtime.disconnect()
     // Leaving the view removes the channel while `disconnect()` runs. Asking for it again would
     // create a channel that nothing removes.
     guard !Task.isCancelled else { return }
     do {
-      try await supabase.channel(channelName).subscribe()
+      try await supabaseClient.channel(channelName).subscribe()
     } catch {
       if !Task.isCancelled {
         self.error = error
@@ -92,7 +92,7 @@ struct ResubscribeView: View {
   }
 
   func observeTodos() async {
-    let channel = await supabase.channel(channelName)
+    let channel = await supabaseClient.channel(channelName)
     let changes = await channel.postgresChanges(for: Todo.self)
     let events = await channel.events()
 
@@ -111,7 +111,7 @@ struct ResubscribeView: View {
       }
     }
 
-    await supabase.removeChannel(channel)
+    await supabaseClient.removeChannel(channel)
   }
 
   func reloadOnResubscribe(_ events: AsyncStream<RealtimeChannelEvent>) async {

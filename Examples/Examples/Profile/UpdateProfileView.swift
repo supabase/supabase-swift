@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct UpdateProfileView: View {
+  @Environment(\.supabase) private var supabase
   let user: User
 
   @State var email = ""

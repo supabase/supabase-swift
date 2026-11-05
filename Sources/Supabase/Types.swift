@@ -80,6 +80,23 @@ public struct SupabaseClientOptions: Sendable {
     /// ``AuthClient/Configuration/observesAppLifecycle``.
     public let observesAppLifecycle: Bool
 
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/http`` for Auth, field by field: a `nil`
+    /// transport or timeout falls back to the global one, and its middlewares run after the
+    /// global ones. `nil` uses the global configuration as is. Auth requests only; PostgREST,
+    /// Storage and Functions keep the global configuration.
+    public let http: HTTPClientConfiguration?
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/logger`` for Auth. `nil` uses the global
+    /// logger.
+    public let logger: Logging.Logger?
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/clock`` for Auth: the clock auto refresh
+    /// and Auth's request-retry backoff sleep on. `nil` uses the global clock.
+    ///
+    /// Every other sub-client keeps following ``SupabaseClientOptions/GlobalOptions/clock``, so
+    /// set this only to drive Auth apart from them.
+    public let clock: (any Clock<Duration>)?
+
     /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
     /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
     /// When set, the `auth` namespace of the Supabase client cannot be used.
@@ -93,6 +110,9 @@ public struct SupabaseClientOptions: Sendable {
       storageKey: String? = nil,
       autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
+      http: HTTPClientConfiguration? = nil,
+      logger: Logging.Logger? = nil,
+      clock: (any Clock<Duration>)? = nil,
       accessToken: (@Sendable () async throws -> String?)? = nil
     ) {
       self.storage = storage
@@ -100,6 +120,9 @@ public struct SupabaseClientOptions: Sendable {
       self.storageKey = storageKey
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
+      self.http = http
+      self.logger = logger
+      self.clock = clock
       self.accessToken = accessToken
     }
   }
