@@ -30,8 +30,8 @@ struct AutoRefreshTests {
   }
 
   #if !canImport(UIKit) && !os(watchOS)
-    // While another suite runs `withMainSerialExecutor`, every job goes to the main queue, which
-    // this test blocks.
+    // This test blocks the main queue, where every job goes while a suite in another test target
+    // swaps in the main serial executor, so it never overlaps with them.
     @Suite(.mainSerialExecutorSerialized)
     struct WhileTheMainThreadIsBlocked {
       @Test

@@ -82,7 +82,6 @@ struct JWKSCacheTests {
     while !condition() {
       await Task.yield()
     }
-    await Task.megaYield()
   }
 
   @Test
