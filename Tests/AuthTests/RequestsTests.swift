@@ -174,7 +174,8 @@ struct RequestsTests {
           #expect(authorizationHeader == "bearer accesstoken")
           return (json(named: "user"), HTTPURLResponse.stub())
         },
-        date: { currentDate }
+        date: { currentDate },
+        redirectTo: URL(string: "https://dummy-url.com/callback")!
       )
 
       let url = URL(
@@ -198,7 +199,7 @@ struct RequestsTests {
 
   @Test
   func sessionFromURLWithMissingComponent() async {
-    let sut = makeSUT()
+    let sut = makeSUT(redirectTo: URL(string: "https://dummy-url.com/callback")!)
 
     let url = URL(
       string:
@@ -1194,6 +1195,7 @@ struct RequestsTests {
     record: Bool = false,
     fetch: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
     date: @escaping @Sendable () -> Date = { Date() },
+    redirectTo: URL? = nil,
     file: StaticString = #filePath,
     testName: String = #function,
     line: UInt = #line
@@ -1203,6 +1205,7 @@ struct RequestsTests {
       storageKey: uniqueStorageKey(),
       headers: HTTPFields(["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"]),
       storage: InMemoryTestStorage(),
+      redirectTo: redirectTo,
       http: .init(
         transport: snapshotTransport(
           record: record, fetch: fetch, file: file, testName: testName, line: line)),

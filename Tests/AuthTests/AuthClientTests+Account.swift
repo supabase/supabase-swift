@@ -77,7 +77,7 @@ extension AuthClientTests {
   func pkceExchangeAfterResetPasswordEmitsPasswordRecovery() async throws {
     transport.stub(.post, "recover")
     transport.stub(.post, "token", data: MockData.session)
-    let sut = makeSUT()
+    let sut = makeSUT(redirectTo: URL(string: "https://supabase.com")!)
 
     try await sut.resetPassword(email: "example@mail.com")
 

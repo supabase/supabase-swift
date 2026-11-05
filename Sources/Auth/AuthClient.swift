@@ -156,6 +156,8 @@ public final class AuthClient: Sendable {
 
   private let lifecycleTask: Task<Void, Never>
 
+  private let noCallbackWarned = LockIsolated(false)
+
   /// Returns the session, refreshing it first when its access token expires in less than 30
   /// seconds.
   ///
@@ -791,22 +793,39 @@ public final class AuthClient: Sendable {
 
   /// Returns `true` when `url` is a redirect that ``handleRedirect(_:)`` handles.
   ///
-  /// It reads only the URL, not storage. A URL with a code returns `true` even when no flow
-  /// waits for it.
-  public func isAuthRedirect(_ url: URL) -> Bool {
-    AuthRedirect.parse(url) != nil
+  /// A URL is an auth redirect when it has an auth result, such as a code, tokens, or an error,
+  /// and it opens a known callback. The known callbacks are ``Configuration/redirectTo`` and the
+  /// redirect URL of each pending flow. A URL opens a callback when the scheme, host, port, and
+  /// path match. A trailing slash is ignored.
+  ///
+  /// It reads the pending flows from storage, but sends no request. A URL with a code returns
+  /// `true` for the configured callback even when no flow waits for it. When storage cannot be
+  /// read, only ``Configuration/redirectTo`` is checked.
+  public func isAuthRedirect(_ url: URL) async -> Bool {
+    await authRedirect(in: url) { [self] in
+      do {
+        return try await dependencies.flowStore.pendingFlows()
+      } catch {
+        logger.error("Failure reading the pending flows: \(error.localizedDescription)")
+        return []
+      }
+    } != nil
   }
 
   /// Finishes the auth flow that a redirect URL reports, and stores the session.
   ///
-  /// Pass the URLs that reach your auth callback. ``isAuthRedirect(_:)`` checks one. The client
-  /// reads the URL's contents to find the flow: a PKCE code, tokens from an email link, an error,
-  /// or an email change that waits for a second confirmation.
+  /// The client handles only a URL that opens a known callback: ``Configuration/redirectTo`` or
+  /// the redirect URL of a pending flow. ``isAuthRedirect(_:)`` applies the same rule. For any
+  /// other URL, such as `myapp://invite?code=ABC`, it returns `nil` and sends no request. When no
+  /// callback is known, no URL is an auth redirect, and the client logs a warning.
   ///
-  /// A code without a flow ID, such as the code in an email link, can belong to any pending flow.
-  /// The client tries the pending flows newest first, so a link from an earlier email can still
-  /// finish its own flow. The server may have made that link invalid already, for example when a
-  /// later email went to the same user.
+  /// The client reads the URL's contents to find the flow: a PKCE code, tokens from an email link,
+  /// an error, or an email change that waits for a second confirmation.
+  ///
+  /// A code in a redirect, such as the code in an email link, can belong to any pending flow that
+  /// waits on the same callback. The client tries those flows newest first, so a link from an
+  /// earlier email can still finish its own flow. The server may have made that link invalid
+  /// already, for example when a later email went to the same user.
   ///
   /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to, with
   /// no pending flow. Anyone who can make your app open a URL can sign it in to their own account
@@ -833,19 +852,86 @@ public final class AuthClient: Sendable {
   ///   client then stores nothing.
   @discardableResult
   public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
-    try await handleRedirect(url, flowID: nil)
+    guard
+      let (redirect, flows) = try await authRedirect(
+        in: url, flows: { try await dependencies.flowStore.pendingFlows() })
+    else { return nil }
+    return try await handle(redirect, flow: .candidates(flows), signOuts: nil)
   }
 
-  /// `flowID` names the flow the caller started. It wins over the URL's `sb_flow_id`.
+  /// Handles the callback URL of the flow `flowID`, which the caller started and presented. The
+  /// URL is not checked against the known callbacks, because the presenter returned it for that
+  /// flow.
   ///
   /// `signOuts` is the sign-out count when the sign-in started; a later sign-out discards it.
-  /// `nil` reads the count now.
   func handleRedirect(
     _ url: URL,
-    flowID: UUID?,
-    signOuts: UInt64? = nil
+    flowID: UUID,
+    signOuts: UInt64
   ) async throws -> RedirectResult? {
     guard let redirect = AuthRedirect.parse(url) else { return nil }
+    return try await handle(redirect, flow: .id(flowID), signOuts: signOuts)
+  }
+
+  /// The redirect in `url` and the pending flows that wait on its callback, newest first, or `nil`
+  /// when `url` is not an auth redirect.
+  ///
+  /// A redirect that the client handled already, or handles now, is accepted again without the
+  /// callback check, so a redelivery replays its result after its flow is gone.
+  private func authRedirect(
+    in url: URL,
+    flows loadFlows: () async throws -> [PendingFlowRecord]
+  ) async rethrows -> (redirect: AuthRedirect, flows: [PendingFlowRecord])? {
+    guard let redirect = AuthRedirect.parse(url) else { return nil }
+
+    if let key = redirect.deduplicationKey,
+      await dependencies.redirectDeduplicator.contains(key)
+    {
+      return (redirect, [])
+    }
+
+    let flows = try await loadFlows()
+    let waiting = flows.filter { flow in
+      flow.redirectTo.map { AuthRedirect.url(url, reaches: $0) } ?? false
+    }
+    if !waiting.isEmpty { return (redirect, waiting) }
+
+    if let configured = configuration.redirectTo, AuthRedirect.url(url, reaches: configured) {
+      return (redirect, [])
+    }
+    if configuration.redirectTo == nil, flows.allSatisfy({ $0.redirectTo == nil }) {
+      warnNoCallbackOnce()
+    }
+    return nil
+  }
+
+  private func warnNoCallbackOnce() {
+    let first = noCallbackWarned.withValue { warned in
+      defer { warned = true }
+      return !warned
+    }
+    guard first else { return }
+    logger.warning(
+      """
+      A URL with an auth result is not an auth redirect: Configuration.redirectTo is not set, and \
+      no pending flow has a redirect URL. Set Configuration.redirectTo so that redirects that \
+      arrive after their flow is gone are handled too.
+      """)
+  }
+
+  /// The flow a code redirect finishes: one named flow, or a list of candidates to try.
+  private enum RedirectFlow {
+    case id(UUID)
+    case candidates([PendingFlowRecord])
+  }
+
+  /// `signOuts` is the sign-out count when the sign-in started; a later sign-out discards it.
+  /// `nil` reads the count now.
+  private func handle(
+    _ redirect: AuthRedirect,
+    flow redirectFlow: RedirectFlow,
+    signOuts: UInt64?
+  ) async throws -> RedirectResult? {
     let started = if let signOuts { signOuts } else { await sessionStore.signOuts }
 
     switch redirect {
@@ -855,10 +941,15 @@ public final class AuthClient: Sendable {
     case .emailChangePending(let message):
       return .emailChangePending(message: message)
 
-    case .code(let code, let urlFlowID):
+    case .code(let code):
       return try await dependencies.redirectDeduplicator.value(for: code) { [self] in
-        let (session, flow) = try await exchange(
-          code: code, flowID: flowID ?? urlFlowID, signOuts: started)
+        let (session, flow) =
+          switch redirectFlow {
+          case .id(let id):
+            try await exchange(code: code, flowID: id, signOuts: started)
+          case .candidates(let flows):
+            try await exchange(code: code, candidates: flows, signOuts: started)
+          }
         return .signedIn(session, verification: flow.purpose.verification)
       }
 
@@ -870,28 +961,38 @@ public final class AuthClient: Sendable {
     }
   }
 
-  /// Exchanges `code` with the flow `flowID` names. With an ID, never falls back to another flow.
-  ///
-  /// Without an ID, the code can belong to any pending flow, for example an email link that cannot
-  /// carry an ID. The client tries the flows newest first. A ``ErrorCode/badCodeVerifier``
-  /// rejection means the code belongs to another flow, so the client tries the next one. Any other
-  /// rejection throws. A guessed flow is kept on every rejection, because a rejection does not
-  /// prove the code was that flow's; the TTL drops it.
+  /// Exchanges `code` with the flow `flowID` names, or, without an ID, with the pending flows
+  /// newest first. With an ID, never falls back to another flow.
   private func exchange(
     code: String,
     flowID: UUID?,
     signOuts: UInt64
   ) async throws -> (session: Session, flow: PendingFlowRecord) {
-    if let flowID {
-      guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
-        throw await missingFlowError(
-          "No pending flow with ID \(flowID). It finished, expired, or started on another device.",
-          signOuts: signOuts)
-      }
-      return (try await exchange(code: code, flow: flow, guessed: false, signOuts: signOuts), flow)
+    guard let flowID else {
+      return try await exchange(
+        code: code, candidates: try await dependencies.flowStore.pendingFlows(),
+        signOuts: signOuts)
     }
+    guard let flow = try await dependencies.flowStore.flow(id: flowID) else {
+      throw await missingFlowError(
+        "No pending flow with ID \(flowID). It finished, expired, or started on another device.",
+        signOuts: signOuts)
+    }
+    return (try await exchange(code: code, flow: flow, guessed: false, signOuts: signOuts), flow)
+  }
 
-    let flows = try await dependencies.flowStore.pendingFlows()
+  /// Exchanges `code` with the first of `flows` that it belongs to.
+  ///
+  /// Without an ID, the code can belong to any of the flows, for example an email link that cannot
+  /// carry an ID. A ``ErrorCode/badCodeVerifier`` rejection means the code belongs to another
+  /// flow, so the client tries the next one. Any other rejection throws. A guessed flow is kept on
+  /// every rejection, because a rejection does not prove the code was that flow's; the TTL drops
+  /// it.
+  private func exchange(
+    code: String,
+    candidates flows: [PendingFlowRecord],
+    signOuts: UInt64
+  ) async throws -> (session: Session, flow: PendingFlowRecord) {
     var rejection: (any Error)?
     for flow in flows {
       do {

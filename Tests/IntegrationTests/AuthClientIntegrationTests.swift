@@ -37,6 +37,7 @@ struct AuthClientIntegrationTests {
     serviceRole: Bool = false,
     storage: any AuthStorage = InMemoryTestStorage(),
     storageKey: String = "sb-test-\(UUID().uuidString)-auth-token",
+    redirectTo: URL? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
   ) -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
@@ -49,6 +50,7 @@ struct AuthClientIntegrationTests {
           .authorization: "Bearer \(key)",
         ],
         storage: storage,
+        redirectTo: redirectTo,
         logger: logger
       )
     )
@@ -755,8 +757,10 @@ struct AuthClientIntegrationTests {
     let link = try await admin.generateLink(.magicLink(email: email))
     let location = try await redirectLocation(of: link.properties.actionLink)
     #expect(location.fragment?.contains("access_token=") == true)
+    // The link goes to the Site URL, so the client needs it as its callback.
+    let client = Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
 
-    let result = try await authClient.handleRedirect(location)
+    let result = try await client.handleRedirect(location)
     guard case .signedIn(let session, _) = result else {
       Issue.record("Expected .signedIn, got \(String(describing: result))")
       return
@@ -768,6 +772,54 @@ struct AuthClientIntegrationTests {
   func unrelatedURLIsNotAnAuthRedirect() async throws {
     let result = try await authClient.handleRedirect(URL(string: "http://localhost:3000/profile")!)
     #expect(result == nil)
+  }
+
+  @Test
+  func implicitMagicLinkWithNoKnownCallbackIsNotHandled() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+
+    let link = try await admin.generateLink(.magicLink(email: email))
+    let location = try await redirectLocation(of: link.properties.actionLink)
+
+    #expect(await authClient.isAuthRedirect(location) == false)
+    #expect(try await authClient.handleRedirect(location) == nil)
+    #expect(authClient.currentSession == nil)
+  }
+
+  /// A deep link on another path of the callback's host is not an auth redirect, even with the
+  /// real code of a pending flow. The flow stays, and the real redirect still finishes it.
+  @Test
+  func aRecoveryCodeOnAnotherPathIsNotAnAuthRedirect() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    try await admin.createUser(
+      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+    )
+    try await authClient.resetPassword(
+      email: email,
+      options: .init(redirectTo: URL(string: "http://localhost:3000")!)
+    )
+    let link = try await MailCatcher().latestLink(to: email)
+    let location = try await redirectLocation(of: link)
+    var deepLink = try #require(URLComponents(url: location, resolvingAgainstBaseURL: false))
+    deepLink.path = "/invite"
+    let invite = try #require(deepLink.url)
+
+    #expect(await authClient.isAuthRedirect(invite) == false)
+    #expect(try await authClient.handleRedirect(invite) == nil)
+    #expect(try await authClient.dependencies.flowStore.pendingFlows().count == 1)
+
+    #expect(await authClient.isAuthRedirect(location))
+    let result = try await authClient.handleRedirect(location)
+    guard case .signedIn(_, let verification) = result else {
+      Issue.record("Expected .signedIn, got \(String(describing: result))")
+      return
+    }
+    #expect(verification == .recovery)
   }
 
   @Test

@@ -1,16 +1,23 @@
+import ConcurrencyExtras
 import Foundation
 import Logging
 
 /// Stores each pending PKCE flow as its own record, with an index of the live flows.
 ///
-/// Every call reads storage again, because two clients can share one storage.
+/// Every call reads storage again, because two clients can share one storage. Index updates run
+/// one at a time for each storage key in the process. Another process, such as an app extension
+/// that shares the Keychain, can still overwrite an index update, so ``start(purpose:redirectTo:)``
+/// reads the index again after its update and repeats a lost one.
 actor FlowStore {
+  /// How many times ``start(purpose:redirectTo:)`` writes its index entry before it gives up.
+  static let maximumIndexAttempts = 3
+
   private let storage: any AuthStorage
   private let storageKey: String
   private let pkce: PKCE
   private let now: @Sendable () -> Date
   private let logger: Logging.Logger
-  private var lastIndexUpdate: Task<Void, Never>?
+  private let indexUpdates: FlowIndexUpdateQueue
 
   init(
     storage: any AuthStorage,
@@ -24,6 +31,7 @@ actor FlowStore {
     self.pkce = pkce
     self.now = now
     self.logger = logger
+    self.indexUpdates = .queue(storageKey: storageKey)
   }
 
   /// Saves a new flow and returns it with the challenge to send to the server.
@@ -40,10 +48,8 @@ actor FlowStore {
 
     try await storage.save(try flow.encoded(), key: recordKey(flow.id))
 
-    let dropped = try await updateIndex { index in
-      index.insert(
-        PendingFlowIndex.Entry(id: flow.id, createdAt: flow.createdAt), now: flow.createdAt)
-    }
+    let dropped = try await insertIndexEntry(
+      PendingFlowIndex.Entry(id: flow.id, createdAt: flow.createdAt))
 
     for id in dropped {
       do {
@@ -112,24 +118,39 @@ actor FlowStore {
     PendingFlowRecord.key(id: id, storageKey: storageKey)
   }
 
-  /// Runs the index read-modify-write one update at a time.
+  /// Inserts `entry`, then reads the index again and repeats the insert when another process
+  /// overwrote it. A lost entry would leave a record that no prune removes.
   ///
-  /// The actor is reentrant across the storage awaits, so without this two updates could read the
-  /// same index and the second save would drop the first one's change.
+  /// - Returns: The IDs of the flows the inserts dropped.
+  private func insertIndexEntry(_ entry: PendingFlowIndex.Entry) async throws -> [UUID] {
+    var dropped: [UUID] = []
+    for _ in 0..<Self.maximumIndexAttempts {
+      dropped += try await updateIndex { index in
+        index.flows.contains { $0.id == entry.id } ? [] : index.insert(entry, now: entry.createdAt)
+      }
+      if try await loadIndex().flows.contains(where: { $0.id == entry.id }) {
+        return dropped
+      }
+    }
+    logger.warning("Another client keeps overwriting the pending flow index.")
+    return dropped
+  }
+
+  /// Runs the index read-modify-write one update at a time for the storage key.
+  ///
+  /// The actor is reentrant across the storage awaits, and other clients in the process can share
+  /// the storage key. Without this, two updates could read the same index and the second save
+  /// would drop the first one's change.
   private func updateIndex<Result: Sendable>(
     _ change: @escaping @Sendable (inout PendingFlowIndex) -> Result
   ) async throws -> Result {
-    let previous = lastIndexUpdate
-    let update = Task { () throws -> Result in
-      await previous?.value
+    try await indexUpdates.run {
       var index = try await self.loadIndex()
       let result = change(&index)
       try await self.storage.save(
         try index.encoded(), key: PendingFlowIndex.key(storageKey: self.storageKey))
       return result
     }
-    lastIndexUpdate = Task { _ = await update.result }
-    return try await update.value
   }
 
   /// An index that fails to decode reads as empty, so the next update overwrites it.
@@ -142,5 +163,39 @@ actor FlowStore {
       logger.warning("The pending flow index fails to decode. It is treated as empty.")
       return PendingFlowIndex()
     }
+  }
+}
+
+/// Runs operations one at a time, in the order they arrive. One queue exists for each storage key
+/// in the process, so every ``FlowStore`` on that key shares it.
+final class FlowIndexUpdateQueue: Sendable {
+  private static let queues = LockIsolated<[String: FlowIndexUpdateQueue]>([:])
+
+  static func queue(storageKey: String) -> FlowIndexUpdateQueue {
+    queues.withValue { queues in
+      if let queue = queues[storageKey] { return queue }
+      let queue = FlowIndexUpdateQueue()
+      queues[storageKey] = queue
+      return queue
+    }
+  }
+
+  private let last = LockIsolated<Task<Void, Never>?>(nil)
+
+  /// Runs `operation` after every earlier operation finished. Cancelling the caller does not
+  /// cancel `operation`.
+  func run<Result: Sendable>(
+    _ operation: @escaping @Sendable () async throws -> Result
+  ) async throws -> Result {
+    let update = last.withValue { last in
+      let previous = last
+      let update = Task {
+        await previous?.value
+        return try await operation()
+      }
+      last = Task { _ = await update.result }
+      return update
+    }
+    return try await update.value
   }
 }

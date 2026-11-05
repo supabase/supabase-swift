@@ -717,7 +717,8 @@ struct AuthClientTests {
 
       let currentDate = Date()
 
-      let sut = makeSUT(date: { currentDate })
+      let sut = makeSUT(
+        date: { currentDate }, redirectTo: URL(string: "https://dummy-url.com/callback")!)
 
       let url = URL(
         string:
@@ -965,13 +966,15 @@ struct AuthClientTests {
     storageKey: String = uniqueStorageKey(),
     date: @escaping @Sendable () -> Date = { Self.now },
     platform: AuthPlatform = .live,
-    autoRefresh: AuthClient.AutoRefreshPolicy = .manual
+    autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
+    redirectTo: URL? = nil
   ) -> AuthClient {
     let configuration = AuthClient.Configuration(
       url: url,
       storageKey: storageKey,
       headers: HTTPFields(["apikey": apiKey]),
       storage: storage,
+      redirectTo: redirectTo,
       http: .init(transport: transport),
       autoRefresh: autoRefresh,
       now: date)

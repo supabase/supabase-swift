@@ -13,6 +13,8 @@ import Testing
 /// both auto refresh and the injected `now`, and a storage key no other test uses.
 struct Race: Sendable {
   static let lifetime: TimeInterval = 3600
+  /// The callback every client has unless a test passes another: the URL the tests' redirects open.
+  static let callback = URL(string: "com.example.app://callback")!
   private static let epoch = Date(timeIntervalSince1970: 1_800_000_000)
 
   let clock = SignalingTestClock()
@@ -48,7 +50,7 @@ struct Race: Sendable {
   func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .manual,
     storage: (any AuthStorage)? = nil,
-    redirectTo: URL? = nil,
+    redirectTo: URL? = Race.callback,
     clock: (any Clock<Duration>)? = nil,
     lifecycleEvents: (@Sendable () async -> AsyncStream<AppLifecycleEvent>)? = nil,
     beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
@@ -63,7 +65,7 @@ struct Race: Sendable {
   /// A new client on the same storage, so it reads what the race left on disk, as the next launch
   /// would.
   func relaunch() async -> AuthClient {
-    let client = makeClient(autoRefresh: .manual, storage: localStorage)
+    let client = makeClient(autoRefresh: .manual, storage: localStorage, redirectTo: Race.callback)
     await client.initialization()
     return client
   }

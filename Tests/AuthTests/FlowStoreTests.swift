@@ -13,9 +13,16 @@ private actor RecordingStorage: AuthStorage {
   private(set) var removedKeys: [String] = []
   private var failingSave: Int?
   private var saveCount = 0
+  private var indexOverwrites = 0
 
   func failSave(number: Int) {
     failingSave = number
+  }
+
+  /// Makes the next `count` index saves lost: each one is replaced by an empty index right after
+  /// it, as a save from another process would.
+  func loseIndexSaves(_ count: Int) {
+    indexOverwrites = count
   }
 
   func load(key: String) async throws -> Data? {
@@ -27,6 +34,10 @@ private actor RecordingStorage: AuthStorage {
     if saveCount == failingSave { throw SaveFailure() }
     savedKeys.append(key)
     values[key] = data
+    if key.hasSuffix("-flows"), indexOverwrites > 0 {
+      indexOverwrites -= 1
+      values[key] = try PendingFlowIndex().encoded()
+    }
   }
 
   func remove(key: String) async throws {
@@ -221,5 +232,64 @@ struct FlowStoreTests {
     try await removed
 
     #expect(try await storedIndexIDs(storage) == [newID])
+  }
+
+  @Test func twoStoresOnOneKeyLeaveAConsistentIndex() async throws {
+    let storage = RecordingStorage()
+    let clock = LockIsolated(Date())
+    let app = makeStore(storage: storage, clock: clock)
+    let other = makeStore(storage: storage, clock: clock)
+    let existing = try await app.start(purpose: .signIn, redirectTo: nil).flow.id
+
+    async let started = other.start(purpose: .recovery, redirectTo: nil).flow.id
+    async let removed: Void = app.remove(id: existing)
+    let newID = try await started
+    try await removed
+
+    #expect(try await storedIndexIDs(storage) == [newID])
+  }
+
+  @Test func twoStoresOnOneKeyKeepEveryIndexEntry() async throws {
+    let storage = RecordingStorage()
+    let clock = LockIsolated(Date())
+    let stores = [
+      makeStore(storage: storage, clock: clock), makeStore(storage: storage, clock: clock),
+    ]
+
+    let ids = try await withThrowingTaskGroup(of: UUID.self) { group in
+      for index in 0..<4 {
+        let store = stores[index % 2]
+        group.addTask { try await store.start(purpose: .signIn, redirectTo: nil).flow.id }
+      }
+      return try await group.reduce(into: Set<UUID>()) { $0.insert($1) }
+    }
+
+    #expect(ids.count == 4)
+    #expect(try await storedIndexIDs(storage) == ids)
+  }
+
+  @Test func anIndexEntryThatAnotherProcessOverwritesIsWrittenAgain() async throws {
+    let storage = RecordingStorage()
+    let store = makeStore(storage: storage, clock: LockIsolated(Date()))
+    await storage.loseIndexSaves(1)
+
+    let flow = try await store.start(purpose: .signIn, redirectTo: nil).flow
+
+    #expect(try await storedIndexIDs(storage) == [flow.id])
+    let indexKey = PendingFlowIndex.key(storageKey: Self.storageKey)
+    #expect(await storage.savedKeys.filter { $0 == indexKey }.count == 2)
+  }
+
+  @Test func startStopsWritingTheIndexAfterTheLastAttempt() async throws {
+    let storage = RecordingStorage()
+    let store = makeStore(storage: storage, clock: LockIsolated(Date()))
+    await storage.loseIndexSaves(.max)
+
+    let flow = try await store.start(purpose: .signIn, redirectTo: nil).flow
+
+    #expect(try await store.flow(id: flow.id) != nil)
+    let indexKey = PendingFlowIndex.key(storageKey: Self.storageKey)
+    #expect(
+      await storage.savedKeys.filter { $0 == indexKey }.count == FlowStore.maximumIndexAttempts)
   }
 }

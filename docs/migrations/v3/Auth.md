@@ -563,10 +563,16 @@ let email = identity.email
 `handleRedirect(_:)` takes the URL that opened your app. It returns `nil` when the URL is not an
 auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verification:)` or
 `.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
-`AuthClient` and `SupabaseClient` have the method. A URL with a `message` item is an email-change
-redirect only when it also has the `sb` marker, so your own links, such as
-`myapp://chat?message=hello`, return `nil`. Auth servers before v2.186.0 do not send `sb`, so
-`handleRedirect(_:)` returns `nil` for their email-change redirects.
+`AuthClient` and `SupabaseClient` have the method.
+
+A URL is an auth redirect only when it opens a known callback: `redirectToURL` (Auth's
+`Configuration.redirectTo`) or the `redirectTo` you passed when a flow started. Scheme, host, port,
+and path must match; a trailing slash is ignored. Your own links, such as
+`myapp://invite?code=ABC`, return `nil`. With no callback known, no URL is an auth redirect, so set
+`redirectToURL`. A callback that only a per-call `redirectTo` names is known while its flow waits,
+so an error redirect that arrives after the flow expired returns `nil`. A URL with a `message` item is an email-change redirect only when it also has the
+`sb` marker. Auth servers before v2.186.0 do not send `sb`, so `handleRedirect(_:)` returns `nil`
+for their email-change redirects.
 
 ```swift
 // v2
@@ -582,16 +588,20 @@ if case .signedIn(let session, _)? = try await supabase.auth.handleRedirect(url)
 ```
 
 Use `isAuthRedirect(_:)` where several handlers share one URL entry point, for example to keep
-your redirect away from another SDK's URL handler. It reads only the query and the fragment, not
-the scheme or host: any URL with `code`, `error`, or `access_token` counts, and another SDK's
-callback can carry them. Check your own scheme too:
+your redirect away from another SDK's URL handler. It applies the same callback rule, and it is
+`async` because it reads the pending flows from storage:
 
 ```swift
 // v3
 func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
   guard let url = contexts.first?.url else { return }
-  if url.scheme == "myapp", supabase.auth.isAuthRedirect(url) { return }
-  ThirdPartySDK.open(url)
+  Task {
+    if await supabase.auth.isAuthRedirect(url) {
+      try await supabase.handleRedirect(url)
+    } else {
+      ThirdPartySDK.open(url)
+    }
+  }
 }
 ```
 
