@@ -69,7 +69,7 @@ struct RealtimeCore {
     case broadcast(
       channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID)
     case removeChannel(channel: ChannelID, waiter: WaiterID)
-    case bindingsChanged(channel: ChannelID, snapshot: JoinSnapshot)
+    case bindingsChanged(channel: ChannelID, bindings: [PostgresJoinConfig])
     case setAuth(token: String?)
 
     // Inbound and timers
@@ -252,8 +252,8 @@ struct RealtimeCore {
       return rejoinTimerFired(channel)
     case .timerFired(.postgresTimeout(let channel, let ref)):
       return postgresTimedOut(channel, ref: ref)
-    case .bindingsChanged(let channel, let snapshot):
-      return bindingsChanged(channel, snapshot: snapshot)
+    case .bindingsChanged(let channel, let bindings):
+      return bindingsChanged(channel, bindings: bindings)
     case .unsubscribe(let channel, let waiter):
       return unsubscribe(channel, waiter: waiter)
     case .timerFired(.leaveTimeout(let channel, let ref)):

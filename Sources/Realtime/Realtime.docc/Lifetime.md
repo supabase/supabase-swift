@@ -87,9 +87,12 @@ The server sends presence and Postgres changes only to a join that asks for them
 streams you open before ``RealtimeChannel/subscribe()`` decide what the join requests.
 
 - A presence stream, ``RealtimeChannel/presenceStates()`` or
-  ``RealtimeChannel/presenceChanges()``, must be open before ``RealtimeChannel/subscribe()``. On
-  a channel that is joining or joined, the call reports an issue and returns a stream that has
-  already finished.
+  ``RealtimeChannel/presenceChanges()``, open before ``RealtimeChannel/subscribe()`` turns
+  presence on for the join. On a channel that is joining or joined, a new presence stream works
+  only when presence is on: a stream was open at subscribe,
+  ``RealtimeChannelConfiguration/Presence-swift.struct/enabled`` is `true`, or a
+  ``RealtimeChannel/track(_:encoder:)`` succeeded since the join. Otherwise the call reports an
+  issue and returns a stream that has already finished.
 - A Postgres changes stream opened on a joined channel makes the channel leave and join again
   with the new binding. ``RealtimeChannel/events()`` then yields
   ``RealtimeChannelEvent/resubscribed``. Open these streams first to join once.

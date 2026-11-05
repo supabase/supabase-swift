@@ -25,6 +25,9 @@ extension RealtimeCore {
       joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
       payload: payload)
     guard let waiter else { return [.send(message)] }
+    if event == ChannelEvent.presence, payload["event"]?.stringValue == "track" {
+      channels.update(channel) { _ = $0.pendingTracks.insert(ref) }
+    }
     return [.send(message)] + awaitReply(channel, ref: ref, waiter: waiter)
   }
 
@@ -49,7 +52,7 @@ extension RealtimeCore {
   }
 
   /// Settles the push `ref` with the server's reply: `error` fails it with the server's reason,
-  /// and any other status resolves it.
+  /// and any other status resolves it. A track that succeeds turns presence on for the live join.
   mutating func receivePushReply(_ message: RealtimeMessage, ref: Ref, on channel: ChannelID)
     -> [Effect]
   {
@@ -58,9 +61,14 @@ extension RealtimeCore {
         "Dropping a reply without a status on '\(topic(of: channel))': \(message.payload)")
       return []
     }
-    guard
-      let waiter = channels.update(channel, { $0.pendingPushes.removeValue(forKey: ref) }) ?? nil
-    else { return [] }
+    let waiter = channels.update(channel) { record -> WaiterID? in
+      guard let waiter = record.pendingPushes.removeValue(forKey: ref) else { return nil }
+      if record.pendingTracks.remove(ref) != nil, status != .error {
+        record.hasTrackedSinceJoin = true
+      }
+      return waiter
+    }
+    guard let waiter = waiter ?? nil else { return [] }
     let outcome: WaiterOutcome
     if status == .error {
       let reason = message.replyReason(default: "The server rejected the push.")

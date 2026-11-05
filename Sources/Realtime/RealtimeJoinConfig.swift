@@ -59,7 +59,9 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
         },
         replicationReady: configuration.broadcast.waitForReplication
       ),
-      presence: PresenceJoinConfig(key: configuration.presence.key ?? "", enabled: presenceEnabled),
+      presence: PresenceJoinConfig(
+        key: configuration.presence.key ?? "",
+        enabled: presenceEnabled),
       postgresChanges: bindings,
       postgresChangesOptions: postgresChanges.waitForSubscription
         ? PostgresChangesOptions(wait: true, timeout: postgresChanges.subscriptionTimeout) : nil,

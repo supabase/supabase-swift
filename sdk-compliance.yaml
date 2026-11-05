@@ -1846,6 +1846,7 @@ features:
       - RealtimeChannel.presenceChanges
       - RealtimeChannel.presenceStates
     supporting_symbols:
+      - RealtimeChannelConfiguration.Presence.enabled
       - PresenceChange
       - PresenceChange.init
       - PresenceChange.joins

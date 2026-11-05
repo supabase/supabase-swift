@@ -60,6 +60,39 @@ struct RealtimeCoreSubscribeTests {
   }
 
   @Test
+  func aRejoinSendsThePresenceFlagOfTheSubscribe() throws {
+    var harness = CoreHarness.connected()
+    let room = harness.channel()
+    let withPresence = JoinSnapshot(bindings: [], presenceEnabled: true)
+    _ = harness.send(Self.subscribe(harness.waiter(), channel: room, snapshot: withPresence))
+    _ = harness.send(.bindingsChanged(channel: room, bindings: []))
+
+    _ = harness.send(.timerFired(.joinTimeout(channel: room, ref: "1")))
+    let effects = harness.send(.timerFired(.rejoin(channel: room)))
+
+    let rejoin = try #require(
+      effects.lazy.compactMap { effect -> RealtimeMessage? in
+        if case .send(let message) = effect, message.event == ChannelEvent.join {
+          message
+        } else {
+          nil
+        }
+      }.first)
+    #expect(rejoin.presenceEnabled == true)
+  }
+
+  @Test
+  func subscribingAJoinedChannelAgainKeepsItsPresenceFlag() {
+    var harness = Self.subscribed()
+
+    let withPresence = JoinSnapshot(bindings: [], presenceEnabled: true)
+    _ = harness.send(Self.subscribe(harness.waiter(), snapshot: withPresence))
+
+    #expect(harness.core.channels[.room]?.snapshot.presenceEnabled == false)
+    #expect(harness.core.channels[.room]?.acceptsPresenceStream == false)
+  }
+
+  @Test
   func joinTimeoutIncludesTheServerPostgresWait() throws {
     var harness = CoreHarness.connected()
     var configuration = RealtimeChannelConfiguration()

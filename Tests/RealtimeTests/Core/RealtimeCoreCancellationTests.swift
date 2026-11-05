@@ -185,9 +185,7 @@ struct RealtimeCoreCancellationTests {
   func cancelDuringABindingsRejoinKeepsIt() {
     var harness = Self.subscribed()
     _ = harness.send(
-      .bindingsChanged(
-        channel: .room,
-        snapshot: JoinSnapshot(bindings: [Self.messages], presenceEnabled: false)))
+      .bindingsChanged(channel: .room, bindings: [Self.messages]))
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w))
 

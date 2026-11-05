@@ -1098,6 +1098,73 @@
     }
 
     @Test
+    func aPresenceStreamOpenedAfterSubscribeWorksWithTheEnabledOption() async throws {
+      let client = client
+      let client2 = client2
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+        try await client2.realtime.connect()
+
+        let topic = "presence-late-\(UUID().uuidString)"
+        let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
+        let bob = await client2.realtime.channel(topic) {
+          $0.presence.key = "bob"
+          $0.presence.enabled = true
+        }
+        try await ana.subscribe()
+        try await bob.subscribe()
+
+        let bobChanges = await bob.presenceChanges()
+        try await ana.track(["name": "Ana"] as JSONObject)
+
+        let joined = try await withTimeout(.seconds(5)) {
+          await bobChanges.first { $0.joins["ana"] != nil }
+        }
+        #expect(joined?.joins["ana"]?.first?.payload == ["name": "Ana"])
+
+        await ana.unsubscribe()
+        await bob.unsubscribe()
+      }
+    }
+
+    @Test
+    func aPresenceStreamOpenedAfterATrackSeesTheOtherClients() async throws {
+      let client = client
+      let client2 = client2
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+        try await client2.realtime.connect()
+
+        let topic = "presence-late-track-\(UUID().uuidString)"
+        let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
+        let bob = await client2.realtime.channel(topic) { $0.presence.key = "bob" }
+        try await ana.subscribe()
+        try await bob.subscribe()
+
+        try await ana.track(["name": "Ana"] as JSONObject)
+        try await waitForPresence(on: ana) { $0.entries["ana"] != nil }
+
+        let anaStates = await ana.presenceStates()
+        try await bob.track(["name": "Bob"] as JSONObject)
+
+        let (first, withBob) = try await withTimeout(.seconds(5)) {
+          () async -> (PresenceState?, PresenceState?) in
+          var states = anaStates.makeAsyncIterator()
+          let first = await states.next()
+          while let state = await states.next() {
+            if state.entries["bob"] != nil { return (first, state) }
+          }
+          return (first, nil)
+        }
+        #expect(first?.entries["ana"] != nil)
+        #expect(withBob?.entries["bob"]?.first?.payload == ["name": "Bob"])
+
+        await ana.unsubscribe()
+        await bob.unsubscribe()
+      }
+    }
+
+    @Test
     func presenceTrackBeforeSubscribeThrowsNotSubscribed() async {
       let client = client
       await withMainSerialExecutor {

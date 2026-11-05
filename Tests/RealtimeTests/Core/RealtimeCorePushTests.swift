@@ -227,8 +227,7 @@ struct RealtimeCorePushTests {
     // A new binding rejoins: leave with ref "3", join with ref "4". The push still waits.
     let messages = PostgresJoinConfig(event: .insert, schema: "public", table: "messages")
     _ = harness.send(
-      .bindingsChanged(
-        channel: .room, snapshot: JoinSnapshot(bindings: [messages], presenceEnabled: false)))
+      .bindingsChanged(channel: .room, bindings: [messages]))
     #expect(
       harness.core.channels[.room]?.phase == .joining(ref: "4", attempt: 1, stage: .reply))
 

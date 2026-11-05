@@ -107,6 +107,14 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// ``PresenceEntry`` per connection. When `nil`, the server picks a new key on each join.
     public var key: String?
 
+    /// Whether the channel asks the server for presence even when no presence stream is open at
+    /// ``RealtimeChannel/subscribe()``. Defaults to `false`.
+    ///
+    /// Set it when the app opens ``RealtimeChannel/presenceStates()`` or
+    /// ``RealtimeChannel/presenceChanges()`` only after the channel subscribes, such as from a
+    /// view that appears later, or reads ``RealtimeChannel/presenceState`` with no stream open.
+    public var enabled = false
+
     /// Creates presence options with no key.
     public init() {}
   }

@@ -14,14 +14,19 @@ struct ChannelRecord {
   var phase: Phase = .unsubscribed
   /// Whether the channel joined at least once, so the next join is a rejoin.
   var hasBeenSubscribed = false
-  /// The client's Postgres bindings, in registration order, and whether a presence stream is
-  /// open, so the join turns presence on.
+  /// The client's Postgres bindings, in registration order, and whether a presence stream was
+  /// open when the subscription started, so its joins turn presence on.
   var snapshot = JoinSnapshot(bindings: [], presenceEnabled: false)
   /// The bindings the last `phx_join` carried.
   var joinedBindings: [PostgresJoinConfig] = []
   /// The bindings the server echoed in the join reply, with their ids.
   var serverChanges: [PostgresJoinConfig] = []
   var presence = PresenceTracker()
+  /// Whether a track succeeded since the current `phx_join` was sent.
+  var hasTrackedSinceJoin = false
+  /// The refs of the track pushes of the current join. Only a ref still in ``pendingPushes``
+  /// counts, so the next join clears the rest.
+  var pendingTracks: Set<Ref> = []
   /// The ref of the join that timed out while the channel waits to rejoin. A late `ok` for it
   /// still confirms the join.
   var timedOutJoinRef: Ref?
@@ -45,6 +50,27 @@ struct ChannelRecord {
     self.topic = topic
     self.wireTopic = RealtimeChannel.wireTopic(for: topic)
     self.configuration = configuration
+  }
+
+  /// Whether the joins of the subscription ask the server for presence.
+  var joinsWithPresence: Bool {
+    snapshot.presenceEnabled || configuration.presence.enabled
+  }
+
+  /// Whether a presence stream opened now gets events. Before a subscription starts, the stream
+  /// turns presence on for it. Once it started, presence must be on: the subscription's joins ask
+  /// for it, or a track succeeded on the live join.
+  var acceptsPresenceStream: Bool {
+    switch phase {
+    case .unsubscribed, .failed:
+      true
+    case .leaving:
+      subscribeWaiters.isEmpty || joinsWithPresence
+    case .waitingForSocket, .refreshingToken, .waitingToRetry:
+      joinsWithPresence
+    case .joining, .subscribed:
+      joinsWithPresence || hasTrackedSinceJoin
+    }
   }
 
   /// The ref of the join the server can still confirm, or already confirmed.
