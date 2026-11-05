@@ -79,6 +79,9 @@ struct ResubscribeView: View {
   /// it. Subscribing again joins it, and the join emits `.resubscribed`.
   func rejoin() async {
     await supabase.realtime.disconnect()
+    // Leaving the view removes the channel while `disconnect()` runs. Asking for it again would
+    // create a channel that nothing removes.
+    guard !Task.isCancelled else { return }
     do {
       try await supabase.channel(channelName).subscribe()
     } catch {
