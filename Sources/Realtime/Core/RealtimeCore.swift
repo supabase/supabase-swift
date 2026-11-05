@@ -164,7 +164,12 @@ struct RealtimeCore {
   // Read-only outside the core. Not `private(set)`: the core's extensions in other files write
   // them, and Swift has no setter access level for that.
   var connection: RealtimeClient.ConnectionState = .disconnected(nil)
+  /// Add or drop a record with ``setRecord(_:for:)``, which keeps ``channelsByWireTopic`` in
+  /// step. A write to a field of a record needs no care: a record's wire topic never changes.
   var channels: [ChannelID: ChannelRecord] = [:]
+  /// The channels of each wire topic, in creation order, so routing a frame looks only at the
+  /// records of its topic.
+  var channelsByWireTopic: [String: [ChannelID]] = [:]
 
   var tokens = TokenState()
   /// When the `accessToken` callback was last called, as `CoreTime.elapsed`.

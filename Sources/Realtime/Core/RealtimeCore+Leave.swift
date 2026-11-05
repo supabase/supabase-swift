@@ -186,7 +186,7 @@ extension RealtimeCore {
     }
 
     guard message.event == ChannelEvent.close else { return effects }
-    channels[channel] = nil
+    setRecord(nil, for: channel)
     return effects + [.finishChannel(channel)]
   }
 
@@ -307,7 +307,7 @@ extension RealtimeCore {
 
   /// Ends the streams of `channel` and forgets its record.
   private mutating func dropChannel(_ channel: ChannelID) -> [Effect] {
-    channels[channel] = nil
+    setRecord(nil, for: channel)
     return [.finishChannel(channel)]
   }
 

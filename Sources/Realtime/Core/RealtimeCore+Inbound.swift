@@ -37,11 +37,33 @@ extension RealtimeCore {
   private func firstChannel(
     forWireTopic wireTopic: String, where predicate: (ChannelRecord) -> Bool
   ) -> ChannelID? {
-    var first: ChannelID?
-    for (id, record) in channels where record.wireTopic == wireTopic && predicate(record) {
-      first = min(first ?? id, id)
+    channelsByWireTopic[wireTopic]?.first { channels[$0].map(predicate) == true }
+  }
+
+  /// Stores `record` for `channel`, or drops the channel's record when `record` is `nil`, and
+  /// updates ``channelsByWireTopic`` to match.
+  mutating func setRecord(_ record: ChannelRecord?, for channel: ChannelID) {
+    let old =
+      if let record {
+        channels.updateValue(record, forKey: channel)
+      } else {
+        channels.removeValue(forKey: channel)
+      }
+    let oldTopic = old?.wireTopic
+    let newTopic = record?.wireTopic
+    guard oldTopic != newTopic else { return }
+    if let oldTopic {
+      channelsByWireTopic[oldTopic]?.removeAll { $0 == channel }
+      if channelsByWireTopic[oldTopic]?.isEmpty == true {
+        channelsByWireTopic[oldTopic] = nil
+      }
     }
-    return first
+    if let newTopic {
+      // Channel ids grow in creation order.
+      var ids = channelsByWireTopic.removeValue(forKey: newTopic) ?? []
+      ids.insert(channel, at: ids.firstIndex { $0 > channel } ?? ids.endIndex)
+      channelsByWireTopic[newTopic] = ids
+    }
   }
 
   /// The topic of `channel`, for log lines. A channel with no record has none.

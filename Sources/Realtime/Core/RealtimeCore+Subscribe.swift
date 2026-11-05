@@ -27,7 +27,7 @@ extension RealtimeCore {
     switch record.phase {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
-      channels[channel] = record
+      setRecord(record, for: channel)
       return effects + [.resume(waiter, .success)]
 
     case .unsubscribed, .failed:
@@ -35,13 +35,13 @@ extension RealtimeCore {
       record.subscribeWaiters.append(waiter)
       record.hasRefreshedExpiredToken = false
       record.isAutomaticRejoin = false
-      channels[channel] = record
+      setRecord(record, for: channel)
       return effects + sendJoin(channel, attempt: 1)
 
     case .waitingForSocket, .refreshingToken, .joining, .waitingToRetry, .leaving:
       // The attempt in flight, or the join after the leave, answers this caller too.
       record.subscribeWaiters.append(waiter)
-      channels[channel] = record
+      setRecord(record, for: channel)
       return effects
     }
   }
