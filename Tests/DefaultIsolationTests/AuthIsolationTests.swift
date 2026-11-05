@@ -61,6 +61,7 @@ enum AuthIsolationTests {
       _ = try await auth.linkIdentity(.github)
     #endif
     _ = try await auth.exchangeCodeForSession("code", flowID: id)
+    _ = await auth.isAuthRedirect(url)
     _ = try await auth.handleRedirect(url)
     _ = try await auth.importSession(accessToken: "jwt", refreshToken: "token")
     try await auth.signOut()
