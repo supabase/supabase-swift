@@ -172,7 +172,10 @@ struct StartupRefreshTests {
     http.respond { _, _ in Self.refreshResponse }
     try storeExpiredSession()
 
-    let client = makeClient(autoRefresh: policy, initialRefreshTimeout: timeout)
+    // With `.automatic`, auto refresh refreshes the expired session at once, in the background.
+    // The app stays in the background, so only a startup refresh could send a request.
+    let client = makeClient(
+      autoRefresh: policy, initialRefreshTimeout: timeout, startsInBackground: true)
     await client.initialization()
     #expect(client.status == .signedIn(Self.expired))
     var events = client.events().makeAsyncIterator()
@@ -313,22 +316,29 @@ struct StartupRefreshTests {
   private func makeClient(
     autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
     initialRefreshTimeout: Duration = .seconds(5),
-    storage: (any AuthStorage)? = nil
+    storage: (any AuthStorage)? = nil,
+    startsInBackground: Bool = false
   ) -> AuthClient {
-    AuthClient(
+    var platform = AuthPlatform.live
+    if startsInBackground {
+      // No lifecycle event ever arrives, so auto refresh never starts.
+      platform.hasBackgroundState = true
+      platform.lifecycleEvents = { AsyncStream { _ in } }
+    }
+    return AuthClient(
       configuration: AuthClient.Configuration(
         url: clientURL,
         storageKey: key,
         storage: storage ?? localStorage,
         http: HTTPClientConfiguration(transport: http),
         autoRefresh: autoRefresh,
-        observesAppLifecycle: false,
+        observesAppLifecycle: startsInBackground,
         clock: clock,
         now: { Self.now },
         initialRefreshTimeout: initialRefreshTimeout
       ),
       pkce: .live,
-      platform: .live
+      platform: platform
     )
   }
 }
