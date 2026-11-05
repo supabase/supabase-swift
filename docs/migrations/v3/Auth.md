@@ -33,6 +33,13 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`KeychainStorage` returns `nil` for a missing key.** `load(key:)` does not throw when no item
   exists, and `remove(key:)` on a missing key does nothing. Remove `catch` blocks that treated an
   error as "no session". A custom `AuthStorage` must follow the same contract.
+- **The stored session stays on this device.** The default storage writes Keychain items with
+  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`; v2 used
+  `kSecAttrAccessibleAfterFirstUnlock`. The first save after the upgrade, such as a token refresh,
+  moves a v2 item to the new class in place, so the user stays signed in. A backup restored to
+  another device no longer carries the session, and the user signs in again there. macOS keeps the
+  file-based Keychain, which has no accessibility class. To keep the v2 behavior, pass
+  `storage: KeychainStorage(accessibility: .afterFirstUnlock, useDataProtectionKeychain: false)`.
 - **Network and decoding errors are wrapped.** `URLError` and `DecodingError` arrive as
   `AuthError` with kind `.transport` or `.decoding`; the original is in `underlyingError`. A
   cancelled task throws `CancellationError`. Search for `as URLError` and `as DecodingError` near
@@ -951,8 +958,8 @@ let supabase = SupabaseClient(
 
 On macOS, `KeychainStorage()` uses the data-protection Keychain, which removes the Keychain
 consent prompt and needs a provisioning profile with Keychain entitlements. It moves a session
-from the file-based Keychain on the first load. The default storage of a client keeps the
-file-based Keychain, as v2 did, so a client you create without `storage:` behaves as before.
+from the file-based Keychain on the first load. On macOS, the default storage of a client keeps
+the file-based Keychain, as v2 did.
 
 ## Experimental APIs
 

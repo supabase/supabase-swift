@@ -237,7 +237,7 @@ extension RealtimeClient {
     record.phase = .subscribed(joinRef: "1")
     record.hasBeenSubscribed = true
     record.serverChanges = serverChanges
-    core.channels[channel.id] = record
+    core.channels.setRecord(record, for: channel.id)
   }
 
   /// Ends every stream of `channel`, so a test reads what a stream buffered without waiting.

@@ -173,6 +173,10 @@ struct LoopbackError: Error {
       return (server, request)
     }
 
+    static func stalling() throws -> LoopbackTCPServer {
+      try LoopbackTCPServer { _ in }
+    }
+
     func start() throws -> UInt16 {
       let ready = DispatchSemaphore(value: 0)
       listener.stateUpdateHandler = { state in

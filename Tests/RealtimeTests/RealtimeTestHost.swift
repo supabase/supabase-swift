@@ -272,7 +272,7 @@ extension RealtimeClient {
     var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())
     record.phase = .subscribed(joinRef: joinRef)
     record.hasBeenSubscribed = true
-    core.channels[id] = record
+    core.channels.setRecord(record, for: id)
   }
 
   /// Whether the core has a record for `topic`.

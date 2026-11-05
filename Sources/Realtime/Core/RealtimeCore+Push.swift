@@ -58,7 +58,9 @@ extension RealtimeCore {
         "Dropping a reply without a status on '\(topic(of: channel))': \(message.payload)")
       return []
     }
-    guard let waiter = channels[channel]?.pendingPushes.removeValue(forKey: ref) else { return [] }
+    guard
+      let waiter = channels.update(channel, { $0.pendingPushes.removeValue(forKey: ref) }) ?? nil
+    else { return [] }
     let outcome: WaiterOutcome
     if status == .error {
       let reason = message.replyReason(default: "The server rejected the push.")
@@ -70,7 +72,9 @@ extension RealtimeCore {
   }
 
   mutating func pushTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
-    guard let waiter = channels[channel]?.pendingPushes.removeValue(forKey: ref) else { return [] }
+    guard
+      let waiter = channels.update(channel, { $0.pendingPushes.removeValue(forKey: ref) }) ?? nil
+    else { return [] }
     logger.debug("Push \(ref) on '\(topic(of: channel))' timed out")
     return [.resume(waiter, .failure(.pushTimeout))]
   }
@@ -79,7 +83,7 @@ extension RealtimeCore {
   /// their timeouts.
   mutating func failPendingPushes(_ channel: ChannelID, with error: RealtimeError) -> [Effect] {
     guard let pushes = channels[channel]?.pendingPushes, !pushes.isEmpty else { return [] }
-    channels[channel]?.pendingPushes = [:]
+    channels.update(channel) { $0.pendingPushes = [:] }
     return pushes.sorted { (UInt64($0.key) ?? 0) < (UInt64($1.key) ?? 0) }
       .flatMap { ref, waiter -> [Effect] in
         [.resume(waiter, .failure(error)), .cancel(.pushTimeout(channel: channel, ref: ref))]
@@ -87,7 +91,7 @@ extension RealtimeCore {
   }
 
   private mutating func awaitReply(_ channel: ChannelID, ref: Ref, waiter: WaiterID) -> [Effect] {
-    channels[channel]?.pendingPushes[ref] = waiter
+    channels.update(channel) { $0.pendingPushes[ref] = waiter }
     return [.schedule(.pushTimeout(channel: channel, ref: ref), after: options.timeout)]
   }
 
