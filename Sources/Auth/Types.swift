@@ -1757,7 +1757,7 @@ public enum SignOutScope: String, Sendable {
   case others
 }
 
-/// The kind of email that ``AuthClient/resend(email:type:redirectTo:captchaToken:)`` sends again.
+/// The kind of email that ``AuthClient/resend(email:type:options:)`` sends again.
 public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
@@ -1788,7 +1788,7 @@ struct ResendEmailParams: Encodable {
   let codeChallengeMethod: String?
 }
 
-/// The kind of phone code that ``AuthClient/resend(phone:type:captchaToken:)`` sends again.
+/// The kind of phone code that ``AuthClient/resend(phone:type:options:)`` sends again.
 public struct ResendPhoneType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
@@ -1873,6 +1873,59 @@ public struct SSOOptions: Sendable, Hashable {
   ///
   /// - Parameters:
   ///   - redirectTo: The URL the server redirects to after the identity provider step.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/resend(email:type:options:)``.
+public struct ResendEmailOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send an email again.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/resend(phone:type:options:)``.
+public struct ResendPhoneOptions: Sendable, Hashable {
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send a phone code again.
+  ///
+  /// - Parameter captchaToken: The captcha verification token.
+  public init(captchaToken: String? = nil) {
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/resetPassword(email:options:)``.
+public struct ResetPasswordOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates password reset options.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
   ///   - captchaToken: The captcha verification token.
   public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
     self.redirectTo = redirectTo

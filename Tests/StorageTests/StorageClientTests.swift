@@ -28,9 +28,7 @@ struct StorageClientTests {
     #expect(baseUrl.absoluteString == "\(supabaseURL)/object/public/\(bucketId)/\(path)")
 
     let baseUrlWithDownload = sut.from(bucketId).publicURL(
-      path: path,
-      download: .withOriginalName
-    )
+      path: path, options: PublicURLOptions(download: .withOriginalName))
     assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
       """
       http://localhost:54321/storage/v1/object/public/tests/README.md?download=
@@ -38,8 +36,7 @@ struct StorageClientTests {
     }
 
     let baseUrlWithDownloadAndFileName = sut.from(bucketId).publicURL(
-      path: path, download: .named("test")
-    )
+      path: path, options: PublicURLOptions(download: .named("test")))
     assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
       """
       http://localhost:54321/storage/v1/object/public/tests/README.md?download=test
@@ -47,9 +44,9 @@ struct StorageClientTests {
     }
 
     let baseUrlWithAllOptions = sut.from(bucketId).publicURL(
-      path: path, download: .named("test"),
-      transform: ImageTransform(width: 300, height: 300)
-    )
+      path: path,
+      options: PublicURLOptions(
+        download: .named("test"), transform: ImageTransform(width: 300, height: 300)))
     assertInlineSnapshot(of: baseUrlWithAllOptions, as: .description) {
       """
       http://localhost:54321/storage/v1/render/image/public/tests/README.md?download=test&width=300&height=300

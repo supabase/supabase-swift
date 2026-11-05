@@ -579,10 +579,22 @@ features:
       - ResendPhoneType.rawValue
       - ResendPhoneType.sms
       - ResendPhoneType.phoneChange
+      - ResendEmailOptions
+      - ResendEmailOptions.init
+      - ResendEmailOptions.redirectTo
+      - ResendEmailOptions.captchaToken
+      - ResendPhoneOptions
+      - ResendPhoneOptions.init
+      - ResendPhoneOptions.captchaToken
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
       - AuthClient.resetPassword
+    supporting_symbols:
+      - ResetPasswordOptions
+      - ResetPasswordOptions.init
+      - ResetPasswordOptions.redirectTo
+      - ResetPasswordOptions.captchaToken
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -2117,6 +2129,7 @@ features:
       - DownloadOptions.init
       - DownloadOptions.range
       - DownloadOptions.cacheNonce
+      - DownloadOptions.transform
       - DownloadOptions.headers
       - DownloadResponse.data
       - DownloadResponse.write
@@ -2221,14 +2234,30 @@ features:
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
+      - PublicURLOptions
+      - PublicURLOptions.init
+      - PublicURLOptions.download
+      - PublicURLOptions.transform
+      - PublicURLOptions.versionId
+      - PublicURLOptions.cacheNonce
   storage.file_buckets.create_signed_url:
     status: implemented
     symbols:
       - StorageBucket.createSignedURL
+      - SignedURLOptions
+      - SignedURLOptions.init
+      - SignedURLOptions.download
+      - SignedURLOptions.transform
+      - SignedURLOptions.versionId
+      - SignedURLOptions.cacheNonce
   storage.file_buckets.create_signed_urls:
     status: implemented
     symbols:
       - StorageBucket.createSignedURLs
+      - SignedURLsOptions
+      - SignedURLsOptions.init
+      - SignedURLsOptions.download
+      - SignedURLsOptions.cacheNonce
       - SignedURLResult
       - SignedURLResult.success
       - SignedURLResult.failure
@@ -2339,9 +2368,8 @@ features:
       - CacheControl.maxAge
       - CacheControl.noCache
       - CacheControl.noStore
-  # Not a separate method: a bare `cacheNonce: String?` parameter repeated on
-  # createSignedURL, createSignedURLs, download, and publicURL — no
-  # dedicated named symbol exists distinct from those methods, which are
+  # Not a separate method: a `cacheNonce` field on SignedURLOptions,
+  # SignedURLsOptions, DownloadOptions, and PublicURLOptions, which are
   # already claimed by their own capabilities above.
   storage.file_buckets.url_cache_nonce: implemented
   storage.file_buckets.download_as_stream:
@@ -2424,7 +2452,7 @@ features:
   # StorageVectorsClient, VectorBucketClient and VectorIndexClient are all
   # @_spi(Experimental) (vector buckets are a public alpha of Supabase Storage),
   # so the public symbol graph the compliance scanner reads never contains them.
-  # parallel_scan is listVectors(segment:).
+  # parallel_scan is ListVectorsOptions.segment on listVectors(options:).
   storage.vector_buckets.create_vector_bucket: implemented
   storage.vector_buckets.list_vector_buckets: implemented
   storage.vector_buckets.delete_vector_bucket: implemented

@@ -42,9 +42,9 @@ public import HTTPTypes
 ///
 /// ### Downloading files
 ///
-/// - ``download(path:transform:options:progress:)``
+/// - ``download(path:options:progress:)``
 /// - ``DownloadResponse``
-/// - ``publicURL(path:download:transform:versionId:cacheNonce:)``
+/// - ``publicURL(path:options:)``
 ///
 /// ### Managing files
 ///
@@ -60,8 +60,8 @@ public import HTTPTypes
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
-/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:options:)``
+/// - ``createSignedURLs(paths:expiresIn:options:)``
 ///
 /// ### Customizing headers
 ///
@@ -445,7 +445,7 @@ public struct StorageBucket: Sendable {
   /// let downloadURL = try await storage.from("docs").createSignedURL(
   ///   path: "report.pdf",
   ///   expiresIn: .seconds(60),
-  ///   download: .withOriginalName
+  ///   options: SignedURLOptions(download: .withOriginalName)
   /// )
   /// ```
   ///
@@ -453,32 +453,24 @@ public struct StorageBucket: Sendable {
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
   ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
   ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
-  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
-  ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
-  ///     `nil` for inline display.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - versionId: The version the URL serves. `nil` serves the current version.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   public func createSignedURL(
     path: String,
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    transform: ImageTransform? = nil,
-    versionId: String? = nil,
-    cacheNonce: String? = nil
+    options: SignedURLOptions = SignedURLOptions()
   ) async throws -> URL {
     let response = try await api.execute(
       api.requests.sign(
         bucket: id, key: ObjectKey(path), expiresIn: Self.seconds(expiresIn),
-        transform: transform, versionId: versionId)
+        transform: options.transform, versionId: options.versionId)
     )
     .decoded(as: SignedURLAPIResponse.self)
 
     return try api.requests.resolve(
-      response.signedURL, query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
+      response.signedURL,
+      query: Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce))
   }
 
   /// Creates signed URLs for multiple files in a single request.
@@ -504,19 +496,14 @@ public struct StorageBucket: Sendable {
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
   ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
-  ///   - download: Controls whether the URLs trigger a file download. Pass `.withOriginalName` to
-  ///     download using each file's original name, `.named("custom")` for a custom name, or `nil`
-  ///     for inline display.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior and cache nonce.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
   public func createSignedURLs(
     paths: [String],
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    cacheNonce: String? = nil
+    options: SignedURLsOptions = SignedURLsOptions()
   ) async throws -> [SignedURLResult] {
     let response = try await api.execute(
       api.requests.sign(
@@ -524,7 +511,7 @@ public struct StorageBucket: Sendable {
     )
     .decoded(as: [SignedURLsAPIResponse].self)
 
-    let query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
+    let query = Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce)
     return try response.map { item in
       if let signedURLString = item.signedURL {
         let url = try api.requests.resolve(signedURLString, query: query)
@@ -645,12 +632,11 @@ public struct StorageBucket: Sendable {
   /// ```
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``publicURL(path:download:transform:versionId:cacheNonce:)`` directly.
+  /// ``publicURL(path:options:)`` directly.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - options: The byte range, version, cache nonce and extra headers.
+  ///   - options: The byte range, version, cache nonce, image transformation and extra headers.
   ///   - progress: Called as the body is read; see ``TransferProgress``.
   ///     ``TransferProgress/totalBytes`` is `nil` when Storage sends no `Content-Length`, as for a
   ///     transformed image.
@@ -660,13 +646,11 @@ public struct StorageBucket: Sendable {
   ///   ``StorageError`` with kind `transport` from the body.
   public func download(
     path: String,
-    transform: ImageTransform? = nil,
     options: DownloadOptions = DownloadOptions(),
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> DownloadResponse {
     let (head, body) = try await api.stream(
-      api.requests.download(
-        bucket: id, key: ObjectKey(path), transform: transform, options: options)
+      api.requests.download(bucket: id, key: ObjectKey(path), options: options)
     )
     var response = body ?? HTTPBody(Data())
     if let progress {
@@ -748,7 +732,8 @@ public struct StorageBucket: Sendable {
   /// let url = storage.from("avatars").publicURL(path: "user123.png")
   ///
   /// // Force download with original file name
-  /// let dlURL = storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
+  /// let dlURL = storage.from("docs").publicURL(
+  ///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
   /// ```
   ///
   /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
@@ -759,27 +744,18 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
-  ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
-  ///     `nil` for inline display.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - versionId: The version the URL serves. `nil` serves the current version.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: The publicly accessible `URL` for the file.
   public func publicURL(
     path: String,
-    download: DownloadBehavior? = nil,
-    transform: ImageTransform? = nil,
-    versionId: String? = nil,
-    cacheNonce: String? = nil
+    options: PublicURLOptions = PublicURLOptions()
   ) -> URL {
-    var query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
-    if let versionId {
+    var query = Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce)
+    if let versionId = options.versionId {
       query.append(URLQueryItem(name: "versionId", value: versionId))
     }
     return api.requests.publicURL(
-      bucket: id, key: ObjectKey(lenient: path), transform: transform?.queryItems ?? [],
+      bucket: id, key: ObjectKey(lenient: path), transform: options.transform?.queryItems ?? [],
       query: query)
   }
 

@@ -50,10 +50,8 @@ struct FileObjectDetailView: View {
           Task {
             do {
               let url = try await api.createSignedURL(
-                path: fileObject.name,
-                expiresIn: .seconds(60),
-                download: .withOriginalName
-              )
+                path: fileObject.name, expiresIn: .seconds(60),
+                options: SignedURLOptions(download: .withOriginalName))
               lastActionResult = ("createSignedURL (download)", url)
               openURL(url)
             } catch {}
