@@ -509,6 +509,14 @@ jobs:
         run: ./scripts/check-isolation-coverage.sh Auth Tests/DefaultIsolationTests/AuthIsolationTests.swift
       - name: Check main-actor call sites cover the Realtime API
         run: ./scripts/check-isolation-coverage.sh Realtime Tests/DefaultIsolationTests/RealtimeIsolationTests.swift
+      - name: Check main-actor call sites cover the Supabase API
+        run: ./scripts/check-isolation-coverage.sh Supabase Tests/DefaultIsolationTests/SupabaseIsolationTests.swift
+      - name: Check main-actor call sites cover the Functions API
+        run: ./scripts/check-isolation-coverage.sh Functions Tests/DefaultIsolationTests/FunctionsIsolationTests.swift
+      - name: Check main-actor call sites cover the PostgREST API
+        run: ./scripts/check-isolation-coverage.sh PostgREST Tests/DefaultIsolationTests/PostgRESTIsolationTests.swift
+      - name: Check main-actor call sites cover the Storage API
+        run: ./scripts/check-isolation-coverage.sh Storage Tests/DefaultIsolationTests/StorageIsolationTests.swift
 
   lint:
     name: SwiftLint
