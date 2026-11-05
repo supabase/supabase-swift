@@ -66,6 +66,10 @@ public struct RealtimeError: SupabaseError {
     public static let payloadTooLarge: Kind = "payloadTooLarge"
     /// The server closed the channel while a subscribe was in flight.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
+    /// The server reported an error on the channel (`phx_error`). The channel joins again on
+    /// its own, and ``RealtimeChannelEvent/resubscribed`` follows the rejoin. Pushes that
+    /// waited for a reply fail with this kind.
+    public static let channelError: Kind = "channelError"
     /// The call used a channel that ``RealtimeClient/removeChannel(_:)`` removed or that the
     /// server closed (`phx_close`), or the removal ended a subscribe in flight. Get a new channel
     /// from ``RealtimeClient/channel(_:configure:)``.
@@ -247,6 +251,10 @@ extension RealtimeError {
   /// The server closed the channel while a subscribe was in flight.
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
+
+  /// The server reported an error on the channel (`phx_error`).
+  static let channelError = RealtimeError(
+    kind: .channelError, message: "The server reported an error on the channel.")
 
   /// The channel was removed with ``RealtimeClient/removeChannel(_:)``, or the server closed it.
   static let channelRemoved = RealtimeError(

@@ -60,21 +60,23 @@ each one; ``RealtimeChannel/events()`` then yields ``RealtimeChannelEvent/resubs
 
 ### When the server closes a channel
 
-The automatic rejoin covers a dropped socket. It does not cover a channel that the server ends
-while the socket stays up, for example when the token expires:
+The server can end a channel while the socket stays up, for example when the token expires. What
+follows depends on the message:
 
-- After a close (`phx_close`), the channel's status becomes
+- After a channel error (`phx_error`), the channel joins again on its own. Its status becomes
+  ``RealtimeChannelStatus/resubscribing(attempt:retryIn:lastError:)`` with a
+  ``RealtimeError/Kind-swift.struct/channelError`` error, and the rejoin waits 1, 2 and 5
+  seconds, then every 10 seconds, between attempts. Pushes that wait for a reply throw the same
+  error. When the rejoin succeeds, ``RealtimeChannel/events()`` yields
+  ``RealtimeChannelEvent/resubscribed``. A `phx_error` during a join counts as a failed attempt,
+  so ``RealtimeChannel/subscribe()`` keeps waiting.
+- After a close (`phx_close`), the channel does not join again. Its status becomes
   ``RealtimeChannelStatus/unsubscribed``, the client removes the channel, and every stream on it
   ends. Your `for await` loops end. The handle is spent, as after
   ``RealtimeClient/removeChannel(_:)``: its actions throw
   ``RealtimeError/Kind-swift.struct/channelRemoved``. To keep receiving events, ask the client
-  for a new channel and subscribe it.
-- After a channel error (`phx_error`), the status becomes
-  ``RealtimeChannelStatus/unsubscribed``, but the channel and its streams stay. Call
-  ``RealtimeChannel/subscribe()`` again.
-
-In both cases ``RealtimeChannel/statusChanges()`` reports ``RealtimeChannelStatus/unsubscribed``
-without a call from you. Watch for it if your screen must stay live.
+  for a new channel and subscribe it. Watch ``RealtimeChannel/statusChanges()`` for
+  ``RealtimeChannelStatus/unsubscribed`` if your screen must stay live.
 
 ### Heartbeat and liveness
 

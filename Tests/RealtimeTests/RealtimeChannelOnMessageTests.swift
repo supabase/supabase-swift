@@ -445,11 +445,12 @@ struct RealtimeChannelOnMessageTests {
   }
 
   @Test
-  func errorClosesChannelWithoutRemovingItFromSocket() async {
+  func errorKeepsChannelAndWaitsToRejoin() async {
     await deliver(message(event: ChannelEvent.error))
 
     #expect(await client.liveChannel(for: sut.topic) != nil)
-    #expect(await sut.status == .unsubscribed)
+    #expect(await sut.status == .resubscribing)
+    #expect(await sut.status.error?.kind == .channelError)
   }
 
   @Test

@@ -181,6 +181,16 @@ struct RealtimeReconnectRecoveryTests {
 
     try await settled(barrier, after: socket, on: channel)
     #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
+    // The rejoin runs on the real clock, so read the status stream: it keeps every change.
+    let sawRejoinWait = LockIsolated(false)
+    let statuses = await channel.statusChanges()
+    let watcher = Task {
+      for await status in statuses where status == .resubscribing {
+        sawRejoinWait.setValue(true)
+        return
+      }
+    }
+    defer { watcher.cancel() }
 
     socket.reply(
       RealtimeMessage(
@@ -191,8 +201,8 @@ struct RealtimeReconnectRecoveryTests {
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
-    #expect(await channel.status == .unsubscribed)
+    await waitUntil(timeout: 2) { sawRejoinWait.value }
+    #expect(sawRejoinWait.value)
 
     await sut.disconnect()
   }

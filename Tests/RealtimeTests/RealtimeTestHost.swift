@@ -190,12 +190,20 @@ final class RealtimeTestHost: Sendable {
     return join
   }
 
+  /// Reports an error on the channel that `join` opened, as the server does with `phx_error`.
+  func sendError(for join: RealtimeMessage) {
+    send(ChannelEvent.error, for: join)
+  }
+
   /// Closes the channel that `join` opened, as the server does with `phx_close`.
   func sendClose(for join: RealtimeMessage) {
+    send(ChannelEvent.close, for: join)
+  }
+
+  private func send(_ event: String, for join: RealtimeMessage) {
     server?.send(
       RealtimeMessage(
-        joinRef: join.joinRef, ref: nil, topic: join.topic, event: ChannelEvent.close,
-        payload: [:]))
+        joinRef: join.joinRef, ref: nil, topic: join.topic, event: event, payload: [:]))
   }
 }
 

@@ -138,5 +138,6 @@ data again when ``RealtimeChannelEvent/resubscribed`` arrives:
 Catch the error from ``RealtimeChannel/subscribe()`` instead of discarding it with `try?`. A
 failed join leaves the streams open, so a loop after it would wait until the task is cancelled.
 
-A channel that the server closes does not join again. See
+A channel that the server reports an error on (`phx_error`) joins again the same way. A channel
+that the server closes (`phx_close`) does not join again. See
 <doc:ConnectionBehavior#When-the-server-closes-a-channel>.
