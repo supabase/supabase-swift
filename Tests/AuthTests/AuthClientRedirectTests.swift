@@ -198,19 +198,106 @@ struct AuthClientRedirectTests {
   }
 
   @Test
-  func sbFlowIDSelectsItsFlow() async throws {
+  func aURLsFlowIDIsIgnored() async throws {
     race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
     let client = race.makeClient()
     let a = try await client.oauthSignInURL(.github).id
     let b = try await client.oauthSignInURL(.google).id
-    let verifierA = try #require(try storedFlow(a)).verifier
+    let verifierB = try #require(try storedFlow(b)).verifier
 
     try await client.handleRedirect(
       URL(string: "com.example.app://callback?code=one-time-code&sb_flow_id=\(a.uuidString)")!)
 
+    #expect(exchangeBodies() == [exchangeBody(verifier: verifierB)])
+    #expect(try storedFlow(a) != nil)
+    #expect(try storedFlow(b) == nil)
+  }
+
+  @Test(
+    arguments: [
+      "com.example.app://invite?code=ABC",
+      "com.example.app://x?error=y",
+      "com.example.app://chat?message=hi&sb=",
+      "other.app://callback?code=ABC",
+      "com.example.app://callback/extra?code=ABC",
+    ]
+  )
+  func aDeepLinkOutsideTheCallbacksIsNotAnAuthRedirect(urlString: String) async throws {
+    let client = race.makeClient()
+    _ = try await client.oauthSignInURL(.github)
+    let url = URL(string: urlString)!
+
+    let result = try await client.handleRedirect(url)
+
+    #expect(result == nil)
+    #expect(await client.isAuthRedirect(url) == false)
+    #expect(race.requestCount(grantType: "pkce") == 0)
+    #expect(try pendingFlowCount() == 1)
+  }
+
+  @Test(arguments: ["com.example.app://callback/?code=x", "COM.EXAMPLE.APP://CALLBACK?code=x"])
+  func theConfiguredCallbackMatchesWithoutCaseOrATrailingSlash(urlString: String) async {
+    let client = race.makeClient()
+
+    #expect(await client.isAuthRedirect(URL(string: urlString)!))
+  }
+
+  @Test
+  func aPerCallRedirectURLIsACallbackOnlyForItsFlows() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient()
+    let login = URL(string: "com.example.app://login")!
+    let a = try await client.oauthSignInURL(.github, options: OAuthOptions(redirectTo: login)).id
+    let b = try await client.oauthSignInURL(.google).id
+    let verifierA = try #require(try storedFlow(a)).verifier
+    let url = URL(string: "com.example.app://login?code=one-time-code")!
+
+    #expect(await client.isAuthRedirect(url))
+    try await client.handleRedirect(url)
+
     #expect(exchangeBodies() == [exchangeBody(verifier: verifierA)])
-    #expect(try storedFlow(a) == nil)
     #expect(try storedFlow(b) != nil)
+  }
+
+  @Test
+  func aPerCallRedirectURLIsACallbackAfterARelaunch() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let login = URL(string: "com.example.app://login")!
+    _ = try await race.makeClient().oauthSignInURL(
+      .github, options: OAuthOptions(redirectTo: login))
+    let relaunched = await race.relaunch()
+
+    let result = try await relaunched.handleRedirect(
+      URL(string: "com.example.app://login?code=one-time-code")!)
+
+    #expect(describe(result) == "signedIn exchanged-access verification: nil")
+  }
+
+  @Test
+  func aRedeliveryReplaysAfterItsCallbackFlowIsGone() async throws {
+    race.answerCodeExchange { [race] in try Race.ok(race.issue("exchanged")) }
+    let client = race.makeClient(redirectTo: nil)
+    let login = URL(string: "com.example.app://login")!
+    _ = try await client.oauthSignInURL(.github, options: OAuthOptions(redirectTo: login))
+    let url = URL(string: "com.example.app://login?code=one-time-code")!
+
+    let first = try await client.handleRedirect(url)
+    let second = try await client.handleRedirect(url)
+
+    #expect(try pendingFlowCount() == 0)
+    #expect(second == first)
+    #expect(describe(second) == "signedIn exchanged-access verification: nil")
+    #expect(race.requestCount(grantType: "pkce") == 1)
+  }
+
+  @Test
+  func withNoKnownCallbackNoURLIsAnAuthRedirect() async throws {
+    let client = race.makeClient(redirectTo: nil)
+    _ = try await client.oauthSignInURL(.github)
+
+    #expect(try await client.handleRedirect(callback) == nil)
+    #expect(await client.isAuthRedirect(callback) == false)
+    #expect(race.requestCount(grantType: "pkce") == 0)
   }
 
   @Test
@@ -284,8 +371,8 @@ struct AuthClientRedirectTests {
 
     #expect(result == nil)
     #expect(race.transport.requests.isEmpty)
-    #expect(client.isAuthRedirect(unrelated) == false)
-    #expect(client.isAuthRedirect(URL(string: "com.example.app://callback?code=x")!))
+    #expect(await client.isAuthRedirect(unrelated) == false)
+    #expect(await client.isAuthRedirect(URL(string: "com.example.app://callback?code=x")!))
   }
 
   @Test
@@ -667,7 +754,7 @@ struct AuthClientRedirectTests {
       try await client.handleRedirect(
         URL(
           string:
-            "myapp://cb#access_token=a&refresh_token=r&expires_in=3600&token_type=bearer"
+            "com.example.app://callback#access_token=a&refresh_token=r&expires_in=3600&token_type=bearer"
         )!)
     }
     await gate.arrivals(1)
@@ -698,7 +785,7 @@ struct AuthClientRedirectTests {
     let presenter = ClosurePresenter { _, _ in
       URL(
         string: """
-          myapp://cb#access_token=implicit-access&refresh_token=implicit-refresh\
+          com.example.app://callback#access_token=implicit-access&refresh_token=implicit-refresh\
           &expires_in=3600&token_type=bearer
           """
       )!
@@ -792,8 +879,7 @@ struct AuthClientRedirectTests {
     let b = try await client.oauthSignInURL(.google).id
 
     await #expect {
-      try await client.handleRedirect(
-        URL(string: "com.example.app://callback?code=one-time-code&sb_flow_id=\(b.uuidString)")!)
+      try await client.exchangeCodeForSession("one-time-code", flowID: b)
     } throws: { ($0 as? AuthError)?.errorCode == .badCodeVerifier }
 
     #expect(race.requestCount(grantType: "pkce") == 1)

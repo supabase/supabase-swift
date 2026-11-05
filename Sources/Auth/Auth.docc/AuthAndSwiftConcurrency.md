@@ -43,7 +43,7 @@ actor Uploader {
 
 | API | Where it runs |
 | --- | --- |
-| ``AuthClient/status``, ``AuthClient/events()``, ``AuthClient/isAuthRedirect(_:)`` | Synchronous and not tied to an actor. Call them from anywhere, with no `await`. They return at once. ``AuthClient/events()`` only starts the first read of storage in the background, when the client has not read it yet. |
+| ``AuthClient/status``, ``AuthClient/events()`` | Synchronous and not tied to an actor. Call them from anywhere, with no `await`. They return at once. ``AuthClient/events()`` only starts the first read of storage in the background, when the client has not read it yet. |
 | ``AuthClient/signIn(email:password:captchaToken:)``, ``AuthClient/session()``, ``AuthClient/handleRedirect(_:)``, ``AuthClient/signOut(scope:)``, and the other `async` methods of ``AuthClient`` | The actor of the caller. The request and the bookkeeping run on other executors. |
 | ``KeychainStorage`` reads and writes | A background executor. The methods are `@concurrent`, so Keychain I/O never blocks the caller. |
 | ``WebAuthPresenter/authenticate(url:callbackScheme:)`` and ``ClosurePresenter`` | The main actor. The client awaits it, so the sign-in page opens on the main thread whichever actor called ``AuthClient/signInWithOAuth(_:options:presenter:)``. |

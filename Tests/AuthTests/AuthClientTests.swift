@@ -905,7 +905,8 @@ extension AuthMockerTests {
 
         let currentDate = Date()
 
-        let sut = makeSUT(date: { currentDate })
+        let sut = makeSUT(
+          date: { currentDate }, redirectTo: URL(string: "https://dummy-url.com/callback")!)
 
         let url = URL(
           string:
@@ -1287,7 +1288,7 @@ extension AuthMockerTests {
         statusCode: 200,
         data: [.post: MockData.session]
       ).register()
-      let sut = makeSUT()
+      let sut = makeSUT(redirectTo: URL(string: "https://supabase.com")!)
 
       try await sut.resetPassword(email: "example@mail.com")
 
@@ -3205,7 +3206,7 @@ extension AuthMockerTests {
     @Test
     func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws
     {
-      let sut = makeSUT()
+      let sut = makeSUT(redirectTo: URL(string: "https://dummy-url.com/callback")!)
 
       Mock(
         url: clientURL.appendingPathComponent("user"),
@@ -3927,7 +3928,8 @@ extension AuthMockerTests {
       url: URL = clientURL,
       storageKey: String = uniqueStorageKey(),
       date: @escaping @Sendable () -> Date = { Self.now },
-      platform: AuthPlatform = .live
+      platform: AuthPlatform = .live,
+      redirectTo: URL? = nil
     ) -> AuthClient {
       let sessionConfiguration = URLSessionConfiguration.default
       sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
@@ -3938,6 +3940,7 @@ extension AuthMockerTests {
         storageKey: storageKey,
         headers: HTTPFields(["apikey": apiKey]),
         storage: storage,
+        redirectTo: redirectTo,
         http: .init(transport: URLSessionTransport(session: session)),
         now: date)
 

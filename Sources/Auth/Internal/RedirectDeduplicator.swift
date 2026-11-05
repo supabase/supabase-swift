@@ -32,6 +32,11 @@ actor RedirectDeduplicator<Value: Sendable> {
     return try await task.value
   }
 
+  /// Whether a result for `key` is stored or in progress.
+  func contains(_ key: String) -> Bool {
+    tasks[key] != nil
+  }
+
   /// Forgets every stored result, so a later call for any key runs its operation again.
   func removeAll() {
     tasks.removeAll()

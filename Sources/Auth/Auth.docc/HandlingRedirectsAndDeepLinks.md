@@ -35,6 +35,12 @@ universal link needs the associated domain, as the section on universal links be
 Pass the URL to the client from `onOpenURL`, on the root view of the scene. The client reads the
 URL and finds the flow. It returns `nil` for a URL that is not an auth redirect.
 
+A URL is an auth redirect only when it opens a known callback: the redirect URL of the client, or
+the `redirectTo` of a flow that waits for its result. The scheme, host, port, and path must match.
+A trailing slash is ignored. So `com.example.app://invite?code=ABC` is not an auth redirect when
+the callback is `com.example.app://callback`. When no callback is known, no URL is an auth
+redirect.
+
 ```swift
 @main
 struct MyApp: App {
@@ -69,14 +75,18 @@ account that the tokens belong to, and anyone who can make your app open a URL c
 ### Route auth URLs apart from other links
 
 When the app also opens other deep links, ask the client first with
-``AuthClient/isAuthRedirect(_:)``. It reads only the URL, so it is cheap and does no I/O.
+``AuthClient/isAuthRedirect(_:)``. It applies the same rule as
+``AuthClient/handleRedirect(_:)``. It reads the pending flows from storage, so it is `async`, but
+it sends no request.
 
 ```swift
 .onOpenURL { url in
-  if supabase.auth.isAuthRedirect(url) {
-    Task { try await supabase.auth.handleRedirect(url) }
-  } else {
-    router.open(url)
+  Task {
+    if await supabase.auth.isAuthRedirect(url) {
+      try await supabase.auth.handleRedirect(url)
+    } else {
+      router.open(url)
+    }
   }
 }
 ```

@@ -432,8 +432,10 @@ public final class SupabaseClient: Sendable {
   /// ``AuthClient/handleRedirect(_:)``.
   ///
   /// Pass the URLs that reach your auth callback. ``AuthClient/isAuthRedirect(_:)`` checks one. A
-  /// URL that is not an auth redirect returns `nil`. The same URL can arrive more than once; the
-  /// later deliveries get the first result and send no request.
+  /// URL that is not an auth redirect returns `nil`: only a URL that opens
+  /// ``SupabaseClientOptions/AuthOptions/redirectToURL`` or the redirect URL of a pending flow is
+  /// one. The same URL can arrive more than once; the later deliveries get the first result and
+  /// send no request.
   ///
   /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to. Pass
   /// only URLs that reach your own callback.

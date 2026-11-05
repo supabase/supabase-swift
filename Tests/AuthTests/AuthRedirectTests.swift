@@ -5,8 +5,6 @@ import Testing
 
 @Suite
 struct AuthRedirectTests {
-  private static let flowID = UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!
-
   private static let tokens = ImplicitTokens(
     accessToken: "a",
     refreshToken: "r",
@@ -42,9 +40,8 @@ struct AuthRedirectTests {
   }
 
   static let cases: [(String, AuthRedirect?)] = [
-    ("myapp://cb?code=abc", .code("abc", flowID: nil)),
-    ("myapp://cb?code=abc&sb_flow_id=\(flowID.uuidString)", .code("abc", flowID: flowID)),
-    ("myapp://cb?code=abc&sb_flow_id=not-a-uuid", .code("abc", flowID: nil)),
+    ("myapp://cb?code=abc", .code("abc")),
+    ("myapp://cb?code=abc&sb_flow_id=6C69F399-BE1B-467A-9C53-D3753ABDD2DF", .code("abc")),
     ("myapp://cb#\(implicitFragment)", .implicit(tokens, type: nil)),
     ("myapp://cb#\(implicitFragment)&type=recovery", .implicit(tokens, type: .recovery)),
     (
@@ -91,7 +88,7 @@ struct AuthRedirectTests {
         .oauthFlowFailed(
           "The redirect has an access token but no refresh token, token type, or expiry."))
     ),
-    ("myapp://cb?code=q#code=f", .code("f", flowID: nil)),
+    ("myapp://cb?code=q#code=f", .code("f")),
     ("myapp://profile?id=42", nil),
     ("https://example.com", nil),
   ]
@@ -100,5 +97,45 @@ struct AuthRedirectTests {
   func parse(urlString: String, expected: AuthRedirect?) throws {
     let url = try #require(URL(string: urlString))
     #expect(AuthRedirect.parse(url) == expected)
+  }
+
+  @Test(
+    arguments: [
+      ("com.example.app://callback?code=a", "com.example.app://callback"),
+      ("com.example.app://callback/?code=a", "com.example.app://callback"),
+      ("com.example.app://callback?code=a", "com.example.app://callback/"),
+      ("COM.Example.App://Callback?code=a", "com.example.app://callback"),
+      ("com.example.app://callback#access_token=a", "com.example.app://callback?next=home"),
+      ("com.example.app:/callback?code=a", "com.example.app:/callback"),
+      ("https://example.com/auth/callback?code=a", "https://example.com/auth/callback"),
+      ("https://example.com/auth/callback/?code=a", "https://example.com/auth/callback"),
+      ("http://localhost:3000/callback?code=a", "http://localhost:3000/callback"),
+      ("https://example.com/cb?code=a", "https://example.com:443/cb"),
+      ("http://example.com:80/cb?code=a", "http://example.com/cb"),
+      ("https://example.com/auth%2Dcb?code=a", "https://example.com/auth-cb"),
+    ]
+  )
+  func aURLReachesItsCallback(url: String, callback: String) throws {
+    #expect(
+      AuthRedirect.url(try #require(URL(string: url)), reaches: try #require(URL(string: callback)))
+    )
+  }
+
+  @Test(
+    arguments: [
+      ("com.example.app://invite?code=a", "com.example.app://callback"),
+      ("other.app://callback?code=a", "com.example.app://callback"),
+      ("com.example.app://callback/extra?code=a", "com.example.app://callback"),
+      ("https://example.com/auth/callback?code=a", "https://example.com/auth"),
+      ("https://evil.com/auth/callback?code=a", "https://example.com/auth/callback"),
+      ("http://localhost:4000/callback?code=a", "http://localhost:3000/callback"),
+      ("http://example.com/callback?code=a", "https://example.com/callback"),
+      ("https://example.com:8443/cb?code=a", "https://example.com/cb"),
+    ]
+  )
+  func aURLDoesNotReachAnotherCallback(url: String, callback: String) throws {
+    #expect(
+      !AuthRedirect.url(
+        try #require(URL(string: url)), reaches: try #require(URL(string: callback))))
   }
 }

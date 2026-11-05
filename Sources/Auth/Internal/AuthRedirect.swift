@@ -12,7 +12,7 @@ struct ImplicitTokens: Sendable, Hashable {
 
 /// What a URL opened in the app asks the client to do, decided by the URL's contents alone.
 enum AuthRedirect: Sendable, Equatable {
-  case code(String, flowID: UUID?)
+  case code(String)
   case implicit(ImplicitTokens, type: EmailOTPType?)
   case error(AuthError)
   case emailChangePending(message: String)
@@ -31,7 +31,7 @@ enum AuthRedirect: Sendable, Equatable {
     }
 
     if let code = items["code"] {
-      return .code(code, flowID: items["sb_flow_id"].flatMap(UUID.init(uuidString:)))
+      return .code(code)
     }
 
     if let accessToken = items["access_token"] {
@@ -65,9 +65,47 @@ enum AuthRedirect: Sendable, Equatable {
     return nil
   }
 
+  /// The key that the client deduplicates the redirect by, or `nil` when it is not deduplicated.
+  var deduplicationKey: String? {
+    switch self {
+    case .code(let code): code
+    case .implicit(let tokens, _): tokens.accessToken
+    case .error, .emailChangePending: nil
+    }
+  }
+
+  /// Whether `url` opens `callback`: the same scheme, host, port, and path. Scheme and host
+  /// compare without case, and a trailing slash on the path is ignored. The query and the fragment
+  /// are ignored, because the server adds its result there.
+  static func url(_ url: URL, reaches callback: URL) -> Bool {
+    guard
+      let lhs = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let rhs = URLComponents(url: callback, resolvingAgainstBaseURL: false)
+    else { return false }
+    let scheme = lhs.scheme?.lowercased()
+    return scheme == rhs.scheme?.lowercased()
+      && lhs.host?.lowercased() == rhs.host?.lowercased()
+      && effectivePort(lhs.port, scheme: scheme) == effectivePort(rhs.port, scheme: scheme)
+      && normalizedPath(lhs.path) == normalizedPath(rhs.path)
+  }
+
+  /// `nil` for the default port of the scheme, so `https://a.com:443` matches `https://a.com`.
+  private static func effectivePort(_ port: Int?, scheme: String?) -> Int? {
+    switch (scheme, port) {
+    case ("http", 80), ("https", 443): nil
+    default: port
+    }
+  }
+
+  private static func normalizedPath(_ path: String) -> String {
+    var path = Substring(path)
+    while path.hasSuffix("/") { path = path.dropLast() }
+    return String(path)
+  }
+
   static func == (lhs: AuthRedirect, rhs: AuthRedirect) -> Bool {
     switch (lhs, rhs) {
-    case (.code(let a, let aID), .code(let b, let bID)): a == b && aID == bID
+    case (.code(let a), .code(let b)): a == b
     case (.implicit(let a, let aType), .implicit(let b, let bType)): a == b && aType == bType
     case (.emailChangePending(let a), .emailChangePending(let b)): a == b
     case (.error(let a), .error(let b)):

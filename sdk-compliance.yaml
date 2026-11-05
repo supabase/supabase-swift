@@ -1141,7 +1141,7 @@ features:
       - AuthClient.events
   client.authentication_integration.session_url_detection:
     status: implemented
-    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. The client detects the flow from the URL's contents, returns nil for a URL that is not an auth redirect, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) checks a URL without handling it."
+    note: "No automatic listener/predicate like supabase-js's boolean-or-custom-predicate config: the app calls SupabaseClient.handleRedirect(_:)/AuthClient.handleRedirect(_:) from its own URL-handling entry point with the URLs that reach its auth callback. A URL is an auth redirect only when its scheme, host, port, and path match the configured redirect URL or the redirectTo of a pending flow; the client then detects the flow from the URL's contents, returns nil for any other URL, and replays the first result for a repeated delivery. AuthClient.isAuthRedirect(_:) (async, reads the pending flows) checks a URL with the same rule without handling it."
     symbols:
       - SupabaseClient.handleRedirect
       - AuthClient.handleRedirect
