@@ -470,6 +470,18 @@ let options = RealtimeClientOptions(
 )
 ```
 
+## watchOS connections need an opt-in
+
+watchOS blocks `URLSessionWebSocketTask` for most apps (Apple's TN3135), and the connection waits
+forever. In v3, `connect()` on watchOS throws a non-retryable `.transport` error that cites
+TN3135. If the app runs in a context that TN3135 allows, such as audio streaming, opt in:
+
+```swift
+let options = RealtimeClientOptions(
+  webSocketTransport: URLSessionWebSocketTransport(allowsWatchOSConnections: true)
+)
+```
+
 ## `fetch:` is replaced by `http:`
 
 REST broadcast calls go through a `ClientTransport`.

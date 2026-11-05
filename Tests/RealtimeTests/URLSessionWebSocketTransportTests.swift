@@ -46,6 +46,19 @@ struct URLSessionWebSocketTransportTests {
     #expect(error?.isRetryable == false)
   }
 
+  @Test
+  func watchOSWithoutOptInFailsFastWithANonRetryableErrorCitingTN3135() async {
+    let transport = URLSessionWebSocketTransport(isWatchOS: true)
+
+    let error = await #expect(throws: RealtimeError.self) {
+      _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
+    }
+    #expect(error?.kind == .transport)
+    #expect(error?.isRetryable == false)
+    #expect(error?.message.contains("TN3135") == true)
+    #expect(error?.message.contains("allowsWatchOSConnections") == true)
+  }
+
   #if canImport(Network)
     private func connect(port: UInt16) async throws -> any WebSocketConnection {
       try await transport.connect(to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
@@ -182,6 +195,58 @@ struct URLSessionWebSocketTransportTests {
         headerFields: [HTTPField.Name("x-api-key")!: "secret"]
       )
       #expect(request.value.lowercased().contains("x-api-key: secret"))
+    }
+
+    @Test
+    func watchOSHandshakeThatNeverCompletesTimesOutCitingTN3135() async throws {
+      let server = try LoopbackTCPServer.stalling()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(
+        allowsWatchOSConnections: true, isWatchOS: true, handshakeTimeout: 0.2)
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await transport.connect(
+          to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+      }
+      #expect(error?.kind == .transport)
+      #expect(error?.isRetryable == true)
+      #expect(error?.message.contains("TN3135") == true)
+      #expect((error?.underlyingError as? URLError)?.code == .timedOut)
+    }
+
+    @Test(arguments: [0, -1, TimeInterval.infinity])
+    func watchOSHandshakeDeadlineIsSkippedWhenTheTimeoutIsNotAPositiveFiniteNumber(
+      timeout: TimeInterval
+    ) async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(
+        allowsWatchOSConnections: true, isWatchOS: true, handshakeTimeout: timeout)
+
+      let connection = try await transport.connect(
+        to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+
+      connection.close(code: .normalClosure, reason: nil)
+    }
+
+    @Test
+    func handshakeTimeoutDoesNotApplyOutsideWatchOS() async throws {
+      let server = try LoopbackTCPServer.stalling()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(isWatchOS: false, handshakeTimeout: 0.2)
+
+      let task = Task {
+        try await transport.connect(to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+      }
+      try await Task.sleep(for: .milliseconds(600))
+      task.cancel()
+
+      await #expect(throws: CancellationError.self) {
+        _ = try await task.value
+      }
     }
 
     @Test
