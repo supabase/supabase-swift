@@ -14,7 +14,7 @@ import Foundation
 
 /// Calls every public async Auth API from the main actor, since this target compiles with
 /// `.defaultIsolation(MainActor.self)`. Nothing here runs: if a call stops compiling, the build
-/// fails. `scripts/check-auth-isolation-coverage.sh` checks that each API has a call.
+/// fails. `scripts/check-isolation-coverage.sh` checks that each API has a call.
 enum AuthIsolationTests {
   /// Arguments the calls below need. Nothing creates one: it only has to type-check.
   struct Inputs {
