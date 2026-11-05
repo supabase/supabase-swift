@@ -325,6 +325,27 @@ public final class SupabaseClient: Sendable {
     try rest.rpc(fn, count: count)
   }
 
+  /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F> {
+    try rest.rpc(function)
+  }
+
+  // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func rpc<F: _PostgrestFunction>(_ function: F, _: Void = ()) throws
+    -> _PostgrestFunctionQuery<F>
+  {
+    fatalError()
+  }
+
   /// Returns a database client scoped to the given Postgres schema.
   ///
   /// The schema must be on the list of exposed schemas in your Supabase project dashboard.
