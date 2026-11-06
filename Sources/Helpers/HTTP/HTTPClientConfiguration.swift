@@ -16,7 +16,7 @@
 /// once per attempt.
 ///
 /// ```swift
-/// let options = SupabaseClient.Configuration(
+/// let configuration = SupabaseClient.Configuration(
 ///   global: .init(http: .init(timeout: .seconds(30)))
 /// )
 /// ```

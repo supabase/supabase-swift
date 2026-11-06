@@ -237,9 +237,8 @@ public actor RealtimeClient {
 
   /// Designated initializer.
   ///
-  /// `clock` is a separate parameter from ``Configuration/clock`` so tests can pair a
-  /// `TestClock` with a stub `transport`. The public initializer forwards `configuration.clock`,
-  /// so the two only ever differ inside this package's own tests.
+  /// The public initializer forwards `configuration.clock` as `clock`. Package tests pass their
+  /// own clock here with a stub `transport`.
   init(
     configuration: Configuration,
     transport: any WebSocketTransport,

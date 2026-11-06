@@ -9,13 +9,13 @@ struct PostgrestClientConfigurationTests {
   private let url = URL(string: "http://localhost")!
 
   @Test
-  func loggerIsTaggedWithSystemMetadata() {
-    let configuration = PostgrestClient.Configuration(
-      url: url,
-      logger: Logging.Logger(label: "test")
-    )
+  func loggerSetAfterInitIsTaggedWithSystemMetadata() {
+    var configuration = PostgrestClient.Configuration(url: url)
+    configuration.logger = Logging.Logger(label: "test")
 
-    #expect(configuration.logger[metadataKey: "system"] == "postgrest")
+    let client = PostgrestClient(configuration: configuration)
+
+    #expect(client.configuration.logger[metadataKey: "system"] == "postgrest")
   }
 
   @Test

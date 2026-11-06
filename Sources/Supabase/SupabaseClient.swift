@@ -90,7 +90,7 @@ public final class SupabaseClient: Sendable {
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
-  let clock: any Clock<Duration>
+  var clock: any Clock<Duration> { configuration.global.clock }
 
   let _auth: AuthClient
 
@@ -212,7 +212,6 @@ public final class SupabaseClient: Sendable {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.configuration = configuration
-    self.clock = configuration.global.clock
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -254,7 +253,7 @@ public final class SupabaseClient: Sendable {
         sdkMiddlewares: [TraceContextMiddleware()]
       ),
       logger: configuration.auth.logger ?? configuration.global.logger,
-      clock: configuration.auth.clock ?? clock
+      clock: configuration.auth.clock ?? configuration.global.clock
     )
     _auth = AuthClient(configuration: authConfiguration)
 
@@ -645,5 +644,4 @@ public final class SupabaseClient: Sendable {
       )
     )
   }
-
 }

@@ -12,14 +12,13 @@ import Testing
 @Suite
 struct StorageClientConfigurationTests {
   @Test
-  func loggerIsTaggedWithSystemMetadata() {
-    let configuration = StorageClient.Configuration(
-      url: URL(string: "http://localhost")!,
-      headers: [:],
-      logger: Logging.Logger(label: "test")
-    )
+  func loggerSetAfterInitIsTaggedWithSystemMetadata() {
+    var configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+    configuration.logger = Logging.Logger(label: "test")
 
-    #expect(configuration.logger[metadataKey: "system"] == "storage")
+    let client = StorageClient(configuration: configuration)
+
+    #expect(client.configuration.logger[metadataKey: "system"] == "storage")
   }
 
   @Test

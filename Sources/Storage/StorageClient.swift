@@ -64,6 +64,7 @@ extension StorageClient {
     public var http: HTTPClientConfiguration
 
     /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+    /// The client tags it with the `system` metadata key set to `storage`.
     public var logger: Logging.Logger
 
     /// Whether transient failures of reads are retried. Defaults to `true`.
@@ -106,8 +107,6 @@ extension StorageClient {
       self.headers = headers
       self.usesNewHostname = usesNewHostname
       self.http = http
-      var logger = logger
-      logger[metadataKey: "system"] = "storage"
       self.logger = logger
       self.retryEnabled = retryEnabled
       self.clock = clock
