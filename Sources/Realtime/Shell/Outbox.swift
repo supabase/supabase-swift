@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Helpers
 import Logging
 
 /// Sends messages over a connection in the order they were enqueued.
@@ -32,7 +33,9 @@ final class Outbox: Sendable {
           do {
             frame = .text(try serializer.encodeText(message))
           } catch {
-            logger.error("Failed to encode message \(message): \(error)")
+            let summary = LogRedaction.summary(of: error)
+            logger.error(
+              "Failed to encode a '\(message.event)' message for '\(message.topic)': \(summary)")
             continue
           }
         }
@@ -40,7 +43,7 @@ final class Outbox: Sendable {
           try await connection.send(frame)
         } catch {
           guard !Task.isCancelled else { return }
-          logger.error("Failed to send frame: \(error)")
+          logger.error("Failed to send frame: \(LogRedaction.summary(of: error))")
         }
       }
     }

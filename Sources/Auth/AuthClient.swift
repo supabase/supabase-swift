@@ -227,6 +227,8 @@ public final class AuthClient: Sendable {
   ) {
     let clientID = AuthClient.nextClientID()
     self.clientID = clientID
+    var configuration = configuration
+    configuration.logger = configuration.logger.redactingSecrets()
 
     let logger: Logging.Logger = {
       var logger = configuration.logger
@@ -1693,7 +1695,7 @@ public final class AuthClient: Sendable {
       do {
         try await sessionStore.load()
       } catch {
-        logger.error("Failed to load the stored session: \(error)")
+        logger.error("Failed to load the stored session: \(LogRedaction.summary(of: error))")
       }
     }
   }
