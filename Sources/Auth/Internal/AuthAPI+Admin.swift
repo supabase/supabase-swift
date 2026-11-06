@@ -102,20 +102,20 @@ extension AuthAPI {
 // MARK: - Factors and passkeys
 
 extension AuthAPI {
-  func adminListFactors(userId: UUID) -> AuthRequest<[Factor]> {
-    request(.get, "admin/users/\(userId)/factors", decode: decoding([Factor].self))
+  func adminListFactors(userID: UUID) -> AuthRequest<[Factor]> {
+    request(.get, "admin/users/\(userID)/factors", decode: decoding([Factor].self))
   }
 
-  func adminDeleteFactor(id: UUID, userId: UUID) -> AuthRequest<Void> {
-    request(.delete, "admin/users/\(userId)/factors/\(id)", decode: ignoringBody)
+  func adminDeleteFactor(id: UUID, userID: UUID) -> AuthRequest<Void> {
+    request(.delete, "admin/users/\(userID)/factors/\(id)", decode: ignoringBody)
   }
 
-  func adminListPasskeys(userId: UUID) -> AuthRequest<[PasskeyListItem]> {
-    request(.get, "admin/users/\(userId)/passkeys", decode: decoding([PasskeyListItem].self))
+  func adminListPasskeys(userID: UUID) -> AuthRequest<[PasskeyListItem]> {
+    request(.get, "admin/users/\(userID)/passkeys", decode: decoding([PasskeyListItem].self))
   }
 
-  func adminDeletePasskey(id: UUID, userId: UUID) -> AuthRequest<Void> {
-    request(.delete, "admin/users/\(userId)/passkeys/\(id)", decode: ignoringBody)
+  func adminDeletePasskey(id: UUID, userID: UUID) -> AuthRequest<Void> {
+    request(.delete, "admin/users/\(userID)/passkeys/\(id)", decode: ignoringBody)
   }
 }
 

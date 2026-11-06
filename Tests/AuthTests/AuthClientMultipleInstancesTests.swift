@@ -131,12 +131,12 @@ struct AuthClientMultipleInstancesTests {
 
   @Test
   func mfaOutlivesClient() async throws {
-    let factorId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     let (mfa, transport) = releasedClientSubClient(
       \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
     try await mfa.dependencies.seedSession(.valid)
 
-    try await mfa.unenroll(factorID: factorId)
+    try await mfa.unenroll(factorID: factorID)
 
     #expect(transport.requests.count == 1)
   }

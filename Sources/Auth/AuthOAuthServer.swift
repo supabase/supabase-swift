@@ -71,7 +71,7 @@ public struct AuthOAuthServer: Sendable {
   /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, completing the third-party app's OAuth flow.
   public func approveAuthorization(id: String) async throws -> OAuthRedirect {
-    try await consent(authorizationId: id, action: "approve")
+    try await consent(authorizationID: id, action: "approve")
   }
 
   /// Denies a pending OAuth authorization request.
@@ -89,12 +89,12 @@ public struct AuthOAuthServer: Sendable {
   /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, carrying the OAuth error.
   public func denyAuthorization(id: String) async throws -> OAuthRedirect {
-    try await consent(authorizationId: id, action: "deny")
+    try await consent(authorizationID: id, action: "deny")
   }
 
-  private func consent(authorizationId: String, action: String) async throws -> OAuthRedirect {
+  private func consent(authorizationID: String, action: String) async throws -> OAuthRedirect {
     try await api.authorizedExecute {
-      try authAPI.oauthConsent(authorizationId: authorizationId, action: action, accessToken: $0)
+      try authAPI.oauthConsent(authorizationID: authorizationID, action: action, accessToken: $0)
     }
   }
 
@@ -112,6 +112,6 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter id: The unique identifier of the OAuth client to revoke access for.
   public func revokeGrant(id: UUID) async throws {
-    try await api.authorizedExecute { authAPI.revokeOAuthGrant(clientId: id, accessToken: $0) }
+    try await api.authorizedExecute { authAPI.revokeOAuthGrant(clientID: id, accessToken: $0) }
   }
 }

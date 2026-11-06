@@ -252,6 +252,15 @@ supporting_symbols:
   - AuthAdminMFA
   # The admin OAuth namespace is shared by every auth.oauth_admin.* capability.
   - AuthAdminClient.oauth
+  - OAuthClient.clientID
+  - OAuthClient.clientURI
+  - OAuthClient.logoURI
+  - OAuthClient.redirectURIs
+  - CreateOAuthClientParams.clientURI
+  - CreateOAuthClientParams.redirectURIs
+  - UpdateOAuthClientParams.clientURI
+  - UpdateOAuthClientParams.logoURI
+  - UpdateOAuthClientParams.redirectURIs
   # AdminUserAttributes is the request body of both auth.admin.create_user and
   # auth.admin.update_user; its encoder maps banDuration to a Go duration string.
   - AdminUserAttributes.encode
@@ -1072,8 +1081,8 @@ features:
       - OAuthAuthorizationDetailsResponse.redirect
       - OAuthAuthorizationDetailsResponse.init
       - OAuthAuthorizationDetails
-      - OAuthAuthorizationDetails.authorizationId
-      - OAuthAuthorizationDetails.redirectUri
+      - OAuthAuthorizationDetails.authorizationID
+      - OAuthAuthorizationDetails.redirectURI
       - OAuthAuthorizationDetails.client
       - OAuthAuthorizationDetails.user
       - OAuthAuthorizationDetails.scope
@@ -1082,7 +1091,7 @@ features:
       - OAuthAuthorizationClient.id
       - OAuthAuthorizationClient.name
       - OAuthAuthorizationClient.uri
-      - OAuthAuthorizationClient.logoUri
+      - OAuthAuthorizationClient.logoURI
       - OAuthAuthorizationClient.init
       - OAuthAuthorizationUser
       - OAuthAuthorizationUser.id

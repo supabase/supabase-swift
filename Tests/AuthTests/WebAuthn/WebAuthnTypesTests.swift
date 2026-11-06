@@ -39,7 +39,7 @@ struct WebAuthnTypesTests {
   @Test
   func passkeyRegistrationOptionsDecodeExpiresAtFromUnixSeconds() throws {
     let json = Data(
-      #"{"challengeId":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","options":{},"expiresAt":1700000000}"#
+      #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","options":{},"expires_at":1700000000}"#
         .utf8)
 
     let decoded = try JSONDecoder().decode(PasskeyRegistrationOptions.self, from: json)
@@ -50,7 +50,7 @@ struct WebAuthnTypesTests {
   @Test
   func passkeyAuthenticationOptionsDecodeExpiresAtFromUnixSeconds() throws {
     let json = Data(
-      #"{"challengeId":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","options":{},"expiresAt":1700000000}"#
+      #"{"challenge_id":"e621e1f8-c36c-495a-93fc-0c247a3e6e5f","options":{},"expires_at":1700000000}"#
         .utf8)
 
     let decoded = try JSONDecoder().decode(PasskeyAuthenticationOptions.self, from: json)

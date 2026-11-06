@@ -75,9 +75,9 @@ struct AuthAPITests {
       ).head,
       api.jwks().head,
       api.oauthAuthorizationDetails(id: "a", accessToken: token).head,
-      api.oauthConsent(authorizationId: "a", action: "approve", accessToken: token).head,
+      api.oauthConsent(authorizationID: "a", action: "approve", accessToken: token).head,
       api.oauthGrants(accessToken: token).head,
-      api.revokeOAuthGrant(clientId: id, accessToken: token).head,
+      api.revokeOAuthGrant(clientID: id, accessToken: token).head,
       api.enrollFactor(.totp(), decoding: TOTPEnrollment.self, accessToken: token).head,
       api.challengeFactor(factorID: id, channel: nil, webAuthn: nil, accessToken: token).head,
       api.verifyFactor(factorID: id, challengeID: id, code: "1", accessToken: token).head,
@@ -103,13 +103,13 @@ struct AuthAPITests {
       api.adminDeleteUser(id: id, softDelete: false).head,
       api.adminListUsers(page: nil, pageSize: nil).head,
       api.adminGenerateLink(params: .magicLink(email: "a@b.c")).head,
-      api.adminListFactors(userId: id).head,
-      api.adminDeleteFactor(id: id, userId: id).head,
-      api.adminListPasskeys(userId: id).head,
-      api.adminDeletePasskey(id: id, userId: id).head,
+      api.adminListFactors(userID: id).head,
+      api.adminDeleteFactor(id: id, userID: id).head,
+      api.adminListPasskeys(userID: id).head,
+      api.adminDeletePasskey(id: id, userID: id).head,
       api.adminListOAuthClients(params: nil).head,
       api.adminCreateOAuthClient(
-        params: CreateOAuthClientParams(clientName: "n", redirectUris: [])
+        params: CreateOAuthClientParams(clientName: "n", redirectURIs: [])
       ).head,
       api.adminOAuthClient(id: id).head,
       api.adminUpdateOAuthClient(id: id, params: UpdateOAuthClientParams()).head,
@@ -343,7 +343,7 @@ struct AuthAPITests {
       Issue.record("Expected keyNotFound, got \(error)")
       return
     }
-    #expect(key.stringValue == "tokenType")
+    #expect(key.stringValue == "token_type")
   }
 
   @Test
@@ -399,7 +399,7 @@ struct AuthAPITests {
       Issue.record("Expected .details, got \(details)")
       return
     }
-    #expect(value.authorizationId == "abc")
+    #expect(value.authorizationID == "abc")
 
     let redirect = try request.decode(
       ok, Data(#"{"redirect_url":"https://example.com/callback?code=1"}"#.utf8))

@@ -21,8 +21,8 @@ import Testing
 
 @Suite
 struct AuthOAuthServerTests {
-  let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-  let userId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
+  let clientID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+  let userID = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
 
   let transport = RecordingTransport()
   let storage = InMemoryTestStorage()
@@ -47,13 +47,13 @@ struct AuthOAuthServerTests {
         "authorization_id": "abc123def456",
         "redirect_uri": "https://example.com/callback",
         "client": {
-          "id": "\(clientId)",
+          "id": "\(clientID)",
           "name": "Test Client",
           "uri": "https://example.com",
           "logo_uri": "https://example.com/logo.png"
         },
         "user": {
-          "id": "\(userId)",
+          "id": "\(userID)",
           "email": "user@example.com"
         },
         "scope": "read write"
@@ -69,13 +69,13 @@ struct AuthOAuthServerTests {
       return
     }
 
-    #expect(details.authorizationId == "abc123def456")
-    #expect(details.redirectUri == URL(string: "https://example.com/callback"))
-    #expect(details.client.id == clientId)
+    #expect(details.authorizationID == "abc123def456")
+    #expect(details.redirectURI == URL(string: "https://example.com/callback"))
+    #expect(details.client.id == clientID)
     #expect(details.client.name == "Test Client")
     #expect(details.client.uri == URL(string: "https://example.com"))
-    #expect(details.client.logoUri == URL(string: "https://example.com/logo.png"))
-    #expect(details.user.id == userId)
+    #expect(details.client.logoURI == URL(string: "https://example.com/logo.png"))
+    #expect(details.user.id == userID)
     #expect(details.user.email == "user@example.com")
     #expect(details.scope == "read write")
   }
@@ -87,11 +87,11 @@ struct AuthOAuthServerTests {
         "authorization_id": "abc123def456",
         "redirect_uri": "https://example.com/callback",
         "client": {
-          "id": "\(clientId)",
+          "id": "\(clientID)",
           "name": "Test Client"
         },
         "user": {
-          "id": "\(userId)",
+          "id": "\(userID)",
           "email": "user@example.com"
         },
         "scope": "read"
@@ -108,7 +108,7 @@ struct AuthOAuthServerTests {
     }
 
     #expect(details.client.uri == nil)
-    #expect(details.client.logoUri == nil)
+    #expect(details.client.logoURI == nil)
   }
 
   @Test
@@ -118,10 +118,10 @@ struct AuthOAuthServerTests {
         "authorization_id": "abc123def456",
         "redirect_uri": "https://example.com/callback",
         "client": {
-          "id": "\(clientId)"
+          "id": "\(clientID)"
         },
         "user": {
-          "id": "\(userId)"
+          "id": "\(userID)"
         }
       }
       """.data(using: .utf8)!
@@ -135,10 +135,10 @@ struct AuthOAuthServerTests {
       return
     }
 
-    #expect(details.authorizationId == "abc123def456")
-    #expect(details.client.id == clientId)
+    #expect(details.authorizationID == "abc123def456")
+    #expect(details.client.id == clientID)
     #expect(details.client.name == nil)
-    #expect(details.user.id == userId)
+    #expect(details.user.id == userID)
     #expect(details.user.email == nil)
     #expect(details.scope == nil)
   }
@@ -172,7 +172,7 @@ struct AuthOAuthServerTests {
           "name": "Test Client"
         },
         "user": {
-          "id": "\(userId)",
+          "id": "\(userID)",
           "email": "user@example.com"
         },
         "scope": "email"
@@ -192,7 +192,7 @@ struct AuthOAuthServerTests {
     let json = """
       {
         "client": {
-          "id": "\(clientId)",
+          "id": "\(clientID)",
           "name": "Test Client",
           "uri": "https://example.com",
           "logo_uri": "https://example.com/logo.png"
@@ -204,7 +204,7 @@ struct AuthOAuthServerTests {
 
     let grant = try AuthClient.Configuration.jsonDecoder.decode(OAuthGrant.self, from: json)
 
-    #expect(grant.client.id == clientId)
+    #expect(grant.client.id == clientID)
     #expect(grant.scopes == ["read", "write"])
   }
 
@@ -215,13 +215,13 @@ struct AuthOAuthServerTests {
         "authorization_id": "abc123def456",
         "redirect_uri": "https://example.com/callback",
         "client": {
-          "id": "\(clientId)",
+          "id": "\(clientID)",
           "name": "Test Client",
           "uri": "https://example.com",
           "logo_uri": "https://example.com/logo.png"
         },
         "user": {
-          "id": "\(userId)",
+          "id": "\(userID)",
           "email": "user@example.com"
         },
         "scope": "read write"
@@ -251,7 +251,7 @@ struct AuthOAuthServerTests {
       return
     }
 
-    #expect(details.authorizationId == "abc123def456")
+    #expect(details.authorizationID == "abc123def456")
     #expect(details.client.name == "Test Client")
   }
 
@@ -356,7 +356,7 @@ struct AuthOAuthServerTests {
       [
         {
           "client": {
-            "id": "\(clientId)",
+            "id": "\(clientID)",
             "name": "Test Client",
             "uri": "https://example.com",
             "logo_uri": "https://example.com/logo.png"
@@ -384,7 +384,7 @@ struct AuthOAuthServerTests {
     let grants = try await sut.oauthServer.listGrants()
 
     #expect(grants.count == 1)
-    #expect(grants[0].client.id == clientId)
+    #expect(grants[0].client.id == clientID)
     #expect(grants[0].scopes == ["read", "write"])
   }
 
@@ -405,7 +405,7 @@ struct AuthOAuthServerTests {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
-    try await sut.oauthServer.revokeGrant(id: clientId)
+    try await sut.oauthServer.revokeGrant(id: clientID)
   }
 
   @Test
@@ -420,7 +420,7 @@ struct AuthOAuthServerTests {
     try await sut.seedSession(.valid)
 
     do {
-      try await sut.oauthServer.revokeGrant(id: clientId)
+      try await sut.oauthServer.revokeGrant(id: clientID)
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)

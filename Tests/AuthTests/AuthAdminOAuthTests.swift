@@ -23,7 +23,7 @@ import Testing
 
 @Suite
 struct AuthAdminOAuthTests {
-  let clientId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+  let clientID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
   let transport = RecordingTransport()
 
   @Test
@@ -32,7 +32,7 @@ struct AuthAdminOAuthTests {
       {
         "clients": [
           {
-            "client_id": "\(clientId)",
+            "client_id": "\(clientID)",
             "client_name": "Test Client",
             "client_type": "confidential",
             "token_endpoint_auth_method": "client_secret_post",
@@ -78,7 +78,7 @@ struct AuthAdminOAuthTests {
     let response = try await sut.oauth.listClients()
 
     #expect(response.clients.count == 1)
-    #expect(response.clients[0].clientId == clientId)
+    #expect(response.clients[0].clientID == clientID)
     #expect(response.clients[0].clientName == "Test Client")
     #expect(response.audience == "authenticated")
     #expect(response.total == 1)
@@ -88,7 +88,7 @@ struct AuthAdminOAuthTests {
   func updateOAuthClient() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_name": "Update Client name",
         "client_secret": "secret123",
         "client_type": "confidential",
@@ -102,7 +102,7 @@ struct AuthAdminOAuthTests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.put, "admin/oauth/clients/\(clientId)", data: responseData) {
+    transport.stub(.put, "admin/oauth/clients/\(clientID)", data: responseData) {
       #"""
       curl \
       	--request PUT \
@@ -120,15 +120,15 @@ struct AuthAdminOAuthTests {
     let sut = AuthAdminClient.testing(http: transport)
 
     let client = try await sut.oauth.updateClient(
-      id: clientId,
+      id: clientID,
       params: UpdateOAuthClientParams(
         clientName: "Update Client name",
-        redirectUris: ["https://example.com/callback"],
+        redirectURIs: ["https://example.com/callback"],
         grantTypes: [.authorizationCode, .refreshToken]
       )
     )
 
-    #expect(client.clientId == clientId)
+    #expect(client.clientID == clientID)
     #expect(client.clientName == "Update Client name")
     #expect(client.clientSecret == "secret123")
   }
@@ -137,7 +137,7 @@ struct AuthAdminOAuthTests {
   func createOAuthClient() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_name": "New Client",
         "client_secret": "secret123",
         "client_type": "confidential",
@@ -170,12 +170,12 @@ struct AuthAdminOAuthTests {
 
     let params = CreateOAuthClientParams(
       clientName: "New Client",
-      redirectUris: ["https://example.com/callback"]
+      redirectURIs: ["https://example.com/callback"]
     )
 
     let client = try await sut.oauth.createClient(params: params)
 
-    #expect(client.clientId == clientId)
+    #expect(client.clientID == clientID)
     #expect(client.clientName == "New Client")
     #expect(client.clientSecret == "secret123")
   }
@@ -184,7 +184,7 @@ struct AuthAdminOAuthTests {
   func getOAuthClient() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_name": "Test Client",
         "client_type": "confidential",
         "token_endpoint_auth_method": "client_secret_post",
@@ -197,7 +197,7 @@ struct AuthAdminOAuthTests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.get, "admin/oauth/clients/\(clientId)", data: responseData) {
+    transport.stub(.get, "admin/oauth/clients/\(clientID)", data: responseData) {
       #"""
       curl \
       	--header "Authorization: Bearer supabase.secret.key" \
@@ -210,11 +210,11 @@ struct AuthAdminOAuthTests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let client = try await sut.oauth.client(id: clientId)
+    let client = try await sut.oauth.client(id: clientID)
 
-    #expect(client.clientId == clientId)
+    #expect(client.clientID == clientID)
     #expect(client.clientName == "Test Client")
-    #expect(client.redirectUris == ["https://example.com/callback"])
+    #expect(client.redirectURIs == ["https://example.com/callback"])
     #expect(client.grantTypes == [.authorizationCode, .refreshToken])
     #expect(client.responseTypes == [.code])
   }
@@ -223,7 +223,7 @@ struct AuthAdminOAuthTests {
   func getOAuthClientWithoutClientName() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_type": "confidential",
         "token_endpoint_auth_method": "client_secret_post",
         "registration_type": "manual",
@@ -235,13 +235,13 @@ struct AuthAdminOAuthTests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.get, "admin/oauth/clients/\(clientId)", data: responseData)
+    transport.stub(.get, "admin/oauth/clients/\(clientID)", data: responseData)
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let client = try await sut.oauth.client(id: clientId)
+    let client = try await sut.oauth.client(id: clientID)
 
-    #expect(client.clientId == clientId)
+    #expect(client.clientID == clientID)
     #expect(client.clientName == nil)
   }
 
@@ -249,7 +249,7 @@ struct AuthAdminOAuthTests {
   func getOAuthClientWithoutRedirectUrisGrantTypesOrResponseTypes() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_name": "Test Client",
         "client_type": "confidential",
         "token_endpoint_auth_method": "client_secret_post",
@@ -259,21 +259,21 @@ struct AuthAdminOAuthTests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.get, "admin/oauth/clients/\(clientId)", data: responseData)
+    transport.stub(.get, "admin/oauth/clients/\(clientID)", data: responseData)
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let client = try await sut.oauth.client(id: clientId)
+    let client = try await sut.oauth.client(id: clientID)
 
-    #expect(client.clientId == clientId)
-    #expect(client.redirectUris == nil)
+    #expect(client.clientID == clientID)
+    #expect(client.redirectURIs == nil)
     #expect(client.grantTypes == nil)
     #expect(client.responseTypes == nil)
   }
 
   @Test
   func deleteOAuthClient() async throws {
-    transport.stub(.delete, "admin/oauth/clients/\(clientId)", status: .noContent) {
+    transport.stub(.delete, "admin/oauth/clients/\(clientID)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -287,14 +287,14 @@ struct AuthAdminOAuthTests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    try await sut.oauth.deleteClient(id: clientId)
+    try await sut.oauth.deleteClient(id: clientID)
   }
 
   @Test
   func regenerateOAuthClientSecret() async throws {
     let responseData = """
       {
-        "client_id": "\(clientId)",
+        "client_id": "\(clientID)",
         "client_name": "Test Client",
         "client_secret": "new-secret456",
         "client_type": "confidential",
@@ -308,7 +308,7 @@ struct AuthAdminOAuthTests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.post, "admin/oauth/clients/\(clientId)/regenerate_secret", data: responseData) {
+    transport.stub(.post, "admin/oauth/clients/\(clientID)/regenerate_secret", data: responseData) {
       #"""
       curl \
       	--request POST \
@@ -322,9 +322,9 @@ struct AuthAdminOAuthTests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let client = try await sut.oauth.regenerateClientSecret(id: clientId)
+    let client = try await sut.oauth.regenerateClientSecret(id: clientID)
 
-    #expect(client.clientId == clientId)
+    #expect(client.clientID == clientID)
     #expect(client.clientSecret == "new-secret456")
   }
 

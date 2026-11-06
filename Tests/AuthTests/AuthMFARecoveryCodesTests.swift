@@ -20,7 +20,7 @@ import Testing
 
 @Suite
 struct AuthMFARecoveryCodesTests {
-  let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
+  let factorID = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
   let transport = RecordingTransport()
   let storage = InMemoryTestStorage()
@@ -47,7 +47,7 @@ struct AuthMFARecoveryCodesTests {
       data: Data(
         """
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "total": 10,
           "remaining": 7
         }
@@ -71,7 +71,7 @@ struct AuthMFARecoveryCodesTests {
 
     expectNoDifference(
       response,
-      AuthMFARecoveryCodesStatusResponse(id: factorId, total: 10, remaining: 7)
+      AuthMFARecoveryCodesStatusResponse(id: factorID, total: 10, remaining: 7)
     )
   }
 
@@ -82,7 +82,7 @@ struct AuthMFARecoveryCodesTests {
       data: Data(
         """
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "friendly_name": "Backup codes",
           "total": 2,
           "codes": ["K4M9-X7QP-2AB8-HT3Z", "R7TW-9PLN-4CD2-KS6V"]
@@ -109,7 +109,7 @@ struct AuthMFARecoveryCodesTests {
 
     let response = try await sut.mfa.recoveryCodes.generate(friendlyName: "Backup codes")
 
-    expectNoDifference(response.id, factorId)
+    expectNoDifference(response.id, factorID)
     expectNoDifference(response.friendlyName, "Backup codes")
     expectNoDifference(response.total, 2)
     expectNoDifference(response.codes, ["K4M9-X7QP-2AB8-HT3Z", "R7TW-9PLN-4CD2-KS6V"])
@@ -122,7 +122,7 @@ struct AuthMFARecoveryCodesTests {
       data: Data(
         """
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "friendly_name": "Recovery codes",
           "total": 1,
           "codes": ["K4M9-X7QP-2AB8-HT3Z"]
@@ -156,7 +156,7 @@ struct AuthMFARecoveryCodesTests {
       data: Data(
         """
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "friendly_name": "Backup codes",
           "total": 1,
           "codes": ["W2QH-6BTX-8NM4-JY5R"]
@@ -224,7 +224,7 @@ struct AuthMFARecoveryCodesTests {
   func unenroll() async throws {
     transport.stub(
       .delete, recoveryCodesPath,
-      data: Data(#"{"id":"\#(factorId)"}"#.utf8)
+      data: Data(#"{"id":"\#(factorID)"}"#.utf8)
     ) {
       #"""
       curl \
@@ -242,6 +242,6 @@ struct AuthMFARecoveryCodesTests {
 
     let id = try await sut.mfa.recoveryCodes.unenroll().id
 
-    expectNoDifference(id, factorId)
+    expectNoDifference(id, factorID)
   }
 }
