@@ -8,7 +8,12 @@ import Logging
 
 extension HTTPClient {
   init(configuration: AuthClient.Configuration) {
-    self.init(http: configuration.http, clock: configuration.clock, logger: configuration.logger)
+    self.init(
+      http: configuration.http,
+      clock: configuration.clock,
+      logger: configuration.logger,
+      retryEnabled: configuration.retryEnabled
+    )
   }
 
   init(

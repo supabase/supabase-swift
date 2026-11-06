@@ -245,6 +245,7 @@ supporting_symbols:
   - AuthAdminClient.Configuration.headers
   - AuthAdminClient.Configuration.http
   - AuthAdminClient.Configuration.logger
+  - AuthClient.Configuration.retryEnabled
   - AuthAdminClient.Configuration.retryEnabled
   - AuthAdminClient.Configuration.clock
   # Descriptions that hide the secret key.

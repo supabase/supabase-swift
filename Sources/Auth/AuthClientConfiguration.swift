@@ -34,6 +34,9 @@ extension AuthClient {
   /// - ``observesAppLifecycle``
   /// - ``initialRefreshTimeout``
   ///
+  /// ### Retries
+  /// - ``retryEnabled``
+  ///
   /// ### Testing
   /// - ``clock``
   /// - ``now``
@@ -96,6 +99,12 @@ extension AuthClient {
     /// new ``AuthClient/events()`` stream, or ``AuthClient/initialization()``.
     public var observesAppLifecycle: Bool
 
+    /// Whether to retry transient errors on `GET` requests. Defaults to `true`.
+    ///
+    /// A token request is retried only after a connection failure, whatever this value is set
+    /// to; turning it off stops those retries too.
+    public var retryEnabled: Bool
+
     /// The clock auto refresh sleeps on until the refresh is due, and between retries.
     ///
     /// Keep it in step with ``now``: the refresh deadline sleeps on this clock, and expiry checks
@@ -140,6 +149,7 @@ extension AuthClient {
     ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
+    ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
     ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
     ///   - now: The time source for expiry checks. Defaults to the system clock.
     public init(
@@ -153,6 +163,7 @@ extension AuthClient {
       initialRefreshTimeout: Duration = .seconds(5),
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+      retryEnabled: Bool = true,
       clock: any Clock<Duration> = ContinuousClock(),
       now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -165,6 +176,7 @@ extension AuthClient {
       self.http = http
       self.autoRefresh = autoRefresh
       self.observesAppLifecycle = observesAppLifecycle
+      self.retryEnabled = retryEnabled
       self.clock = clock
       self.now = now
       self.initialRefreshTimeout = initialRefreshTimeout

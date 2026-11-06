@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/08/26.
 //
 
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -30,6 +31,7 @@ struct AuthClientConfigurationTests {
     #expect(configuration.autoRefresh == .automatic)
     #expect(configuration.observesAppLifecycle)
     #expect(configuration.initialRefreshTimeout == .seconds(5))
+    #expect(configuration.retryEnabled)
   }
 
   @Test
@@ -94,6 +96,28 @@ struct AuthClientConfigurationTests {
 
     #expect(dependenciesLogger[metadataKey: "system"] == "auth")
     #expect(dependenciesLogger[metadataKey: "client_id"] != nil)
+  }
+
+  @Test(arguments: [(true, 3), (false, 1)])
+  func retryEnabledControlsWhetherAGetIsRetried(retryEnabled: Bool, attempts: Int) async {
+    let requests = LockIsolated(0)
+    var configuration = AuthClient.Configuration(
+      url: url,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryAuthStorage(),
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          requests.withValue { $0 += 1 }
+          return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
+        }),
+      clock: ImmediateClock()
+    )
+    configuration.retryEnabled = retryEnabled
+    let sut = AuthClient(configuration: configuration)
+
+    _ = try? await sut.user(jwt: "token")
+
+    #expect(requests.value == attempts)
   }
 
   @Test
