@@ -56,6 +56,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `.plfts`, `.phfts`, `.wfts(_:query:config:)` | `.textSearch(_:query:config:type:)` with `.plain`, `.phrase`, `.websearch` |
 | `.explain(…, format: String)` | `.explain(…, format: ExplainFormat)` |
 | `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [Errors](#errors) |
+| `Helpers.PostgrestError`, also visible through `import Auth`, `Functions`, `Realtime` or `Storage` | `PostgREST.PostgrestError`; import `PostgREST` or `Supabase` |
 
 A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturningOptions` or
 `TextSearchType` needs a `default:` case. `PostgrestOperator.allCases` is gone.

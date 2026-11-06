@@ -78,6 +78,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
+| `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
+| `ObservationToken` | removed; cancel the task that reads the stream |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
