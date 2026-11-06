@@ -1,5 +1,5 @@
 //
-//  AuthAdminUserSequenceTests.swift
+//  AuthAdminUserPagingTests.swift
 //  AuthTests
 //
 //  Created by Guilherme Souza on 16/09/26.
@@ -16,7 +16,7 @@ import Testing
 @testable import Auth
 
 @Suite
-struct AuthAdminUserSequenceTests {
+struct AuthAdminUserPagingTests {
   private func page(_ emails: [String]) -> Data {
     let users = emails.map { email in
       """
@@ -91,7 +91,7 @@ struct AuthAdminUserSequenceTests {
       pages: [(["a@example.com"], 2), (["b@example.com"], 3), (["c@example.com"], nil)]
     )
 
-    for try await _ in sut.users(perPage: 1) {}
+    for try await _ in sut.users(pageSize: 1) {}
 
     let pageParams = transport.requests.map { request in
       URLComponents(string: request.head.url?.absoluteString ?? "")?
@@ -142,6 +142,34 @@ struct AuthAdminUserSequenceTests {
 
     expectNoDifference(count, 0)
     expectNoDifference(transport.requests.count, 1)
+  }
+
+  @Test
+  func usersPagesYieldsEachUserPage() async throws {
+    let (sut, transport) = makeSUT(
+      pages: [(["a@example.com", "b@example.com"], 2), (["c@example.com"], nil)]
+    )
+
+    let pages = try await sut.users(pageSize: 2).pages.collect()
+
+    expectNoDifference(
+      pages.map { $0.users.map(\.email) }, [["a@example.com", "b@example.com"], ["c@example.com"]])
+    expectNoDifference(pages.map(\.nextPage), [2, nil])
+    expectNoDifference(pages.map(\.total), [3, 3])
+    expectNoDifference(transport.requests.count, 2)
+  }
+
+  @Test
+  func usersPageAfterFetchesThatPageNumber() async throws {
+    let (sut, transport) = makeSUT(pages: [(["c@example.com"], nil)])
+
+    let page = try await sut.users(pageSize: 1).page(after: 3)
+
+    expectNoDifference(page.users.map(\.email), ["c@example.com"])
+    let query = URLComponents(string: transport.requests.first?.head.url?.absoluteString ?? "")?
+      .queryItems?.filter { $0.name == "page" || $0.name == "per_page" }
+    expectNoDifference(
+      query, [URLQueryItem(name: "page", value: "3"), URLQueryItem(name: "per_page", value: "1")])
   }
 
   @Test

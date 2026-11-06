@@ -927,11 +927,16 @@ features:
       - UserPage.nextPage
       - UserPage.lastPage
       - UserPage.total
-      - AuthAdminClient.UserSequence
-      - AuthAdminClient.UserSequence.Element
-      - AuthAdminClient.UserSequence.makeAsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator.next
+      - PageSequence
+      - PageSequence.pages
+      - PageSequence.page
+      - PageSequence.makeAsyncIterator
+      - PageSequence.AsyncIterator
+      - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
@@ -2200,20 +2205,12 @@ features:
       - ObjectSortColumn.createdAt
       - ObjectSortColumn.lastAccessedAt
       - StorageBucket.objects
-      - ObjectListing
-      - ObjectListing.Element
-      - ObjectListing.Pages
-      - ObjectListing.pages
-      - ObjectListing.page
-      - ObjectListing.makeAsyncIterator
-      - ObjectListing.AsyncIterator
-      - ObjectListing.AsyncIterator.next
-      - ObjectListing.Page
-      - ObjectListing.Page.init
-      - ObjectListing.Page.objects
-      - ObjectListing.Page.folders
-      - ObjectListing.Page.nextCursor
-      - ObjectListing.Page.hasNext
+      - ObjectPage
+      - ObjectPage.init
+      - ObjectPage.objects
+      - ObjectPage.folders
+      - ObjectPage.nextCursor
+      - ObjectPage.hasNext
       - ObjectListingOptions
       - ObjectListingOptions.init
       - ObjectListingOptions.pageSize
@@ -2222,10 +2219,15 @@ features:
       - ObjectListingOptions.order
       - ObjectListingOptions.exactMatch
       - PageSequence
-      - PageSequence.Element
+      - PageSequence.pages
+      - PageSequence.page
       - PageSequence.makeAsyncIterator
       - PageSequence.AsyncIterator
       - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
       - ObjectMetadata
       - ObjectMetadata.init
       - ObjectMetadata.eTag

@@ -33,8 +33,8 @@ import HTTPTypes
 ///
 /// - ``createBucket(_:)``
 /// - ``bucket(_:)``
-/// - ``listBuckets(prefix:maxResults:)``
-/// - ``PagedListing``
+/// - ``listBuckets(prefix:pageSize:)``
+/// - ``VectorBucketPage``
 /// - ``deleteBucket(_:)``
 ///
 /// ### Managing indexes and vector data
@@ -121,13 +121,14 @@ public struct StorageVectorsClient: Sendable {
   ///
   /// - Parameters:
   ///   - prefix: Returns only buckets whose name starts with this prefix. Pass `nil` for all buckets.
-  ///   - maxResults: The maximum number of buckets per page (up to 500).
-  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
+  ///   - pageSize: The maximum number of buckets per page (up to 500).
+  /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
+  ///   when the API rejects a request.
   public func listBuckets(
     prefix: String? = nil,
-    maxResults: Int? = nil
-  ) -> PagedListing<ListVectorBucketsResponse, VectorBucket> {
-    PagedListing(
+    pageSize: Int? = nil
+  ) -> PageSequence<VectorBucket, VectorBucketPage, String> {
+    PageSequence(
       fetch: { [api] nextToken in
         let response: ListVectorBucketsResponseBody = try await api.execute(
           HTTPRequest(
@@ -135,16 +136,16 @@ public struct StorageVectorsClient: Sendable {
             url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
           ),
           body: JSONEncoder.storage.encode(
-            VectorBucketListBody(maxResults: maxResults, nextToken: nextToken, prefix: prefix)
+            VectorBucketListBody(maxResults: pageSize, nextToken: nextToken, prefix: prefix)
           )
         )
         .decoded(decoder: .vectors)
-        return ListVectorBucketsResponse(
+        return VectorBucketPage(
           vectorBuckets: response.vectorBuckets,
           nextToken: response.nextToken
         )
       },
-      nextToken: \.nextToken,
+      nextCursor: \.nextToken,
       elements: \.vectorBuckets
     )
   }
@@ -201,11 +202,11 @@ public struct VectorBucket: Decodable, Sendable, Hashable {
 }
 
 /// A page of vector buckets, as returned by
-/// ``StorageVectorsClient/listBuckets(prefix:maxResults:)``.
+/// ``StorageVectorsClient/listBuckets(prefix:pageSize:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct ListVectorBucketsResponse: Sendable {
+public struct VectorBucketPage: Sendable {
   /// The buckets in this page.
   public var vectorBuckets: [VectorBucket]
 

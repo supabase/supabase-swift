@@ -113,7 +113,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await bucket.listIndexes(prefix: "e", maxResults: 2).page()
+      let response = try await bucket.listIndexes(prefix: "e", pageSize: 2).page()
       #expect(response.indexes.map(\.indexName) == ["embeddings", "summaries"])
       #expect(response.nextToken == "page-2")
     }

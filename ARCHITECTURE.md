@@ -59,7 +59,7 @@ All public types should conform to `Sendable` where appropriate for Swift 6 comp
 
 ### Access Control
 
-- Every client module (Auth, Functions, PostgREST, Realtime, Storage) has `@_exported import Helpers`, so every public Helpers type shows up through each of them. Helpers' public surface holds only types that two or more modules use in public signatures: the HTTP layer, `JSONValue`, `SupabaseError`, and `HTTPErrorResponse`. A type that belongs to one module lives in that module.
+- Every client module (Auth, Functions, PostgREST, Realtime, Storage) has `@_exported import Helpers`, so every public Helpers type shows up through each of them. Helpers' public surface holds only types that two or more modules use in public signatures: the HTTP layer, `JSONValue`, `SupabaseError`, `HTTPErrorResponse`, and `PageSequence`. A type that belongs to one module lives in that module.
 - Use `package` only for something another SDK module needs. Tests use `@testable import`.
 - `@_spi(Experimental)` is the only SPI name.
 

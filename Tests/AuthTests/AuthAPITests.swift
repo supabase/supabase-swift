@@ -101,7 +101,7 @@ struct AuthAPITests {
       api.adminCreateUser(attributes: AdminUserAttributes()).head,
       api.adminInviteUser(email: "a@b.c", userMetadata: [:], redirectTo: nil).head,
       api.adminDeleteUser(id: id, softDelete: false).head,
-      api.adminListUsers(page: nil, perPage: nil).head,
+      api.adminListUsers(page: nil, pageSize: nil).head,
       api.adminGenerateLink(params: .magicLink(email: "a@b.c")).head,
       api.adminListFactors(userId: id).head,
       api.adminDeleteFactor(id: id, userId: id).head,
@@ -222,7 +222,7 @@ struct AuthAPITests {
 
   @Test
   func listUsersReadsPaginationFromHeaders() throws {
-    let response = try api.adminListUsers(page: nil, perPage: nil).decode(
+    let response = try api.adminListUsers(page: nil, pageSize: nil).decode(
       HTTPTypes.HTTPResponse(
         status: .ok,
         headerFields: [

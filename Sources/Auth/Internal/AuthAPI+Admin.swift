@@ -52,14 +52,14 @@ extension AuthAPI {
       decode: ignoringBody)
   }
 
-  func adminListUsers(page: Int?, perPage: Int?) -> AuthRequest<UserPage> {
+  func adminListUsers(page: Int?, pageSize: Int?) -> AuthRequest<UserPage> {
     struct Response: Decodable {
       let users: [User]
       let aud: String
     }
 
     return request(
-      .get, "admin/users", query: pageQuery(page: page, perPage: perPage),
+      .get, "admin/users", query: pageQuery(page: page, pageSize: pageSize),
       decode: { [decoder] httpResponse, data in
         let response = try data.decoded(as: Response.self, decoder: decoder)
         let pages = Self.pages(httpResponse)
@@ -81,10 +81,10 @@ extension AuthAPI {
       body: encoder.encode(params.body), decode: decoding(GenerateLinkResponse.self))
   }
 
-  private func pageQuery(page: Int?, perPage: Int?) -> [URLQueryItem] {
+  private func pageQuery(page: Int?, pageSize: Int?) -> [URLQueryItem] {
     [
       page.map { URLQueryItem(name: "page", value: $0.description) },
-      perPage.map { URLQueryItem(name: "per_page", value: $0.description) },
+      pageSize.map { URLQueryItem(name: "per_page", value: $0.description) },
     ].compactMap { $0 }
   }
 
@@ -131,7 +131,7 @@ extension AuthAPI {
     }
 
     return request(
-      .get, "admin/oauth/clients", query: pageQuery(page: params?.page, perPage: params?.perPage),
+      .get, "admin/oauth/clients", query: pageQuery(page: params?.page, pageSize: params?.perPage),
       decode: { [decoder] httpResponse, data in
         let response = try data.decoded(as: Response.self, decoder: decoder)
         let pages = Self.pages(httpResponse)
