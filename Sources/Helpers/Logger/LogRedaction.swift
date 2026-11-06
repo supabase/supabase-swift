@@ -50,7 +50,7 @@ package enum LogRedaction {
       guard case .invalidValue(_, let context) = error else { return "EncodingError" }
       return "EncodingError.invalidValue at '\(path(of: context))'"
     case let error as URLError:
-      return "\(NSURLErrorDomain) \(error.code.rawValue)"
+      return "\(NSURLErrorDomain) \(error.errorCode)"
     case let error as NSError where error.domain == NSURLErrorDomain:
       return "\(error.domain) \(error.code)"
     default:
