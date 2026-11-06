@@ -1,6 +1,7 @@
 Abijmil
 accesstoken
 acks
+actionlink
 ahref
 Alamofire
 alamofire
@@ -190,6 +191,7 @@ sadcat
 secp256k1
 setof
 signposter
+signedurl
 siwe
 SIWE
 siws

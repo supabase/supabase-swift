@@ -12,12 +12,6 @@ import Testing
 
 @testable import Realtime
 
-#if canImport(UIKit)
-  import UIKit
-#elseif canImport(AppKit)
-  import AppKit
-#endif
-
 /// Which input of the access token race reaches the client first.
 enum TokenRace: Sendable {
   /// The callback returns a token before the request timeout.
@@ -301,40 +295,24 @@ struct InboxTests {
 
   // MARK: Lifecycle
 
-  #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-    @Test
-    func appLifecycleEventsGoThroughTheInbox() async throws {
-      let host = await RealtimeTestHost(options: RealtimeClientOptions(handleAppLifecycle: true))
-      try await host.client.connect()
+  @Test
+  func appLifecycleEventsGoThroughTheInbox() async throws {
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    let host = await RealtimeTestHost(
+      options: RealtimeClientOptions(handleAppLifecycle: true),
+      lifecycleEvents: { events }
+    )
+    try await host.client.connect()
 
-      #if os(macOS)
-        // A Mac app that loses focus keeps its connection, so it is not a background. This
-        // shares the test with the sleep below: both post to a process-wide notification
-        // center, so two tests would see each other's posts.
-        await MainActor.run {
-          NotificationCenter.default.post(
-            name: NSApplication.didResignActiveNotification, object: nil)
-        }
-        await host.client.flushInbox()
-        #expect(await !host.client.wasConnectedBeforeBackground)
-      #endif
+    // The foreground at launch is not a return to it, and Realtime ignores activation and
+    // protected data.
+    lifecycle.yield(.foreground)
+    lifecycle.yield(.didBecomeActive)
+    lifecycle.yield(.protectedDataDidBecomeAvailable)
+    lifecycle.yield(.systemWillSleep)
 
-      // Only the background notification: a foreground one would wake every other client in
-      // the process that is waiting to reconnect.
-      await MainActor.run {
-        #if canImport(UIKit)
-          NotificationCenter.default.post(
-            name: UIApplication.didEnterBackgroundNotification, object: nil)
-        #else
-          NSWorkspace.shared.notificationCenter.post(
-            name: NSWorkspace.willSleepNotification, object: nil)
-        #endif
-      }
-      await host.client.flushInbox()
-
-      #expect(await host.client.wasConnectedBeforeBackground)
-    }
-  #endif
+    #expect(await waitUntil { await host.client.wasConnectedBeforeBackground })
+  }
 
   @Test
   func releasingTheClientEndsThePumpAndClosesTheSocket() async throws {

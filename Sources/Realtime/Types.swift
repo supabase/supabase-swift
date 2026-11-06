@@ -105,8 +105,8 @@ public struct RealtimeClientOptions: Sendable {
   /// Disable this to manage the connection yourself with ``RealtimeClient/connect()`` and
   /// ``RealtimeClient/disconnect(code:reason:)``.
   ///
-  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
-  /// (including watchOS and Linux), where lifecycle observation is not supported.
+  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on watchOS, where you can turn it
+  /// on, and on Linux and Android, where it does nothing.
   public var handleAppLifecycle: Bool
 
   /// Whether to watch the network path and reconnect as soon as the network is back.
@@ -143,7 +143,8 @@ public struct RealtimeClientOptions: Sendable {
   ///
   /// `nil`, the default, uses a logger labeled `"io.supabase.realtime"`. `SupabaseClient` uses
   /// its global logger instead. The client tags the logger it uses with the `system` metadata
-  /// key set to `realtime`.
+  /// key set to `realtime`. The client removes tokens, secrets, and URL query strings from each
+  /// line before your handler sees it.
   public var logger: Logging.Logger?
 
   /// The WebSocket stack the client connects with.

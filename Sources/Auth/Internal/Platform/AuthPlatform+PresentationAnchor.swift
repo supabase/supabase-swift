@@ -7,6 +7,7 @@
 
 #if canImport(AuthenticationServices) && !os(watchOS)
   import AuthenticationServices
+  import Helpers
 
   #if canImport(UIKit)
     import UIKit
@@ -21,7 +22,7 @@
     @MainActor
     static func defaultPresentationAnchor() -> ASPresentationAnchor {
       #if canImport(UIKit)
-        guard !isAppExtension else { return ASPresentationAnchor() }
+        guard !AppLifecycle.isAppExtension else { return ASPresentationAnchor() }
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let windows =
           (scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)?.windows ?? []

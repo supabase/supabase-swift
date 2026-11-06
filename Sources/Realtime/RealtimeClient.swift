@@ -184,11 +184,10 @@ public actor RealtimeClient {
   /// started in `init`, applies the inputs on the actor in the order they were yielded.
   nonisolated let inbox: AsyncStream<Input>.Continuation
 
-  #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-    /// Yields the app lifecycle changes into ``inbox`` when
-    /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
-    let lifecycleObserver: RealtimeLifecycleObserver?
-  #endif
+  /// Yields the app lifecycle changes into ``inbox`` when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`. It holds only the inbox, so `deinit`
+  /// cancels it.
+  let lifecycleTask: Task<Void, Never>?
 
   #if canImport(Network)
     /// Yields a wake hint into ``inbox`` when the network path is satisfied, when
@@ -232,7 +231,8 @@ public actor RealtimeClient {
   }
 
   private static func logger(for options: RealtimeClientOptions) -> Logger {
-    var logger = options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime")
+    var logger = (options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime"))
+      .redactingSecrets()
     logger[metadataKey: "system"] = "realtime"
     return logger
   }
@@ -241,7 +241,8 @@ public actor RealtimeClient {
   ///
   /// `clock` is a separate parameter from ``RealtimeClientOptions/clock`` so tests can pair a
   /// `TestClock` with a stub `transport`. The public initializer forwards `options.clock`, so
-  /// the two only ever differ inside this package's own tests.
+  /// the two only ever differ inside this package's own tests. Tests also replace
+  /// `lifecycleEvents`, so no test client reacts to the real app lifecycle.
   init(
     url: URL,
     options: RealtimeClientOptions,
@@ -249,7 +250,9 @@ public actor RealtimeClient {
     http: HTTPClient,
     clock: any Clock<Duration>,
     reconnectBackoff: BackoffPolicy = defaultReconnectBackoff,
-    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
+    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) },
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      AppLifecycle.live.events
   ) {
     var headers = HTTPFields(options.headers)
     if headers[.xClientInfo] == nil {
@@ -276,9 +279,15 @@ public actor RealtimeClient {
 
     let (inputs, inbox) = AsyncStream.makeStream(of: Input.self, bufferingPolicy: .unbounded)
     self.inbox = inbox
-    #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      lifecycleObserver = options.handleAppLifecycle ? RealtimeLifecycleObserver(inbox: inbox) : nil
-    #endif
+    lifecycleTask =
+      options.handleAppLifecycle
+      ? Task.named("supabase.realtime.lifecycle") { [inbox] in
+        var isLaunchState = true
+        for await event in await lifecycleEvents() {
+          if let input = Input(event, isLaunchState: isLaunchState) { inbox.yield(input) }
+          isLaunchState = false
+        }
+      } : nil
     #if canImport(Network)
       networkPathObserver =
         options.monitorsNetworkPath ? RealtimeNetworkPathObserver(inbox: inbox) : nil
@@ -286,7 +295,7 @@ public actor RealtimeClient {
 
     // The pump. Not stored: it holds the client weakly, so it never keeps it alive, and it ends
     // when `deinit` finishes the inbox. It still reads the inputs buffered before then.
-    Task(priority: .medium) { [weak self] in
+    Task.named("supabase.realtime.pump", priority: .medium) { [weak self] in
       for await input in inputs {
         guard let self else {
           Self.receiveAfterRelease(input)
@@ -324,9 +333,10 @@ public actor RealtimeClient {
 
   deinit {
     // No waiter can be parked here: a parked caller runs an isolated method, so it retains the
-    // client. The lifecycle and network path observers remove themselves in their own `deinit`,
-    // and the fan-outs and channel states end their streams in theirs.
+    // client. The network path observer removes itself in its own `deinit`, and the fan-outs and
+    // channel states end their streams in theirs.
     inbox.finish()
+    lifecycleTask?.cancel()
     // Close the live socket: cancelling the tasks alone leaves the underlying WebSocket (and its
     // URLSession) open when a connected client is released without calling `disconnect()`.
     socket?.close(code: .normalClosure, reason: "Client deallocated")
@@ -469,8 +479,8 @@ public actor RealtimeClient {
 
   /// Records whether the socket is connected as the app enters the background.
   ///
-  /// Runs when the inbox delivers ``Input/appBackground``, which ``RealtimeLifecycleObserver``
-  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// Runs when the inbox delivers ``Input/appBackground``, which the lifecycle task yields when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
     apply(.appBackground)
   }
@@ -479,8 +489,8 @@ public actor RealtimeClient {
   /// connection when the socket was connected before the app went to the background and has
   /// since gone away.
   ///
-  /// Runs when the inbox delivers ``Input/appForeground``, which ``RealtimeLifecycleObserver``
-  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// Runs when the inbox delivers ``Input/appForeground``, which the lifecycle task yields when
+  /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
   func handleAppForeground() {
     apply(.appForeground)
   }

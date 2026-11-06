@@ -65,6 +65,9 @@ public struct FunctionsClient: Sendable {
     public var http: HTTPClientConfiguration
 
     /// A logger for request and response diagnostics.
+    ///
+    /// The client removes tokens, secrets, and URL query strings from each line before your handler
+    /// sees it.
     public var logger: Logging.Logger
 
     /// The decoder ``FunctionsClient/invoke(_:body:options:as:decoder:)`` and
@@ -136,7 +139,7 @@ public struct FunctionsClient: Sendable {
     }
     self.configuration = configuration
 
-    var logger = configuration.logger
+    var logger = configuration.logger.redactingSecrets()
     logger[metadataKey: "system"] = "functions"
     let accessToken = configuration.accessToken.map { AccessTokenMiddleware(getAccessToken: $0) }
     http = HTTPClient(

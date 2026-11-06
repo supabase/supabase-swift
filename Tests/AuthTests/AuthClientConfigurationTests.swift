@@ -153,4 +153,21 @@ struct AuthClientConfigurationTests {
 
     #expect(recorder.entries == ["refresh failed: refresh_token=<redacted> system=auth"])
   }
+
+  @Test
+  func aLoggerSetAfterTheConfigurationIsBuiltStillRedacts() {
+    let recorder = LogRecorder()
+    var configuration = AuthClient.Configuration(
+      url: URL(string: "http://localhost")!,
+      storageKey: "key",
+      storage: InMemoryAuthStorage()
+    )
+    configuration.logger = recorder.makeLogger()
+    let sut = AuthClient(configuration: configuration)
+
+    sut.configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
+
+    #expect(recorder.entries.contains { $0.hasPrefix("refresh failed: refresh_token=<redacted>") })
+    #expect(!recorder.entries.contains { $0.contains("r-secret-1") })
+  }
 }

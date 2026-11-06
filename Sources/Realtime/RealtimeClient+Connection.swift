@@ -295,7 +295,7 @@ extension RealtimeClient {
       logger.debug("Connected to realtime WebSocket")
       apply(.socketOpened(conn))
     case .failure(let error):
-      logger.error("Connection failed: \(error)")
+      logger.error("Connection failed: \(LogRedaction.summary(of: error))")
       guard isCurrent else { return }
       apply(.socketOpenFailed(Self.realtimeError(error)))
     }
@@ -311,7 +311,8 @@ extension RealtimeClient {
     to connection: any WebSocketConnection, generation: Int
   ) -> Task<Void, Never> {
     let events = connection.events
-    return Task(priority: .medium) { [inbox, serializer, logger] in
+    return Task.named("supabase.realtime.reader", priority: .medium) {
+      [inbox, serializer, logger] in
       for await event in events {
         if Task.isCancelled { return }
         let input: SocketInput
@@ -320,14 +321,14 @@ extension RealtimeClient {
           do {
             input = .binaryBroadcast(try serializer.decodeBinary(data))
           } catch {
-            logger.error("Failed to decode binary frame: \(error)")
+            logger.error("Failed to decode binary frame: \(LogRedaction.summary(of: error))")
             continue
           }
         case .frame(.text(let text)):
           do {
             input = .frame(try serializer.decodeText(text))
           } catch {
-            logger.error("Failed to decode text frame: \(error)")
+            logger.error("Failed to decode text frame: \(LogRedaction.summary(of: error))")
             continue
           }
         case .closed(let code, let reason):
@@ -363,7 +364,7 @@ extension RealtimeClient {
         topic=\(topic), event=\(event)
 
         Error:
-        \(error)
+        \(LogRedaction.summary(of: error))
         """
       )
     }
@@ -392,7 +393,7 @@ extension RealtimeClient {
         do {
           token = try await provider()
         } catch {
-          logger.error("Failed to fetch access token: \(error)")
+          logger.error("Failed to fetch access token: \(LogRedaction.summary(of: error))")
         }
       }
       inbox.yield(.tokenFetched(token, generation: generation))

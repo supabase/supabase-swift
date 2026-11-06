@@ -11,9 +11,11 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 1. Install Xcode 26.0 or later (Swift 6.2 or later).
 2. Update the package requirement:
 
+   <!-- x-release-please-start-version -->
    ```swift
    .package(url: "https://github.com/supabase/supabase-swift", from: "3.0.0-alpha.1")
    ```
+   <!-- x-release-please-end -->
 
 3. Build. Expect many compile errors.
 4. Fix the errors in [Changes in every module](#changes-in-every-module) and
@@ -78,6 +80,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
+| `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
+| `ObservationToken` | removed; cancel the task that reads the stream |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
