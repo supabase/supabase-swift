@@ -31,7 +31,7 @@ struct SelectionOfMacroTests {
         @Column("due_at") var dueDate: Date?
       }
 
-      extension TodoSummary {
+      nonisolated extension TodoSummary {
         typealias Source = Todo
 
         static let selectString = [
@@ -39,7 +39,7 @@ struct SelectionOfMacroTests {
           "due_at:\(Todo.columns.dueDate.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case dueDate = "due_at"
         }
@@ -72,7 +72,7 @@ struct SelectionOfMacroTests {
         var isDone: Bool
       }
 
-      extension TodoSummary {
+      nonisolated extension TodoSummary {
         typealias Source = Todo
 
         static let selectString = [
@@ -80,7 +80,7 @@ struct SelectionOfMacroTests {
           "is_done:\(Todo.columns.isDone.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case isDone = "is_done"
         }
@@ -115,7 +115,7 @@ struct SelectionOfMacroTests {
         @Relationship(\Comment.todoID) var comments: [CommentBody]
       }
 
-      extension TodoWithComments {
+      nonisolated extension TodoWithComments {
         typealias Source = Todo
 
         static let selectString = [
@@ -124,7 +124,7 @@ struct SelectionOfMacroTests {
           "comments:\(embeds.comments.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
           case comments = "comments"
@@ -138,7 +138,7 @@ struct SelectionOfMacroTests {
           Comment.columns.todoID.postgrestExpression,
         ]
 
-        struct Embeds: Sendable {
+        nonisolated struct Embeds: Sendable {
           let comments = _PostgrestEmbed<CommentBody>(alias: "comments", foreignKey: Comment.columns.todoID.postgrestExpression)
 
           init() {
@@ -168,7 +168,7 @@ struct SelectionOfMacroTests {
         @Relationship(\Comment.authorID) var author: UserName?
       }
 
-      extension CommentWithAuthor {
+      nonisolated extension CommentWithAuthor {
         typealias Source = Comment
 
         static let selectString = [
@@ -176,7 +176,7 @@ struct SelectionOfMacroTests {
           "author:\(embeds.author.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case body = "body"
           case author = "author"
         }
@@ -188,7 +188,7 @@ struct SelectionOfMacroTests {
           Comment.columns.authorID.postgrestExpression,
         ]
 
-        struct Embeds: Sendable {
+        nonisolated struct Embeds: Sendable {
           let author = _PostgrestEmbed<UserName>(alias: "author", foreignKey: Comment.columns.authorID.postgrestExpression)
 
           init() {
@@ -218,7 +218,7 @@ struct SelectionOfMacroTests {
         @Relationship(computed: \Channel.Columns.getMessages) var messages: [Message]
       }
 
-      extension ChannelFeed {
+      nonisolated extension ChannelFeed {
         typealias Source = Channel
 
         static let selectString = [
@@ -226,7 +226,7 @@ struct SelectionOfMacroTests {
           "messages:\(embeds.messages.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case slug = "slug"
           case messages = "messages"
         }
@@ -238,7 +238,7 @@ struct SelectionOfMacroTests {
           Channel.columns.getMessages.postgrestEmbedName,
         ]
 
-        struct Embeds: Sendable {
+        nonisolated struct Embeds: Sendable {
           let messages = _PostgrestEmbed<Message>(alias: "messages", relation: Channel.columns.getMessages)
 
           init() {
@@ -266,14 +266,14 @@ struct SelectionOfMacroTests {
         var isDone: Bool
       }
 
-      extension TodoSummary {
+      nonisolated extension TodoSummary {
         public typealias Source = Todo
 
         public static let selectString = [
           "is_done:\(Todo.columns.isDone.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case isDone = "is_done"
         }
 
@@ -306,7 +306,7 @@ struct SelectionOfMacroTests {
         @Aggregate(.count) var rows: Int
       }
 
-      extension OrderTotals {
+      nonisolated extension OrderTotals {
         typealias Source = Order
 
         static let selectString = [
@@ -315,7 +315,7 @@ struct SelectionOfMacroTests {
           "rows:\(_PostgrestAggregate<Order, Int>.countAll.postgrestExpression)",
         ].joined(separator: ",")
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case category = "category"
           case total = "total"
           case rows = "rows"

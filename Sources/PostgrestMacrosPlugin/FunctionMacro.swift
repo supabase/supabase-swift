@@ -56,13 +56,7 @@ public struct FunctionMacro: ExtensionMacro {
     let clause = inheritanceClause(
       wanted: ["Encodable", "Sendable", "_PostgrestFunction"], missing: protocols)
     return [
-      try ExtensionDeclSyntax(
-        """
-        extension \(type.trimmed)\(raw: clause) {
-        \(raw: body.joined(separator: "\n\n"))
-        }
-        """
-      )
+      try conformanceExtension(of: type, clause: clause, body: body)
     ]
   }
 }

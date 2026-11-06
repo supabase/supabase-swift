@@ -240,6 +240,10 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 /// Scopes work as for a foreign-key embed: ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and
 /// ``PostgREST/_PostgrestQuery/requiring(_:_:)``.
 ///
+/// In a module built with `.defaultIsolation(MainActor.self)`, declare the relationship in a
+/// `nonisolated extension Channel.Columns`. The generated code reads it from a nonisolated
+/// context, so a main-actor-isolated property does not compile.
+///
 /// - Parameter computed: A key path to the relationship on the relation's `Columns`, for example
 ///   `\Channel.Columns.getMessages`.
 @attached(peer)
