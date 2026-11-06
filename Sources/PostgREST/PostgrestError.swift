@@ -133,7 +133,7 @@ extension PostgrestError.ServerError {
   /// "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row" and "The result
   /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
   /// so look for that instead of matching a fixed prefix.
-  package var matchedZeroRows: Bool {
+  var matchedZeroRows: Bool {
     guard let details else { return false }
     let words = details.split(separator: " ")
     guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,

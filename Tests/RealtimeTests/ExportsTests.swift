@@ -18,8 +18,5 @@ struct ExportsTests {
 
     let anyJSON: JSONValue = .string("test")
     #expect(anyJSON == .string("test"))
-
-    _ = ObservationToken {
-    }
   }
 }
