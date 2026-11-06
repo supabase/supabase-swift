@@ -12,8 +12,8 @@ struct RealtimeColdStartTests {
 
   private func makeClient(socket: AsyncFakeWebSocket) -> RealtimeClient {
     RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(2),
@@ -97,8 +97,8 @@ struct RealtimeColdStartTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(5),
@@ -154,8 +154,8 @@ struct RealtimeColdStartTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         heartbeatInterval: .milliseconds(200),
         requestTimeout: .seconds(5),

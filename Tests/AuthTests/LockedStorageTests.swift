@@ -251,9 +251,9 @@ struct LockedStorageTests {
         url: clientURL,
         storageKey: key,
         storage: storage,
-        http: HTTPClientConfiguration(transport: world.http),
         autoRefresh: .automatic,
         observesAppLifecycle: observesAppLifecycle,
+        http: HTTPClientConfiguration(transport: world.http),
         clock: world.clock,
         now: world.now
       ),

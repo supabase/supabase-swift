@@ -70,7 +70,7 @@ Every failure is a ``StorageError`` or a `CancellationError`. See <doc:HandlingE
 ### Clients
 
 - ``StorageClient``
-- ``StorageClientConfiguration``
+- ``StorageClient/Configuration``
 - ``StorageBucket``
 
 ### Uploads

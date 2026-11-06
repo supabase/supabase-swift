@@ -855,7 +855,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let subscription = Task { try await channel.subscribe() }
     let join = try #require(await h.received(ChannelEvent.join))
-    await h.clock.advance(by: RealtimeClientOptions.defaultRequestTimeout)
+    await h.clock.advance(by: RealtimeClient.Configuration.defaultRequestTimeout)
     try h.confirm(join)
     #expect(await waitUntil { await channel.status == .subscribed })
     await h.clock.advance(by: .seconds(1))
@@ -947,8 +947,9 @@ struct RealtimeChannelSubscriptionTests {
   func subscribeAfterTheClientIsReleasedThrowsAtOnce() async throws {
     func makeChannel() async -> RealtimeChannel {
       let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(handleAppLifecycle: false)
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          handleAppLifecycle: false)
       )
       return await client.channel("room")
     }
@@ -1300,7 +1301,7 @@ struct RealtimeChannelSubscriptionTests {
     /// `onConnect` runs inside each transport call and `onAccessToken` inside each access-token
     /// lookup, both numbered from 1, so a test can park one attempt at that point.
     init(
-      timeout: Duration = RealtimeClientOptions.defaultRequestTimeout,
+      timeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout,
       failedConnects: Int = 0,
       connectError: any Error = URLError(.notConnectedToInternet),
       connectOnSubscribe: Bool = true,
@@ -1316,11 +1317,12 @@ struct RealtimeChannelSubscriptionTests {
       self.server = server
       self.connects = connects
       client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
           connectOnSubscribe: connectOnSubscribe,
+          handleAppLifecycle: false,
           accessToken: {
             let call = accessTokenCalls.withValue {
               $0 += 1
@@ -1328,8 +1330,7 @@ struct RealtimeChannelSubscriptionTests {
             }
             await onAccessToken(call)
             return "token-\(call)"
-          },
-          handleAppLifecycle: false
+          }
         ),
         wsTransport: { _, _ in
           let attempt = connects.withValue {

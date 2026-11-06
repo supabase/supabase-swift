@@ -86,10 +86,10 @@ struct Race: Sendable {
         storageKey: storageKey,
         storage: storage,
         redirectTo: redirectTo,
-        logger: logger,
-        http: HTTPClientConfiguration(transport: transport),
         autoRefresh: autoRefresh,
         observesAppLifecycle: false,
+        http: HTTPClientConfiguration(transport: transport),
+        logger: logger,
         clock: clock,
         now: now
       ),

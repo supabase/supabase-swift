@@ -25,8 +25,9 @@ import Logging
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(supabaseURL:supabaseKey:)``
-/// - ``init(supabaseURL:supabaseKey:options:)``
+/// - ``init(supabaseURL:supabaseKey:configuration:)``
+/// - ``configuration``
+/// - ``Configuration``
 ///
 /// ### Supabase Services
 /// - ``auth``
@@ -81,13 +82,14 @@ public final class SupabaseClient: Sendable {
       .map { "sb-\($0)-auth-token" }
   }
 
-  let options: SupabaseClientOptions
+  /// The configuration this client was created with.
+  public let configuration: Configuration
   let supabaseURL: URL
   let supabaseKey: String
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
-  let clock: any Clock<Duration>
+  var clock: any Clock<Duration> { configuration.global.clock }
 
   let _auth: AuthClient
 
@@ -96,11 +98,11 @@ public final class SupabaseClient: Sendable {
   /// Use this property to sign users in and out, retrieve the current session,
   /// and listen for authentication state changes.
   ///
-  /// > Warning: Do not access this property when ``SupabaseClientOptions/AuthOptions/accessToken``
+  /// > Warning: Do not access this property when ``SupabaseClient/Configuration/Auth/accessToken``
   /// > is configured — the client will emit a runtime issue. Use a separate ``SupabaseClient``
   /// > without `accessToken` if you need both Supabase Auth and a third-party auth provider.
   public var auth: AuthClient {
-    if options.auth.accessToken != nil {
+    if configuration.auth.accessToken != nil {
       reportIssue(
         """
         Supabase Client is configured with the auth.accessToken option,
@@ -113,30 +115,33 @@ public final class SupabaseClient: Sendable {
 
   var rest: PostgrestClient {
     PostgrestClient(
-      url: databaseURL,
-      schema: options.db.schema,
-      headers: dataHeaders.dictionary,
-      logger: options.global.logger,
-      http: authenticatedHTTP(staleTokenRejection: .postgrest),
-      encoder: options.db.encoder,
-      decoder: options.db.decoder,
-      retryEnabled: options.db.retry
+      configuration: .init(
+        url: databaseURL,
+        schema: configuration.database.schema,
+        headers: dataHeaders.dictionary,
+        http: authenticatedHTTP(staleTokenRejection: .postgrest),
+        logger: configuration.global.logger,
+        encoder: configuration.database.encoder,
+        decoder: configuration.database.decoder,
+        retryEnabled: configuration.database.retry,
+        clock: clock
+      )
     )
   }
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
+    var storageConfiguration = StorageClient.Configuration(
       url: storageURL,
       headers: dataHeaders,
+      usesNewHostname: configuration.storage.usesNewHostname,
       http: authenticatedHTTP(staleTokenRejection: .storage),
-      logger: options.global.logger,
-      usesNewHostname: options.storage.usesNewHostname,
-      retryEnabled: options.storage.retryEnabled
+      logger: configuration.global.logger,
+      retryEnabled: configuration.storage.retryEnabled,
+      clock: clock
     )
-    configuration.clock = clock
-    configuration.resumable = options.storage.resumable
-    return StorageClient(configuration: configuration)
+    storageConfiguration.resumable = configuration.storage.resumable
+    return StorageClient(configuration: storageConfiguration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -153,7 +158,7 @@ public final class SupabaseClient: Sendable {
 
   /// The Functions client for invoking Supabase Edge Functions.
   ///
-  /// Built on first access from ``SupabaseClientOptions/FunctionsOptions`` and the global HTTP
+  /// Built on first access from ``SupabaseClient/Configuration/Functions`` and the global HTTP
   /// configuration, then cached.
   public var functions: FunctionsClient {
     mutableState.withValue {
@@ -179,7 +184,7 @@ public final class SupabaseClient: Sendable {
   /// The HTTP headers included in every request made by sub-clients.
   ///
   /// This dictionary is read-only. To supply custom headers, set
-  /// ``SupabaseClientOptions/GlobalOptions/headers`` when initializing the client.
+  /// ``SupabaseClient/Configuration/Global/headers`` when initializing the client.
   public var headers: [String: String] {
     _headers.dictionary
   }
@@ -194,32 +199,19 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  /// Creates a client with default options.
+  /// Creates a client.
   /// - Parameters:
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-  public convenience init(supabaseURL: URL, supabaseKey: String) {
-    self.init(
-      supabaseURL: supabaseURL,
-      supabaseKey: supabaseKey,
-      options: SupabaseClientOptions()
-    )
-  }
-
-  /// Creates a client with custom options.
-  /// - Parameters:
-  ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
-  ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-  ///   - options: Configuration options for the client and its sub-clients.
+  ///   - configuration: Settings for the client and its sub-clients.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions
+    configuration: Configuration = .init()
   ) {
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
-    self.options = options
-    self.clock = options.global.clock
+    self.configuration = configuration
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -236,7 +228,7 @@ public final class SupabaseClient: Sendable {
           ]
         )
       )
-      .merging(with: HTTPFields(options.global.headers))
+      .merging(with: HTTPFields(configuration.global.headers))
 
     guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
       preconditionFailure(
@@ -248,23 +240,24 @@ public final class SupabaseClient: Sendable {
 
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      storageKey: options.auth.storageKey ?? defaultStorageKey,
+      storageKey: configuration.auth.storageKey ?? defaultStorageKey,
       headers: _headers,
-      storage: options.auth.storage,
-      redirectTo: options.auth.redirectToURL,
-      logger: options.auth.logger ?? options.global.logger,
+      storage: configuration.auth.storage,
+      redirectTo: configuration.auth.redirectToURL,
+      autoRefresh: configuration.auth.accessToken == nil
+        ? configuration.auth.autoRefresh : .disabled,
+      observesAppLifecycle: configuration.auth.observesAppLifecycle,
       http: Self.resolveHTTP(
-        global: options.global.http,
-        override: options.auth.http,
+        global: configuration.global.http,
+        override: configuration.auth.http,
         sdkMiddlewares: [TraceContextMiddleware()]
       ),
-      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
-      observesAppLifecycle: options.auth.observesAppLifecycle,
-      clock: options.auth.clock ?? clock
+      logger: configuration.auth.logger ?? configuration.global.logger,
+      clock: configuration.auth.clock ?? configuration.global.clock
     )
     _auth = AuthClient(configuration: authConfiguration)
 
-    if options.auth.accessToken == nil {
+    if configuration.auth.accessToken == nil {
       listenForAuthEvents()
     }
   }
@@ -365,7 +358,7 @@ public final class SupabaseClient: Sendable {
 
   /// Returns a scope that only queries relations declared to live in the given schema.
   ///
-  /// - Precondition: ``SupabaseClientOptions/DatabaseOptions/schema`` is not set.
+  /// - Precondition: ``SupabaseClient/Configuration/Database/schema`` is not set.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
@@ -433,7 +426,7 @@ public final class SupabaseClient: Sendable {
   ///
   /// Pass the URLs that reach your auth callback. ``AuthClient/isAuthRedirect(_:)`` checks one. A
   /// URL that is not an auth redirect returns `nil`: only a URL that opens
-  /// ``SupabaseClientOptions/AuthOptions/redirectToURL`` or the redirect URL of a pending flow is
+  /// ``SupabaseClient/Configuration/Auth/redirectToURL`` or the redirect URL of a pending flow is
   /// one. The same URL can arrive more than once; the later deliveries get the first result and
   /// send no request.
   ///
@@ -477,7 +470,7 @@ public final class SupabaseClient: Sendable {
 
   /// The resolved transport shared by every sub-client.
   private var transport: any ClientTransport {
-    options.global.http.transport ?? URLSessionTransport()
+    configuration.global.http.transport ?? URLSessionTransport()
   }
 
   /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
@@ -494,11 +487,11 @@ public final class SupabaseClient: Sendable {
   ) -> HTTPClientConfiguration {
     HTTPClientConfiguration(
       transport: transport,
-      middlewares: options.global.http.middlewares + [
+      middlewares: configuration.global.http.middlewares + [
         TraceContextMiddleware(),
         bearerMiddleware(staleTokenRejection: staleTokenRejection),
       ],
-      timeout: options.global.http.timeout
+      timeout: configuration.global.http.timeout
     )
   }
 
@@ -508,7 +501,7 @@ public final class SupabaseClient: Sendable {
     staleTokenRejection: StaleTokenRejection,
     bearerToken: @escaping @Sendable (String) -> String? = { $0 }
   ) -> any ClientMiddleware {
-    guard options.auth.accessToken == nil else {
+    guard configuration.auth.accessToken == nil else {
       return AccessTokenMiddleware(getAccessToken: {
         [provider = accessTokenProvider, supabaseKey] in
         bearerToken(try await provider() ?? supabaseKey)
@@ -518,7 +511,7 @@ public final class SupabaseClient: Sendable {
       auth: _auth,
       fallbackToken: bearerToken(supabaseKey),
       staleTokenRejection: staleTokenRejection,
-      autoRefresh: options.auth.autoRefresh
+      autoRefresh: configuration.auth.autoRefresh
     )
   }
 
@@ -527,10 +520,10 @@ public final class SupabaseClient: Sendable {
   /// Swallows only ``AuthError/sessionMissing`` — the expected "no signed-in user" case, which
   /// should resolve to `nil` (falling back to the anon key) rather than failing the caller. Every
   /// other error (a network failure refreshing the session, or one thrown by a configured
-  /// ``SupabaseClientOptions/AuthOptions/accessToken`` third-party auth provider) propagates, so
+  /// ``SupabaseClient/Configuration/Auth/accessToken`` third-party auth provider) propagates, so
   /// callers of this closure never need their own knowledge of which auth errors are benign.
   private var accessTokenProvider: @Sendable () async throws -> String? {
-    { [accessToken = options.auth.accessToken, auth = _auth] in
+    { [accessToken = configuration.auth.accessToken, auth = _auth] in
       do {
         if let accessToken {
           return try await accessToken()
@@ -601,10 +594,10 @@ public final class SupabaseClient: Sendable {
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,
-        region: options.functions.region,
+        region: configuration.functions.region,
         http: Self.resolveHTTP(
-          global: options.global.http,
-          override: options.functions.http,
+          global: configuration.global.http,
+          override: configuration.functions.http,
           sdkMiddlewares: [
             TraceContextMiddleware(),
             bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
@@ -612,50 +605,43 @@ public final class SupabaseClient: Sendable {
             },
           ]
         ),
-        logger: options.functions.logger ?? options.global.logger,
-        decoder: options.functions.decoder
+        logger: configuration.functions.logger ?? configuration.global.logger,
+        decoder: configuration.functions.decoder
       )
     )
   }
 
   private func _initRealtimeClient() -> RealtimeClient {
-    var realtimeOptions = options.realtime
-    // Through `HTTPFields`, so names compare without regard to case and the global headers win.
-    realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
-
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
-
-    if realtimeOptions.http.transport == nil {
-      realtimeOptions.http = HTTPClientConfiguration(
+    let realtime = configuration.realtime
+    var http = realtime.http
+    if http.transport == nil {
+      http = HTTPClientConfiguration(
         transport: transport,
-        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+        middlewares: configuration.global.http.middlewares + realtime.http.middlewares
           + [TraceContextMiddleware()],
-        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+        timeout: realtime.http.timeout ?? configuration.global.http.timeout
       )
     }
-
-    if realtimeOptions.accessToken == nil {
-      realtimeOptions.accessToken = { [weak self] in
-        try await self?._getAccessToken()
-      }
-    } else {
-      reportIssue(
-        """
-        You assigned a custom `accessToken` closure to the RealtimeClient. This might not work as you expect
-        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
-
-        Please make sure you know what you're doing.
-        """
-      )
-    }
-
-    realtimeOptions.clock = clock
 
     return RealtimeClient(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
+      configuration: .init(
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        // Through `HTTPFields`, so names compare without regard to case and the global headers
+        // win.
+        headers: HTTPFields(realtime.headers).merging(with: _headers).dictionary,
+        heartbeatInterval: realtime.heartbeatInterval,
+        requestTimeout: realtime.requestTimeout,
+        connectOnSubscribe: realtime.connectOnSubscribe,
+        disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
+        handleAppLifecycle: realtime.handleAppLifecycle,
+        monitorsNetworkPath: realtime.monitorsNetworkPath,
+        serverLogLevel: realtime.serverLogLevel,
+        accessToken: { [weak self] in try await self?._getAccessToken() },
+        webSocketTransport: realtime.webSocketTransport,
+        http: http,
+        logger: realtime.logger ?? configuration.global.logger,
+        clock: clock
+      )
     )
   }
 }

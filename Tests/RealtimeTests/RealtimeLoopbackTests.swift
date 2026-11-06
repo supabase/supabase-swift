@@ -166,18 +166,18 @@ import Testing
       transport: URLSessionWebSocketTransport = URLSessionWebSocketTransport(),
       reconnectBackoff: BackoffPolicy = .fullJitter(base: .milliseconds(100), cap: .seconds(30))
     ) -> RealtimeClient {
-      let options = RealtimeClientOptions(
+      let configuration = RealtimeClient.Configuration(
+        url: URL(string: "http://127.0.0.1:\(port)")!,
         heartbeatInterval: .seconds(30),
         requestTimeout: .seconds(10),
         handleAppLifecycle: false,
         monitorsNetworkPath: false
       )
       return RealtimeClient(
-        url: URL(string: "http://127.0.0.1:\(port)")!,
-        options: options,
+        configuration: configuration,
         transport: transport,
-        http: HTTPClient(configuration: options.http, appending: []),
-        clock: options.clock,
+        http: HTTPClient(configuration: configuration.http, appending: []),
+        clock: configuration.clock,
         reconnectBackoff: reconnectBackoff
       )
     }

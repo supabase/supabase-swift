@@ -2,7 +2,7 @@
 
 This file covers the changes to `FunctionsClient` and the Edge Functions API from v2 to v3. See
 [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every module,
-including `supabase.functions` and `SupabaseClientOptions.FunctionsOptions`.
+including `supabase.functions` and `SupabaseClient.Configuration.Functions`.
 
 ## Silent changes
 

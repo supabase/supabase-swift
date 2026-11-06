@@ -92,7 +92,7 @@
     }
 
     let storage = StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
         headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"]
       )

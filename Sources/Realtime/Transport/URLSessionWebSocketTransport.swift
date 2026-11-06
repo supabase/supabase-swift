@@ -22,8 +22,8 @@ import IssueReporting
 /// `delegate` is consulted for TLS challenges only, which is how an app pins certificates:
 ///
 /// ```swift
-/// var options = RealtimeClientOptions()
-/// options.webSocketTransport = URLSessionWebSocketTransport(
+/// var configuration = RealtimeClient.Configuration(url: realtimeURL)
+/// configuration.webSocketTransport = URLSessionWebSocketTransport(
 ///   configuration: pinnedSession.configuration,
 ///   delegate: pinnedSession.delegate
 /// )

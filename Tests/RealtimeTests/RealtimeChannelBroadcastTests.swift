@@ -24,8 +24,8 @@ final class RealtimeChannelBroadcastTests: Sendable {
     self.server = server
     http = RecordingTransport()
     sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         accessToken: {
           "custom.access.token"

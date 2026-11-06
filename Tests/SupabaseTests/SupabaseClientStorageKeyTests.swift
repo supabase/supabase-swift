@@ -34,7 +34,7 @@ struct SupabaseClientStorageKeyTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), storageKey: "my-key")
       )
     )
@@ -47,7 +47,7 @@ struct SupabaseClientStorageKeyTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
@@ -60,7 +60,7 @@ struct SupabaseClientStorageKeyTests {
         _ = SupabaseClient(
           supabaseURL: URL(string: "project-ref")!,
           supabaseKey: "anon-key",
-          options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+          configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
         )
       }
     }

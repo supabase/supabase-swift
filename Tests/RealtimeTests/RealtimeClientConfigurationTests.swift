@@ -14,12 +14,30 @@ import Testing
 #endif
 
 @Suite
-struct RealtimeClientOptionsTests {
+struct RealtimeClientConfigurationTests {
+  private let url = URL(string: "http://localhost:54321/realtime/v1")!
+
+  @Test
+  func clientExposesTheConfigurationItWasCreatedWith() {
+    let client = RealtimeClient(
+      configuration: .init(url: url, heartbeatInterval: .seconds(7), handleAppLifecycle: false)
+    )
+
+    #expect(client.configuration.url == url)
+    #expect(client.configuration.heartbeatInterval == .seconds(7))
+  }
+
+  @Test
+  func loggerDefaultsToTheRealtimeLabel() {
+    #expect(RealtimeClient.Configuration(url: url).logger.label == "io.supabase.realtime")
+  }
+
   @Test
   func initializesWithoutAnAPIKeyInsteadOfTrapping() {
     let client = RealtimeClient(
-      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(headers: [:])
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+        headers: [:])
     )
 
     #expect(client.headers[.apiKey] == nil)
@@ -27,15 +45,15 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func defaults() {
-    let options = RealtimeClientOptions()
+    let options = RealtimeClient.Configuration(url: url)
 
     #expect(options.heartbeatInterval == .seconds(25))
     #expect(options.requestTimeout == .seconds(10))
-    #expect(RealtimeClientOptions.defaultRequestTimeout == .seconds(10))
+    #expect(RealtimeClient.Configuration.defaultRequestTimeout == .seconds(10))
     #expect(options.connectOnSubscribe)
     #expect(options.disconnectOnEmptyChannelsAfter == .seconds(50))
-    #expect(options.handleAppLifecycle == RealtimeClientOptions.defaultHandleAppLifecycle)
-    #expect(options.monitorsNetworkPath == RealtimeClientOptions.defaultMonitorsNetworkPath)
+    #expect(options.handleAppLifecycle == RealtimeClient.Configuration.defaultHandleAppLifecycle)
+    #expect(options.monitorsNetworkPath == RealtimeClient.Configuration.defaultMonitorsNetworkPath)
     #expect(options.serverLogLevel == nil)
   }
 
@@ -43,15 +61,15 @@ struct RealtimeClientOptionsTests {
   @Test
   func monitorsNetworkPathDefaultsOnWhereThePathIsReliable() {
     #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
-      #expect(RealtimeClientOptions.defaultMonitorsNetworkPath)
+      #expect(RealtimeClient.Configuration.defaultMonitorsNetworkPath)
     #else
-      #expect(!RealtimeClientOptions.defaultMonitorsNetworkPath)
+      #expect(!RealtimeClient.Configuration.defaultMonitorsNetworkPath)
     #endif
   }
 
   @Test
   func monitorsNetworkPathCanBeSetInTheInitializerAndAfterwards() {
-    var options = RealtimeClientOptions(monitorsNetworkPath: false)
+    var options = RealtimeClient.Configuration(url: url, monitorsNetworkPath: false)
     #expect(!options.monitorsNetworkPath)
 
     options.monitorsNetworkPath = true
@@ -61,8 +79,9 @@ struct RealtimeClientOptionsTests {
   @Test
   func reconnectBackoffIsFullJitterWithA1sBaseAnd30sCap() {
     let client = RealtimeClient(
-      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+        handleAppLifecycle: false)
     )
 
     #expect(client.reconnectBackoff.delay(forAttempt: 1, random: { $0.upperBound }) == .seconds(1))
@@ -73,7 +92,7 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func everyTimingOptionIsWritable() {
-    var options = RealtimeClientOptions()
+    var options = RealtimeClient.Configuration(url: url)
     options.heartbeatInterval = .seconds(5)
     options.requestTimeout = .seconds(4)
     options.connectOnSubscribe = false
@@ -87,7 +106,7 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func headersAreReadableAsADictionary() {
-    var options = RealtimeClientOptions(headers: ["X-Custom": "1"])
+    var options = RealtimeClient.Configuration(url: url, headers: ["X-Custom": "1"])
     options.headers["X-Other"] = "2"
 
     #expect(options.headers == ["X-Custom": "1", "X-Other": "2"])
@@ -112,12 +131,9 @@ struct RealtimeClientOptionsTests {
   @Test
   func webSocketTransportIsUsed() async throws {
     let transport = CountingTransport()
-    var options = RealtimeClientOptions(handleAppLifecycle: false)
-    options.webSocketTransport = transport
-    let client = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: options
-    )
+    var configuration = RealtimeClient.Configuration(url: url, handleAppLifecycle: false)
+    configuration.webSocketTransport = transport
+    let client = RealtimeClient(configuration: configuration)
 
     try await client.connect()
 
@@ -127,18 +143,20 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func webSocketTransportDefaultsToNil() {
-    #expect(RealtimeClientOptions().webSocketTransport == nil)
+    #expect(RealtimeClient.Configuration(url: url).webSocketTransport == nil)
   }
 
   @Test
   func connectionOptionsAreWritable() {
-    var options = RealtimeClientOptions()
+    var options = RealtimeClient.Configuration(url: url)
+    options.url = URL(string: "http://localhost:1/realtime/v1")!
     options.accessToken = { "token" }
     options.logger = Logging.Logger(label: "custom")
     options.http = HTTPClientConfiguration(timeout: .seconds(3))
 
     #expect(options.accessToken != nil)
-    #expect(options.logger?.label == "custom")
+    #expect(options.url.port == 1)
+    #expect(options.logger.label == "custom")
     #expect(options.http.timeout == .seconds(3))
   }
 
@@ -146,8 +164,10 @@ struct RealtimeClientOptionsTests {
   private func upgradeHeaders(for headers: [String: String]) async throws -> HTTPFields {
     let captured = LockIsolated<HTTPFields?>(nil)
     let client = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: headers, handleAppLifecycle: false),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        headers: headers,
+        handleAppLifecycle: false),
       wsTransport: { _, fields in
         captured.setValue(fields)
         return FakeWebSocket.fakes().0
@@ -167,8 +187,10 @@ struct RealtimeClientOptionsTests {
   ])
   func serverLogLevelAddsTheQueryItem(level: RealtimeServerLogLevel, expected: String) {
     let client = RealtimeClient(
-      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(serverLogLevel: level, handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+        handleAppLifecycle: false,
+        serverLogLevel: level)
     )
 
     let items = URLComponents(url: client.webSocketURL, resolvingAgainstBaseURL: false)?.queryItems
@@ -178,8 +200,9 @@ struct RealtimeClientOptionsTests {
   @Test
   func noServerLogLevelAddsNoQueryItem() {
     let client = RealtimeClient(
-      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+        handleAppLifecycle: false)
     )
 
     let items = URLComponents(url: client.webSocketURL, resolvingAgainstBaseURL: false)?.queryItems
@@ -195,10 +218,10 @@ struct RealtimeClientOptionsTests {
   @Test
   func clientTagsTheGivenLoggerWithSystemMetadata() {
     let client = RealtimeClient(
-      url: URL(string: "https://example.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(
-        logger: Logging.Logger(label: "test"),
-        handleAppLifecycle: false
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://example.supabase.co/realtime/v1")!,
+        handleAppLifecycle: false,
+        logger: Logging.Logger(label: "test")
       )
     )
     #expect(client.logger.label == "test")
@@ -207,11 +230,10 @@ struct RealtimeClientOptionsTests {
 
   @Test
   func clientUsesTheDefaultLoggerWhenNoneIsGiven() {
-    #expect(RealtimeClientOptions().logger == nil)
-
     let client = RealtimeClient(
-      url: URL(string: "https://example.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://example.supabase.co/realtime/v1")!,
+        handleAppLifecycle: false)
     )
     #expect(client.logger.label == "io.supabase.realtime")
     #expect(client.logger[metadataKey: "system"] == "realtime")

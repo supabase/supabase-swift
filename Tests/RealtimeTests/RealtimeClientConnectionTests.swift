@@ -595,8 +595,8 @@ struct RealtimeClientConnectionTests {
       self.sockets = sockets
       self.servers = servers
       client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
           headers: headers,
           heartbeatInterval: heartbeatInterval,
           handleAppLifecycle: false

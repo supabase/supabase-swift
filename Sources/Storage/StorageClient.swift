@@ -3,106 +3,116 @@ public import HTTPTypes
 public import Helpers
 public import Logging
 
-/// Configuration for the Supabase Storage client.
-///
-/// Pass a ``StorageClientConfiguration`` to ``StorageClient`` to control the Storage
-/// endpoint URL, authentication headers, and the underlying transport.
-///
-/// ```swift
-/// let configuration = StorageClientConfiguration(
-///   url: URL(string: "https://project.supabase.co/storage/v1")!,
-///   headers: [.init("apikey")!: key],
-///   http: HTTPClientConfiguration(
-///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
-///   )
-/// )
-/// let storage = StorageClient(configuration: configuration)
-/// ```
-///
-/// A user's token enters a request through the middleware chain in ``http``, never through a
-/// configuration field: `AccessTokenMiddleware` resolves it for every request, so a token that
-/// rotates is always current, and `SupabaseClient` installs the same middleware for its own
-/// Storage client. A static `Authorization` in ``headers`` is sent as-is and wins over any
-/// middleware, which only sets the header when the request has none.
-///
-/// ## Topics
-///
-/// ### Creating a configuration
-///
-/// - ``init(url:headers:http:logger:usesNewHostname:retryEnabled:)``
-///
-/// ### Configuration properties
-///
-/// - ``url``
-/// - ``headers``
-/// - ``http``
-/// - ``logger``
-/// - ``usesNewHostname``
-/// - ``retryEnabled``
-public struct StorageClientConfiguration: Sendable {
-  /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
-  public var url: URL
-
-  /// HTTP headers sent with every request. `HTTPFields` matches names case-insensitively.
+extension StorageClient {
+  /// Configuration for the Supabase Storage client.
   ///
-  /// A static `Authorization` here wins over any middleware in ``http``. For a token that
-  /// rotates, leave it out and add an `AccessTokenMiddleware` instead.
-  public var headers: HTTPFields
-
-  /// The transport and middleware chain every request goes through.
-  public let http: HTTPClientConfiguration
-
-  /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+  /// Pass a ``StorageClient/Configuration`` to ``StorageClient/init(configuration:)`` to control
+  /// the Storage endpoint URL, authentication headers, and the underlying transport.
   ///
-  /// The client removes tokens, secrets, and URL query strings from each line before your handler
-  /// sees it.
-  public let logger: Logging.Logger
-
-  /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
-  /// which disables request buffering and enables uploads larger than 50 GB.
-  public let usesNewHostname: Bool
-
-  /// Whether transient failures of reads are retried. Defaults to `true`.
+  /// ```swift
+  /// let configuration = StorageClient.Configuration(
+  ///   url: URL(string: "https://project.supabase.co/storage/v1")!,
+  ///   headers: [.init("apikey")!: key],
+  ///   http: HTTPClientConfiguration(
+  ///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
+  ///   )
+  /// )
+  /// let storage = StorageClient(configuration: configuration)
+  /// ```
   ///
-  /// Only reads are replayed: `GET` and `HEAD` requests, ``StorageBucket/list(path:options:)`` and
-  /// each page of ``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered
-  /// backoff. Uploads, moves, copies, removals and bucket changes are never replayed.
-  public let retryEnabled: Bool
-
-  /// How resumable uploads are chunked, retried and persisted.
+  /// A user's token enters a request through the middleware chain in ``http``, never through a
+  /// configuration field: `AccessTokenMiddleware` resolves it for every request, so a token that
+  /// rotates is always current, and `SupabaseClient` installs the same middleware for its own
+  /// Storage client. A static `Authorization` in ``headers`` is sent as-is and wins over any
+  /// middleware, which only sets the header when the request has none.
   ///
-  /// - Warning: Experimental. See ``ResumableUpload``.
-  @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
-
-  /// The clock the waits between retries sleep on.
-  package var clock: any Clock<Duration> = ContinuousClock()
-
-  /// Creates a ``StorageClientConfiguration``.
+  /// ## Topics
   ///
-  /// - Parameters:
-  ///   - url: The base URL of the Storage API endpoint.
-  ///   - headers: HTTP headers sent with every request.
-  ///   - http: The transport and middleware chain every request goes through.
-  ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed by
-  ///     `SwiftLogNoOpLogHandler` to disable logging entirely.
-  ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads over 50 GB.
-  ///   - retryEnabled: Whether transient failures of reads are retried.
-  public init(
-    url: URL,
-    headers: HTTPFields,
-    http: HTTPClientConfiguration = .init(),
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
-    usesNewHostname: Bool = false,
-    retryEnabled: Bool = true
-  ) {
-    self.url = url
-    self.headers = headers
-    self.http = http
-    var logger = logger.redactingSecrets()
-    logger[metadataKey: "system"] = "storage"
-    self.logger = logger
-    self.usesNewHostname = usesNewHostname
-    self.retryEnabled = retryEnabled
+  /// ### Creating a configuration
+  ///
+  /// - ``init(url:headers:usesNewHostname:http:logger:retryEnabled:clock:)``
+  ///
+  /// ### Configuration properties
+  ///
+  /// - ``url``
+  /// - ``headers``
+  /// - ``usesNewHostname``
+  /// - ``http``
+  /// - ``logger``
+  /// - ``retryEnabled``
+  /// - ``clock``
+  public struct Configuration: Sendable {
+    /// The base URL of the Storage API endpoint (e.g. `https://project.supabase.co/storage/v1`).
+    public var url: URL
+
+    /// HTTP headers sent with every request. `HTTPFields` matches names case-insensitively.
+    ///
+    /// A static `Authorization` here wins over any middleware in ``http``. For a token that
+    /// rotates, leave it out and add an `AccessTokenMiddleware` instead.
+    public var headers: HTTPFields
+
+    /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
+    /// which disables request buffering and enables uploads larger than 50 GB.
+    public var usesNewHostname: Bool
+
+    /// How resumable uploads are chunked, retried and persisted.
+    ///
+    /// - Warning: Experimental. See ``ResumableUpload``.
+    @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
+
+    /// The transport and middleware chain every request goes through.
+    public var http: HTTPClientConfiguration
+
+    /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+    ///
+    /// The client removes tokens, secrets, and URL query strings from each line before your handler
+    /// sees it, and tags the logger with the `system` metadata key set to `storage`.
+    public var logger: Logging.Logger
+
+    /// Whether transient failures of reads are retried. Defaults to `true`.
+    ///
+    /// Only reads are replayed: `GET` and `HEAD` requests, ``StorageBucket/list(path:options:)``
+    /// and each page of ``StorageBucket/objects(prefix:options:)``, up to three attempts with
+    /// jittered backoff. Uploads, moves, copies, removals and bucket changes are never replayed.
+    public var retryEnabled: Bool
+
+    /// The clock the waits between retries sleep on.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive retries deterministically in
+    /// tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
+    public var clock: any Clock<Duration>
+
+    /// Creates a configuration.
+    ///
+    /// - Parameters:
+    ///   - url: The base URL of the Storage API endpoint.
+    ///   - headers: HTTP headers sent with every request.
+    ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads
+    ///     over 50 GB.
+    ///   - http: The transport and middleware chain every request goes through.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger; pass a logger backed
+    ///     by `SwiftLogNoOpLogHandler` to disable logging entirely.
+    ///   - retryEnabled: Whether transient failures of reads are retried.
+    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
+    public init(
+      url: URL,
+      headers: HTTPFields = [:],
+      usesNewHostname: Bool = false,
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.storage"),
+      retryEnabled: Bool = true,
+      clock: any Clock<Duration> = ContinuousClock()
+    ) {
+      self.url = url
+      self.headers = headers
+      self.usesNewHostname = usesNewHostname
+      self.http = http
+      self.logger = logger
+      self.retryEnabled = retryEnabled
+      self.clock = clock
+    }
   }
 }
 
@@ -161,13 +171,13 @@ public struct StorageClient: Sendable {
   let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
-  public var configuration: StorageClientConfiguration { api.configuration }
+  public var configuration: Configuration { api.configuration }
 
   /// Creates a ``StorageClient`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
-  public init(configuration: StorageClientConfiguration) {
+  public init(configuration: Configuration) {
     api = StorageAPI(configuration: configuration)
   }
 

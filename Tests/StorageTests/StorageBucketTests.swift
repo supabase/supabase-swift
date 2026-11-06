@@ -24,7 +24,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [
             .init("apikey")!:
@@ -38,7 +38,7 @@ extension StorageMockerTests {
       -> StorageClient
     {
       StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
           http: .init(
@@ -63,7 +63,7 @@ extension StorageMockerTests {
       -> StorageClient
     {
       StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
           http: .init(
@@ -84,7 +84,7 @@ extension StorageMockerTests {
       -> StorageClient
     {
       StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
           http: .init(transport: ClosureTransport { _, _ in try failure() })
