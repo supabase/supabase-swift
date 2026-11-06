@@ -947,7 +947,8 @@ so it loses no change, and it finishes when your task is cancelled or the client
 `AuthChange` has `event`, `session`, `status` (an `AuthStatus`), and `signOutReason`, which tells
 `.userInitiated` from `.sessionExpired`, `.sessionRevoked`, and `.sessionMissing`. For the state
 without a stream, read `auth.status`, or `await auth.initialization()` to wait until storage is
-read. `AuthStateChangeListener` and `AuthStateChangeListenerRegistration` are removed.
+read. `AuthStateChangeListener`, `AuthStateChangeListenerRegistration` and `ObservationToken` are
+removed.
 
 ```swift
 // v2
