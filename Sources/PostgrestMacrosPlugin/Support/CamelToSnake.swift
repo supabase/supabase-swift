@@ -9,14 +9,18 @@
 ///
 /// `isDone` becomes `is_done`; `dueDate` becomes `due_date`; an already-lowercase name is
 /// unchanged. A run of capitals is one word, so `htmlURL` becomes `html_url` and `urlSession` stays
-/// `url_session`.
+/// `url_session`. A plural `s` after the run belongs to it: `ownerIDs` becomes `owner_ids`.
 func camelToSnakeCase(_ name: String) -> String {
   var out = ""
   var previousWasUpper = false
   for (index, character) in name.enumerated() {
     if character.isUppercase {
-      let nextIsLower = name.dropFirst(index + 1).first?.isLowercase ?? false
-      if index > 0, !previousWasUpper || nextIsLower {
+      let rest = name.dropFirst(index + 1)
+      let nextIsLower = rest.first?.isLowercase ?? false
+      // `IDs`: the `s` closes the run, so no word starts at `D`.
+      let isPluralRun =
+        previousWasUpper && rest.first == "s" && (rest.dropFirst().first?.isUppercase ?? true)
+      if index > 0, !previousWasUpper || (nextIsLower && !isPluralRun) {
         out.append("_")
       }
       out.append(Character(character.lowercased()))
