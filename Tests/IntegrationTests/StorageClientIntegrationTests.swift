@@ -301,7 +301,7 @@ struct StorageClientIntegrationTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseSecretKey,
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
 
     let payload = Data("from SupabaseClient".utf8)
     try await client.storage.from(name).upload(path: "file.txt", data: payload)
@@ -316,7 +316,7 @@ struct StorageClientIntegrationTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseNewFormatPublishableKey,
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
 
     #expect(try await client.storage.from(name).list().isEmpty)
     let error = await StorageIntegration.storageError {

@@ -35,7 +35,7 @@
       client = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
-        options: SupabaseClientOptions(
+        configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client1") {
@@ -48,7 +48,7 @@
       client2 = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
-        options: SupabaseClientOptions(
+        configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client2") {

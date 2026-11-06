@@ -57,9 +57,9 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage()),
-        global: SupabaseClientOptions.GlobalOptions(clock: clock)
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        global: SupabaseClient.Configuration.Global(clock: clock)
       )
     )
 
@@ -77,20 +77,20 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(schema: customSchema),
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           headers: customHeaders,
           logger: logger
         ),
-        functions: SupabaseClientOptions.FunctionsOptions(
+        functions: SupabaseClient.Configuration.Functions(
           region: .apNortheast1
         ),
-        realtime: SupabaseClientOptions.RealtimeOptions(
+        realtime: SupabaseClient.Configuration.Realtime(
           headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
         )
       )
@@ -144,13 +144,29 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func exposesTheConfigurationItWasCreatedWith() {
+    var configuration = SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
+    configuration.database.schema = "custom"
+    configuration.storage.usesNewHostname = true
+
+    let client = SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: configuration
+    )
+
+    #expect(client.configuration.database.schema == "custom")
+    #expect(client.configuration.storage.usesNewHostname)
+  }
+
+  @Test
   func realtimeHeadersMergeCaseInsensitively() {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage()),
-        realtime: SupabaseClientOptions.RealtimeOptions(headers: [
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        realtime: SupabaseClient.Configuration.Realtime(headers: [
           "apikey": "other", "X-Custom": "1",
         ])
       )
@@ -171,12 +187,12 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(logger: logger)
+        global: SupabaseClient.Configuration.Global(logger: logger)
       )
     )
 
@@ -189,8 +205,8 @@ struct SupabaseClientTests {
     let defaultClient = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage())
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
       )
     )
     #expect(defaultClient.rest.configuration.retryEnabled == true)
@@ -198,9 +214,9 @@ struct SupabaseClientTests {
     let noRetryClient = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(retry: false),
-        auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage())
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(retry: false),
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
       )
     )
     #expect(noRetryClient.rest.configuration.retryEnabled == false)
@@ -208,14 +224,14 @@ struct SupabaseClientTests {
 
   @Test
   func storageResumableOptionForwardsToStorageClient() {
-    var storageOptions = SupabaseClientOptions.StorageOptions()
+    var storageOptions = SupabaseClient.Configuration.Storage()
     storageOptions.resumable = ResumableUploadConfiguration(
       chunkSize: 1024, retryTimeout: .seconds(5))
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage()),
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
         storage: storageOptions
       )
     )
@@ -246,8 +262,8 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
           autoRefresh: .manual
         )
@@ -270,12 +286,12 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
           autoRefresh: .manual
         ),
-        realtime: SupabaseClientOptions.RealtimeOptions(
+        realtime: SupabaseClient.Configuration.Realtime(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
@@ -291,22 +307,22 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeWebSocketTransportComesOnlyFromRealtimeOptions() {
+  func realtimeWebSocketTransportComesOnlyFromRealtimeConfiguration() {
     let localStorage = InMemoryAuthStorage()
     let httpSession = URLSession(configuration: .ephemeral)
     let realtimeTransport = MarkerWebSocketTransport()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: httpSession))
         ),
-        realtime: SupabaseClientOptions.RealtimeOptions(webSocketTransport: realtimeTransport)
+        realtime: SupabaseClient.Configuration.Realtime(webSocketTransport: realtimeTransport)
       )
     )
 
@@ -318,12 +334,12 @@ struct SupabaseClientTests {
     let clientWithoutRealtimeTransport = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: httpSession))
         )
       )
@@ -342,7 +358,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(
           storage: localStorage,
           accessToken: { "jwt" }
@@ -377,7 +393,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(
           storage: InMemoryAuthStorage(),
           accessToken: { throw TokenProviderError() }
@@ -438,7 +454,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(storage: storage, accessToken: { "third-party-jwt" }),
         global: .init(http: .init(transport: transport))
       )
@@ -484,7 +500,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(
           http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
@@ -509,8 +525,8 @@ struct SupabaseClientTests {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
-        options: SupabaseClientOptions(
-          auth: SupabaseClientOptions.AuthOptions(
+        configuration: SupabaseClient.Configuration(
+          auth: SupabaseClient.Configuration.Auth(
             storage: InMemoryAuthStorage(),
             autoRefresh: .manual
           )
@@ -544,8 +560,8 @@ struct SupabaseClientTests {
       let client = SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
-        options: SupabaseClientOptions(
-          auth: SupabaseClientOptions.AuthOptions(
+        configuration: SupabaseClient.Configuration(
+          auth: SupabaseClient.Configuration.Auth(
             storage: InMemoryAuthStorage(),
             autoRefresh: .manual
           )
@@ -574,7 +590,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
@@ -586,7 +602,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     let headers = client.storage.configuration.headers
@@ -599,7 +615,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
@@ -620,13 +636,13 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual,
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, middlewares: [TagMiddleware(seen: seenByMiddleware)]))
       )
     )
@@ -654,7 +670,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.mutableState.functions == nil)
@@ -672,7 +688,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(http: .init(transport: transport)),
         functions: .init(region: .usEast1)
@@ -693,7 +709,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(
           http: .init(
@@ -723,7 +739,7 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage()),
         global: .init(logger: Logging.Logger(label: "global")),
         functions: .init(logger: Logging.Logger(label: "functions"))
@@ -746,12 +762,12 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, timeout: .seconds(7)))
       )
     )
@@ -785,12 +801,12 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, middlewares: [TagMiddleware()]))
       )
     )
@@ -806,12 +822,12 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        realtime: SupabaseClientOptions.RealtimeOptions(http: .init(middlewares: [TagMiddleware()]))
+        realtime: SupabaseClient.Configuration.Realtime(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
@@ -859,10 +875,10 @@ struct SupabaseClientTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(logger: Logging.Logger(label: "global")),
-        realtime: SupabaseClientOptions.RealtimeOptions(logger: Logging.Logger(label: "realtime"))
+        realtime: SupabaseClient.Configuration.Realtime(logger: Logging.Logger(label: "realtime"))
       )
     )
 
@@ -876,9 +892,9 @@ struct SupabaseClientTests {
     SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), accessToken: { nil }),
-        realtime: SupabaseClientOptions.RealtimeOptions(handleAppLifecycle: false)
+        realtime: SupabaseClient.Configuration.Realtime(handleAppLifecycle: false)
       )
     )
   }

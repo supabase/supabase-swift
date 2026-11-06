@@ -89,8 +89,8 @@ let client = SupabaseClient(
 let client = SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key",
-    options: SupabaseClientOptions(
-        db: .init(
+    configuration: SupabaseClient.Configuration(
+        database: .init(
             schema: "public"
         ),
         auth: .init(

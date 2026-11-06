@@ -33,7 +33,7 @@ reach the server's expiry check.
 `SupabaseClient` sets this closure for you. It returns the signed-in user's token. After every
 sign-in, token refresh and sign-out, `SupabaseClient` also sends the new token with
 ``RealtimeClient/setAuth(_:)``; after a sign-out, that is the project key. Do not set
-`accessToken` in `SupabaseClientOptions.realtime`: the client reports an issue when you do.
+`accessToken` in `SupabaseClient.Configuration.realtime`: the client reports an issue when you do.
 
 ### When a token expires
 
@@ -83,7 +83,7 @@ reply to it.
 
 ### Third-party auth
 
-With `SupabaseClient`, set the `accessToken` closure in `SupabaseClientOptions.AuthOptions`.
+With `SupabaseClient`, set the `accessToken` closure in `SupabaseClient.Configuration.Auth`.
 Realtime uses the same closure as every other module.
 
 With a standalone ``RealtimeClient``, set ``RealtimeClient/Configuration/accessToken`` to your auth

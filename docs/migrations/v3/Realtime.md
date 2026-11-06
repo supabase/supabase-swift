@@ -99,8 +99,8 @@ Changes that still compile but behave differently. Check each one by hand.
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
 - **`SupabaseClient` uses the global logger for Realtime when you pass none.** A `logger:` you
-  pass in `SupabaseClientOptions(realtime:)` is kept. With `nil`, the default, Realtime uses
-  `GlobalOptions.logger`.
+  pass in `SupabaseClient.Configuration.Realtime` is kept. With `nil`, the default, Realtime uses
+  `Configuration.Global.logger`.
 - **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
   certificate pinning, pass a transport (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
@@ -147,6 +147,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `await RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
 | `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
 | `RealtimeClientV2.Configuration`, `RealtimeClientOptions` | `RealtimeClient.Configuration`, which holds `url` |
+| `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` (`SupabaseClient` sends the Auth token) |
 | `RealtimeClientV2.init(config:)`, `RealtimeClient(url:options:)` | `RealtimeClient(configuration:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
 | `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |

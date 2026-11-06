@@ -22,13 +22,13 @@ struct AuthMiddlewareTests {
     client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryTestStorage(),
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: autoRefresh
         ),
-        global: SupabaseClientOptions.GlobalOptions(http: .init(transport: http))
+        global: SupabaseClient.Configuration.Global(http: .init(transport: http))
       )
     )
     http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, body in
@@ -289,13 +289,13 @@ struct AuthMiddlewareTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryTestStorage(),
           storageKey: "sb-test-\(UUID().uuidString)-auth-token",
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(http: .init(transport: http))
+        global: SupabaseClient.Configuration.Global(http: .init(transport: http))
       )
     )
 

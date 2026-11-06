@@ -32,10 +32,10 @@ supporting_symbols:
 
   # The injected clock is a testability seam shared across Auth's token auto-refresh and
   # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
-  # capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
+  # capability any one feature implements. `SupabaseClient` forwards `Configuration.Global.clock` to the
   # per-sub-client properties, so all three spell the same knob at a different layer.
-  - SupabaseClientOptions.GlobalOptions.clock
-  - SupabaseClientOptions.AuthOptions.clock
+  - SupabaseClient.Configuration.Global.clock
+  - SupabaseClient.Configuration.Auth.clock
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
   - RealtimeClient.Configuration.clock
@@ -45,10 +45,10 @@ supporting_symbols:
   - AuthClient.Configuration.redirectTo
   - Session.receivedAt
   - Session.encode
-  # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
+  # A per-module logger override on the facade, mirroring `Configuration.Global.logger`; a logging
   # knob, not a capability.
-  - SupabaseClientOptions.FunctionsOptions.logger
-  - SupabaseClientOptions.AuthOptions.logger
+  - SupabaseClient.Configuration.Functions.logger
+  - SupabaseClient.Configuration.Auth.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -404,6 +404,10 @@ supporting_symbols:
   - RealtimeClient.Configuration
   - RealtimeClient.Configuration.url
   - RealtimeClient.configuration
+  # The facade configuration type, the client's copy of it, and its Realtime settings.
+  - SupabaseClient.Configuration
+  - SupabaseClient.configuration
+  - SupabaseClient.Configuration.Realtime
 
 features:
 
@@ -732,8 +736,8 @@ features:
       - AuthClient.AutoRefreshPolicy.automatic
       - AuthClient.AutoRefreshPolicy.manual
       - AuthClient.AutoRefreshPolicy.disabled
-      - SupabaseClientOptions.AuthOptions.autoRefresh
-      - SupabaseClientOptions.AuthOptions.observesAppLifecycle
+      - SupabaseClient.Configuration.Auth.autoRefresh
+      - SupabaseClient.Configuration.Auth.observesAppLifecycle
   auth.session.sign_out_reason:
     status: implemented
     symbols:
@@ -1142,7 +1146,7 @@ features:
   client.authentication_integration.third_party_auth:
     status: implemented
     symbols:
-      - SupabaseClientOptions.AuthOptions.accessToken
+      - SupabaseClient.Configuration.Auth.accessToken
   client.authentication_integration.cross_client_token_sync:
     status: implemented
     note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.events() and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
@@ -1166,7 +1170,7 @@ features:
   client.session_management.custom_storage:
     status: implemented
     symbols:
-      - SupabaseClientOptions.AuthOptions.storage
+      - SupabaseClient.Configuration.Auth.storage
       - AuthClient.Configuration.storage
     supporting_symbols:
       - AuthStorage
@@ -1198,12 +1202,12 @@ features:
   client.request_configuration.custom_http_client:
     status: implemented
     symbols:
-      - SupabaseClientOptions.GlobalOptions.http
+      - SupabaseClient.Configuration.Global.http
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
       - StorageClient.Configuration.http
-      - SupabaseClientOptions.FunctionsOptions.http
-      - SupabaseClientOptions.AuthOptions.http
+      - SupabaseClient.Configuration.Functions.http
+      - SupabaseClient.Configuration.Auth.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init
@@ -1248,7 +1252,7 @@ features:
   client.request_configuration.global_headers:
     status: implemented
     symbols:
-      - SupabaseClientOptions.GlobalOptions.headers
+      - SupabaseClient.Configuration.Global.headers
       - StorageClient.settingHeader
       - StorageBucket.settingHeader
 
@@ -2602,4 +2606,4 @@ features:
     note: "Reads only: GET, HEAD and list(). Uploads, moves, copies, removals and bucket changes are never replayed."
     symbols:
       - StorageClient.Configuration.retryEnabled
-      - SupabaseClientOptions.StorageOptions.retryEnabled
+      - SupabaseClient.Configuration.Storage.retryEnabled

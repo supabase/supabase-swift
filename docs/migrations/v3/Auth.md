@@ -97,7 +97,7 @@ Changes that still compile but behave differently. Check each one by hand.
   let client = SupabaseClient(
     supabaseURL: url,
     supabaseKey: key,
-    options: .init(auth: .init(storage: InMemoryAuthStorage()))
+    configuration: .init(auth: .init(storage: InMemoryAuthStorage()))
   )
   ```
 - **The stored session is read once.** The client reads `storage` once, right after it is created, and
@@ -272,7 +272,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
 | `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
 | `AuthClient.Configuration.redirectToURL` | `redirectTo` |
-| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | unchanged; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
+| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth(redirectToURL:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
 | `AuthClient.Configuration` `let` properties | `var` properties |
 | `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
@@ -339,7 +339,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` (`UserPage.audience` for users) |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
-| `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `SupabaseClient.Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
 | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:clock:now:)`; `AuthClient.configuration` is public |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
@@ -648,7 +648,7 @@ so email links and implicit tokens still work. Remove `flowType:` from `AuthClie
 // v2
 let options = SupabaseClientOptions(auth: .init(flowType: .pkce))
 // v3
-let options = SupabaseClientOptions(auth: .init())
+let configuration = SupabaseClient.Configuration(auth: .init())
 ```
 
 ## `oauthSignInURL` returns an `OAuthFlow`
@@ -1102,7 +1102,7 @@ let supabase = SupabaseClient(
 let supabase = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
-  options: .init(auth: .init(autoRefresh: .manual))
+  configuration: .init(auth: .init(autoRefresh: .manual))
 )
 ```
 
@@ -1141,7 +1141,7 @@ struct MyStorage: AuthStorage {
 let supabase = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
-  options: .init(auth: .init(storage: MyStorage()))
+  configuration: .init(auth: .init(storage: MyStorage()))
 )
 ```
 

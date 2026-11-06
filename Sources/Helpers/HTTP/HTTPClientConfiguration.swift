@@ -8,7 +8,7 @@
 /// The transport, middleware chain and request timeout a client sends through.
 ///
 /// Pass one of these as `http:` to any sub-client or to
-/// `SupabaseClientOptions.GlobalOptions`. ``transport`` is `nil` by default, which means the
+/// `SupabaseClient.Configuration.Global`. ``transport`` is `nil` by default, which means the
 /// default ``URLSessionTransport`` over `URLSession.shared`.
 /// Middlewares run in array order for requests (index 0 first) and in reverse for responses,
 /// before the SDK's own middlewares and the transport. In a module that retries (Auth,
@@ -16,7 +16,7 @@
 /// once per attempt.
 ///
 /// ```swift
-/// let options = SupabaseClientOptions(
+/// let options = SupabaseClient.Configuration(
 ///   global: .init(http: .init(timeout: .seconds(30)))
 /// )
 /// ```
