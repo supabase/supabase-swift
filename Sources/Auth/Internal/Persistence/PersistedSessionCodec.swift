@@ -89,13 +89,14 @@ enum PersistedSessionCodec {
     init?(intValue: Int) { nil }
   }
 
+  private static let freeFormObjects: Set<String> = [
+    "userMetadata", "user_metadata", "appMetadata", "app_metadata", "identityData",
+    "identity_data",
+  ]
+
   /// Whether `path` points inside a user-supplied JSON object, whose keys are data.
   private static func isFreeFormObject(_ path: [any CodingKey]) -> Bool {
-    let objects: Set<String> = [
-      "userMetadata", "user_metadata", "appMetadata", "app_metadata", "identityData",
-      "identity_data",
-    ]
-    return path.dropLast().contains { objects.contains($0.stringValue) }
+    path.dropLast().contains { freeFormObjects.contains($0.stringValue) }
   }
 
   private static func snakeCased(_ key: String) -> String {
@@ -110,7 +111,8 @@ enum PersistedSessionCodec {
   private static func camelCased(_ key: String) -> String {
     let words = key.split(separator: "_", omittingEmptySubsequences: false)
     guard let first = words.first else { return key }
-    return String(first) + words.dropFirst().map { $0.capitalized }.joined()
+    return String(first)
+      + words.dropFirst().map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined()
   }
 
   private struct V2WrappedSession: Decodable {
