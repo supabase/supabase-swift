@@ -2048,7 +2048,7 @@ features:
       - Bucket.createdAt
       - Bucket.updatedAt
       - Bucket.type
-      - Bucket.ownerId
+      - Bucket.ownerID
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
@@ -2259,7 +2259,7 @@ features:
       - PublicURLOptions.init
       - PublicURLOptions.download
       - PublicURLOptions.transform
-      - PublicURLOptions.versionId
+      - PublicURLOptions.versionID
       - PublicURLOptions.cacheNonce
   storage.file_buckets.create_signed_url:
     status: implemented
@@ -2269,7 +2269,7 @@ features:
       - SignedURLOptions.init
       - SignedURLOptions.download
       - SignedURLOptions.transform
-      - SignedURLOptions.versionId
+      - SignedURLOptions.versionID
       - SignedURLOptions.cacheNonce
   storage.file_buckets.create_signed_urls:
     status: implemented
@@ -2314,7 +2314,7 @@ features:
       - ObjectInfo.id
       - ObjectInfo.version
       - ObjectInfo.name
-      - ObjectInfo.bucketId
+      - ObjectInfo.bucketID
       - ObjectInfo.size
       - ObjectInfo.contentType
       - ObjectInfo.cacheControl
@@ -2410,9 +2410,9 @@ features:
   storage.file_buckets.download_specific_version:
     status: implemented
     symbols:
-      - DownloadOptions.versionId
-  # Not separate methods: the `versionId:` parameter of StorageBucket.info and
-  # the `sourceVersionId:` parameter of StorageBucket.move and StorageBucket.copy.
+      - DownloadOptions.versionID
+  # Not separate methods: the `versionID:` parameter of StorageBucket.info and
+  # the `sourceVersionID:` parameter of StorageBucket.move and StorageBucket.copy.
   storage.file_buckets.file_info_specific_version: implemented
   storage.file_buckets.move_specific_version: implemented
   storage.file_buckets.copy_specific_version: implemented
@@ -2422,7 +2422,7 @@ features:
       - ObjectVersion
       - ObjectVersion.init
       - ObjectVersion.path
-      - ObjectVersion.versionId
+      - ObjectVersion.versionID
   storage.file_buckets.bucket_versioning_status:
     status: implemented
     symbols:
@@ -2541,7 +2541,7 @@ features:
       - StorageError.Code.invalidKey
       - StorageError.Code.invalidRange
       - StorageError.Code.invalidMimeType
-      - StorageError.Code.invalidUploadId
+      - StorageError.Code.invalidUploadID
       - StorageError.Code.keyAlreadyExists
       - StorageError.Code.bucketAlreadyExists
       - StorageError.Code.databaseTimeout
@@ -2563,7 +2563,7 @@ features:
       - StorageError.Code.invalidUploadSignature
       - StorageError.Code.lockTimeout
       - StorageError.Code.s3Error
-      - StorageError.Code.invalidAccessKeyId
+      - StorageError.Code.invalidAccessKeyID
       - StorageError.Code.maximumCredentialsLimit
       - StorageError.Code.invalidChecksum
       - StorageError.Code.missingPart

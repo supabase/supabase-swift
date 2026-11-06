@@ -85,7 +85,7 @@ public actor ResumableUpload {
   /// The identity of this upload. Asking for the same upload again returns the same `ID`.
   public nonisolated let id: ID
   /// The bucket the object goes to.
-  public nonisolated let bucketId: String
+  public nonisolated let bucketID: String
   /// The path of the object in the bucket.
   public nonisolated let path: String
   /// The size of the upload.
@@ -158,7 +158,7 @@ public actor ResumableUpload {
   static func handle(record: ResumableUploadRecord, api: StorageAPI) -> ResumableUpload {
     handle(fingerprint: record.fingerprint, api: api) {
       ResumableUpload(
-        id: ID(rawValue: record.fingerprint), bucketId: record.bucketId, path: record.path,
+        id: ID(rawValue: record.fingerprint), bucketID: record.bucketID, path: record.path,
         totalBytes: record.totalBytes, input: .prepared(record.source),
         options: UploadOptions(
           contentType: record.contentType,
@@ -169,11 +169,11 @@ public actor ResumableUpload {
   }
 
   init(
-    id: ID, bucketId: String, path: String, totalBytes: Int64, input: Input,
+    id: ID, bucketID: String, path: String, totalBytes: Int64, input: Input,
     options: UploadOptions, api: StorageAPI
   ) {
     self.id = id
-    self.bucketId = bucketId
+    self.bucketID = bucketID
     self.path = path
     self.totalBytes = totalBytes
     self.input = input
@@ -361,7 +361,7 @@ public actor ResumableUpload {
     let object = UploadedObject(
       id: response?.id.flatMap(UUID.init(uuidString:)),
       path: path,
-      fullPath: response?.key ?? "\(bucketId)/\(path)")
+      fullPath: response?.key ?? "\(bucketID)/\(path)")
     if let record { try? store.remove(record) }
     state = .completed(object)
   }
@@ -407,11 +407,11 @@ public actor ResumableUpload {
     let (_, modificationDate) = try ResumableStore.attributes(
       of: store.fileURL(for: source, fingerprint: id.rawValue))
     let created = try await tus.create(
-      bucket: bucketId, key: key, length: totalBytes, options: options)
+      bucket: bucketID, key: key, length: totalBytes, options: options)
     let now = Date()
     let record = ResumableUploadRecord(
       fingerprint: id.rawValue,
-      bucketId: bucketId,
+      bucketID: bucketID,
       path: path,
       totalBytes: totalBytes,
       source: source,

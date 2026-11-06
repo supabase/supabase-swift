@@ -599,7 +599,7 @@ final class StorageBucketIntegrationTests {
     let info = try await api.info(path: "options.txt")
     #expect(info.id == uploaded.id)
     #expect(info.name == "options.txt")
-    #expect(info.bucketId == bucketName)
+    #expect(info.bucketID == bucketName)
     #expect(info.size == Int64(payload.count))
     #expect(info.contentType == "text/plain")
     #expect(info.cacheControl == "no-cache")

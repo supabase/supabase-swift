@@ -1237,7 +1237,7 @@ extension StorageMockerTests {
       .register()
 
       let response = try await storage.from("bucket")
-        .download(path: "file.txt", options: DownloadOptions(versionId: "v1"))
+        .download(path: "file.txt", options: DownloadOptions(versionID: "v1"))
 
       #expect(try await response.data() == Data("hello world".utf8))
     }
