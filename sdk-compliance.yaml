@@ -158,12 +158,13 @@ supporting_symbols:
   - StorageClient
   - StorageClient.init
   - StorageClient.configuration
-  - StorageClientConfiguration
-  - StorageClientConfiguration.init
-  - StorageClientConfiguration.url
-  - StorageClientConfiguration.headers
-  - StorageClientConfiguration.logger
-  - StorageClientConfiguration.usesNewHostname
+  - StorageClient.Configuration
+  - StorageClient.Configuration.init
+  - StorageClient.Configuration.url
+  - StorageClient.Configuration.headers
+  - StorageClient.Configuration.logger
+  - StorageClient.Configuration.usesNewHostname
+  - StorageClient.Configuration.clock
   - StorageError.ServerError.code
   - StorageError.code
   - StorageError.serverStatusCode
@@ -1190,7 +1191,7 @@ features:
       - SupabaseClientOptions.GlobalOptions.http
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
-      - StorageClientConfiguration.http
+      - StorageClient.Configuration.http
       - SupabaseClientOptions.FunctionsOptions.http
       - SupabaseClientOptions.AuthOptions.http
     supporting_symbols:
@@ -2589,5 +2590,5 @@ features:
     status: implemented
     note: "Reads only: GET, HEAD and list(). Uploads, moves, copies, removals and bucket changes are never replayed."
     symbols:
-      - StorageClientConfiguration.retryEnabled
+      - StorageClient.Configuration.retryEnabled
       - SupabaseClientOptions.StorageOptions.retryEnabled

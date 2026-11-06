@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import Helpers
@@ -12,7 +13,7 @@ import Testing
 struct StorageClientConfigurationTests {
   @Test
   func loggerIsTaggedWithSystemMetadata() {
-    let configuration = StorageClientConfiguration(
+    let configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost")!,
       headers: [:],
       logger: Logging.Logger(label: "test")
@@ -21,13 +22,38 @@ struct StorageClientConfigurationTests {
     #expect(configuration.logger[metadataKey: "system"] == "storage")
   }
 
+  @Test
+  func headersDefaultToEmpty() {
+    let configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+
+    #expect(configuration.headers.isEmpty)
+  }
+
+  @Test
+  func everyFieldIsMutable() {
+    var configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+    let clock = TestClock<Duration>()
+
+    configuration.http = HTTPClientConfiguration(timeout: .seconds(7))
+    configuration.logger = Logging.Logger(label: "replaced")
+    configuration.usesNewHostname = true
+    configuration.retryEnabled = false
+    configuration.clock = clock
+
+    #expect(configuration.http.timeout == .seconds(7))
+    #expect(configuration.logger.label == "replaced")
+    #expect(configuration.usesNewHostname)
+    #expect(!configuration.retryEnabled)
+    #expect(configuration.clock as? TestClock<Duration> === clock)
+  }
+
   private func makeSUT(
     headers: HTTPFields,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     requests: LockIsolated<[HTTPRequest]>
   ) -> StorageClient {
     StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: headers,
         http: .init(
@@ -109,7 +135,7 @@ struct StorageClientConfigurationTests {
   @Test
   func settingHeaderMergesWithoutRebuildingTheClient() async throws {
     let storage = StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "https://project.supabase.co/storage/v1")!,
         headers: [.xClientInfo: "custom/1"],
         usesNewHostname: true

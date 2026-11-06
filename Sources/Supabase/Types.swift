@@ -219,7 +219,7 @@ public struct SupabaseClientOptions: Sendable {
     public let retryEnabled: Bool
 
     /// How resumable uploads are chunked, retried and persisted. See
-    /// `StorageClientConfiguration.resumable`.
+    /// `StorageClient.Configuration.resumable`.
     ///
     /// - Warning: Experimental. See `ResumableUpload`.
     @_spi(Experimental) public var resumable = ResumableUploadConfiguration()

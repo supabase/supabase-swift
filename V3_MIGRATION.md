@@ -75,7 +75,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
 | `StorageHTTPSession` | `any ClientTransport` |
 | `fetch:` argument on `AuthClient`, `AuthClient.Configuration`, `PostgrestClient`, `PostgrestClient.Configuration`, `FunctionsClient`, `RealtimeClientOptions` | `http: HTTPClientConfiguration` |
-| `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
+| `StorageClientConfiguration(session:)` | `StorageClient.Configuration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
 
@@ -165,9 +165,9 @@ let storage = SupabaseStorageClient(
 
 // v3
 let http = HTTPClientConfiguration(transport: URLSessionTransport(session: session))
-let database = PostgrestClient(url: databaseURL, http: http)
+let database = PostgrestClient(configuration: .init(url: databaseURL, http: http))
 let storage = StorageClient(
-  configuration: StorageClientConfiguration(url: storageURL, headers: headers, http: http)
+  configuration: .init(url: storageURL, headers: headers, http: http)
 )
 ```
 

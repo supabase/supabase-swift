@@ -126,15 +126,15 @@ public final class SupabaseClient: Sendable {
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: storageURL,
       headers: dataHeaders,
+      usesNewHostname: options.storage.usesNewHostname,
       http: authenticatedHTTP(staleTokenRejection: .storage),
       logger: options.global.logger,
-      usesNewHostname: options.storage.usesNewHostname,
-      retryEnabled: options.storage.retryEnabled
+      retryEnabled: options.storage.retryEnabled,
+      clock: clock
     )
-    configuration.clock = clock
     configuration.resumable = options.storage.resumable
     return StorageClient(configuration: configuration)
   }

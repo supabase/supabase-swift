@@ -77,7 +77,7 @@ public struct StorageBucket: Sendable {
   let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
-  public var configuration: StorageClientConfiguration { api.configuration }
+  public var configuration: StorageClient.Configuration { api.configuration }
 
   init(id: String, api: StorageAPI) {
     self.id = id

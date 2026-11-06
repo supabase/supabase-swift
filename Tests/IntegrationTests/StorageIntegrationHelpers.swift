@@ -23,7 +23,7 @@ enum StorageIntegration {
     middlewares: [any ClientMiddleware] = []
   ) -> StorageClient {
     StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: url,
         headers: headers,
         http: HTTPClientConfiguration(middlewares: middlewares)

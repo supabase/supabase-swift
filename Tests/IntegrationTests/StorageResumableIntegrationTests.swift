@@ -47,7 +47,7 @@ final class StorageResumableIntegrationTests {
   }
 
   private func client() -> StorageClient {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: StorageIntegration.url,
       headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
     configuration.resumable = ResumableUploadConfiguration(directory: directory)
