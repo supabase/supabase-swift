@@ -232,7 +232,8 @@ public actor RealtimeClient {
   }
 
   private static func logger(for options: RealtimeClientOptions) -> Logger {
-    var logger = options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime")
+    var logger = (options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime"))
+      .redactingSecrets()
     logger[metadataKey: "system"] = "realtime"
     return logger
   }
