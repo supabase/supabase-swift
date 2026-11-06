@@ -22,7 +22,7 @@ enum ResumableSource: Hashable, Codable, Sendable {
 /// server, and how far it got.
 struct ResumableUploadRecord: Hashable, Codable, Sendable {
   let fingerprint: String
-  let bucketId: String
+  let bucketID: String
   let path: String
   let totalBytes: Int64
   let source: ResumableSource
@@ -78,16 +78,16 @@ struct ResumableStore: Sendable {
   /// SHA-256 of the endpoint, bucket, path, size and modification date, so the same file picked
   /// twice through different temporary URLs is the same upload, and clients of two projects that
   /// share a record directory never share an upload.
-  static func fingerprint(url: URL, bucketId: String, path: String, fileURL: URL) throws -> String {
+  static func fingerprint(url: URL, bucketID: String, path: String, fileURL: URL) throws -> String {
     let (size, modificationDate) = try attributes(of: fileURL)
     return fingerprint(
-      "\(url.absoluteString)\n\(bucketId)\n\(path)\n\(size)\n\(modificationDate.timeIntervalSince1970)"
+      "\(url.absoluteString)\n\(bucketID)\n\(path)\n\(size)\n\(modificationDate.timeIntervalSince1970)"
     )
   }
 
-  static func fingerprint(url: URL, bucketId: String, path: String, data: Data) -> String {
+  static func fingerprint(url: URL, bucketID: String, path: String, data: Data) -> String {
     fingerprint(
-      "\(url.absoluteString)\n\(bucketId)\n\(path)\n\(data.count)\n\(hex(SHA256.hash(data: data)))")
+      "\(url.absoluteString)\n\(bucketID)\n\(path)\n\(data.count)\n\(hex(SHA256.hash(data: data)))")
   }
 
   private static func fingerprint(_ input: String) -> String {

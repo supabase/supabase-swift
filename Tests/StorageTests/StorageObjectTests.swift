@@ -103,7 +103,7 @@ struct StorageObjectTests {
     let info = try JSONDecoder.storage.decode(ObjectInfo.self, from: json)
 
     #expect(info.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
-    #expect(info.bucketId == "avatars")
+    #expect(info.bucketID == "avatars")
     #expect(info.size == 28834)
     #expect(info.contentType == "image/jpeg")
     #expect(info.eTag == "\"abc\"")

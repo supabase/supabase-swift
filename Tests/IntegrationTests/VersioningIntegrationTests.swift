@@ -23,22 +23,22 @@ struct VersioningIntegrationTests {
     try await bucket.upload(path: "a.txt", data: Data("a".utf8))
     let version = try await bucket.info(path: "a.txt").version
 
-    let info = try await bucket.info(path: "a.txt", versionId: version)
+    let info = try await bucket.info(path: "a.txt", versionID: version)
     #expect(info.version == version)
 
     let missing = await StorageIntegration.storageError {
-      _ = try await bucket.info(path: "a.txt", versionId: UUID().uuidString)
+      _ = try await bucket.info(path: "a.txt", versionID: UUID().uuidString)
     }
     #expect(missing?.isNotFound == true)
 
     let signed = try await bucket.createSignedURL(
-      path: "a.txt", expiresIn: .seconds(60), options: SignedURLOptions(versionId: version))
+      path: "a.txt", expiresIn: .seconds(60), options: SignedURLOptions(versionID: version))
     let (signedData, signedResponse) = try await StorageIntegration.fetch(signed)
     #expect(signedResponse.statusCode == 200)
     #expect(signedData == Data("a".utf8))
 
     let (publicData, publicResponse) = try await StorageIntegration.fetch(
-      bucket.publicURL(path: "a.txt", options: PublicURLOptions(versionId: version)))
+      bucket.publicURL(path: "a.txt", options: PublicURLOptions(versionID: version)))
     #expect(publicResponse.statusCode == 200)
     #expect(publicData == Data("a".utf8))
   }
@@ -51,14 +51,14 @@ struct VersioningIntegrationTests {
     try await bucket.upload(path: "a.txt", data: Data("a".utf8))
     let version = try await bucket.info(path: "a.txt").version
 
-    try await bucket.copy(from: "a.txt", to: "b.txt", sourceVersionId: version)
+    try await bucket.copy(from: "a.txt", to: "b.txt", sourceVersionID: version)
     let copyVersion = try await bucket.info(path: "b.txt").version
-    try await bucket.move(from: "b.txt", to: "c.txt", sourceVersionId: copyVersion)
+    try await bucket.move(from: "b.txt", to: "c.txt", sourceVersionID: copyVersion)
     #expect(try await bucket.exists(path: "c.txt"))
     #expect(try await bucket.exists(path: "b.txt") == false)
 
     let removed = try await bucket.remove(versions: [
-      ObjectVersion(path: "a.txt", versionId: version)
+      ObjectVersion(path: "a.txt", versionID: version)
     ])
     #expect(removed.map(\.name) == ["a.txt"])
     #expect(try await bucket.exists(path: "a.txt") == false)

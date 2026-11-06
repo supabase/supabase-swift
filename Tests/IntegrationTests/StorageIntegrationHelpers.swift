@@ -35,8 +35,14 @@ enum StorageIntegration {
   struct ForwardedPurge: Decodable, Equatable {
     struct Body: Decodable, Equatable {
       var type: String
-      var bucketId: String?
+      var bucketID: String?
       var objectName: String?
+
+      enum CodingKeys: String, CodingKey {
+        case type
+        case bucketID = "bucketId"
+        case objectName
+      }
     }
     var path: String
     var body: Body

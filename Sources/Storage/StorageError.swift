@@ -263,7 +263,7 @@ extension StorageError.Code {
   public static let invalidMimeType = StorageError.Code("InvalidMimeType")
 
   /// The specified upload ID is invalid.
-  public static let invalidUploadId = StorageError.Code("InvalidUploadId")
+  public static let invalidUploadID = StorageError.Code("InvalidUploadId")
 
   /// The specified key already exists.
   public static let keyAlreadyExists = StorageError.Code("KeyAlreadyExists")
@@ -330,7 +330,7 @@ extension StorageError.Code {
   public static let s3Error = StorageError.Code("S3Error")
 
   /// The provided access key ID is invalid.
-  public static let invalidAccessKeyId = StorageError.Code("InvalidAccessKeyId")
+  public static let invalidAccessKeyID = StorageError.Code("InvalidAccessKeyId")
 
   /// The maximum number of credentials has been reached.
   public static let maximumCredentialsLimit = StorageError.Code("MaximumCredentialsLimit")

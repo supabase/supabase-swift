@@ -115,7 +115,7 @@ struct ResumableUploadTests {
     let states = upload.states
 
     #expect(upload.totalBytes == 20)
-    #expect(upload.bucketId == "bucket")
+    #expect(upload.bucketID == "bucket")
     #expect(upload.path == "video.mp4")
     try await upload.start()
     let object = try await upload.result

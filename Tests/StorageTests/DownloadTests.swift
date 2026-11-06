@@ -48,7 +48,7 @@ struct DownloadTests {
     _ = try await bucket.download(
       path: "file.txt",
       options: DownloadOptions(
-        range: 0...1023, versionId: "v1", cacheNonce: "n", transform: ImageTransform(width: 10),
+        range: 0...1023, versionID: "v1", cacheNonce: "n", transform: ImageTransform(width: 10),
         headers: [.init("x-custom")!: "1", .ifNoneMatch: "\"etag\""]))
 
     let request = try #require(sent.value)
