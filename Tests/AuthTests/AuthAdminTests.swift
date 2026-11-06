@@ -5,6 +5,8 @@
 //  Created by Guilherme Souza on 30/09/26.
 //
 
+import Clocks
+import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import TestHelpers
@@ -48,6 +50,53 @@ struct AuthAdminTests {
     let request = try #require(transport.requests.first?.head)
     #expect(request.headerFields[HTTPField.Name("X-Custom")!] == "1")
     #expect(request.headerFields[HTTPField.Name("apikey")!] == "secret.key")
+  }
+
+  @Test
+  func retriesAGetOnTheConfiguredClock() async throws {
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .serviceUnavailable), Data())
+    }
+    let clock = SleepCountingClock()
+    let admin = AuthAdminClient(
+      configuration: .init(
+        url: clientURL, secretKey: "secret.key", http: .init(transport: transport), clock: clock)
+    )
+
+    _ = try? await admin.user(id: UUID())
+
+    #expect(transport.requests.count == 3)
+    #expect(clock.sleeps.value == 2)
+  }
+
+  @Test
+  func doesNotRetryWhenRetryIsDisabled() async throws {
+    let transport = RecordingTransport { _, _ in
+      (HTTPResponse(status: .serviceUnavailable), Data())
+    }
+    let admin = AuthAdminClient(
+      configuration: .init(
+        url: clientURL, secretKey: "secret.key", http: .init(transport: transport),
+        retryEnabled: false)
+    )
+
+    _ = try? await admin.user(id: UUID())
+
+    #expect(transport.requests.count == 1)
+  }
+
+  @Test
+  func describingTheConfigurationHidesTheSecretKey() {
+    let configuration = AuthAdminClient.Configuration(
+      url: clientURL, secretKey: "sb_secret_abc",
+      headers: [HTTPField.Name("apikey")!: "sb_secret_abc"])
+    var dumped = ""
+    dump(configuration, to: &dumped)
+
+    #expect(!String(describing: configuration).contains("sb_secret_abc"))
+    #expect(!String(reflecting: configuration).contains("sb_secret_abc"))
+    #expect(!dumped.contains("sb_secret_abc"))
+    #expect(String(describing: configuration).contains("<redacted>"))
   }
 
   @Test
@@ -127,5 +176,19 @@ struct AuthAdminTests {
     let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
     #expect(json?.keys.sorted() == ["email_confirm", "id"])
     #expect(json?["id"] as? String == id.uuidString)
+  }
+}
+
+/// Sleeps at once and counts the sleeps, so a test can see which clock a retry waited on.
+private struct SleepCountingClock: Clock {
+  let base = ImmediateClock()
+  let sleeps = LockIsolated(0)
+
+  var now: ImmediateClock<Duration>.Instant { base.now }
+  var minimumResolution: Duration { base.minimumResolution }
+
+  func sleep(until deadline: ImmediateClock<Duration>.Instant, tolerance: Duration?) async throws {
+    sleeps.withValue { $0 += 1 }
+    try await base.sleep(until: deadline, tolerance: tolerance)
   }
 }

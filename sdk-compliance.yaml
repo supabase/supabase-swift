@@ -245,6 +245,12 @@ supporting_symbols:
   - AuthAdminClient.Configuration.headers
   - AuthAdminClient.Configuration.http
   - AuthAdminClient.Configuration.logger
+  - AuthAdminClient.Configuration.retryEnabled
+  - AuthAdminClient.Configuration.clock
+  # Descriptions that hide the secret key.
+  - AuthAdminClient.Configuration.description
+  - AuthAdminClient.Configuration.debugDescription
+  - AuthAdminClient.Configuration.customMirror
   # The configuration each client was created with, and the PostgREST logger, now public.
   - AuthClient.configuration
   - PostgrestClient.Configuration.logger

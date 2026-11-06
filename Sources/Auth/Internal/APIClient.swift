@@ -11,8 +11,13 @@ extension HTTPClient {
     self.init(http: configuration.http, clock: configuration.clock, logger: configuration.logger)
   }
 
-  init(http: HTTPClientConfiguration, clock: any Clock<Duration>, logger: Logging.Logger) {
-    var policy = RetryPolicy.default
+  init(
+    http: HTTPClientConfiguration,
+    clock: any Clock<Duration>,
+    logger: Logging.Logger,
+    retryEnabled: Bool = true
+  ) {
+    var policy = retryEnabled ? RetryPolicy.default : .disabled
     policy.retryableStatuses.remove(429)
 
     self.init(

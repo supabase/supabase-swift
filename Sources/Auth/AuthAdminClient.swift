@@ -73,6 +73,12 @@ public struct AuthAdminClient: Sendable {
     /// and tags it with the `system` metadata key set to `auth`.
     public var logger: Logging.Logger
 
+    /// Whether to retry transient errors on `GET` requests. Defaults to `true`.
+    public var retryEnabled: Bool
+
+    /// The clock the retry backoff sleeps on. Defaults to `ContinuousClock()`.
+    public var clock: any Clock<Duration>
+
     /// Creates a configuration.
     ///
     /// - Parameters:
@@ -81,18 +87,24 @@ public struct AuthAdminClient: Sendable {
     ///   - headers: Headers sent with every request.
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: The logger to use. Defaults to a build-config-aware logger.
+    ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
+    ///   - clock: The clock the retry backoff sleeps on.
     public init(
       url: URL,
       secretKey: String,
       headers: HTTPFields = [:],
       http: HTTPClientConfiguration = .init(),
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+      retryEnabled: Bool = true,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.url = url
       self.secretKey = secretKey
       self.headers = headers
       self.http = http
       self.logger = logger
+      self.retryEnabled = retryEnabled
+      self.clock = clock
     }
   }
 
@@ -126,7 +138,12 @@ public struct AuthAdminClient: Sendable {
     var logger = configuration.logger.redactingSecrets()
     logger[metadataKey: "system"] = "auth"
     self.api = APIClient(
-      http: HTTPClient(http: configuration.http, clock: ContinuousClock(), logger: logger))
+      http: HTTPClient(
+        http: configuration.http,
+        clock: configuration.clock,
+        logger: logger,
+        retryEnabled: configuration.retryEnabled
+      ))
   }
 
   /// Admin operations on a user's MFA factors.
@@ -232,4 +249,37 @@ public struct AuthAdminClient: Sendable {
   public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
     try await api.execute(authAPI.signOut(accessToken: jwt, scope: scope))
   }
+}
+
+extension AuthAdminClient.Configuration: CustomStringConvertible, CustomDebugStringConvertible,
+  CustomReflectable
+{
+  /// A description that shows `<redacted>` in place of ``secretKey`` and lists only the header
+  /// names, so logs and crash reports never carry the key.
+  public var description: String {
+    "AuthAdminClient.Configuration(url: \(url), secretKey: <redacted>, headers: \(headerNames))"
+  }
+
+  /// The same text as ``description``.
+  public var debugDescription: String { description }
+
+  /// A mirror that shows `<redacted>` in place of ``secretKey`` and lists only the header names,
+  /// so `dump(_:)` never prints the key.
+  public var customMirror: Mirror {
+    Mirror(
+      self,
+      children: [
+        "url": url,
+        "secretKey": "<redacted>",
+        "headers": headerNames,
+        "http": http,
+        "logger": logger,
+        "retryEnabled": retryEnabled,
+        "clock": clock,
+      ],
+      displayStyle: .struct
+    )
+  }
+
+  private var headerNames: [String] { headers.map(\.name.rawName) }
 }
