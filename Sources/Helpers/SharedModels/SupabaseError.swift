@@ -53,7 +53,7 @@ extension SupabaseError {
   package func formattedDescription(kind: String) -> String {
     var text = "\(String(describing: Self.self))(\(kind)): \(message)"
     if let response {
-      text += " [status \(response.statusCode)"
+      text += " [status \(response.status.code)"
       if let requestID = response.requestID {
         text += ", request \(requestID)"
       }

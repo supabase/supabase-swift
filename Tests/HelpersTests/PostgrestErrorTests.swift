@@ -66,7 +66,7 @@ struct PostgrestErrorTests {
       kind: .server,
       message: "Row not found",
       serverError: .init(code: "PGRST116", message: "Row not found"),
-      response: HTTPErrorResponse(statusCode: 406, headers: headers, body: Data())
+      response: HTTPErrorResponse(status: 406, headers: headers, body: Data())
     )
 
     #expect(

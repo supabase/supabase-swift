@@ -33,7 +33,7 @@ struct RealtimeErrorTests {
     let error = RealtimeError(
       kind: .server,
       message: "Server error",
-      response: HTTPErrorResponse(statusCode: 500, headers: HTTPFields(), body: Data())
+      response: HTTPErrorResponse(status: 500, headers: HTTPFields(), body: Data())
     )
 
     #expect(error.description == "RealtimeError(server): Server error [status 500]")

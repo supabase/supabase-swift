@@ -144,7 +144,7 @@ struct DownloadTests {
       path: "file.txt", options: DownloadOptions(range: 0...19))
 
     #expect(pulled.value == 0)
-    #expect(response.httpResponse.status == .partialContent)
+    #expect(response.status == .partialContent)
     #expect(response.contentType == "text/plain")
     #expect(response.contentLength == 20)
     #expect(response.contentRange == "bytes 0-19/100")

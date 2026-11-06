@@ -217,7 +217,7 @@ struct AuthAPITests {
       )
     }
     #expect(error.errorCode == .otpDisabled)
-    #expect(error.response?.statusCode == 422)
+    #expect(error.response?.status == 422)
   }
 
   @Test

@@ -26,7 +26,7 @@ struct FunctionsErrorTests {
     let error = FunctionsError(
       kind: .server,
       message: "Edge Function returned a non-2xx status code: 412",
-      response: HTTPErrorResponse(statusCode: 412, headers: HTTPFields(), body: Data())
+      response: HTTPErrorResponse(status: 412, headers: HTTPFields(), body: Data())
     )
 
     #expect(
@@ -40,7 +40,7 @@ struct FunctionsErrorTests {
       kind: .server,
       message: "Edge Function returned a non-2xx status code: 503",
       code: .bootError,
-      response: HTTPErrorResponse(statusCode: 503, headers: HTTPFields(), body: Data())
+      response: HTTPErrorResponse(status: 503, headers: HTTPFields(), body: Data())
     )
 
     #expect(

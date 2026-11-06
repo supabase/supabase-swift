@@ -1,87 +1,105 @@
 public import Foundation
 public import HTTPTypes
+import Helpers
 
-/// The response returned by a PostgREST query, containing the raw data, HTTP response, row count, and decoded value.
-///
-/// ``PostgrestResponse`` wraps the raw network response from PostgREST and provides decoded access
-/// to the returned rows alongside metadata such as the total row count (when requested via
-/// ``CountOption``) and the HTTP status code.
+/// The response returned by a PostgREST query: the status, the headers, the raw body, the row
+/// count, and the decoded value.
 ///
 /// ```swift
 /// let response: PostgrestResponse<[Todo]> = try await client
 ///   .from("todos")
-///   .select()
+///   .select(count: .exact)
 ///   .execute()
 ///
 /// print(response.value)  // [Todo]
 /// print(response.count)  // optional total count
-/// print(response.status) // HTTP status code
+/// print(response.status.code) // 200
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Response Data
 ///
-/// - ``data``
 /// - ``value``
 /// - ``count``
 /// - ``status``
-/// - ``response``
+/// - ``headers``
+/// - ``body``
+/// - ``requestID``
+///
+/// ### Creating a Response
+///
+/// - ``init(status:headers:body:count:value:)``
 ///
 /// ### Converting the Response
 ///
 /// - ``string(encoding:)``
 public struct PostgrestResponse<T> {
-  /// The raw response body as `Data`.
-  public let data: Data
+  /// The HTTP status PostgREST answered with.
+  public var status: HTTPResponse.Status
 
-  /// The HTTP response head: status and header fields.
-  public let response: HTTPResponse
+  /// Every response header. Import `HTTPTypes` to spell header names.
+  public var headers: HTTPFields
+
+  /// The raw response body. Empty when PostgREST sent none.
+  public var body: Data
 
   /// The total number of rows matching the query, or `nil` if no count was requested.
   ///
-  /// This value is populated from the `Content-Range` response header when a ``CountOption`` is
-  /// passed to the query. It respects any applied filters but ignores modifiers such as `limit`
-  /// and `range`.
-  public let count: Int?
+  /// The SDK reads it from the `Content-Range` header when a ``CountOption`` is passed to the
+  /// query. It respects any applied filters but ignores modifiers such as `limit` and `range`.
+  public var count: Int?
 
   /// The decoded response value.
-  public let value: T
+  public var value: T
 
-  /// The HTTP status code of the response.
-  public var status: Int {
-    response.status.code
-  }
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
+  public var requestID: String? { headers[.sbRequestID] }
 
-  /// Creates a ``PostgrestResponse`` from raw response data.
+  /// Creates a response, for tests and mocks.
   ///
   /// - Parameters:
-  ///   - data: The raw response body.
-  ///   - response: The HTTP response head.
+  ///   - status: The HTTP status.
+  ///   - headers: The response headers.
+  ///   - body: The raw response body.
+  ///   - count: The total row count, or `nil` when no count was requested.
   ///   - value: The decoded value.
   public init(
-    data: Data,
-    response: HTTPResponse,
+    status: HTTPResponse.Status,
+    headers: HTTPFields,
+    body: Data,
+    count: Int? = nil,
     value: T
   ) {
-    var count: Int?
-
-    if let contentRange = response.headerFields[.contentRange]?.split(separator: "/").last {
-      count = contentRange == "*" ? nil : Int(contentRange)
-    }
-
-    self.data = data
-    self.response = response
+    self.status = status
+    self.headers = headers
+    self.body = body
     self.count = count
     self.value = value
+  }
+
+  /// Creates a response from a response head, reading ``count`` from `Content-Range`.
+  init(_ response: HTTPResponse, body: Data, value: T) {
+    let total = response.headerFields[.contentRange]?.split(separator: "/").last
+    self.init(
+      status: response.status,
+      headers: response.headerFields,
+      body: body,
+      count: total.flatMap { Int($0) },
+      value: value
+    )
   }
 
   /// Returns the response body as a string using the specified encoding.
   ///
   /// - Parameter encoding: The string encoding to use. Defaults to `.utf8`.
-  /// - Returns: A `String` decoded from ``data``, or `nil` if the data cannot be decoded with the given encoding.
+  /// - Returns: A `String` decoded from ``body``, or `nil` if the body cannot be decoded with the
+  ///   given encoding.
   public func string(encoding: String.Encoding = .utf8) -> String? {
-    String(data: data, encoding: encoding)
+    String(data: body, encoding: encoding)
   }
 }
 

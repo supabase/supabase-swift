@@ -34,6 +34,13 @@ public struct FunctionStreamResponse: Sendable, CustomStringConvertible {
   /// `CancellationError` when the iterating task is cancelled, which also closes the connection.
   public var body: HTTPBody
 
+  /// Creates a response, for tests and mocks.
+  public init(status: HTTPResponse.Status, headers: HTTPFields, body: HTTPBody) {
+    self.status = status
+    self.headers = headers
+    self.body = body
+  }
+
   /// The `Content-Type` header, when present.
   public var contentType: String? { headers[.contentType] }
 
@@ -45,7 +52,10 @@ public struct FunctionStreamResponse: Sendable, CustomStringConvertible {
   /// The worker execution id, from `x-deno-execution-id`. Quote it to Supabase support.
   public var executionID: String? { headers[.xDenoExecutionID] }
 
-  /// The gateway request id, from `sb-request-id`.
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
   public var requestID: String? { headers[.sbRequestID] }
 
   /// The status and content type. Never the body, which cannot be read twice anyway.

@@ -58,6 +58,16 @@ supporting_symbols:
   # list instead (see the database.* section below).
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
+  # Every execute() returns this wrapper, whatever the database.* capability.
+  - PostgrestResponse
+  - PostgrestResponse.init
+  - PostgrestResponse.status
+  - PostgrestResponse.headers
+  - PostgrestResponse.body
+  - PostgrestResponse.count
+  - PostgrestResponse.value
+  - PostgrestResponse.requestID
+  - PostgrestResponse.string
   - PostgrestExecutablePhase
   - PostgrestFilterPhase
   - PostgrestFilterablePhase
@@ -119,7 +129,7 @@ supporting_symbols:
   - SupabaseError.errorDescription
   - HTTPErrorResponse
   - HTTPErrorResponse.init
-  - HTTPErrorResponse.statusCode
+  - HTTPErrorResponse.status
   - HTTPErrorResponse.headers
   - HTTPErrorResponse.body
   - HTTPErrorResponse.requestID
@@ -1596,6 +1606,7 @@ features:
       - FunctionBody.stream
       - FunctionBody.text
       - FunctionResponse
+      - FunctionResponse.init
       - FunctionResponse.body
       - FunctionResponse.contentType
       - FunctionResponse.decode
@@ -1655,6 +1666,7 @@ features:
       - FunctionStreamResponse.body
     supporting_symbols:
       - FunctionStreamResponse
+      - FunctionStreamResponse.init
       - FunctionStreamResponse.status
       - FunctionStreamResponse.headers
       - FunctionStreamResponse.contentType
@@ -2399,7 +2411,9 @@ features:
       - StorageBucket.download
       - DownloadResponse
       - DownloadResponse.init
-      - DownloadResponse.httpResponse
+      - DownloadResponse.status
+      - DownloadResponse.headers
+      - DownloadResponse.requestID
       - DownloadResponse.body
       - DownloadResponse.contentType
       - DownloadResponse.contentLength

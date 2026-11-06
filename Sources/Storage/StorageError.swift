@@ -7,7 +7,7 @@ public import Helpers
 /// ``serverStatusCode`` carry what Storage put in the body, ``serverError`` holds that body as
 /// sent, and ``response`` holds the HTTP status, headers and request id. On the object, bucket,
 /// render and CDN routes the HTTP status is 400 for nearly every failure, so branch on ``code``
-/// or ``serverStatusCode``, not on `response?.statusCode`.
+/// or ``serverStatusCode``, not on `response?.status`.
 ///
 /// ```swift
 /// do {
@@ -182,7 +182,7 @@ public struct StorageError: SupabaseError {
   /// ``Code/noSuchKey`` or ``Code/noSuchBucket``, or the server or HTTP status is 404.
   public var isNotFound: Bool {
     code == .noSuchKey || code == .noSuchBucket || serverStatusCode == 404
-      || response?.statusCode == 404
+      || response?.status == .notFound
   }
 
   /// Creates a ``StorageError``.

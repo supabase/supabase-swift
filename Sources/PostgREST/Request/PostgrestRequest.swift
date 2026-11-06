@@ -128,9 +128,9 @@ public struct _PostgrestRequest: Sendable {
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    func decoded(_ body: Data) throws -> PostgrestResponse<T> {
+    func decoded(_ payload: Data) throws -> PostgrestResponse<T> {
       do {
-        return PostgrestResponse(data: data, response: response, value: try decode(body))
+        return PostgrestResponse(response, body: data, value: try decode(payload))
       } catch let error as PostgrestError {
         throw error
       } catch {

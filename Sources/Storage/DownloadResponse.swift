@@ -7,60 +7,74 @@
 
 public import Foundation
 public import HTTPTypes
+import Helpers
 
 /// A downloaded object's body and the response Storage sent with it.
 ///
 /// Returned by ``StorageBucket/download(path:options:progress:)``, where ``body``
 /// streams the object.
 ///
-/// The common headers have typed properties. Read any other from ``httpResponse``:
+/// The common headers have typed properties. Read any other from ``headers``:
 ///
 /// ```swift
 /// let response = try await bucket.download(
 ///   path: "photo.jpg", options: DownloadOptions(transform: ImageTransform(width: 200)))
-/// let applied = response.httpResponse.headerFields[HTTPField.Name("X-Transformations")!]
+/// let applied = response.headers[HTTPField.Name("X-Transformations")!]
 /// ```
 public struct DownloadResponse: Sendable {
-  /// The status and headers Storage sent, e.g. `206 Partial Content` for a ranged download.
-  public let httpResponse: HTTPResponse
+  /// The HTTP status Storage answered with, e.g. `206 Partial Content` for a ranged download.
+  public var status: HTTPResponse.Status
+
+  /// Every response header. Import `HTTPTypes` to spell header names.
+  public var headers: HTTPFields
+
   /// The object's bytes, streamed as they arrive. It can be read once.
-  public let body: HTTPBody
+  public var body: HTTPBody
 
   /// Creates a response, for tests and mocks.
-  public init(httpResponse: HTTPResponse, body: HTTPBody) {
-    self.httpResponse = httpResponse
+  public init(status: HTTPResponse.Status, headers: HTTPFields, body: HTTPBody) {
+    self.status = status
+    self.headers = headers
     self.body = body
+  }
+
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
+  public var requestID: String? {
+    headers[.sbRequestID]
   }
 
   /// The `Content-Type` Storage serves the object with.
   public var contentType: String? {
-    httpResponse.headerFields[.contentType]
+    headers[.contentType]
   }
 
   /// The `Content-Length`: the size of the object, or of the requested range. `nil` when Storage
   /// does not send one, as for a transformed image.
   public var contentLength: Int64? {
-    httpResponse.headerFields[.contentLength].flatMap { Int64($0) }
+    headers[.contentLength].flatMap { Int64($0) }
   }
 
   /// The `Content-Range` of a ranged download, e.g. `"bytes 0-1023/4096"`.
   public var contentRange: String? {
-    httpResponse.headerFields[.contentRange]
+    headers[.contentRange]
   }
 
   /// The object's `ETag`, quotes included.
   public var eTag: String? {
-    httpResponse.headerFields[.eTag]
+    headers[.eTag]
   }
 
   /// When the object was last written.
   public var lastModified: Date? {
-    httpResponse.headerFields[.lastModified].flatMap(Self.httpDate)
+    headers[.lastModified].flatMap(Self.httpDate)
   }
 
   /// The `Cache-Control` the object was uploaded with.
   public var cacheControl: String? {
-    httpResponse.headerFields[.cacheControl]
+    headers[.cacheControl]
   }
 
   /// Reads the whole body into memory.

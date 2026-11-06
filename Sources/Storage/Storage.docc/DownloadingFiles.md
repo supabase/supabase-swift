@@ -45,7 +45,7 @@ for try await chunk in response.body {
 ``DownloadResponse`` has typed properties for the common headers:
 ``DownloadResponse/contentType``, ``DownloadResponse/contentLength``,
 ``DownloadResponse/contentRange``, ``DownloadResponse/eTag``, ``DownloadResponse/lastModified``
-and ``DownloadResponse/cacheControl``. Read any other from ``DownloadResponse/httpResponse``.
+and ``DownloadResponse/cacheControl``. Read any other from ``DownloadResponse/headers``.
 
 ```swift
 let response = try await avatars.download(path: "user123.png")

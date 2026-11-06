@@ -46,7 +46,7 @@ struct SupabaseErrorTests {
     let error = FixtureError(
       kind: "server",
       message: "Row not found",
-      response: HTTPErrorResponse(statusCode: 404, headers: headers, body: Data())
+      response: HTTPErrorResponse(status: 404, headers: headers, body: Data())
     )
 
     #expect(error.description == "FixtureError(server): Row not found [status 404, request req-1]")
@@ -57,7 +57,7 @@ struct SupabaseErrorTests {
     let error = FixtureError(
       kind: "server",
       message: "Row not found",
-      response: HTTPErrorResponse(statusCode: 404, headers: HTTPFields(), body: Data())
+      response: HTTPErrorResponse(status: 404, headers: HTTPFields(), body: Data())
     )
 
     #expect(error.description == "FixtureError(server): Row not found [status 404]")

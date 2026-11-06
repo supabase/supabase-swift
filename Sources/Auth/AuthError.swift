@@ -367,8 +367,9 @@ public struct AuthError: SupabaseError {
   /// responses. GoTrue sends no `Retry-After` header, so back off with jitter before retrying.
   public var isRetryable: Bool {
     if kind == .transport { return true }
-    guard let statusCode = response?.statusCode else { return false }
-    return [408, 409, 429].contains(statusCode) || 500..<600 ~= statusCode
+    guard let status = response?.status else { return false }
+    return [.requestTimeout, .conflict, .tooManyRequests].contains(status)
+      || status.kind == .serverError
   }
 
   /// Thrown when a session is required to proceed but none is stored locally.
@@ -428,7 +429,7 @@ extension AuthError {
 
   /// Whether the server answered with a 4xx status.
   var isClientError: Bool {
-    response.map { 400..<500 ~= $0.statusCode } ?? false
+    response?.status.kind == .clientError
   }
 
   static let excessiveRefresh = AuthError(
