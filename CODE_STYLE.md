@@ -99,7 +99,7 @@ Use these rules for every public method. Apply them in order.
    no more optional settings than these. A lone `captchaToken` or `redirectTo` is fine:
    `signIn(email:password:captchaToken:)`, `signInAnonymously(userMetadata:captchaToken:)`,
    `updateUser(_:redirectTo:)`, `createSignedUploadURL(path:upsert:)`,
-   `listUsers(page:perPage:)`, `info(path:versionId:)`, `disconnect(code:reason:)`.
+   `listUsers(page:pageSize:)`, `info(path:versionId:)`, `disconnect(code:reason:)`.
 5. The options parameter is named `options` and has a default of an empty value (`.init()` or
    `XOptions()`). It comes after the required inputs. It comes before the parameters that are not
    request settings, which always stay inline: `presenter`, `progress`, `as:`, `decoder`,

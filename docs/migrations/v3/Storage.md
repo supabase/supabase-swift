@@ -250,6 +250,7 @@ Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `Resu
 `StorageClientConfiguration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PagedListing`; call `.page()` for the first page. `vectors(keys:)`, `listVectors`, and
-`queryVectors` take their optional settings in `GetVectorsOptions`, `ListVectorsOptions`, and
-`QueryVectorsOptions`.
+return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+`VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
+`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
+`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.

@@ -101,7 +101,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await vectors.listBuckets(prefix: "doc", maxResults: 2).page()
+      let response = try await vectors.listBuckets(prefix: "doc", pageSize: 2).page()
       #expect(response.vectorBuckets.map(\.vectorBucketName) == ["documents", "images"])
       #expect(response.nextToken == "page-2")
     }

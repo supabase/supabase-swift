@@ -101,9 +101,8 @@ Every failure is a ``StorageError`` or a `CancellationError`. See <doc:HandlingE
 
 ### Listing objects
 
-- ``ObjectListing``
+- ``ObjectPage``
 - ``ObjectListingOptions``
-- ``PageSequence``
 - ``ListOptions``
 - ``ObjectSortColumn``
 - ``SortOrder``

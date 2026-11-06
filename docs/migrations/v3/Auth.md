@@ -306,7 +306,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
 | `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)` |
 | `AuthAdmin.inviteUserByEmail(_:data:redirectTo:)` | `AuthAdminClient.inviteUser(email:userMetadata:redirectTo:)`; `userMetadata` is a `JSONObject` |
-| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:perPage:)` |
+| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:pageSize:)`; `users(pageSize:)` returns a `PageSequence` over every page |
 | `ListUsersPaginatedResponse` | `UserPage`, with only `let` properties |
 | `AuthAdmin.generateLink(params:)` | `AuthAdminClient.generateLink(_:)` |
 | `GenerateLinkProperties.redirectTo: URL` | `URL?` |
