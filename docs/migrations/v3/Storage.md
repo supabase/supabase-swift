@@ -86,7 +86,7 @@ let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v"
 try await custom.from("avatars").list()
 ```
 
-## `StorageError` is a struct with `kind`
+## `StorageError` is a struct
 
 `StorageError` has `kind`, `message`, `code`, `serverStatusCode`, `isNotFound`, `serverError`,
 `response` and `underlyingError`. The body fields `statusCode` and `error` moved to

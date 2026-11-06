@@ -1,6 +1,6 @@
 # Realtime v3 migration
 
-This file covers the changes to the `Realtime` module from v2.55.4 to v3. See
+This file covers the changes to the `Realtime` module from v2 to v3. See
 [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every module.
 
 ## Silent changes
@@ -10,7 +10,7 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Errors are `RealtimeError`.** `subscribeWithError()`, `httpSend` and connection failures now
   throw a public `RealtimeError` with a `kind`. Code that compared `localizedDescription` or
   checked an `NSError` domain stops matching. Search for those checks and match on `kind`
-  instead (see [Errors](#errors)).
+  instead (see [`RealtimeError` is a struct](#realtimeerror-is-a-struct)).
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
 - **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
@@ -500,7 +500,7 @@ let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
 let options = RealtimeClientOptions(http: .init(transport: URLSessionTransport(session: session)))
 ```
 
-## Errors
+## `RealtimeError` is a struct
 
 Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.server` with
 `response` set. A network or WebSocket failure is `.transport`; `underlyingError` holds the

@@ -22,7 +22,7 @@ package struct LoggerInterceptor: ClientMiddleware {
   static let maxLoggedBodyBytes: Int64 = 64 * 1024
 
   package init(logger: Logging.Logger) {
-    self.logger = logger
+    self.logger = logger.redactingSecrets()
   }
 
   package func intercept(
@@ -37,17 +37,19 @@ package struct LoggerInterceptor: ClientMiddleware {
     var logger = logger
     logger[metadataKey: "requestID"] = "\(id)"
 
-    let (requestBody, requestBodyText) = try await Self.loggable(body)
+    let traces = logger.logLevel <= .trace
+    let (requestBody, requestBodyText) = traces ? try await Self.loggable(body) : (body, "")
     logger.trace(
       """
-      Request: \(request.method.rawValue) \(request.url?.absoluteString.removingPercentEncoding ?? "")
+      Request: \(request.method.rawValue) \(Self.loggable(request.url))
       Body: \(requestBodyText)
       """
     )
 
     do {
       let (head, responseBody) = try await next(request, requestBody)
-      let (loggedBody, responseBodyText) = try await Self.loggable(responseBody)
+      let (loggedBody, responseBodyText) =
+        traces ? try await Self.loggable(responseBody) : (responseBody, "")
       logger.trace(
         """
         Response: Status code: \(head.status.code) Content-Length: \(head.headerFields[.contentLength] ?? "-")
@@ -56,9 +58,19 @@ package struct LoggerInterceptor: ClientMiddleware {
       )
       return (head, loggedBody)
     } catch {
-      logger.error("Response: Failure \(error)")
+      logger.error("Response: Failure (\(LogRedaction.summary(of: error)))")
       throw error
     }
+  }
+
+  /// The URL without its query and fragment, which can hold a signed token or a filter value.
+  private static func loggable(_ url: URL?) -> String {
+    guard let url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      return ""
+    }
+    components.query = nil
+    components.fragment = nil
+    return components.string?.removingPercentEncoding ?? ""
   }
 
   /// Buffers small known-length bodies for logging and re-wraps them; passes everything else
@@ -79,13 +91,6 @@ package struct LoggerInterceptor: ClientMiddleware {
     return (body.onUploadProgress.map(rewrapped.reportingProgress) ?? rewrapped, stringify(data))
   }
 }
-
-/// JSON fields whose values `stringify` replaces with `<redacted>`, at any depth.
-let redactedJSONKeys: Set<String> = [
-  "password", "client_secret", "secret", "access_token", "refresh_token", "id_token",
-  "provider_token", "provider_refresh_token", "code_verifier", "token", "token_hash",
-  "email_otp", "hashed_token", "action_link",
-]
 
 func stringify(_ data: Data?) -> String {
   guard let data else {
@@ -108,7 +113,8 @@ private func redactingSecrets(in object: Any) -> Any {
   if let dictionary = object as? [String: Any] {
     return dictionary.reduce(into: [String: Any]()) { result, entry in
       result[entry.key] =
-        redactedJSONKeys.contains(entry.key) ? "<redacted>" : redactingSecrets(in: entry.value)
+        LogRedaction.isSensitive(jsonKey: entry.key)
+        ? LogRedaction.placeholder : redactingSecrets(in: entry.value)
     }
   }
   if let array = object as? [Any] {

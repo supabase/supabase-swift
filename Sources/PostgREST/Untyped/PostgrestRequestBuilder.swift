@@ -7,6 +7,7 @@
 
 public import Foundation
 public import HTTPTypes
+import Helpers
 import Logging
 
 /// A marker protocol conformed to by every phase whose builder can execute a request and set
@@ -417,7 +418,8 @@ extension PostgrestRequestBuilder where Phase: PostgrestExecutablePhase {
       do {
         return try decoder.decode(T.self, from: data)
       } catch {
-        configuration.logger.error("Failed to decode type '\(T.self) with error: \(error)")
+        configuration.logger.error(
+          "Failed to decode type '\(T.self)' with error: \(LogRedaction.summary(of: error))")
         throw PostgrestError(
           kind: .decoding,
           message: "Failed to decode the PostgREST response as \(T.self).",

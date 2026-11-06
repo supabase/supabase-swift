@@ -1,6 +1,6 @@
 # PostgREST v3 migration
 
-This file covers the changes to `PostgrestClient` and the string query builders from v2.55.4 to
+This file covers the changes to `PostgrestClient` and the string query builders from v2 to
 v3. See [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every
 module.
 
@@ -58,7 +58,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `.in(_:value:)` | `.in(_:values:)` |
 | `.plfts`, `.phfts`, `.wfts(_:query:config:)` | `.textSearch(_:query:config:type:)` with `.plain`, `.phrase`, `.websearch` |
 | `.explain(…, format: String)` | `.explain(…, format: ExplainFormat)` |
-| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [Errors](#errors) |
+| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [`PostgrestError` is a struct](#postgresterror-is-a-struct) |
 
 A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturningOptions` or
 `TextSearchType` needs a `default:` case. `PostgrestOperator.allCases` is gone.
@@ -133,7 +133,7 @@ let scoped = email.map { query.eq("email", value: $0) } ?? query.is("email", val
 try await scoped.execute()
 ```
 
-## Errors
+## `PostgrestError` is a struct
 
 `PostgrestError` is a wrapper with `kind`, `message`, `serverError`, `response` and
 `underlyingError`. The PostgREST body (`code`, `message`, `details`, `hint`) moves to
