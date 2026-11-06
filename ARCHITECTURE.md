@@ -82,7 +82,7 @@ Uses modern `HTTPTypes` for request/response handling. Every module shares one p
 ### Logging
 
 - Every SDK logger comes from `supabaseDefaultLogger(label: "io.supabase.<module>")`, and the configuration init sets the `system` metadata. The logger is non-optional.
-- A redacting handler in Helpers wraps every SDK logger when the client is created. It removes JWTs, URL query strings and fragments, and secret JSON keys (tokens, passwords, signed URLs).
+- A redacting handler in Helpers wraps every SDK logger when the client is created. It removes JWTs, URL query strings and fragments, and secret JSON keys (tokens, passwords, signed URLs). This is the target; SDK-2876 tracks it. Today only Auth redacts, and only in `Configuration.init`, so a logger set on the configuration after init is not wrapped.
 - HTTP traffic logs at `.trace`. At `.error`, log an SDK-written summary, never a raw `URLError` or a message that can carry a token.
 
 ### Configuration
