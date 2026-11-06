@@ -58,7 +58,7 @@ public struct Events {
   public var data: JSONValue?
 }
 
-extension Events.Columns {
+nonisolated extension Events.Columns {
   public var daysSinceEvent: _PostgrestComputedField<Events, Decimal> {
     .init("days_since_event")
   }
@@ -87,7 +87,7 @@ public struct ForeignTable {
   public var status: UserStatus?
 }
 
-extension ForeignTable.Columns {
+nonisolated extension ForeignTable.Columns {
   public var foreignTableLabel: _PostgrestComputedField<ForeignTable, String> {
     .init("foreign_table_label")
   }
@@ -100,7 +100,7 @@ public struct IntervalTest {
   public var durationOptional: _PostgresInterval?
 }
 
-extension IntervalTest.Columns {
+nonisolated extension IntervalTest.Columns {
   public var doubleDuration: _PostgrestComputedField<IntervalTest, _PostgresInterval> {
     .init("double_duration")
   }
@@ -144,7 +144,7 @@ public struct Todos {
   @Column("user-id") public var userId: Int
 }
 
-extension Todos.Columns {
+nonisolated extension Todos.Columns {
   public var blurb: _PostgrestComputedField<Todos, String> {
     .init("blurb")
   }
@@ -181,7 +181,7 @@ public struct TodosMatview {
   @Column("user-id") public var userId: Int?
 }
 
-extension TodosMatview.Columns {
+nonisolated extension TodosMatview.Columns {
   public var getTodosByMatview: _PostgrestToOneRelation<TodosMatview, Todos> {
     .init("get_todos_by_matview")
   }
@@ -197,7 +197,7 @@ public struct TodosView {
   @Column("user-id") public var userId: Int?
 }
 
-extension TodosView.Columns {
+nonisolated extension TodosView.Columns {
   public var blurbVarchar: _PostgrestComputedField<TodosView, String> {
     .init("blurb_varchar")
   }
@@ -230,7 +230,7 @@ public struct Users {
   @Default public var userUuid: UUID?
 }
 
-extension Users.Columns {
+nonisolated extension Users.Columns {
   public var functionUsingSetofRowsOne: _PostgrestToOneRelation<Users, Todos> {
     .init("function_using_setof_rows_one")
   }
@@ -265,7 +265,7 @@ public struct UsersAudit {
   public var previousValue: JSONValue?
 }
 
-extension UsersAudit.Columns {
+nonisolated extension UsersAudit.Columns {
   public var createdAgo: _PostgrestComputedField<UsersAudit, Decimal> {
     .init("created_ago")
   }
@@ -280,7 +280,7 @@ public struct UsersView {
   public var userUuid: UUID?
 }
 
-extension UsersView.Columns {
+nonisolated extension UsersView.Columns {
   public var getSingleUserSummaryFromView: _PostgrestToOneRelation<UsersView, UserTodosSummaryView>
   {
     .init("get_single_user_summary_from_view")

@@ -325,8 +325,18 @@ for target in package.targets {
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
   }
 
-  if target.name == "DefaultIsolationTests" {
+  // The typegen output targets compile generated code the way an app with default MainActor
+  // isolation does; SupabaseTypegenOutputTests keeps the default, nonisolated mode.
+  if [
+    "DefaultIsolationTests",
+    "SupabaseTypegenPostgrestTypegenOutputTests",
+    "SupabaseTypegenHostileOutputTests",
+  ].contains(target.name) {
     swiftSettings.append(.defaultIsolation(MainActor.self))
+    if target.name != "DefaultIsolationTests" {
+      // Xcode 26 "Approachable Concurrency" turns this on with default MainActor isolation.
+      swiftSettings.append(.enableUpcomingFeature("InferIsolatedConformances"))
+    }
   }
 
   // Apple platforms only: on Linux, Foundation is not built with library evolution, so the

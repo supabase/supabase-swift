@@ -12,7 +12,7 @@ public struct Channels {
   public var slug: String
 }
 
-extension Channels.Columns {
+nonisolated extension Channels.Columns {
   public var channelMessages: _PostgrestToManyRelation<Channels, Messages> {
     .init("channel_messages")
   }
