@@ -145,7 +145,9 @@ public final class AuthClient: Sendable {
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
 
-  var configuration: AuthClient.Configuration { dependencies.configuration }
+  /// The configuration this client was created with, after the client adds its default
+  /// headers.
+  public var configuration: Configuration { dependencies.configuration }
 
   private let now: @Sendable () -> Date
   private var sessionManager: SessionManager { dependencies.sessionManager }

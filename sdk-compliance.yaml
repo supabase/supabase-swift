@@ -237,6 +237,14 @@ supporting_symbols:
   # auth.admin.* capability runs on, rather than belonging to one of them.
   - AuthAdminClient
   - AuthAdminClient.init
+  - AuthAdminClient.configuration
+  - AuthAdminClient.Configuration
+  - AuthAdminClient.Configuration.init
+  - AuthAdminClient.Configuration.url
+  - AuthAdminClient.Configuration.secretKey
+  - AuthAdminClient.Configuration.headers
+  - AuthAdminClient.Configuration.http
+  - AuthAdminClient.Configuration.logger
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdminClient.mfa

@@ -30,7 +30,7 @@ struct AuthClientIntegrationTests {
   static let authURL = URL(string: "\(DotEnv.supabaseURL)/auth/v1")!
 
   static func makeAdminClient() -> AuthAdminClient {
-    AuthAdminClient(url: authURL, secretKey: DotEnv.supabaseSecretKey)
+    AuthAdminClient(configuration: .init(url: authURL, secretKey: DotEnv.supabaseSecretKey))
   }
 
   static func makeClient(

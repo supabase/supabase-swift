@@ -70,7 +70,9 @@ struct AuthClientConfigurationTests {
     try await storage.save(
       PersistedSessionCodec.encode(Session.valid), key: "custom-key")
     let configuration = AuthClient.Configuration(
-      url: url, storageKey: "custom-key", storage: storage)
+      url: url,
+      storageKey: "custom-key",
+      storage: storage)
 
     let sut = AuthClient(configuration: configuration)
     await sut.initialization()

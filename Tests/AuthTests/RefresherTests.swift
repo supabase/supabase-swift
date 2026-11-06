@@ -345,9 +345,9 @@ struct World {
       url: clientURL,
       storageKey: storageKey,
       storage: InMemoryTestStorage(),
-      http: HTTPClientConfiguration(transport: http),
       autoRefresh: autoRefresh,
       observesAppLifecycle: observesAppLifecycle,
+      http: HTTPClientConfiguration(transport: http),
       clock: sleepClock ?? clock,
       now: now
     )

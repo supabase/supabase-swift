@@ -99,8 +99,11 @@ import Testing
     http.respond { _, _ in try sessionResponse(.valid) }
     let sut = AuthClient(
       configuration: .init(
-        url: clientURL, storageKey: key, storage: storage, http: .init(transport: http),
-        autoRefresh: .manual),
+        url: clientURL,
+        storageKey: key,
+        storage: storage,
+        autoRefresh: .manual,
+        http: .init(transport: http)),
       pkce: .live,
       platform: .live
     )

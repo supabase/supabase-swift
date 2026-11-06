@@ -32,14 +32,44 @@ struct AuthAdminTests {
   }
 
   @Test
+  func sendsCustomHeadersWithTheSecretKey() async throws {
+    let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) }
+    let admin = AuthAdminClient(
+      configuration: .init(
+        url: clientURL,
+        secretKey: "secret.key",
+        headers: [HTTPField.Name("X-Custom")!: "1"],
+        http: .init(transport: transport)
+      )
+    )
+
+    try await admin.deleteUser(id: UUID())
+
+    let request = try #require(transport.requests.first?.head)
+    #expect(request.headerFields[HTTPField.Name("X-Custom")!] == "1")
+    #expect(request.headerFields[HTTPField.Name("apikey")!] == "secret.key")
+  }
+
+  @Test
+  func exposesTheConfigurationItWasCreatedWith() {
+    let admin = AuthAdminClient(configuration: .init(url: clientURL, secretKey: "secret.key"))
+
+    #expect(admin.configuration.url == clientURL)
+    #expect(admin.configuration.secretKey == "secret.key")
+    #expect(admin.configuration.headers.isEmpty)
+  }
+
+  @Test
   func logsRequestsWithoutTheQueryOrTheSecretKey() async throws {
     let recorder = LogRecorder()
     let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data("[]".utf8)) }
     let admin = AuthAdminClient(
-      url: clientURL,
-      secretKey: "sb_secret_admin-key",
-      http: .init(transport: transport),
-      logger: recorder.makeLogger()
+      configuration: .init(
+        url: clientURL,
+        secretKey: "sb_secret_admin-key",
+        http: .init(transport: transport),
+        logger: recorder.makeLogger()
+      )
     )
 
     _ = try? await admin.listUsers(page: 2, perPage: 5)

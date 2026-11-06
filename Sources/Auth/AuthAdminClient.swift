@@ -6,6 +6,7 @@
 //
 
 public import Foundation
+public import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -16,8 +17,10 @@ public import Logging
 ///
 /// ```swift
 /// let admin = AuthAdminClient(
-///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
-///   secretKey: secretKey
+///   configuration: .init(
+///     url: URL(string: "https://<project>.supabase.co/auth/v1")!,
+///     secretKey: secretKey
+///   )
 /// )
 /// let user = try await admin.createUser(
 ///   AdminUserAttributes(email: "user@example.com", confirmsEmail: true)
@@ -30,7 +33,9 @@ public import Logging
 /// ## Topics
 ///
 /// ### Creating an admin client
-/// - ``init(url:secretKey:http:logger:)``
+/// - ``init(configuration:)``
+/// - ``Configuration``
+/// - ``configuration``
 ///
 /// ### User management
 /// - ``user(id:)``
@@ -48,40 +53,80 @@ public import Logging
 /// - ``oauth``
 /// - ``customProviders``
 public struct AuthAdminClient: Sendable {
+  /// The settings an ``AuthAdminClient`` is created with.
+  public struct Configuration: Sendable {
+    /// The base URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
+    public var url: URL
+
+    /// The project's secret key. The client sends it as the `apikey` header. It also sends a
+    /// legacy JWT key as the bearer token, but never an `sb_secret_` key.
+    public var secretKey: String
+
+    /// Headers sent with every request. A header set here wins over the `apikey` and
+    /// `Authorization` headers the client derives from ``secretKey``.
+    public var headers: HTTPFields
+
+    /// The transport and middleware chain every request goes through.
+    public var http: HTTPClientConfiguration
+
+    /// The logger to use. Defaults to a build-config-aware logger. The client redacts secrets
+    /// and tags it with the `system` metadata key set to `auth`.
+    public var logger: Logging.Logger
+
+    /// Creates a configuration.
+    ///
+    /// - Parameters:
+    ///   - url: The base URL of the Auth server.
+    ///   - secretKey: The project's secret key.
+    ///   - headers: Headers sent with every request.
+    ///   - http: The transport and middleware chain every request goes through.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger.
+    public init(
+      url: URL,
+      secretKey: String,
+      headers: HTTPFields = [:],
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
+    ) {
+      self.url = url
+      self.secretKey = secretKey
+      self.headers = headers
+      self.http = http
+      self.logger = logger
+    }
+  }
+
+  /// The configuration this client was created with.
+  public let configuration: Configuration
+
   let authAPI: AuthAPI
   let api: APIClient
 
   /// Creates an admin client.
   ///
-  /// - Parameters:
-  ///   - url: The base URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
-  ///   - secretKey: The project's secret key. The client sends it as the `apikey` header. It
-  ///     also sends a legacy JWT key as the bearer token, but never an `sb_secret_` key.
-  ///   - http: The transport and middleware chain every request goes through.
-  ///   - logger: The logger to use. Defaults to a build-config-aware logger.
-  public init(
-    url: URL,
-    secretKey: String,
-    http: HTTPClientConfiguration = .init(),
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
-  ) {
+  /// - Parameter configuration: The settings the client is created with.
+  public init(configuration: Configuration) {
+    self.configuration = configuration
+
     var headers = AuthClient.Configuration.defaultHeaders
-    headers[.apikeyHeaderName] = secretKey
-    if !APIKeyFormat.isNew(secretKey) {
-      headers[.authorization] = "Bearer \(secretKey)"
+    headers[.apikeyHeaderName] = configuration.secretKey
+    if !APIKeyFormat.isNew(configuration.secretKey) {
+      headers[.authorization] = "Bearer \(configuration.secretKey)"
     }
+    headers = headers.merging(with: configuration.headers)
 
     self.authAPI = AuthAPI(
-      url: url,
+      url: configuration.url,
       headers: headers,
       defaultRedirectURL: nil,
       encoder: AuthClient.Configuration.jsonEncoder,
       decoder: AuthClient.Configuration.jsonDecoder,
       now: { Date() }
     )
-    var logger = logger.redactingSecrets()
+    var logger = configuration.logger.redactingSecrets()
     logger[metadataKey: "system"] = "auth"
-    self.api = APIClient(http: HTTPClient(http: http, clock: ContinuousClock(), logger: logger))
+    self.api = APIClient(
+      http: HTTPClient(http: configuration.http, clock: ContinuousClock(), logger: logger))
   }
 
   /// Admin operations on a user's MFA factors.

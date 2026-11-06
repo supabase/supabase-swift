@@ -300,7 +300,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `Session.expiresAt: TimeInterval`, `Session.expiresIn: TimeInterval` | `expiresAt: Date`, `expiresIn: Duration`; see below |
 | `Session.isExpired: Bool` | `Session.isExpired(at:leeway:)`; see below |
 | `PasskeyRegistrationOptions.expiresAt: TimeInterval`, `PasskeyAuthenticationOptions.expiresAt: TimeInterval` | `Date` |
-| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:secretKey:)`; see below |
+| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(configuration: .init(url:secretKey:))`; see below |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
@@ -341,6 +341,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
+| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:clock:now:)`; `AuthClient.configuration` is public |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `MFAChallenge.id`, `challengeID:`: `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
@@ -387,8 +388,10 @@ let supabase = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: secretKey)
 try await supabase.auth.admin.deleteUser(id: userID)
 // v3
 let admin = AuthAdminClient(
-  url: supabaseURL.appendingPathComponent("auth/v1"),
-  secretKey: secretKey
+  configuration: .init(
+    url: supabaseURL.appendingPathComponent("auth/v1"),
+    secretKey: secretKey
+  )
 )
 try await admin.deleteUser(id: userID)
 ```

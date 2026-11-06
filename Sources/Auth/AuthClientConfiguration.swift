@@ -131,28 +131,28 @@ extension AuthClient {
     ///   - headers: Headers to send with every request.
     ///   - storage: Where the client persists the session. `nil` uses the platform's default.
     ///   - redirectTo: Default URL to be used for redirect on the flows that requires it.
-    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
-    ///   - http: The transport and middleware chain every request goes through.
     ///   - autoRefresh: When the client refreshes the session on its own.
     ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
     ///     foreground.
-    ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
-    ///   - now: The time source for expiry checks. Defaults to the system clock.
     ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
     ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
+    ///   - http: The transport and middleware chain every request goes through.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
+    ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+    ///   - now: The time source for expiry checks. Defaults to the system clock.
     public init(
       url: URL,
       storageKey: String,
       headers: HTTPFields = [:],
       storage: (any AuthStorage)? = nil,
       redirectTo: URL? = nil,
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      http: HTTPClientConfiguration = .init(),
       autoRefresh: AutoRefreshPolicy = .automatic,
       observesAppLifecycle: Bool = true,
+      initialRefreshTimeout: Duration = .seconds(5),
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
       clock: any Clock<Duration> = ContinuousClock(),
-      now: @escaping @Sendable () -> Date = { Date() },
-      initialRefreshTimeout: Duration = .seconds(5)
+      now: @escaping @Sendable () -> Date = { Date() }
     ) {
       self.url = url
       self.storageKey = storageKey

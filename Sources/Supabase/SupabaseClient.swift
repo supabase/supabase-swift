@@ -254,14 +254,14 @@ public final class SupabaseClient: Sendable {
       headers: _headers,
       storage: options.auth.storage,
       redirectTo: options.auth.redirectToURL,
-      logger: options.auth.logger ?? options.global.logger,
+      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
+      observesAppLifecycle: options.auth.observesAppLifecycle,
       http: Self.resolveHTTP(
         global: options.global.http,
         override: options.auth.http,
         sdkMiddlewares: [TraceContextMiddleware()]
       ),
-      autoRefresh: options.auth.accessToken == nil ? options.auth.autoRefresh : .disabled,
-      observesAppLifecycle: options.auth.observesAppLifecycle,
+      logger: options.auth.logger ?? options.global.logger,
       clock: options.auth.clock ?? clock
     )
     _auth = AuthClient(configuration: authConfiguration)

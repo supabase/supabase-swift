@@ -375,9 +375,9 @@ struct AuthMiddlewareTests {
         url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
         storageKey: "sb-test-\(UUID().uuidString)-auth-token",
         storage: InMemoryTestStorage(),
-        http: HTTPClientConfiguration(transport: http),
         autoRefresh: .manual,
-        observesAppLifecycle: false
+        observesAppLifecycle: false,
+        http: HTTPClientConfiguration(transport: http)
       ),
       pkce: .live,
       platform: .live,
@@ -473,12 +473,12 @@ struct AuthMiddlewareRefreshRaceTests {
         url: URL(string: "https://project-ref.supabase.co/auth/v1")!,
         storageKey: "sb-test-\(UUID().uuidString)-auth-token",
         storage: InMemoryTestStorage(),
+        autoRefresh: .manual,
+        observesAppLifecycle: false,
+        http: HTTPClientConfiguration(transport: http),
         logger: Logging.Logger(label: "test") { _ in
           HoldingSecondRefreshLogHandler(secondRefresh: secondRefresh)
-        },
-        http: HTTPClientConfiguration(transport: http),
-        autoRefresh: .manual,
-        observesAppLifecycle: false
+        }
       ),
       pkce: .live,
       platform: .live
