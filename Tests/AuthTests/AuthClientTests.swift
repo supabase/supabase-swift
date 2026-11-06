@@ -584,7 +584,7 @@ struct AuthClientTests {
     } catch let error as AuthError {
       #expect(error.kind == .server)
       #expect(error.errorCode == .web3UnsupportedChain)
-      #expect(error.response?.statusCode == 400)
+      #expect(error.response?.status == 400)
     }
   }
 

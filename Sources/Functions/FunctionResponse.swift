@@ -32,6 +32,20 @@ public struct FunctionResponse: Sendable, CustomStringConvertible {
   /// The decoder ``decode(as:decoder:)`` uses when the call passes none.
   let decoder: JSONDecoder
 
+  /// Creates a response, for tests and mocks. ``decode(as:decoder:)`` uses the SDK's default
+  /// decoder unless the call passes one.
+  public init(status: HTTPResponse.Status, headers: HTTPFields, body: Data) {
+    self.init(status: status, headers: headers, body: body, decoder: .supabase())
+  }
+
+  /// Creates a response that decodes with the client's configured decoder.
+  init(status: HTTPResponse.Status, headers: HTTPFields, body: Data, decoder: JSONDecoder) {
+    self.status = status
+    self.headers = headers
+    self.body = body
+    self.decoder = decoder
+  }
+
   /// The `Content-Type` header, when present.
   public var contentType: String? { headers[.contentType] }
 
@@ -43,7 +57,10 @@ public struct FunctionResponse: Sendable, CustomStringConvertible {
   /// The worker execution id, from `x-deno-execution-id`. Quote it to Supabase support.
   public var executionID: String? { headers[.xDenoExecutionID] }
 
-  /// The gateway request id, from `sb-request-id`.
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
   public var requestID: String? { headers[.sbRequestID] }
 
   /// ``body`` as UTF-8, or `nil` when it is not valid UTF-8.

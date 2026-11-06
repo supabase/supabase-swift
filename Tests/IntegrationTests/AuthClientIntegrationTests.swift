@@ -578,7 +578,7 @@ struct AuthClientIntegrationTests {
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 404)
+      #expect(error.response?.status == 404)
     }
   }
 

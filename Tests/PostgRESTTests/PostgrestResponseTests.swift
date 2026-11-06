@@ -7,32 +7,38 @@ import Testing
 @Suite
 struct PostgrestResponseTests {
   @Test
-  func initWithCount() {
-    let data = Data()
-    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "bytes 0-100/200"])
-    let value = "Test Value"
+  func initFromHeadCopiesStatusHeadersAndBody() {
+    let head = HTTPResponse(
+      status: .partialContent,
+      headerFields: [.contentRange: "0-99/200", .sbRequestID: "req-1"])
 
-    let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
+    let response = PostgrestResponse(head, body: Data("[]".utf8), value: "Test Value")
 
-    #expect(postgrestResponse.data == data)
-    #expect(postgrestResponse.response == response)
-    #expect(postgrestResponse.value == value)
-    #expect(postgrestResponse.status == 200)
-    #expect(postgrestResponse.count == 200)
+    #expect(response.status == .partialContent)
+    #expect(response.headers == head.headerFields)
+    #expect(response.body == Data("[]".utf8))
+    #expect(response.value == "Test Value")
+    #expect(response.requestID == "req-1")
   }
 
   @Test
-  func initWithNoCount() {
-    let data = Data()
-    let response = HTTPResponse(status: .ok, headerFields: [.contentRange: "*"])
-    let value = "Test Value"
+  func initFromHeadReadsTheCountFromContentRange() {
+    let head = HTTPResponse(status: .ok, headerFields: [.contentRange: "0-100/200"])
 
-    let postgrestResponse = PostgrestResponse(data: data, response: response, value: value)
+    #expect(PostgrestResponse(head, body: Data(), value: ()).count == 200)
+  }
 
-    #expect(postgrestResponse.data == data)
-    #expect(postgrestResponse.response == response)
-    #expect(postgrestResponse.value == value)
-    #expect(postgrestResponse.status == 200)
-    #expect(postgrestResponse.count == nil)
+  @Test
+  func initFromHeadHasNoCountForAnUnknownTotal() {
+    let head = HTTPResponse(status: .ok, headerFields: [.contentRange: "*/*"])
+
+    #expect(PostgrestResponse(head, body: Data(), value: ()).count == nil)
+  }
+
+  @Test
+  func initFromHeadHasNoCountWithoutContentRange() {
+    let head = HTTPResponse(status: .ok)
+
+    #expect(PostgrestResponse(head, body: Data(), value: ()).count == nil)
   }
 }

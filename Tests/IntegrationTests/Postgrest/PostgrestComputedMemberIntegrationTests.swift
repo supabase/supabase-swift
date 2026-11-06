@@ -34,7 +34,7 @@ struct PostgrestComputedMemberIntegrationTests {
       .execute()
 
     #expect(response.value.map(\.slug) == ["public", "random"])
-    let rows = try JSONSerialization.jsonObject(with: response.data) as? [[String: Any]]
+    let rows = try JSONSerialization.jsonObject(with: response.body) as? [[String: Any]]
     #expect(rows?.map { Set($0.keys) } == [["id", "slug"], ["id", "slug"]])
   }
 

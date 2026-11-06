@@ -519,7 +519,7 @@ final class StorageBucketIntegrationTests {
       #expect(error?.kind == .server)
       #expect(error?.code == .noSuchKey)
       #expect(error?.serverStatusCode == 404)
-      #expect(error?.response?.statusCode == 400)
+      #expect(error?.response?.status == 400)
       #expect(error?.isNotFound == true)
       #expect(error?.serverError?.error == "not_found")
       #expect(error?.message == "Object not found")

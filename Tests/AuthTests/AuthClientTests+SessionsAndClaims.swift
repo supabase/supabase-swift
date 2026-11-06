@@ -513,7 +513,7 @@ extension AuthClientTests {
     } catch let error as AuthError {
       #expect(error.kind == .server)
       #expect(error.errorCode == .unexpectedFailure)
-      #expect(error.response?.statusCode == 502)
+      #expect(error.response?.status == 502)
       #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))
     } catch {
       Issue.record("Unexpected error \(error)")

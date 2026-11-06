@@ -926,7 +926,7 @@ extension StorageMockerTests {
         #expect(error.kind == .server)
         #expect(error.message == "Error")
         #expect(error.serverError?.message == "Error")
-        #expect(error.response?.statusCode == 400)
+        #expect(error.response?.status == 400)
       }
     }
 
@@ -963,7 +963,7 @@ extension StorageMockerTests {
         #expect(error.kind == .server)
         #expect(error.serverError == nil)
         #expect(error.response?.body == Data("error".utf8))
-        #expect(error.response?.statusCode == 412)
+        #expect(error.response?.status == 412)
       }
     }
 
@@ -1004,7 +1004,7 @@ extension StorageMockerTests {
         #expect(error.kind == .server)
         #expect(error.serverError?.code == .noSuchKey)
         #expect(error.serverError?.error == "not_found")
-        #expect(error.response?.statusCode == 400)
+        #expect(error.response?.status == 400)
       }
     }
 

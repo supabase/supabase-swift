@@ -112,6 +112,26 @@ struct PostgrestIntegrationTests {
   }
 
   @Test
+  func responseCarriesStatusHeadersBodyAndCount() async throws {
+    try await client.from("todos")
+      .insert([
+        NewTodo(description: "first", tags: []),
+        NewTodo(description: "second", tags: []),
+      ])
+      .execute()
+
+    let response: PostgrestResponse<[Todo]> = try await client.from("todos")
+      .select(count: .exact)
+      .execute()
+
+    #expect(response.status == .ok)
+    #expect(response.headers[.contentRange] == "0-1/2")
+    #expect(response.count == 2)
+    #expect(!response.body.isEmpty)
+    #expect(response.value.count == 2)
+  }
+
+  @Test
   func queryWithPlusSign() async throws {
     let users = [
       User(email: "johndoe@mail.com"),

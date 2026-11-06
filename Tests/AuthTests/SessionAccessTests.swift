@@ -136,6 +136,6 @@ import Testing
     let error = await #expect(throws: AuthError.self) { try await sut.claims() }
 
     expectNoDifference(error?.kind, .server)
-    expectNoDifference(error?.response?.statusCode, 500)
+    expectNoDifference(error?.response?.status, 500)
   }
 }

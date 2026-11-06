@@ -541,7 +541,7 @@ struct RealtimeChannelTests {
     } catch let error as RealtimeError {
       #expect(error.kind == .server)
       #expect(error.message == "Server error")
-      #expect(error.response?.statusCode == 500)
+      #expect(error.response?.status == 500)
     } catch {
       Issue.record("Unexpected error \(error)")
     }

@@ -48,7 +48,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgrestFilterBuilder.Operator`: `enum` | `PostgrestOperator` struct (`Operator` is a type alias) |
 | `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members |
 | `insert(…)`, `upsert(…)` return `PostgrestFilterBuilder` | return `PostgrestTransformBuilder` |
-| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
+| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.status: HTTPResponse.Status`, `.headers: HTTPFields` |
+| `PostgrestResponse.status: Int` | `PostgrestResponse.status: HTTPResponse.Status`; use `.status.code` for the `Int` |
+| `PostgrestResponse.data` | `PostgrestResponse.body` |
+| `PostgrestResponse(data:response:value:)`; `let` fields | `PostgrestResponse(status:headers:body:count:value:)`; `var` fields |
 | `URLQueryRepresentable` | `PostgrestFilterValue` |
 | `PostgrestFilterValue.queryValue` | `PostgrestFilterValue.rawValue` |
 | `.like(_:value:)`, `.ilike(_:value:)` | `.like(_:pattern:)`, `.ilike(_:pattern:)` |
@@ -150,7 +153,7 @@ closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 // v3
 } catch let error as PostgrestError {
   if error.serverError?.code == "23505" { showDuplicate(error.serverError?.details) }
-  print(error.response?.statusCode ?? 0, error.response?.requestID ?? "")
+  print(error.response?.status.code ?? 0, error.response?.requestID ?? "")
 }
 ```
 

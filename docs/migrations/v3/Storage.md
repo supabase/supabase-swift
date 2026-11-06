@@ -107,7 +107,7 @@ try await custom.from("avatars").list()
 ```
 
 Branch on `isNotFound`, `code` or `serverStatusCode`. Storage sends HTTP 400 for most failures and
-puts the real status in the body, so `response?.statusCode` is usually 400.
+puts the real status in the body, so `response?.status` is usually `400 Bad Request`.
 
 ## `UploadOptions` replaces `FileOptions`
 
