@@ -25,6 +25,9 @@ warnings that `PostgrestMacros` was not compiled with library evolution; they ar
 macOS CI jobs compile the generated code with library evolution; the Linux job runs the same
 behavioral tests without it. A change to the macros or to `PostgREST` that breaks generated code
 fails `swift test` at the root; a generator change that is not recorded fails `EmitterTests`.
+`SupabaseTypegenPostgrestTypegenOutputTests` and `SupabaseTypegenHostileOutputTests` build with
+`.defaultIsolation(MainActor.self)` and `InferIsolatedConformances`, as an app with Xcode's
+"Approachable Concurrency" does; `SupabaseTypegenOutputTests` keeps the nonisolated default.
 `SupabaseTypegenOutputTests` also runs queries through the generated types. `IntegrationTests`
 compiles the same file through the symlink `Tests/IntegrationTests/Postgrest/Generated.swift` (a
 test target cannot depend on another), so the Postgrest integration tests query the integration
@@ -59,9 +62,11 @@ column on standard error. It has no filters: Postgres has no equality for a comp
 A Postgres `date` becomes `Date`, read and written as midnight UTC. A caller who builds "today" at
 local midnight east of UTC writes the previous day; build the value in a UTC calendar.
 
-Computed fields and relationships come from `functions`: one `extension <Type>.Columns` per
-relation, for each function with one input argument of the relation's row type, in the relation's
-own schema, and not named like a column (compared as Postgres names). A scalar return type gives
+Computed fields and relationships come from `functions`: one `nonisolated extension <Type>.Columns`
+per relation (so an app built with `.defaultIsolation(MainActor.self)` can read them from the
+nonisolated `@SelectionOf` expansion), for each function with one input argument of the
+relation's row type, in the relation's own schema, and not named like a column (compared as
+Postgres names). A scalar return type gives
 `_PostgrestComputedField` (the mapping above applies); a row type gives `_PostgrestToOneRelation`, or
 `_PostgrestToManyRelation` when the function returns a `SETOF` with more than one `ROWS`. A function
 that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is

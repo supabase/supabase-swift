@@ -818,7 +818,7 @@ extension FilePlan {
 
         if !relation.computed.isEmpty {
           let type = TokenSyntax.identifier(relation.typeName)
-          try ExtensionDeclSyntax("extension \(type).Columns") {
+          try ExtensionDeclSyntax("nonisolated extension \(type).Columns") {
             for member in relation.computed {
               let name = TokenSyntax.identifier(member.name)
               let literal = StringLiteralExprSyntax(content: member.function)

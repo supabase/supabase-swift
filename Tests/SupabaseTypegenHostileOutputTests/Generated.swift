@@ -114,7 +114,7 @@ public struct Hostile {
   public var stock: InventoryState?
 }
 
-extension Hostile.Columns {
+nonisolated extension Hostile.Columns {
   public var selfComputed: _PostgrestComputedField<Hostile, String> {
     .init("Self")
   }
