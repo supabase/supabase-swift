@@ -105,8 +105,8 @@ public struct RealtimeClientOptions: Sendable {
   /// Disable this to manage the connection yourself with ``RealtimeClient/connect()`` and
   /// ``RealtimeClient/disconnect(code:reason:)``.
   ///
-  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
-  /// (including watchOS and Linux), where lifecycle observation is not supported.
+  /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on watchOS, where you can turn it
+  /// on, and on Linux and Android, where it does nothing.
   public var handleAppLifecycle: Bool
 
   /// Whether to watch the network path and reconnect as soon as the network is back.

@@ -287,7 +287,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     self.task = task
     self.session = session
     (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
-    receiveTask.setValue(Task { await receiveLoop() })
+    receiveTask.setValue(Task.named("supabase.realtime.receiver") { await receiveLoop() })
   }
 
   private func receiveLoop() async {

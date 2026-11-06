@@ -311,7 +311,8 @@ extension RealtimeClient {
     to connection: any WebSocketConnection, generation: Int
   ) -> Task<Void, Never> {
     let events = connection.events
-    return Task(priority: .medium) { [inbox, serializer, logger] in
+    return Task.named("supabase.realtime.reader", priority: .medium) {
+      [inbox, serializer, logger] in
       for await event in events {
         if Task.isCancelled { return }
         let input: SocketInput
