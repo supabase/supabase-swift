@@ -142,7 +142,7 @@ extension RealtimeClient {
     /// The logger for the client's own diagnostics.
     ///
     /// Defaults to a build-config-aware logger labeled `"io.supabase.realtime"`. `SupabaseClient`
-    /// uses its global logger instead. The client tags the logger it uses with the `system`
+    /// passes the facade Realtime logger, or its global logger when that is `nil`. The client tags the logger it uses with the `system`
     /// metadata key set to `realtime`.
     public var logger: Logging.Logger
 

@@ -52,7 +52,7 @@ func makeMockSession() -> URLSession {
 @Suite
 struct SupabaseClientTests {
   @Test
-  func globalClockReachesAuthAndRealtime() {
+  func globalClockReachesEverySubClientThatWaits() {
     let clock = TestClock()
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -65,6 +65,8 @@ struct SupabaseClientTests {
 
     #expect(client.auth.configuration.clock as AnyObject === clock)
     #expect(client.realtime.configuration.clock as AnyObject === clock)
+    #expect(client.rest.configuration.clock as AnyObject === clock)
+    #expect(client.storage.configuration.clock as AnyObject === clock)
   }
 
   @Test

@@ -25,7 +25,6 @@ import Logging
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(supabaseURL:supabaseKey:)``
 /// - ``init(supabaseURL:supabaseKey:configuration:)``
 /// - ``configuration``
 /// - ``Configuration``
@@ -124,7 +123,8 @@ public final class SupabaseClient: Sendable {
         logger: configuration.global.logger,
         encoder: configuration.database.encoder,
         decoder: configuration.database.decoder,
-        retryEnabled: configuration.database.retry
+        retryEnabled: configuration.database.retry,
+        clock: clock
       )
     )
   }

@@ -245,6 +245,9 @@ supporting_symbols:
   - AuthAdminClient.Configuration.headers
   - AuthAdminClient.Configuration.http
   - AuthAdminClient.Configuration.logger
+  # The configuration each client was created with, and the PostgREST logger, now public.
+  - AuthClient.configuration
+  - PostgrestClient.Configuration.logger
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdminClient.mfa
@@ -1578,7 +1581,7 @@ features:
       - PostgrestRequestBuilder.retry
   database.configuration.request_timeout:
     status: implemented
-    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or GlobalOptions.http through SupabaseClient), or per request with timeout(_:)."
+    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or SupabaseClient.Configuration.Global.http through SupabaseClient), or per request with timeout(_:)."
     symbols:
       - HTTPClientConfiguration.timeout
       - PostgrestRequestBuilder.timeout
@@ -1988,7 +1991,7 @@ features:
       - RealtimeClient.Configuration.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "RealtimeClient.Configuration.logger takes a swift-log Logger, which carries its own level; it defaults to a logger labeled io.supabase.realtime, and SupabaseClient passes its global logger. RealtimeClient.Configuration.serverLogLevel sets the server-side log level."
+    note: "RealtimeClient.Configuration.logger takes a swift-log Logger, which carries its own level; it defaults to a logger labeled io.supabase.realtime, and SupabaseClient passes SupabaseClient.Configuration.Realtime.logger, or its global logger when that is nil. RealtimeClient.Configuration.serverLogLevel sets the server-side log level."
     symbols:
       - RealtimeClient.Configuration.init
       - RealtimeClient.Configuration.logger

@@ -229,6 +229,10 @@ public final class AuthClient: Sendable {
     let clientID = AuthClient.nextClientID()
     self.clientID = clientID
 
+    var configuration = configuration
+    configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "auth"
+
     let logger: Logging.Logger = {
       var logger = configuration.logger
       logger[metadataKey: "system"] = "auth"

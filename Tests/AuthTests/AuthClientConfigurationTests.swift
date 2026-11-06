@@ -142,16 +142,17 @@ struct AuthClientConfigurationTests {
   }
 
   @Test
-  func loggerRedactsSecretsBeforeTheCallersHandlerSeesThem() {
+  func loggerSetAfterInitRedactsSecretsBeforeTheCallersHandlerSeesThem() {
     let recorder = LogRecorder()
-    let configuration = AuthClient.Configuration(
+    var configuration = AuthClient.Configuration(
       url: URL(string: "http://localhost")!,
       storageKey: "key",
-      storage: InMemoryAuthStorage(),
-      logger: recorder.makeLogger()
+      storage: InMemoryAuthStorage()
     )
+    configuration.logger = recorder.makeLogger()
+    let sut = AuthClient(configuration: configuration)
 
-    configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
+    sut.configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
 
     #expect(recorder.entries == ["refresh failed: refresh_token=<redacted> system=auth"])
   }

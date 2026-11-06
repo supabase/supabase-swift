@@ -60,6 +60,12 @@ extension SupabaseClient {
       /// and HEAD requests. Defaults to `true`.
       public var retry: Bool
 
+      /// Creates the database settings.
+      /// - Parameters:
+      ///   - schema: The Postgres schema queries target. `nil` uses `public`.
+      ///   - encoder: The encoder for request bodies of the untyped API.
+      ///   - decoder: The decoder for responses of the untyped API.
+      ///   - retry: Whether to retry transient errors on GET and HEAD requests.
       public init(
         schema: String? = nil,
         encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
@@ -117,6 +123,19 @@ extension SupabaseClient {
       /// Create another client if you wish to use Supabase Auth and third-party authentications concurrently in the same application.
       public var accessToken: (@Sendable () async throws -> String?)?
 
+      /// Creates the Auth settings.
+      /// - Parameters:
+      ///   - storage: Where the session is stored. `nil` uses the platform default.
+      ///   - redirectToURL: The default redirect URL for Auth flows.
+      ///   - storageKey: The storage key for the session. `nil` derives it from the project.
+      ///   - autoRefresh: When the client refreshes the session.
+      ///   - observesAppLifecycle: Whether auto refresh follows the app's foreground state.
+      ///   - http: Overrides the global HTTP settings for Auth requests, field by field. `nil`
+      ///     uses the global value.
+      ///   - logger: Overrides the global logger for Auth. `nil` uses the global value.
+      ///   - clock: Overrides the global clock for Auth. `nil` uses the global value.
+      ///   - accessToken: A third-party token source. When set, ``SupabaseClient/auth`` cannot be
+      ///     used.
       public init(
         storage: (any AuthStorage)? = nil,
         redirectToURL: URL? = nil,
@@ -208,6 +227,12 @@ extension SupabaseClient {
       /// global logger.
       public var logger: Logger?
 
+      /// Creates the Edge Functions settings.
+      /// - Parameters:
+      ///   - region: The default region for invocations. `nil` lets the platform pick.
+      ///   - decoder: The decoder for function responses.
+      ///   - http: Overrides the global HTTP settings for Functions. `nil` uses the global value.
+      ///   - logger: Overrides the global logger for Functions. `nil` uses the global value.
       public init(
         region: FunctionRegion? = nil,
         decoder: JSONDecoder = .supabase(),
@@ -237,6 +262,10 @@ extension SupabaseClient {
       /// - Warning: Experimental. See `ResumableUpload`.
       @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
 
+      /// Creates the Storage settings.
+      /// - Parameters:
+      ///   - usesNewHostname: Whether to use the `project-ref.storage.supabase.co` hostname.
+      ///   - retryEnabled: Whether to retry transient errors on reads.
       public init(usesNewHostname: Bool = false, retryEnabled: Bool = true) {
         self.usesNewHostname = usesNewHostname
         self.retryEnabled = retryEnabled
@@ -292,6 +321,19 @@ extension SupabaseClient {
       /// global logger.
       public var logger: Logging.Logger?
 
+      /// Creates the Realtime settings.
+      /// - Parameters:
+      ///   - headers: Headers for the WebSocket upgrade request. The global headers win.
+      ///   - heartbeatInterval: How often the client sends a heartbeat.
+      ///   - requestTimeout: How long a push waits for the server reply.
+      ///   - connectOnSubscribe: Whether subscribing to a channel connects the socket.
+      ///   - disconnectOnEmptyChannelsAfter: How long the socket stays open with no channels.
+      ///   - handleAppLifecycle: Whether the client follows the app lifecycle.
+      ///   - monitorsNetworkPath: Whether the client reconnects when the network comes back.
+      ///   - serverLogLevel: The server-side log level. `nil` uses the server default.
+      ///   - webSocketTransport: The WebSocket stack. `nil` uses the default transport.
+      ///   - http: The HTTP settings for `RealtimeChannel.httpSend` calls.
+      ///   - logger: The logger for Realtime. `nil` uses the global logger.
       public init(
         headers: [String: String] = [:],
         heartbeatInterval: Duration = RealtimeClient.Configuration.defaultHeartbeatInterval,

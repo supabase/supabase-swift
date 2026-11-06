@@ -62,6 +62,8 @@ extension AuthClient {
     /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
     /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
     /// custom behavior — see swift-log's documentation for available `LogHandler`s.
+    /// The client wraps it to redact tokens and tags it with the `system` metadata key set to
+    /// `auth`.
     public var logger: Logging.Logger
 
     /// The transport and middleware chain every request goes through.
@@ -159,8 +161,6 @@ extension AuthClient {
       self.headers = headers
       self.storage = storage ?? AuthPlatform.defaultStorage
       self.redirectTo = redirectTo
-      var logger = logger.redactingSecrets()
-      logger[metadataKey: "system"] = "auth"
       self.logger = logger
       self.http = http
       self.autoRefresh = autoRefresh

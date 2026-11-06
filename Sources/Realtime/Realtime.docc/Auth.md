@@ -32,8 +32,9 @@ reach the server's expiry check.
 
 `SupabaseClient` sets this closure for you. It returns the signed-in user's token. After every
 sign-in, token refresh and sign-out, `SupabaseClient` also sends the new token with
-``RealtimeClient/setAuth(_:)``; after a sign-out, that is the project key. Do not set
-`accessToken` in `SupabaseClient.Configuration.realtime`: the client reports an issue when you do.
+``RealtimeClient/setAuth(_:)``; after a sign-out, that is the project key.
+`SupabaseClient.Configuration.Realtime` has no `accessToken`. To supply your own token, set
+`SupabaseClient.Configuration.Auth.accessToken`.
 
 ### When a token expires
 
