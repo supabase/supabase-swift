@@ -16,7 +16,7 @@ import Testing
 @SelectionOf(Users.self)
 struct UserWithTodos {
   var name: String?
-  @Relationship(\Todos.userId) var todos: [Todos]
+  @Relationship(\Todos.userID) var todos: [Todos]
   @Relationship(computed: \Users.Columns.getTodosFromUser) var computedTodos: [Todos]
   @Relationship(computed: \Users.Columns.functionUsingTableReturns) var firstTodo: Todos?
 }
@@ -53,7 +53,7 @@ struct SupabaseTypegenPostgrestTypegenOutputTests {
     _ = try await client.from(Users.self).select(UserWithTodos.self)
       .where { $0.status.eq(.active) }
       .execute()
-    _ = try await client.rpc.getTodosFromUser(searchUserId: 1).execute()
+    _ = try await client.rpc.getTodosFromUser(searchUserID: 1).execute()
 
     let paths = transport.requests.map { $0.head.path?.removingPercentEncoding }
     #expect(

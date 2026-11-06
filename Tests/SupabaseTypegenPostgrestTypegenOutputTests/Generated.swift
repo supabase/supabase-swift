@@ -24,7 +24,7 @@ public enum UserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValu
 @Table("items", schema: Inventory.self)
 public struct InventoryItems {
   @PrimaryKey @Default public var id: Int
-  public var ownerId: Int
+  public var ownerID: Int
   @Default public var status: InventoryUserStatus
 }
 
@@ -32,7 +32,7 @@ public struct InventoryItems {
 public struct InventoryUsers {
   @PrimaryKey @Default public var id: Int
   @Default public var status: InventoryUserStatus?
-  public var publicUserId: Int?
+  public var publicUserID: Int?
 }
 
 @Table("a_view")
@@ -133,7 +133,7 @@ public struct TableWithOtherTablesRowType {
 
 @Table("table_with_primary_key_other_than_id")
 public struct TableWithPrimaryKeyOtherThanId {
-  @PrimaryKey @Default public var otherId: Int
+  @PrimaryKey @Default public var otherID: Int
   public var name: String?
 }
 
@@ -141,7 +141,7 @@ public struct TableWithPrimaryKeyOtherThanId {
 public struct Todos {
   @PrimaryKey @Default public var id: Int
   public var details: String?
-  @Column("user-id") public var userId: Int
+  @Column("user-id") public var userID: Int
 }
 
 nonisolated extension Todos.Columns {
@@ -178,7 +178,7 @@ nonisolated extension Todos.Columns {
 public struct TodosMatview {
   public var id: Int?
   public var details: String?
-  @Column("user-id") public var userId: Int?
+  @Column("user-id") public var userID: Int?
 }
 
 nonisolated extension TodosMatview.Columns {
@@ -194,7 +194,7 @@ nonisolated extension TodosMatview.Columns {
 public struct TodosView {
   public var id: Int?
   public var details: String?
-  @Column("user-id") public var userId: Int?
+  @Column("user-id") public var userID: Int?
 }
 
 nonisolated extension TodosView.Columns {
@@ -208,13 +208,13 @@ nonisolated extension TodosView.Columns {
 
 @Table("user_details")
 public struct UserDetails {
-  @PrimaryKey public var userId: Int
+  @PrimaryKey public var userID: Int
   public var details: String?
 }
 
 @Table("user_todos_summary_view", readOnly: true)
 public struct UserTodosSummaryView {
-  public var userId: Int?
+  public var userID: Int?
   public var userName: String?
   public var userStatus: UserStatus?
   public var todoCount: Int?
@@ -261,7 +261,7 @@ nonisolated extension Users.Columns {
 public struct UsersAudit {
   @Default public var id: Int
   @Default public var createdAt: Date?
-  public var userId: Int?
+  public var userID: Int?
   public var previousValue: JSONValue?
 }
 
@@ -292,9 +292,9 @@ nonisolated extension UsersView.Columns {
 
 @Table("users_view_with_multiple_refs_to_users", readOnly: true)
 public struct UsersViewWithMultipleRefsToUsers {
-  public var initialId: Int?
+  public var initialID: Int?
   public var initialName: String?
-  public var secondId: Int?
+  public var secondID: Int?
   public var secondName: String?
 }
 
@@ -330,7 +330,7 @@ public struct FunctionReturningTableFunction {
 @Function("function_returning_table_with_args")
 public struct FunctionReturningTableWithArgsFunction {
   public typealias Result = [FunctionReturningTableWithArgsRow]
-  public var userId: Int
+  public var userID: Int
 }
 
 @Function("get_composite_type_data")
@@ -341,13 +341,13 @@ public struct GetCompositeTypeDataFunction {
 @Function("get_single_user_summary_from_view")
 public struct GetSingleUserSummaryFromViewFunction {
   public typealias Result = [UserTodosSummaryView]
-  public var searchUserId: Int
+  public var searchUserID: Int
 }
 
 @Function("get_todos_from_user")
 public struct GetTodosFromUserFunction {
   public typealias Result = [Todos]
-  public var searchUserId: Int
+  public var searchUserID: Int
 }
 
 @Function("get_user_ids")
@@ -422,13 +422,13 @@ public struct PostgrestResolvableWithOverrideFunctionFunction3 {
 public struct PostgrestResolvableWithOverrideFunctionFunction4 {
   public typealias Result = [Todos]
   public var completed: Bool
-  public var todoId: Int
+  public var todoID: Int
 }
 
 @Function("postgrest_resolvable_with_override_function")
 public struct PostgrestResolvableWithOverrideFunctionFunction5 {
   public typealias Result = [Users]
-  public var userId: Int
+  public var userID: Int
 }
 
 @Function("postgrest_unresolvable_function")
@@ -444,7 +444,7 @@ public struct SearchTodosByDetailsFunction {
 @Function("test_unnamed_row_setof")
 public struct TestUnnamedRowSetofFunction {
   public typealias Result = [Todos]
-  public var userId: Int
+  public var userID: Int
 }
 
 extension _PostgrestFunctions {
@@ -466,27 +466,27 @@ extension _PostgrestFunctions {
     try call(FunctionReturningTableFunction())
   }
 
-  public func functionReturningTableWithArgs(userId: Int) throws -> _PostgrestFunctionQuery<
+  public func functionReturningTableWithArgs(userID: Int) throws -> _PostgrestFunctionQuery<
     [FunctionReturningTableWithArgsRow]
   > {
-    try call(FunctionReturningTableWithArgsFunction(userId: userId))
+    try call(FunctionReturningTableWithArgsFunction(userID: userID))
   }
 
   public func getCompositeTypeData() throws -> _PostgrestFunctionQuery<[_PostgresUnmapped?]> {
     try call(GetCompositeTypeDataFunction())
   }
 
-  public func getSingleUserSummaryFromView(searchUserId: Int) throws -> _PostgrestFunctionQuery<
+  public func getSingleUserSummaryFromView(searchUserID: Int) throws -> _PostgrestFunctionQuery<
     [UserTodosSummaryView]
   > {
-    try call(GetSingleUserSummaryFromViewFunction(searchUserId: searchUserId))
+    try call(GetSingleUserSummaryFromViewFunction(searchUserID: searchUserID))
   }
 
-  public func getTodosFromUser(searchUserId: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
-    try call(GetTodosFromUserFunction(searchUserId: searchUserId))
+  public func getTodosFromUser(searchUserID: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
+    try call(GetTodosFromUserFunction(searchUserID: searchUserID))
   }
 
-  public func getUserIds() throws -> _PostgrestFunctionQuery<[Int?]> {
+  public func getUserIDs() throws -> _PostgrestFunctionQuery<[Int?]> {
     try call(GetUserIdsFunction())
   }
 
@@ -538,16 +538,16 @@ extension _PostgrestFunctions {
     try call(PostgrestResolvableWithOverrideFunctionFunction3(b: b))
   }
 
-  public func postgrestResolvableWithOverrideFunction(completed: Bool, todoId: Int) throws
+  public func postgrestResolvableWithOverrideFunction(completed: Bool, todoID: Int) throws
     -> _PostgrestFunctionQuery<[Todos]>
   {
-    try call(PostgrestResolvableWithOverrideFunctionFunction4(completed: completed, todoId: todoId))
+    try call(PostgrestResolvableWithOverrideFunctionFunction4(completed: completed, todoID: todoID))
   }
 
-  public func postgrestResolvableWithOverrideFunction(userId: Int) throws
+  public func postgrestResolvableWithOverrideFunction(userID: Int) throws
     -> _PostgrestFunctionQuery<[Users]>
   {
-    try call(PostgrestResolvableWithOverrideFunctionFunction5(userId: userId))
+    try call(PostgrestResolvableWithOverrideFunctionFunction5(userID: userID))
   }
 
   public func postgrestUnresolvableFunction() throws -> _PostgrestFunctionQuery<Void> {
@@ -559,7 +559,7 @@ extension _PostgrestFunctions {
     try call(SearchTodosByDetailsFunction(searchDetails: searchDetails))
   }
 
-  public func testUnnamedRowSetof(userId: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
-    try call(TestUnnamedRowSetofFunction(userId: userId))
+  public func testUnnamedRowSetof(userID: Int) throws -> _PostgrestFunctionQuery<[Todos]> {
+    try call(TestUnnamedRowSetofFunction(userID: userID))
   }
 }

@@ -35,7 +35,7 @@ struct Counters {
 struct Discussions {
   @PrimaryKey @Default var id: Int
   var title: String
-  var pinnedPostId: Int?
+  var pinnedPostID: Int?
 }
 
 @Table("key_value_storage")
@@ -47,7 +47,7 @@ struct KeyValueStorage {
 @Table("messages")
 struct Messages {
   @PrimaryKey @Default var id: Int
-  var channelId: Int?
+  var channelID: Int?
   var data: JSONValue?
   var message: String?
   var username: String?
@@ -91,7 +91,7 @@ struct PostgresValues {
 @Table("posts")
 struct Posts {
   @PrimaryKey @Default var id: Int
-  var discussionId: Int
+  var discussionID: Int
   var author: String
   @Default var approved: Bool
   @Default var createdAt: Date
@@ -100,7 +100,7 @@ struct Posts {
 @Table("replies")
 struct Replies {
   @PrimaryKey @Default var id: Int
-  var postId: Int
+  var postID: Int
   var body: String
   @Default var approved: Bool
 }
@@ -141,7 +141,7 @@ struct Users {
 
 @Table("channel_message_counts", readOnly: true)
 struct ChannelMessageCountsRow {
-  var channelId: Int?
+  var channelID: Int?
   var messageCount: Int?
   var slug: String?
 }
@@ -201,7 +201,7 @@ struct MessageIdsFunction {
 @Function("messages_of")
 struct MessagesOfFunction {
   typealias Result = [Messages]
-  var channelId: Int
+  var channelID: Int
 }
 
 @Function("messages_of")
@@ -215,7 +215,7 @@ struct MessagesOfFunction2 {
 struct SearchMessagesFunction {
   typealias Result = [Messages]
   var query: String
-  var channelId: Int? = nil
+  var channelID: Int? = nil
 }
 
 @Function("sleep_for")
@@ -256,12 +256,12 @@ extension _PostgrestFunctions {
     try call(GetUsernameAndStatusFunction(nameParam: nameParam))
   }
 
-  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {
+  func messageIDs(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {
     try call(MessageIdsFunction(statuses: statuses))
   }
 
-  func messagesOf(channelId: Int) throws -> _PostgrestFunctionQuery<[Messages]> {
-    try call(MessagesOfFunction(channelId: channelId))
+  func messagesOf(channelID: Int) throws -> _PostgrestFunctionQuery<[Messages]> {
+    try call(MessagesOfFunction(channelID: channelID))
   }
 
   func messagesOf(channelSlug: String, maxCount: Int) throws -> _PostgrestFunctionQuery<[Messages]>
@@ -269,10 +269,10 @@ extension _PostgrestFunctions {
     try call(MessagesOfFunction2(channelSlug: channelSlug, maxCount: maxCount))
   }
 
-  func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestFunctionQuery<
+  func searchMessages(query: String, channelID: Int? = nil) throws -> _PostgrestFunctionQuery<
     [Messages]
   > {
-    try call(SearchMessagesFunction(query: query, channelId: channelId))
+    try call(SearchMessagesFunction(query: query, channelID: channelID))
   }
 
   func sleepFor(seconds: Double) throws -> _PostgrestFunctionQuery<Void> {

@@ -143,8 +143,7 @@ struct EmitterTests {
       "public.hostile.relation_name is named relationNameColumn: @Table reserves relationName",
       "public.hostile.primary_key_columns is named primaryKeyColumnsColumn: "
         + "@Table reserves primaryKeyColumns",
-      "public.hostile.userId is named userId2: another column is also named userId",
-      "public.hostile.user-id is named userId3: another column is also named userId",
+      "public.hostile.user-id is named userID2: another column is also named userID",
       #"function my"schema.elsewhere(hostile) is not generated: "#
         + "it is not in the schema of public.hostile",
       "function public.anything(hostile) is not generated: it returns record, not a value",
@@ -165,11 +164,8 @@ struct EmitterTests {
         + "MySchemaRestockFunction2: another type is also named MySchemaRestockFunction",
       "function public.pick(userId int4) arguments is named PickFunction2: "
         + "another type is also named PickFunction",
-      "function public.labels(user_id int4, userId int4) parameter userId is named userId2: "
-        + "another parameter is also named userId",
       "function public.my_schema_restock is named mySchemaRestock2: "
         + "another call is also named mySchemaRestock(self:in:)",
-      "function public.pick is named pick2: another call is also named pick(userId:)",
     ]
     #expect(result.standardError == notes.map { "supabase-typegen: note: \($0)\n" }.joined())
   }
@@ -301,17 +297,17 @@ struct EmitterTests {
       struct SearchMessagesFunction {
         typealias Result = [Messages]
         var query: String
-        var channelId: Int? = nil
+        var channelID: Int? = nil
       }
       """,
       """
-        func searchMessages(query: String, channelId: Int? = nil) throws -> _PostgrestFunctionQuery<
+        func searchMessages(query: String, channelID: Int? = nil) throws -> _PostgrestFunctionQuery<
           [Messages]
         > {
-          try call(SearchMessagesFunction(query: query, channelId: channelId))
+          try call(SearchMessagesFunction(query: query, channelID: channelID))
         }
       """,
-      "  func messageIds(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {",
+      "  func messageIDs(statuses: [UserStatus]) throws -> _PostgrestFunctionQuery<[Int?]> {",
       "  func getStatus(nameParam: String) throws -> _PostgrestFunctionQuery<String?> {",
       """
       @Function("void_func")
@@ -363,7 +359,7 @@ struct EmitterTests {
   @Test
   func overloadsDifferInTheirLabels() {
     let result = run(arguments: []) { Fixture.integration }
-    #expect(result.standardOutput.contains("func messagesOf(channelId: Int) throws"))
+    #expect(result.standardOutput.contains("func messagesOf(channelID: Int) throws"))
     #expect(
       result.standardOutput.contains("func messagesOf(channelSlug: String, maxCount: Int) throws"))
     #expect(!result.standardOutput.contains("priceLabel"))

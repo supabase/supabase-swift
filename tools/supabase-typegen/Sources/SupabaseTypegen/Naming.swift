@@ -59,11 +59,24 @@ enum Naming {
   /// `snake_case` (or any other spelling) to `lowerCamelCase`, escaped. `1st_place` becomes
   /// `_1stPlace`, `class` becomes `` `class` ``.
   /// `IN_PROGRESS` becomes `inProgress`.
+  ///
+  /// An acronym after the first word keeps its capitals, as in the SDK's own names: `user_id`
+  /// becomes `userID` and `html_url` becomes `htmlURL`. A first word stays lowercase: `url_path`
+  /// becomes `urlPath`.
   static func propertyName(_ name: String) -> String {
     let words = words(of: name)
     guard let first = words.first else { return identifier("") }
     let head = isAllCaps(first) ? first.lowercased() : lowercasedFirst(first)
-    return identifier(head + words.dropFirst().map(capitalized).joined())
+    return identifier(head + words.dropFirst().map(propertyWord).joined())
+  }
+
+  private static let acronyms: [String: String] = [
+    "id": "ID", "ids": "IDs", "url": "URL", "urls": "URLs", "uri": "URI", "uris": "URIs",
+    "jwt": "JWT", "jwts": "JWTs", "otp": "OTP", "otps": "OTPs",
+  ]
+
+  private static func propertyWord(_ word: String) -> String {
+    acronyms[word.lowercased()] ?? capitalized(word)
   }
 
   /// `snake_case` (or any other spelling) to `UpperCamelCase`, escaped. `ORDER_STATUS` becomes

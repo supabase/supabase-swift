@@ -87,9 +87,9 @@ public struct Hostile {
   @Column("relation_name") public var relationNameColumn: String
   @Column("primary_key_columns") public var primaryKeyColumnsColumn: String
   @Column("Draft") public var draft: String
-  public var userId: Int
-  @Column("userId") public var userId2: Int
-  @Column("user-id") public var userId3: Int
+  public var userID: Int
+  @Column("userId") public var userId: Int
+  @Column("user-id") public var userID2: Int
   @Column(#"say "hi""#) public var sayHi: String
   @Column(#"back\slash"#) public var backSlash: String
   @Column("1st_place") public var _1stPlace: Int
@@ -193,8 +193,8 @@ public struct MySchemaRestockFunction {
 
 @Function("labels")
 public struct LabelsFunction {
-  public var userId: Int
-  @Column("userId") public var userId2: Int
+  public var userID: Int
+  @Column("userId") public var userId: Int
 }
 
 @Function("moods")
@@ -213,7 +213,7 @@ public struct MySchemaRestockFunction2 {
 @Function("pick")
 public struct PickFunction {
   public typealias Result = Int?
-  public var userId: Int
+  public var userID: Int
 }
 
 @Function("pick")
@@ -244,8 +244,8 @@ extension _PostgrestFunctions {
     try call(MySchemaRestockFunction(selfArgument: selfArgument, `in`: `in`))
   }
 
-  public func labels(userId: Int, userId2: Int) throws -> _PostgrestFunctionQuery<Void> {
-    try call(LabelsFunction(userId: userId, userId2: userId2))
+  public func labels(userID: Int, userId: Int) throws -> _PostgrestFunctionQuery<Void> {
+    try call(LabelsFunction(userID: userID, userId: userId))
   }
 
   public func moods(at: Date) throws -> _PostgrestFunctionQuery<[Mood?]> {
@@ -258,11 +258,11 @@ extension _PostgrestFunctions {
     try call(MySchemaRestockFunction2(selfArgument: selfArgument, `in`: `in`))
   }
 
-  public func pick(userId: Int) throws -> _PostgrestFunctionQuery<Int?> {
-    try call(PickFunction(userId: userId))
+  public func pick(userID: Int) throws -> _PostgrestFunctionQuery<Int?> {
+    try call(PickFunction(userID: userID))
   }
 
-  public func pick2(userId: Int) throws -> _PostgrestFunctionQuery<Int?> {
+  public func pick(userId: Int) throws -> _PostgrestFunctionQuery<Int?> {
     try call(PickFunction2(userId: userId))
   }
 
