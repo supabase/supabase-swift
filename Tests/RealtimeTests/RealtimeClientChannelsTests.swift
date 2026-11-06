@@ -33,9 +33,10 @@ struct RealtimeClientChannelsTests {
     #expect(Set(topics) == ["a", "b"])
   }
 
-  /// The core must not ask for presence in the next join once the last presence stream ended.
+  /// Every join of a subscription carries the presence flag the subscription started with, so
+  /// ending the last presence stream leaves it for the rejoins.
   @Test
-  func endingTheLastPresenceStreamTurnsPresenceOffForTheNextJoin() async {
+  func endingTheLastPresenceStreamKeepsPresenceOnForTheRejoins() async {
     let channel = await client.channel("a")
     let presence = await channel.presenceChanges()
     await client.installSubscribedRecord("a")
@@ -46,7 +47,9 @@ struct RealtimeClientChannelsTests {
     await reader.value
 
     let client = client
-    #expect(await waitUntil(timeout: 5) { await client.presenceIsOn(in: channel) == false })
+    #expect(
+      await waitUntil(timeout: 5) { await client.streamCounts(of: channel).presenceChanges == 0 })
+    #expect(await client.presenceIsOn(in: channel) == true)
   }
 
   @Test

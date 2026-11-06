@@ -387,12 +387,12 @@ public actor RealtimeClient {
     { [inbox] in inbox.yield(.streamEnded(id)) }
   }
 
-  /// Forgets the stream `id`, which its consumer ended, and hands the core the channel's join
-  /// payload: a Postgres or presence stream changes it.
+  /// Forgets the stream `id`, which its consumer ended, and hands the core the channel's
+  /// Postgres bindings.
   ///
-  /// The snapshot goes on every end, because a fan-out may have dropped the stream on an earlier
-  /// yield. The core rejoins only for a Postgres binding the join lacks, so a lost binding or
-  /// presence takes effect at the next join.
+  /// The bindings go on every end, because a fan-out may have dropped the stream on an earlier
+  /// yield. The core rejoins only for a Postgres binding the join lacks, so a lost binding takes
+  /// effect at the next join. A lost presence stream takes effect when a new subscription starts.
   func streamEnded(_ id: StreamID) {
     guard let channel = id.channel else {
       if !statusFanout.remove(id) { heartbeatFanout.remove(id) }
@@ -400,7 +400,7 @@ public actor RealtimeClient {
     }
     guard let state = channelStates[channel] else { return }
     state.removeStream(id)
-    apply(.bindingsChanged(channel: channel, snapshot: state.joinSnapshot))
+    apply(.bindingsChanged(channel: channel, bindings: state.joinSnapshot.bindings))
   }
 
   // MARK: - Connection

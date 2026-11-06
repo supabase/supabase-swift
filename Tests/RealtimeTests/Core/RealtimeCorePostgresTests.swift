@@ -269,7 +269,7 @@ struct RealtimeCorePostgresTests {
     let snapshot = JoinSnapshot(bindings: [Self.messages], presenceEnabled: false)
 
     #expect(
-      harness.send(.bindingsChanged(channel: .room, snapshot: snapshot)) == [
+      harness.send(.bindingsChanged(channel: .room, bindings: snapshot.bindings)) == [
         .send(Self.leave(joinRef: "1", ref: "2")),
         .publishChannelStatus(.room, .subscribing(attempt: 1)),
         .send(try Self.join(ref: "3", snapshot: snapshot)),
@@ -292,7 +292,8 @@ struct RealtimeCorePostgresTests {
     let w = harness.waiter()
     _ = harness.send(Self.subscribe(w, snapshot: Self.noStreams))
 
-    #expect(harness.send(.bindingsChanged(channel: .room, snapshot: Self.withMessages)) == [])
+    #expect(
+      harness.send(.bindingsChanged(channel: .room, bindings: Self.withMessages.bindings)) == [])
     #expect(
       harness.send(.frame(Self.reply(ref: "1"))) == [
         .resume(w, .success),
@@ -309,7 +310,8 @@ struct RealtimeCorePostgresTests {
   func sameBindingsDoNotRejoin() {
     var harness = Self.subscribed(snapshot: Self.withMessages)
 
-    #expect(harness.send(.bindingsChanged(channel: .room, snapshot: Self.withMessages)) == [])
+    #expect(
+      harness.send(.bindingsChanged(channel: .room, bindings: Self.withMessages.bindings)) == [])
   }
 
   @Test
@@ -317,7 +319,8 @@ struct RealtimeCorePostgresTests {
     var harness = Self.subscribed(
       snapshot: JoinSnapshot(bindings: [Self.messages, Self.users], presenceEnabled: false))
 
-    #expect(harness.send(.bindingsChanged(channel: .room, snapshot: Self.withMessages)) == [])
+    #expect(
+      harness.send(.bindingsChanged(channel: .room, bindings: Self.withMessages.bindings)) == [])
     #expect(harness.core.channels[.room]?.phase == .subscribed(joinRef: "1"))
   }
 
@@ -330,9 +333,7 @@ struct RealtimeCorePostgresTests {
     insertsOnly.event = .insert
 
     let effects = harness.send(
-      .bindingsChanged(
-        channel: .room,
-        snapshot: JoinSnapshot(bindings: [Self.users, insertsOnly], presenceEnabled: false)))
+      .bindingsChanged(channel: .room, bindings: [Self.users, insertsOnly]))
 
     #expect(effects.first == .send(Self.leave(joinRef: "1", ref: "2")))
   }

@@ -191,6 +191,13 @@ final class RealtimeTestHost: Sendable {
     return join
   }
 
+  /// Tracks a payload on `channel` and confirms the push.
+  func track(_ channel: RealtimeChannel) async throws {
+    async let tracked: Void = channel.track(["name": "ana"])
+    reply(to: try await receive(event: ChannelEvent.presence))
+    try await tracked
+  }
+
   /// Reports an error on the channel that `join` opened, as the server does with `phx_error`.
   func sendError(for join: RealtimeMessage) {
     send(ChannelEvent.error, for: join)
@@ -272,14 +279,16 @@ extension RealtimeClient {
       postgres: state.joinSnapshot.bindings.count)
   }
 
-  /// Gives the core a subscribed channel for `topic`, as a confirmed join would, so frames for
-  /// it reach the channel's streams without a socket. The client must have a channel for `topic`.
+  /// Gives the core a subscribed channel for `topic`, as a confirmed join with presence on would,
+  /// so frames for it reach the channel's streams without a socket, and presence streams open on
+  /// it. The client must have a channel for `topic`.
   func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
     guard let id = liveChannelState(for: topic)?.handle.id else {
       preconditionFailure("No channel for '\(topic)'")
     }
     var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())
     record.phase = .subscribed(joinRef: joinRef)
+    record.snapshot.presenceEnabled = true
     record.hasBeenSubscribed = true
     core.channels.setRecord(record, for: id)
   }
@@ -323,5 +332,12 @@ extension RealtimeChannel {
   /// What the join in flight waits for, or `nil` when no join is in flight.
   var joinStage: ChannelRecord.JoinStage? {
     get async { await client?.joinStage(for: topic) }
+  }
+}
+
+extension RealtimeMessage {
+  /// The `config.presence.enabled` flag of a `phx_join` payload.
+  var presenceEnabled: Bool? {
+    payload["config"]?.objectValue?["presence"]?.objectValue?["enabled"]?.boolValue
   }
 }

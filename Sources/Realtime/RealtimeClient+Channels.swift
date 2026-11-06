@@ -75,7 +75,7 @@ extension RealtimeClient {
     guard let state = state(of: channel) else { return .finished }
     let id = nextStreamID(channel: channel.id)
     let stream = state.addPostgresStream(id, config, onTermination: onStreamEnd(id))
-    apply(.bindingsChanged(channel: channel.id, snapshot: state.joinSnapshot))
+    apply(.bindingsChanged(channel: channel.id, bindings: state.joinSnapshot.bindings))
     return stream
   }
 
@@ -87,24 +87,22 @@ extension RealtimeClient {
     guard let state = state(of: channel) else { return .finished }
     let id = nextStreamID(channel: channel.id)
     let stream = state.addSignalsStream(id, bindings, onTermination: onStreamEnd(id))
-    apply(.bindingsChanged(channel: channel.id, snapshot: state.joinSnapshot))
+    apply(.bindingsChanged(channel: channel.id, bindings: state.joinSnapshot.bindings))
     return stream
   }
 
-  /// Presence streams shape the join payload, so they can only be opened before the join is sent.
+  /// Presence streams shape the join payload, so a stream opened once the subscription started is
+  /// rejected unless presence is on for it. A channel the core never saw has not subscribed.
   private func canOpenPresenceStream(on state: ChannelState) -> Bool {
-    switch state.status.current ?? .unsubscribed {
-    case .unsubscribed, .unsubscribing, .failed:
-      return true
-    case .subscribing, .resubscribing, .subscribed:
-      reportIssue(
-        """
-        Cannot open "presence" streams for "\(state.handle.topic)" after `subscribe()`.
-        Please open all your presence streams before subscribing to the channel.
-        """
-      )
-      return false
-    }
+    if core.channels[state.handle.id]?.acceptsPresenceStream ?? true { return true }
+    reportIssue(
+      """
+      Cannot open "presence" streams for "\(state.handle.topic)" after `subscribe()`, because \
+      presence is off for this channel. Open a presence stream before subscribing, or set \
+      `configuration.presence.enabled` to `true`.
+      """
+    )
+    return false
   }
 
   // MARK: Actions

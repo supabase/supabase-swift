@@ -44,6 +44,63 @@ struct ChannelRecordTests {
     #expect(!record.hasBeenSubscribed)
   }
 
+  @Test(arguments: [
+    (Phase.unsubscribed, true),
+    (.failed(Self.timedOut), true),
+    (.leaving(joinRef: "1", leaveRef: "2"), true),
+    (.waitingForSocket(attempt: 1), false),
+    (.refreshingToken(attempt: 1), false),
+    (.joining(ref: "1", attempt: 1, stage: .reply), false),
+    (.waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: Self.timedOut), false),
+    (.subscribed(joinRef: "1"), false),
+  ])
+  func aChannelWithPresenceOffAcceptsAPresenceStreamOnlyBeforeItJoins(
+    phase: Phase, accepts: Bool
+  ) {
+    var record = ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration())
+    record.phase = phase
+
+    #expect(record.acceptsPresenceStream == accepts)
+  }
+
+  @Test(arguments: [
+    Phase.waitingForSocket(attempt: 1),
+    .refreshingToken(attempt: 1),
+    .joining(ref: "1", attempt: 1, stage: .reply),
+    .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: Self.timedOut),
+    .subscribed(joinRef: "1"),
+  ])
+  func aSubscriptionWithPresenceOnAcceptsAPresenceStream(phase: Phase) {
+    var configuration = RealtimeChannelConfiguration()
+    configuration.presence.enabled = true
+    var record = ChannelRecord(topic: "room", configuration: configuration)
+    record.phase = phase
+
+    #expect(record.acceptsPresenceStream)
+  }
+
+  @Test
+  func aTrackCountsOnlyWhileItsJoinIsLive() {
+    var record = ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration())
+    record.hasTrackedSinceJoin = true
+
+    record.phase = .subscribed(joinRef: "1")
+    #expect(record.acceptsPresenceStream)
+    record.phase = .waitingToRetry(attempt: 1, retryIn: .seconds(1), lastError: Self.timedOut)
+    #expect(!record.acceptsPresenceStream)
+  }
+
+  @Test
+  func aLeaveWithASubscribeQueuedUsesTheQueuedSubscription() {
+    var record = ChannelRecord(topic: "room", configuration: RealtimeChannelConfiguration())
+    record.phase = .leaving(joinRef: "1", leaveRef: "2")
+    record.subscribeWaiters = [WaiterID(rawValue: 1)]
+
+    #expect(!record.acceptsPresenceStream)
+    record.snapshot.presenceEnabled = true
+    #expect(record.acceptsPresenceStream)
+  }
+
   @Test
   func phasesCompareErrorsByFailure() {
     #expect(

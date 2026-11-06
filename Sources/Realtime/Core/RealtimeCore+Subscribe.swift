@@ -23,7 +23,14 @@ extension RealtimeCore {
     }
 
     var record = channels[channel] ?? ChannelRecord(topic: topic, configuration: configuration)
-    record.snapshot = snapshot
+    record.snapshot.bindings = snapshot.bindings
+    switch record.phase {
+    case .unsubscribed, .failed, .leaving:
+      // A new subscription: its joins carry the presence flag of this call, as later rejoins do.
+      record.snapshot.presenceEnabled = snapshot.presenceEnabled
+    case .subscribed, .waitingForSocket, .refreshingToken, .joining, .waitingToRetry:
+      break
+    }
     switch record.phase {
     case .subscribed:
       logger.debug("Subscribe no-op for channel '\(topic)': already subscribed")
@@ -67,8 +74,10 @@ extension RealtimeCore {
     record.timedOutJoinRef = nil
     let config = RealtimeJoinConfig(
       record.configuration, bindings: record.snapshot.bindings,
-      presenceEnabled: record.snapshot.presenceEnabled)
+      presenceEnabled: record.joinsWithPresence)
     record.joinedBindings = config.postgresChanges
+    record.hasTrackedSinceJoin = false
+    record.pendingTracks = []
     record.joinAccessToken = tokens.token
     // A new join waits for its own first presence state.
     record.presence.waitForNextState()
@@ -286,9 +295,9 @@ extension RealtimeCore {
     return sendLeave(channel, joinRef: ref) + failSubscribe(channel, with: error)
   }
 
-  mutating func bindingsChanged(_ channel: ChannelID, snapshot: JoinSnapshot) -> [Effect] {
+  mutating func bindingsChanged(_ channel: ChannelID, bindings: [PostgresJoinConfig]) -> [Effect] {
     guard channels[channel] != nil else { return [] }
-    channels.update(channel) { $0.snapshot = snapshot }
+    channels.update(channel) { $0.snapshot.bindings = bindings }
     return rejoinIfBindingsChanged(channel)
   }
 
