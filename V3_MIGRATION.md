@@ -88,6 +88,10 @@ Naming rules applied across all modules (the module tables list each symbol):
 - A method that only reads a value drops its `get` prefix: `getPublicURL` is `publicURL`.
 - An argument that names an identifier is `id:`: `deleteClient(clientId:)` is
   `deleteClient(id:)`.
+- An acronym keeps its capitals in a public name: `ID`, `URL`, `URI`, `JWT` and `OTP`, as in
+  `versionID`, `redirectURIs` and `factorID`. `supabase-typegen` follows the rule when it names a
+  property from a column: `channel_id` becomes `channelID`, so regenerate your models and rename
+  their uses.
 - A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
 

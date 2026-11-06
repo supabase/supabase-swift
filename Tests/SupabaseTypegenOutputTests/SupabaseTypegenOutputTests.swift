@@ -40,7 +40,7 @@ struct SupabaseTypegenOutputTests {
 
   @Test
   func snakeCaseColumnKeepsItsName() {
-    #expect(Posts.columns.discussionId.postgrestExpression == "discussion_id")
+    #expect(Posts.columns.discussionID.postgrestExpression == "discussion_id")
     #expect(Todos.columns.isComplete.postgrestExpression == "is_complete")
   }
 
@@ -93,7 +93,7 @@ struct SupabaseTypegenOutputTests {
   func generatedFunctionCallSendsItsArgumentsAndFilters() async throws {
     let (client, transport) = recordingClient()
     _ = try await client.rpc.searchMessages(query: "hello")
-      .where { $0.channelId.eq(1) }
+      .where { $0.channelID.eq(1) }
       .execute()
 
     let request = try #require(transport.requests.first)
@@ -118,9 +118,9 @@ struct SupabaseTypegenOutputTests {
   @Test
   func generatedFunctionCallCanBeReadOnly() async throws {
     let (client, transport) = recordingClient()
-    _ = try await client.rpc.searchMessages(query: "hello", channelId: 1)
+    _ = try await client.rpc.searchMessages(query: "hello", channelID: 1)
       .readOnly()
-      .where { $0.channelId.eq(1) }
+      .where { $0.channelID.eq(1) }
       .execute()
 
     let request = try #require(transport.requests.first)
