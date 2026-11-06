@@ -98,6 +98,7 @@ struct TableMacroSupportTests {
     #expect(camelToSnakeCase("ownerIDs") == "owner_ids")
     #expect(camelToSnakeCase("redirectURIs") == "redirect_uris")
     #expect(camelToSnakeCase("userIDsList") == "user_ids_list")
+    #expect(camelToSnakeCase("apiURLIsValid") == "api_url_is_valid")
     #expect(camelToSnakeCase("htmlURLString") == "html_url_string")
   }
 
