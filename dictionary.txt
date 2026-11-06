@@ -102,6 +102,7 @@ inkey
 isdistinct
 johndoe
 jwks
+jwts
 JWKS
 kakao
 Kakao
@@ -146,6 +147,7 @@ posix
 omitempty
 openssl
 otpauth
+otps
 opentelemetry
 parameterless
 passout
