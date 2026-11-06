@@ -38,8 +38,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
-| `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.init` and `Configuration.init` |
-| `PostgrestClient(… fetch:)`, `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
+| `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.Configuration.init` |
+| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:accessToken:clock:))`; the flat init is gone, and `http` now comes before `logger` |
+| `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` and `Configuration.clock` are public too |
+| `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
 | `PostgrestClient.FetchHandler` | `any ClientTransport` |
 | `logger: (any SupabaseLogger)?` | `logger: Logging.Logger` |
 | `PostgrestClient`, builders: `final class` | `struct` |
@@ -68,7 +70,9 @@ let client = PostgrestClient(url: url)
 client.setAuth(token)
 
 // v3
-let client = PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
+let client = PostgrestClient(
+  configuration: .init(url: url, accessToken: { try await auth.session.accessToken })
+)
 ```
 
 An `Authorization` header in `headers:` or from `settingHeader` wins over the closure.
@@ -87,7 +91,7 @@ try await client.from("todos").setHeader(name: "Prefer", value: "params=single-o
 
 // v3
 var database: PostgrestClient?
-let client = PostgrestClient(url: url, headers: ["Prefer": "params=single-object"])
+let client = PostgrestClient(configuration: .init(url: url, headers: ["Prefer": "params=single-object"]))
 try await client.from("todos").select(count: .exact).execute()
 ```
 

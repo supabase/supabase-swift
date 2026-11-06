@@ -50,37 +50,39 @@ struct BuildURLRequestTests {
     encoder.outputFormatting = .sortedKeys
 
     let client = PostgrestClient(
-      url: url,
-      schema: nil,
-      headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
-      http: .init(
-        transport: ClosureTransport { request, body in
-          guard let runningTestCase = runningTestCase.value else {
-            Issue.record("execute called without a runningTestCase set.")
+      configuration: .init(
+        url: url,
+        schema: nil,
+        headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
+        http: .init(
+          transport: ClosureTransport { request, body in
+            guard let runningTestCase = runningTestCase.value else {
+              Issue.record("execute called without a runningTestCase set.")
+              return (HTTPTypes.HTTPResponse(status: .ok), nil)
+            }
+
+            guard var urlRequest = URLRequest(httpRequest: request) else {
+              throw URLError(.badURL)
+            }
+            if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+
+            await MainActor.run { [runningTestCase] in
+              assertSnapshot(
+                of: urlRequest,
+                as: .curl,
+                named: runningTestCase.name,
+                record: runningTestCase.record,
+                file: runningTestCase.file,
+                testName: "testBuildRequest()",
+                line: runningTestCase.line
+              )
+            }
+
             return (HTTPTypes.HTTPResponse(status: .ok), nil)
-          }
-
-          guard var urlRequest = URLRequest(httpRequest: request) else {
-            throw URLError(.badURL)
-          }
-          if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
-
-          await MainActor.run { [runningTestCase] in
-            assertSnapshot(
-              of: urlRequest,
-              as: .curl,
-              named: runningTestCase.name,
-              record: runningTestCase.record,
-              file: runningTestCase.file,
-              testName: "testBuildRequest()",
-              line: runningTestCase.line
-            )
-          }
-
-          return (HTTPTypes.HTTPResponse(status: .ok), nil)
-        }),
-      encoder: encoder,
-      retryEnabled: false
+          }),
+        encoder: encoder,
+        retryEnabled: false
+      )
     )
 
     let testCases: [TestCase] = [
@@ -264,7 +266,7 @@ struct BuildURLRequestTests {
 
   @Test
   func sessionConfiguration() {
-    let client = PostgrestClient(url: url, schema: nil)
+    let client = PostgrestClient(configuration: .init(url: url, schema: nil))
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     #expect(clientInfoHeader != nil)
   }

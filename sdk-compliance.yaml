@@ -1562,6 +1562,7 @@ features:
     status: implemented
     symbols:
       - PostgrestClient.Configuration.retryEnabled
+      - PostgrestClient.Configuration.clock
       - PostgrestRequestBuilder.retry
   database.configuration.request_timeout:
     status: implemented

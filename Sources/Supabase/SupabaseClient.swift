@@ -113,14 +113,16 @@ public final class SupabaseClient: Sendable {
 
   var rest: PostgrestClient {
     PostgrestClient(
-      url: databaseURL,
-      schema: options.db.schema,
-      headers: dataHeaders.dictionary,
-      logger: options.global.logger,
-      http: authenticatedHTTP(staleTokenRejection: .postgrest),
-      encoder: options.db.encoder,
-      decoder: options.db.decoder,
-      retryEnabled: options.db.retry
+      configuration: .init(
+        url: databaseURL,
+        schema: options.db.schema,
+        headers: dataHeaders.dictionary,
+        http: authenticatedHTTP(staleTokenRejection: .postgrest),
+        logger: options.global.logger,
+        encoder: options.db.encoder,
+        decoder: options.db.decoder,
+        retryEnabled: options.db.retry
+      )
     )
   }
 
