@@ -6,6 +6,7 @@
 //
 
 #if canImport(Observation)
+  import Helpers
   public import Observation
 
   /// An observable mirror of an ``AuthClient``'s ``AuthStatus``, for SwiftUI and other
@@ -66,7 +67,7 @@
     public init(client: AuthClient) {
       status = client.status
       let changes = client.events()
-      task = Task { [weak self] in
+      task = Task.named("supabase.auth.model") { [weak self] in
         for await change in changes {
           guard let self else { return }
           // Observation invalidates readers on every write, equal value or not.

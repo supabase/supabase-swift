@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Helpers
 
 /// What the edges of the client hand to its actor: the socket reader, timers, connect attempts,
 /// token fetches, stream terminations, task cancellations, and app lifecycle changes.
@@ -28,6 +29,24 @@ enum Input: Sendable {
   case wake
   /// Resumes once every earlier input is applied. Test hook: only `flushInbox()` yields it.
   case flush(CheckedContinuation<Void, Never>)
+}
+
+extension Input {
+  /// The Realtime policy for an app lifecycle event, or `nil` for an event Realtime ignores.
+  ///
+  /// A return to the foreground, or the Mac waking, checks the connection. The app going to the
+  /// background, or the Mac going to sleep, records whether it was connected. The foreground at
+  /// launch is not a return, and a probe for it would only send a heartbeat the socket does not
+  /// need; the background at launch still counts. Activation follows each return to the
+  /// foreground, so it would probe twice.
+  init?(_ event: AppLifecycleEvent, isLaunchState: Bool) {
+    switch event {
+    case .foreground where isLaunchState: return nil
+    case .foreground, .systemDidWake: self = .appForeground
+    case .background, .systemWillSleep: self = .appBackground
+    case .didBecomeActive, .protectedDataDidBecomeAvailable: return nil
+    }
+  }
 }
 
 /// What the socket reader decodes off the actor. A frame that fails to decode is logged by the

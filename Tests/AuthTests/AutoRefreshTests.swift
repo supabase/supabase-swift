@@ -66,7 +66,7 @@ struct AutoRefreshTests {
 
   #if canImport(UIKit) && !os(watchOS)
     @Test
-    func becomingActiveIsAForegroundEvenWithoutEnteringTheForeground() async {
+    func becomingActiveIsReportedEvenWithoutEnteringTheForeground() async {
       let events = await AuthPlatform.live.lifecycleEvents()
       let received = LockIsolated<[AppLifecycleEvent]>([])
       let collecting = Task {
@@ -83,7 +83,7 @@ struct AutoRefreshTests {
       }
 
       #expect(await waitUntil(timeout: 2) { received.value.count == 3 })
-      #expect(Array(received.value.dropFirst()) == [.background, .foreground])
+      #expect(Array(received.value.dropFirst()) == [.background, .didBecomeActive])
     }
   #endif
 
@@ -104,6 +104,38 @@ struct AutoRefreshTests {
 
     lifecycle.yield(.foreground)
     #expect(await world.refreshCount(settledAt: 1) == 1)
+  }
+
+  /// A cold launch, Control Center, and every activation on macOS post only `didBecomeActive`:
+  /// auto refresh treats it as the foreground and checks the session at once.
+  @Test
+  func becomingActiveRefreshesAtOnceWhenTheSessionIsDue() async throws {
+    let world = World()
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    lifecycle.yield(.background)
+    let client = makeClient(world, lifecycle: events)
+    try await client.seedSession(world.issueSession())
+    await world.advance(to: Self.refreshAfter + 60)
+    #expect(await world.refreshCount(settledAt: 0) == 0)
+
+    lifecycle.yield(.didBecomeActive)
+    #expect(await world.refreshCount(settledAt: 1) == 1)
+  }
+
+  /// Auth ignores the Mac going to sleep and waking.
+  @Test
+  func sleepAndWakeDoNotChangeAutoRefresh() async throws {
+    let world = World()
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    lifecycle.yield(.background)
+    let client = makeClient(world, lifecycle: events)
+    try await client.seedSession(world.issueSession())
+    await world.advance(to: Self.refreshAfter + 60)
+
+    lifecycle.yield(.systemDidWake)
+    lifecycle.yield(.systemWillSleep)
+    #expect(await world.refreshCount(settledAt: 0) == 0)
+    #expect(await client.dependencies.autoRefresh.isRegistered == false)
   }
 
   @Test

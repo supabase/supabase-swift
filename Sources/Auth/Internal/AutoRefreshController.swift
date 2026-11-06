@@ -52,9 +52,9 @@ actor AutoRefreshController {
 
   func handle(_ event: AppLifecycleEvent) async {
     switch event {
-    case .foreground: state.isInForeground = true
+    case .foreground, .didBecomeActive: state.isInForeground = true
     case .background: state.isInForeground = false
-    case .protectedDataDidBecomeAvailable: return
+    case .protectedDataDidBecomeAvailable, .systemWillSleep, .systemDidWake: return
     }
     await apply()
   }

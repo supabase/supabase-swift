@@ -23,7 +23,7 @@ final class Outbox: Sendable {
   init(connection: any WebSocketConnection, serializer: RealtimeSerializer, logger: Logger) {
     let (items, continuation) = AsyncStream.makeStream(of: Item.self)
     self.continuation = continuation
-    writer = Task(priority: .medium) {
+    writer = Task.named("supabase.realtime.writer", priority: .medium) {
       for await item in items {
         let frame: WebSocketFrame
         switch item {
