@@ -37,6 +37,12 @@ enum StorageIntegration {
       var type: String
       var bucketID: String?
       var objectName: String?
+
+      enum CodingKeys: String, CodingKey {
+        case type
+        case bucketID = "bucketId"
+        case objectName
+      }
     }
     var path: String
     var body: Body
