@@ -429,7 +429,7 @@ struct FunctionsClientTests {
       Issue.record("Invoke should fail.")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 300)
+      #expect(error.response?.status == 300)
       #expect(error.response?.body == Data())
     } catch {
       Issue.record("Unexpected error thrown \(error)")
@@ -930,7 +930,7 @@ struct FunctionsClientTests {
       Issue.record("Expected failure")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 500)
+      #expect(error.response?.status == 500)
       #expect(error.response?.body == body.prefix(cap))
     } catch {
       Issue.record("Unexpected error thrown \(error)")

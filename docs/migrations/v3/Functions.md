@@ -139,7 +139,7 @@ The enum cases are gone. Match on `kind` instead. The status and body are in `re
 | v2 | v3 |
 | --- | --- |
 | `FunctionsError.relayError` | `error.kind == .relay` |
-| `FunctionsError.httpError(code:data:)` | `error.kind == .server`, `error.response?.statusCode`, `error.response?.body` |
+| `FunctionsError.httpError(code:data:)` | `error.kind == .server`, `error.response?.status`, `error.response?.body` |
 
 ```swift
 // v2
@@ -154,7 +154,7 @@ do {
   try await supabase.functions.invoke("hello")
 } catch let error as FunctionsError where error.kind == .server {
   if let response = error.response {
-    print(response.statusCode, String(decoding: response.body, as: UTF8.self))
+    print(response.status.code, String(decoding: response.body, as: UTF8.self))
   }
 }
 ```

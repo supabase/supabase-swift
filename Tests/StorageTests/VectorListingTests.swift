@@ -49,7 +49,7 @@ struct VectorListingTests {
       ])
 
     var buckets: [VectorBucket] = []
-    for try await bucket in vectors.listBuckets(prefix: "x", maxResults: 1) {
+    for try await bucket in vectors.listBuckets(prefix: "x", pageSize: 1) {
       buckets.append(bucket)
     }
 
@@ -69,7 +69,7 @@ struct VectorListingTests {
       #"{"indexes":[{"indexName":"i2","vectorBucketName":"b"}]}"#,
     ])
 
-    var pages: [ListVectorIndexesResponse] = []
+    var pages: [VectorIndexPage] = []
     for try await page in vectors.from("b").listIndexes().pages {
       pages.append(page)
     }

@@ -187,7 +187,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
         && error.serverError?.code == "PGRST201"
         && error.serverError?.details?.contains("discussion_id") == true
         && error.serverError?.hint?.contains("posts!") == true
-        && error.response?.statusCode == 300
+        && error.response?.status == 300
     }
   }
 }

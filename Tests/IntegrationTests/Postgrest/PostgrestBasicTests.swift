@@ -109,7 +109,7 @@ struct PostgrestBasicTests {
 
   @Test
   func rPCReturnsVoid() async throws {
-    let response = try await client.rpc("void_func").execute().data
+    let response = try await client.rpc("void_func").execute().body
     #expect(response == Data())
   }
 

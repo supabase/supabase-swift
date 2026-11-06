@@ -99,11 +99,11 @@ struct AuthErrorTests {
       kind: .server,
       message: "API Error",
       errorCode: .emailConflictIdentityNotDeletable,
-      response: HTTPErrorResponse(statusCode: 422, headers: headers, body: Data())
+      response: HTTPErrorResponse(status: 422, headers: headers, body: Data())
     )
 
     #expect(error.errorCode == .emailConflictIdentityNotDeletable)
-    #expect(error.response?.statusCode == 422)
+    #expect(error.response?.status == 422)
     #expect(error.response?.requestID == "req-1")
     #expect(error.description == "AuthError(server): API Error [status 422, request req-1]")
   }

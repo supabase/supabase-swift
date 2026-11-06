@@ -44,7 +44,9 @@ final class RealtimeTestHost: Sendable {
     configuration: RealtimeClient.Configuration = RealtimeClient.Configuration(
       url: RealtimeTestHost.url,
       handleAppLifecycle: false, monitorsNetworkPath: false),
-    http: HTTPClient = HTTPClient(transport: RecordingTransport())
+    http: HTTPClient = HTTPClient(transport: RecordingTransport()),
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      noLifecycleEvents
   ) async {
     // Newest-1: a wait only needs to know that something changed since it last looked.
     (signal, signalContinuation) = AsyncStream<Void>.makeStream(
@@ -76,7 +78,8 @@ final class RealtimeTestHost: Sendable {
         return socket
       },
       http: http,
-      clock: clock
+      clock: clock,
+      lifecycleEvents: lifecycleEvents
     )
 
     let statusChanges = await client.statusChanges()

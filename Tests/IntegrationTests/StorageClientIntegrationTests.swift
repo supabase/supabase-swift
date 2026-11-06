@@ -207,7 +207,7 @@ struct StorageClientIntegrationTests {
 
     #expect(error?.code == .accessDenied)
     #expect(error?.serverStatusCode == 403)
-    #expect(error?.response?.statusCode == 400)
+    #expect(error?.response?.status == 400)
   }
 
   @Test
@@ -219,7 +219,7 @@ struct StorageClientIntegrationTests {
     }
 
     #expect(error?.kind == .server)
-    #expect((error?.response?.statusCode ?? 0) >= 400)
+    #expect((error?.response?.status.code ?? 0) >= 400)
     #if os(macOS)
       #expect(error?.code == .invalidRequest)
       #expect(error?.serverStatusCode == 400)

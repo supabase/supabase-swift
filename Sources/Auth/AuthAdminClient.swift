@@ -43,8 +43,8 @@ public import Logging
 /// - ``updateUser(id:attributes:)``
 /// - ``deleteUser(id:softDelete:)``
 /// - ``inviteUser(email:userMetadata:redirectTo:)``
-/// - ``listUsers(page:perPage:)``
-/// - ``users(perPage:)``
+/// - ``listUsers(page:pageSize:)``
+/// - ``users(pageSize:)``
 /// - ``generateLink(_:)``
 /// - ``signOut(jwt:scope:)``
 ///
@@ -222,13 +222,13 @@ public struct AuthAdminClient: Sendable {
 
   /// Gets one page of users.
   ///
-  /// To walk every page, use ``users(perPage:)``.
+  /// To walk every page, use ``users(pageSize:)``.
   ///
   /// - Parameters:
   ///   - page: The page to get, starting at `1`. `nil` gets the first page.
-  ///   - perPage: Users per page. `nil` leaves the page size to the server.
-  public func listUsers(page: Int? = nil, perPage: Int? = nil) async throws -> UserPage {
-    try await api.execute(authAPI.adminListUsers(page: page, perPage: perPage))
+  ///   - pageSize: Users per page. `nil` leaves the page size to the server.
+  public func listUsers(page: Int? = nil, pageSize: Int? = nil) async throws -> UserPage {
+    try await api.execute(authAPI.adminListUsers(page: page, pageSize: pageSize))
   }
 
   /// Generates an email link and OTP for you to send through your own email provider.

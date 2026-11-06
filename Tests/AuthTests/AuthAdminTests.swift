@@ -121,7 +121,7 @@ struct AuthAdminTests {
       )
     )
 
-    _ = try? await admin.listUsers(page: 2, perPage: 5)
+    _ = try? await admin.listUsers(page: 2, pageSize: 5)
 
     let logged = recorder.entries.joined(separator: "\n")
     #expect(logged.contains("/auth/v1/admin/users"))

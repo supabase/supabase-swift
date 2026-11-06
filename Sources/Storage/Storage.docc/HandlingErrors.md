@@ -24,7 +24,7 @@ passes its cap.
 
 On the object, bucket and render routes, Storage answers nearly every failure with HTTP 400. The
 real outcome is in the body. So branch on ``StorageError/code`` or
-``StorageError/serverStatusCode``, not on `response?.statusCode`.
+``StorageError/serverStatusCode``, not on `response?.status`.
 
 ```swift
 do {

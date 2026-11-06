@@ -94,7 +94,8 @@ public struct PostgrestClient: Sendable {
     public var http: HTTPClientConfiguration
 
     /// The logger for request and response diagnostics. Defaults to a build-config-aware
-    /// logger. The client tags it with the `system` metadata key set to `postgrest`.
+    /// logger. The client removes tokens, secrets, and URL query strings from each line before
+    /// your handler sees it, and tags the logger with the `system` metadata key set to `postgrest`.
     public var logger: Logging.Logger
 
     /// The `JSONEncoder` used to serialize request bodies.
@@ -208,6 +209,7 @@ public struct PostgrestClient: Sendable {
   public init(configuration: Configuration) {
     var configuration = configuration
     configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "postgrest"
     self.configuration = configuration
   }

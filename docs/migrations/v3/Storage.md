@@ -88,7 +88,7 @@ let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v"
 try await custom.from("avatars").list()
 ```
 
-## `StorageError` is a struct with `kind`
+## `StorageError` is a struct
 
 `StorageError` has `kind`, `message`, `code`, `serverStatusCode`, `isNotFound`, `serverError`,
 `response` and `underlyingError`. The body fields `statusCode` and `error` moved to
@@ -109,7 +109,7 @@ try await custom.from("avatars").list()
 ```
 
 Branch on `isNotFound`, `code` or `serverStatusCode`. Storage sends HTTP 400 for most failures and
-puts the real status in the body, so `response?.statusCode` is usually 400.
+puts the real status in the body, so `response?.status` is usually `400 Bad Request`.
 
 ## `UploadOptions` replaces `FileOptions`
 
@@ -252,6 +252,7 @@ Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `Resu
 `StorageClient.Configuration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PagedListing`; call `.page()` for the first page. `vectors(keys:)`, `listVectors`, and
-`queryVectors` take their optional settings in `GetVectorsOptions`, `ListVectorsOptions`, and
-`QueryVectorsOptions`.
+return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+`VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
+`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
+`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.

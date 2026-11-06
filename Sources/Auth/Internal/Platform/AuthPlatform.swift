@@ -1,10 +1,5 @@
 import Foundation
-
-enum AppLifecycleEvent: Hashable, Sendable {
-  case foreground
-  case background
-  case protectedDataDidBecomeAvailable
-}
+import Helpers
 
 struct AuthPlatform: Sendable {
   /// `true` where the system can run the app in the background, where auto refresh pauses. Only
@@ -17,4 +12,8 @@ struct AuthPlatform: Sendable {
   /// order the system posts it.
   var lifecycleEvents: @Sendable () async -> AsyncStream<AppLifecycleEvent>
 
+  static let live = AuthPlatform(
+    hasBackgroundState: AppLifecycle.live.hasBackgroundState,
+    lifecycleEvents: AppLifecycle.live.events
+  )
 }

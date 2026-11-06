@@ -306,7 +306,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
 | `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)` |
 | `AuthAdmin.inviteUserByEmail(_:data:redirectTo:)` | `AuthAdminClient.inviteUser(email:userMetadata:redirectTo:)`; `userMetadata` is a `JSONObject` |
-| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:perPage:)` |
+| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:pageSize:)`; `users(pageSize:)` returns a `PageSequence` over every page |
 | `ListUsersPaginatedResponse` | `UserPage`, with only `let` properties |
 | `AuthAdmin.generateLink(params:)` | `AuthAdminClient.generateLink(_:)` |
 | `GenerateLinkProperties.redirectTo: URL` | `URL?` |
@@ -676,7 +676,7 @@ cases: `catch ErrorCode.invalidCredentials` and `catch AuthError.Kind.sessionMis
 | v2 | v3 |
 | --- | --- |
 | `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `catch AuthError.Kind.sessionMissing` (nothing stored) or `catch AuthError.Kind.sessionInvalidated` (the server rejected the session) |
-| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.statusCode`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
+| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
 | `.weakPassword(message, reasons)` | `error.errorCode == .weakPassword`; `error.weakPasswordReasons` |
 | `.pkceGrantCodeExchange(...)`, `.implicitGrantRedirect(message)`, `.pkce(_:)`, `.invalidImplicitGrantFlowURL`, `.invalidRedirectScheme` | `error.kind == .oauthFlowFailed` |
 | `.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` |
@@ -697,7 +697,7 @@ do {
 do {
   try await supabase.auth.signIn(email: email, password: password)
 } catch let error as AuthError where error.kind == .server {
-  print(error.response?.statusCode ?? 0, error.errorCode, error.message)
+  print(error.response?.status.code ?? 0, error.errorCode, error.message)
 } catch AuthError.Kind.sessionMissing, AuthError.Kind.sessionInvalidated {
   showLogin()
 }
@@ -950,7 +950,8 @@ so it loses no change, and it finishes when your task is cancelled or the client
 `AuthChange` has `event`, `session`, `status` (an `AuthStatus`), and `signOutReason`, which tells
 `.userInitiated` from `.sessionExpired`, `.sessionRevoked`, and `.sessionMissing`. For the state
 without a stream, read `auth.status`, or `await auth.initialization()` to wait until storage is
-read. `AuthStateChangeListener` and `AuthStateChangeListenerRegistration` are removed.
+read. `AuthStateChangeListener`, `AuthStateChangeListenerRegistration` and `ObservationToken` are
+removed.
 
 ```swift
 // v2

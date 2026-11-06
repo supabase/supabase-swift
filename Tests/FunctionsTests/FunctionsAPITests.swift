@@ -315,7 +315,7 @@ struct FunctionsAPITests {
       #expect(error.kind == testCase.kind)
       #expect(error.code == testCase.expectedCode)
       #expect(error.isPlatformError == testCase.isPlatformError)
-      #expect(error.response?.statusCode == testCase.status)
+      #expect(error.response?.status.code == testCase.status)
       #expect(error.response?.body == Data("body".utf8))
     } catch {
       Issue.record("Unexpected error \(error)")

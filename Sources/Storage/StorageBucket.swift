@@ -667,7 +667,7 @@ public struct StorageBucket: Sendable {
         },
         length: length, iterationBehavior: .single)
     }
-    return DownloadResponse(httpResponse: head, body: response)
+    return DownloadResponse(status: head.status, headers: head.headerFields, body: response)
   }
 
   /// Retrieves metadata about an existing file without downloading its content.

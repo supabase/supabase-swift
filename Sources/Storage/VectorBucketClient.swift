@@ -32,7 +32,7 @@ import HTTPTypes
 ///
 /// - ``createIndex(_:dimension:distanceMetric:dataType:metadataConfiguration:)``
 /// - ``indexDetails(_:)``
-/// - ``listIndexes(prefix:maxResults:)``
+/// - ``listIndexes(prefix:pageSize:)``
 /// - ``deleteIndex(_:)``
 ///
 /// ### Accessing vector data
@@ -139,13 +139,14 @@ public struct VectorBucketClient: Sendable {
   /// - Parameters:
   ///   - prefix: Returns only indexes whose name starts with this prefix. Pass `nil` for all
   ///     indexes.
-  ///   - maxResults: The maximum number of indexes per page (up to 500).
-  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
+  ///   - pageSize: The maximum number of indexes per page (up to 500).
+  /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
+  ///   when the API rejects a request.
   public func listIndexes(
     prefix: String? = nil,
-    maxResults: Int? = nil
-  ) -> PagedListing<ListVectorIndexesResponse, VectorIndexSummary> {
-    PagedListing(
+    pageSize: Int? = nil
+  ) -> PageSequence<VectorIndexSummary, VectorIndexPage, String> {
+    PageSequence(
       fetch: { [api, vectorBucketName] nextToken in
         let response: ListIndexesResponseBody = try await api.execute(
           HTTPRequest(
@@ -156,15 +157,15 @@ public struct VectorBucketClient: Sendable {
             ListIndexesBody(
               vectorBucketName: vectorBucketName,
               prefix: prefix,
-              maxResults: maxResults,
+              maxResults: pageSize,
               nextToken: nextToken
             )
           )
         )
         .decoded(decoder: .vectors)
-        return ListVectorIndexesResponse(indexes: response.indexes, nextToken: response.nextToken)
+        return VectorIndexPage(indexes: response.indexes, nextToken: response.nextToken)
       },
-      nextToken: \.nextToken,
+      nextCursor: \.nextToken,
       elements: \.indexes
     )
   }
@@ -385,7 +386,7 @@ public struct VectorIndex: Decodable, Sendable, Hashable {
 }
 
 /// A summary of a vector index, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:maxResults:)``.
+/// ``VectorBucketClient/listIndexes(prefix:pageSize:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -401,11 +402,11 @@ public struct VectorIndexSummary: Decodable, Sendable, Hashable {
 }
 
 /// A page of vector indexes, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:maxResults:)``.
+/// ``VectorBucketClient/listIndexes(prefix:pageSize:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct ListVectorIndexesResponse: Sendable {
+public struct VectorIndexPage: Sendable {
   /// The indexes in this page.
   public var indexes: [VectorIndexSummary]
 

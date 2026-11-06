@@ -228,7 +228,6 @@ public final class AuthClient: Sendable {
   ) {
     let clientID = AuthClient.nextClientID()
     self.clientID = clientID
-
     var configuration = configuration
     configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "auth"
@@ -1698,7 +1697,7 @@ public final class AuthClient: Sendable {
       do {
         try await sessionStore.load()
       } catch {
-        logger.error("Failed to load the stored session: \(error)")
+        logger.error("Failed to load the stored session: \(LogRedaction.summary(of: error))")
       }
     }
   }
@@ -1812,7 +1811,7 @@ public final class AuthClient: Sendable {
 extension AuthError {
   /// Whether a logout answer means the server has nothing left to revoke for `scope`.
   fileprivate func meansNothingLeftToRevoke(for scope: SignOutScope) -> Bool {
-    guard response?.statusCode == 403 else { return false }
+    guard response?.status == .forbidden else { return false }
     return errorCode == .userNotFound || (scope == .local && errorCode == .sessionNotFound)
   }
 }

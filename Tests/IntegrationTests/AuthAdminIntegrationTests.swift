@@ -71,6 +71,36 @@ struct AuthAdminIntegrationTests {
   }
 
   @Test
+  func usersPagesThroughEveryUser() async throws {
+    var ids: [UUID] = []
+    for _ in 0..<3 {
+      let email = "paging-\(UUID().uuidString.prefix(8).lowercased())@example.com"
+      ids.append(
+        try await admin.createUser(AdminUserAttributes(email: email, confirmsEmail: true)).id)
+    }
+
+    do {
+      let pages = try await admin.users(pageSize: 1).pages.prefix(2).collect()
+      // The three users above guarantee at least three pages of one.
+      #expect(pages.map(\.users.count) == [1, 1])
+      #expect(pages.map(\.nextPage) == [2, 3])
+      let second = try await admin.users(pageSize: 1).page(after: 2)
+      #expect(second.users.map(\.id) == pages[1].users.map(\.id))
+
+      var seen: Set<UUID> = []
+      for try await user in admin.users(pageSize: 100) {
+        seen.insert(user.id)
+      }
+      #expect(seen.isSuperset(of: ids))
+    } catch {
+      for id in ids { try? await admin.deleteUser(id: id) }
+      throw error
+    }
+
+    for id in ids { try await admin.deleteUser(id: id) }
+  }
+
+  @Test
   func banDurationBansAndLifts() async throws {
     let email = "ban-\(UUID().uuidString.prefix(8).lowercased())@example.com"
     let password = "the.pass.\(UUID().uuidString)"

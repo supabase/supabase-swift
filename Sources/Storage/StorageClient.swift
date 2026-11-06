@@ -64,7 +64,9 @@ extension StorageClient {
     public var http: HTTPClientConfiguration
 
     /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
-    /// The client tags it with the `system` metadata key set to `storage`.
+    ///
+    /// The client removes tokens, secrets, and URL query strings from each line before your handler
+    /// sees it, and tags the logger with the `system` metadata key set to `storage`.
     public var logger: Logging.Logger
 
     /// Whether transient failures of reads are retried. Defaults to `true`.

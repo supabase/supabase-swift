@@ -61,6 +61,7 @@ struct StorageAPI: Sendable {
     if configuration.headers[.xClientInfo] == nil {
       configuration.headers[.xClientInfo] = "storage-swift/\(version)"
     }
+    configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "storage"
 
     if configuration.usesNewHostname == true {

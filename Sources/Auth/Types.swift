@@ -2041,7 +2041,7 @@ public struct PageParams: Hashable, Sendable {
   }
 }
 
-/// One page of users, returned by ``AuthAdminClient/listUsers(page:perPage:)``.
+/// One page of users, returned by ``AuthAdminClient/listUsers(page:pageSize:)``.
 public struct UserPage: Hashable, Sendable {
   /// The users on this page.
   public let users: [User]

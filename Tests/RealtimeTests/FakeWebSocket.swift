@@ -147,6 +147,11 @@ struct ClosureWebSocketTransport: WebSocketTransport {
   }
 }
 
+/// The default lifecycle of a test client: no events, so no test reacts to the real app lifecycle.
+let noLifecycleEvents: @Sendable () async -> AsyncStream<AppLifecycleEvent> = {
+  AsyncStream { $0.finish() }
+}
+
 extension RealtimeClient {
   /// Builds a client whose transport is the `wsTransport` closure.
   ///
@@ -158,7 +163,9 @@ extension RealtimeClient {
     http: HTTPClient,
     clock: any Clock<Duration>,
     reconnectBackoff: BackoffPolicy = RealtimeClient.defaultReconnectBackoff,
-    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound }
+    jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { $0.upperBound },
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      noLifecycleEvents
   ) {
     self.init(
       configuration: configuration,
@@ -166,7 +173,8 @@ extension RealtimeClient {
       http: http,
       clock: clock,
       reconnectBackoff: reconnectBackoff,
-      jitter: jitter
+      jitter: jitter,
+      lifecycleEvents: lifecycleEvents
     )
   }
 }

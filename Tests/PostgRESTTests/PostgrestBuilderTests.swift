@@ -67,7 +67,7 @@ extension PostgrestMockerTests {
         #expect(error.kind == .server)
         #expect(error.message == "Bad Request")
         #expect(error.serverError?.message == "Bad Request")
-        #expect(error.response?.statusCode == 400)
+        #expect(error.response?.status == 400)
       }
     }
 
@@ -93,7 +93,7 @@ extension PostgrestMockerTests {
         #expect(error.kind == .server)
         #expect(error.serverError == nil)
         #expect(error.response?.body == Data("Bad Request".utf8))
-        #expect(error.response?.statusCode == 400)
+        #expect(error.response?.status == 400)
       }
     }
 

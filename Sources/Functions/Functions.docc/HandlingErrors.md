@@ -30,7 +30,7 @@ do {
   try await supabase.functions.invoke("flaky")
 } catch let error as FunctionsError where error.kind == .server {
   if error.isPlatformError {
-    log("platform \(error.code?.rawValue ?? "?") status \(error.response?.statusCode ?? 0)")
+    log("platform \(error.code?.rawValue ?? "?") status \(error.response?.status.code ?? 0)")
   } else if let body = error.response?.body {
     let problem = try? JSONDecoder().decode(Problem.self, from: body)
   }

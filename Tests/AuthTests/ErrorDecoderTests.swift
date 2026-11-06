@@ -53,7 +53,7 @@ struct ErrorDecoderTests {
     #expect(error.errorCode == .invalidCredentials)
     #expect(error.message == "Invalid login credentials")
     #expect(error.oauthError == nil)
-    #expect(error.response?.statusCode == 400)
+    #expect(error.response?.status == 400)
     #expect(error.response?.body == Data(body.utf8))
   }
 
@@ -365,7 +365,7 @@ struct ErrorDecoderTests {
   func decodingErrorIsNotRetryable() {
     let error = AuthError(
       kind: .decoding, message: "bad body",
-      response: HTTPErrorResponse(statusCode: 200, headers: [:], body: Data()))
+      response: HTTPErrorResponse(status: 200, headers: [:], body: Data()))
 
     #expect(!error.isRetryable)
     #expect(!error.invalidatesSession)

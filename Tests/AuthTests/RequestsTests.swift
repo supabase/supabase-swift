@@ -956,7 +956,7 @@ struct RequestsTests {
     let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.listUsers(page: 2, perPage: 10)
+      _ = try await sut.listUsers(page: 2, pageSize: 10)
     }
   }
 

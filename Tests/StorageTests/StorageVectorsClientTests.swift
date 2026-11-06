@@ -101,7 +101,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await vectors.listBuckets(prefix: "doc", maxResults: 2).page()
+      let response = try await vectors.listBuckets(prefix: "doc", pageSize: 2).page()
       #expect(response.vectorBuckets.map(\.vectorBucketName) == ["documents", "images"])
       #expect(response.nextToken == "page-2")
     }
@@ -129,7 +129,7 @@ extension StorageMockerTests {
       #expect(error?.message == "new row violates row-level security")
       #expect(error?.kind == .server)
       #expect(error?.serverError?.error == "Unauthorized")
-      #expect(error?.response?.statusCode == 403)
+      #expect(error?.response?.status == 403)
     }
   }
 }

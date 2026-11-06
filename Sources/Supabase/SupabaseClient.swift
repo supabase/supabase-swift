@@ -547,7 +547,7 @@ public final class SupabaseClient: Sendable {
   /// therefore resolved up front (so the task doesn't need `self` to reach `auth`) and `self` is
   /// captured weakly.
   private func listenForAuthEvents() {
-    let task = Task { [weak self, events = _auth.events()] in
+    let task = Task.named("supabase.client.authEvents") { [weak self, events = _auth.events()] in
       for await change in events {
         guard let self else { return }
         await self.handleTokenChanged(event: change.event, session: change.session)

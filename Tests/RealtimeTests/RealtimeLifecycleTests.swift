@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import Logging
 import TestHelpers
 import Testing
@@ -35,7 +36,9 @@ struct RealtimeLifecycleTests {
 
   private func makeClient(
     handleAppLifecycle: Bool = false, monitorsNetworkPath: Bool = false,
-    reconnectBackoff: BackoffPolicy? = nil
+    reconnectBackoff: BackoffPolicy? = nil,
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      noLifecycleEvents
   ) -> RealtimeClient {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
@@ -84,7 +87,8 @@ struct RealtimeLifecycleTests {
       },
       http: HTTPClient(transport: http),
       clock: testClock,
-      reconnectBackoff: reconnectBackoff ?? RealtimeClient.defaultReconnectBackoff
+      reconnectBackoff: reconnectBackoff ?? RealtimeClient.defaultReconnectBackoff,
+      lifecycleEvents: lifecycleEvents
     )
   }
 
@@ -402,6 +406,28 @@ struct RealtimeLifecycleTests {
     )
   }
 
+  /// The lifecycle task holds only the inbox, so a client that observes a lifecycle that never
+  /// ends is still released.
+  @Test
+  func theLifecycleTaskDoesNotRetainTheClient() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+    }
+    let box = WeakBox()
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+
+    func scope() async throws {
+      let sut = makeClient(handleAppLifecycle: true, lifecycleEvents: { events })
+      box.client = sut
+      try await sut.connect()
+      lifecycle.yield(.foreground)
+    }
+    try await scope()
+
+    #expect(await waitUntil(timeout: 5) { box.client == nil })
+    lifecycle.finish()
+  }
+
   @Test
   func releasingTheClientAndItsChannelsClosesTheSocket() async throws {
     final class WeakBox: @unchecked Sendable {
@@ -433,19 +459,76 @@ struct RealtimeLifecycleTests {
   }
 
   @Test
-  func handleAppLifecycleFalseDoesNotInstallLifecycleObserver() async {
-    let sut = makeClient(handleAppLifecycle: false)
-    #expect(await !sut.hasLifecycleObserver)
+  func handleAppLifecycleFalseDoesNotObserveTheLifecycle() async {
+    let observed = LockIsolated(false)
+    let sut = makeClient(
+      handleAppLifecycle: false,
+      lifecycleEvents: {
+        observed.setValue(true)
+        return AsyncStream { $0.finish() }
+      }
+    )
+    try? await sut.connect()
+    await sut.flushInbox()
+
+    #expect(!observed.value)
   }
 
-  #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-    @Test
-    func handleAppLifecycleTrueInstallsLifecycleObserver() async {
-      let sut = makeClient(handleAppLifecycle: true)
-      #expect(await sut.hasLifecycleObserver)
-      _ = sut
+  @Test
+  func theLifecycleObserverIsNamedTheLifecycle() async throws {
+    guard #available(iOS 26, macOS 26, tvOS 26, watchOS 26, visionOS 26, *) else { return }
+    let name = LockIsolated<String??>(nil)
+    let sut = makeClient(
+      handleAppLifecycle: true,
+      lifecycleEvents: {
+        name.setValue(.some(Task.name))
+        return AsyncStream { $0.finish() }
+      }
+    )
+
+    #expect(await waitUntil { name.value != nil })
+    #expect(name.value == .some("supabase.realtime.lifecycle"))
+    _ = sut
+  }
+
+  /// The Mac waking from sleep is a return to the foreground: a connected socket gets a
+  /// liveness probe at once. The first event is the state at launch, which is not a change.
+  @Test(arguments: [AppLifecycleEvent.foreground, .systemDidWake])
+  func aReturnToTheForegroundProbesTheSocket(_ event: AppLifecycleEvent) async throws {
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    let sut = makeClient(handleAppLifecycle: true, lifecycleEvents: { events })
+    try await sut.connect()
+    let heartbeats = await sut.heartbeats()
+
+    lifecycle.yield(.foreground)
+    lifecycle.yield(event)
+
+    _ = await heartbeats.first { $0 == .sent }
+    #expect(await sut.status == .connected)
+  }
+
+  @Test
+  func eachLifecycleEventMapsToTheRealtimePolicy() {
+    func name(_ input: Input?) -> String? {
+      switch input {
+      case .appForeground?: "appForeground"
+      case .appBackground?: "appBackground"
+      case nil: nil
+      default: "other"
+      }
     }
-  #endif
+
+    #expect(name(Input(.foreground, isLaunchState: false)) == "appForeground")
+    #expect(name(Input(.systemDidWake, isLaunchState: false)) == "appForeground")
+    #expect(name(Input(.background, isLaunchState: false)) == "appBackground")
+    #expect(name(Input(.systemWillSleep, isLaunchState: false)) == "appBackground")
+    #expect(name(Input(.didBecomeActive, isLaunchState: false)) == nil)
+    #expect(name(Input(.protectedDataDidBecomeAvailable, isLaunchState: false)) == nil)
+    // At launch the foreground is not a return to it, but the background still records whether
+    // the client was connected when the app left.
+    #expect(name(Input(.foreground, isLaunchState: true)) == nil)
+    #expect(name(Input(.background, isLaunchState: true)) == "appBackground")
+  }
 
   @Test
   func monitorsNetworkPathFalseDoesNotInstallNetworkPathObserver() async {
@@ -464,15 +547,6 @@ struct RealtimeLifecycleTests {
 }
 
 extension RealtimeClient {
-  /// Whether the client observes the app lifecycle.
-  fileprivate var hasLifecycleObserver: Bool {
-    #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      lifecycleObserver != nil
-    #else
-      false
-    #endif
-  }
-
   /// Whether the client watches the network path.
   fileprivate var hasNetworkPathObserver: Bool {
     #if canImport(Network)

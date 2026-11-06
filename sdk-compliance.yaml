@@ -58,6 +58,16 @@ supporting_symbols:
   # list instead (see the database.* section below).
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
+  # Every execute() returns this wrapper, whatever the database.* capability.
+  - PostgrestResponse
+  - PostgrestResponse.init
+  - PostgrestResponse.status
+  - PostgrestResponse.headers
+  - PostgrestResponse.body
+  - PostgrestResponse.count
+  - PostgrestResponse.value
+  - PostgrestResponse.requestID
+  - PostgrestResponse.string
   - PostgrestExecutablePhase
   - PostgrestFilterPhase
   - PostgrestFilterablePhase
@@ -119,7 +129,7 @@ supporting_symbols:
   - SupabaseError.errorDescription
   - HTTPErrorResponse
   - HTTPErrorResponse.init
-  - HTTPErrorResponse.statusCode
+  - HTTPErrorResponse.status
   - HTTPErrorResponse.headers
   - HTTPErrorResponse.body
   - HTTPErrorResponse.requestID
@@ -942,11 +952,16 @@ features:
       - UserPage.nextPage
       - UserPage.lastPage
       - UserPage.total
-      - AuthAdminClient.UserSequence
-      - AuthAdminClient.UserSequence.Element
-      - AuthAdminClient.UserSequence.makeAsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator.next
+      - PageSequence
+      - PageSequence.pages
+      - PageSequence.page
+      - PageSequence.makeAsyncIterator
+      - PageSequence.AsyncIterator
+      - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
@@ -1622,6 +1637,7 @@ features:
       - FunctionBody.stream
       - FunctionBody.text
       - FunctionResponse
+      - FunctionResponse.init
       - FunctionResponse.body
       - FunctionResponse.contentType
       - FunctionResponse.decode
@@ -1681,6 +1697,7 @@ features:
       - FunctionStreamResponse.body
     supporting_symbols:
       - FunctionStreamResponse
+      - FunctionStreamResponse.init
       - FunctionStreamResponse.status
       - FunctionStreamResponse.headers
       - FunctionStreamResponse.contentType
@@ -2214,20 +2231,12 @@ features:
       - ObjectSortColumn.createdAt
       - ObjectSortColumn.lastAccessedAt
       - StorageBucket.objects
-      - ObjectListing
-      - ObjectListing.Element
-      - ObjectListing.Pages
-      - ObjectListing.pages
-      - ObjectListing.page
-      - ObjectListing.makeAsyncIterator
-      - ObjectListing.AsyncIterator
-      - ObjectListing.AsyncIterator.next
-      - ObjectListing.Page
-      - ObjectListing.Page.init
-      - ObjectListing.Page.objects
-      - ObjectListing.Page.folders
-      - ObjectListing.Page.nextCursor
-      - ObjectListing.Page.hasNext
+      - ObjectPage
+      - ObjectPage.init
+      - ObjectPage.objects
+      - ObjectPage.folders
+      - ObjectPage.nextCursor
+      - ObjectPage.hasNext
       - ObjectListingOptions
       - ObjectListingOptions.init
       - ObjectListingOptions.pageSize
@@ -2236,10 +2245,15 @@ features:
       - ObjectListingOptions.order
       - ObjectListingOptions.exactMatch
       - PageSequence
-      - PageSequence.Element
+      - PageSequence.pages
+      - PageSequence.page
       - PageSequence.makeAsyncIterator
       - PageSequence.AsyncIterator
       - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
       - ObjectMetadata
       - ObjectMetadata.init
       - ObjectMetadata.eTag
@@ -2425,7 +2439,9 @@ features:
       - StorageBucket.download
       - DownloadResponse
       - DownloadResponse.init
-      - DownloadResponse.httpResponse
+      - DownloadResponse.status
+      - DownloadResponse.headers
+      - DownloadResponse.requestID
       - DownloadResponse.body
       - DownloadResponse.contentType
       - DownloadResponse.contentLength
