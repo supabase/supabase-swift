@@ -64,7 +64,7 @@ struct SupabaseClientTests {
     )
 
     #expect(client.auth.configuration.clock as AnyObject === clock)
-    #expect(client.realtime.options.clock as AnyObject === clock)
+    #expect(client.realtime.configuration.clock as AnyObject === clock)
   }
 
   @Test
@@ -90,7 +90,7 @@ struct SupabaseClientTests {
         functions: SupabaseClientOptions.FunctionsOptions(
           region: .apNortheast1
         ),
-        realtime: RealtimeClientOptions(
+        realtime: SupabaseClientOptions.RealtimeOptions(
           headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
         )
       )
@@ -124,10 +124,9 @@ struct SupabaseClientTests {
 
     #expect(client.functions.configuration.region == .apNortheast1)
 
-    let realtimeURL = client.realtime.url
+    let realtimeURL = client.realtime.configuration.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = client.realtime.options
     let expectedRealtimeHeader = client._headers.merging(with: [
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
@@ -151,14 +150,16 @@ struct SupabaseClientTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: SupabaseClientOptions.AuthOptions(storage: InMemoryAuthStorage()),
-        realtime: RealtimeClientOptions(headers: ["apikey": "other", "X-Custom": "1"])
+        realtime: SupabaseClientOptions.RealtimeOptions(headers: [
+          "apikey": "other", "X-Custom": "1",
+        ])
       )
     )
 
     let headers = client.realtime.headers
     #expect(headers[values: .apiKey] == ["PUBLISHABLE_KEY"])
     #expect(headers[HTTPField.Name("x-custom")!] == "1")
-    #expect(client.realtime.options.headers["X-Custom"] == "1")
+    #expect(client.realtime.configuration.headers["X-Custom"] == "1")
   }
 
   @Test
@@ -254,11 +255,11 @@ struct SupabaseClientTests {
     )
 
     #expect(
-      client.realtime.options.http.transport is URLSessionTransport,
+      client.realtime.configuration.http.transport is URLSessionTransport,
       "the default URLSessionTransport should be propagated to Realtime client"
     )
     #expect(
-      client.realtime.options.http.middlewares.contains { $0 is TraceContextMiddleware },
+      client.realtime.configuration.http.middlewares.contains { $0 is TraceContextMiddleware },
       "SDK middlewares should be installed when the caller sets no transport"
     )
   }
@@ -274,17 +275,17 @@ struct SupabaseClientTests {
           storage: localStorage,
           autoRefresh: .manual
         ),
-        realtime: RealtimeClientOptions(
+        realtime: SupabaseClientOptions.RealtimeOptions(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
 
     #expect(
-      client.realtime.options.http.transport is ClosureTransport,
+      client.realtime.configuration.http.transport is ClosureTransport,
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtime.options.http.middlewares.isEmpty,
+      client.realtime.configuration.http.middlewares.isEmpty,
       "middlewares should stay as the caller passed them when they set a transport"
     )
   }
@@ -305,7 +306,7 @@ struct SupabaseClientTests {
         global: SupabaseClientOptions.GlobalOptions(
           http: .init(transport: URLSessionTransport(session: httpSession))
         ),
-        realtime: RealtimeClientOptions(webSocketTransport: realtimeTransport)
+        realtime: SupabaseClientOptions.RealtimeOptions(webSocketTransport: realtimeTransport)
       )
     )
 
@@ -766,7 +767,7 @@ struct SupabaseClientTests {
       let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
       #expect(entry.timeout == .seconds(7), "\(prefix)")
     }
-    #expect(client.realtime.options.http.timeout == .seconds(7))
+    #expect(client.realtime.configuration.http.timeout == .seconds(7))
   }
 
   @Test
@@ -810,11 +811,11 @@ struct SupabaseClientTests {
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        realtime: RealtimeClientOptions(http: .init(middlewares: [TagMiddleware()]))
+        realtime: SupabaseClientOptions.RealtimeOptions(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
-    let middlewares = client.realtime.options.http.middlewares
+    let middlewares = client.realtime.configuration.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
   }
@@ -861,7 +862,7 @@ struct SupabaseClientTests {
       options: SupabaseClientOptions(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(logger: Logging.Logger(label: "global")),
-        realtime: RealtimeClientOptions(logger: Logging.Logger(label: "realtime"))
+        realtime: SupabaseClientOptions.RealtimeOptions(logger: Logging.Logger(label: "realtime"))
       )
     )
 
@@ -877,7 +878,7 @@ struct SupabaseClientTests {
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
         auth: .init(storage: InMemoryAuthStorage(), accessToken: { nil }),
-        realtime: RealtimeClientOptions(handleAppLifecycle: false)
+        realtime: SupabaseClientOptions.RealtimeOptions(handleAppLifecycle: false)
       )
     )
   }

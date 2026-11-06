@@ -38,7 +38,7 @@ supporting_symbols:
   - SupabaseClientOptions.AuthOptions.clock
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
-  - RealtimeClientOptions.clock
+  - RealtimeClient.Configuration.clock
   # The default redirect URL every Auth call uses when it does not pass its own, and the members
   # of `Session` that record and encode when the client received it. Shared across Auth features,
   # not a capability of one.
@@ -384,16 +384,18 @@ supporting_symbols:
   - RealtimeError.ServerCode.unknownErrorOnChannel
   # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.requestTimeout
+  - RealtimeClient.Configuration.requestTimeout
   # Connection plumbing every realtime.* capability uses: the upgrade headers and the
   # HTTP client REST broadcasts go through.
-  - RealtimeClientOptions.headers
-  - RealtimeClientOptions.http
-  - RealtimeClientOptions.defaultRequestTimeout
-  - RealtimeClientOptions.connectOnSubscribe
-  - RealtimeClientOptions.defaultConnectOnSubscribe
-  # The options type itself.
-  - RealtimeClientOptions
+  - RealtimeClient.Configuration.headers
+  - RealtimeClient.Configuration.http
+  - RealtimeClient.Configuration.defaultRequestTimeout
+  - RealtimeClient.Configuration.connectOnSubscribe
+  - RealtimeClient.Configuration.defaultConnectOnSubscribe
+  # The configuration type itself, its url, and the client's copy of it.
+  - RealtimeClient.Configuration
+  - RealtimeClient.Configuration.url
+  - RealtimeClient.configuration
 
 features:
 
@@ -1927,9 +1929,9 @@ features:
 
   realtime.configuration.custom_websocket_transport:
     status: implemented
-    note: "RealtimeClientOptions.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
+    note: "RealtimeClient.Configuration.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
     symbols:
-      - RealtimeClientOptions.webSocketTransport
+      - RealtimeClient.Configuration.webSocketTransport
       - URLSessionWebSocketTransport
       - URLSessionWebSocketTransport.connect
       - URLSessionWebSocketTransport.init
@@ -1957,27 +1959,27 @@ features:
     status: implemented
     note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.heartbeatInterval
-      - RealtimeClientOptions.defaultHeartbeatInterval
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.heartbeatInterval
+      - RealtimeClient.Configuration.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.accessToken
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.accessToken
   realtime.configuration.deferred_disconnect:
     status: implemented
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
-      - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.disconnectOnEmptyChannelsAfter
+      - RealtimeClient.Configuration.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "RealtimeClientOptions.logger takes an optional swift-log Logger, which carries its own level; nil uses the default logger, or the global logger in SupabaseClient. RealtimeClientOptions.serverLogLevel sets the server-side log level."
+    note: "RealtimeClient.Configuration.logger takes a swift-log Logger, which carries its own level; it defaults to a logger labeled io.supabase.realtime, and SupabaseClient passes its global logger. RealtimeClient.Configuration.serverLogLevel sets the server-side log level."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.logger
-      - RealtimeClientOptions.serverLogLevel
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.logger
+      - RealtimeClient.Configuration.serverLogLevel
     supporting_symbols:
       - RealtimeServerLogLevel
       - RealtimeServerLogLevel.init
@@ -1987,18 +1989,18 @@ features:
       - RealtimeServerLogLevel.error
   realtime.configuration.foreground_liveness_probe:
     status: implemented
-    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClientOptions.handleAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
+    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.handleAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.handleAppLifecycle
-      - RealtimeClientOptions.defaultHandleAppLifecycle
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.handleAppLifecycle
+      - RealtimeClient.Configuration.defaultHandleAppLifecycle
   realtime.configuration.network_path_wake:
     status: implemented
     note: "NWPathMonitor reports a satisfied path as a wake hint that cuts a reconnect backoff short. The hint never gates a connect. The option defaults to off on watchOS and has no effect on Linux, which has no path monitor."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.monitorsNetworkPath
-      - RealtimeClientOptions.defaultMonitorsNetworkPath
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.monitorsNetworkPath
+      - RealtimeClient.Configuration.defaultMonitorsNetworkPath
 
   realtime.configuration.binary_protocol:
     status: implemented

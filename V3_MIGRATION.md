@@ -281,7 +281,7 @@ Changes that still compile but behave differently. Check each one by hand.
   `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
   `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
 - **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
-  for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
+  for certificate pinning), pass `SupabaseClientOptions.RealtimeOptions(webSocketTransport:)` a
   `URLSessionWebSocketTransport` built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
   `FunctionsOptions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).

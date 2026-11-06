@@ -90,8 +90,9 @@ struct InboxTests {
     // Each connect waits until the test ends it or the attempt is cancelled.
     let attempts = LockIsolated<[AsyncStream<Void>.Continuation]>([])
     let client = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        handleAppLifecycle: false),
       wsTransport: { _, _ in
         let (open, continuation) = AsyncStream<Void>.makeStream()
         attempts.withValue { $0.append(continuation) }
@@ -133,7 +134,10 @@ struct InboxTests {
   @Test
   func aStaleTimerTokenIsDropped() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        handleAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
@@ -190,8 +194,10 @@ struct InboxTests {
   @Test
   func aStaleIdleTokenIsDropped() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
-        disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        disconnectOnEmptyChannelsAfter: .seconds(5),
+        handleAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
     let removal = Task { await host.client.removeChannel(channel) }
@@ -214,9 +220,11 @@ struct InboxTests {
     // Each call waits until the test ends it or the call is cancelled.
     let calls = LockIsolated<[AsyncStream<Void>.Continuation]>([])
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
         requestTimeout: .seconds(5),
+        handleAppLifecycle: false,
         accessToken: {
           let (returned, continuation) = AsyncStream<Void>.makeStream()
           calls.withValue { $0.append(continuation) }
@@ -226,8 +234,7 @@ struct InboxTests {
           case .timeoutWins: return "late"
           case .callReturnsNil: return nil
           }
-        },
-        handleAppLifecycle: false
+        }
       ))
     defer { calls.value.forEach { $0.finish() } }
     let channel = await host.client.channel("room")
@@ -304,7 +311,9 @@ struct InboxTests {
   #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
     @Test
     func appLifecycleEventsGoThroughTheInbox() async throws {
-      let host = await RealtimeTestHost(options: RealtimeClientOptions(handleAppLifecycle: true))
+      let host = await RealtimeTestHost(
+        configuration: .init(
+          url: RealtimeTestHost.url, handleAppLifecycle: true))
       try await host.client.connect()
 
       #if os(macOS)
@@ -346,8 +355,9 @@ struct InboxTests {
 
     func scope() async throws -> AsyncStream<Input>.Continuation {
       let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(handleAppLifecycle: false),
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          handleAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -405,8 +415,9 @@ struct InboxTests {
 
   private func makeClient() -> RealtimeClient {
     RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        handleAppLifecycle: false),
       wsTransport: { _, _ in FakeWebSocket.fakes().0 },
       http: HTTPClient(transport: RecordingTransport()),
       clock: TestClock<Duration>()

@@ -21,7 +21,7 @@ import Foundation
   /// The signals are the app's background and foreground notifications on iOS, tvOS, and
   /// visionOS. On macOS an app that loses focus keeps its connection, so they are the Mac going
   /// to sleep and waking. What the client does with them is described at
-  /// ``RealtimeClientOptions/handleAppLifecycle``.
+  /// ``RealtimeClient/Configuration/handleAppLifecycle``.
   ///
   /// The client owns the observer, so it is not `Sendable`. Its observers are fixed at init and
   /// only yield ``Input/appBackground`` and ``Input/appForeground`` into the client's inbox. It

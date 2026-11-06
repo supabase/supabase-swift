@@ -24,8 +24,9 @@ struct RealtimeChannelTests {
 
   init() async {
     client = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"])
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"])
     )
     sut = await client.channel("topic")
   }
@@ -65,8 +66,8 @@ struct RealtimeChannelTests {
     func presenceChangeCallbackRejectedWhileSubscribing() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
           headers: ["apikey": "test-key"],
           accessToken: { "test-token" }
         ),
@@ -121,8 +122,8 @@ struct RealtimeChannelTests {
     func presenceChangeCallbackRejectedWhileSubscribed() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
           headers: ["apikey": "test-key"],
           accessToken: { "test-token" }
         ),
@@ -245,8 +246,8 @@ struct RealtimeChannelTests {
     let (client, server) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -300,8 +301,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -329,8 +331,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -359,8 +361,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -390,8 +392,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -432,8 +434,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -462,8 +464,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -495,8 +497,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"]),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -523,8 +526,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -553,9 +556,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw URLError(.timedOut) }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -579,9 +583,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw CancellationError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -601,9 +606,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw FetchError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: ["apikey": "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -624,8 +630,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         requestTimeout: .seconds(5),
         accessToken: { "test-token" }
@@ -652,8 +658,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         requestTimeout: .seconds(5),
         accessToken: { "test-token" }
@@ -681,8 +687,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -710,8 +716,8 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: ["apikey": "test-key"],
         accessToken: { "test-token" }
       ),
@@ -740,8 +746,8 @@ struct RealtimeChannelTests {
     func channelErrorWaitsToRejoin() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
           headers: ["apikey": "test-key"],
           accessToken: { "test-token" }
         ),

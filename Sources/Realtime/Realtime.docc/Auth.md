@@ -5,27 +5,26 @@ Give the client a token, keep it fresh, and protect private channels with row le
 ## Overview
 
 Every join carries an access token. The server checks it on join and closes the channel when it
-expires. The client gets tokens from a closure, ``RealtimeClientOptions/accessToken``, or from
+expires. The client gets tokens from a closure, ``RealtimeClient/Configuration/accessToken``, or from
 ``RealtimeClient/setAuth(_:)``.
 
 ### The token closure
 
-``RealtimeClientOptions/accessToken`` returns the token to join with:
+``RealtimeClient/Configuration/accessToken`` returns the token to join with:
 
 ```swift
-let options = RealtimeClientOptions(
-  headers: ["apikey": publishableKey],
-  accessToken: { try await session.currentAccessToken() }
-)
 let realtime = RealtimeClient(
-  url: URL(string: "https://<project-ref>.supabase.co/realtime/v1")!,
-  options: options
+  configuration: .init(
+    url: URL(string: "https://<project-ref>.supabase.co/realtime/v1")!,
+    headers: ["apikey": publishableKey],
+    accessToken: { try await session.currentAccessToken() }
+  )
 )
 ```
 
 The client calls the closure before a join and when a heartbeat goes out, at most once every 10
 seconds. A call that throws, returns `nil`, or does not return within
-``RealtimeClientOptions/requestTimeout`` keeps the current token.
+``RealtimeClient/Configuration/requestTimeout`` keeps the current token.
 
 When the token is a JWT, the client also calls the closure 60 seconds before the token's `exp`,
 while it is connected, and sends the new token to every joined channel. So a channel does not
@@ -87,7 +86,7 @@ reply to it.
 With `SupabaseClient`, set the `accessToken` closure in `SupabaseClientOptions.AuthOptions`.
 Realtime uses the same closure as every other module.
 
-With a standalone ``RealtimeClient``, set ``RealtimeClientOptions/accessToken`` to your auth
+With a standalone ``RealtimeClient``, set ``RealtimeClient/Configuration/accessToken`` to your auth
 library's token getter. When your library tells you the token changed, call
 ``RealtimeClient/setAuth(_:)``:
 

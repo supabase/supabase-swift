@@ -619,43 +619,37 @@ public final class SupabaseClient: Sendable {
   }
 
   private func _initRealtimeClient() -> RealtimeClient {
-    var realtimeOptions = options.realtime
-    // Through `HTTPFields`, so names compare without regard to case and the global headers win.
-    realtimeOptions.headers = HTTPFields(realtimeOptions.headers).merging(with: _headers).dictionary
-
-    if realtimeOptions.logger == nil {
-      realtimeOptions.logger = options.global.logger
-    }
-
-    if realtimeOptions.http.transport == nil {
-      realtimeOptions.http = HTTPClientConfiguration(
+    let realtime = options.realtime
+    var http = realtime.http
+    if http.transport == nil {
+      http = HTTPClientConfiguration(
         transport: transport,
-        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
+        middlewares: options.global.http.middlewares + realtime.http.middlewares
           + [TraceContextMiddleware()],
-        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+        timeout: realtime.http.timeout ?? options.global.http.timeout
       )
     }
-
-    if realtimeOptions.accessToken == nil {
-      realtimeOptions.accessToken = { [weak self] in
-        try await self?._getAccessToken()
-      }
-    } else {
-      reportIssue(
-        """
-        You assigned a custom `accessToken` closure to the RealtimeClient. This might not work as you expect
-        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
-
-        Please make sure you know what you're doing.
-        """
-      )
-    }
-
-    realtimeOptions.clock = clock
 
     return RealtimeClient(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
+      configuration: .init(
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        // Through `HTTPFields`, so names compare without regard to case and the global headers
+        // win.
+        headers: HTTPFields(realtime.headers).merging(with: _headers).dictionary,
+        heartbeatInterval: realtime.heartbeatInterval,
+        requestTimeout: realtime.requestTimeout,
+        connectOnSubscribe: realtime.connectOnSubscribe,
+        disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
+        handleAppLifecycle: realtime.handleAppLifecycle,
+        monitorsNetworkPath: realtime.monitorsNetworkPath,
+        serverLogLevel: realtime.serverLogLevel,
+        accessToken: { [weak self] in try await self?._getAccessToken() },
+        webSocketTransport: realtime.webSocketTransport,
+        http: http,
+        logger: realtime.logger ?? options.global.logger,
+        clock: clock
+      )
     )
   }
+
 }

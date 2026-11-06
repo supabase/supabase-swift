@@ -21,7 +21,7 @@ public struct SupabaseClientOptions: Sendable {
   /// Options for the Edge Functions sub-client.
   public let functions: FunctionsOptions
   /// Options for the Realtime sub-client.
-  public let realtime: RealtimeClientOptions
+  public let realtime: RealtimeOptions
   /// Options for the Storage sub-client.
   public let storage: StorageOptions
 
@@ -230,6 +230,83 @@ public struct SupabaseClientOptions: Sendable {
     }
   }
 
+  /// Options for the Realtime sub-client.
+  ///
+  /// `SupabaseClient` derives the URL, the `apikey` header, the access token and the clock
+  /// itself, so they are not settings here.
+  public struct RealtimeOptions: Sendable {
+    /// Headers sent with the WebSocket upgrade request. The global headers and the `apikey`
+    /// header win over a header set here; names compare without regard to case.
+    public var headers: [String: String]
+
+    /// How often the client sends a heartbeat. See
+    /// ``RealtimeClient/Configuration/heartbeatInterval``.
+    public var heartbeatInterval: Duration
+
+    /// How long the client waits for the server to answer a request. See
+    /// ``RealtimeClient/Configuration/requestTimeout``.
+    public var requestTimeout: Duration
+
+    /// Whether subscribing to a channel connects the client. See
+    /// ``RealtimeClient/Configuration/connectOnSubscribe``.
+    public var connectOnSubscribe: Bool
+
+    /// How long the client keeps the socket open after the last channel is removed. See
+    /// ``RealtimeClient/Configuration/disconnectOnEmptyChannelsAfter``.
+    public var disconnectOnEmptyChannelsAfter: Duration
+
+    /// Whether the client follows the app lifecycle. See
+    /// ``RealtimeClient/Configuration/handleAppLifecycle``.
+    public var handleAppLifecycle: Bool
+
+    /// Whether the client reconnects as soon as the network is back. See
+    /// ``RealtimeClient/Configuration/monitorsNetworkPath``.
+    public var monitorsNetworkPath: Bool
+
+    /// How much the Realtime server logs for this connection. `nil` keeps the server's level.
+    public var serverLogLevel: RealtimeServerLogLevel?
+
+    /// The WebSocket stack the client connects with. `nil` uses
+    /// ``URLSessionWebSocketTransport``.
+    public var webSocketTransport: (any WebSocketTransport)?
+
+    /// The transport and middleware chain `RealtimeChannel.httpSend` calls go through. With a
+    /// `nil` transport, the global transport, middlewares and timeout apply, and these
+    /// middlewares run after the global ones.
+    public var http: HTTPClientConfiguration
+
+    /// Overrides ``SupabaseClientOptions/GlobalOptions/logger`` for Realtime. `nil` uses the
+    /// global logger.
+    public var logger: Logging.Logger?
+
+    public init(
+      headers: [String: String] = [:],
+      heartbeatInterval: Duration = RealtimeClient.Configuration.defaultHeartbeatInterval,
+      requestTimeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout,
+      connectOnSubscribe: Bool = RealtimeClient.Configuration.defaultConnectOnSubscribe,
+      disconnectOnEmptyChannelsAfter: Duration = RealtimeClient.Configuration
+        .defaultDisconnectOnEmptyChannelsAfter,
+      handleAppLifecycle: Bool = RealtimeClient.Configuration.defaultHandleAppLifecycle,
+      monitorsNetworkPath: Bool = RealtimeClient.Configuration.defaultMonitorsNetworkPath,
+      serverLogLevel: RealtimeServerLogLevel? = nil,
+      webSocketTransport: (any WebSocketTransport)? = nil,
+      http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger? = nil
+    ) {
+      self.headers = headers
+      self.heartbeatInterval = heartbeatInterval
+      self.requestTimeout = requestTimeout
+      self.connectOnSubscribe = connectOnSubscribe
+      self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
+      self.handleAppLifecycle = handleAppLifecycle
+      self.monitorsNetworkPath = monitorsNetworkPath
+      self.serverLogLevel = serverLogLevel
+      self.webSocketTransport = webSocketTransport
+      self.http = http
+      self.logger = logger
+    }
+  }
+
   /// Creates a configuration with the given options.
   /// - Parameters:
   ///   - db: Options for the database (PostgREST) sub-client.
@@ -243,7 +320,7 @@ public struct SupabaseClientOptions: Sendable {
     auth: AuthOptions,
     global: GlobalOptions = .init(),
     functions: FunctionsOptions = .init(),
-    realtime: RealtimeClientOptions = .init(),
+    realtime: RealtimeOptions = .init(),
     storage: StorageOptions = .init()
   ) {
     self.db = db
@@ -260,7 +337,7 @@ extension SupabaseClientOptions {
     db: DatabaseOptions = .init(),
     global: GlobalOptions = .init(),
     functions: FunctionsOptions = .init(),
-    realtime: RealtimeClientOptions = .init(),
+    realtime: RealtimeOptions = .init(),
     storage: StorageOptions = .init()
   ) {
     self.db = db

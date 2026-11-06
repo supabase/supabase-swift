@@ -38,12 +38,12 @@ struct RealtimeLifecycleTests {
     reconnectBackoff: BackoffPolicy? = nil
   ) -> RealtimeClient {
     RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
-        accessToken: { "custom.access.token" },
         handleAppLifecycle: handleAppLifecycle,
-        monitorsNetworkPath: monitorsNetworkPath
+        monitorsNetworkPath: monitorsNetworkPath,
+        accessToken: { "custom.access.token" }
       ),
       wsTransport: { [servers, answersHeartbeats] _, _ in
         let (client, server) = FakeWebSocket.fakes()
@@ -260,8 +260,8 @@ struct RealtimeLifecycleTests {
     let rejoinJoinTopics = LockIsolated<Set<String>>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         accessToken: { "custom.access.token" }
       ),

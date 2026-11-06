@@ -23,8 +23,10 @@ import Logging
 ///
 /// ```swift
 /// let client = RealtimeClient(
-///   url: URL(string: "https://<project>.supabase.co/realtime/v1")!,
-///   options: RealtimeClientOptions(accessToken: { session.accessToken })
+///   configuration: .init(
+///     url: URL(string: "https://<project>.supabase.co/realtime/v1")!,
+///     accessToken: { session.accessToken }
+///   )
 /// )
 ///
 /// try await client.connect()
@@ -54,12 +56,11 @@ import Logging
 /// ### Authentication
 /// - ``setAuth(_:)``
 public actor RealtimeClient {
-  nonisolated let url: URL
-  nonisolated let options: RealtimeClientOptions
-  /// ``RealtimeClientOptions/logger``, or the default logger when it is `nil`, tagged with the
-  /// `system` metadata key set to `realtime`.
+  /// The configuration this client was created with.
+  public nonisolated let configuration: Configuration
+  /// ``Configuration/logger`` tagged with the `system` metadata key set to `realtime`.
   nonisolated let logger: Logger
-  /// `options.headers` with `X-Client-Info` added when the app did not set it.
+  /// `configuration.headers` with `X-Client-Info` added when the app did not set it.
   nonisolated let headers: HTTPFields
   nonisolated let transport: any WebSocketTransport
   nonisolated let http: HTTPClient
@@ -186,13 +187,13 @@ public actor RealtimeClient {
 
   #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
     /// Yields the app lifecycle changes into ``inbox`` when
-    /// ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+    /// ``Configuration/handleAppLifecycle`` is `true`.
     let lifecycleObserver: RealtimeLifecycleObserver?
   #endif
 
   #if canImport(Network)
     /// Yields a wake hint into ``inbox`` when the network path is satisfied, when
-    /// ``RealtimeClientOptions/monitorsNetworkPath`` is `true`.
+    /// ``Configuration/monitorsNetworkPath`` is `true`.
     let networkPathObserver: RealtimeNetworkPathObserver?
   #endif
 
@@ -211,54 +212,49 @@ public actor RealtimeClient {
 
   /// Creates a new ``RealtimeClient``.
   ///
-  /// The client connects through ``RealtimeClientOptions/webSocketTransport``, or through
-  /// ``URLSessionWebSocketTransport`` when that option is `nil`.
+  /// The client connects through ``Configuration/webSocketTransport``, or through
+  /// ``URLSessionWebSocketTransport`` when that setting is `nil`.
   ///
-  /// - Parameters:
-  ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
-  ///   - options: Configuration options for the client.
-  public init(url: URL, options: RealtimeClientOptions) {
+  /// - Parameter configuration: The settings the client is created with.
+  public init(configuration: Configuration) {
     let interceptors: [any ClientMiddleware] = [
-      LoggerInterceptor(logger: Self.logger(for: options))
+      LoggerInterceptor(logger: Self.logger(for: configuration))
     ]
 
     self.init(
-      url: url,
-      options: options,
-      transport: options.webSocketTransport ?? URLSessionWebSocketTransport(),
-      http: HTTPClient(configuration: options.http, appending: interceptors),
-      clock: options.clock
+      configuration: configuration,
+      transport: configuration.webSocketTransport ?? URLSessionWebSocketTransport(),
+      http: HTTPClient(configuration: configuration.http, appending: interceptors),
+      clock: configuration.clock
     )
   }
 
-  private static func logger(for options: RealtimeClientOptions) -> Logger {
-    var logger = options.logger ?? supabaseDefaultLogger(label: "io.supabase.realtime")
+  private static func logger(for configuration: Configuration) -> Logger {
+    var logger = configuration.logger
     logger[metadataKey: "system"] = "realtime"
     return logger
   }
 
   /// Designated initializer.
   ///
-  /// `clock` is a separate parameter from ``RealtimeClientOptions/clock`` so tests can pair a
-  /// `TestClock` with a stub `transport`. The public initializer forwards `options.clock`, so
-  /// the two only ever differ inside this package's own tests.
+  /// `clock` is a separate parameter from ``Configuration/clock`` so tests can pair a
+  /// `TestClock` with a stub `transport`. The public initializer forwards `configuration.clock`,
+  /// so the two only ever differ inside this package's own tests.
   init(
-    url: URL,
-    options: RealtimeClientOptions,
+    configuration: Configuration,
     transport: any WebSocketTransport,
     http: HTTPClient,
     clock: any Clock<Duration>,
     reconnectBackoff: BackoffPolicy = defaultReconnectBackoff,
     jitter: @escaping @Sendable (ClosedRange<Double>) -> Double = { Double.random(in: $0) }
   ) {
-    var headers = HTTPFields(options.headers)
+    var headers = HTTPFields(configuration.headers)
     if headers[.xClientInfo] == nil {
       headers[.xClientInfo] = "realtime-swift/\(version)"
     }
 
-    let logger = Self.logger(for: options)
-    self.url = url
-    self.options = options
+    let logger = Self.logger(for: configuration)
+    self.configuration = configuration
     self.logger = logger
     self.headers = headers
     self.transport = transport
@@ -269,19 +265,20 @@ public actor RealtimeClient {
     self.reconnectBackoff = reconnectBackoff
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
-      baseURL: Self.realtimeBaseURL(url: url),
+      baseURL: Self.realtimeBaseURL(url: configuration.url),
       apikey: headers[.apiKey],
-      serverLogLevel: options.serverLogLevel
+      serverLogLevel: configuration.serverLogLevel
     )
 
     let (inputs, inbox) = AsyncStream.makeStream(of: Input.self, bufferingPolicy: .unbounded)
     self.inbox = inbox
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      lifecycleObserver = options.handleAppLifecycle ? RealtimeLifecycleObserver(inbox: inbox) : nil
+      lifecycleObserver =
+        configuration.handleAppLifecycle ? RealtimeLifecycleObserver(inbox: inbox) : nil
     #endif
     #if canImport(Network)
       networkPathObserver =
-        options.monitorsNetworkPath ? RealtimeNetworkPathObserver(inbox: inbox) : nil
+        configuration.monitorsNetworkPath ? RealtimeNetworkPathObserver(inbox: inbox) : nil
     #endif
 
     // The pump. Not stored: it holds the client weakly, so it never keeps it alive, and it ends
@@ -306,11 +303,11 @@ public actor RealtimeClient {
     let jitter = jitter
     let registeredChannels = registeredChannels
     let coreOptions = RealtimeCore.Options(
-      timeout: options.requestTimeout,
-      heartbeatInterval: options.heartbeatInterval,
-      connectOnSubscribe: options.connectOnSubscribe,
-      disconnectOnEmptyChannelsAfter: options.disconnectOnEmptyChannelsAfter,
-      hasAccessTokenProvider: options.accessToken != nil,
+      timeout: configuration.requestTimeout,
+      heartbeatInterval: configuration.heartbeatInterval,
+      connectOnSubscribe: configuration.connectOnSubscribe,
+      disconnectOnEmptyChannelsAfter: configuration.disconnectOnEmptyChannelsAfter,
+      hasAccessTokenProvider: configuration.accessToken != nil,
       accessTokenRefreshInterval: Self.accessTokenRefreshInterval,
       accessTokenRefreshLeeway: Self.accessTokenRefreshLeeway,
       retryDelay: { reconnectBackoff.delay(forAttempt: $0, random: jitter) },
@@ -359,7 +356,7 @@ public actor RealtimeClient {
 
   /// An async stream that emits each step of the heartbeat cycle.
   ///
-  /// The client sends a heartbeat at each ``RealtimeClientOptions/heartbeatInterval``
+  /// The client sends a heartbeat at each ``Configuration/heartbeatInterval``
   /// interval to keep the connection alive. The stream replays the latest event, if any, and
   /// then emits every later one. Cancelling the iterating task ends the stream; so does
   /// releasing the client.
@@ -411,7 +408,7 @@ public actor RealtimeClient {
   /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
   /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
   /// automatic reconnect carries on. If
-  /// ``RealtimeClientOptions/connectOnSubscribe`` is `true` (the default), this is called
+  /// ``Configuration/connectOnSubscribe`` is `true` (the default), this is called
   /// automatically when a channel is subscribed to.
   ///
   /// ```swift
@@ -440,7 +437,7 @@ public actor RealtimeClient {
   /// The frames already queued, such as broadcasts that returned before this call, are still
   /// written before the socket closes. The method returns once the socket is closed; a second call
   /// made while that happens returns at once. The wait
-  /// lasts at most ``RealtimeClientOptions/requestTimeout``; after that, or when the calling task
+  /// lasts at most ``Configuration/requestTimeout``; after that, or when the calling task
   /// is cancelled, the frames left are dropped.
   ///
   /// - Parameters:
@@ -451,7 +448,7 @@ public actor RealtimeClient {
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = clock
     // Started before the event, so the bound runs from the call.
-    let deadline = sleepThenRun(on: clock, after: options.requestTimeout) {}
+    let deadline = sleepThenRun(on: clock, after: configuration.requestTimeout) {}
     defer { deadline.cancel() }
     stoppedByDisconnect = StoppedSocket()
     apply(.disconnectRequested(code: code, reason: reason))
@@ -470,7 +467,7 @@ public actor RealtimeClient {
   /// Records whether the socket is connected as the app enters the background.
   ///
   /// Runs when the inbox delivers ``Input/appBackground``, which ``RealtimeLifecycleObserver``
-  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// yields when ``Configuration/handleAppLifecycle`` is `true`.
   func handleAppBackground() {
     apply(.appBackground)
   }
@@ -480,7 +477,7 @@ public actor RealtimeClient {
   /// since gone away.
   ///
   /// Runs when the inbox delivers ``Input/appForeground``, which ``RealtimeLifecycleObserver``
-  /// yields when ``RealtimeClientOptions/handleAppLifecycle`` is `true`.
+  /// yields when ``Configuration/handleAppLifecycle`` is `true`.
   func handleAppForeground() {
     apply(.appForeground)
   }
@@ -507,7 +504,7 @@ public actor RealtimeClient {
   ///
   /// > Note: This method does not subscribe to the channel. Call ``RealtimeChannel/subscribe()``
   /// > on the returned instance to join the topic. Only the subscribe cancels a disconnect
-  /// > scheduled by ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``.
+  /// > scheduled by ``Configuration/disconnectOnEmptyChannelsAfter``.
   ///
   /// - Parameters:
   ///   - topic: The channel topic name, such as `"room:lobby"`.
@@ -562,7 +559,7 @@ public actor RealtimeClient {
   /// topic, and the method returns when the leave ends. A new channel for the same topic, from
   /// ``channel(_:configure:)``, can subscribe meanwhile. After removal, if no channels remain,
   /// the client disconnects (or schedules a deferred disconnect based on
-  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``).
+  /// ``Configuration/disconnectOnEmptyChannelsAfter``).
   ///
   /// Removing a channel that was already removed, or that another client created, does nothing
   /// and returns at once. This holds for a second call made while the first removal is still
@@ -581,7 +578,7 @@ public actor RealtimeClient {
   /// Unsubscribes from and removes all channels, then disconnects immediately.
   ///
   /// Unlike ``removeChannel(_:)``, this method ignores
-  /// ``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` and
+  /// ``Configuration/disconnectOnEmptyChannelsAfter`` and
   /// disconnects the WebSocket right away.
   public func removeAllChannels() async {
     let removed = channels
@@ -611,9 +608,9 @@ public actor RealtimeClient {
   ///
   /// When the token changes, it is sent to all currently-subscribed channels. If `token` is
   /// `nil`, the value is fetched from the `accessToken` callback configured on
-  /// ``RealtimeClientOptions``. The callback is called at most once every 10 seconds; inside
+  /// ``Configuration``. The callback is called at most once every 10 seconds; inside
   /// that window the stored token is kept. A callback that does not return within
-  /// ``RealtimeClientOptions/requestTimeout`` is treated as failed.
+  /// ``Configuration/requestTimeout`` is treated as failed.
   ///
   /// While the client is connected, the callback is set, and the token is a JWT, the client also
   /// calls the callback one minute before the token's `exp`, so channels are not closed when it
@@ -714,6 +711,7 @@ public actor RealtimeClient {
   /// Topic and event are percent-encoded as individual path segments (so values containing
   /// `/` don't introduce extra path components), and a private channel adds `?private=true`.
   nonisolated func broadcastURL(topic: String, event: String, isPrivate: Bool) -> URL {
+    let url = configuration.url
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       return url
     }
@@ -732,11 +730,7 @@ public actor RealtimeClient {
       components.queryItems = [URLQueryItem(name: "private", value: "true")]
     }
 
-    guard let url = components.url else {
-      return url
-    }
-
-    return url
+    return components.url ?? url
   }
 }
 
