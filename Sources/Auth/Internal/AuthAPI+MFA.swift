@@ -47,14 +47,20 @@ extension AuthAPI {
     accessToken: String
   ) throws -> AuthRequest<Session> {
     struct Params: Encodable {
-      let factorId: UUID
-      let challengeId: UUID
+      let factorID: UUID
+      let challengeID: UUID
       let code: String
+
+      private enum CodingKeys: String, CodingKey {
+        case factorID = "factor_id"
+        case challengeID = "challenge_id"
+        case code
+      }
     }
 
     return try request(
       .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(Params(factorId: factorID, challengeId: challengeID, code: code)),
+      body: encoder.encode(Params(factorID: factorID, challengeID: challengeID, code: code)),
       decode: decodingSession())
   }
 
@@ -70,18 +76,29 @@ extension AuthAPI {
     struct WebAuthn: Encodable {
       let type: String
       let credentialResponse: JSONValue
+
+      private enum CodingKeys: String, CodingKey {
+        case type
+        case credentialResponse = "credential_response"
+      }
     }
     struct Params: Encodable {
-      let factorId: UUID
-      let challengeId: UUID
+      let factorID: UUID
+      let challengeID: UUID
       let webauthn: WebAuthn
+
+      private enum CodingKeys: String, CodingKey {
+        case factorID = "factor_id"
+        case challengeID = "challenge_id"
+        case webauthn
+      }
     }
 
     return try request(
       .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
       body: encoder.encode(
         Params(
-          factorId: factorID, challengeId: challengeID,
+          factorID: factorID, challengeID: challengeID,
           webauthn: WebAuthn(type: type.rawValue, credentialResponse: credentialResponse))),
       decode: decodingSession())
   }
@@ -115,6 +132,10 @@ extension AuthAPI {
   ) throws -> AuthRequest<AuthMFARecoveryCodesGenerateResponse> {
     struct Params: Encodable {
       let friendlyName: String
+
+      private enum CodingKeys: String, CodingKey {
+        case friendlyName = "friendly_name"
+      }
     }
 
     return try request(

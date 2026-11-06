@@ -338,7 +338,7 @@ extension AuthAPI {
           gotrueMetaSecurity: options.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(MessageIDBody.self) { $0.messageId }
+      decode: decoding(MessageIDBody.self) { $0.messageID }
     )
   }
 
@@ -417,7 +417,7 @@ extension AuthAPI {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(MessageIDBody.self) { $0.messageId }
+      decode: decoding(MessageIDBody.self) { $0.messageID }
     )
   }
 
@@ -466,7 +466,7 @@ extension AuthAPI {
       .post, "sso",
       body: encoder.encode(
         SignInWithSSORequest(
-          providerId: providerID,
+          providerID: providerID,
           domain: domain,
           redirectTo: redirectTo ?? defaultRedirectURL,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -611,14 +611,14 @@ extension AuthAPI {
   }
 
   func oauthConsent(
-    authorizationId: String,
+    authorizationID: String,
     action: String,
     accessToken: String
   ) throws -> AuthRequest<OAuthRedirect> {
     try request(
       .post,
       url: url.appendingPathComponent("oauth/authorizations")
-        .appendingPathComponent(authorizationId)
+        .appendingPathComponent(authorizationID)
         .appendingPathComponent("consent"),
       authorization: bearer(accessToken),
       body: encoder.encode(["action": action]), decode: decoding(OAuthRedirect.self))
@@ -630,10 +630,10 @@ extension AuthAPI {
       decode: decoding([OAuthGrant].self))
   }
 
-  func revokeOAuthGrant(clientId: UUID, accessToken: String) -> AuthRequest<Void> {
+  func revokeOAuthGrant(clientID: UUID, accessToken: String) -> AuthRequest<Void> {
     request(
       .delete, "user/oauth/grants",
-      query: [URLQueryItem(name: "client_id", value: clientId.uuidString)],
+      query: [URLQueryItem(name: "client_id", value: clientID.uuidString)],
       authorization: bearer(accessToken), decode: ignoringBody)
   }
 }

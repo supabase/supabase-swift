@@ -8,6 +8,11 @@ every module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **Free-form keys are no longer rewritten.** The v2 Auth coders converted every key between
+  `camelCase` and `snake_case`, including the keys of your own JSON, such as `userMetadata` and
+  `data`. v3 maps only the declared model keys, so the keys that you send and read stay as you
+  wrote them. If your app or a database trigger relied on the conversion, for example by sending
+  `firstName` and reading `first_name`, send and read the key you mean.
 - **Initial session can be expired.** With `autoRefresh: .automatic`, the client tries one
   refresh of an expired stored session before it delivers `.initialSession`. It waits at most
   `AuthClient.Configuration.initialRefreshTimeout`, 5 seconds by default. A value of zero or less
@@ -374,6 +379,22 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## Acronyms use uniform case
+
+Every public Auth name spells `ID`, `URL` and `URI` in capitals, like `factorID` and `jwksURI`. The
+wire keys do not change.
+
+| v3 pre-release | v3 |
+| --- | --- |
+| `OAuthClient.clientId`, `.clientUri`, `.logoUri`, `.redirectUris` | `clientID`, `clientURI`, `logoURI`, `redirectURIs` |
+| `CreateOAuthClientParams` and `UpdateOAuthClientParams`: `clientUri`, `logoUri`, `redirectUris` | `clientURI`, `logoURI`, `redirectURIs` |
+| `OAuthAuthorizationClient.logoUri` | `logoURI` |
+| `OAuthAuthorizationDetails.authorizationId`, `.redirectUri` | `authorizationID`, `redirectURI` |
+| `WebAuthnChallengeOptions.rpId` | `rpID` |
+| The `userId:` parameter of the admin MFA and passkey methods | `userID:` |
+| `CustomProvider` URL and ID fields (`clientId`, `discoveryUrl`, `authorizationUrl`, `tokenUrl`, `userinfoUrl`, `jwksUri`, `acceptableClientIds`) | `clientID`, `discoveryURL`, `authorizationURL`, `tokenURL`, `userinfoURL`, `jwksURI`, `acceptableClientIDs` |
+| `OAuthRedirect.redirectURL` and `OAuthAuthorizationDetails.redirectUri` | `redirectURL` and `redirectURI` stay two names: the first is a full URL the app opens, the second is the client's registered URI |
 
 ## `admin` is a separate `AuthAdminClient`
 

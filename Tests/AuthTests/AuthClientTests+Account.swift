@@ -241,10 +241,10 @@ extension AuthClientTests {
 
   @Test
   func adminListPasskeysReturnsItems() async throws {
-    let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+    let userID = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
 
     transport.stub(
-      .get, "admin/users/\(userId)/passkeys",
+      .get, "admin/users/\(userID)/passkeys",
       data: Data(
         """
         [
@@ -266,7 +266,7 @@ extension AuthClientTests {
 
     let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
 
-    let passkeys = try await sut.passkeys.list(forUser: userId)
+    let passkeys = try await sut.passkeys.list(forUser: userID)
 
     expectNoDifference(
       passkeys.map(\.id),
@@ -282,10 +282,10 @@ extension AuthClientTests {
 
   @Test
   func adminDeletePasskey() async throws {
-    let userId = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
+    let userID = UUID(uuidString: "859f402d-b3de-4105-a1b9-932836d9193b")!
     let passkeyId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
-    transport.stub(.delete, "admin/users/\(userId)/passkeys/\(passkeyId)", status: .noContent) {
+    transport.stub(.delete, "admin/users/\(userID)/passkeys/\(passkeyId)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -293,12 +293,12 @@ extension AuthClientTests {
       	--header "X-Client-Info: auth-swift/0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/auth/v1/admin/users/\#(userId)/passkeys/\#(passkeyId)"
+      	"http://localhost:54321/auth/v1/admin/users/\#(userID)/passkeys/\#(passkeyId)"
       """#
     }
 
     let sut = AuthAdminClient.testing(secretKey: apiKey, http: transport)
-    try await sut.passkeys.delete(id: passkeyId, forUser: userId)
+    try await sut.passkeys.delete(id: passkeyId, forUser: userID)
   }
 
   @Test
@@ -323,8 +323,8 @@ extension AuthClientTests {
 
   @Test
   func unlinkIdentity() async throws {
-    let identityId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-    transport.stub(.delete, "user/identities/\(identityId.uuidString)", status: .noContent) {
+    let identityID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    transport.stub(.delete, "user/identities/\(identityID.uuidString)", status: .noContent) {
       #"""
       curl \
       	--request DELETE \
@@ -342,7 +342,7 @@ extension AuthClientTests {
 
     try await sut.unlinkIdentity(
       UserIdentity(
-        id: identityId,
+        id: identityID,
         providerUserID: "5923044",
         userID: UUID(),
         provider: .email,
@@ -729,7 +729,7 @@ extension AuthClientTests {
     try await sut.seedSession(.valid)
 
     let challenge = try await sut.mfa.challenge(
-      factorID: factorID, webAuthn: .init(rpId: "example.com"))
+      factorID: factorID, webAuthn: .init(rpID: "example.com"))
 
     expectNoDifference(challenge.id, UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     expectNoDifference(challenge.factorType, .webAuthn)

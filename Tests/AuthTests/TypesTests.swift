@@ -17,6 +17,23 @@ struct TypesTests {
   }
 
   @Test
+  func sdkCodersLeaveFreeFormKeysAlone() throws {
+    let attributes = UserAttributes(userMetadata: ["firstName": "Ada", "snake_key": 1])
+
+    let body = try AuthClient.Configuration.jsonEncoder.encode(attributes)
+    let sent = try JSONDecoder().decode([String: [String: JSONValue]].self, from: body)
+
+    #expect(sent["data"]?.keys.sorted() == ["firstName", "snake_key"])
+
+    let json = Data(
+      #"{"id":"859f402d-b3de-4105-a1b9-932836d9193b","aud":"authenticated","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z","user_metadata":{"firstName":"Ada","last_name":"L"}}"#
+        .utf8)
+    let user = try AuthClient.Configuration.jsonDecoder.decode(User.self, from: json)
+
+    #expect(user.userMetadata.keys.sorted() == ["firstName", "last_name"])
+  }
+
+  @Test
   func jwkDecodesKeyOps() throws {
     let json = Data(
       #"{"kty":"EC","key_ops":["verify"],"alg":"ES256","kid":"k1","crv":"P-256","x":"AQAB","y":"AQAB"}"#
@@ -206,7 +223,7 @@ struct TypesTests {
       _ = try decodeIdentity(dropping: "identity_id")
       Issue.record("Expected a DecodingError")
     } catch DecodingError.keyNotFound(let key, _) {
-      #expect(key.stringValue == "identityId")
+      #expect(key.stringValue == "identity_id")
     } catch {
       Issue.record("Unexpected error: \(error)")
     }

@@ -11,7 +11,7 @@
 //    2. Host an `apple-app-site-association` file at that domain granting this app the
 //       `webcredentials` service.
 //    3. Configure `rp_id` in your Supabase project to match that domain.
-//       The SDK reads rpId from the server response — no client-side configuration needed.
+//       The SDK reads rpID from the server response — no client-side configuration needed.
 //
 
 @_spi(Experimental) import Auth
