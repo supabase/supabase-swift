@@ -9,7 +9,7 @@ import Foundation
 import HTTPTypes
 
 extension AuthAPI {
-  /// The credential is a `JSONValue`, so the snake_case key strategy keeps its W3C field names.
+  /// The credential is a `JSONValue`, so its W3C field names reach the server as they are.
   private struct VerifyBody: Encodable {
     let challengeID: UUID
     let credential: JSONValue

@@ -8,6 +8,12 @@ every module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **`Session`, `User`, `UserIdentity` and `Factor` encode with snake_case keys.** They declare
+  their own keys now, so any coder writes `access_token`, not `accessToken`. If your app stores
+  these values with its own `JSONEncoder` (a `UserDefaults` or keychain cache), it writes
+  `access_token` from now on, and a blob that it wrote earlier with `accessToken` no longer
+  decodes. Clear such a cache or decode the old blob with your own keys. The SDK's own session
+  storage reads every earlier format.
 - **Free-form keys are no longer rewritten.** The v2 Auth coders converted every key between
   `camelCase` and `snake_case`, including the keys of your own JSON, such as `userMetadata` and
   `data`. v3 maps only the declared model keys, so the keys that you send and read stay as you

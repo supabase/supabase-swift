@@ -108,11 +108,15 @@ enum PersistedSessionCodec {
     return result
   }
 
+  /// Foundation's `convertFromSnakeCase` for one key: leading and trailing underscores stay.
   private static func camelCased(_ key: String) -> String {
-    let words = key.split(separator: "_", omittingEmptySubsequences: false)
+    let leading = key.prefix { $0 == "_" }
+    let trailing = key.dropFirst(leading.count).reversed().prefix { $0 == "_" }
+    let core = key.dropFirst(leading.count).dropLast(trailing.count)
+    let words = core.split(separator: "_", omittingEmptySubsequences: true)
     guard let first = words.first else { return key }
-    return String(first)
-      + words.dropFirst().map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined()
+    let rest = words.dropFirst().map { $0.prefix(1).uppercased() + $0.dropFirst() }
+    return leading + first + rest.joined() + trailing
   }
 
   private struct V2WrappedSession: Decodable {

@@ -71,8 +71,8 @@ extension AuthAPI {
     credentialResponse: JSONValue,
     accessToken: String
   ) throws -> AuthRequest<Session> {
-    // The server needs `type` to parse the credential. The credential is a `JSONValue`, so the
-    // snake_case key strategy keeps its W3C field names.
+    // The server needs `type` to parse the credential. The credential is a `JSONValue`, so its
+    // W3C field names reach the server as they are.
     struct WebAuthn: Encodable {
       let type: String
       let credentialResponse: JSONValue
