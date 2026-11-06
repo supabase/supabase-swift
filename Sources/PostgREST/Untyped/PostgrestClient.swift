@@ -174,7 +174,7 @@ public struct PostgrestClient: Sendable {
       self.url = url
       self.schema = schema
       self.headers = headers
-      var logger = logger
+      var logger = logger.redactingSecrets()
       logger[metadataKey: "system"] = "postgrest"
       self.logger = logger
       self.http = http

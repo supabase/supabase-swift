@@ -143,7 +143,8 @@ public struct RealtimeClientOptions: Sendable {
   ///
   /// `nil`, the default, uses a logger labeled `"io.supabase.realtime"`. `SupabaseClient` uses
   /// its global logger instead. The client tags the logger it uses with the `system` metadata
-  /// key set to `realtime`.
+  /// key set to `realtime`. The client removes tokens, secrets, and URL query strings from each
+  /// line before your handler sees it.
   public var logger: Logging.Logger?
 
   /// The WebSocket stack the client connects with.

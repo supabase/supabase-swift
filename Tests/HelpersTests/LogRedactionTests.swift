@@ -1,8 +1,9 @@
+import Foundation
 import Logging
 import TestHelpers
 import Testing
 
-@testable import Auth
+@testable import Helpers
 
 @Suite
 struct LogRedactionTests {
@@ -71,6 +72,14 @@ struct LogRedactionTests {
   }
 
   @Test
+  func masksSecretAPIKeys() {
+    #expect(
+      LogRedaction.redact("Authorization: Bearer sb_secret_AbC-123_xyz sent")
+        == "Authorization: Bearer <redacted> sent")
+    #expect(LogRedaction.redact("apiKey: sb_publishable_1") == "apiKey: <redacted>")
+  }
+
+  @Test
   func masksSecretsInJSONThatEscapesItsSlashesAndQuotes() {
     #expect(
       LogRedaction.redact(#"{"url" : "https:\/\/idp.example\/authorize?state=s-1&code=c-1"}"#)
@@ -78,6 +87,59 @@ struct LogRedactionTests {
     #expect(
       LogRedaction.redact(#"body: {\"refresh_token\":\"r-secret-1\"}"#)
         == #"body: {\"refresh_token\":\"<redacted>\"}"#)
+  }
+}
+
+@Suite
+struct LogRedactionSummaryTests {
+  @Test
+  func summarizesAnErrorByDomainAndCodeOnly() {
+    let error = URLError(
+      .timedOut, userInfo: [NSURLErrorFailingURLStringErrorKey: "https://x.co/?token=t-1"])
+
+    #expect(LogRedaction.summary(of: error) == "NSURLErrorDomain \(URLError.timedOut.rawValue)")
+  }
+
+  @Test
+  func summarizesADecodingErrorByItsCaseAndPathWithoutTheValue() throws {
+    struct Row: Decodable { let id: Int }
+    let error = try #require(
+      throws: DecodingError.self,
+      performing: {
+        try JSONDecoder().decode([Row].self, from: Data(#"[{"id":"s-secret-1"}]"#.utf8))
+      }
+    )
+
+    #expect(LogRedaction.summary(of: error) == "DecodingError.typeMismatch at 'Index 0.id'")
+  }
+
+  @Test
+  func summarizesAnEncodingErrorByItsPathWithoutTheValue() throws {
+    let error = try #require(
+      throws: EncodingError.self,
+      performing: { try JSONEncoder().encode(["access_token": Double.nan]) }
+    )
+
+    #expect(LogRedaction.summary(of: error) == "EncodingError.invalidValue at 'access_token'")
+  }
+
+  @Test
+  func keepsTheDescriptionOfAnErrorThatDoesNotLeak() {
+    struct Closed: Error, CustomStringConvertible {
+      var description: String { "closed with code 4000" }
+    }
+
+    #expect(LogRedaction.summary(of: Closed()) == "closed with code 4000")
+  }
+
+  @Test(arguments: ["signedURL", "signedUrl", "url", "action_link", "refresh_token", "otp"])
+  func redactsSensitiveAndLinkKeysInJSON(key: String) {
+    #expect(LogRedaction.isSensitive(jsonKey: key))
+  }
+
+  @Test(arguments: ["path", "id", "status"])
+  func keepsOtherJSONKeys(key: String) {
+    #expect(!LogRedaction.isSensitive(jsonKey: key))
   }
 }
 
@@ -170,6 +232,16 @@ struct RedactingLogHandlerTests {
     logger.error("kept")
 
     #expect(recorder.entries == ["kept"])
+  }
+
+  @Test
+  func wrappingTwiceKeepsASingleRedactingHandler() throws {
+    let logger = recorder.makeLogger().redactingSecrets().redactingSecrets()
+
+    let handler = try #require(logger.handler as? RedactingLogHandler)
+    #expect(!(handler.base.handler is RedactingLogHandler))
+    logger.warning("refresh_token=r-secret-1")
+    #expect(recorder.entries == ["refresh_token=<redacted>"])
   }
 }
 
