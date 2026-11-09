@@ -111,7 +111,9 @@ enum StorageIsolationTests {
     for await progress in upload.progress { _ = progress }
     for await state in upload.states { _ = state }
 
+    _ = try await storage.resumableUploads.pending()
     _ = try await storage.resumableUploads.resumeAll()
+    try await storage.resumableUploads.clear()
   }
 
   static func vectors(_ storage: StorageClient, _ inputs: Inputs) async throws {
@@ -123,11 +125,11 @@ enum StorageIsolationTests {
 
     let bucket = vectorsClient.from("vectors")
     try await bucket.createIndex("index", dimension: 3, distanceMetric: inputs.distanceMetric)
-    _ = try await bucket.indexDetails("index")
+    _ = try await bucket.index("index")
     try await bucket.deleteIndex("index")
     for try await index in bucket.listIndexes() { _ = index }
 
-    let index = bucket.index("index")
+    let index = bucket.from("index")
     try await index.putVectors(inputs.vectors)
     _ = try await index.vectors(keys: ["key"])
     _ = try await index.queryVectors(inputs.queryVector, topK: 3)

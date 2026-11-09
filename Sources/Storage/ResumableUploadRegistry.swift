@@ -37,19 +37,20 @@ public struct ResumableUploadRegistry: Sendable {
 
   /// A handle for every record on disk, oldest first. An upload already in flight in this
   /// process is returned as the same handle; the others are ``ResumableUpload/State/pending``
-  /// until ``ResumableUpload/start()``.
+  /// until ``ResumableUpload/start()``. Reads the disk off the caller's actor.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
-  public func pending() throws -> [ResumableUpload] {
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
+  @concurrent
+  public func pending() async throws -> [ResumableUpload] {
     try store.records().map { ResumableUpload.handle(record: $0, api: api) }
   }
 
   /// ``pending()``, with every upload started or resumed. A refusal by the server does not
   /// throw here; it shows in that upload's ``ResumableUpload/state`` and ``ResumableUpload/result``.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
   public func resumeAll() async throws -> [ResumableUpload] {
-    let uploads = try pending()
+    let uploads = try await pending()
     for upload in uploads {
       switch await upload.state {
       case .pending: try? await upload.start()
@@ -61,13 +62,16 @@ public struct ResumableUploadRegistry: Sendable {
   }
 
   /// Deletes the record and sandbox copy of every upload that is not in flight in this
-  /// process. An upload in flight keeps its files until it completes or is cancelled.
+  /// process. An upload in flight keeps its files until it completes or is cancelled. Works on
+  /// the disk off the caller's actor.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
-  public func clear() throws {
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
+  @concurrent
+  public func clear() async throws {
+    let store = store
     for record in try store.records()
     where !ResumableUpload.isLive(fingerprint: record.fingerprint, api: api) {
-      try store.remove(record)
+      store.remove(record)
     }
   }
 }

@@ -272,7 +272,7 @@ public actor ResumableUpload {
     await loop?.value
     if let record {
       await TusSession(api: api).terminate(record.uploadURL)
-      try? store.remove(record)
+      store.remove(record)
     }
   }
 
@@ -362,12 +362,12 @@ public actor ResumableUpload {
       id: response?.id.flatMap(UUID.init(uuidString:)),
       path: path,
       fullPath: response?.key ?? "\(bucketID)/\(path)")
-    if let record { try? store.remove(record) }
+    if let record { store.remove(record) }
     state = .completed(object)
   }
 
   private func fail(_ error: StorageError, keepRecord: Bool) {
-    if !keepRecord, let record { try? store.remove(record) }
+    if !keepRecord, let record { store.remove(record) }
     state = .failed(error)
   }
 
