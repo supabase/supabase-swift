@@ -90,6 +90,11 @@ struct ResumableUploadTests {
 
   private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageBucket
   {
+    makeStorage(script, retryTimeout: retryTimeout).from("bucket")
+  }
+
+  private func makeStorage(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageClient
+  {
     var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
@@ -97,7 +102,7 @@ struct ResumableUploadTests {
     configuration.resumable = ResumableUploadConfiguration(
       chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
     configuration.clock = ImmediateClock()
-    return StorageClient(configuration: configuration).from("bucket")
+    return StorageClient(configuration: configuration)
   }
 
   private var store: ResumableStore {
@@ -299,6 +304,41 @@ struct ResumableUploadTests {
     #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
     #expect(try store.records().isEmpty)
     await #expect(throws: CancellationError.self) { try await upload.result }
+  }
+
+  @Test(arguments: [false, true])
+  func clearKeepsTheRecordOfAFailedUploadThatIsResuming(
+    whileAnotherHandleIsPending: Bool
+  ) async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0), Self.appended(offset: 8), Self.transportFailure,
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.head(offset: 8)(request, data)
+      },
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let storage = makeStorage(script, retryTimeout: .zero)
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+    let pending = whileAnotherHandleIsPending ? try await storage.resumableUploads.pending() : []
+    #expect(pending.allSatisfy { $0 !== upload })
+
+    let resuming = Task { try await upload.resume() }
+    while script.log.value.count < 4 { await Task.yield() }
+    try await storage.resumableUploads.clear()
+
+    #expect(try store.record(fingerprint: upload.id.rawValue) != nil)
+    open.yield()
+    try await resuming.value
+    while await upload.isRunning { await Task.yield() }
+    guard case .completed = await upload.state else {
+      Issue.record("not completed: \(await upload.state)")
+      return
+    }
+    withExtendedLifetime(pending) {}
   }
 
   @Test

@@ -177,6 +177,36 @@ struct ResumableUploadRegistryTests {
     #expect(try await storage.resumableUploads.pending().isEmpty)
   }
 
+  @Test
+  func aCorruptRecordDoesNotBlockPendingAndClearRemovesIt() async throws {
+    _ = try saveRecord(fingerprint: "a")
+    let corrupt = store.directory.appendingPathComponent(
+      "\(String(repeating: "b", count: 64)).json")
+    try Data("not json".utf8).write(to: corrupt)
+
+    let pending = try await storage.resumableUploads.pending()
+    #expect(pending.map(\.id.rawValue) == ["a"])
+    #expect(!FileManager.default.fileExists(atPath: corrupt.path))
+
+    try await storage.resumableUploads.clear()
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func clearKeepsTheRecordOfAnUploadThatIsStillStarting() async throws {
+    let record = try saveRecord(fingerprint: "a")
+    let upload = try #require(try await storage.resumableUploads.pending().first)
+    let starting = Task { try await upload.start() }
+    await waitUntil { requests.value.contains { $0.hasPrefix("HEAD") } }
+
+    try await storage.resumableUploads.clear()
+
+    #expect(try store.record(fingerprint: "a")?.uploadURL == record.uploadURL)
+    #expect(FileManager.default.fileExists(atPath: store.fileURL(for: record).path))
+    starting.cancel()
+    _ = await starting.result
+  }
+
   enum RegistryCall: CaseIterable, Sendable {
     case pending, clear
   }

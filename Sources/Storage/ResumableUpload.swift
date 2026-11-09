@@ -146,11 +146,16 @@ public actor ResumableUpload {
     }
   }
 
-  /// Whether a handle for `fingerprint` has started and is not yet terminal in this process.
-  static func isLive(fingerprint: String, api: StorageAPI) -> Bool {
+  /// Removes `record` unless a handle for it has started and is not yet terminal in this
+  /// process. Holds the lock ``start()`` claims the record under, so a start never loses its
+  /// record to a concurrent removal.
+  static func removeUnlessLive(
+    _ record: ResumableUploadRecord, from store: ResumableStore, api: StorageAPI
+  ) {
     live.withValue { live in
-      let entry = live[liveKey(fingerprint: fingerprint, api: api)]
-      return entry?.upload != nil && entry?.started == true
+      let entry = live[liveKey(fingerprint: record.fingerprint, api: api)]
+      if entry?.upload != nil, entry?.started == true { return }
+      store.remove(record)
     }
   }
 
@@ -222,16 +227,19 @@ public actor ResumableUpload {
   public func start() async throws {
     guard case .pending = state, !startInProgress else { return }
     startInProgress = true
-    defer { startInProgress = false }
+    let key = liveKey
+    claimLive(key)
+    defer {
+      startInProgress = false
+      switch state {
+      case .uploading: break
+      default: releaseStart(key)
+      }
+    }
     do {
       let record = try await loadOrCreateRecord()
       guard case .pending = state else { return }
       self.record = record
-      Self.live.withValue { live in
-        if live[liveKey]?.upload == nil || live[liveKey]?.upload === self {
-          live[liveKey] = Live(upload: self, started: true)
-        }
-      }
       state = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {
@@ -240,6 +248,26 @@ public actor ResumableUpload {
       let error = storageError(error)
       state = .failed(error)
       throw error
+    }
+  }
+
+  /// Marks this handle as the one driving its record, so ``ResumableUploadRegistry/clear()``
+  /// keeps the record and a second handle is never made for it. Takes the entry from another
+  /// handle that has not started, such as one ``ResumableUploadRegistry/pending()`` made after
+  /// this one failed.
+  private func claimLive(_ key: String) {
+    Self.live.withValue { live in
+      let entry = live[key]
+      if entry?.upload == nil || entry?.upload === self || entry?.started != true {
+        live[key] = Live(upload: self, started: true)
+      }
+    }
+  }
+
+  /// Gives up the claim ``start()`` took on the record when it ends without uploading.
+  private func releaseStart(_ key: String) {
+    Self.live.withValue { live in
+      if live[key]?.upload === self { live[key]?.started = false }
     }
   }
 
@@ -259,6 +287,7 @@ public actor ResumableUpload {
     }
     await loop?.value
     guard record != nil else { return try await start() }
+    claimLive(liveKey)
     state = .uploading
     startLoop(from: 0, next: .resync)
   }
