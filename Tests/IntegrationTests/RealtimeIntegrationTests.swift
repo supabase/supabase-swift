@@ -308,8 +308,8 @@
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [
-            "apikey": DotEnv.supabasePublishableKey,
-            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+            .apikey: DotEnv.supabasePublishableKey,
+            .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
           ],
           heartbeatInterval: .seconds(1),
           disconnectOnEmptyChannelsAfter: .seconds(3600),
