@@ -52,6 +52,15 @@ func makeMockSession() -> URLSession {
 @Suite
 struct SupabaseClientTests {
   @Test
+  func eachDatabaseConfigurationGetsItsOwnDefaultCoders() {
+    let first = SupabaseClient.Configuration.Database()
+    let second = SupabaseClient.Configuration.Database()
+
+    #expect(first.encoder !== second.encoder)
+    #expect(first.decoder !== second.decoder)
+  }
+
+  @Test
   func globalClockReachesEverySubClientThatWaits() {
     let clock = TestClock()
     let client = SupabaseClient(

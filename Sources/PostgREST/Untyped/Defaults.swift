@@ -6,26 +6,18 @@
 //
 
 import ConcurrencyExtras
-public import Foundation
+package import Foundation
 
 let version = Helpers.version
 
 extension PostgrestClient.Configuration {
-  /// The default `JSONDecoder` used for decoding PostgREST responses.
-  ///
-  /// Pre-configured with Supabase-compatible date decoding and key strategies.
-  /// Use this as a starting point if you need a custom decoder.
-  public static let jsonDecoder: JSONDecoder = {
-    JSONDecoder.supabase()
-  }()
+  /// The fixed decoder of the typed API. Not public, so no caller can change the settings the
+  /// column names depend on. Typed Postgres changes decode with it too.
+  package static let jsonDecoder = JSONDecoder.supabase()
 
-  /// The default `JSONEncoder` used for encoding PostgREST request bodies.
-  ///
-  /// Pre-configured with Supabase-compatible date encoding and key strategies.
-  /// Use this as a starting point if you need a custom encoder.
-  public static let jsonEncoder: JSONEncoder = {
-    JSONEncoder.supabase()
-  }()
+  /// The fixed encoder of the typed API. Not public, so no caller can change the settings the
+  /// column names depend on.
+  package static let jsonEncoder = JSONEncoder.supabase()
 
   /// The default HTTP headers added to every request from a ``PostgrestClient``.
   ///

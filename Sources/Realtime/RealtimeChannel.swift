@@ -225,7 +225,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - payload: The value to send. It must encode as a JSON object.
-  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
+  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
   /// - Throws: An `EncodingError` when `payload` does not encode as a JSON object.
   ///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
   ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
@@ -236,7 +236,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   ``RealtimeError/Kind-swift.struct/notConnected`` when the client was released, and
   ///   `CancellationError` when the awaiting task is cancelled.
   public func broadcast(
-    event: String, payload: some Encodable, encoder: JSONEncoder = .supabase()
+    event: String, payload: some Encodable, encoder: JSONEncoder? = nil
   ) async throws {
     let message = try JSONObject(payload, encoder: encoder)
     try await broadcast(event: event, payload: .json(message))
@@ -280,7 +280,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///
   /// - Parameters:
   ///   - payload: The value to share. It must encode as a JSON object.
-  ///   - encoder: The encoder for `payload`. Defaults to ``JSONValue/encoder`` when `nil`.
+  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
   /// - Throws: An error if `payload` does not encode as a JSON object,
   ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the channel is not subscribed,
   ///   ``RealtimeError/Kind-swift.struct/timeout`` when the server does not reply in time, the
@@ -288,7 +288,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   when the channel was removed, ``RealtimeError/Kind-swift.struct/notConnected`` when the
   ///   client was released, and `CancellationError` when the awaiting task is cancelled.
   public func track(_ payload: some Encodable, encoder: JSONEncoder? = nil) async throws {
-    let payload = try JSONObject(payload, encoder: encoder ?? JSONValue.encoder)
+    let payload = try JSONObject(payload, encoder: encoder)
     try await pushPresence([
       "type": "presence",
       "event": "track",

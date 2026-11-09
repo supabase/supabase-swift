@@ -48,7 +48,7 @@ struct PostgrestQueryFixture {
         ],
         http: .init(transport: URLSessionTransport(session: session)),
         encoder: {
-          let encoder = PostgrestClient.Configuration.jsonEncoder
+          let encoder = JSONEncoder.supabase()
           encoder.outputFormatting = [.sortedKeys]
           return encoder
         }()

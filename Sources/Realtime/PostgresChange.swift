@@ -116,11 +116,11 @@ public struct PostgresRow: Sendable, Hashable {
   ///
   /// - Parameters:
   ///   - type: The type to decode. Can be inferred from context.
-  ///   - decoder: The decoder to use. Defaults to the decoder the SDK uses for server responses.
+  ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
   /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when the row does not
   ///   decode as `T`. The underlying `DecodingError` is in ``RealtimeError/underlyingError``.
   public func decode<T: Decodable>(
-    as _: T.Type = T.self, decoder: JSONDecoder = .supabase()
+    as _: T.Type = T.self, decoder: JSONDecoder? = nil
   ) throws -> T {
     do {
       return try values.decode(as: T.self, decoder: decoder)

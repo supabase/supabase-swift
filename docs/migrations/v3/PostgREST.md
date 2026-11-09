@@ -41,12 +41,12 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.Configuration.init` |
 | `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:accessToken:clock:))`; the flat init is gone, and `http` now comes before `logger` |
 | `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` and `Configuration.clock` are public too |
+| `PostgrestClient.Configuration.jsonEncoder`, `.jsonDecoder` | removed; see [Default coders](#default-coders) |
 | `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
 | `PostgrestClient.FetchHandler` | `any ClientTransport` |
 | `logger: (any SupabaseLogger)?` | `logger: Logging.Logger` |
 | `PostgrestClient`, builders: `final class` | `struct` |
 | `PostgrestBuilder` | `any PostgrestExecutableBuilder`, or `PostgrestFilterBuilder` / `PostgrestTransformBuilder` |
-| `Configuration.encoder`, `.decoder`: `var` | `let`; pass them to `init`, or per call with `encoder:` / `decoder:` |
 | `PostgrestFilterBuilder.Operator`: `enum` | `PostgrestOperator` struct (`Operator` is a type alias) |
 | `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members |
 | `insert(…)`, `upsert(…)` return `PostgrestFilterBuilder` | return `PostgrestTransformBuilder` |
@@ -204,6 +204,23 @@ The v2 builders (`from("table")`, `rpc`, `PostgrestQueryBuilder`, `PostgrestFilt
 `PostgrestTransformBuilder`) keep their names and stay supported in v3, apart from the changes
 above. They moved to `Sources/PostgREST/Untyped/` and send requests through the same core as the
 typed API. You do not need to move to the typed API.
+
+## Default coders
+
+`PostgrestClient.Configuration.jsonEncoder` and `.jsonDecoder` are gone. They were one shared
+instance, so a change to one changed every client that used it. `JSONEncoder.supabase()` and
+`JSONDecoder.supabase()` return a new coder with the same settings on each call. Each
+`Configuration` gets its own.
+
+```swift
+// v2
+let decoder = PostgrestClient.Configuration.jsonDecoder
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+// v3
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+```
 
 ## Experimental APIs
 
