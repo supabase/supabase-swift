@@ -183,6 +183,7 @@ let package = Package(
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         "PostgrestMacros",
         "PostgrestMacrosPlugin",
+        "TestHelpers",
       ]
     ),
     .testTarget(
