@@ -22,7 +22,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
-  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
+  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
   ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
   /// - Throws: An `EncodingError` when `payload` does not encode, and ``RealtimeError`` with kind
   ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, `.channelRemoved`, or
@@ -30,12 +30,12 @@ extension RealtimeChannel {
   public func httpSend(
     event: String,
     payload: some Encodable,
-    encoder: JSONEncoder = .supabase(),
+    encoder: JSONEncoder? = nil,
     timeout: Duration? = nil
   ) async throws {
     try await httpSend(
       event: event,
-      body: try encoder.encode(payload),
+      body: try (encoder ?? JSONValue.encoder).encode(payload),
       contentType: "application/json",
       timeout: timeout
     )

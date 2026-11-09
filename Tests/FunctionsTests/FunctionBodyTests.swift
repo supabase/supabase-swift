@@ -44,6 +44,13 @@ struct FunctionBodyTests {
   }
 
   @Test
+  func jsonWithNilEncoderUsesTheSDKEncoder() async throws {
+    let body = try FunctionBody.json(["at": Date(timeIntervalSince1970: 0)], encoder: nil)
+
+    #expect(try await bytes(body) == #"{"at":"1970-01-01T00:00:00.000Z"}"#)
+  }
+
+  @Test
   func jsonEncodeFailureThrowsInvalidRequest() {
     struct Failing: Encodable {
       struct Reason: Error {}

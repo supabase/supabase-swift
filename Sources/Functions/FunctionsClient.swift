@@ -73,8 +73,8 @@ public struct FunctionsClient: Sendable {
     /// The decoder ``FunctionsClient/invoke(_:body:options:as:decoder:)`` and
     /// ``FunctionResponse/decode(as:decoder:)`` use when no per-call `decoder:` is given.
     ///
-    /// Defaults to the SDK decoder, which reads ISO 8601 dates (the format a TypeScript
-    /// function's `JSON.stringify` writes) into `Date`.
+    /// Defaults to a new `JSONDecoder.supabase()`, which reads ISO 8601 dates (the format a
+    /// TypeScript function's `JSON.stringify` writes) into `Date`.
     public var decoder: JSONDecoder
 
     /// Resolved for every request and sent as `Authorization: Bearer <token>` unless the request

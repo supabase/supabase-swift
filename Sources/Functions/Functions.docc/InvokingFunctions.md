@@ -24,7 +24,8 @@ let same = try await supabase.functions.invoke("checkout", body: .json(Order(id:
 
 Dates decode from ISO 8601 strings, the format a TypeScript function writes with
 `JSON.stringify`. Pass `decoder:` to one call, or set ``FunctionsClient/Configuration/decoder``
-for every call, to change that.
+for every call, to change that. To keep the date handling and change another setting, start from
+`JSONDecoder.supabase()`.
 
 A call whose answer you do not need still compiles: `invoke` is `@discardableResult`.
 

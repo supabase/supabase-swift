@@ -10,8 +10,6 @@ supporting_symbols:
   - JSONValue.init
   - JSONValue.decode
   - JSONValue.encode
-  - JSONValue.decoder
-  - JSONValue.encoder
   - JSONValue.null
   - JSONValue.bool
   - JSONValue.integer
@@ -29,6 +27,11 @@ supporting_symbols:
   - JSONValue.doubleValue
   - JSONValue.description
   - JSONValue.rawValue
+
+  # The SDK's default coders, which read and write Postgres timestamps. Every client defaults to
+  # them, and they are the starting point for a custom coder, so no one feature owns them.
+  - JSONDecoder.supabase
+  - JSONEncoder.supabase
 
   # The injected clock is a testability seam shared across Auth's token auto-refresh and
   # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a

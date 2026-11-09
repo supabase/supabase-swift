@@ -17,7 +17,7 @@ extension SupabaseClient {
   /// fetch. A new element comes after every insert, update or delete that changes the result.
   ///
   /// ```swift
-  /// for try await todos in supabase.stream(Todo.self, where: { $0.listId.eq(listID) }) {
+  /// for try await todos in supabase.stream(of: Todo.self, where: { $0.listID.eq(listID) }) {
   ///   self.todos = todos
   /// }
   /// ```
@@ -53,7 +53,7 @@ extension SupabaseClient {
   ///   fetch fails, when the channel fails for good, or when a changed row does not decode as `R`.
   @_spi(Experimental)
   public func stream<R: _PostgrestKeyedRelation>(
-    _ relation: R.Type,
+    of relation: R.Type,
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil
   ) -> AsyncThrowingStream<[R], any Error> {
     liveRows(from: liveQueryUpdates(R.self, filter: filter?(R.columns)))

@@ -73,6 +73,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `AnyJSON` | `JSONValue` |
+| `AnyJSON.encoder`, `AnyJSON.decoder` | removed; see [Default coders](#default-coders) |
 | `SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, `OSLogSupabaseLogger` | `Logging.Logger` from swift-log |
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
 | `StorageHTTPSession` | `any ClientTransport` |
@@ -97,6 +98,29 @@ Naming rules applied across all modules (the module tables list each symbol):
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
   Each one has `rawValue`, `init(rawValue:)` and a literal initializer, and no other
   initializer: `ErrorCode("x")` is `AuthError.Code(rawValue: "x")` or the literal `"x"`.
+
+### Default coders
+
+`JSONEncoder.supabase()` and `JSONDecoder.supabase()` are public. They write and read `Date` the
+way Postgres does: ISO 8601 with fractional seconds, with or without an offset. Foundation's
+`.iso8601` strategy reads neither form. Each call returns a new coder. To change one setting, start
+from them so dates still work. The shared `AnyJSON.encoder`, `AnyJSON.decoder`, and
+`PostgrestClient.Configuration.jsonEncoder` and `.jsonDecoder` are gone.
+
+Every per-call `encoder:` and `decoder:` parameter is optional. `nil` uses the client's configured
+coder, or `JSONEncoder.supabase()` / `JSONDecoder.supabase()` where the client has none.
+
+```swift
+// v2
+let decoder = AnyJSON.decoder
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)  // payload: JSONObject
+
+// v3
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)
+```
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
 

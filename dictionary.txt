@@ -65,6 +65,7 @@ emaillink
 enotconn
 entrancy
 eproto
+ERRCODE
 errno
 etag
 ethereum
