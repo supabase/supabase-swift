@@ -9,10 +9,23 @@ import Foundation
 import HTTPTypes
 import Testing
 
-@testable import Helpers
+@testable import PostgREST
 
 @Suite
 struct PostgrestErrorTests {
+  /// Every module re-exports Helpers, so a Helpers type would also show up in `import Storage`.
+  @Test
+  func isDeclaredInThePostgRESTModule() {
+    #expect(String(reflecting: PostgrestError.self) == "PostgREST.PostgrestError")
+  }
+
+  @Test
+  func isCaughtAsASupabaseError() {
+    let error: any Error = PostgrestError(kind: .transport, message: "offline")
+
+    #expect((error as? any SupabaseError)?.message == "offline")
+  }
+
   @Test
   func errorDescriptionIsTheMessage() {
     let error = PostgrestError(kind: .invalidRequest, message: "test error message")
@@ -66,7 +79,7 @@ struct PostgrestErrorTests {
       kind: .server,
       message: "Row not found",
       serverError: .init(code: "PGRST116", message: "Row not found"),
-      response: HTTPErrorResponse(statusCode: 406, headers: headers, body: Data())
+      response: HTTPErrorResponse(status: 406, headers: headers, body: Data())
     )
 
     #expect(

@@ -21,9 +21,9 @@ public import Helpers
 ///   try await functions.invoke("hello")
 /// } catch let error as FunctionsError where error.kind == .server {
 ///   if error.isPlatformError {
-///     print("platform", error.code?.rawValue ?? "?", error.response?.statusCode ?? 0)
+///     print("platform", error.code?.rawValue ?? "?", error.response?.status.code ?? 0)
 ///   } else {
-///     print("function", error.response?.statusCode ?? 0, error.response?.body ?? Data())
+///     print("function", error.response?.status.code ?? 0, error.response?.body ?? Data())
 ///   }
 /// }
 /// ```

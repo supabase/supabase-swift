@@ -93,7 +93,7 @@ struct StorageErrorTests {
     (.invalidKey, "InvalidKey"),
     (.invalidRange, "InvalidRange"),
     (.invalidMimeType, "InvalidMimeType"),
-    (.invalidUploadId, "InvalidUploadId"),
+    (.invalidUploadID, "InvalidUploadId"),
     (.keyAlreadyExists, "KeyAlreadyExists"),
     (.bucketAlreadyExists, "BucketAlreadyExists"),
     (.databaseTimeout, "DatabaseTimeout"),
@@ -115,7 +115,7 @@ struct StorageErrorTests {
     (.invalidUploadSignature, "InvalidUploadSignature"),
     (.lockTimeout, "LockTimeout"),
     (.s3Error, "S3Error"),
-    (.invalidAccessKeyId, "InvalidAccessKeyId"),
+    (.invalidAccessKeyID, "InvalidAccessKeyId"),
     (.maximumCredentialsLimit, "MaximumCredentialsLimit"),
     (.invalidChecksum, "InvalidChecksum"),
     (.missingPart, "MissingPart"),
@@ -161,7 +161,7 @@ struct StorageErrorTests {
 
     #expect(error.code == .noSuchKey)
     #expect(error.serverStatusCode == 404)
-    #expect(error.response?.statusCode == 400)
+    #expect(error.response?.status == 400)
     #expect(error.isNotFound)
   }
 
@@ -230,7 +230,7 @@ struct StorageErrorTests {
     #expect(
       StorageError(
         kind: .server, message: "",
-        response: HTTPErrorResponse(statusCode: 404, headers: [:], body: Data())
+        response: HTTPErrorResponse(status: 404, headers: [:], body: Data())
       ).isNotFound)
     #expect(!StorageError(kind: .server, message: "", code: .invalidJWT).isNotFound)
     #expect(!StorageError(kind: .transport, message: "").isNotFound)
@@ -249,7 +249,7 @@ struct StorageErrorTests {
       kind: .server,
       message: "Object not found",
       serverError: .init(statusCode: 404, error: "not_found", message: "Object not found"),
-      response: HTTPErrorResponse(statusCode: 404, headers: HTTPFields(), body: Data())
+      response: HTTPErrorResponse(status: 404, headers: HTTPFields(), body: Data())
     )
 
     #expect(error.description == "StorageError(server): Object not found [status 404]")

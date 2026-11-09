@@ -52,7 +52,10 @@ BREAKING CHANGE: This removes the old API
 1. **Push commits** to `main` branch with conventional commit messages
 2. **Release-please** analyzes commits and creates a release PR when needed
 3. **Review and merge** the release PR to trigger the actual release:
-   - Version is updated in `Sources/Helpers/Version.swift`
+   - Version is updated in every file listed in `extra-files` in `release-please-config.json`:
+     both `Version.swift` files, and the copyable install snippets in `README.md`, `RELEASE.md`,
+     and `V3_MIGRATION.md` (inside the HTML comment blocks that mark the version). Do not write
+     the marker text in prose in these files: release-please would rewrite the versions after it
    - `CHANGELOG.md` is updated
    - Git tag is created (e.g., `v2.33.0`)
    - GitHub release is published
@@ -114,11 +117,13 @@ without a matching change in supabase/sdk.
 When the download is not possible, the CLI falls back to `supabase-typegen` on the `PATH`. Users
 install it like this (the README has the same steps):
 
+<!-- x-release-please-start-version -->
 ```bash
-VERSION=2.55.1 # the supabase-swift version the project uses
+VERSION=3.0.0-alpha.1 # the supabase-swift version the project uses
 ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
 mkdir -p ~/.local/bin
 curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
 supabase-typegen --version
 ```
+<!-- x-release-please-end -->
 

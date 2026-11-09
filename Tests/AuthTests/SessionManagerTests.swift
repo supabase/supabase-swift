@@ -390,7 +390,11 @@ struct SessionManagerTests {
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
 
-    struct RefreshBody: Decodable { let refreshToken: String }
+    struct RefreshBody: Decodable {
+      let refreshToken: String
+
+      enum CodingKeys: String, CodingKey { case refreshToken = "refresh_token" }
+    }
 
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, body in
       let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(
@@ -436,7 +440,11 @@ struct SessionManagerTests {
     let tokensRequested = LockIsolated<[String]>([])
     let (gate, continuation) = AsyncStream<Void>.makeStream()
 
-    struct RefreshBody: Decodable { let refreshToken: String }
+    struct RefreshBody: Decodable {
+      let refreshToken: String
+
+      enum CodingKeys: String, CodingKey { case refreshToken = "refresh_token" }
+    }
 
     http.respond(when: { $0.url?.path.contains("/token") == true }) { _, body in
       let refreshToken = try AuthClient.Configuration.jsonDecoder.decode(

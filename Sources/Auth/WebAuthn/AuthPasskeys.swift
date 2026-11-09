@@ -143,8 +143,8 @@ public struct AuthPasskeys: Sendable {
     /// Signs in with a passkey: fetches assertion options, shows the system passkey sheet, and
     /// verifies the assertion.
     ///
-    /// The relying party is the `rpId` the server returns, so the app's Associated Domains
-    /// entitlement must list `webcredentials:<rpId>`.
+    /// The relying party is the `rpID` the server returns, so the app's Associated Domains
+    /// entitlement must list `webcredentials:<rpID>`.
     ///
     /// - Parameter anchor: The window to show the sheet from. `nil` uses the app's key window. An
     ///   app extension has no key window to find, so pass one there.

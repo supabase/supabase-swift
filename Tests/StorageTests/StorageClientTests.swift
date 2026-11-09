@@ -16,7 +16,7 @@ import IssueReporting
 @Suite
 struct StorageClientTests {
   let supabaseURL = URL(string: "http://localhost:54321/storage/v1")!
-  let bucketId = "tests"
+  let bucketID = "tests"
 
   @Test
   func publicURL() throws {
@@ -24,10 +24,10 @@ struct StorageClientTests {
 
     let path = "README.md"
 
-    let baseUrl = sut.from(bucketId).publicURL(path: path)
-    #expect(baseUrl.absoluteString == "\(supabaseURL)/object/public/\(bucketId)/\(path)")
+    let baseUrl = sut.from(bucketID).publicURL(path: path)
+    #expect(baseUrl.absoluteString == "\(supabaseURL)/object/public/\(bucketID)/\(path)")
 
-    let baseUrlWithDownload = sut.from(bucketId).publicURL(
+    let baseUrlWithDownload = sut.from(bucketID).publicURL(
       path: path, options: PublicURLOptions(download: .withOriginalName))
     assertInlineSnapshot(of: baseUrlWithDownload, as: .description) {
       """
@@ -35,7 +35,7 @@ struct StorageClientTests {
       """
     }
 
-    let baseUrlWithDownloadAndFileName = sut.from(bucketId).publicURL(
+    let baseUrlWithDownloadAndFileName = sut.from(bucketID).publicURL(
       path: path, options: PublicURLOptions(download: .named("test")))
     assertInlineSnapshot(of: baseUrlWithDownloadAndFileName, as: .description) {
       """
@@ -43,7 +43,7 @@ struct StorageClientTests {
       """
     }
 
-    let baseUrlWithAllOptions = sut.from(bucketId).publicURL(
+    let baseUrlWithAllOptions = sut.from(bucketID).publicURL(
       path: path,
       options: PublicURLOptions(
         download: .named("test"), transform: ImageTransform(width: 300, height: 300)))
@@ -78,7 +78,7 @@ struct StorageClientTests {
         )!
       )
     })
-    let results: [SignedURLResult] = try await sut.from(bucketId).createSignedURLs(
+    let results: [SignedURLResult] = try await sut.from(bucketID).createSignedURLs(
       paths: ["file1.txt", "file2.txt"],
       expiresIn: .seconds(60)
     )
@@ -136,7 +136,7 @@ struct StorageClientTests {
       )
     })
 
-    try await sut.from(bucketId)
+    try await sut.from(bucketID)
       .upload(
         path: "file1.txt",
         data: "test data".data(using: .utf8)!,
@@ -180,7 +180,7 @@ struct StorageClientTests {
       )
     })
 
-    try await sut.from(bucketId)
+    try await sut.from(bucketID)
       .upload(
         path: "sadcat.jpg",
         fileURL: uploadFileURL("sadcat.jpg"),
@@ -242,7 +242,7 @@ struct StorageClientTests {
       )
     })
 
-    _ = try await sut.from(bucketId)
+    _ = try await sut.from(bucketID)
       .settingHeader(name: .init("X-Custom-Header")!, value: "custom-value")
       .list()
 
@@ -277,7 +277,7 @@ struct StorageClientTests {
       )
     })
 
-    _ = try await sut.from(bucketId)
+    _ = try await sut.from(bucketID)
       .settingHeader(name: .init("X-Header-A")!, value: "value-a")
       .settingHeader(name: .init("X-Header-B")!, value: "value-b")
       .list()
@@ -313,7 +313,7 @@ struct StorageClientTests {
       )
     })
 
-    _ = try await sut.from(bucketId)
+    _ = try await sut.from(bucketID)
       .settingHeader(name: .init("X-Custom-Header")!, value: "initial-value")
       .settingHeader(name: .init("X-Custom-Header")!, value: "updated-value")
       .list()
@@ -353,7 +353,7 @@ struct StorageClientTests {
       )
     })
 
-    _ = try await sut.from(bucketId)
+    _ = try await sut.from(bucketID)
       .settingHeader(name: .init("X-Child-Header")!, value: "child-value")
       .list()
 
@@ -362,7 +362,7 @@ struct StorageClientTests {
         == "child-value"
     )
 
-    _ = try await sut.from(bucketId).list()
+    _ = try await sut.from(bucketID).list()
 
     #expect(capturedRequests[1].value(forHTTPHeaderField: "X-Child-Header") == nil)
   }
@@ -397,7 +397,7 @@ struct StorageClientTests {
     _ =
       try await sut
       .settingHeader(name: .init("X-Client-Header")!, value: "client-value")
-      .from(bucketId)
+      .from(bucketID)
       .list()
 
     #expect(

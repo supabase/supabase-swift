@@ -25,13 +25,13 @@ struct PurgeCacheIntegrationTests {
       path: "dir/a file.png", transformationsOnly: transformationsOnly)
 
     let purges = try await StorageIntegration.forwardedPurges()
-      .filter { $0.body.bucketId == nil || $0.body.bucketId == name }
+      .filter { $0.body.bucketID == nil || $0.body.bucketID == name }
     let suffix = transformationsOnly ? "-transforms" : ""
     #expect(
       purges.map(\.body) == [
         .init(type: "tenant\(suffix)"),
-        .init(type: "bucket\(suffix)", bucketId: name),
-        .init(type: "object\(suffix)", bucketId: name, objectName: "dir/a file.png"),
+        .init(type: "bucket\(suffix)", bucketID: name),
+        .init(type: "object\(suffix)", bucketID: name, objectName: "dir/a file.png"),
       ])
   }
 

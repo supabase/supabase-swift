@@ -128,13 +128,14 @@ public struct _PostgrestRequest: Sendable {
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
     }
 
-    func decoded(_ body: Data) throws -> PostgrestResponse<T> {
+    func decoded(_ payload: Data) throws -> PostgrestResponse<T> {
       do {
-        return PostgrestResponse(data: data, response: response, value: try decode(body))
+        return PostgrestResponse(response, body: data, value: try decode(payload))
       } catch let error as PostgrestError {
         throw error
       } catch {
-        configuration.logger.error("Failed to decode type '\(T.self)' with error: \(error)")
+        configuration.logger.error(
+          "Failed to decode type '\(T.self)' with error: \(LogRedaction.summary(of: error))")
         throw PostgrestError(
           kind: .decoding,
           message: "Failed to decode the PostgREST response as \(T.self).",

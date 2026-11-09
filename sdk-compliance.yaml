@@ -58,6 +58,16 @@ supporting_symbols:
   # list instead (see the database.* section below).
   - PostgrestExecutableBuilder
   - PostgrestExecutableBuilder.execute
+  # Every execute() returns this wrapper, whatever the database.* capability.
+  - PostgrestResponse
+  - PostgrestResponse.init
+  - PostgrestResponse.status
+  - PostgrestResponse.headers
+  - PostgrestResponse.body
+  - PostgrestResponse.count
+  - PostgrestResponse.value
+  - PostgrestResponse.requestID
+  - PostgrestResponse.string
   - PostgrestExecutablePhase
   - PostgrestFilterPhase
   - PostgrestFilterablePhase
@@ -119,7 +129,7 @@ supporting_symbols:
   - SupabaseError.errorDescription
   - HTTPErrorResponse
   - HTTPErrorResponse.init
-  - HTTPErrorResponse.statusCode
+  - HTTPErrorResponse.status
   - HTTPErrorResponse.headers
   - HTTPErrorResponse.body
   - HTTPErrorResponse.requestID
@@ -257,6 +267,15 @@ supporting_symbols:
   - AuthAdminMFA
   # The admin OAuth namespace is shared by every auth.oauth_admin.* capability.
   - AuthAdminClient.oauth
+  - OAuthClient.clientID
+  - OAuthClient.clientURI
+  - OAuthClient.logoURI
+  - OAuthClient.redirectURIs
+  - CreateOAuthClientParams.clientURI
+  - CreateOAuthClientParams.redirectURIs
+  - UpdateOAuthClientParams.clientURI
+  - UpdateOAuthClientParams.logoURI
+  - UpdateOAuthClientParams.redirectURIs
   # AdminUserAttributes is the request body of both auth.admin.create_user and
   # auth.admin.update_user; its encoder maps banDuration to a Go duration string.
   - AdminUserAttributes.encode
@@ -932,11 +951,16 @@ features:
       - UserPage.nextPage
       - UserPage.lastPage
       - UserPage.total
-      - AuthAdminClient.UserSequence
-      - AuthAdminClient.UserSequence.Element
-      - AuthAdminClient.UserSequence.makeAsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator
-      - AuthAdminClient.UserSequence.AsyncIterator.next
+      - PageSequence
+      - PageSequence.pages
+      - PageSequence.page
+      - PageSequence.makeAsyncIterator
+      - PageSequence.AsyncIterator
+      - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
   auth.admin.invite_user:
     status: implemented
     symbols:
@@ -1072,8 +1096,8 @@ features:
       - OAuthAuthorizationDetailsResponse.redirect
       - OAuthAuthorizationDetailsResponse.init
       - OAuthAuthorizationDetails
-      - OAuthAuthorizationDetails.authorizationId
-      - OAuthAuthorizationDetails.redirectUri
+      - OAuthAuthorizationDetails.authorizationID
+      - OAuthAuthorizationDetails.redirectURI
       - OAuthAuthorizationDetails.client
       - OAuthAuthorizationDetails.user
       - OAuthAuthorizationDetails.scope
@@ -1082,7 +1106,7 @@ features:
       - OAuthAuthorizationClient.id
       - OAuthAuthorizationClient.name
       - OAuthAuthorizationClient.uri
-      - OAuthAuthorizationClient.logoUri
+      - OAuthAuthorizationClient.logoURI
       - OAuthAuthorizationClient.init
       - OAuthAuthorizationUser
       - OAuthAuthorizationUser.id
@@ -1611,6 +1635,7 @@ features:
       - FunctionBody.stream
       - FunctionBody.text
       - FunctionResponse
+      - FunctionResponse.init
       - FunctionResponse.body
       - FunctionResponse.contentType
       - FunctionResponse.decode
@@ -1670,6 +1695,7 @@ features:
       - FunctionStreamResponse.body
     supporting_symbols:
       - FunctionStreamResponse
+      - FunctionStreamResponse.init
       - FunctionStreamResponse.status
       - FunctionStreamResponse.headers
       - FunctionStreamResponse.contentType
@@ -2063,7 +2089,7 @@ features:
       - Bucket.createdAt
       - Bucket.updatedAt
       - Bucket.type
-      - Bucket.ownerId
+      - Bucket.ownerID
   storage.file_buckets.list_file_buckets:
     status: implemented
     symbols:
@@ -2203,20 +2229,12 @@ features:
       - ObjectSortColumn.createdAt
       - ObjectSortColumn.lastAccessedAt
       - StorageBucket.objects
-      - ObjectListing
-      - ObjectListing.Element
-      - ObjectListing.Pages
-      - ObjectListing.pages
-      - ObjectListing.page
-      - ObjectListing.makeAsyncIterator
-      - ObjectListing.AsyncIterator
-      - ObjectListing.AsyncIterator.next
-      - ObjectListing.Page
-      - ObjectListing.Page.init
-      - ObjectListing.Page.objects
-      - ObjectListing.Page.folders
-      - ObjectListing.Page.nextCursor
-      - ObjectListing.Page.hasNext
+      - ObjectPage
+      - ObjectPage.init
+      - ObjectPage.objects
+      - ObjectPage.folders
+      - ObjectPage.nextCursor
+      - ObjectPage.hasNext
       - ObjectListingOptions
       - ObjectListingOptions.init
       - ObjectListingOptions.pageSize
@@ -2225,10 +2243,15 @@ features:
       - ObjectListingOptions.order
       - ObjectListingOptions.exactMatch
       - PageSequence
-      - PageSequence.Element
+      - PageSequence.pages
+      - PageSequence.page
       - PageSequence.makeAsyncIterator
       - PageSequence.AsyncIterator
       - PageSequence.AsyncIterator.next
+      - PageSequence.Pages
+      - PageSequence.Pages.makeAsyncIterator
+      - PageSequence.Pages.AsyncIterator
+      - PageSequence.Pages.AsyncIterator.next
       - ObjectMetadata
       - ObjectMetadata.init
       - ObjectMetadata.eTag
@@ -2274,7 +2297,7 @@ features:
       - PublicURLOptions.init
       - PublicURLOptions.download
       - PublicURLOptions.transform
-      - PublicURLOptions.versionId
+      - PublicURLOptions.versionID
       - PublicURLOptions.cacheNonce
   storage.file_buckets.create_signed_url:
     status: implemented
@@ -2284,7 +2307,7 @@ features:
       - SignedURLOptions.init
       - SignedURLOptions.download
       - SignedURLOptions.transform
-      - SignedURLOptions.versionId
+      - SignedURLOptions.versionID
       - SignedURLOptions.cacheNonce
   storage.file_buckets.create_signed_urls:
     status: implemented
@@ -2329,7 +2352,7 @@ features:
       - ObjectInfo.id
       - ObjectInfo.version
       - ObjectInfo.name
-      - ObjectInfo.bucketId
+      - ObjectInfo.bucketID
       - ObjectInfo.size
       - ObjectInfo.contentType
       - ObjectInfo.cacheControl
@@ -2414,7 +2437,9 @@ features:
       - StorageBucket.download
       - DownloadResponse
       - DownloadResponse.init
-      - DownloadResponse.httpResponse
+      - DownloadResponse.status
+      - DownloadResponse.headers
+      - DownloadResponse.requestID
       - DownloadResponse.body
       - DownloadResponse.contentType
       - DownloadResponse.contentLength
@@ -2425,9 +2450,9 @@ features:
   storage.file_buckets.download_specific_version:
     status: implemented
     symbols:
-      - DownloadOptions.versionId
-  # Not separate methods: the `versionId:` parameter of StorageBucket.info and
-  # the `sourceVersionId:` parameter of StorageBucket.move and StorageBucket.copy.
+      - DownloadOptions.versionID
+  # Not separate methods: the `versionID:` parameter of StorageBucket.info and
+  # the `sourceVersionID:` parameter of StorageBucket.move and StorageBucket.copy.
   storage.file_buckets.file_info_specific_version: implemented
   storage.file_buckets.move_specific_version: implemented
   storage.file_buckets.copy_specific_version: implemented
@@ -2437,7 +2462,7 @@ features:
       - ObjectVersion
       - ObjectVersion.init
       - ObjectVersion.path
-      - ObjectVersion.versionId
+      - ObjectVersion.versionID
   storage.file_buckets.bucket_versioning_status:
     status: implemented
     symbols:
@@ -2556,7 +2581,7 @@ features:
       - StorageError.Code.invalidKey
       - StorageError.Code.invalidRange
       - StorageError.Code.invalidMimeType
-      - StorageError.Code.invalidUploadId
+      - StorageError.Code.invalidUploadID
       - StorageError.Code.keyAlreadyExists
       - StorageError.Code.bucketAlreadyExists
       - StorageError.Code.databaseTimeout
@@ -2578,7 +2603,7 @@ features:
       - StorageError.Code.invalidUploadSignature
       - StorageError.Code.lockTimeout
       - StorageError.Code.s3Error
-      - StorageError.Code.invalidAccessKeyId
+      - StorageError.Code.invalidAccessKeyID
       - StorageError.Code.maximumCredentialsLimit
       - StorageError.Code.invalidChecksum
       - StorageError.Code.missingPart

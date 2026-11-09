@@ -157,6 +157,70 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func aFailureLogsAnSDKSummaryAndNotTheFailingURL() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+    let signedURL = "https://x.supabase.co/storage/v1/object/upload/sign/b/f?token=st-secret-1"
+
+    await #expect(throws: URLError.self) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
+        throw URLError(
+          .timedOut,
+          userInfo: [
+            NSURLErrorFailingURLStringErrorKey: signedURL,
+            NSURLErrorFailingURLErrorKey: URL(string: signedURL)!,
+          ])
+      }
+    }
+
+    #expect(
+      capture.errorLogs == ["Response: Failure (NSURLErrorDomain \(URLError.timedOut.rawValue))"])
+  }
+
+  @Test
+  func theRequestLineDropsTheQueryAndFragment() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+    let request = createTestRequest(
+      url: "https://api.example.com/rest/v1/my%20invites?code=eq.pg%20secret%20one#frag")
+
+    _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(), nil)
+    }
+
+    #expect(
+      capture.verboseLogs[0].hasPrefix("Request: GET https://api.example.com/rest/v1/my invites\n"))
+    #expect(!capture.verboseLogs.contains { $0.contains("secret") || $0.contains("frag") })
+  }
+
+  @Test
+  func belowTraceTheBodiesPassThroughUnread() async throws {
+    var (logger, capture) = makeLogger()
+    logger.logLevel = .debug
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    let (_, body) = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+      (self.createTestResponse(), HTTPBody(Data("ok".utf8)))
+    }
+
+    #expect(capture.verboseLogs.isEmpty)
+    #expect(try await Data(collecting: try #require(body), upTo: 10) == Data("ok".utf8))
+  }
+
+  @Test
+  func stringifyRedactsSignedURLs() {
+    let data = Data(
+      #"{"signedURL":"/object/sign/b/f?token=s-1","signedUrl":"/x?token=s-2","url":"/y?token=s-3"}"#
+        .utf8)
+
+    let result = stringify(data)
+
+    #expect(!result.contains("s-1"))
+    #expect(!result.contains("s-2"))
+    #expect(!result.contains("s-3"))
+  }
+
+  @Test
   func interceptorWithJSONBody() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)

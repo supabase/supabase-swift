@@ -102,7 +102,7 @@ import Testing
 
     let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .local) }
 
-    expectNoDifference(error?.response?.statusCode, answer.status.code)
+    expectNoDifference(error?.response?.status, answer.status)
     expectNoDifference(sut.status, .signedOut(.userInitiated))
   }
 
@@ -143,7 +143,7 @@ import Testing
 
     let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .local) }
 
-    expectNoDifference(error?.response?.statusCode, answer.status.code)
+    expectNoDifference(error?.response?.status, answer.status)
     #expect(logoutRequests.isEmpty)
     expectNoDifference(sut.status, .signedOut(.userInitiated))
   }
@@ -216,7 +216,7 @@ import Testing
 
     let (_, changes) = try await sut.recordingChanges {
       let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .global) }
-      expectNoDifference(error?.response?.statusCode, answer.status.code)
+      expectNoDifference(error?.response?.status, answer.status)
     }
 
     expectNoDifference(changes.map(\.event), [.initialSession])

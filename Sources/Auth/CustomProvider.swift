@@ -106,28 +106,28 @@ public struct CustomProvider: Decodable, Hashable, Sendable, Identifiable {
 
   private enum CodingKeys: String, CodingKey {
     case id
-    case providerType
+    case providerType = "provider_type"
     case identifier
     case name
-    case clientID = "clientId"
-    case acceptableClientIDs = "acceptableClientIds"
+    case clientID = "client_id"
+    case acceptableClientIDs = "acceptable_client_ids"
     case scopes
-    case customClaimsAllowlist
-    case pkceEnabled
-    case attributeMapping
-    case authorizationParams
+    case customClaimsAllowlist = "custom_claims_allowlist"
+    case pkceEnabled = "pkce_enabled"
+    case attributeMapping = "attribute_mapping"
+    case authorizationParams = "authorization_params"
     case enabled
-    case emailOptional
+    case emailOptional = "email_optional"
     case issuer
-    case discoveryURL = "discoveryUrl"
-    case skipNonceCheck
-    case authorizationURL = "authorizationUrl"
-    case tokenURL = "tokenUrl"
-    case userinfoURL = "userinfoUrl"
-    case jwksURI = "jwksUri"
-    case discoveryDocument
-    case createdAt
-    case updatedAt
+    case discoveryURL = "discovery_url"
+    case skipNonceCheck = "skip_nonce_check"
+    case authorizationURL = "authorization_url"
+    case tokenURL = "token_url"
+    case userinfoURL = "userinfo_url"
+    case jwksURI = "jwks_uri"
+    case discoveryDocument = "discovery_document"
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
   }
 
   public init(from decoder: any Decoder) throws {
@@ -195,14 +195,14 @@ public struct OIDCDiscoveryDocument: Decodable, Hashable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case issuer
-    case authorizationEndpoint
-    case tokenEndpoint
-    case userinfoEndpoint
-    case jwksURI = "jwksUri"
-    case scopesSupported
-    case responseTypesSupported
-    case grantTypesSupported
-    case subjectTypesSupported
+    case authorizationEndpoint = "authorization_endpoint"
+    case tokenEndpoint = "token_endpoint"
+    case userinfoEndpoint = "userinfo_endpoint"
+    case jwksURI = "jwks_uri"
+    case scopesSupported = "scopes_supported"
+    case responseTypesSupported = "response_types_supported"
+    case grantTypesSupported = "grant_types_supported"
+    case subjectTypesSupported = "subject_types_supported"
   }
 }
 
@@ -335,26 +335,26 @@ public struct CreateCustomProviderParams: Encodable, Hashable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case providerType
+    case providerType = "provider_type"
     case identifier
     case name
-    case clientID = "clientId"
-    case clientSecret
-    case acceptableClientIDs = "acceptableClientIds"
+    case clientID = "client_id"
+    case clientSecret = "client_secret"
+    case acceptableClientIDs = "acceptable_client_ids"
     case scopes
-    case customClaimsAllowlist
-    case pkceEnabled
-    case attributeMapping
-    case authorizationParams
+    case customClaimsAllowlist = "custom_claims_allowlist"
+    case pkceEnabled = "pkce_enabled"
+    case attributeMapping = "attribute_mapping"
+    case authorizationParams = "authorization_params"
     case enabled
-    case emailOptional
+    case emailOptional = "email_optional"
     case issuer
-    case discoveryURL = "discoveryUrl"
-    case skipNonceCheck
-    case authorizationURL = "authorizationUrl"
-    case tokenURL = "tokenUrl"
-    case userinfoURL = "userinfoUrl"
-    case jwksURI = "jwksUri"
+    case discoveryURL = "discovery_url"
+    case skipNonceCheck = "skip_nonce_check"
+    case authorizationURL = "authorization_url"
+    case tokenURL = "token_url"
+    case userinfoURL = "userinfo_url"
+    case jwksURI = "jwks_uri"
   }
 }
 
@@ -461,22 +461,22 @@ public struct UpdateCustomProviderParams: Encodable, Hashable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case name
-    case clientID = "clientId"
-    case clientSecret
-    case acceptableClientIDs = "acceptableClientIds"
+    case clientID = "client_id"
+    case clientSecret = "client_secret"
+    case acceptableClientIDs = "acceptable_client_ids"
     case scopes
-    case customClaimsAllowlist
-    case pkceEnabled
-    case attributeMapping
-    case authorizationParams
+    case customClaimsAllowlist = "custom_claims_allowlist"
+    case pkceEnabled = "pkce_enabled"
+    case attributeMapping = "attribute_mapping"
+    case authorizationParams = "authorization_params"
     case enabled
-    case emailOptional
+    case emailOptional = "email_optional"
     case issuer
-    case discoveryURL = "discoveryUrl"
-    case skipNonceCheck
-    case authorizationURL = "authorizationUrl"
-    case tokenURL = "tokenUrl"
-    case userinfoURL = "userinfoUrl"
-    case jwksURI = "jwksUri"
+    case discoveryURL = "discovery_url"
+    case skipNonceCheck = "skip_nonce_check"
+    case authorizationURL = "authorization_url"
+    case tokenURL = "token_url"
+    case userinfoURL = "userinfo_url"
+    case jwksURI = "jwks_uri"
   }
 }

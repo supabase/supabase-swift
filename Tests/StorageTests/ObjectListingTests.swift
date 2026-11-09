@@ -57,7 +57,7 @@ struct ObjectListingTests {
     let bodies = LockIsolated<[String]>([])
     let bucket = try Self.makeBucket(bodies: bodies, responses: [Self.firstPage, Self.lastPage])
 
-    var pages: [ObjectListing.Page] = []
+    var pages: [ObjectPage] = []
     for try await page in bucket.objects(
       prefix: "2026/", options: ObjectListingOptions(pageSize: 1, sortBy: .createdAt)
     ).pages {

@@ -1,6 +1,6 @@
 # PostgREST v3 migration
 
-This file covers the changes to `PostgrestClient` and the string query builders from v2.55.4 to
+This file covers the changes to `PostgrestClient` and the string query builders from v2 to
 v3. See [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every
 module.
 
@@ -48,14 +48,18 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgrestFilterBuilder.Operator`: `enum` | `PostgrestOperator` struct (`Operator` is a type alias) |
 | `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members |
 | `insert(…)`, `upsert(…)` return `PostgrestFilterBuilder` | return `PostgrestTransformBuilder` |
-| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
+| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.status: HTTPResponse.Status`, `.headers: HTTPFields` |
+| `PostgrestResponse.status: Int` | `PostgrestResponse.status: HTTPResponse.Status`; use `.status.code` for the `Int` |
+| `PostgrestResponse.data` | `PostgrestResponse.body` |
+| `PostgrestResponse(data:response:value:)`; `let` fields | `PostgrestResponse(status:headers:body:count:value:)`; `var` fields |
 | `URLQueryRepresentable` | `PostgrestFilterValue` |
 | `PostgrestFilterValue.queryValue` | `PostgrestFilterValue.rawValue` |
 | `.like(_:value:)`, `.ilike(_:value:)` | `.like(_:pattern:)`, `.ilike(_:pattern:)` |
 | `.in(_:value:)` | `.in(_:values:)` |
 | `.plfts`, `.phfts`, `.wfts(_:query:config:)` | `.textSearch(_:query:config:type:)` with `.plain`, `.phrase`, `.websearch` |
 | `.explain(…, format: String)` | `.explain(…, format: ExplainFormat)` |
-| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [Errors](#errors) |
+| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [`PostgrestError` is a struct](#postgresterror-is-a-struct) |
+| `Helpers.PostgrestError`, also visible through `import Auth`, `Functions`, `Realtime` or `Storage` | `PostgREST.PostgrestError`; import `PostgREST` or `Supabase` |
 
 A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturningOptions` or
 `TextSearchType` needs a `default:` case. `PostgrestOperator.allCases` is gone.
@@ -130,7 +134,7 @@ let scoped = email.map { query.eq("email", value: $0) } ?? query.is("email", val
 try await scoped.execute()
 ```
 
-## Errors
+## `PostgrestError` is a struct
 
 `PostgrestError` is a wrapper with `kind`, `message`, `serverError`, `response` and
 `underlyingError`. The PostgREST body (`code`, `message`, `details`, `hint`) moves to
@@ -149,7 +153,7 @@ closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 // v3
 } catch let error as PostgrestError {
   if error.serverError?.code == "23505" { showDuplicate(error.serverError?.details) }
-  print(error.response?.statusCode ?? 0, error.response?.requestID ?? "")
+  print(error.response?.status.code ?? 0, error.response?.requestID ?? "")
 }
 ```
 

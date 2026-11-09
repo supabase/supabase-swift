@@ -51,6 +51,14 @@ struct UserCredentials: Encodable, Hashable, Sendable {
   var refreshToken: String?
   var gotrueMetaSecurity: AuthMetaSecurity?
 
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case password
+    case phone
+    case refreshToken = "refresh_token"
+    case gotrueMetaSecurity = "gotrue_meta_security"
+  }
+
   init(
     email: String? = nil,
     password: String? = nil,
@@ -75,6 +83,17 @@ struct SignUpRequest: Encodable, Hashable, Sendable {
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case password
+    case phone
+    case channel
+    case data
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+  }
 }
 
 struct IDTokenBody: Encodable, Hashable, Sendable {
@@ -84,6 +103,15 @@ struct IDTokenBody: Encodable, Hashable, Sendable {
   var nonce: String?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var linkIdentity: Bool
+
+  private enum CodingKeys: String, CodingKey {
+    case provider
+    case idToken = "id_token"
+    case accessToken = "access_token"
+    case nonce
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case linkIdentity = "link_identity"
+  }
 }
 
 struct Web3Body: Encodable, Hashable, Sendable {
@@ -91,6 +119,13 @@ struct Web3Body: Encodable, Hashable, Sendable {
   var message: String
   var signature: String
   var gotrueMetaSecurity: AuthMetaSecurity?
+
+  private enum CodingKeys: String, CodingKey {
+    case chain
+    case message
+    case signature
+    case gotrueMetaSecurity = "gotrue_meta_security"
+  }
 }
 
 extension JSONObject {
@@ -239,8 +274,16 @@ extension KeyedDecodingContainer {
 
 extension Session {
   private enum CodingKeys: String, CodingKey {
-    case providerToken, providerRefreshToken, accessToken, tokenType, expiresIn, expiresAt
-    case receivedAt, refreshToken, weakPassword, user
+    case providerToken = "provider_token"
+    case providerRefreshToken = "provider_refresh_token"
+    case accessToken = "access_token"
+    case tokenType = "token_type"
+    case expiresIn = "expires_in"
+    case expiresAt = "expires_at"
+    case receivedAt = "received_at"
+    case refreshToken = "refresh_token"
+    case weakPassword = "weak_password"
+    case user
   }
 
   public init(from decoder: any Decoder) throws {
@@ -436,26 +479,26 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case id
-    case appMetadata
-    case userMetadata
+    case appMetadata = "app_metadata"
+    case userMetadata = "user_metadata"
     case audience = "aud"
-    case confirmationSentAt
-    case recoverySentAt
-    case emailChangeSentAt
-    case newEmail
-    case invitedAt
-    case actionLink
+    case confirmationSentAt = "confirmation_sent_at"
+    case recoverySentAt = "recovery_sent_at"
+    case emailChangeSentAt = "email_change_sent_at"
+    case newEmail = "new_email"
+    case invitedAt = "invited_at"
+    case actionLink = "action_link"
     case email
     case phone
-    case createdAt
-    case confirmedAt
-    case emailConfirmedAt
-    case phoneConfirmedAt
-    case lastSignInAt
+    case createdAt = "created_at"
+    case confirmedAt = "confirmed_at"
+    case emailConfirmedAt = "email_confirmed_at"
+    case phoneConfirmedAt = "phone_confirmed_at"
+    case lastSignInAt = "last_sign_in_at"
     case role
-    case updatedAt
+    case updatedAt = "updated_at"
     case identities
-    case isAnonymous
+    case isAnonymous = "is_anonymous"
     case factors
   }
 
@@ -614,18 +657,17 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.updatedAt = updatedAt
   }
 
-  // Raw values are the names after `convertFromSnakeCase`, so `identity_id` maps to `id` and the
-  // wire `id` maps to `providerUserID`.
+  // The wire `identity_id` maps to `id`, and the wire `id` maps to `providerUserID`.
   enum CodingKeys: String, CodingKey {
-    case id = "identityId"
+    case id = "identity_id"
     case providerUserID = "id"
-    case userID = "userId"
+    case userID = "user_id"
     case provider
-    case identityData
+    case identityData = "identity_data"
     case email
-    case createdAt
-    case lastSignInAt
-    case updatedAt
+    case createdAt = "created_at"
+    case lastSignInAt = "last_sign_in_at"
+    case updatedAt = "updated_at"
   }
 
   public init(from decoder: any Decoder) throws {
@@ -740,6 +782,10 @@ public struct IDTokenCredentials: Sendable, Hashable {
 /// A captcha verification token, in the shape the server reads it.
 struct AuthMetaSecurity: Encodable, Hashable, Sendable {
   var captchaToken: String
+
+  private enum CodingKeys: String, CodingKey {
+    case captchaToken = "captcha_token"
+  }
 }
 
 /// A Web3 chain supported by Sign in with Web3.
@@ -890,7 +936,11 @@ public struct MessageID: RawRepresentable, Decodable, Hashable, Sendable {
 
 /// The `{"message_id": …}` body of a phone `/otp` or `/resend` response.
 struct MessageIDBody: Decodable {
-  let messageId: MessageID?
+  let messageID: MessageID?
+
+  private enum CodingKeys: String, CodingKey {
+    case messageID = "message_id"
+  }
 }
 
 struct OTPParams: Encodable, Hashable, Sendable {
@@ -902,6 +952,17 @@ struct OTPParams: Encodable, Hashable, Sendable {
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case phone
+    case createUser = "create_user"
+    case channel
+    case data
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+  }
 }
 
 enum VerifyOTPParams: Encodable {
@@ -931,6 +992,11 @@ struct VerifyEmailOTPParams: Encodable, Hashable, Sendable {
 struct VerifyTokenHashParams: Encodable, Hashable, Sendable {
   var tokenHash: String
   var type: EmailOTPType
+
+  private enum CodingKeys: String, CodingKey {
+    case tokenHash = "token_hash"
+    case type
+  }
 }
 
 struct VerifyPhoneOTPParams: Encodable, Hashable {
@@ -1093,7 +1159,9 @@ public struct SignUpOptions: Sendable, Hashable {
 }
 
 private enum SessionKeys: String, CodingKey {
-  case accessToken, refreshToken, expiresIn
+  case accessToken = "access_token"
+  case refreshToken = "refresh_token"
+  case expiresIn = "expires_in"
 }
 
 extension Decoder {
@@ -1186,7 +1254,13 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
   var codeChallengeMethod: String?
 
   private enum CodingKeys: String, CodingKey {
-    case email, phone, password, currentPassword, nonce, codeChallenge, codeChallengeMethod
+    case email
+    case phone
+    case password
+    case currentPassword = "current_password"
+    case nonce
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
     case userMetadata = "data"
   }
 
@@ -1259,18 +1333,18 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var userMetadata: [String: JSONValue]?
 
   private enum CodingKeys: String, CodingKey {
-    case appMetadata
-    case banDuration
+    case appMetadata = "app_metadata"
+    case banDuration = "ban_duration"
     case email
     case confirmsEmail = "email_confirm"
     case id
     case nonce
     case password
-    case passwordHash
+    case passwordHash = "password_hash"
     case phone
     case confirmsPhone = "phone_confirm"
     case role
-    case userMetadata
+    case userMetadata = "user_metadata"
   }
 
   /// Creates admin user attributes.
@@ -1364,6 +1438,13 @@ struct RecoverParams: Encodable, Hashable, Sendable {
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+  }
 }
 
 /// The kind of an MFA factor.
@@ -1437,6 +1518,15 @@ public struct Factor: Identifiable, Codable, Hashable, Sendable {
 
   /// Timestamp when the factor was last updated.
   public let updatedAt: Date
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName = "friendly_name"
+    case factorType = "factor_type"
+    case status
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
+  }
 }
 
 /// The body of `POST /factors`. Each `enroll` method of ``AuthMFA`` fills the fields of its factor
@@ -1446,6 +1536,13 @@ struct MFAEnrollParams: Encodable, Sendable {
   var friendlyName: String?
   var issuer: String?
   var phone: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case factorType = "factor_type"
+    case friendlyName = "friendly_name"
+    case issuer
+    case phone
+  }
 
   static func totp(issuer: String? = nil, friendlyName: String? = nil) -> Self {
     MFAEnrollParams(factorType: .totp, friendlyName: friendlyName, issuer: issuer)
@@ -1485,13 +1582,21 @@ public struct TOTPEnrollment: Identifiable, Hashable, Sendable {
 
 extension TOTPEnrollment: Decodable {
   private enum CodingKeys: String, CodingKey {
-    case id, friendlyName, totp
+    case id
+    case friendlyName = "friendly_name"
+    case totp
   }
 
   private struct TOTP: Decodable {
     let qrCode: String
     let secret: String
     let uri: String
+
+    private enum CodingKeys: String, CodingKey {
+      case qrCode = "qr_code"
+      case secret
+      case uri
+    }
   }
 
   public init(from decoder: any Decoder) throws {
@@ -1520,6 +1625,12 @@ public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
 
   /// The phone number of the factor, in E.164 format.
   public let phone: String
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName = "friendly_name"
+    case phone
+  }
 }
 
 /// A challenge created by ``AuthMFA/challenge(factorID:channel:)``.
@@ -1539,7 +1650,10 @@ public struct MFAChallenge: Identifiable, Hashable, Sendable {
 
 extension MFAChallenge: Decodable {
   private enum CodingKeys: String, CodingKey {
-    case id, type, expiresAt, webauthn
+    case id
+    case type
+    case expiresAt = "expires_at"
+    case webauthn
   }
 
   public init(from decoder: any Decoder) throws {
@@ -1588,6 +1702,13 @@ public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendabl
   /// The codes themselves. Returned only here, so show them to the user and ask them to store
   /// the codes safely.
   public let codes: [String]
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName = "friendly_name"
+    case total
+    case codes
+  }
 }
 
 /// The user's MFA factors, returned by ``AuthMFA/factors()``.
@@ -1786,6 +1907,14 @@ struct ResendEmailParams: Encodable {
   let gotrueMetaSecurity: AuthMetaSecurity?
   let codeChallenge: String?
   let codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case email
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+  }
 }
 
 /// The kind of phone code that ``AuthClient/resend(phone:type:options:)`` sends again.
@@ -1815,6 +1944,12 @@ struct ResendPhoneParams: Encodable {
   let type: ResendPhoneType
   let phone: String
   let gotrueMetaSecurity: AuthMetaSecurity?
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case phone
+    case gotrueMetaSecurity = "gotrue_meta_security"
+  }
 }
 
 /// Information about why a password is considered weak.
@@ -1825,6 +1960,10 @@ public struct WeakPassword: Codable, Hashable, Sendable {
 
 struct DeleteUserRequest: Encodable {
   let shouldSoftDelete: Bool
+
+  private enum CodingKeys: String, CodingKey {
+    case shouldSoftDelete = "should_soft_delete"
+  }
 }
 
 /// The messaging channel used to deliver OTPs.
@@ -1934,13 +2073,23 @@ public struct ResetPasswordOptions: Sendable, Hashable {
 }
 
 struct SignInWithSSORequest: Encodable {
-  let providerId: UUID?
+  let providerID: UUID?
   let domain: String?
   let redirectTo: URL?
   let gotrueMetaSecurity: AuthMetaSecurity?
   let codeChallenge: String?
   let codeChallengeMethod: String?
   let skipHttpRedirect: Bool?
+
+  private enum CodingKeys: String, CodingKey {
+    case providerID = "provider_id"
+    case domain
+    case redirectTo = "redirect_to"
+    case gotrueMetaSecurity = "gotrue_meta_security"
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+    case skipHttpRedirect = "skip_http_redirect"
+  }
 }
 
 /// The `{"url": …}` body of a `/sso` or `/user/identities/authorize` response.
@@ -2041,7 +2190,7 @@ public struct PageParams: Hashable, Sendable {
   }
 }
 
-/// One page of users, returned by ``AuthAdminClient/listUsers(page:perPage:)``.
+/// One page of users, returned by ``AuthAdminClient/listUsers(page:pageSize:)``.
 public struct UserPage: Hashable, Sendable {
   /// The users on this page.
   public let users: [User]
@@ -2067,6 +2216,14 @@ public struct GenerateLinkParams: Sendable {
     var password: String?
     var newEmail: String?
     var data: [String: JSONValue]?
+
+    private enum CodingKeys: String, CodingKey {
+      case type
+      case email
+      case password
+      case newEmail = "new_email"
+      case data
+    }
   }
   var body: Body
   var redirectTo: URL?
@@ -2197,14 +2354,11 @@ public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
   public let verificationType: GenerateLinkType
 
   private enum CodingKeys: String, CodingKey {
-    case actionLink
-    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
-    // "email_otp" to "emailOtp" (not "emailOTP") before matching against this
-    // raw value, since it doesn't know to capitalize the "OTP" acronym.
-    case emailOTP = "emailOtp"
-    case hashedToken
-    case redirectTo
-    case verificationType
+    case actionLink = "action_link"
+    case emailOTP = "email_otp"
+    case hashedToken = "hashed_token"
+    case redirectTo = "redirect_to"
+    case verificationType = "verification_type"
   }
 }
 
@@ -2325,7 +2479,7 @@ public struct OAuthClientRegistrationType: RawRepresentable, Decodable, Hashable
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
-  public let clientId: UUID
+  public let clientID: UUID
 
   /// Human-readable name of the OAuth client
   public let clientName: String?
@@ -2343,13 +2497,13 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
   public let registrationType: OAuthClientRegistrationType
 
   /// URI of the OAuth client
-  public let clientUri: String?
+  public let clientURI: String?
 
   /// URL of the client application's logo
-  public let logoUri: String?
+  public let logoURI: String?
 
   /// Array of allowed redirect URIs
-  public let redirectUris: [String]?
+  public let redirectURIs: [String]?
 
   /// Array of allowed grant types
   public let grantTypes: [OAuthClientGrantType]?
@@ -2365,6 +2519,23 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
 
   /// Timestamp when the client was last updated
   public let updatedAt: Date
+
+  private enum CodingKeys: String, CodingKey {
+    case clientID = "client_id"
+    case clientName = "client_name"
+    case clientSecret = "client_secret"
+    case clientType = "client_type"
+    case tokenEndpointAuthMethod = "token_endpoint_auth_method"
+    case registrationType = "registration_type"
+    case clientURI = "client_uri"
+    case logoURI = "logo_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+    case responseTypes = "response_types"
+    case scope
+    case createdAt = "created_at"
+    case updatedAt = "updated_at"
+  }
 }
 
 /// Parameters for creating a new OAuth client.
@@ -2374,10 +2545,10 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   public let clientName: String
 
   /// URI of the OAuth client
-  public let clientUri: String?
+  public let clientURI: String?
 
   /// Array of allowed redirect URIs
-  public let redirectUris: [String]
+  public let redirectURIs: [String]
 
   /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
   public let grantTypes: [OAuthClientGrantType]?
@@ -2388,26 +2559,35 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Scope of the OAuth client
   public let scope: String?
 
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+    case responseTypes = "response_types"
+    case scope
+  }
+
   /// Creates parameters for a new OAuth client.
   ///
   /// - Parameters:
   ///   - clientName: Human-readable name for the client.
-  ///   - clientUri: URI of the client application's homepage.
-  ///   - redirectUris: Allowed redirect URIs.
+  ///   - clientURI: URI of the client application's homepage.
+  ///   - redirectURIs: Allowed redirect URIs.
   ///   - grantTypes: Allowed grant types; defaults to `authorization_code` and `refresh_token`.
   ///   - responseTypes: Allowed response types; defaults to `code`.
   ///   - scope: Requested scope.
   public init(
     clientName: String,
-    clientUri: String? = nil,
-    redirectUris: [String],
+    clientURI: String? = nil,
+    redirectURIs: [String],
     grantTypes: [OAuthClientGrantType]? = nil,
     responseTypes: [OAuthClientResponseType]? = nil,
     scope: String? = nil
   ) {
     self.clientName = clientName
-    self.clientUri = clientUri
-    self.redirectUris = redirectUris
+    self.clientURI = clientURI
+    self.redirectURIs = redirectURIs
     self.grantTypes = grantTypes
     self.responseTypes = responseTypes
     self.scope = scope
@@ -2421,36 +2601,44 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   public let clientName: String?
 
   /// URL of the client application's homepage
-  public let clientUri: String?
+  public let clientURI: String?
 
   /// URL of the client application's logo
-  public let logoUri: String?
+  public let logoURI: String?
 
   /// Array of redirect URIs used by the client
-  public let redirectUris: [String]?
+  public let redirectURIs: [String]?
 
   /// OAuth grant types the client is authorized to use
   public let grantTypes: [OAuthClientGrantType]?
+
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case logoURI = "logo_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+  }
 
   /// Creates parameters for updating an existing OAuth client.
   ///
   /// - Parameters:
   ///   - clientName: New human-readable name.
-  ///   - clientUri: New URI for the client application.
-  ///   - logoUri: New logo URI.
-  ///   - redirectUris: Replacement list of redirect URIs.
+  ///   - clientURI: New URI for the client application.
+  ///   - logoURI: New logo URI.
+  ///   - redirectURIs: Replacement list of redirect URIs.
   ///   - grantTypes: Replacement list of grant types.
   public init(
     clientName: String? = nil,
-    clientUri: String? = nil,
-    logoUri: String? = nil,
-    redirectUris: [String]? = nil,
+    clientURI: String? = nil,
+    logoURI: String? = nil,
+    redirectURIs: [String]? = nil,
     grantTypes: [OAuthClientGrantType]? = nil
   ) {
     self.clientName = clientName
-    self.clientUri = clientUri
-    self.logoUri = logoUri
-    self.redirectUris = redirectUris
+    self.clientURI = clientURI
+    self.logoURI = logoURI
+    self.redirectURIs = redirectURIs
     self.grantTypes = grantTypes
   }
 }
@@ -2487,7 +2675,14 @@ public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
   public let uri: URL?
 
   /// URL of the OAuth client's logo.
-  public let logoUri: URL?
+  public let logoURI: URL?
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case uri
+    case logoURI = "logo_uri"
+  }
 }
 
 /// The authenticated user considering the authorization request.
@@ -2506,10 +2701,10 @@ public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
   /// Opaque identifier for this authorization request.
-  public let authorizationId: String
+  public let authorizationID: String
 
   /// The redirect URI the client registered for this request.
-  public let redirectUri: URL
+  public let redirectURI: URL
 
   /// The OAuth client requesting authorization.
   public let client: OAuthAuthorizationClient
@@ -2519,6 +2714,14 @@ public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
 
   /// The requested scope.
   public let scope: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case authorizationID = "authorization_id"
+    case redirectURI = "redirect_uri"
+    case client
+    case user
+    case scope
+  }
 }
 
 /// A redirect URL returned after approving or denying an OAuth authorization
@@ -2532,11 +2735,7 @@ public struct OAuthRedirect: Decodable, Hashable, Sendable {
   public let redirectURL: URL
 
   private enum CodingKeys: String, CodingKey {
-    // The decoder's `.convertFromSnakeCase` strategy converts the JSON key
-    // "redirect_url" to "redirectUrl" (not "redirectURL") before matching
-    // against this raw value, since it doesn't know to capitalize the "URL"
-    // acronym.
-    case redirectURL = "redirectUrl"
+    case redirectURL = "redirect_url"
   }
 }
 
@@ -2556,14 +2755,14 @@ public enum OAuthAuthorizationDetailsResponse: Hashable, Sendable {
 
 extension OAuthAuthorizationDetailsResponse: Decodable {
   private enum CodingKeys: String, CodingKey {
-    case authorizationId
+    case authorizationID = "authorization_id"
   }
 
   /// Details carry an `authorization_id`; the auto-approve body is `{redirect_url}` alone.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self =
-      container.contains(.authorizationId)
+      container.contains(.authorizationID)
       ? .details(try OAuthAuthorizationDetails(from: decoder))
       : .redirect(try OAuthRedirect(from: decoder))
   }
@@ -2581,6 +2780,12 @@ public struct OAuthGrant: Decodable, Hashable, Sendable {
 
   /// When the grant was given.
   public let grantedAt: Date
+
+  private enum CodingKeys: String, CodingKey {
+    case client
+    case scopes
+    case grantedAt = "granted_at"
+  }
 }
 
 /// JSON Web Key (JWK) representation.
@@ -2615,8 +2820,7 @@ public struct JWK: Decodable, Hashable, Sendable {
   /// Symmetric key value (base64url-encoded).
   public let k: String?
 
-  /// The wire names of RFC 7517. Decode with a plain `JSONDecoder`: a `.convertFromSnakeCase`
-  /// strategy would turn `key_ops` into `keyOps` before the match.
+  /// The wire names of RFC 7517.
   enum CodingKeys: String, CodingKey {
     case kty
     case keyOps = "key_ops"

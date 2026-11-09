@@ -81,6 +81,6 @@ struct StorageAnalyticsClientTests {
       _ = try await analytics.listBuckets()
     }
     #expect(error?.message == "Forbidden")
-    #expect(error?.response?.statusCode == 403)
+    #expect(error?.response?.status == 403)
   }
 }

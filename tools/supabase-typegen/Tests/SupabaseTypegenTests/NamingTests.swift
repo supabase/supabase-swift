@@ -12,8 +12,8 @@ import Testing
 @Suite
 struct NamingTests {
   @Test(arguments: [
-    ("user_id", "userId"),
-    ("user-id", "userId"),
+    ("user_id", "userID"),
+    ("user-id", "userID"),
     ("userId", "userId"),
     ("ID", "id"),
     ("Draft", "draft"),
@@ -24,7 +24,16 @@ struct NamingTests {
     ("café_au_lait", "caféAuLait"),
     ("IN_PROGRESS", "inProgress"),
     ("ORDER_STATUS_PENDING", "orderStatusPending"),
-    ("USER_ID", "userId"),
+    ("USER_ID", "userID"),
+    ("pinned_post_id", "pinnedPostID"),
+    ("html_url", "htmlURL"),
+    ("redirect_uris", "redirectURIs"),
+    ("owner_ids", "ownerIDs"),
+    ("id_token", "idToken"),
+    ("url_path", "urlPath"),
+    ("email_otp", "emailOTP"),
+    ("identity_data", "identityData"),
+    ("valid", "valid"),
   ])
   func propertyName(postgres: String, swift: String) {
     #expect(Naming.propertyName(postgres) == swift)

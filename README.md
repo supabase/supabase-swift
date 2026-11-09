@@ -50,6 +50,7 @@
 
 Add `supabase-swift` as a Swift Package Manager dependency:
 
+<!-- x-release-please-start-version -->
 ```swift
 let package = Package(
     ...
@@ -69,10 +70,11 @@ let package = Package(
     ]
 )
 ```
+<!-- x-release-please-end -->
 
 If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the URL when Xcode asks.
 
-You can also add individual libraries (`Auth`, `Realtime`, `Storage`, `PostgREST`, `Functions`) instead of the full `Supabase` product.
+You can also add individual libraries (`Auth`, `Functions`, `PostgREST`, `PostgrestMacros`, `Realtime`, `Storage`) instead of the full `Supabase` product.
 
 ### Initialize the client
 
@@ -180,13 +182,15 @@ to install it by hand only when the CLI cannot do that, for example without netw
 uses the `supabase-typegen` it finds on your `PATH`. Install the build that matches the
 supabase-swift version your project uses:
 
+<!-- x-release-please-start-version -->
 ```bash
-VERSION=2.55.1 # your supabase-swift version
+VERSION=3.0.0-alpha.1 # your supabase-swift version
 ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
 mkdir -p ~/.local/bin
 curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
 supabase-typegen --version
 ```
+<!-- x-release-please-end -->
 
 Put `~/.local/bin` on your `PATH` if it is not there yet. Then generate the file:
 

@@ -53,6 +53,9 @@ public struct StorageClientConfiguration: Sendable {
   public let http: HTTPClientConfiguration
 
   /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.
+  ///
+  /// The client removes tokens, secrets, and URL query strings from each line before your handler
+  /// sees it.
   public let logger: Logging.Logger
 
   /// When `true`, rewrites `project.supabase.co` hostnames to `project.storage.supabase.co`,
@@ -95,7 +98,7 @@ public struct StorageClientConfiguration: Sendable {
     self.url = url
     self.headers = headers
     self.http = http
-    var logger = logger
+    var logger = logger.redactingSecrets()
     logger[metadataKey: "system"] = "storage"
     self.logger = logger
     self.usesNewHostname = usesNewHostname

@@ -141,7 +141,7 @@ public struct VectorIndexClient: Sendable {
   /// Use ``ListVectorsOptions/segment`` to scan the index in parallel across multiple workers.
   ///
   /// ```swift
-  /// let options = ListVectorsOptions(maxResults: 500, returnMetadata: true)
+  /// let options = ListVectorsOptions(pageSize: 500, returnMetadata: true)
   /// for try await vector in index.listVectors(options: options) {
   ///   print(vector.key)
   /// }
@@ -150,11 +150,12 @@ public struct VectorIndexClient: Sendable {
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameter options: The page size, the response contents and the scan segment.
-  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
+  /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
+  ///   when the API rejects a request.
   public func listVectors(
     options: ListVectorsOptions = ListVectorsOptions()
-  ) -> PagedListing<ListVectorsResponse, VectorMatch> {
-    PagedListing(
+  ) -> PageSequence<VectorMatch, VectorPage, String> {
+    PageSequence(
       fetch: { [api, vectorBucketName, indexName] nextToken in
         let response: ListVectorsResponseBody = try await api.execute(
           HTTPRequest(
@@ -165,7 +166,7 @@ public struct VectorIndexClient: Sendable {
             ListVectorsBody(
               vectorBucketName: vectorBucketName,
               indexName: indexName,
-              maxResults: options.maxResults,
+              maxResults: options.pageSize,
               nextToken: nextToken,
               returnData: options.returnData,
               returnMetadata: options.returnMetadata,
@@ -175,9 +176,9 @@ public struct VectorIndexClient: Sendable {
           )
         )
         .decoded(decoder: .vectors)
-        return ListVectorsResponse(vectors: response.vectors, nextToken: response.nextToken)
+        return VectorPage(vectors: response.vectors, nextToken: response.nextToken)
       },
-      nextToken: \.nextToken,
+      nextCursor: \.nextToken,
       elements: \.vectors
     )
   }
@@ -426,7 +427,7 @@ public struct GetVectorsOptions: Sendable, Hashable {
 @_spi(Experimental)
 public struct ListVectorsOptions: Sendable, Hashable {
   /// The maximum number of vectors per page (up to 1000). `nil` uses the server default.
-  public var maxResults: Int?
+  public var pageSize: Int?
 
   /// Whether the response includes the embedding data. Defaults to `false`.
   public var returnData: Bool
@@ -440,17 +441,17 @@ public struct ListVectorsOptions: Sendable, Hashable {
   /// Creates a ``ListVectorsOptions`` value.
   ///
   /// - Parameters:
-  ///   - maxResults: The maximum number of vectors per page (up to 1000).
+  ///   - pageSize: The maximum number of vectors per page (up to 1000).
   ///   - returnData: Whether the response includes the embedding data.
   ///   - returnMetadata: Whether the response includes the metadata.
   ///   - segment: Scans only the given slice of the index, for parallel listing.
   public init(
-    maxResults: Int? = nil,
+    pageSize: Int? = nil,
     returnData: Bool = false,
     returnMetadata: Bool = false,
     segment: VectorListSegment? = nil
   ) {
-    self.maxResults = maxResults
+    self.pageSize = pageSize
     self.returnData = returnData
     self.returnMetadata = returnMetadata
     self.segment = segment
@@ -496,7 +497,7 @@ public struct QueryVectorsOptions: Sendable, Hashable {
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct ListVectorsResponse: Sendable {
+public struct VectorPage: Sendable {
   /// The vectors in this page.
   public var vectors: [VectorMatch]
 

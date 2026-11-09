@@ -114,7 +114,7 @@ struct FunctionsIntegrationTests {
       try await client.invoke("does-not-exist")
     }
     #expect(error?.kind == .server)
-    #expect(error?.response?.statusCode == 404)
+    #expect(error?.response?.status == 404)
   }
 
   @Test
@@ -124,7 +124,7 @@ struct FunctionsIntegrationTests {
       try await client.invoke("echo")
     }
     #expect(error?.kind == .server)
-    #expect(error?.response?.statusCode == 401)
+    #expect(error?.response?.status == 401)
     #expect(error?.code == .unauthorizedNoAuthHeader)
     #expect(error?.isPlatformError == true)
   }

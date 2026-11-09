@@ -69,7 +69,7 @@ struct StorageVectorsClientIntegrationTests {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "NotFoundException")
       #expect(error.message == "resource \"not-exist-bucket\" not found")
-      #expect(error.response?.statusCode == 404)
+      #expect(error.response?.status == 404)
     } catch {
       Issue.record("Unexpected error \(error)")
     }

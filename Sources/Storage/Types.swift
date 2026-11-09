@@ -243,7 +243,7 @@ public struct DownloadOptions: Sendable {
 
   /// The version of the object to fetch, for a bucket with versioning. `nil` (the default)
   /// fetches the current version.
-  public var versionId: String?
+  public var versionID: String?
 
   /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
   /// of a cached one.
@@ -261,19 +261,19 @@ public struct DownloadOptions: Sendable {
   ///
   /// - Parameters:
   ///   - range: The bytes to fetch, both ends included. Fetches the whole object when `nil`.
-  ///   - versionId: The version of the object to fetch. Fetches the current version when `nil`.
+  ///   - versionID: The version of the object to fetch. Fetches the current version when `nil`.
   ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
   ///   - transform: An image transformation that Storage applies before delivery.
   ///   - headers: Extra HTTP headers for the download request.
   public init(
     range: ClosedRange<Int64>? = nil,
-    versionId: String? = nil,
+    versionID: String? = nil,
     cacheNonce: String? = nil,
     transform: ImageTransform? = nil,
     headers: HTTPFields = [:]
   ) {
     self.range = range
-    self.versionId = versionId
+    self.versionID = versionID
     self.cacheNonce = cacheNonce
     self.transform = transform
     self.headers = headers
@@ -298,7 +298,7 @@ public struct SignedURLOptions: Sendable {
   public var transform: ImageTransform?
 
   /// The version the URL serves. `nil` (the default) serves the current version.
-  public var versionId: String?
+  public var versionID: String?
 
   /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
   /// of a cached one.
@@ -310,17 +310,17 @@ public struct SignedURLOptions: Sendable {
   ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
   ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
   ///   - transform: An image transformation that Storage applies before delivery.
-  ///   - versionId: The version the URL serves.
+  ///   - versionID: The version the URL serves.
   ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
   public init(
     download: DownloadBehavior? = nil,
     transform: ImageTransform? = nil,
-    versionId: String? = nil,
+    versionID: String? = nil,
     cacheNonce: String? = nil
   ) {
     self.download = download
     self.transform = transform
-    self.versionId = versionId
+    self.versionID = versionID
     self.cacheNonce = cacheNonce
   }
 }
@@ -361,7 +361,7 @@ public struct PublicURLOptions: Sendable {
   public var transform: ImageTransform?
 
   /// The version the URL serves. `nil` (the default) serves the current version.
-  public var versionId: String?
+  public var versionID: String?
 
   /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
   /// of a cached one.
@@ -373,17 +373,17 @@ public struct PublicURLOptions: Sendable {
   ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
   ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
   ///   - transform: An image transformation that Storage applies before delivery.
-  ///   - versionId: The version the URL serves.
+  ///   - versionID: The version the URL serves.
   ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
   public init(
     download: DownloadBehavior? = nil,
     transform: ImageTransform? = nil,
-    versionId: String? = nil,
+    versionID: String? = nil,
     cacheNonce: String? = nil
   ) {
     self.download = download
     self.transform = transform
-    self.versionId = versionId
+    self.versionID = versionID
     self.cacheNonce = cacheNonce
   }
 }
@@ -560,7 +560,7 @@ public struct UploadedObject: Hashable, Sendable {
   }
 }
 
-/// Options for ``StorageBucket/copy(from:to:toBucket:sourceVersionId:options:)``.
+/// Options for ``StorageBucket/copy(from:to:toBucket:sourceVersionID:options:)``.
 ///
 /// ```swift
 /// let copy = try await bucket.copy(
@@ -624,23 +624,23 @@ public struct CopyOptions: Sendable {
 /// One version of an object, for ``StorageBucket/remove(versions:)``.
 ///
 /// ```swift
-/// try await bucket.remove(versions: [ObjectVersion(path: "a.png", versionId: oldVersion)])
+/// try await bucket.remove(versions: [ObjectVersion(path: "a.png", versionID: oldVersion)])
 /// ```
 public struct ObjectVersion: Hashable, Sendable {
   /// The object path, e.g. `"folder/image.png"`.
   public var path: String
 
   /// The version to address, from ``StorageObject/version`` or ``ObjectInfo/version``.
-  public var versionId: String
+  public var versionID: String
 
   /// Creates an ``ObjectVersion``.
   ///
   /// - Parameters:
   ///   - path: The object path.
-  ///   - versionId: The version to address.
-  public init(path: String, versionId: String) {
+  ///   - versionID: The version to address.
+  public init(path: String, versionID: String) {
     self.path = path
-    self.versionId = versionId
+    self.versionID = versionID
   }
 }
 
@@ -836,7 +836,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   }
 }
 
-/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:versionId:)``.
+/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:versionID:)``.
 ///
 /// ## Topics
 ///
@@ -845,7 +845,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
 /// - ``id``
 /// - ``version``
 /// - ``name``
-/// - ``bucketId``
+/// - ``bucketID``
 ///
 /// ### Size and content type
 ///
@@ -878,7 +878,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var name: String
 
   /// The identifier of the bucket that contains this object.
-  public var bucketId: String?
+  public var bucketID: String?
 
   /// The size in bytes.
   public var size: Int64?
@@ -921,7 +921,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
     id: UUID,
     version: String,
     name: String,
-    bucketId: String? = nil,
+    bucketID: String? = nil,
     size: Int64? = nil,
     contentType: String? = nil,
     cacheControl: String? = nil,
@@ -938,7 +938,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
     self.id = id
     self.version = version
     self.name = name
-    self.bucketId = bucketId
+    self.bucketID = bucketID
     self.size = size
     self.contentType = contentType
     self.cacheControl = cacheControl
@@ -957,7 +957,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
     case id
     case version
     case name
-    case bucketId = "bucket_id"
+    case bucketID = "bucket_id"
     case size
     case contentType = "content_type"
     case cacheControl = "cache_control"
@@ -985,7 +985,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 /// - ``id``
 /// - ``name``
 /// - ``type``
-/// - ``ownerId``
+/// - ``ownerID``
 ///
 /// ### Access and limits
 ///
@@ -1013,7 +1013,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   public var type: BucketType?
 
   /// The ID of the user who owns the bucket, if any.
-  public var ownerId: String?
+  public var ownerID: String?
 
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -1040,7 +1040,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   ///   - id: Unique bucket identifier.
   ///   - name: Human-readable bucket name.
   ///   - type: Whether the bucket holds files or analytics tables.
-  ///   - ownerId: ID of the user who owns the bucket.
+  ///   - ownerID: ID of the user who owns the bucket.
   ///   - isPublic: Whether the bucket is publicly readable.
   ///   - createdAt: Creation timestamp.
   ///   - updatedAt: Last-updated timestamp.
@@ -1051,7 +1051,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     id: String,
     name: String,
     type: BucketType? = nil,
-    ownerId: String? = nil,
+    ownerID: String? = nil,
     isPublic: Bool,
     createdAt: Date,
     updatedAt: Date,
@@ -1062,7 +1062,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     self.id = id
     self.name = name
     self.type = type
-    self.ownerId = ownerId
+    self.ownerID = ownerID
     self.isPublic = isPublic
     self.createdAt = createdAt
     self.updatedAt = updatedAt
@@ -1075,7 +1075,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     case id
     case name
     case type
-    case ownerId = "owner_id"
+    case ownerID = "owner_id"
     case isPublic = "public"
     case createdAt = "created_at"
     case updatedAt = "updated_at"

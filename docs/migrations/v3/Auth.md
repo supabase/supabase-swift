@@ -8,6 +8,17 @@ every module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **`Session`, `User`, `UserIdentity` and `Factor` encode with snake_case keys.** They declare
+  their own keys now, so any coder writes `access_token`, not `accessToken`. If your app stores
+  these values with its own `JSONEncoder` (a `UserDefaults` or keychain cache), it writes
+  `access_token` from now on, and a blob that it wrote earlier with `accessToken` no longer
+  decodes. Clear such a cache or decode the old blob with your own keys. The SDK's own session
+  storage reads every earlier format.
+- **Free-form keys are no longer rewritten.** The v2 Auth coders converted every key between
+  `camelCase` and `snake_case`, including the keys of your own JSON, such as `userMetadata` and
+  `data`. v3 maps only the declared model keys, so the keys that you send and read stay as you
+  wrote them. If your app or a database trigger relied on the conversion, for example by sending
+  `firstName` and reading `first_name`, send and read the key you mean.
 - **Initial session can be expired.** With `autoRefresh: .automatic`, the client tries one
   refresh of an expired stored session before it delivers `.initialSession`. It waits at most
   `AuthClient.Configuration.initialRefreshTimeout`, 5 seconds by default. A value of zero or less
@@ -306,7 +317,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
 | `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)` |
 | `AuthAdmin.inviteUserByEmail(_:data:redirectTo:)` | `AuthAdminClient.inviteUser(email:userMetadata:redirectTo:)`; `userMetadata` is a `JSONObject` |
-| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:perPage:)` |
+| `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:pageSize:)`; `users(pageSize:)` returns a `PageSequence` over every page |
 | `ListUsersPaginatedResponse` | `UserPage`, with only `let` properties |
 | `AuthAdmin.generateLink(params:)` | `AuthAdminClient.generateLink(_:)` |
 | `GenerateLinkProperties.redirectTo: URL` | `URL?` |
@@ -374,6 +385,22 @@ For the structs that replace enums:
 
 For the MFA `UUID` changes, code that passes `factor.id` or `challenge.id` straight into another
 MFA call still compiles. Use `.uuidString` and `UUID(uuidString:)` where you store strings.
+
+## Acronyms use uniform case
+
+Every public Auth name spells `ID`, `URL` and `URI` in capitals, like `factorID` and `jwksURI`. The
+wire keys do not change.
+
+| v3 pre-release | v3 |
+| --- | --- |
+| `OAuthClient.clientId`, `.clientUri`, `.logoUri`, `.redirectUris` | `clientID`, `clientURI`, `logoURI`, `redirectURIs` |
+| `CreateOAuthClientParams` and `UpdateOAuthClientParams`: `clientUri`, `logoUri`, `redirectUris` | `clientURI`, `logoURI`, `redirectURIs` |
+| `OAuthAuthorizationClient.logoUri` | `logoURI` |
+| `OAuthAuthorizationDetails.authorizationId`, `.redirectUri` | `authorizationID`, `redirectURI` |
+| `WebAuthnChallengeOptions.rpId` | `rpID` |
+| The `userId:` parameter of the admin MFA and passkey methods | `userID:` |
+| `CustomProvider` URL and ID fields (`clientId`, `discoveryUrl`, `authorizationUrl`, `tokenUrl`, `userinfoUrl`, `jwksUri`, `acceptableClientIds`) | `clientID`, `discoveryURL`, `authorizationURL`, `tokenURL`, `userinfoURL`, `jwksURI`, `acceptableClientIDs` |
+| `OAuthRedirect.redirectURL` and `OAuthAuthorizationDetails.redirectUri` | `redirectURL` and `redirectURI` stay two names: the first is a full URL the app opens, the second is the client's registered URI |
 
 ## `admin` is a separate `AuthAdminClient`
 
@@ -673,7 +700,7 @@ cases: `catch ErrorCode.invalidCredentials` and `catch AuthError.Kind.sessionMis
 | v2 | v3 |
 | --- | --- |
 | `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `catch AuthError.Kind.sessionMissing` (nothing stored) or `catch AuthError.Kind.sessionInvalidated` (the server rejected the session) |
-| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.statusCode`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
+| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
 | `.weakPassword(message, reasons)` | `error.errorCode == .weakPassword`; `error.weakPasswordReasons` |
 | `.pkceGrantCodeExchange(...)`, `.implicitGrantRedirect(message)`, `.pkce(_:)`, `.invalidImplicitGrantFlowURL`, `.invalidRedirectScheme` | `error.kind == .oauthFlowFailed` |
 | `.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` |
@@ -694,7 +721,7 @@ do {
 do {
   try await supabase.auth.signIn(email: email, password: password)
 } catch let error as AuthError where error.kind == .server {
-  print(error.response?.statusCode ?? 0, error.errorCode, error.message)
+  print(error.response?.status.code ?? 0, error.errorCode, error.message)
 } catch AuthError.Kind.sessionMissing, AuthError.Kind.sessionInvalidated {
   showLogin()
 }
@@ -947,7 +974,8 @@ so it loses no change, and it finishes when your task is cancelled or the client
 `AuthChange` has `event`, `session`, `status` (an `AuthStatus`), and `signOutReason`, which tells
 `.userInitiated` from `.sessionExpired`, `.sessionRevoked`, and `.sessionMissing`. For the state
 without a stream, read `auth.status`, or `await auth.initialization()` to wait until storage is
-read. `AuthStateChangeListener` and `AuthStateChangeListenerRegistration` are removed.
+read. `AuthStateChangeListener`, `AuthStateChangeListenerRegistration` and `ObservationToken` are
+removed.
 
 ```swift
 // v2

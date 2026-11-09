@@ -53,7 +53,7 @@ struct ResumableUploadRegistryTests {
   private func saveRecord(fingerprint: String, offset: Int64 = 8) throws -> ResumableUploadRecord {
     let source = try store.prepare(data: Data(repeating: 1, count: 20), fingerprint: fingerprint)
     let record = ResumableUploadRecord(
-      fingerprint: fingerprint, bucketId: "bucket", path: "video.mp4", totalBytes: 20,
+      fingerprint: fingerprint, bucketID: "bucket", path: "video.mp4", totalBytes: 20,
       source: source, sourceModificationDate: .distantPast,
       uploadURL: URL(string: "http://localhost:54321/storage/v1/upload/resumable/\(fingerprint)")!,
       createdAt: Date(), expiresAt: .distantFuture, lastKnownOffset: offset, chunkSize: 8,
@@ -77,7 +77,7 @@ struct ResumableUploadRegistryTests {
     let uploads = try storage.resumableUploads.pending()
 
     #expect(uploads.map(\.id.rawValue) == ["a", "b"])
-    #expect(uploads[0].bucketId == a.bucketId)
+    #expect(uploads[0].bucketID == a.bucketID)
     #expect(uploads[0].path == a.path)
     #expect(uploads[0].totalBytes == 20)
   }

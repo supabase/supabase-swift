@@ -232,7 +232,7 @@ struct PostgrestEmbeddedScopeTests {
       return error.kind == .server
         && error.serverError?.code == "PGRST201"
         && error.serverError?.hint?.contains("comments!comments_todo_id_fkey") == true
-        && error.response?.statusCode == 300
+        && error.response?.status == 300
     }
   }
 }

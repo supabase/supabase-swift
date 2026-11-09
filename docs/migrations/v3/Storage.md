@@ -61,8 +61,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `copy(...) -> String` | `copy(...) -> UploadedObject`; the old string is `.fullPath` |
 | `BucketOptions` | `CreateBucketOptions` or `UpdateBucketOptions` (see below) |
 | `StorageByteCount`, `.intValue`, `.stringValue` | `ByteCount`, `.bytes`, `.rawValue` |
-| `Bucket.owner: String` | `Bucket.ownerId: String?` |
-| `Bucket(id:name:owner:...)` | `Bucket(id:name:type:ownerId:...)` |
+| `Bucket.owner: String` | `Bucket.ownerID: String?` |
+| `Bucket(id:name:owner:...)` | `Bucket(id:name:type:ownerID:...)` |
 | `Codable` `Bucket` | `Decodable` |
 | `Codable` `ResizeMode`, `ImageFormat` | not `Codable`; use `rawValue` |
 | `Codable` `SortOrder` | `Encodable` |
@@ -103,7 +103,7 @@ let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v"
 try await custom.from("avatars").list()
 ```
 
-## `StorageError` is a struct with `kind`
+## `StorageError` is a struct
 
 `StorageError` has `kind`, `message`, `code`, `serverStatusCode`, `isNotFound`, `serverError`,
 `response` and `underlyingError`. The body fields `statusCode` and `error` moved to
@@ -124,7 +124,7 @@ try await custom.from("avatars").list()
 ```
 
 Branch on `isNotFound`, `code` or `serverStatusCode`. Storage sends HTTP 400 for most failures and
-puts the real status in the body, so `response?.statusCode` is usually 400.
+puts the real status in the body, so `response?.status` is usually `400 Bad Request`.
 
 ## `UploadOptions` replaces `FileOptions`
 
@@ -151,7 +151,7 @@ header value.
 `download(path:options:progress:)` returns a `DownloadResponse` as soon as the headers
 arrive. Read the body with `data()`, or write it to disk with `write(to:)`. The image transform
 (v2 `options:`), `query:`, and `cacheNonce:` move into `DownloadOptions`, which also has `range`,
-`versionId` and `headers`.
+`versionID` and `headers`.
 
 ```swift
 // v2
@@ -164,7 +164,7 @@ let data = try await bucket.download(
   path: "a.png", options: DownloadOptions(cacheNonce: "v2")).data()
 let thumb = try await bucket.download(
   path: "a.png", options: DownloadOptions(transform: ImageTransform(width: 64))).data()
-let old = try await bucket.download(path: "a.png", options: DownloadOptions(versionId: id)).data()
+let old = try await bucket.download(path: "a.png", options: DownloadOptions(versionID: id)).data()
 try await bucket.download(path: "a.mov").write(to: fileURL)
 ```
 
@@ -174,7 +174,7 @@ The body can be read once.
 
 `download:`, the image transform, and `cacheNonce:` move into `SignedURLOptions`,
 `SignedURLsOptions`, and `PublicURLOptions`. `SignedURLOptions` and `PublicURLOptions` also have
-`versionId`. The transform is `transform:`, not `options:`.
+`versionID`. The transform is `transform:`, not `options:`.
 
 ```swift
 // v2
@@ -261,12 +261,25 @@ try await bucket.move(from: "a.png", to: "a.png", toBucket: "archive")
 let key: String = try await bucket.copy(from: "a.png", to: "b.png").fullPath
 ```
 
+## Acronyms use uniform case
+
+Storage names spell `ID` in capitals, like the rest of the SDK. The wire format does not change.
+
+| v3 pre-release | v3 |
+| --- | --- |
+| `versionId`, `sourceVersionId` (options and parameters) | `versionID`, `sourceVersionID` |
+| `ObjectVersion.versionId` | `ObjectVersion.versionID` |
+| `ObjectInfo.bucketId`, `ResumableUpload.bucketId` | `ObjectInfo.bucketID`, `ResumableUpload.bucketID` |
+| `Bucket.ownerId` | `Bucket.ownerID` |
+| `StorageError.Code.invalidUploadId`, `.invalidAccessKeyId` | `.invalidUploadID`, `.invalidAccessKeyID` |
+
 ## Experimental APIs
 
 Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `ResumableUpload`,
 `StorageClientConfiguration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PagedListing`; call `.page()` for the first page. `vectors(keys:)`, `listVectors`, and
-`queryVectors` take their optional settings in `GetVectorsOptions`, `ListVectorsOptions`, and
-`QueryVectorsOptions`.
+return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+`VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
+`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
+`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.

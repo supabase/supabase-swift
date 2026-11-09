@@ -18,13 +18,13 @@ struct PostBody {
 @SelectionOf(Discussions.self)
 struct DiscussionWithPosts {
   var id: Int
-  @Relationship(\Posts.discussionId) var posts: [PostBody]
+  @Relationship(\Posts.discussionID) var posts: [PostBody]
 }
 
 @SelectionOf(Discussions.self)
 struct DiscussionWithItems {
   var id: Int
-  @Relationship(\Posts.discussionId) var items: [PostBody]
+  @Relationship(\Posts.discussionID) var items: [PostBody]
 }
 
 @SelectionOf(Replies.self)
@@ -35,13 +35,13 @@ struct ReplyBody {
 @SelectionOf(Posts.self)
 struct PostWithReplies {
   var id: Int
-  @Relationship(\Replies.postId) var replies: [ReplyBody]
+  @Relationship(\Replies.postID) var replies: [ReplyBody]
 }
 
 @SelectionOf(Discussions.self)
 struct DiscussionWithThreads {
   var id: Int
-  @Relationship(\Posts.discussionId) var posts: [PostWithReplies]
+  @Relationship(\Posts.discussionID) var posts: [PostWithReplies]
 }
 
 @SelectionOf(Discussions.self)
@@ -52,7 +52,7 @@ struct DiscussionTitle {
 @SelectionOf(Posts.self)
 struct PostWithDiscussion {
   var id: Int
-  @Relationship(\Posts.discussionId) var discussion: DiscussionTitle?
+  @Relationship(\Posts.discussionID) var discussion: DiscussionTitle?
 }
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
@@ -185,7 +185,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
         && error.serverError?.code == "PGRST201"
         && error.serverError?.details?.contains("discussion_id") == true
         && error.serverError?.hint?.contains("posts!") == true
-        && error.response?.statusCode == 300
+        && error.response?.status == 300
     }
   }
 }

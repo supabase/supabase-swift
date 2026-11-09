@@ -48,13 +48,13 @@ public import HTTPTypes
 ///
 /// ### Managing files
 ///
-/// - ``move(from:to:toBucket:sourceVersionId:)``
-/// - ``copy(from:to:toBucket:sourceVersionId:options:)``
+/// - ``move(from:to:toBucket:sourceVersionID:)``
+/// - ``copy(from:to:toBucket:sourceVersionID:options:)``
 /// - ``remove(paths:)``
 /// - ``remove(versions:)``
 /// - ``objects(prefix:options:)``
 /// - ``list(path:options:)``
-/// - ``info(path:versionId:)``
+/// - ``info(path:versionID:)``
 /// - ``exists(path:)``
 /// - ``purgeCache(path:transformationsOnly:)``
 ///
@@ -258,11 +258,11 @@ public struct StorageBucket: Sendable {
     let key = try ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
     let fingerprint = try ResumableStore.fingerprint(
-      url: api.configuration.url, bucketId: id, path: key.path, fileURL: fileURL)
+      url: api.configuration.url, bucketID: id, path: key.path, fileURL: fileURL)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
         id: ResumableUpload.ID(rawValue: fingerprint),
-        bucketId: id, path: key.path, totalBytes: size, input: .file(fileURL),
+        bucketID: id, path: key.path, totalBytes: size, input: .file(fileURL),
         options: options.inferringContentType(from: fileURL), api: api)
     }
   }
@@ -285,11 +285,11 @@ public struct StorageBucket: Sendable {
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
     let fingerprint = ResumableStore.fingerprint(
-      url: api.configuration.url, bucketId: id, path: key.path, data: data)
+      url: api.configuration.url, bucketID: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
         id: ResumableUpload.ID(rawValue: fingerprint),
-        bucketId: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
+        bucketID: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
         options: options, api: api)
     }
   }
@@ -384,18 +384,18 @@ public struct StorageBucket: Sendable {
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
   ///   - toBucket: The bucket to move the file into. `nil` moves it within this bucket.
-  ///   - sourceVersionId: The version of the source to move. `nil` moves the current version.
+  ///   - sourceVersionID: The version of the source to move. `nil` moves the current version.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   public func move(
     from source: String,
     to destination: String,
     toBucket: String? = nil,
-    sourceVersionId: String? = nil
+    sourceVersionID: String? = nil
   ) async throws {
     try await api.execute(
       api.requests.move(
         bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
-        destinationBucket: toBucket, sourceVersionId: sourceVersionId)
+        destinationBucket: toBucket, sourceVersionID: sourceVersionID)
     )
   }
 
@@ -410,7 +410,7 @@ public struct StorageBucket: Sendable {
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
   ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
-  ///   - sourceVersionId: The version of the source to copy. `nil` copies the current version.
+  ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
   ///   - options: Whether to replace an existing destination, and the metadata of the copy.
   /// - Returns: The copy's identifier and path.
   /// - Throws: ``StorageError`` if the source does not exist, the destination exists and
@@ -420,14 +420,14 @@ public struct StorageBucket: Sendable {
     from source: String,
     to destination: String,
     toBucket: String? = nil,
-    sourceVersionId: String? = nil,
+    sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
     let destinationKey = try ObjectKey(destination)
     let response = try await api.execute(
       api.requests.copy(
         bucket: id, source: ObjectKey(source), destination: destinationKey,
-        destinationBucket: toBucket, sourceVersionId: sourceVersionId, options: options)
+        destinationBucket: toBucket, sourceVersionID: sourceVersionID, options: options)
     )
     .decoded(as: UploadResponse.self)
     return UploadedObject(
@@ -464,7 +464,7 @@ public struct StorageBucket: Sendable {
     let response = try await api.execute(
       api.requests.sign(
         bucket: id, key: ObjectKey(path), expiresIn: Self.seconds(expiresIn),
-        transform: options.transform, versionId: options.versionId)
+        transform: options.transform, versionID: options.versionID)
     )
     .decoded(as: SignedURLAPIResponse.self)
 
@@ -570,7 +570,7 @@ public struct StorageBucket: Sendable {
   /// let versions = try await bucket.list(path: "docs", options: ListOptions(versions: .only))
   /// try await bucket.remove(
   ///   versions: versions.compactMap { object in
-  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionId: $0) }
+  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionID: $0) }
   ///   })
   /// ```
   ///
@@ -583,7 +583,7 @@ public struct StorageBucket: Sendable {
   public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.remove(
-        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionId) })
+        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionID) })
     )
     .decoded()
   }
@@ -667,18 +667,18 @@ public struct StorageBucket: Sendable {
         },
         length: length, iterationBehavior: .single)
     }
-    return DownloadResponse(httpResponse: head, body: response)
+    return DownloadResponse(status: head.status, headers: head.headerFields, body: response)
   }
 
   /// Retrieves metadata about an existing file without downloading its content.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - versionId: The version to describe. `nil` describes the current version.
+  ///   - versionID: The version to describe. `nil` describes the current version.
   /// - Returns: A ``ObjectInfo`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
-  public func info(path: String, versionId: String? = nil) async throws -> ObjectInfo {
-    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path), versionId: versionId))
+  public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
+    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path), versionID: versionID))
       .decoded()
   }
 
@@ -751,8 +751,8 @@ public struct StorageBucket: Sendable {
     options: PublicURLOptions = PublicURLOptions()
   ) -> URL {
     var query = Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce)
-    if let versionId = options.versionId {
-      query.append(URLQueryItem(name: "versionId", value: versionId))
+    if let versionID = options.versionID {
+      query.append(URLQueryItem(name: "versionId", value: versionID))
     }
     return api.requests.publicURL(
       bucket: id, key: ObjectKey(lenient: path), transform: options.transform?.queryItems ?? [],

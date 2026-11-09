@@ -49,7 +49,7 @@ enum PersistedSessionCodec {
       return Decoded(session: session, isCurrentSchema: false)
 
     case .v2CamelCase:
-      let session = try JSONDecoder().decode(Session.self, from: data)
+      let session = try v2CamelCaseDecoder.decode(Session.self, from: data)
       return Decoded(session: session, isCurrentSchema: false)
     }
   }
@@ -58,13 +58,66 @@ enum PersistedSessionCodec {
     try PersistedJSON.encoder.encode(PersistedSession(session))
   }
 
-  /// The v2 `AuthClient.Configuration.jsonDecoder`, kept here so the v2 shapes stay readable
-  /// after that configuration changes.
+  /// Reads the v2 snake_case shapes. `Session` now declares snake_case keys, so only the
+  /// free-form metadata objects need their keys restored to the camelCase that v2 decoded them to.
   private static let v2SnakeCaseDecoder: JSONDecoder = {
     let decoder = JSONDecoder.supabase()
-    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    decoder.keyDecodingStrategy = .custom { path in
+      let key = path[path.count - 1]
+      return isFreeFormObject(path) ? LegacyKey(camelCased(key.stringValue)) : key
+    }
     return decoder
   }()
+
+  /// Reads the v2 camelCase shape. It maps each key that v2 wrote to the snake_case key that
+  /// `Session` declares now, and leaves the keys of free-form metadata objects as stored.
+  private static let v2CamelCaseDecoder: JSONDecoder = {
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .custom { path in
+      let key = path[path.count - 1]
+      return isFreeFormObject(path) ? key : LegacyKey(snakeCased(key.stringValue))
+    }
+    return decoder
+  }()
+
+  private struct LegacyKey: CodingKey {
+    var stringValue: String
+    var intValue: Int? { nil }
+
+    init(_ stringValue: String) { self.stringValue = stringValue }
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { nil }
+  }
+
+  private static let freeFormObjects: Set<String> = [
+    "userMetadata", "user_metadata", "appMetadata", "app_metadata", "identityData",
+    "identity_data",
+  ]
+
+  /// Whether `path` points inside a user-supplied JSON object, whose keys are data.
+  private static func isFreeFormObject(_ path: [any CodingKey]) -> Bool {
+    path.dropLast().contains { freeFormObjects.contains($0.stringValue) }
+  }
+
+  private static func snakeCased(_ key: String) -> String {
+    var result = ""
+    for (index, character) in key.enumerated() {
+      if character.isUppercase, index > 0 { result.append("_") }
+      result.append(contentsOf: character.lowercased())
+    }
+    return result
+  }
+
+  /// Foundation's `convertFromSnakeCase` for one key: leading and trailing underscores stay.
+  private static func camelCased(_ key: String) -> String {
+    let leading = key.prefix { $0 == "_" }
+    let trailing = key.dropFirst(leading.count).reversed().prefix { $0 == "_" }
+    let core = key.dropFirst(leading.count).dropLast(trailing.count)
+    let words = core.split(separator: "_", omittingEmptySubsequences: true)
+    guard let first = words.first else { return key }
+    let rest = words.dropFirst().map { $0.prefix(1).uppercased() + $0.dropFirst() }
+    return leading + first + rest.joined() + trailing
+  }
 
   private struct V2WrappedSession: Decodable {
     var session: Session

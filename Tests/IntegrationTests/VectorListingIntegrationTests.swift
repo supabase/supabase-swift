@@ -29,7 +29,7 @@ struct VectorListingIntegrationTests {
     }
 
     var buckets: [VectorBucket] = []
-    for try await bucket in vectors.listBuckets(prefix: prefix, maxResults: 1) {
+    for try await bucket in vectors.listBuckets(prefix: prefix, pageSize: 1) {
       buckets.append(bucket)
     }
     #expect(buckets.map(\.vectorBucketName).sorted() == names)
@@ -41,7 +41,7 @@ struct VectorListingIntegrationTests {
     }
     var pages = 0
     var indexes: [String] = []
-    for try await page in bucket.listIndexes(maxResults: 1).pages {
+    for try await page in bucket.listIndexes(pageSize: 1).pages {
       pages += 1
       indexes += page.indexes.map(\.indexName)
     }
@@ -65,7 +65,7 @@ struct VectorListingIntegrationTests {
       (0..<3).map { VectorEntry(key: "k\($0)", data: VectorData(float32: [1, Float($0)])) })
 
     var keys: [String] = []
-    for try await vector in index.listVectors(options: ListVectorsOptions(maxResults: 1)) {
+    for try await vector in index.listVectors(options: ListVectorsOptions(pageSize: 1)) {
       keys.append(vector.key)
     }
 

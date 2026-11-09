@@ -7,7 +7,7 @@ public import Helpers
 /// ``serverStatusCode`` carry what Storage put in the body, ``serverError`` holds that body as
 /// sent, and ``response`` holds the HTTP status, headers and request id. On the object, bucket,
 /// render and CDN routes the HTTP status is 400 for nearly every failure, so branch on ``code``
-/// or ``serverStatusCode``, not on `response?.statusCode`.
+/// or ``serverStatusCode``, not on `response?.status`.
 ///
 /// ```swift
 /// do {
@@ -185,7 +185,7 @@ public struct StorageError: SupabaseError {
   /// ``Code/noSuchKey`` or ``Code/noSuchBucket``, or the server or HTTP status is 404.
   public var isNotFound: Bool {
     code == .noSuchKey || code == .noSuchBucket || serverStatusCode == 404
-      || response?.statusCode == 404
+      || response?.status == .notFound
   }
 
   /// Creates a ``StorageError``.
@@ -266,7 +266,7 @@ extension StorageError.Code {
   public static let invalidMimeType = StorageError.Code("InvalidMimeType")
 
   /// The specified upload ID is invalid.
-  public static let invalidUploadId = StorageError.Code("InvalidUploadId")
+  public static let invalidUploadID = StorageError.Code("InvalidUploadId")
 
   /// The specified key already exists.
   public static let keyAlreadyExists = StorageError.Code("KeyAlreadyExists")
@@ -333,7 +333,7 @@ extension StorageError.Code {
   public static let s3Error = StorageError.Code("S3Error")
 
   /// The provided access key ID is invalid.
-  public static let invalidAccessKeyId = StorageError.Code("InvalidAccessKeyId")
+  public static let invalidAccessKeyID = StorageError.Code("InvalidAccessKeyId")
 
   /// The maximum number of credentials has been reached.
   public static let maximumCredentialsLimit = StorageError.Code("MaximumCredentialsLimit")

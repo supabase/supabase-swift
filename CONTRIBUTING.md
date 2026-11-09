@@ -52,6 +52,17 @@ checkout of `supabase/sdk`. Run it yourself before pushing a public-API
 change — `validate-capabilities.yml` will eventually catch it too, but
 since it isn't a required check, nothing stops a merge if you don't.
 
+What to declare: a type together with its public `init` and its members.
+Do not declare a member without its owning type. Declare every public macro.
+
+### Version strings in docs
+
+Every version string that users copy (the README install snippet,
+`V3_MIGRATION.md`, the typegen install snippet, both `Version.swift` files)
+sits in a file listed in `release-please-config.json` `extra-files`, with an
+`x-release-please-version` marker. The README library list matches the
+`.library` products in `Package.swift`.
+
 ## Common Tasks
 
 ### Adding a New Feature

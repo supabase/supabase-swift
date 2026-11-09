@@ -11,9 +11,11 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 1. Install Xcode 26.0 or later (Swift 6.2 or later).
 2. Update the package requirement:
 
+   <!-- x-release-please-start-version -->
    ```swift
    .package(url: "https://github.com/supabase/supabase-swift", from: "3.0.0-alpha.1")
    ```
+   <!-- x-release-please-end -->
 
 3. Build. Expect many compile errors.
 4. Fix the errors in [Changes in every module](#changes-in-every-module) and
@@ -78,12 +80,18 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
+| `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
+| `ObservationToken` | removed; cancel the task that reads the stream |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
 - A method that only reads a value drops its `get` prefix: `getPublicURL` is `publicURL`.
 - An argument that names an identifier is `id:`: `deleteClient(clientId:)` is
   `deleteClient(id:)`.
+- An acronym keeps its capitals in a public name: `ID`, `URL`, `URI`, `JWT` and `OTP`, as in
+  `versionID`, `redirectURIs` and `factorID`. `supabase-typegen` follows the rule when it names a
+  property from a column: `channel_id` becomes `channelID`, so regenerate your models and rename
+  their uses.
 - A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
 
@@ -193,9 +201,13 @@ that retries must not retry a body whose `iterationBehavior` is `.single`. `impo
 brings in the `HTTPTypes` names (`HTTPRequest`, `HTTPResponse`, `HTTPFields`). If another library
 exports the same names, write `HTTPTypes.HTTPRequest`.
 
-### `HTTPResponse` replaces `HTTPURLResponse`
+### Response wrappers replace `HTTPURLResponse`
 
-`HTTPResponse` has `status` and `headerFields`. It has no URL.
+Every response wrapper has the same fields: `status` (`HTTPResponse.Status`), `headers`
+(`HTTPFields`), `body` (`Data`, or `HTTPBody` when it streams) and `requestID`. This applies to
+`PostgrestResponse`, `FunctionResponse`, `FunctionStreamResponse`, Storage's `DownloadResponse`,
+and the `HTTPErrorResponse` that every error carries. None of them has a URL. Each has a public
+memberwise init, so tests and previews can build one.
 
 ```swift
 // v2
@@ -203,17 +215,22 @@ let etag = response.response.value(forHTTPHeaderField: "ETag")
 let code = response.response.statusCode
 
 // v3
-let etag = response.response.headerFields[.eTag]
-let code = response.response.status.code
+let etag = response.headers[.eTag]
+let code = response.status.code
 ```
 
-If a dependency needs an `HTTPURLResponse`, use the failable
+`status` is an `HTTPResponse.Status`, so `status == 404` and `status == .notFound` both compile.
+Interpolating it prints the code and the server's reason phrase, which is often empty (`"404 "`).
+Use `status.code` where you need the bare number.
+
+A custom `ClientTransport` or middleware still sees `HTTPResponse`, which has `status` and
+`headerFields`. If a dependency needs an `HTTPURLResponse`, use the failable
 `HTTPURLResponse(httpResponse:url:)`.
 
 ### `HTTPError` is removed
 
-Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorResponse?` (status
-code, `HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
+Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorResponse?` (`status`,
+`HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
 module's error format gives kind `.server` with no `serverError`.
 
 ```swift
@@ -228,7 +245,7 @@ module's error format gives kind `.server` with no `serverError`.
 // v3
 } catch let error as any SupabaseError {
   if let response = error.response {
-    print(response.statusCode, String(decoding: response.body, as: UTF8.self))
+    print(response.status.code, String(decoding: response.body, as: UTF8.self))
   } else if (error.underlyingError as? URLError)?.code == .notConnectedToInternet {
     showOfflineBanner()
   }

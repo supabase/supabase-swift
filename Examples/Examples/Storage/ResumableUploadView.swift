@@ -168,7 +168,7 @@ struct ResumableUploadView: View {
       if let upload = model.upload {
         Section("Transfer") {
           VStack(alignment: .leading, spacing: 8) {
-            Text("\(upload.bucketId)/\(upload.path)")
+            Text("\(upload.bucketID)/\(upload.path)")
               .font(.caption)
             ProgressView(value: model.progress?.fractionCompleted ?? 0)
             Text(
@@ -202,7 +202,7 @@ struct ResumableUploadView: View {
               Task { await model.resume(pending) }
             } label: {
               VStack(alignment: .leading) {
-                Text("\(pending.bucketId)/\(pending.path)")
+                Text("\(pending.bucketID)/\(pending.path)")
                 Text(formatBytes(pending.totalBytes))
                   .font(.caption)
                   .foregroundColor(.secondary)

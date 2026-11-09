@@ -547,7 +547,7 @@ struct AuthClientIntegrationTests {
   @Test(.disabled("Requires secret key and pre-seeded users"))
   func listUsers() async throws {
     let admin = Self.makeAdminClient()
-    let pagination = try await admin.listUsers(perPage: 10)
+    let pagination = try await admin.listUsers(pageSize: 10)
     #expect(pagination.users.count == 10)
     #expect(pagination.audience == "authenticated")
     #expect(pagination.nextPage == 2)
@@ -578,7 +578,7 @@ struct AuthClientIntegrationTests {
       Issue.record("Expected deletePasskey to throw for a nonexistent passkey")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 404)
+      #expect(error.response?.status == 404)
     }
   }
 

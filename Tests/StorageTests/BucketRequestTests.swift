@@ -82,7 +82,7 @@ struct BucketRequestTests {
     let buckets = try await storage.listBuckets()
 
     #expect(buckets.map(\.type) == [.analytics, nil])
-    #expect(buckets.map(\.ownerId) == ["u1", nil])
+    #expect(buckets.map(\.ownerID) == ["u1", nil])
   }
 
   @Test

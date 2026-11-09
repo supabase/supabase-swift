@@ -45,7 +45,7 @@ for try await chunk in response.body {
 ``DownloadResponse`` has typed properties for the common headers:
 ``DownloadResponse/contentType``, ``DownloadResponse/contentLength``,
 ``DownloadResponse/contentRange``, ``DownloadResponse/eTag``, ``DownloadResponse/lastModified``
-and ``DownloadResponse/cacheControl``. Read any other from ``DownloadResponse/httpResponse``.
+and ``DownloadResponse/cacheControl``. Read any other from ``DownloadResponse/headers``.
 
 ```swift
 let response = try await avatars.download(path: "user123.png")
@@ -58,7 +58,7 @@ print(response.contentType ?? "?", response.contentLength ?? 0)
 
 - ``DownloadOptions/range`` fetches only some bytes, both ends included. Storage answers
   `206 Partial Content`.
-- ``DownloadOptions/versionId`` fetches an older version in a bucket with versioning.
+- ``DownloadOptions/versionID`` fetches an older version in a bucket with versioning.
 - ``DownloadOptions/cacheNonce`` adds a `cacheNonce` query item, so a CDN serves a fresh copy.
 - ``DownloadOptions/transform`` asks Storage to transform the image first. The request goes to
   the image route, and the response may have no `Content-Length`.
@@ -105,6 +105,6 @@ with `AsyncImage`. It needs no network call to build.
 
 ### Metadata only
 
-``StorageBucket/info(path:versionId:)`` returns an ``ObjectInfo`` without the bytes.
+``StorageBucket/info(path:versionID:)`` returns an ``ObjectInfo`` without the bytes.
 ``StorageBucket/exists(path:)`` returns `false` only when Storage reports the key does not exist;
 every other failure throws.
