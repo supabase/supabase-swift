@@ -28,7 +28,7 @@ struct PostgrestClientAccessTokenTests {
   func accessTokenSetsAuthorizationHeader() async throws {
     let capturedHeaders = LockIsolated(HTTPFields())
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { request, _ in
@@ -48,7 +48,7 @@ struct PostgrestClientAccessTokenTests {
     let token = LockIsolated("first.token")
     let capturedAuthorizationHeaders = LockIsolated([String]())
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { request, _ in
@@ -74,7 +74,7 @@ struct PostgrestClientAccessTokenTests {
     let firstRequestIsInFlight = LockIsolated(false)
     let firstRequestMayFinish = LockIsolated(false)
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { request, _ in
@@ -110,7 +110,7 @@ struct PostgrestClientAccessTokenTests {
   func explicitAuthorizationHeaderOverridesAccessToken() async throws {
     let capturedHeaders = LockIsolated(HTTPFields())
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { request, _ in
@@ -132,7 +132,7 @@ struct PostgrestClientAccessTokenTests {
   func accessTokenErrorFailsTheRequestAsAPostgrestError() async throws {
     struct TokenError: Error, Equatable {}
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { _, _ in
@@ -162,7 +162,7 @@ struct PostgrestClientAccessTokenTests {
       static let columns = Columns()
     }
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { _, _ in
@@ -183,7 +183,7 @@ struct PostgrestClientAccessTokenTests {
   func noAccessTokenSendsNoAuthorizationHeader() async throws {
     let capturedHeaders = LockIsolated(HTTPFields())
 
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: url,
       http: .init(
         transport: ClosureTransport { request, _ in

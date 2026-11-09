@@ -128,7 +128,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
 
   @Test
   func streamsTypedChangesForTheRelationTableAndFilter() async throws {
-    let client = RealtimeClient(
+    let client = try RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions()
     )
@@ -190,7 +190,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
   }
 
   @Test
-  func usesTheRelationSchemaAndNoFilterByDefault() async {
+  func usesTheRelationSchemaAndNoFilterByDefault() async throws {
     enum PrivateSchema: _PostgrestSchema {
       static let name = "private"
     }
@@ -207,7 +207,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
       static let columns = Columns()
     }
 
-    let client = RealtimeClient(
+    let client = try RealtimeClient(
       url: URL(string: "https://localhost:54321/realtime/v1")!,
       options: RealtimeClientOptions()
     )

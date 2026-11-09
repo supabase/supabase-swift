@@ -301,7 +301,7 @@
 
     @Test
     func customOptionsConnectSubscribeAndReceive() async throws {
-      let realtime = RealtimeClient(
+      let realtime = try RealtimeClient(
         url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
         options: RealtimeClientOptions(
           headers: [
@@ -1307,8 +1307,8 @@
     /// on `testClock`.
     private func makeRealtimeClient(
       accessToken: @escaping @Sendable () async throws -> String?
-    ) -> RealtimeClient {
-      RealtimeClient(
+    ) throws -> RealtimeClient {
+      try RealtimeClient(
         url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
         options: RealtimeClientOptions(
           headers: ["apikey": DotEnv.supabasePublishableKey],

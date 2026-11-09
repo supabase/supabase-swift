@@ -34,12 +34,12 @@ struct PostgrestQueryFixture {
 
   let sut: PostgrestClient
 
-  init() {
+  init() throws {
     let configuration = URLSessionConfiguration.default
     configuration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: configuration)
 
-    sut = PostgrestClient(
+    sut = try PostgrestClient(
       url: Self.url,
       headers: [
         "apikey":

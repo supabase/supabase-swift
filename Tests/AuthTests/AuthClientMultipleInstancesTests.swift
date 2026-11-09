@@ -17,13 +17,13 @@ import Testing
 @Suite(.serialized)
 struct AuthClientMultipleInstancesTests {
   @Test
-  func multipleAuthClientInstances() {
+  func multipleAuthClientInstances() throws {
     let url = URL(string: "http://localhost:54321/auth")!
 
     let client1Storage = InMemoryTestStorage()
     let client2Storage = InMemoryTestStorage()
 
-    let client1 = AuthClient(
+    let client1 = try AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: uniqueStorageKey(),
@@ -31,7 +31,7 @@ struct AuthClientMultipleInstancesTests {
       )
     )
 
-    let client2 = AuthClient(
+    let client2 = try AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: uniqueStorageKey(),
@@ -58,7 +58,7 @@ struct AuthClientMultipleInstancesTests {
     let transport = RecordingTransport { _, _ in
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
     }
-    let signingIn = AuthClient(
+    let signingIn = try AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: storageKey,
@@ -66,7 +66,7 @@ struct AuthClientMultipleInstancesTests {
         http: .init(transport: transport)
       )
     )
-    let otherRequest = AuthClient(
+    let otherRequest = try AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: storageKey,
@@ -81,12 +81,12 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
-  func clientWithNoOtherOwnerDeallocates() async {
+  func clientWithNoOtherOwnerDeallocates() async throws {
     let url = URL(string: "http://localhost:54321/auth")!
 
     weak var client: AuthClient?
     do {
-      let owner = AuthClient(
+      let owner = try AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
           storageKey: uniqueStorageKey(),
@@ -106,9 +106,9 @@ struct AuthClientMultipleInstancesTests {
 
   private func releasedClientSubClient<T>(
     _ subClient: (AuthClient) -> T, responding body: Data = Data()
-  ) -> (subClient: T, transport: RecordingTransport) {
+  ) throws -> (subClient: T, transport: RecordingTransport) {
     let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), body) }
-    let client = AuthClient(
+    let client = try AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost:54321/auth")!,
         storageKey: uniqueStorageKey(),
@@ -121,7 +121,7 @@ struct AuthClientMultipleInstancesTests {
 
   @Test
   func oauthServerOutlivesClient() async throws {
-    let (oauthServer, transport) = releasedClientSubClient(\.oauthServer)
+    let (oauthServer, transport) = try releasedClientSubClient(\.oauthServer)
     try await oauthServer.client.seedSession(.valid)
 
     try await oauthServer.revokeGrant(id: UUID())
@@ -132,7 +132,7 @@ struct AuthClientMultipleInstancesTests {
   @Test
   func mfaOutlivesClient() async throws {
     let factorID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-    let (mfa, transport) = releasedClientSubClient(
+    let (mfa, transport) = try releasedClientSubClient(
       \.mfa, responding: Data(#"{"id":"00000000-0000-0000-0000-000000000001"}"#.utf8))
     try await mfa.dependencies.seedSession(.valid)
 
@@ -142,13 +142,13 @@ struct AuthClientMultipleInstancesTests {
   }
 
   @Test
-  func deinitStopsAutoRefreshTask() async {
+  func deinitStopsAutoRefreshTask() async throws {
     let url = URL(string: "http://localhost:54321/auth")!
 
     let autoRefresh: AutoRefreshController
 
     do {
-      let client = AuthClient(
+      let client = try AuthClient(
         configuration: AuthClient.Configuration(
           url: url,
           storageKey: uniqueStorageKey(),

@@ -82,10 +82,13 @@ struct FunctionsClientTests {
     #expect(client.configuration.url == url)
   }
 
-  @Test
-  func initThrowsWhenTheURLHasNoHost() {
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
     let error = #expect(throws: FunctionsError.self) {
-      try FunctionsClient(configuration: .init(url: URL(string: "project-ref")!))
+      try FunctionsClient(configuration: .init(url: url))
     }
     #expect(error?.kind == .invalidConfiguration)
   }

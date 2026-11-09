@@ -89,7 +89,7 @@ struct SelectionIntegrationTests {
 
   @Test
   func selectSendsTheSelectStringAndDecodesTheSelection() async throws {
-    let capture = RequestCapture(body: #"[{"id":1,"is_done":false}]"#)
+    let capture = try RequestCapture(body: #"[{"id":1,"is_done":false}]"#)
     let rows = try await capture.client
       .from(SelectionTodo.self)
       .select(TodoSummary.self)
@@ -118,7 +118,7 @@ struct SelectionIntegrationTests {
 
   @Test
   func aggregateSelectionDecodesTheGroupedRows() async throws {
-    let capture = RequestCapture(
+    let capture = try RequestCapture(
       body: #"[{"category":"books","total":10.5,"tax_total":2,"rows":3}]"#
     )
     let rows = try await capture.client

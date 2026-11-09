@@ -14,7 +14,7 @@ Create one ``AuthModel`` for the app. Keep it in `@State` and pass it down with 
 Keep the client alive too: the model does not retain it.
 
 ```swift
-let supabaseClient = try SupabaseClient(
+let supabaseClient = try! SupabaseClient(
   supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
   supabaseKey: "your-publishable-key"
 )

@@ -23,14 +23,14 @@ import Testing
 extension PostgrestMockerTests {
   @Suite(.mockerSerialized)
   struct PostgrestBuilderTests {
-    let fixture = PostgrestQueryFixture()
+    let fixture = try! PostgrestQueryFixture()
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
     @Test
     func customHeaderOnAPerCallBasis() throws {
       let url = URL(string: "http://localhost:54321/rest/v1")!
-      let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"])
+      let postgrest1 = try PostgrestClient(url: url, headers: ["apikey": "foo"])
       let postgrest2 = try postgrest1.rpc("void_func").settingHeader(
         name: .init("apikey")!, value: "bar")
 
@@ -752,7 +752,7 @@ extension PostgrestMockerTests {
     @Test
     func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
       let seen = LockIsolated<[Duration?]>([])
-      let sut = PostgrestClient(
+      let sut = try PostgrestClient(
         url: url,
         http: .init(
           transport: ClosureTransport { _, _ in

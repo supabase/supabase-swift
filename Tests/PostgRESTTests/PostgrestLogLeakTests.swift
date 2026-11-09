@@ -11,7 +11,7 @@ struct PostgrestLogLeakTests {
 
   @Test
   func aSecretInTheQueryNeverReachesTheLog() async throws {
-    let sut = PostgrestClient(
+    let sut = try PostgrestClient(
       url: URL(string: "http://localhost:54321/rest/v1")!,
       logger: recorder.makeLogger(),
       http: .init(

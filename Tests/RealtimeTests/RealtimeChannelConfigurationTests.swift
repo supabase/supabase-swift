@@ -5,7 +5,7 @@ import Testing
 
 @Suite
 struct RealtimeChannelConfigurationTests {
-  let client = RealtimeClient(
+  let client = try! RealtimeClient(
     url: URL(string: "https://localhost:54321/realtime/v1")!,
     options: RealtimeClientOptions()
   )

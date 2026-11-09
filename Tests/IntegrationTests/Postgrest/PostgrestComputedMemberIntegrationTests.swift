@@ -21,7 +21,7 @@ struct ComputedMemberChannelFeed {
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestComputedMemberIntegrationTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
     headers: ["apikey": DotEnv.supabasePublishableKey]
   )

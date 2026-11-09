@@ -37,7 +37,7 @@ struct RealtimeIsolationTests {
   }
 
   final class Model {
-    let client = RealtimeClient(
+    let client = try! RealtimeClient(
       url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
       options: RealtimeClientOptions(
         webSocketTransport: RefusingTransport(), handleAppLifecycle: false)

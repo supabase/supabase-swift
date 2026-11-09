@@ -24,7 +24,7 @@ Every type that you pass in or get back is `Sendable`:
   conform to them must be `Sendable` too.
 
 ```swift
-let supabase = try SupabaseClient(
+let supabase = try! SupabaseClient(
   supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
   supabaseKey: "your-publishable-key"
 )

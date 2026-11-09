@@ -106,7 +106,7 @@ struct PostgrestDerivedColumnTests {
   func aComparisonWithNoJSONFormFailsTheRequestBeforeItIsSent(
     filter: @Sendable (Item.Columns) -> _PostgrestFilter<Item>
   ) async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     do {
       _ = try await capture.client.from(Item.self).select().where(filter).execute()
       Issue.record("Expected an error")
@@ -173,7 +173,7 @@ struct PostgrestDerivedColumnTests {
 
   @Test
   func orderAcceptsJSONPaths() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Item.self)
       .select()
       .order { $0.data.jsonText("name").asc() }

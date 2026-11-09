@@ -69,23 +69,6 @@ Changes that still compile but behave differently. Check each one by hand.
 | `Storage.File`, `Storage.FormData` | removed |
 | any other API marked deprecated in v2 | removed; apply the v2 fix-it first |
 
-## `StorageClient(configuration:)` throws
-
-`StorageClient(configuration:)` throws a `StorageError` of kind `.invalidConfiguration` when
-`url` has no host or cannot be split into components. Add `try`. `supabase.storage` does not
-throw: `SupabaseClient` checks the URL when you create it.
-
-```swift
-// v2
-let storage = SupabaseStorageClient(
-  configuration: StorageClientConfiguration(url: storageURL, headers: ["apikey": key])
-)
-// v3
-let storage = try StorageClient(
-  configuration: StorageClientConfiguration(url: storageURL, headers: [HTTPField.Name("apikey")!: key])
-)
-```
-
 ## `setHeader` is `settingHeader` and returns a new value
 
 `StorageClientConfiguration.headers` is `HTTPFields`. `setHeader(_:forKey:)` is

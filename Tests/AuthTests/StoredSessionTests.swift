@@ -19,7 +19,7 @@ struct StoredSessionTests {
     try localStorage.store(
       key: key, value: PersistedSessionCodec.encode(Session.valid))
 
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
     await sut.initialization()
 
     expectNoDifference(sut.currentSession, .valid)
@@ -27,8 +27,8 @@ struct StoredSessionTests {
   }
 
   @Test
-  func currentSessionAfterInitializationIsNilWhenNothingIsStored() async {
-    let sut = makeSUT(InMemoryTestStorage())
+  func currentSessionAfterInitializationIsNilWhenNothingIsStored() async throws {
+    let sut = try makeSUT(InMemoryTestStorage())
     await sut.initialization()
 
     #expect(sut.currentSession == nil)
@@ -40,7 +40,7 @@ struct StoredSessionTests {
     try await makeSUT(localStorage).seedSession(.valid)
 
     // Another project URL, so the client gets its own store and reads storage.
-    let relaunched = makeSUT(localStorage, url: URL(string: "http://127.0.0.1")!)
+    let relaunched = try makeSUT(localStorage, url: URL(string: "http://127.0.0.1")!)
     await relaunched.initialization()
     expectNoDifference(relaunched.currentSession, .valid)
     let stored = try #require(localStorage.retrieve(key: key))
@@ -52,7 +52,7 @@ struct StoredSessionTests {
     let localStorage = InMemoryTestStorage()
     try localStorage.store(key: key, value: json(named: fixture))
 
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
     await sut.initialization()
 
     expectNoDifference(sut.currentSession, PersistedSessionFixtures.expectedSession)
@@ -72,7 +72,7 @@ struct StoredSessionTests {
       value: json(named: "persisted-session-v2-camel-case")
     )
 
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
     await sut.initialization()
 
     expectNoDifference(sut.currentSession, PersistedSessionFixtures.expectedSession)
@@ -84,7 +84,7 @@ struct StoredSessionTests {
   @Test
   func readsStorageOnceAtInit() async throws {
     let localStorage = InMemoryTestStorage()
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
     await sut.initialization()
     #expect(sut.currentSession == nil)
 
@@ -99,7 +99,7 @@ struct StoredSessionTests {
     let localStorage = InMemoryTestStorage()
     try localStorage.store(key: key, value: Data("not-valid-json".utf8))
 
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
     await sut.initialization()
 
     #expect(sut.currentSession == nil)
@@ -115,7 +115,7 @@ struct StoredSessionTests {
       key: key, value: PersistedSessionCodec.encode(Session.valid))
     localStorage.failsReads.setValue(true)
 
-    let sut = makeSUT(localStorage)
+    let sut = try makeSUT(localStorage)
 
     #expect(sut.currentSession == nil)
     #expect(sut.dependencies.sessionStore.currentStatus == .loading)
@@ -134,7 +134,7 @@ struct StoredSessionTests {
     let transport = RecordingTransport { _, _ in
       (HTTPResponse(status: .ok), try AuthClient.Configuration.jsonEncoder.encode(Session.valid))
     }
-    let sut = makeSUT(localStorage, http: .init(transport: transport))
+    let sut = try makeSUT(localStorage, http: .init(transport: transport))
 
     let error = await #expect(throws: AuthError.self) {
       try await sut.signIn(email: "user@example.com", password: "secret")
@@ -148,8 +148,8 @@ struct StoredSessionTests {
     _ localStorage: any AuthStorage,
     url: URL = URL(string: "http://localhost")!,
     http: HTTPClientConfiguration = .init()
-  ) -> AuthClient {
-    AuthClient(
+  ) throws -> AuthClient {
+    try AuthClient(
       configuration: AuthClient.Configuration(
         url: url,
         storageKey: key,

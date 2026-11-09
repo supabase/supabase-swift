@@ -173,7 +173,7 @@ let storage = SupabaseStorageClient(
 
 // v3
 let http = HTTPClientConfiguration(transport: URLSessionTransport(session: session))
-let database = PostgrestClient(url: databaseURL, http: http)
+let database = try PostgrestClient(url: databaseURL, http: http)
 let storage = try StorageClient(
   configuration: StorageClientConfiguration(url: storageURL, headers: headers, http: http)
 )
@@ -254,6 +254,35 @@ module's error format gives kind `.server` with no `serverError`.
 
 Errors that your own transport, middleware or `accessToken` closure throws are not wrapped.
 
+### Client initializers throw
+
+Every client initializer throws when its URL has no scheme or no host. The error is the module's
+own error type, with kind `.invalidConfiguration`. Add `try`. A server that reads project URLs from
+configuration can catch the error instead of crashing. For a URL that is fixed in your app, `try!`
+is enough.
+
+| Initializer | Throws |
+| --- | --- |
+| `SupabaseClient(supabaseURL:supabaseKey:)`, `SupabaseClient(supabaseURL:supabaseKey:options:)` | `SupabaseClientError` |
+| `AuthClient(configuration:)` | `AuthError` |
+| `PostgrestClient(configuration:)`, `PostgrestClient(url:…)` | `PostgrestError` |
+| `StorageClient(configuration:)` | `StorageError` |
+| `FunctionsClient(configuration:)` | `FunctionsError` |
+| `RealtimeClient(url:options:)` | `RealtimeError` |
+
+The sub-clients of a `SupabaseClient`, such as `supabase.storage` and `supabase.realtime`, do not
+throw: `SupabaseClient` checks the URL once, when you create it.
+
+```swift
+// v2
+let supabase = SupabaseClient(supabaseURL: url, supabaseKey: key)
+let database = PostgrestClient(url: databaseURL)
+
+// v3
+let supabase = try SupabaseClient(supabaseURL: url, supabaseKey: key)
+let database = try PostgrestClient(url: databaseURL)
+```
+
 ### SDK `async` functions run on the caller's executor
 
 All SDK targets build with `NonisolatedNonsendingByDefault` (SE-0461). An SDK `async` method
@@ -320,22 +349,6 @@ Changes that still compile but behave differently. Check each one by hand.
 | `supabase.handle(_:)` | `supabase.handleRedirect(_:)`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
 | `FunctionsOptions.region: String?` | `FunctionsOptions.region: FunctionRegion?` |
-
-### The initializers throw
-
-`SupabaseClient(supabaseURL:supabaseKey:)` and `SupabaseClient(supabaseURL:supabaseKey:options:)`
-throw a `SupabaseClientError` of kind `.invalidConfiguration` when `supabaseURL` has no host. Add
-`try`. A server that reads project URLs from configuration can catch the error instead of
-crashing. For a URL that is fixed in your app, `try!` is enough.
-`supabase.storage` and `supabase.functions` do not throw.
-
-```swift
-// v2
-let supabase = SupabaseClient(supabaseURL: url, supabaseKey: key)
-
-// v3
-let supabase = try SupabaseClient(supabaseURL: url, supabaseKey: key)
-```
 
 ### `GlobalOptions.session` is removed
 

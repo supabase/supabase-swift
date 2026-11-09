@@ -112,7 +112,8 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
-    PostgrestClient(
+    // `init` checked `supabaseURL`, so `databaseURL`, derived from it, passes the check too.
+    try! PostgrestClient(
       url: databaseURL,
       schema: options.db.schema,
       headers: dataHeaders.dictionary,
@@ -200,7 +201,7 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   /// - Throws: ``SupabaseClientError`` with kind
-  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no host.
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no scheme or no host.
   public convenience init(supabaseURL: URL, supabaseKey: String) throws {
     try self.init(
       supabaseURL: supabaseURL,
@@ -215,18 +216,19 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
   /// - Throws: ``SupabaseClientError`` with kind
-  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no host.
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no scheme or no host.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
   ) throws {
-    guard URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false) != nil,
+    guard supabaseURL.hasSchemeAndHost,
+      URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false) != nil,
       let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL)
     else {
       throw SupabaseClientError(
         kind: .invalidConfiguration,
-        message: "supabaseURL must be a valid URL with a host, got \(supabaseURL).")
+        message: "supabaseURL must be a valid URL with a scheme and a host, got \(supabaseURL).")
     }
 
     self.supabaseURL = supabaseURL
@@ -267,7 +269,7 @@ public final class SupabaseClient: Sendable {
       observesAppLifecycle: options.auth.observesAppLifecycle,
       clock: options.auth.clock ?? clock
     )
-    _auth = AuthClient(configuration: authConfiguration)
+    _auth = try AuthClient(configuration: authConfiguration)
 
     if options.auth.accessToken == nil {
       listenForAuthEvents()
@@ -602,7 +604,7 @@ public final class SupabaseClient: Sendable {
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    // `init` checked that `supabaseURL`, and so `functionsURL`, has a host.
+    // `init` checked `supabaseURL`, so `functionsURL`, derived from it, passes the check too.
     try! FunctionsClient(
       configuration: .init(
         url: functionsURL,
@@ -659,7 +661,8 @@ public final class SupabaseClient: Sendable {
 
     realtimeOptions.clock = clock
 
-    return RealtimeClient(
+    // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
+    return try! RealtimeClient(
       url: supabaseURL.appendingPathComponent("/realtime/v1"),
       options: realtimeOptions
     )

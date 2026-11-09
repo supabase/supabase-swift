@@ -16,12 +16,16 @@ import Testing
 
 @Suite
 struct StorageAPITests {
-  @Test(arguments: [false, true])
-  func throwsWhenTheURLHasNoHost(usesNewHostname: Bool) throws {
+  @Test(
+    arguments: [
+      "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+    ], [false, true])
+  func throwsWhenTheURLHasNoSchemeOrHost(url: String, usesNewHostname: Bool) throws {
+    let url = try #require(URL(string: url))
     let error = #expect(throws: StorageError.self) {
       try StorageClient(
         configuration: StorageClientConfiguration(
-          url: URL(string: "project-ref")!,
+          url: url,
           headers: [:],
           usesNewHostname: usesNewHostname
         )

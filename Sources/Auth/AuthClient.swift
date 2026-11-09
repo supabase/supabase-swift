@@ -21,7 +21,7 @@ typealias AuthClientID = Int
 ///   storageKey: "sb-<project>-auth-token"
 /// )
 /// configuration.headers[HTTPField.Name("apikey")!] = "<publishable-key>"
-/// let auth = AuthClient(configuration: configuration)
+/// let auth = try AuthClient(configuration: configuration)
 ///
 /// // Sign in
 /// let session = try await auth.signIn(email: "user@example.com", password: "secret")
@@ -212,7 +212,15 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameters:
   ///   - configuration: The client configuration.
-  public convenience init(configuration: Configuration) {
+  /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/invalidConfiguration`` if
+  ///   `configuration.url` has no scheme or no host.
+  public convenience init(configuration: Configuration) throws {
+    guard configuration.url.hasSchemeAndHost else {
+      throw AuthError(
+        kind: .invalidConfiguration,
+        message: "AuthClient configured with a URL that has no scheme or host: \(configuration.url)"
+      )
+    }
     self.init(configuration: configuration, pkce: .live, platform: .live)
   }
 

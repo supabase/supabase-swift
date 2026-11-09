@@ -210,13 +210,13 @@ The dividing line is *who can reach the value*, not who supplied it.
 
 - **Public initializers throw on a bad configuration.** A server builds clients at runtime from
   configuration that varies per tenant, so a bad URL there is dynamic input, not a programmer
-  error. `SupabaseClient.init`, `StorageClient.init(configuration:)` and
-  `FunctionsClient.init(configuration:)` throw their module error with kind
-  `invalidConfiguration`.
+  error. Every client initializer (`SupabaseClient`, `AuthClient`, `PostgrestClient`,
+  `StorageClient`, `FunctionsClient`, `RealtimeClient`) throws its module error with kind
+  `invalidConfiguration` when the URL has no scheme or no host.
 - **Internal invariants trap.** When the SDK has already checked a value, or builds it itself,
   `precondition`/`preconditionFailure` (or `try!` on a call that cannot fail for that value) is
-  the right tool: a failure is an SDK bug. `SupabaseClient` checks `supabaseURL` once, so its
-  `storage` and `functions` getters build their clients with `try!`. A `package` tuning constant
+  the right tool: a failure is an SDK bug. `SupabaseClient` checks `supabaseURL` once, so the
+  getters that build its sub-clients use `try!`. A `package` tuning constant
   traps too.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;

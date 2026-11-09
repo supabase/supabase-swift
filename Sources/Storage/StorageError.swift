@@ -49,8 +49,8 @@ public struct StorageError: SupabaseError {
     /// The SDK refused to send: an object path was empty or contained a `..` segment, or a
     /// per-call value such as an expiry was out of range. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
-    /// ``StorageClient/init(configuration:)`` refused the configuration: its URL has no host or
-    /// cannot be split into components. Fix the configuration. No client was created.
+    /// ``StorageClient/init(configuration:)`` refused the configuration: its URL has no scheme, no
+    /// host, or cannot be split into components. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
   }
 

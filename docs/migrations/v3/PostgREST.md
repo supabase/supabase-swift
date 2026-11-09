@@ -72,7 +72,7 @@ let client = PostgrestClient(url: url)
 client.setAuth(token)
 
 // v3
-let client = PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
+let client = try PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
 ```
 
 An `Authorization` header in `headers:` or from `settingHeader` wins over the closure.
@@ -91,7 +91,7 @@ try await client.from("todos").setHeader(name: "Prefer", value: "params=single-o
 
 // v3
 var database: PostgrestClient?
-let client = PostgrestClient(url: url, headers: ["Prefer": "params=single-object"])
+let client = try PostgrestClient(url: url, headers: ["Prefer": "params=single-object"])
 try await client.from("todos").select(count: .exact).execute()
 ```
 

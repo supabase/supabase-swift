@@ -22,7 +22,7 @@ public import Logging
 /// var options = RealtimeClientOptions(accessToken: { try await currentToken() })
 /// options.heartbeatInterval = .seconds(15)
 /// options.serverLogLevel = .warning
-/// let client = RealtimeClient(url: realtimeURL, options: options)
+/// let client = try RealtimeClient(url: realtimeURL, options: options)
 /// ```
 ///
 /// ## Topics

@@ -32,12 +32,13 @@ struct StorageAPI: Sendable {
   /// `url` with `project-ref.supabase.co` rewritten to `project-ref.storage.supabase.co`; any
   /// other host is returned as is.
   static func storageHost(_ url: URL) throws -> URL {
-    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+    guard url.hasSchemeAndHost,
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
       let host = components.host, !host.isEmpty
     else {
       throw StorageError(
         kind: .invalidConfiguration,
-        message: "Storage client initialized with a URL that has no host: \(url)")
+        message: "StorageClient configured with a URL that has no scheme or host: \(url)")
     }
     guard isLegacySupabaseHost(host) else { return url }
 

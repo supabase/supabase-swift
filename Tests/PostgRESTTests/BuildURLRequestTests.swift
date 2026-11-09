@@ -49,7 +49,7 @@ struct BuildURLRequestTests {
     let encoder = PostgrestClient.Configuration.jsonEncoder
     encoder.outputFormatting = .sortedKeys
 
-    let client = PostgrestClient(
+    let client = try PostgrestClient(
       url: url,
       schema: nil,
       headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
@@ -263,8 +263,8 @@ struct BuildURLRequestTests {
   }
 
   @Test
-  func sessionConfiguration() {
-    let client = PostgrestClient(url: url, schema: nil)
+  func sessionConfiguration() throws {
+    let client = try PostgrestClient(url: url, schema: nil)
     let clientInfoHeader = client.configuration.headers["X-Client-Info"]
     #expect(clientInfoHeader != nil)
   }

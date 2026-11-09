@@ -251,7 +251,7 @@ struct ErrorDecoderTests {
 
   @Test
   func undecodableSuccessBodyIsADecodingError() async throws {
-    let sut = AuthClient(
+    let sut = try AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
         storageKey: uniqueStorageKey(),

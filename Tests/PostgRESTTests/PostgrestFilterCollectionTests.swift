@@ -110,7 +110,7 @@ struct PostgrestFilterCollectionTests {
   func aJSONOperandWithNoJSONFormFailsTheRequestBeforeItIsSent(
     filter: @Sendable (Post.Columns) -> _PostgrestFilter<Post>
   ) async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     do {
       _ = try await capture.client.from(Post.self).select().where(filter).execute()
       Issue.record("Expected an error")

@@ -53,8 +53,10 @@ struct SupabaseClientStorageKeyTests {
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
   }
 
-  @Test(arguments: ["project-ref", "https:///rest/v1", "mailto:someone@example.com"])
-  func constructingAClientWithoutAHostThrows(url: String) throws {
+  @Test(arguments: [
+    "project-ref", "https:///rest/v1", "//project-ref.supabase.co", "mailto:someone@example.com",
+  ])
+  func constructingAClientWithoutASchemeOrHostThrows(url: String) throws {
     let error = #expect(throws: SupabaseClientError.self) {
       try SupabaseClient(
         supabaseURL: try #require(URL(string: url)),

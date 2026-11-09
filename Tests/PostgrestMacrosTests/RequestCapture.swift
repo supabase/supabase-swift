@@ -32,10 +32,10 @@ struct RequestCapture {
   private let captured = LockIsolated(HTTPTypes.HTTPRequest?.none)
   private let capturedBody = LockIsolated(Data?.none)
 
-  init(body: String = "[]") {
+  init(body: String = "[]") throws {
     let captured = self.captured
     let capturedBody = self.capturedBody
-    client = PostgrestClient(
+    client = try PostgrestClient(
       url: URL(string: "https://example.supabase.co")!,
       headers: ["X-Client-Info": "postgrest-swift/test"],
       http: .init(

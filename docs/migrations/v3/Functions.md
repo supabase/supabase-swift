@@ -65,9 +65,6 @@ let functions = try FunctionsClient(
 )
 ```
 
-`init(configuration:)` throws a `FunctionsError` of kind `.invalidConfiguration` if `url` has no
-host.
-
 ## The body is an `invoke` argument
 
 `FunctionInvokeOptions` no longer has a `body`. Pass a `FunctionBody` to `invoke` or `stream`.

@@ -14,7 +14,7 @@ public import Logging
 /// stored function.
 ///
 /// ```swift
-/// let client = PostgrestClient(
+/// let client = try PostgrestClient(
 ///   url: URL(string: "https://<project>.supabase.co/rest/v1")!,
 ///   headers: ["apikey": "<anon-key>"]
 /// )
@@ -192,7 +192,15 @@ public struct PostgrestClient: Sendable {
   /// Creates a ``PostgrestClient`` from an existing ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
-  public init(configuration: Configuration) {
+  /// - Throws: ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no scheme or no host.
+  public init(configuration: Configuration) throws {
+    guard configuration.url.hasSchemeAndHost else {
+      throw PostgrestError(
+        kind: .invalidConfiguration,
+        message:
+          "PostgrestClient configured with a URL that has no scheme or host: \(configuration.url)")
+    }
     self.init(configuration: configuration, clock: ContinuousClock())
   }
 
@@ -218,6 +226,8 @@ public struct PostgrestClient: Sendable {
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
   ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
   ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
+  /// - Throws: ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/invalidConfiguration``
+  ///   if `url` has no scheme or no host.
   public init(
     url: URL,
     schema: String? = nil,
@@ -228,8 +238,8 @@ public struct PostgrestClient: Sendable {
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
     retryEnabled: Bool = true,
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) {
-    self.init(
+  ) throws {
+    try self.init(
       configuration: Configuration(
         url: url,
         schema: schema,

@@ -168,7 +168,7 @@ public struct StorageClient: Sendable {
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
   /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidConfiguration``
-  ///   if `configuration.url` has no host or cannot be split into components.
+  ///   if `configuration.url` has no scheme, no host, or cannot be split into components.
   public init(configuration: StorageClientConfiguration) throws {
     api = try StorageAPI(configuration: configuration)
   }

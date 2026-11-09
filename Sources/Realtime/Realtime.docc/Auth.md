@@ -17,7 +17,7 @@ let options = RealtimeClientOptions(
   headers: ["apikey": publishableKey],
   accessToken: { try await session.currentAccessToken() }
 )
-let realtime = RealtimeClient(
+let realtime = try RealtimeClient(
   url: URL(string: "https://<project-ref>.supabase.co/realtime/v1")!,
   options: options
 )

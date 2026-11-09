@@ -72,14 +72,14 @@ struct AuthClientConfigurationTests {
     let configuration = AuthClient.Configuration(
       url: url, storageKey: "custom-key", storage: storage)
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = try AuthClient(configuration: configuration)
     await sut.initialization()
 
     #expect(sut.currentSession == .valid)
   }
 
   @Test
-  func loggerIsTaggedWithSystemMetadataByTheClient() {
+  func loggerIsTaggedWithSystemMetadataByTheClient() throws {
     let configuration = AuthClient.Configuration(
       url: url,
       storageKey: "key",
@@ -87,7 +87,7 @@ struct AuthClientConfigurationTests {
       logger: Logging.Logger(label: "test")
     )
 
-    let sut = AuthClient(configuration: configuration)
+    let sut = try AuthClient(configuration: configuration)
     let dependenciesLogger = sut.dependencies.logger
 
     #expect(dependenciesLogger[metadataKey: "system"] == "auth")
@@ -108,7 +108,7 @@ struct AuthClientConfigurationTests {
         })
     )
     configuration.headers[HTTPField.Name("apikey")!] = "publishable"
-    let sut = AuthClient(configuration: configuration)
+    let sut = try AuthClient(configuration: configuration)
 
     _ = try? await sut.user(jwt: "token")
 
@@ -131,7 +131,7 @@ struct AuthClientConfigurationTests {
         })
     )
     configuration.headers[HTTPField.Name("X-Client-Info")!] = "my-wrapper/1.0"
-    let sut = AuthClient(configuration: configuration)
+    let sut = try AuthClient(configuration: configuration)
 
     _ = try? await sut.user(jwt: "token")
 
@@ -155,7 +155,7 @@ struct AuthClientConfigurationTests {
   }
 
   @Test
-  func aLoggerSetAfterTheConfigurationIsBuiltStillRedacts() {
+  func aLoggerSetAfterTheConfigurationIsBuiltStillRedacts() throws {
     let recorder = LogRecorder()
     var configuration = AuthClient.Configuration(
       url: URL(string: "http://localhost")!,
@@ -163,11 +163,23 @@ struct AuthClientConfigurationTests {
       storage: InMemoryAuthStorage()
     )
     configuration.logger = recorder.makeLogger()
-    let sut = AuthClient(configuration: configuration)
+    let sut = try AuthClient(configuration: configuration)
 
     sut.configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
 
     #expect(recorder.entries.contains { $0.hasPrefix("refresh failed: refresh_token=<redacted>") })
     #expect(!recorder.entries.contains { $0.contains("r-secret-1") })
+  }
+
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: AuthError.self) {
+      try AuthClient(
+        configuration: .init(url: url, storageKey: "key", storage: InMemoryTestStorage()))
+    }
+    #expect(error?.kind == .invalidConfiguration)
   }
 }

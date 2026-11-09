@@ -125,12 +125,13 @@ public struct FunctionsClient: Sendable {
   /// Creates a Functions client.
   ///
   /// - Throws: ``FunctionsError`` with kind ``FunctionsError/Kind-swift.struct/invalidConfiguration``
-  ///   if `configuration.url` has no host.
+  ///   if `configuration.url` has no scheme or no host.
   public init(configuration: Configuration) throws {
-    guard configuration.url.host(percentEncoded: false) != nil else {
+    guard configuration.url.hasSchemeAndHost else {
       throw FunctionsError(
         kind: .invalidConfiguration,
-        message: "FunctionsClient configured with a URL that has no host: \(configuration.url)")
+        message:
+          "FunctionsClient configured with a URL that has no scheme or host: \(configuration.url)")
     }
     if configuration.headers[.authorization] != nil {
       reportIssue(

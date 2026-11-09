@@ -154,7 +154,7 @@ struct SessionTimingTests {
         Self.body(expiresIn: "3600", expiresAt: "1750003600")
       )
     }
-    let sut = AuthClient(
+    let sut = try AuthClient(
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),

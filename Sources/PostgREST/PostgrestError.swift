@@ -53,6 +53,9 @@ public struct PostgrestError: SupabaseError {
     /// request could not be authenticated and was not sent. ``PostgrestError/underlyingError`` is
     /// the provider's error, for example an Auth refresh failure.
     public static let accessToken: Kind = "accessToken"
+    /// ``PostgrestClient/init(configuration:)`` refused the configuration: its URL has no scheme
+    /// or no host. Fix the configuration. No client was created.
+    public static let invalidConfiguration: Kind = "invalidConfiguration"
   }
 
   /// The error body PostgREST returns for a rejected request, with its wire field names.

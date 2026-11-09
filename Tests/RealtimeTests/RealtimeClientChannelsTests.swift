@@ -14,7 +14,7 @@ import Testing
 
 @Suite
 struct RealtimeClientChannelsTests {
-  let client = RealtimeClient(
+  let client = try! RealtimeClient(
     url: URL(string: "http://localhost:54321/realtime/v1")!,
     options: RealtimeClientOptions(
       disconnectOnEmptyChannelsAfter: .zero,

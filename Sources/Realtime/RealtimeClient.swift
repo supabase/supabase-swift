@@ -22,7 +22,7 @@ import Logging
 /// reuse it across your app.
 ///
 /// ```swift
-/// let client = RealtimeClient(
+/// let client = try RealtimeClient(
 ///   url: URL(string: "https://<project>.supabase.co/realtime/v1")!,
 ///   options: RealtimeClientOptions(accessToken: { session.accessToken })
 /// )
@@ -216,7 +216,14 @@ public actor RealtimeClient {
   /// - Parameters:
   ///   - url: The Realtime server URL (e.g. `https://<project>.supabase.co/realtime/v1`).
   ///   - options: Configuration options for the client.
-  public init(url: URL, options: RealtimeClientOptions) {
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidConfiguration``
+  ///   if `url` has no scheme or no host.
+  public init(url: URL, options: RealtimeClientOptions) throws {
+    guard url.hasSchemeAndHost else {
+      throw RealtimeError(
+        kind: .invalidConfiguration,
+        message: "RealtimeClient configured with a URL that has no scheme or host: \(url)")
+    }
     let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: Self.logger(for: options))
     ]

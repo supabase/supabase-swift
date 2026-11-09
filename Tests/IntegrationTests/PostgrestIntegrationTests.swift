@@ -39,7 +39,7 @@ struct User: Codable, Hashable {
   .enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil)
 )
 struct PostgrestIntegrationTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
     headers: [
       "Apikey": DotEnv.supabasePublishableKey

@@ -211,6 +211,7 @@ supporting_symbols:
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
   - PostgrestError.Kind.accessToken
+  - PostgrestError.Kind.invalidConfiguration
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
   - PostgrestError.ServerError.code
@@ -237,6 +238,7 @@ supporting_symbols:
   - AuthError.Kind.jwtVerificationFailed
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
+  - AuthError.Kind.invalidConfiguration
   - AuthError.Kind.sessionInvalidated
   - AuthError.Kind.idTokenMismatch
   - AuthError.Kind.storageUnavailable
@@ -369,6 +371,7 @@ supporting_symbols:
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
+  - RealtimeError.Kind.invalidConfiguration
   - RealtimeError.init
   - RealtimeError.kind
   - RealtimeError.message
