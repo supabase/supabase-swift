@@ -1718,9 +1718,6 @@ features:
       - FunctionsClient.requestIdleTimeout
       - HTTPClientConfiguration.timeout
       - FunctionInvokeOptions.timeout
-  functions.invocation.set_auth_token:
-    status: not_applicable
-    note: "No runtime setter by design. FunctionsClient is immutable and Sendable; the token comes from the Configuration.accessToken closure, which is re-evaluated on every request. See functions.invocation.auth_token."
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
