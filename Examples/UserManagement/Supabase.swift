@@ -8,6 +8,7 @@
 import Foundation
 import Supabase
 
+// swift-format-ignore: NeverUseForceTry
 let supabase = try! SupabaseClient(
   supabaseURL: URL(string: "http://127.0.0.1:54321")!,
   supabaseKey:

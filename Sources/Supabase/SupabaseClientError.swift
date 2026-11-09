@@ -33,7 +33,7 @@ public struct SupabaseClientError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// The `supabaseURL` passed to ``SupabaseClient/init(supabaseURL:supabaseKey:options:)`` has
+    /// The `supabaseURL` passed to ``SupabaseClient/init(supabaseURL:supabaseKey:configuration:)`` has
     /// no scheme or no host. Fix the URL. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
   }

@@ -10,6 +10,7 @@ import Foundation
 import Supabase
 
 extension SupabaseClient {
+  // swift-format-ignore: NeverUseForceTry
   static let thirdPartyAuthWithClerk = try! SupabaseClient(
     supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
     supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,

@@ -74,6 +74,7 @@ extension EnvironmentValues {
   @Entry var supabase = supabaseClient
 }
 
+// swift-format-ignore: NeverUseForceTry
 let supabaseClient = try! SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,

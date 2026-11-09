@@ -115,6 +115,7 @@ public final class SupabaseClient: Sendable {
 
   var rest: PostgrestClient {
     // `init` checked `supabaseURL`, so `databaseURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
     try! PostgrestClient(
       configuration: .init(
         url: databaseURL,
@@ -143,6 +144,7 @@ public final class SupabaseClient: Sendable {
     )
     storageConfiguration.resumable = configuration.storage.resumable
     // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
+    // swift-format-ignore: NeverUseForceTry
     return try! StorageClient(configuration: storageConfiguration)
   }
 
@@ -597,6 +599,7 @@ public final class SupabaseClient: Sendable {
 
   private func _initFunctionsClient() -> FunctionsClient {
     // `init` checked `supabaseURL`, so `functionsURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
     try! FunctionsClient(
       configuration: .init(
         url: functionsURL,
@@ -631,6 +634,7 @@ public final class SupabaseClient: Sendable {
     }
 
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
     return try! RealtimeClient(
       configuration: .init(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
