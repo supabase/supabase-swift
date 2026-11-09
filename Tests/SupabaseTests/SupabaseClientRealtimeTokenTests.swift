@@ -14,8 +14,8 @@ struct SupabaseClientRealtimeTokenTests {
   private func makeClient(
     transport: some ClientTransport = RecordingTransport(),
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) -> SupabaseClient {
-    SupabaseClient(
+  ) throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
@@ -27,8 +27,8 @@ struct SupabaseClientRealtimeTokenTests {
   }
 
   @Test
-  func theSameTokenIsPushedOnce() {
-    let client = makeClient(accessToken: { nil })
+  func theSameTokenIsPushedOnce() throws {
+    let client = try makeClient(accessToken: { nil })
 
     #expect(client.realtimeTokenToPush(event: .signedIn, session: .stub(accessToken: "a")) == "a")
     #expect(
@@ -43,8 +43,8 @@ struct SupabaseClientRealtimeTokenTests {
   }
 
   @Test
-  func signedOutResetsToTheKeyAndTheNextSessionPushesAgain() {
-    let client = makeClient(accessToken: { nil })
+  func signedOutResetsToTheKeyAndTheNextSessionPushesAgain() throws {
+    let client = try makeClient(accessToken: { nil })
 
     #expect(client.realtimeTokenToPush(event: .signedIn, session: .stub(accessToken: "a")) == "a")
     #expect(client.realtimeTokenToPush(event: .signedOut, session: nil) == "PUBLISHABLE_KEY")
@@ -62,7 +62,7 @@ struct SupabaseClientRealtimeTokenTests {
       _, _ in
       (HTTPResponse(status: .ok), sessionJSON(accessToken: "aal2-token", refreshToken: "refresh-2"))
     }
-    let client = makeClient(transport: transport)
+    let client = try makeClient(transport: transport)
     let realtime = client.realtime
 
     _ = try await client.auth.signIn(email: "a@b.c", password: "x")
@@ -75,20 +75,20 @@ struct SupabaseClientRealtimeTokenTests {
   }
 
   @Test
-  func clientDeallocatesWithAnActiveEventsSubscription() async {
+  func clientDeallocatesWithAnActiveEventsSubscription() async throws {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
     }
     let box = WeakBox()
     let task = LockIsolated<Task<Void, Never>?>(nil)
 
-    func scope() {
-      let client = makeClient()
+    func scope() throws {
+      let client = try makeClient()
       box.client = client
       let events = client.auth.events()
       task.setValue(Task { for await _ in events {} })
     }
-    scope()
+    try scope()
 
     await waitUntil { box.client == nil }
 

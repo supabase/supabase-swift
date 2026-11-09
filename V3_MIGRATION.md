@@ -131,7 +131,7 @@ import Logging
 
 var logger = Logger(label: "myapp")
 logger.logLevel = .debug
-let client = SupabaseClient(
+let client = try SupabaseClient(
   supabaseURL: url, supabaseKey: key,
   options: .init(global: .init(logger: logger))
 )
@@ -166,7 +166,7 @@ let storage = SupabaseStorageClient(
 // v3
 let http = HTTPClientConfiguration(transport: URLSessionTransport(session: session))
 let database = PostgrestClient(url: databaseURL, http: http)
-let storage = StorageClient(
+let storage = try StorageClient(
   configuration: StorageClientConfiguration(url: storageURL, headers: headers, http: http)
 )
 ```
@@ -303,6 +303,22 @@ Changes that still compile but behave differently. Check each one by hand.
 | `supabase.handle(_:)` | `supabase.handleRedirect(_:)`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
 | `FunctionsOptions.region: String?` | `FunctionsOptions.region: FunctionRegion?` |
+
+### The initializers throw
+
+`SupabaseClient(supabaseURL:supabaseKey:)` and `SupabaseClient(supabaseURL:supabaseKey:options:)`
+throw a `SupabaseClientError` of kind `.invalidConfiguration` when `supabaseURL` has no host. Add
+`try`. A server that reads project URLs from configuration can catch the error instead of
+crashing. For a URL that is fixed in your app, `try!` is enough.
+`supabase.storage` and `supabase.functions` do not throw.
+
+```swift
+// v2
+let supabase = SupabaseClient(supabaseURL: url, supabaseKey: key)
+
+// v3
+let supabase = try SupabaseClient(supabaseURL: url, supabaseKey: key)
+```
 
 ### `GlobalOptions.session` is removed
 

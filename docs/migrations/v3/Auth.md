@@ -94,7 +94,7 @@ Changes that still compile but behave differently. Check each one by hand.
   tests:
 
   ```swift
-  let client = SupabaseClient(
+  let client = try SupabaseClient(
     supabaseURL: url,
     supabaseKey: key,
     options: .init(auth: .init(storage: InMemoryAuthStorage()))
@@ -991,7 +991,7 @@ The SDK ships no SwiftUI environment key. Declare one with `@Entry` to give view
   }
 }
 // v3
-let supabaseClient = SupabaseClient(supabaseURL: url, supabaseKey: key)
+let supabaseClient = try SupabaseClient(supabaseURL: url, supabaseKey: key)
 
 extension EnvironmentValues {
   @Entry var supabase = supabaseClient
@@ -1096,7 +1096,7 @@ let supabase = SupabaseClient(
   options: .init(auth: .init(autoRefreshToken: false))
 )
 // v3
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   options: .init(auth: .init(autoRefresh: .manual))
@@ -1135,7 +1135,7 @@ struct MyStorage: AuthStorage {
   func load(key: String) async throws -> Data? { /* return nil when missing */ }
   func remove(key: String) async throws { /* ... */ }
 }
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   options: .init(auth: .init(storage: MyStorage()))

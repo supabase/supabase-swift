@@ -88,7 +88,8 @@ struct ResumableUploadTests {
     try Data((0..<20).map(UInt8.init)).write(to: fileURL)
   }
 
-  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageBucket
+  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
+    -> StorageBucket
   {
     var configuration = StorageClientConfiguration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
@@ -97,7 +98,7 @@ struct ResumableUploadTests {
     configuration.resumable = ResumableUploadConfiguration(
       chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
     configuration.clock = ImmediateClock()
-    return StorageClient(configuration: configuration).from("bucket")
+    return try StorageClient(configuration: configuration).from("bucket")
   }
 
   private var store: ResumableStore {

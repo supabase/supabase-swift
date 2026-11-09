@@ -14,8 +14,8 @@ extension StorageClient {
     supabaseURL: String,
     apiKey: String,
     http: HTTPClientConfiguration = .init()
-  ) -> StorageClient {
-    StorageClient(
+  ) throws -> StorageClient {
+    try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: supabaseURL)!,
         headers: [

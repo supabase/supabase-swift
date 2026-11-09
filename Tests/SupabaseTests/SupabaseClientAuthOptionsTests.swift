@@ -17,8 +17,8 @@ struct SupabaseClientAuthOptionsTests {
   private func makeClient(
     auth: SupabaseClientOptions.AuthOptions,
     global: SupabaseClientOptions.GlobalOptions = .init()
-  ) -> SupabaseClient {
-    SupabaseClient(
+  ) throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: url,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(auth: auth, global: global)
@@ -26,10 +26,10 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authClockOverridesTheGlobalClock() {
+  func authClockOverridesTheGlobalClock() throws {
     let authClock = TestClock<Duration>()
     let globalClock = TestClock<Duration>()
-    let client = makeClient(
+    let client = try makeClient(
       auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual, clock: authClock),
       global: .init(clock: globalClock)
     )
@@ -39,9 +39,9 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authClockFallsBackToTheGlobalClock() {
+  func authClockFallsBackToTheGlobalClock() throws {
     let globalClock = TestClock<Duration>()
-    let client = makeClient(
+    let client = try makeClient(
       auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
       global: .init(clock: globalClock)
     )
@@ -50,8 +50,8 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authLoggerOverridesTheGlobalLogger() {
-    let client = makeClient(
+  func authLoggerOverridesTheGlobalLogger() throws {
+    let client = try makeClient(
       auth: .init(
         storage: InMemoryAuthStorage(), autoRefresh: .manual,
         logger: Logging.Logger(label: "auth-logger")),
@@ -63,8 +63,8 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authLoggerFallsBackToTheGlobalLogger() {
-    let client = makeClient(
+  func authLoggerFallsBackToTheGlobalLogger() throws {
+    let client = try makeClient(
       auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
       global: .init(logger: Logging.Logger(label: "global"))
     )
@@ -82,7 +82,7 @@ struct SupabaseClientAuthOptionsTests {
     globalTransport.respond(when: { _ in true }) { _, _ in
       (HTTPResponse(status: .ok), Data("[]".utf8))
     }
-    let client = makeClient(
+    let client = try makeClient(
       auth: .init(
         storage: InMemoryAuthStorage(), autoRefresh: .manual,
         http: .init(transport: authTransport)),
@@ -104,7 +104,7 @@ struct SupabaseClientAuthOptionsTests {
     transport.respond(when: { _ in true }) { _, _ in
       (HTTPResponse(status: .badRequest), Data("{}".utf8))
     }
-    let client = makeClient(
+    let client = try makeClient(
       auth: .init(
         storage: InMemoryAuthStorage(), autoRefresh: .manual,
         http: .init(middlewares: [HeaderMiddleware(name: "x-order", value: "auth")])),
@@ -121,8 +121,8 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authHTTPTimeoutFallsBackToTheGlobalTimeout() {
-    let client = makeClient(
+  func authHTTPTimeoutFallsBackToTheGlobalTimeout() throws {
+    let client = try makeClient(
       auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual, http: .init()),
       global: .init(http: .init(timeout: .seconds(30)))
     )
@@ -131,8 +131,8 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
-  func authHTTPTimeoutOverridesTheGlobalTimeout() {
-    let client = makeClient(
+  func authHTTPTimeoutOverridesTheGlobalTimeout() throws {
+    let client = try makeClient(
       auth: .init(
         storage: InMemoryAuthStorage(), autoRefresh: .manual, http: .init(timeout: .seconds(7))),
       global: .init(http: .init(timeout: .seconds(30)))

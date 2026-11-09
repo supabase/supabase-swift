@@ -9,7 +9,7 @@ middleware.
 Storage URL and the headers every request carries, usually `apikey`.
 
 ```swift
-let storage = StorageClient(
+let storage = try StorageClient(
   configuration: StorageClientConfiguration(
     url: URL(string: "https://<ref>.supabase.co/storage/v1")!,
     headers: [HTTPField.Name("apikey")!: "sb_publishable_…"],
@@ -56,7 +56,7 @@ try await traced.from("avatars").upload(path: "a.png", data: data)
 `URLSession.shared`. An ordered `ClientMiddleware` chain runs in front of it.
 
 ```swift
-let storage = StorageClient(
+let storage = try StorageClient(
   configuration: StorageClientConfiguration(
     url: storageURL,
     headers: headers,

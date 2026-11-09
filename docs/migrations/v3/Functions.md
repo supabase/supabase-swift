@@ -55,7 +55,7 @@ let functions = FunctionsClient(url: url, headers: ["apikey": apiKey], region: .
 functions.setAuth(token: session.accessToken)
 
 // v3
-let functions = FunctionsClient(
+let functions = try FunctionsClient(
   configuration: .init(
     url: url,
     headers: [HTTPField.Name("apikey")!: apiKey],
@@ -65,7 +65,8 @@ let functions = FunctionsClient(
 )
 ```
 
-`init(configuration:)` traps if `url` has no host.
+`init(configuration:)` throws a `FunctionsError` of kind `.invalidConfiguration` if `url` has no
+host.
 
 ## The body is an `invoke` argument
 

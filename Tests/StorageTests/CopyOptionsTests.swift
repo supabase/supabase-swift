@@ -16,14 +16,14 @@ import Testing
 struct CopyOptionsTests {
   typealias Sent = BucketRequestTests.Sent
 
-  static func makeBucket(sent: LockIsolated<[Sent]>, response: String) -> StorageBucket {
-    BucketRequestTests.makeClient(sent: sent, response: response).from("bucket")
+  static func makeBucket(sent: LockIsolated<[Sent]>, response: String) throws -> StorageBucket {
+    try BucketRequestTests.makeClient(sent: sent, response: response).from("bucket")
   }
 
   @Test
   func defaultsSendNothingExtra() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       sent: sent, response: #"{"Id":"8B1F9F4E-2C61-4E3A-9D53-0F1D2B4C6A7E","Key":"bucket/b.png"}"#)
 
     let copy = try await bucket.copy(from: "a.png", to: "/b.png")
@@ -43,7 +43,7 @@ struct CopyOptionsTests {
   @Test
   func sendsUpsertMetadataAndOverrides() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(sent: sent, response: #"{"Key":"bucket/b.png"}"#)
+    let bucket = try Self.makeBucket(sent: sent, response: #"{"Key":"bucket/b.png"}"#)
 
     try await bucket.copy(
       from: "a.png", to: "b.png",

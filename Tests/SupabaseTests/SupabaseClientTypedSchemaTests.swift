@@ -59,11 +59,11 @@ struct SupabaseClientTypedSchemaTests {
     static let columns = Columns()
   }
 
-  private func makeClient(schema: String? = nil) -> SupabaseClient {
+  private func makeClient(schema: String? = nil) throws -> SupabaseClient {
     TypedSchemaCapturingProtocol.capturedRequest = nil
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [TypedSchemaCapturingProtocol.self]
-    return SupabaseClient(
+    return try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
@@ -88,7 +88,7 @@ struct SupabaseClientTypedSchemaTests {
 
   @Test
   func fromQueriesTheRelationInItsOwnSchema() async throws {
-    let supabase = makeClient()
+    let supabase = try makeClient()
 
     _ = try await supabase.from(Secret.self).select().execute()
 
@@ -97,7 +97,7 @@ struct SupabaseClientTypedSchemaTests {
 
   @Test
   func theScopeQueriesItsSchema() async throws {
-    let supabase = makeClient()
+    let supabase = try makeClient()
 
     _ = try await supabase.schema(PrivateSchema.self).from(Secret.self).select().execute()
 
@@ -106,7 +106,7 @@ struct SupabaseClientTypedSchemaTests {
 
   @Test
   func aSchemaInTheDatabaseOptionsWins() async throws {
-    let supabase = makeClient(schema: "public")
+    let supabase = try makeClient(schema: "public")
 
     _ = try await supabase.from(Secret.self).select().execute()
 

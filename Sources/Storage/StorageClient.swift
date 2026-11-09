@@ -111,7 +111,7 @@ public struct StorageClientConfiguration: Sendable {
 /// Typically you obtain an instance via the main `SupabaseClient`:
 ///
 /// ```swift
-/// let client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+/// let client = try SupabaseClient(supabaseURL: url, supabaseKey: key)
 /// let storage = client.storage
 ///
 /// // Upload a file
@@ -164,8 +164,10 @@ public struct StorageClient: Sendable {
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
-  public init(configuration: StorageClientConfiguration) {
-    api = StorageAPI(configuration: configuration)
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no host or cannot be split into components.
+  public init(configuration: StorageClientConfiguration) throws {
+    api = try StorageAPI(configuration: configuration)
   }
 
   init(api: StorageAPI) {

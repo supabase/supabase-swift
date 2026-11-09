@@ -20,7 +20,7 @@ extension StorageMockerTests {
   struct VectorBucketClientTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    private func makeSUT() -> VectorBucketClient {
+    private func makeSUT() throws -> VectorBucketClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
@@ -28,7 +28,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return StorageVectorsClient(
-        api: StorageAPI(
+        api: try StorageAPI(
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],
@@ -39,7 +39,7 @@ extension StorageMockerTests {
 
     @Test
     func createIndex() async throws {
-      let bucket = makeSUT()
+      let bucket = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/CreateIndex"),
@@ -59,7 +59,7 @@ extension StorageMockerTests {
 
     @Test
     func deleteIndex() async throws {
-      let bucket = makeSUT()
+      let bucket = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/DeleteIndex"),
@@ -72,7 +72,7 @@ extension StorageMockerTests {
 
     @Test
     func getIndexDecodesVectorIndex() async throws {
-      let bucket = makeSUT()
+      let bucket = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/GetIndex"),
@@ -98,7 +98,7 @@ extension StorageMockerTests {
 
     @Test
     func listIndexesDecodesIndexesAndNextToken() async throws {
-      let bucket = makeSUT()
+      let bucket = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/ListIndexes"),
@@ -119,8 +119,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func indexReturnsScopedClient() {
-      let bucket = makeSUT()
+    func indexReturnsScopedClient() throws {
+      let bucket = try makeSUT()
       let index = bucket.index("embeddings")
       #expect(index.vectorBucketName == "documents")
       #expect(index.indexName == "embeddings")
@@ -128,7 +128,7 @@ extension StorageMockerTests {
 
     @Test
     func forbiddenThrowsStorageError() async throws {
-      let bucket = makeSUT()
+      let bucket = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/CreateIndex"),

@@ -54,7 +54,7 @@ Uses modern `HTTPTypes` for request/response handling. Every module shares one p
 Uses option builder pattern for client configuration:
 
 ```swift
-SupabaseClient(
+try SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   options: SupabaseClientOptions(

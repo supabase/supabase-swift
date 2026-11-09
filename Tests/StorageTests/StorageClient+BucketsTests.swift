@@ -27,14 +27,14 @@ extension StorageMockerTests {
   struct StorageClientBucketsTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    private func makeSUT() -> StorageClient {
+    private func makeSUT() throws -> StorageClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
       configuration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: configuration)
 
-      return StorageClient(
+      return try StorageClient(
         configuration: StorageClientConfiguration(
           url: url,
           headers: [
@@ -94,8 +94,9 @@ extension StorageMockerTests {
         ),
       ]
     )
-    func urlConstructionWithNewHostname(input: String, expected: String, description: String) {
-      let storage = StorageClient(
+    func urlConstructionWithNewHostname(input: String, expected: String, description: String) throws
+    {
+      let storage = try StorageClient(
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
@@ -117,8 +118,8 @@ extension StorageMockerTests {
         "http://localhost:1234/storage/v1",
       ]
     )
-    func urlConstructionWithoutNewHostname(input: String) {
-      let storage = StorageClient(
+    func urlConstructionWithoutNewHostname(input: String) throws {
+      let storage = try StorageClient(
         configuration: StorageClientConfiguration(
           url: URL(string: input)!,
           headers: [:],
@@ -130,7 +131,7 @@ extension StorageMockerTests {
 
     @Test
     func bucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket/bucket123"),
@@ -167,7 +168,7 @@ extension StorageMockerTests {
 
     @Test
     func listBuckets() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket"),
@@ -206,7 +207,7 @@ extension StorageMockerTests {
 
     @Test
     func createBucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket"),
@@ -251,7 +252,7 @@ extension StorageMockerTests {
 
     @Test
     func updateBucketSendsOnlyTheFieldsThatAreSet() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket/bucket123"),
@@ -277,8 +278,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func updateBucketWithNothingToChangeThrowsBeforeSending() async {
-      let storage = makeSUT()
+    func updateBucketWithNothingToChangeThrowsBeforeSending() async throws {
+      let storage = try makeSUT()
 
       await #expect {
         try await storage.updateBucket("bucket123", options: UpdateBucketOptions())
@@ -289,7 +290,7 @@ extension StorageMockerTests {
 
     @Test
     func updateBucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket/bucket123"),
@@ -332,7 +333,7 @@ extension StorageMockerTests {
 
     @Test
     func deleteBucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket/bucket123"),
@@ -357,7 +358,7 @@ extension StorageMockerTests {
 
     @Test
     func emptyBucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket/bucket123/empty"),
@@ -382,7 +383,7 @@ extension StorageMockerTests {
 
     @Test
     func purgeCacheForBucket() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("cdn/bucket123"),
@@ -407,7 +408,7 @@ extension StorageMockerTests {
 
     @Test
     func purgeCacheForBucketTransformationsOnly() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("cdn/bucket123"),
@@ -433,7 +434,7 @@ extension StorageMockerTests {
 
     @Test
     func createBucketWithFileSizeLimit() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket"),
@@ -475,7 +476,7 @@ extension StorageMockerTests {
 
     @Test
     func createBucketWithHumanReadableFileSizeLimit() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("bucket"),

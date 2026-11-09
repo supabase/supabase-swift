@@ -298,7 +298,7 @@ struct StorageClientIntegrationTests {
   func supabaseClientWithTheSecretKeyBypassesRowLevelSecurity() async throws {
     let name = try await StorageIntegration.newBucket("supabase-client")
     defer { StorageIntegration.dropBucket(name) }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseSecretKey,
       options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))
@@ -313,7 +313,7 @@ struct StorageClientIntegrationTests {
   func supabaseClientWithANewFormatKeySendsNoBearer() async throws {
     let name = try await StorageIntegration.newBucket("publishable")
     defer { StorageIntegration.dropBucket(name) }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseNewFormatPublishableKey,
       options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))

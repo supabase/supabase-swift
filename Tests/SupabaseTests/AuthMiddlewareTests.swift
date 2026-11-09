@@ -19,7 +19,7 @@ struct AuthMiddlewareTests {
   }
 
   init(autoRefresh: AuthClient.AutoRefreshPolicy) async throws {
-    client = SupabaseClient(
+    client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
@@ -286,7 +286,7 @@ struct AuthMiddlewareTests {
   @Test
   func unauthorizedWithoutASessionIsSentWithTheKeyAndNotRetried() async throws {
     let http = RecordingTransport { _, _ in (invalidTokenUnauthorized, Data()) }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(

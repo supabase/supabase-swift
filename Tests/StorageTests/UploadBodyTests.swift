@@ -13,8 +13,8 @@ struct UploadBodyTests {
     var body: Data
   }
 
-  private func makeBucket(sent: LockIsolated<Sent?>) -> StorageBucket {
-    StorageClient(
+  private func makeBucket(sent: LockIsolated<Sent?>) throws -> StorageBucket {
+    try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],

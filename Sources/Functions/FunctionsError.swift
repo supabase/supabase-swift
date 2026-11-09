@@ -58,6 +58,9 @@ public struct FunctionsError: SupabaseError {
     /// The SDK refused to send the request: the body could not be encoded. Nothing was sent.
     /// ``FunctionsError/underlyingError`` is the `EncodingError`.
     public static let invalidRequest: Kind = "invalidRequest"
+    /// ``FunctionsClient/init(configuration:)`` refused the configuration: its URL has no host.
+    /// Fix the configuration. No client was created.
+    public static let invalidConfiguration: Kind = "invalidConfiguration"
   }
 
   /// A platform error code from the `sb-error-code` response header.

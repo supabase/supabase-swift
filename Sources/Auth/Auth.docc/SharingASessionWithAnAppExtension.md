@@ -35,13 +35,13 @@ Put the client factory in code that all targets compile, such as a shared framew
 same project URL, so the clients derive the same storage key, and the same access group.
 
 ```swift
-func makeSupabaseClient(autoRefresh: AuthClient.AutoRefreshPolicy) -> SupabaseClient {
+func makeSupabaseClient(autoRefresh: AuthClient.AutoRefreshPolicy) throws -> SupabaseClient {
   // A missing key would give `nil`, and `nil` means the default group. The app and the
   // extension would then stop sharing, with no error.
   guard let accessGroup = Bundle.main.object(forInfoDictionaryKey: "KeychainAccessGroup") as? String
   else { fatalError("Add KeychainAccessGroup to the Info.plist of every target.") }
 
-  return SupabaseClient(
+  return try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key",
     options: .init(
@@ -54,10 +54,10 @@ func makeSupabaseClient(autoRefresh: AuthClient.AutoRefreshPolicy) -> SupabaseCl
 }
 
 // In the app:
-let supabase = makeSupabaseClient(autoRefresh: .automatic)
+let supabase = try makeSupabaseClient(autoRefresh: .automatic)
 
 // In the extension:
-let supabase = makeSupabaseClient(autoRefresh: .disabled)
+let supabase = try makeSupabaseClient(autoRefresh: .disabled)
 ```
 
 ### Refresh in one process only

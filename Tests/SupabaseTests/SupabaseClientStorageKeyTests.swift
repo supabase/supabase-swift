@@ -30,8 +30,8 @@ struct SupabaseClientStorageKeyTests {
   }
 
   @Test
-  func honorsAnExplicitStorageKeyOverTheProjectRef() {
-    let client = SupabaseClient(
+  func honorsAnExplicitStorageKeyOverTheProjectRef() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
       options: SupabaseClientOptions(
@@ -43,8 +43,8 @@ struct SupabaseClientStorageKeyTests {
   }
 
   @Test
-  func usesTheDerivedKeyWhenNoneIsGiven() {
-    let client = SupabaseClient(
+  func usesTheDerivedKeyWhenNoneIsGiven() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
       options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
@@ -53,16 +53,17 @@ struct SupabaseClientStorageKeyTests {
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
   }
 
-  #if os(macOS) || os(Linux)
-    @Test
-    func constructingAClientWithoutAHostTraps() async {
-      await #expect(processExitsWith: .failure) {
-        _ = SupabaseClient(
-          supabaseURL: URL(string: "project-ref")!,
-          supabaseKey: "anon-key",
-          options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
-        )
-      }
+  @Test(arguments: ["project-ref", "https:///rest/v1", "mailto:someone@example.com"])
+  func constructingAClientWithoutAHostThrows(url: String) throws {
+    let error = #expect(throws: SupabaseClientError.self) {
+      try SupabaseClient(
+        supabaseURL: try #require(URL(string: url)),
+        supabaseKey: "anon-key",
+        options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      )
     }
-  #endif
+    #expect(error?.kind == .invalidConfiguration)
+    #expect(error?.response == nil)
+    #expect(error?.description.hasPrefix("SupabaseClientError(invalidConfiguration): ") == true)
+  }
 }

@@ -9,8 +9,9 @@ public import Foundation
 
 /// The root of every error the Supabase SDK throws.
 ///
-/// `AuthError`, `PostgrestError`, `StorageError`, `FunctionsError` and `RealtimeError` all
-/// conform. Catch the existential to handle failures from any module in one place:
+/// `AuthError`, `PostgrestError`, `StorageError`, `FunctionsError`, `RealtimeError` and
+/// `SupabaseClientError` all conform. Catch the existential to handle failures from any module in
+/// one place:
 ///
 /// ```swift
 /// do {

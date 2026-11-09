@@ -22,7 +22,7 @@ struct TracingTests {
   @Test
   func tracePropagationIsNoOpWithoutActiveSpan() async throws {
     RequestCapturingProtocol.capturedRequests = []
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       options: SupabaseClientOptions(
@@ -50,7 +50,7 @@ struct TracingTests {
       defer { span.end() }
 
       RequestCapturingProtocol.capturedRequests = []
-      let client = SupabaseClient(
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
         options: SupabaseClientOptions(

@@ -22,7 +22,7 @@ enum StorageIntegration {
     headers: HTTPFields = [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"],
     middlewares: [any ClientMiddleware] = []
   ) -> StorageClient {
-    StorageClient(
+    try! StorageClient(
       configuration: StorageClientConfiguration(
         url: url,
         headers: headers,

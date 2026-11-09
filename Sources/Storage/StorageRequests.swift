@@ -33,19 +33,20 @@ struct StorageRequests: Sendable {
   /// The base URL every route is appended to.
   let url: URL
 
-  init(url: URL) {
+  init(url: URL) throws {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      preconditionFailure("Storage client initialized with an invalid URL: \(url)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "Storage client initialized with an invalid URL: \(url)")
     }
+    let resumableURL = try StorageAPI.storageHost(url)
     while components.percentEncodedPath.hasSuffix("/") {
       components.percentEncodedPath.removeLast()
     }
     self.base = components
     self.url = url
     var resumable = components
-    resumable.host =
-      URLComponents(
-        url: StorageAPI.storageHost(url), resolvingAgainstBaseURL: false)?.host
+    resumable.host = URLComponents(url: resumableURL, resolvingAgainstBaseURL: false)?.host
     self.resumableBase = resumable
   }
 

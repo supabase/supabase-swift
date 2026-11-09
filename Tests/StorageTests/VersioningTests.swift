@@ -16,14 +16,14 @@ import Testing
 struct VersioningTests {
   typealias Sent = BucketRequestTests.Sent
 
-  static func makeBucket(sent: LockIsolated<[Sent]>, response: String) -> StorageBucket {
-    BucketRequestTests.makeClient(sent: sent, response: response).from("bucket")
+  static func makeBucket(sent: LockIsolated<[Sent]>, response: String) throws -> StorageBucket {
+    try BucketRequestTests.makeClient(sent: sent, response: response).from("bucket")
   }
 
   @Test
   func infoSendsTheVersion() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       sent: sent,
       response: #"{"id":"8B1F9F4E-2C61-4E3A-9D53-0F1D2B4C6A7E","version":"v1","name":"a.png"}"#)
 
@@ -36,7 +36,7 @@ struct VersioningTests {
   @Test
   func createSignedURLSendsTheVersion() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       sent: sent, response: #"{"signedURL":"/object/sign/bucket/a.png?token=t"}"#)
 
     _ = try await bucket.createSignedURL(
@@ -46,8 +46,8 @@ struct VersioningTests {
   }
 
   @Test
-  func publicURLCarriesTheVersion() {
-    let bucket = Self.makeBucket(sent: .init([]), response: "")
+  func publicURLCarriesTheVersion() throws {
+    let bucket = try Self.makeBucket(sent: .init([]), response: "")
 
     let url = bucket.publicURL(
       path: "a.png", options: PublicURLOptions(versionId: "v1", cacheNonce: "n"))
@@ -60,7 +60,7 @@ struct VersioningTests {
   @Test
   func moveAndCopySendTheBucketAndSourceVersion() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(sent: sent, response: #"{"Key":"other/b.png"}"#)
+    let bucket = try Self.makeBucket(sent: sent, response: #"{"Key":"other/b.png"}"#)
 
     try await bucket.move(from: "a.png", to: "b.png", toBucket: "other", sourceVersionId: "v1")
     try await bucket.copy(from: "a.png", to: "b.png", toBucket: "other", sourceVersionId: "v1")
@@ -75,7 +75,7 @@ struct VersioningTests {
   @Test
   func removeVersionsSendsPathAndVersionPairs() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let bucket = Self.makeBucket(sent: sent, response: "[]")
+    let bucket = try Self.makeBucket(sent: sent, response: "[]")
 
     try await bucket.remove(versions: [
       ObjectVersion(path: "/a//b.png", versionId: "v1"),

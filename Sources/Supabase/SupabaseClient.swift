@@ -16,7 +16,7 @@ import Logging
 /// Create one instance per Supabase project and share it across your app.
 ///
 /// ```swift
-/// let supabase = SupabaseClient(
+/// let supabase = try SupabaseClient(
 ///   supabaseURL: URL(string: "https://your-project.supabase.co")!,
 ///   supabaseKey: "your-anon-key"
 /// )
@@ -136,7 +136,8 @@ public final class SupabaseClient: Sendable {
     )
     configuration.clock = clock
     configuration.resumable = options.storage.resumable
-    return StorageClient(configuration: configuration)
+    // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
+    return try! StorageClient(configuration: configuration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -198,8 +199,10 @@ public final class SupabaseClient: Sendable {
   /// - Parameters:
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-  public convenience init(supabaseURL: URL, supabaseKey: String) {
-    self.init(
+  /// - Throws: ``SupabaseClientError`` with kind
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no host.
+  public convenience init(supabaseURL: URL, supabaseKey: String) throws {
+    try self.init(
       supabaseURL: supabaseURL,
       supabaseKey: supabaseKey,
       options: SupabaseClientOptions()
@@ -211,11 +214,21 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - options: Configuration options for the client and its sub-clients.
+  /// - Throws: ``SupabaseClientError`` with kind
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no host.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     options: SupabaseClientOptions
-  ) {
+  ) throws {
+    guard URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false) != nil,
+      let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL)
+    else {
+      throw SupabaseClientError(
+        kind: .invalidConfiguration,
+        message: "supabaseURL must be a valid URL with a host, got \(supabaseURL).")
+    }
+
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.options = options
@@ -237,14 +250,6 @@ public final class SupabaseClient: Sendable {
         )
       )
       .merging(with: HTTPFields(options.global.headers))
-
-    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
-      preconditionFailure(
-        """
-        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
-        """
-      )
-    }
 
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
@@ -597,7 +602,8 @@ public final class SupabaseClient: Sendable {
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    FunctionsClient(
+    // `init` checked that `supabaseURL`, and so `functionsURL`, has a host.
+    try! FunctionsClient(
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,

@@ -25,23 +25,25 @@ struct ResumableUploadRegistryTests {
   }
 
   private var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
-      url: URL(string: "http://localhost:54321/storage/v1")!,
-      headers: [:],
-      http: .init(
-        transport: ClosureTransport { [requests, responses] request, _ in
-          requests.withValue { $0.append("\(request.method.rawValue) \(request.path ?? "")") }
-          guard
-            let (response, body) = responses.withValue({ $0.isEmpty ? nil : $0.removeFirst() })
-          else {
-            try await Task.sleep(for: .seconds(60))
-            throw URLError(.cancelled)
-          }
-          return (response, body.isEmpty ? nil : HTTPBody(body))
-        }))
-    configuration.resumable = ResumableUploadConfiguration(
-      chunkSize: 8, directory: root.appendingPathComponent("store"))
-    return StorageClient(configuration: configuration)
+    get throws {
+      var configuration = StorageClientConfiguration(
+        url: URL(string: "http://localhost:54321/storage/v1")!,
+        headers: [:],
+        http: .init(
+          transport: ClosureTransport { [requests, responses] request, _ in
+            requests.withValue { $0.append("\(request.method.rawValue) \(request.path ?? "")") }
+            guard
+              let (response, body) = responses.withValue({ $0.isEmpty ? nil : $0.removeFirst() })
+            else {
+              try await Task.sleep(for: .seconds(60))
+              throw URLError(.cancelled)
+            }
+            return (response, body.isEmpty ? nil : HTTPBody(body))
+          }))
+      configuration.resumable = ResumableUploadConfiguration(
+        chunkSize: 8, directory: root.appendingPathComponent("store"))
+      return try StorageClient(configuration: configuration)
+    }
   }
 
   private var store: ResumableStore {

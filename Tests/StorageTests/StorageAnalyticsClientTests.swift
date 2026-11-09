@@ -20,14 +20,14 @@ struct StorageAnalyticsClientTests {
     sent: LockIsolated<[Sent]> = .init([]),
     status: HTTPResponse.Status = .ok,
     response: String
-  ) -> StorageAnalyticsClient {
-    BucketRequestTests.makeClient(sent: sent, status: status, response: response).analytics
+  ) throws -> StorageAnalyticsClient {
+    try BucketRequestTests.makeClient(sent: sent, status: status, response: response).analytics
   }
 
   @Test
   func createBucketPostsTheNameAndDecodesTheBucket() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let analytics = Self.makeAnalytics(
+    let analytics = try Self.makeAnalytics(
       sent: sent,
       response: #"""
         {"id":"events","name":"events","created_at":"2026-01-01T00:00:00.000Z",
@@ -46,7 +46,7 @@ struct StorageAnalyticsClientTests {
   @Test
   func listBucketsSendsTheOptions() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let analytics = Self.makeAnalytics(sent: sent, response: "[]")
+    let analytics = try Self.makeAnalytics(sent: sent, response: "[]")
 
     let buckets = try await analytics.listBuckets(
       options: BucketListOptions(limit: 5, sortBy: .name, order: .ascending))
@@ -61,7 +61,8 @@ struct StorageAnalyticsClientTests {
   @Test
   func deleteBucketEncodesTheName() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let analytics = Self.makeAnalytics(sent: sent, response: #"{"message":"Successfully deleted"}"#)
+    let analytics = try Self.makeAnalytics(
+      sent: sent, response: #"{"message":"Successfully deleted"}"#)
 
     try await analytics.deleteBucket("a b")
 
@@ -71,7 +72,7 @@ struct StorageAnalyticsClientTests {
 
   @Test
   func anIcebergErrorBodyBecomesAStorageError() async throws {
-    let analytics = Self.makeAnalytics(
+    let analytics = try Self.makeAnalytics(
       status: .forbidden,
       response:
         #"{"error":{"message":"Forbidden","type":"ForbiddenException","code":403}}"#)

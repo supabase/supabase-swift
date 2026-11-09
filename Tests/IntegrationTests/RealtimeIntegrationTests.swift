@@ -32,7 +32,7 @@
     let client: SupabaseClient
     let client2: SupabaseClient
     init() async throws {
-      client = SupabaseClient(
+      client = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(
@@ -45,7 +45,7 @@
           )
         )
       )
-      client2 = SupabaseClient(
+      client2 = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         options: SupabaseClientOptions(

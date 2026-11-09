@@ -20,7 +20,7 @@ struct StorageClientTests {
 
   @Test
   func publicURL() throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     let path = "README.md"
 
@@ -56,7 +56,7 @@ struct StorageClientTests {
 
   @Test
   func createSignedURLs() async throws {
-    let sut = makeSUT(fetch: { _ in
+    let sut = try makeSUT(fetch: { _ in
       (
         """
         [
@@ -104,7 +104,7 @@ struct StorageClientTests {
 
   @Test
   func uploadData() async throws {
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       assertInlineSnapshot(of: request, as: .curl) {
         #"""
         curl \
@@ -149,7 +149,7 @@ struct StorageClientTests {
 
   @Test
   func uploadFileURL() async throws {
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       assertInlineSnapshot(of: request, as: .curl) {
         #"""
         curl \
@@ -193,8 +193,8 @@ struct StorageClientTests {
   private func makeSUT(
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = unimplemented(
       "makeSUT.fetch")
-  ) -> StorageClient {
-    StorageClient.test(
+  ) throws -> StorageClient {
+    try StorageClient.test(
       supabaseURL: supabaseURL.absoluteString,
       apiKey: "test.api.key",
       http: .init(
@@ -218,7 +218,7 @@ struct StorageClientTests {
   @Test
   func settingHeader_setsHeaderOnRequest() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       capturedRequest.setValue(request)
       return (
         """
@@ -253,7 +253,7 @@ struct StorageClientTests {
   @Test
   func settingHeader_supportsMethodChaining() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       capturedRequest.setValue(request)
       return (
         """
@@ -289,7 +289,7 @@ struct StorageClientTests {
   @Test
   func settingHeader_overridesExistingHeader() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       capturedRequest.setValue(request)
       return (
         """
@@ -339,7 +339,7 @@ struct StorageClientTests {
       ]
       """
 
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       capturedRequests.withValue { $0.append(request) }
 
       return (
@@ -370,7 +370,7 @@ struct StorageClientTests {
   @Test
   func settingHeader_onTopLevelClientPropagatesToFileApi() async throws {
     let capturedRequest = LockIsolated(URLRequest?.none)
-    let sut = makeSUT(fetch: { request in
+    let sut = try makeSUT(fetch: { request in
       capturedRequest.setValue(request)
       return (
         """

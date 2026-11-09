@@ -114,7 +114,7 @@ removed the next time it is read.
 ```swift
 var configuration = StorageClientConfiguration(url: storageURL, headers: headers)
 configuration.resumable = ResumableUploadConfiguration(directory: appGroupURL)
-let storage = StorageClient(configuration: configuration)
+let storage = try StorageClient(configuration: configuration)
 ```
 
 A record keeps the chunk size it was created with, so a change applies to new uploads only.

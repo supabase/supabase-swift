@@ -15,7 +15,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class VectorIndexClientIntegrationTests {
-  let vectors = StorageClient(
+  let vectors = try! StorageClient(
     configuration: StorageClientConfiguration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [

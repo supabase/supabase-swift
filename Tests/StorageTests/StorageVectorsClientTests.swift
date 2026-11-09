@@ -20,7 +20,7 @@ extension StorageMockerTests {
   struct StorageVectorsClientTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    private func makeSUT() -> StorageVectorsClient {
+    private func makeSUT() throws -> StorageVectorsClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
@@ -28,7 +28,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return StorageVectorsClient(
-        api: StorageAPI(
+        api: try StorageAPI(
           configuration: StorageClientConfiguration(
             url: url,
             headers: [:],
@@ -39,7 +39,7 @@ extension StorageMockerTests {
 
     @Test
     func createBucket() async throws {
-      let vectors = makeSUT()
+      let vectors = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/CreateVectorBucket"),
@@ -52,7 +52,7 @@ extension StorageMockerTests {
 
     @Test
     func deleteBucket() async throws {
-      let vectors = makeSUT()
+      let vectors = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/DeleteVectorBucket"),
@@ -65,7 +65,7 @@ extension StorageMockerTests {
 
     @Test
     func getBucketDecodesVectorBucket() async throws {
-      let vectors = makeSUT()
+      let vectors = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/GetVectorBucket"),
@@ -86,7 +86,7 @@ extension StorageMockerTests {
 
     @Test
     func listBucketsDecodesBucketsAndNextToken() async throws {
-      let vectors = makeSUT()
+      let vectors = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/ListVectorBuckets"),
@@ -108,7 +108,7 @@ extension StorageMockerTests {
 
     @Test
     func forbiddenThrowsStorageError() async throws {
-      let vectors = makeSUT()
+      let vectors = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/CreateVectorBucket"),

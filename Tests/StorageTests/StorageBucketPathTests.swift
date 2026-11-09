@@ -102,8 +102,8 @@ struct StorageBucketPathTests {
 
   private func makeSUT(
     response: String, requests: LockIsolated<[HTTPRequest]>, bodies: LockIsolated<[Data]>
-  ) -> StorageBucket {
-    StorageClient(
+  ) throws -> StorageBucket {
+    try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -135,7 +135,7 @@ struct StorageBucketPathTests {
   ) async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = makeSUT(response: operation.response, requests: requests, bodies: bodies)
+    let bucket = try makeSUT(response: operation.response, requests: requests, bodies: bodies)
 
     let url = try await operation.run(bucket, input.raw)
 
@@ -154,10 +154,10 @@ struct StorageBucketPathTests {
   @Test(
     arguments: operations.filter { $0.name != "list" && $0.name != "publicURL" },
     ["", "/", "a/../b.png", "./a.png"])
-  func refusesAnInvalidPathBeforeSending(operation: Operation, input: String) async {
+  func refusesAnInvalidPathBeforeSending(operation: Operation, input: String) async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = makeSUT(response: operation.response, requests: requests, bodies: bodies)
+    let bucket = try makeSUT(response: operation.response, requests: requests, bodies: bodies)
 
     await #expect {
       try await operation.run(bucket, input)
@@ -172,10 +172,10 @@ struct StorageBucketPathTests {
     ("./a.png", "/storage/v1/object/public/bucket/%2E/a.png"),
     ("", "/storage/v1/object/public/bucket/"),
   ])
-  func publicURLEncodesWhatOtherMethodsRefuse(input: String, path: String) {
+  func publicURLEncodesWhatOtherMethodsRefuse(input: String, path: String) throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = makeSUT(response: "", requests: requests, bodies: bodies)
+    let bucket = try makeSUT(response: "", requests: requests, bodies: bodies)
 
     #expect(bucket.publicURL(path: input).path(percentEncoded: true) == path)
   }
@@ -184,7 +184,7 @@ struct StorageBucketPathTests {
   func listAcceptsTheEmptyPrefix() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = makeSUT(response: "[]", requests: requests, bodies: bodies)
+    let bucket = try makeSUT(response: "[]", requests: requests, bodies: bodies)
 
     _ = try await bucket.list(path: "/")
 
@@ -196,7 +196,7 @@ struct StorageBucketPathTests {
   func bucketIdIsEncodedAsOneSegment() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = StorageClient(
+    let bucket = try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],

@@ -26,8 +26,8 @@ struct DownloadTests {
     status: HTTPResponse.Status = .ok,
     headers: HTTPFields = [:],
     body: @escaping @Sendable () -> HTTPBody?
-  ) -> StorageBucket {
-    StorageClient(
+  ) throws -> StorageBucket {
+    try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -43,7 +43,7 @@ struct DownloadTests {
   @Test
   func sendsRangeVersionNonceAndHeaders() async throws {
     let sent = LockIsolated<HTTPRequest?>(nil)
-    let bucket = Self.makeBucket(sent: sent) { HTTPBody(Data("abc".utf8)) }
+    let bucket = try Self.makeBucket(sent: sent) { HTTPBody(Data("abc".utf8)) }
 
     _ = try await bucket.download(
       path: "file.txt",
@@ -64,7 +64,7 @@ struct DownloadTests {
   @Test
   func headersOverrideTheRange() async throws {
     let sent = LockIsolated<HTTPRequest?>(nil)
-    let bucket = Self.makeBucket(sent: sent) { nil }
+    let bucket = try Self.makeBucket(sent: sent) { nil }
 
     _ = try await bucket.download(
       path: "file.txt", options: DownloadOptions(range: 0...9, headers: [.range: "bytes=5-"]))
@@ -75,7 +75,7 @@ struct DownloadTests {
   @Test
   func reportsProgressAsTheBodyIsRead() async throws {
     let reports = LockIsolated<[TransferProgress]>([])
-    let bucket = Self.makeBucket { Self.chunks(8, of: 64 << 10) }
+    let bucket = try Self.makeBucket { Self.chunks(8, of: 64 << 10) }
 
     let response = try await bucket.download(path: "file.bin") { progress in
       reports.withValue { $0.append(progress) }
@@ -92,7 +92,7 @@ struct DownloadTests {
 
   @Test
   func aNetworkFailureMidBodyIsATransportError() async throws {
-    let bucket = Self.makeBucket {
+    let bucket = try Self.makeBucket {
       Self.chunks(2, of: 10, length: .unknown, then: URLError(.networkConnectionLost))
     }
 
@@ -107,7 +107,8 @@ struct DownloadTests {
 
   @Test
   func aServerErrorIsDecoded() async throws {
-    let bucket = Self.makeBucket(status: .notFound, headers: [.contentType: "application/json"]) {
+    let bucket = try Self.makeBucket(status: .notFound, headers: [.contentType: "application/json"])
+    {
       HTTPBody(Data(#"{"statusCode":"404","error":"not_found","message":"Object not found"}"#.utf8))
     }
 
@@ -122,7 +123,7 @@ struct DownloadTests {
   @Test
   func returnsTheHeadBeforeTheBodyIsRead() async throws {
     let pulled = LockIsolated(0)
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       status: .partialContent,
       headers: [
         .contentType: "text/plain",
