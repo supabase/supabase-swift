@@ -49,4 +49,11 @@ struct OptionsTests {
     let type2: TextSearchType = "pl"
     #expect(type1 == type2)
   }
+
+  @Test
+  func explainFormatStringLiteral() {
+    let format: ExplainFormat = "yaml"
+    #expect(format.rawValue == "yaml")
+    #expect(ExplainFormat.json == "json")
+  }
 }

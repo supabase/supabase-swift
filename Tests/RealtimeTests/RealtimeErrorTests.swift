@@ -48,7 +48,7 @@ struct RealtimeErrorTests {
 
   struct JoinReasonRow: CustomTestStringConvertible {
     let reason: String
-    let code: RealtimeError.ServerCode?
+    let code: RealtimeError.Code?
     let kind: RealtimeError.Kind
     let isRetryable: Bool
     var testDescription: String { reason }
@@ -159,7 +159,7 @@ struct RealtimeErrorTests {
   func joinErrorClassifiesEveryServerReason(row: JoinReasonRow) {
     let error = RealtimeError.joinError(reason: row.reason)
 
-    #expect(error.serverCode == row.code)
+    #expect(error.code == row.code)
     #expect(error.kind == row.kind)
     #expect(error.isRetryable == row.isRetryable)
     #expect(error.message == row.reason)
@@ -169,7 +169,7 @@ struct RealtimeErrorTests {
   func joinErrorDoesNotTreatAProseSentenceWithAColonAsACode() {
     let error = RealtimeError.joinError(reason: "Something went wrong: details")
 
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
     #expect(error.isRetryable)
   }
 
@@ -251,7 +251,7 @@ struct RealtimeErrorTests {
 
     #expect(error.kind == .payloadTooLarge)
     #expect(!error.isRetryable)
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
   }
 
   @Test
@@ -303,7 +303,27 @@ struct RealtimeErrorTests {
     let error = RealtimeError(kind: .timeout, message: "slow")
 
     #expect(error.isRetryable)
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
     #expect(error.closeCode == nil)
+  }
+
+  @Test
+  func catchMatchesKindAndCode() {
+    let error: any Error = RealtimeError(
+      kind: .unauthorized, message: "denied", code: .unauthorized, isRetryable: false)
+
+    #expect(RealtimeError.Kind.unauthorized ~= error)
+    #expect(!(RealtimeError.Kind.timeout ~= error))
+    #expect(RealtimeError.Code.unauthorized ~= error)
+    #expect(!(RealtimeError.Code.privateOnly ~= error))
+    #expect(!(RealtimeError.Code.unauthorized ~= URLError(.timedOut)))
+    #expect(!(RealtimeError.Kind.unauthorized ~= URLError(.timedOut)))
+
+    do {
+      throw error
+    } catch RealtimeError.Code.unauthorized {
+    } catch {
+      Issue.record("Expected RealtimeError.Code.unauthorized, got \(error)")
+    }
   }
 }

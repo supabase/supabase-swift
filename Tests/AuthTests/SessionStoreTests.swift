@@ -702,14 +702,14 @@ struct SessionStoreTests {
   }
 
   @Test(arguments: [
-    (ErrorCode.refreshTokenNotFound, SignOutReason.sessionExpired),
+    (AuthError.Code.refreshTokenNotFound, SignOutReason.sessionExpired),
     (.sessionExpired, .sessionExpired),
     (.refreshTokenAlreadyUsed, .sessionRevoked),
     (.sessionNotFound, .sessionRevoked),
     (.userBanned, .sessionRevoked),
   ])
-  func signOutReasonFollowsTheServerCode(code: ErrorCode, reason: SignOutReason) {
-    let error = AuthError(kind: .sessionInvalidated, message: "", errorCode: code)
+  func signOutReasonFollowsTheServerCode(code: AuthError.Code, reason: SignOutReason) {
+    let error = AuthError(kind: .sessionInvalidated, message: "", code: code)
 
     #expect(SignOutReason(invalidatedBy: error) == reason)
   }
@@ -804,7 +804,7 @@ struct SessionStoreTests {
     let refresh = Task {
       try await store.refresh("refresh-x") { _ in
         await gate.pass()
-        throw AuthError(kind: .sessionInvalidated, message: "", errorCode: .refreshTokenAlreadyUsed)
+        throw AuthError(kind: .sessionInvalidated, message: "", code: .refreshTokenAlreadyUsed)
       }
     }
     await gate.arrivals(1)
@@ -832,7 +832,7 @@ struct SessionStoreTests {
 }
 
 private let alreadyUsed = AuthError(
-  kind: .sessionInvalidated, message: "", errorCode: .refreshTokenAlreadyUsed)
+  kind: .sessionInvalidated, message: "", code: .refreshTokenAlreadyUsed)
 
 private func makeSession(_ accessToken: String) -> Session {
   Session(

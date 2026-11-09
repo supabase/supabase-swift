@@ -41,12 +41,16 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `RealtimeServerLogLevel`, `PostgresChange.Kind`.
-- Consumers `switch` over it and the SDK expects to add members in minor releases:
-  `AuthEvent`.
+  `FactorStatus`, `PushStatus`, `RealtimeServerLogLevel`, `PostgresChange.Kind`,
+  `WebSocketCloseCode`, and the error code of every module: `AuthError.Code`,
+  `PostgrestError.Code`, `StorageError.Code`, `FunctionsError.Code`, `RealtimeError.Code`.
+- The SDK expects to add members in minor releases: `AuthEvent`, and the error kind of every
+  module (`AuthError.Kind`, `StorageError.Kind`, and so on).
 
-These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`.
-The known values are `static let` members, so call sites read the same as they did with an
+These types conform to `RawRepresentable`, `Hashable`, `Sendable` and `ExpressibleByStringLiteral`
+(`ExpressibleByIntegerLiteral` for `WebSocketCloseCode`). Each has a `let rawValue`,
+`init(rawValue:)` and the literal initializer, and no other initializer. The known values are
+`static let` members, so call sites read the same as they did with an
 `enum`, but a `switch` needs a `default:` case:
 
 ```swift
@@ -63,6 +67,18 @@ Equality, `contains`, and string literals work as you would expect:
 if event == .signedIn { ... }
 if [.signedIn, .tokenRefreshed].contains(event) { ... }
 let level: RealtimeServerLogLevel = "debug"  // a value the SDK has no member for yet
+```
+
+Error kinds and error codes also match an error directly in a `catch` clause:
+
+```swift
+do {
+  try await supabase.storage.from("avatars").download(path: "a.png")
+} catch StorageError.Code.noSuchKey {
+  showPlaceholder()
+} catch StorageError.Kind.transport {
+  showOfflineBanner()
+}
 ```
 
 `init(rawValue:)` never fails. An unrecognized value round-trips through `rawValue` instead of

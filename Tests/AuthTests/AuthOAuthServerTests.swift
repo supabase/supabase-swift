@@ -282,7 +282,7 @@ struct AuthOAuthServerTests {
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .oauthAuthorizationNotFound)
+      #expect(error.code == .oauthAuthorizationNotFound)
     }
   }
 
@@ -424,7 +424,7 @@ struct AuthOAuthServerTests {
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .oauthConsentNotFound)
+      #expect(error.code == .oauthConsentNotFound)
     }
   }
 }

@@ -136,9 +136,10 @@ try await scoped.execute()
 
 ## `PostgrestError` is a struct
 
-`PostgrestError` is a wrapper with `kind`, `message`, `serverError`, `response` and
-`underlyingError`. The PostgREST body (`code`, `message`, `details`, `hint`) moves to
-`serverError`. `HTTPError`, `URLError` and `DecodingError` from a query now arrive as a
+`PostgrestError` is a wrapper with `kind`, `message`, `code`, `serverError`, `response` and
+`underlyingError`. The body's `code` is `PostgrestError.code`, a `PostgrestError.Code?` with
+static members for common PostgreSQL codes, such as `.uniqueViolation` for `23505`. The rest of
+the PostgREST body (`message`, `details`, `hint`) moves to `serverError`. `HTTPError`, `URLError` and `DecodingError` from a query now arrive as a
 `PostgrestError` with kind `.server`, `.transport` or `.decoding`. A throwing `accessToken`
 closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 
@@ -151,8 +152,10 @@ closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 }
 
 // v3
+} catch PostgrestError.Code.uniqueViolation {
+  showDuplicate()
 } catch let error as PostgrestError {
-  if error.serverError?.code == "23505" { showDuplicate(error.serverError?.details) }
+  if error.code == "PGRST116" { showNotFound() }
   print(error.response?.status.code ?? 0, error.response?.requestID ?? "")
 }
 ```

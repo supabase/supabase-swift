@@ -54,8 +54,8 @@ public struct SignOutReason: RawRepresentable, Hashable, Sendable, ExpressibleBy
 extension SignOutReason {
   /// The reason for an error whose ``AuthError/invalidatesSession`` is `true`.
   init(invalidatedBy error: AuthError) {
-    switch error.errorCode {
-    case .refreshTokenAlreadyUsed, .sessionNotFound, .userBanned:
+    switch error.code {
+    case .refreshTokenAlreadyUsed?, .sessionNotFound?, .userBanned?:
       self = .sessionRevoked
     default:
       // refresh_token_not_found, session_expired, and an OAuth invalid_grant on refresh.

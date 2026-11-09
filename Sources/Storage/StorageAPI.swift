@@ -152,19 +152,16 @@ struct StorageAPI: Sendable {
   static let errorBodyCap = 1 << 20
 
   /// The ``StorageError`` for a non-2xx response: the decoded JSON body when there is one, the
-  /// text of a plain-text body (the tus routes answer that way, with the code implied by the
-  /// status), or the status alone.
+  /// text of a plain-text body (the tus routes answer that way), or the status alone.
   static func serverError(_ response: HTTPResponse, body: Data) -> StorageError {
     let httpResponse = HTTPErrorResponse(response, body: body)
 
-    if let serverError = try? JSONDecoder.storage.decode(StorageError.ServerError.self, from: body)
-    {
+    if let decoded = try? JSONDecoder.storage.decode(StorageError.Body.self, from: body) {
       return StorageError(
         kind: .server,
-        message: serverError.message,
-        code: serverError.code,
-        serverStatusCode: serverError.statusCode,
-        serverError: serverError,
+        message: decoded.serverError.message,
+        code: decoded.code,
+        serverError: decoded.serverError,
         response: httpResponse
       )
     }
@@ -175,19 +172,10 @@ struct StorageAPI: Sendable {
         in: .whitespacesAndNewlines),
       !text.isEmpty
     {
-      let code: StorageError.Code? =
-        switch status {
-        case 404: .noSuchUpload
-        case 409: .keyAlreadyExists
-        case 413: .entityTooLarge
-        default: nil
-        }
       return StorageError(
         kind: .server,
         message: text,
-        code: code,
-        serverStatusCode: status,
-        serverError: .init(statusCode: status, code: code, message: text),
+        serverError: .init(statusCode: status, message: text),
         response: httpResponse
       )
     }

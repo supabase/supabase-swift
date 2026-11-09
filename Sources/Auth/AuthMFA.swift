@@ -151,8 +151,8 @@ public struct AuthMFA: Sendable {
   ///   - challengeID: The ID returned by ``challenge(factorID:channel:)``.
   ///   - code: The code from the authenticator app or the message sent to the phone.
   /// - Returns: The upgraded session.
-  /// - Throws: An error with code ``ErrorCode/mfaVerificationFailed`` when the code is wrong, or
-  ///   ``ErrorCode/mfaChallengeExpired`` when the challenge has expired.
+  /// - Throws: An error with code ``AuthError/Code-swift.struct/mfaVerificationFailed`` when the code is wrong, or
+  ///   ``AuthError/Code-swift.struct/mfaChallengeExpired`` when the challenge has expired.
   @discardableResult
   public func verify(factorID: UUID, challengeID: UUID, code: String) async throws -> Session {
     try await commitVerifiedSession {
@@ -216,7 +216,7 @@ public struct AuthMFA: Sendable {
   ///
   /// - Parameter factorID: The ID of the factor to remove.
   /// - Returns: The ID of the factor that was removed.
-  /// - Throws: An error with code ``ErrorCode/validationFailed`` for the recovery-codes factor.
+  /// - Throws: An error with code ``AuthError/Code-swift.struct/validationFailed`` for the recovery-codes factor.
   ///   Remove it with ``AuthMFARecoveryCodes/unenroll()``.
   @discardableResult
   public func unenroll(factorID: UUID) async throws -> AuthMFAUnenrollResponse {

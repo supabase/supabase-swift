@@ -158,7 +158,8 @@ struct ResumableUploadTests {
 
     let error = await #expect(throws: StorageError.self) { try await upload.start() }
 
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
     guard case .failed = await upload.state else { Issue.record("not failed"); return }
     await #expect(throws: StorageError.self) { try await upload.result }
   }
@@ -238,7 +239,8 @@ struct ResumableUploadTests {
     try await upload.start()
     let error = await #expect(throws: StorageError.self) { try await upload.result }
 
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
     #expect(script.log.value.count == 2)
     #expect(try store.records().isEmpty)
   }
