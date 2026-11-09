@@ -27,14 +27,14 @@ struct QueryCapture {
     headers: HTTPFields = [.xClientInfo: "postgrest-swift/test"],
     encoder: JSONEncoder = .supabase(),
     decoder: JSONDecoder = .supabase()
-  ) {
+  ) throws {
     let captured = self.captured
     let capturedBody = self.capturedBody
     let headerFields: HTTPFields = responseHeaders.reduce(into: [.contentType: "application/json"])
     { fields, entry in
       fields[HTTPField.Name(entry.key)!] = entry.value
     }
-    client = PostgrestClient(
+    client = try PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
         headers: headers,

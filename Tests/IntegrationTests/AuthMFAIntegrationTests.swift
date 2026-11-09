@@ -18,7 +18,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct AuthMFAIntegrationTests {
-  let auth = AuthClient(
+  let auth = try! AuthClient(
     configuration: AuthClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
       storageKey: "sb-test-\(UUID().uuidString)-auth-token",

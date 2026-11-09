@@ -441,8 +441,8 @@ private struct Membership: _PostgrestKeyedRelation {
 
 private func makeClient(
   respond: @escaping @Sendable (HTTPRequest) -> String = { _ in "[]" }
-) -> SupabaseClient {
-  SupabaseClient(
+) throws -> SupabaseClient {
+  try SupabaseClient(
     supabaseURL: URL(string: "https://project-ref.supabase.co")!,
     supabaseKey: "PUBLISHABLE_KEY",
     configuration: SupabaseClient.Configuration(
@@ -467,8 +467,8 @@ private func makeClient(
 @Suite
 struct SupabaseClientStreamTests {
   @Test
-  func bindsTheFilteredRowsAndEveryDelete() async {
-    let supabase = makeClient { _ in "[]" }
+  func bindsTheFilteredRowsAndEveryDelete() async throws {
+    let supabase = try makeClient { _ in "[]" }
 
     let source = await supabase.liveQuerySource(
       for: LiveItem.self, filter: LiveItem.columns.listId.eq(7))
@@ -489,8 +489,8 @@ struct SupabaseClientStreamTests {
   }
 
   @Test
-  func bindsEveryChangeWithoutAFilter() async {
-    let supabase = makeClient { _ in "[]" }
+  func bindsEveryChangeWithoutAFilter() async throws {
+    let supabase = try makeClient { _ in "[]" }
 
     let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     withExtendedLifetime(source) {}
@@ -501,8 +501,8 @@ struct SupabaseClientStreamTests {
   }
 
   @Test
-  func usesADedicatedChannelPerStream() async {
-    let supabase = makeClient { _ in "[]" }
+  func usesADedicatedChannelPerStream() async throws {
+    let supabase = try makeClient { _ in "[]" }
 
     let first = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     let second = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
@@ -514,7 +514,7 @@ struct SupabaseClientStreamTests {
 
   @Test
   func throwsWhenAFetchedRowLacksItsPrimaryKey() async throws {
-    let supabase = makeClient { _ in #"[{"title":"a","list_id":7}]"# }
+    let supabase = try makeClient { _ in #"[{"title":"a","list_id":7}]"# }
 
     let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     let error = await #expect(throws: PostgrestError.self) { try await source.fetch() }
@@ -531,7 +531,7 @@ struct SupabaseClientStreamTests {
   @Test
   func streamsTheRowsOfEachUpdateAndSkipsStaleOnes() async throws {
     let (updates, update) = AsyncThrowingStream<LiveQueryUpdate<Item>, any Error>.makeStream()
-    let rows = makeClient().liveRows(from: updates)
+    let rows = try makeClient().liveRows(from: updates)
 
     update.yield(.stale)
     update.yield(.rows([Item(id: 1, title: "a")]))
@@ -551,7 +551,7 @@ struct SupabaseClientStreamTests {
   @Test
   func fetchesTheFilteredRowsWithTheirKeysInPrimaryKeyOrder() async throws {
     let paths = LockIsolated<[String?]>([])
-    let supabase = makeClient { request in
+    let supabase = try makeClient { request in
       paths.withValue { $0.append(request.path) }
       guard request.path?.contains("id=gt.") == false else { return "[]" }
       return #"[{"id":1,"title":"a","list_id":7},{"id":2,"title":"b","list_id":7}]"#
@@ -576,7 +576,7 @@ struct SupabaseClientStreamTests {
 
   @Test
   func fetchesEveryPageAfterTheLastKey() async throws {
-    let supabase = makeClient { request in
+    let supabase = try makeClient { request in
       switch request.path {
       case "/rest/v1/items?select=%2A&order=id.asc&limit=2":
         #"[{"id":1,"title":"a","list_id":7},{"id":2,"title":"b","list_id":7}]"#
@@ -599,7 +599,7 @@ struct SupabaseClientStreamTests {
   @Test
   func pagesACompositeKeyAfterTheLastRow() async throws {
     let paths = LockIsolated<[String?]>([])
-    let supabase = makeClient { request in
+    let supabase = try makeClient { request in
       paths.withValue { $0.append(request.path) }
       guard paths.value.count == 1 else { return "[]" }
       return #"[{"team_id":1,"user_id":"a,b"}]"#
@@ -623,8 +623,8 @@ struct SupabaseClientStreamTests {
 struct LiveQueryObservableTests {
   @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
   @Test
-  func startsEmptyAndNotLive() {
-    let sut = LiveQuery(makeClient(), LiveItem.self, where: { $0.listId.eq(7) })
+  func startsEmptyAndNotLive() throws {
+    let sut = LiveQuery(try makeClient(), LiveItem.self, where: { $0.listId.eq(7) })
 
     #expect(sut.rows.isEmpty)
     #expect(sut.isLive == false)
@@ -634,8 +634,8 @@ struct LiveQueryObservableTests {
   #if canImport(SwiftUI)
     @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
     @Test
-    func keepsTheAnimationItIsGiven() {
-      let sut = LiveQuery(makeClient(), LiveItem.self, animation: .easeInOut)
+    func keepsTheAnimationItIsGiven() throws {
+      let sut = LiveQuery(try makeClient(), LiveItem.self, animation: .easeInOut)
 
       #expect(sut.animation == .easeInOut)
     }

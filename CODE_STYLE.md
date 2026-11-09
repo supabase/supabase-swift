@@ -206,20 +206,24 @@ Use standard file headers with copyright:
 
 ### When trapping is allowed
 
-The dividing line is *when the value is fixed*, not who supplied it.
+The dividing line is *who can reach the value*, not who supplied it.
 
-- **Fixed once, at construction** — an initializer argument, a configuration field, a `package`
-  tuning constant. `precondition`/`preconditionFailure` is the right tool: the value cannot change
-  afterwards, so a bad one is a programmer error, and trapping reports it at the exact point it
-  was introduced. `SupabaseClient.init` traps on a `supabaseURL` with no host; `StorageApi` traps
-  on a URL it cannot decompose.
-  Degrading instead would bury the mistake behind an unrelated failure much later.
+- **Public initializers throw on a bad configuration.** A server builds clients at runtime from
+  configuration that varies per tenant, so a bad URL there is dynamic input, not a programmer
+  error. Every client initializer (`SupabaseClient`, `AuthClient`, `PostgrestClient`,
+  `StorageClient`, `FunctionsClient`, `RealtimeClient`) throws its module error with kind
+  `invalidConfiguration` when the URL has no scheme or no host.
+- **Internal invariants trap.** When the SDK has already checked a value, or builds it itself,
+  `precondition`/`preconditionFailure` (or `try!` on a call that cannot fail for that value) is
+  the right tool: a failure is an SDK bug. `SupabaseClient` checks `supabaseURL` once, so the
+  getters that build its sub-clients use `try!`. A `package` tuning constant
+  traps too.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
   otherwise `reportIssue` and fall back.
 
-A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
-input and traps. A value being *dynamic* is. See SDK-1793.
+Degrading instead of throwing would bury the mistake behind an unrelated failure much later. See
+SDK-1793.
 
 ## Testing Conventions
 

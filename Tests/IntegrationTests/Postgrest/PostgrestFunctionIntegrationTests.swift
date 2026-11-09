@@ -38,7 +38,7 @@ struct GetUsernameAndStatus {
 /// one whose rows take a filter.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestFunctionIntegrationTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     configuration: .init(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [.apikey: DotEnv.supabasePublishableKey]

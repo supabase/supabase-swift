@@ -19,8 +19,8 @@ struct ObjectListingTests {
     bodies: LockIsolated<[String]> = .init([]),
     status: HTTPResponse.Status = .ok,
     responses: [String]
-  ) -> StorageBucket {
-    StorageClient(
+  ) throws -> StorageBucket {
+    try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -55,7 +55,7 @@ struct ObjectListingTests {
   @Test
   func pagesFollowTheCursorToTheEndWithTheSameOptions() async throws {
     let bodies = LockIsolated<[String]>([])
-    let bucket = Self.makeBucket(bodies: bodies, responses: [Self.firstPage, Self.lastPage])
+    let bucket = try Self.makeBucket(bodies: bodies, responses: [Self.firstPage, Self.lastPage])
 
     var pages: [ObjectPage] = []
     for try await page in bucket.objects(
@@ -76,7 +76,7 @@ struct ObjectListingTests {
 
   @Test
   func iteratingYieldsTheObjectsOfEveryPage() async throws {
-    let bucket = Self.makeBucket(responses: [Self.firstPage, Self.lastPage])
+    let bucket = try Self.makeBucket(responses: [Self.firstPage, Self.lastPage])
 
     var names: [String] = []
     for try await object in bucket.objects(prefix: "2026/") {
@@ -89,7 +89,7 @@ struct ObjectListingTests {
   @Test
   func stopsWhenHasNextIsFalseEvenWithACursor() async throws {
     let bodies = LockIsolated<[String]>([])
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       bodies: bodies, responses: [#"{"hasNext":false,"nextCursor":"stale","objects":[]}"#])
 
     var count = 0
@@ -102,7 +102,8 @@ struct ObjectListingTests {
   @Test
   func sendsTheFlatListingAndFilters() async throws {
     let bodies = LockIsolated<[String]>([])
-    let bucket = Self.makeBucket(bodies: bodies, responses: [#"{"hasNext":false,"objects":[]}"#])
+    let bucket = try Self.makeBucket(
+      bodies: bodies, responses: [#"{"hasNext":false,"objects":[]}"#])
 
     _ = try await bucket.objects(
       prefix: "//a//b",
@@ -120,7 +121,7 @@ struct ObjectListingTests {
   @Test
   func pageAfterSendsTheCursor() async throws {
     let bodies = LockIsolated<[String]>([])
-    let bucket = Self.makeBucket(bodies: bodies, responses: [Self.lastPage])
+    let bucket = try Self.makeBucket(bodies: bodies, responses: [Self.lastPage])
 
     let page = try await bucket.objects().page(after: "c9")
 
@@ -130,7 +131,7 @@ struct ObjectListingTests {
 
   @Test
   func anOldProjectThrowsFeatureNotEnabled() async throws {
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       status: .badRequest,
       responses: [
         #"{"statusCode":"400","error":"FeatureNotEnabled","code":"FeatureNotEnabled","message":"not enabled"}"#
@@ -144,7 +145,7 @@ struct ObjectListingTests {
 
   @Test
   func aDotSegmentThrowsWhenIterated() async throws {
-    let bucket = Self.makeBucket(responses: [])
+    let bucket = try Self.makeBucket(responses: [])
 
     let error = await #expect(throws: StorageError.self) {
       _ = try await bucket.objects(prefix: "a/../b").page()

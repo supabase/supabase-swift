@@ -85,6 +85,9 @@ public struct RealtimeError: SupabaseError {
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
+    /// ``RealtimeClient/init(configuration:)`` refused the configuration: its URL has no scheme
+    /// or no host. Fix the configuration. No client was created.
+    public static let invalidConfiguration: Kind = "invalidConfiguration"
 
     /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
     static let encoding: Kind = "encoding"

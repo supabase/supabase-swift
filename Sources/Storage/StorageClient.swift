@@ -17,7 +17,7 @@ extension StorageClient {
   ///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
   ///   )
   /// )
-  /// let storage = StorageClient(configuration: configuration)
+  /// let storage = try StorageClient(configuration: configuration)
   /// ```
   ///
   /// A user's token enters a request through the middleware chain in ``http``, never through a
@@ -124,7 +124,7 @@ extension StorageClient {
 /// Typically you obtain an instance via the main `SupabaseClient`:
 ///
 /// ```swift
-/// let client = SupabaseClient(supabaseURL: url, supabaseKey: key)
+/// let client = try SupabaseClient(supabaseURL: url, supabaseKey: key)
 /// let storage = client.storage
 ///
 /// // Upload a file
@@ -177,8 +177,10 @@ public struct StorageClient: Sendable {
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, JSON codecs, and transport.
-  public init(configuration: Configuration) {
-    api = StorageAPI(configuration: configuration)
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no scheme, no host, or cannot be split into components.
+  public init(configuration: Configuration) throws {
+    api = try StorageAPI(configuration: configuration)
   }
 
   init(api: StorageAPI) {

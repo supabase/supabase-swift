@@ -14,7 +14,7 @@ import Testing
 extension PostgrestMockerTests {
   @Suite(.mockerSerialized)
   struct PostgrestTransformBuilderTests {
-    let fixture = PostgrestQueryFixture()
+    let fixture = try! PostgrestQueryFixture()
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 

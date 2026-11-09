@@ -46,12 +46,12 @@ final class StorageResumableIntegrationTests {
     }
   }
 
-  private func client() -> StorageClient {
+  private func client() throws -> StorageClient {
     var configuration = StorageClient.Configuration(
       url: StorageIntegration.url,
       headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
     configuration.resumable = ResumableUploadConfiguration(directory: directory)
-    return StorageClient(configuration: configuration)
+    return try StorageClient(configuration: configuration)
   }
 
   private func bucket(_ client: StorageClient) -> StorageBucket {
@@ -71,7 +71,7 @@ final class StorageResumableIntegrationTests {
 
   @Test
   func uploadsALargeFileInChunks() async throws {
-    let client = client()
+    let client = try client()
     let upload = try bucket(client).resumableUpload(path: "whole.bin", fileURL: fileURL)
     let progress = upload.progress
 
@@ -92,7 +92,7 @@ final class StorageResumableIntegrationTests {
 
   @Test
   func pauseThenResumeFinishesTheUpload() async throws {
-    let client = client()
+    let client = try client()
     let upload = try bucket(client).resumableUpload(path: "paused.bin", fileURL: fileURL)
 
     try await upload.start()
@@ -113,7 +113,7 @@ final class StorageResumableIntegrationTests {
 
   @Test
   func cancelRemovesTheUploadAndItsRecord() async throws {
-    let client = client()
+    let client = try client()
     let upload = try bucket(client).resumableUpload(path: "cancelled.bin", fileURL: fileURL)
 
     try await upload.start()
@@ -131,13 +131,13 @@ final class StorageResumableIntegrationTests {
 
   @Test
   func aSecondClientResumesFromTheRecord() async throws {
-    let first = client()
+    let first = try client()
     let upload = try bucket(first).resumableUpload(path: "relaunched.bin", fileURL: fileURL)
     try await upload.start()
     await waitForFirstChunk(of: upload)
     await upload.pause()
 
-    let second = client()
+    let second = try client()
     let resumed = try await second.resumableUploads.resumeAll()
     #expect(resumed.count == 1)
     #expect(resumed.first?.id == upload.id)
@@ -149,7 +149,7 @@ final class StorageResumableIntegrationTests {
 
   @Test
   func aCorruptRecordDoesNotBlockRelaunchRecovery() async throws {
-    let first = client()
+    let first = try client()
     let upload = try bucket(first).resumableUpload(path: "corrupt-neighbor.bin", fileURL: fileURL)
     try await upload.start()
     await waitForFirstChunk(of: upload)
@@ -157,7 +157,7 @@ final class StorageResumableIntegrationTests {
     let corrupt = directory.appendingPathComponent("\(String(repeating: "c", count: 64)).json")
     try Data("{".utf8).write(to: corrupt)
 
-    let second = client()
+    let second = try client()
     let resumed = try await second.resumableUploads.resumeAll()
     #expect(resumed.map(\.id) == [upload.id])
     _ = try await resumed[0].result

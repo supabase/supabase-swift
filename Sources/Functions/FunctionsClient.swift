@@ -122,13 +122,14 @@ public struct FunctionsClient: Sendable {
 
   /// Creates a Functions client.
   ///
-  /// Traps if `configuration.url` has no host. The URL is fixed at construction, so a bad one
-  /// is a programmer error, and trapping reports it where it was introduced instead of as an
-  /// opaque transport failure on the first call.
-  public init(configuration: Configuration) {
-    guard configuration.url.host(percentEncoded: false) != nil else {
-      preconditionFailure(
-        "FunctionsClient configured with a URL that has no host: \(configuration.url)")
+  /// - Throws: ``FunctionsError`` with kind ``FunctionsError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no scheme or no host.
+  public init(configuration: Configuration) throws {
+    guard configuration.url.hasSchemeAndHost else {
+      throw FunctionsError(
+        kind: .invalidConfiguration,
+        message:
+          "FunctionsClient configured with a URL that has no scheme or host: \(configuration.url)")
     }
     if configuration.headers[.authorization] != nil {
       reportIssue(

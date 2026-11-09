@@ -9,7 +9,7 @@ middleware.
 ``FunctionsClient/Configuration/url`` is required.
 
 ```swift
-let functions = FunctionsClient(
+let functions = try FunctionsClient(
   configuration: .init(
     url: URL(string: "https://<ref>.supabase.co/functions/v1")!,
     headers: [.apikey: "sb_publishable_…"],
@@ -44,7 +44,7 @@ it. Your middlewares run first, then the SDK adds the bearer and logs the reques
 A middleware of yours therefore never sees the token.
 
 ```swift
-let functions = FunctionsClient(
+let functions = try FunctionsClient(
   configuration: .init(
     url: url,
     http: .init(

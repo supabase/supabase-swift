@@ -16,7 +16,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct AuthOAuthServerIntegrationTests {
-  let authClient = AuthClientIntegrationTests.makeClient()
+  let authClient = try! AuthClientIntegrationTests.makeClient()
 
   private func createPendingAuthorization(
     accessToken: String,

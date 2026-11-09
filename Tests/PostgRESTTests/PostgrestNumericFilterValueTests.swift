@@ -71,7 +71,7 @@ struct PostgrestNumericFilterValueTests {
 
   @Test
   func numericValuesFilterInTheStringBuilder() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from("products")
       .select()
       .gte("price", value: Decimal(string: "19.99")!)
@@ -84,7 +84,7 @@ struct PostgrestNumericFilterValueTests {
 
   @Test
   func numericColumnsFilterInATypedQuery() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Product.self)
       .select()
       .where {

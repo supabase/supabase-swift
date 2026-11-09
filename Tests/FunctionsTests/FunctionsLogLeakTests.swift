@@ -15,7 +15,7 @@ struct FunctionsLogLeakTests {
 
   @Test
   func aSecretInTheQueryOrTheResponseNeverReachesTheLog() async throws {
-    let sut = FunctionsClient(
+    let sut = try FunctionsClient(
       configuration: .init(
         url: URL(string: "http://localhost:54321/functions/v1")!,
         http: .init(

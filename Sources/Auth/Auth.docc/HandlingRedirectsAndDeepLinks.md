@@ -20,7 +20,7 @@ Give the client the URL that the server sends the user to, and register it with 
 URL must also be on the redirect allow list of your Supabase project.
 
 ```swift
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
   supabaseKey: "your-publishable-key",
   configuration: .init(auth: .init(redirectTo: URL(string: "com.example.app://callback")!))

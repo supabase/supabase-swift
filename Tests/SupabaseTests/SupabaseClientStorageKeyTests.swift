@@ -30,8 +30,8 @@ struct SupabaseClientStorageKeyTests {
   }
 
   @Test
-  func honorsAnExplicitStorageKeyOverTheProjectRef() {
-    let client = SupabaseClient(
+  func honorsAnExplicitStorageKeyOverTheProjectRef() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
       configuration: SupabaseClient.Configuration(
@@ -43,8 +43,8 @@ struct SupabaseClientStorageKeyTests {
   }
 
   @Test
-  func usesTheDerivedKeyWhenNoneIsGiven() {
-    let client = SupabaseClient(
+  func usesTheDerivedKeyWhenNoneIsGiven() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
@@ -53,16 +53,20 @@ struct SupabaseClientStorageKeyTests {
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
   }
 
-  #if os(macOS) || os(Linux)
-    @Test
-    func constructingAClientWithoutAHostTraps() async {
-      await #expect(processExitsWith: .failure) {
-        _ = SupabaseClient(
-          supabaseURL: URL(string: "project-ref")!,
-          supabaseKey: "anon-key",
-          configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
-        )
-      }
+  @Test(arguments: [
+    "project-ref", "https:///rest/v1", "//project-ref.supabase.co", "mailto:someone@example.com",
+  ])
+  func constructingAClientWithoutASchemeOrHostThrows(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: SupabaseClientError.self) {
+      try SupabaseClient(
+        supabaseURL: url,
+        supabaseKey: "anon-key",
+        configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
+      )
     }
-  #endif
+    #expect(error?.kind == .invalidConfiguration)
+    #expect(error?.response == nil)
+    #expect(error?.description.hasPrefix("SupabaseClientError(invalidConfiguration): ") == true)
+  }
 }

@@ -32,7 +32,7 @@
     let client: SupabaseClient
     let client2: SupabaseClient
     init() async throws {
-      client = SupabaseClient(
+      client = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
@@ -45,7 +45,7 @@
           )
         )
       )
-      client2 = SupabaseClient(
+      client2 = try SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
@@ -301,7 +301,7 @@
 
     @Test
     func customOptionsConnectSubscribeAndReceive() async throws {
-      let realtime = RealtimeClient(
+      let realtime = try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [
@@ -576,7 +576,7 @@
       let expired = signedToken(expiringIn: -60)
       let fresh = signedToken(expiringIn: 3600)
       let fetched = LockIsolated<[String]>([])
-      let realtime = makeRealtimeClient {
+      let realtime = try makeRealtimeClient {
         fetched.withValue { tokens in
           let token = tokens.isEmpty ? expired : fresh
           tokens.append(token)
@@ -602,7 +602,7 @@
     @Test
     func aTokenThatExpiresWhileJoinedClosesTheChannel() async throws {
       let token = signedToken(expiringIn: 5)
-      let realtime = makeRealtimeClient { token }
+      let realtime = try makeRealtimeClient { token }
       try await withMainSerialExecutor {
         try await realtime.connect()
 
@@ -1307,8 +1307,8 @@
     /// on `testClock`.
     private func makeRealtimeClient(
       accessToken: @escaping @Sendable () async throws -> String?
-    ) -> RealtimeClient {
-      RealtimeClient(
+    ) throws -> RealtimeClient {
+      try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [.apikey: DotEnv.supabasePublishableKey],

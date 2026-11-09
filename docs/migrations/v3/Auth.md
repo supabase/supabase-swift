@@ -105,7 +105,7 @@ Changes that still compile but behave differently. Check each one by hand.
   tests:
 
   ```swift
-  let client = SupabaseClient(
+  let client = try SupabaseClient(
     supabaseURL: url,
     supabaseKey: key,
     configuration: .init(auth: .init(storage: InMemoryAuthStorage()))
@@ -1041,7 +1041,7 @@ The SDK ships no SwiftUI environment key. Declare one with `@Entry` to give view
   }
 }
 // v3
-let supabaseClient = SupabaseClient(supabaseURL: url, supabaseKey: key)
+let supabaseClient = try! SupabaseClient(supabaseURL: url, supabaseKey: key)
 
 extension EnvironmentValues {
   @Entry var supabase = supabaseClient
@@ -1113,7 +1113,7 @@ let auth = AuthClient(
 var configuration = AuthClient.Configuration(url: url, storageKey: "sb-project-auth-token")
 configuration.headers[.apikey] = key
 configuration.redirectTo = redirect
-let auth = AuthClient(configuration: configuration)
+let auth = try AuthClient(configuration: configuration)
 ```
 
 ## Custom `encoder` and `decoder` are removed
@@ -1125,7 +1125,7 @@ let auth = AuthClient(configuration: configuration)
 // v2
 let auth = AuthClient(url: url, localStorage: storage, encoder: myEncoder, decoder: myDecoder)
 // v3
-let auth = AuthClient(configuration: .init(url: url, storageKey: "my-key", storage: storage))
+let auth = try AuthClient(configuration: .init(url: url, storageKey: "my-key", storage: storage))
 ```
 
 ## `autoRefreshToken` is `autoRefresh`
@@ -1146,7 +1146,7 @@ let supabase = SupabaseClient(
   options: .init(auth: .init(autoRefreshToken: false))
 )
 // v3
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   configuration: .init(auth: .init(autoRefresh: .manual))
@@ -1185,7 +1185,7 @@ struct MyStorage: AuthStorage {
   func load(key: String) async throws -> Data? { /* return nil when missing */ }
   func remove(key: String) async throws { /* ... */ }
 }
-let supabase = SupabaseClient(
+let supabase = try! SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   configuration: .init(auth: .init(storage: MyStorage()))

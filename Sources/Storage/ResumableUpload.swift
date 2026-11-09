@@ -84,6 +84,8 @@ public actor ResumableUpload {
 
   /// The identity of this upload. Asking for the same upload again returns the same `ID`.
   public nonisolated let id: ID
+  /// The fingerprint behind ``id``, which names this upload's files in the store.
+  nonisolated let fingerprint: Fingerprint
   /// The bucket the object goes to.
   public nonisolated let bucketID: String
   /// The path of the object in the bucket.
@@ -125,16 +127,16 @@ public actor ResumableUpload {
 
   private static let live = LockIsolated<[String: Live]>([:])
 
-  private nonisolated var liveKey: String { Self.liveKey(fingerprint: id.rawValue, api: api) }
+  private nonisolated var liveKey: String { Self.liveKey(fingerprint: fingerprint, api: api) }
 
-  private static func liveKey(fingerprint: String, api: StorageAPI) -> String {
+  private static func liveKey(fingerprint: Fingerprint, api: StorageAPI) -> String {
     ResumableStore(configuration: api.configuration.resumable).directory
-      .appendingPathComponent(fingerprint).path
+      .appendingPathComponent(fingerprint.rawValue).path
   }
 
   /// The live handle for `fingerprint`, or the one `make` builds.
   static func handle(
-    fingerprint: String, api: StorageAPI, make: @Sendable () -> ResumableUpload
+    fingerprint: Fingerprint, api: StorageAPI, make: @Sendable () -> ResumableUpload
   ) -> ResumableUpload {
     let key = liveKey(fingerprint: fingerprint, api: api)
     return live.withValue { live in
@@ -163,7 +165,7 @@ public actor ResumableUpload {
   static func handle(record: ResumableUploadRecord, api: StorageAPI) -> ResumableUpload {
     handle(fingerprint: record.fingerprint, api: api) {
       ResumableUpload(
-        id: ID(rawValue: record.fingerprint), bucketID: record.bucketID, path: record.path,
+        fingerprint: record.fingerprint, bucketID: record.bucketID, path: record.path,
         totalBytes: record.totalBytes, input: .prepared(record.source),
         options: UploadOptions(
           contentType: record.contentType,
@@ -174,10 +176,11 @@ public actor ResumableUpload {
   }
 
   init(
-    id: ID, bucketID: String, path: String, totalBytes: Int64, input: Input,
+    fingerprint: Fingerprint, bucketID: String, path: String, totalBytes: Int64, input: Input,
     options: UploadOptions, api: StorageAPI
   ) {
-    self.id = id
+    self.id = ID(rawValue: fingerprint.rawValue)
+    self.fingerprint = fingerprint
     self.bucketID = bucketID
     self.path = path
     self.totalBytes = totalBytes
@@ -402,7 +405,7 @@ public actor ResumableUpload {
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
     let tus = TusSession(api: api)
-    if var existing = try store.record(fingerprint: id.rawValue) {
+    if var existing = try store.record(fingerprint: fingerprint) {
       do {
         existing.lastKnownOffset = try await tus.offset(of: existing.uploadURL)
         try store.save(existing)
@@ -413,8 +416,8 @@ public actor ResumableUpload {
     }
     let source =
       switch input {
-      case .file(let fileURL): try await store.prepare(fileURL: fileURL, fingerprint: id.rawValue)
-      case .data(let data): try store.prepare(data: data, fingerprint: id.rawValue)
+      case .file(let fileURL): try await store.prepare(fileURL: fileURL, fingerprint: fingerprint)
+      case .data(let data): try store.prepare(data: data, fingerprint: fingerprint)
       case .prepared(let source): source
       }
     return try await createRecord(source: source, with: tus)
@@ -422,8 +425,7 @@ public actor ResumableUpload {
 
   /// Creates the upload again on the server for a record the server no longer knows.
   private func recreate(_ stale: ResumableUploadRecord) async throws -> ResumableUploadRecord {
-    try? FileManager.default.removeItem(
-      at: store.directory.appendingPathComponent("\(stale.fingerprint).json"))
+    try? FileManager.default.removeItem(at: store.recordURL(fingerprint: stale.fingerprint))
     let record = try await createRecord(source: stale.source, with: TusSession(api: api))
     self.record = record
     return record
@@ -434,12 +436,12 @@ public actor ResumableUpload {
   {
     let key = try ObjectKey(path)
     let (_, modificationDate) = try ResumableStore.attributes(
-      of: store.fileURL(for: source, fingerprint: id.rawValue))
+      of: store.fileURL(for: source, fingerprint: fingerprint))
     let created = try await tus.create(
       bucket: bucketID, key: key, length: totalBytes, options: options)
     let now = Date()
     let record = ResumableUploadRecord(
-      fingerprint: id.rawValue,
+      fingerprint: fingerprint,
       bucketID: bucketID,
       path: path,
       totalBytes: totalBytes,

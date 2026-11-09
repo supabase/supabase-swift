@@ -61,9 +61,9 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func globalClockReachesEverySubClientThatWaits() {
+  func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -79,13 +79,13 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func clientInitialization() async {
+  func clientInitialization() async throws {
     let logger = Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     let customSchema = "custom_schema"
     let localStorage = InMemoryAuthStorage()
     let customHeaders: HTTPFields = [HTTPField.Name("header_field")!: "header_value"]
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -155,12 +155,12 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func exposesTheConfigurationItWasCreatedWith() {
+  func exposesTheConfigurationItWasCreatedWith() throws {
     var configuration = SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     configuration.database.schema = "custom"
     configuration.storage.usesNewHostname = true
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: configuration
@@ -171,8 +171,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeHeadersMergeCaseInsensitively() {
-    let client = SupabaseClient(
+  func realtimeHeadersMergeCaseInsensitively() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -190,12 +190,12 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeFallsBackToTheGlobalLoggerTaggedWithSystemMetadata() {
+  func realtimeFallsBackToTheGlobalLoggerTaggedWithSystemMetadata() throws {
     // Uses a plain Logger (not SwiftLogNoOpLogHandler) because a no-op handler's metadata
     // subscript always reads back nil, which would make this assertion untestable.
     let logger = Logging.Logger(label: "test")
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -212,8 +212,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func dbRetryOptionForwardsToPostgrestClient() {
-    let defaultClient = SupabaseClient(
+  func dbRetryOptionForwardsToPostgrestClient() throws {
+    let defaultClient = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -222,7 +222,7 @@ struct SupabaseClientTests {
     )
     #expect(defaultClient.rest.configuration.retryEnabled == true)
 
-    let noRetryClient = SupabaseClient(
+    let noRetryClient = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -234,8 +234,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeObservesAppLifecycleForwardsToRealtimeClient() {
-    let client = SupabaseClient(
+  func realtimeObservesAppLifecycleForwardsToRealtimeClient() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -248,11 +248,11 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func storageResumableOptionForwardsToStorageClient() {
+  func storageResumableOptionForwardsToStorageClient() throws {
     var storageOptions = SupabaseClient.Configuration.Storage()
     storageOptions.resumable = ResumableUploadConfiguration(
       chunkSize: 1024, retryTimeout: .seconds(5))
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -266,12 +266,12 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func clientInitWithDefaultOptions() async {
+  func clientInitWithDefaultOptions() async throws {
     // A test bundle has no Keychain entitlement, so reading the stored session reports it. The
     // client reads it in a task it starts, so the test reads the session inside the known issue.
     // `initialization()` is no option: it never returns while the read fails.
-    await withKnownIssue(isIntermittent: true) {
-      let client = SupabaseClient(
+    try await withKnownIssue(isIntermittent: true) {
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://default-options.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY"
       )
@@ -282,9 +282,9 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func defaultTransportPropagatedToRealtimeClient() {
+  func defaultTransportPropagatedToRealtimeClient() throws {
     let localStorage = InMemoryAuthStorage()
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -306,9 +306,9 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func userProvidedRealtimeTransportIsNotOverridden() {
+  func userProvidedRealtimeTransportIsNotOverridden() throws {
     let localStorage = InMemoryAuthStorage()
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -332,11 +332,11 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeWebSocketTransportComesOnlyFromRealtimeConfiguration() {
+  func realtimeWebSocketTransportComesOnlyFromRealtimeConfiguration() throws {
     let localStorage = InMemoryAuthStorage()
     let httpSession = URLSession(configuration: .ephemeral)
     let realtimeTransport = MarkerWebSocketTransport()
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -356,7 +356,7 @@ struct SupabaseClientTests {
       "user-provided realtime transport should be used"
     )
 
-    let clientWithoutRealtimeTransport = SupabaseClient(
+    let clientWithoutRealtimeTransport = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -377,10 +377,10 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func clientInitWithCustomAccessToken() async {
+  func clientInitWithCustomAccessToken() async throws {
     let localStorage = InMemoryAuthStorage()
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: .init(
@@ -398,7 +398,7 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async {
+  func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async throws {
     struct TokenProviderError: Error, Equatable {}
 
     final class UnreachableProtocol: URLProtocol {
@@ -415,7 +415,7 @@ struct SupabaseClientTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [UnreachableProtocol.self]
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: .init(
@@ -476,7 +476,7 @@ struct SupabaseClientTests {
       )
     }
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: .init(
@@ -522,7 +522,7 @@ struct SupabaseClientTests {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [CapturingProtocol.self]
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: .init(
@@ -540,14 +540,14 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func listenForAuthEventsTaskDoesNotRetainClient() async {
+  func listenForAuthEventsTaskDoesNotRetainClient() async throws {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
     }
     let box = WeakBox()
 
-    func scope() {
-      let client = SupabaseClient(
+    func scope() throws {
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
         configuration: SupabaseClient.Configuration(
@@ -564,7 +564,7 @@ struct SupabaseClientTests {
         "test precondition: client should be listening for internal auth events"
       )
     }
-    scope()
+    try scope()
 
     await Task.megaYield()
 
@@ -575,14 +575,14 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func subClientsDoNotRetainClient() async {
+  func subClientsDoNotRetainClient() async throws {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
     }
     let box = WeakBox()
 
-    func scope() {
-      let client = SupabaseClient(
+    func scope() throws {
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
         configuration: SupabaseClient.Configuration(
@@ -600,7 +600,7 @@ struct SupabaseClientTests {
 
       _ = client.storage
     }
-    scope()
+    try scope()
 
     await Task.megaYield()
 
@@ -611,8 +611,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsOmitsAuthorizationBearerForNewFormatKey() {
-    let client = SupabaseClient(
+  func functionsOmitsAuthorizationBearerForNewFormatKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
@@ -623,8 +623,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func storageOmitsAuthorizationBearerForNewFormatKey() {
-    let client = SupabaseClient(
+  func storageOmitsAuthorizationBearerForNewFormatKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
@@ -636,8 +636,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() {
-    let client = SupabaseClient(
+  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
@@ -658,7 +658,7 @@ struct SupabaseClientTests {
         HTTPBody(Data("[]".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -691,8 +691,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsIsBuiltOnceAndCached() {
-    let client = SupabaseClient(
+  func functionsIsBuiltOnceAndCached() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
@@ -710,7 +710,7 @@ struct SupabaseClientTests {
       seen.withValue { $0.append(request) }
       return (HTTPTypes.HTTPResponse(status: .ok), nil)
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -731,7 +731,7 @@ struct SupabaseClientTests {
   func functionsHTTPOverridesTheGlobalTransport() async throws {
     let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
     let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -760,8 +760,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() {
-    let client = SupabaseClient(
+  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -784,7 +784,7 @@ struct SupabaseClientTests {
         HTTPBody(Data("[]".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -823,7 +823,7 @@ struct SupabaseClientTests {
         HTTPBody(Data("{}".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -843,8 +843,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() {
-    let client = SupabaseClient(
+  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -862,8 +862,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func authEventsDoNotBuildRealtime() async {
-    let client = makeRealtimeAuthClient()
+  func authEventsDoNotBuildRealtime() async throws {
+    let client = try makeRealtimeAuthClient()
 
     await client.handleTokenChanged(event: .initialSession, session: nil)
     await client.handleTokenChanged(event: .signedIn, session: .stub(accessToken: "user-token"))
@@ -873,8 +873,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func authEventsReachAnExistingRealtimeClient() async {
-    let client = makeRealtimeAuthClient()
+  func authEventsReachAnExistingRealtimeClient() async throws {
+    let client = try makeRealtimeAuthClient()
     let realtime = client.realtime
 
     await client.handleTokenChanged(
@@ -886,8 +886,8 @@ struct SupabaseClientTests {
   }
 
   @Test(arguments: [AuthEvent.passwordRecovery, .userUpdated, .mfaChallengeVerified])
-  func anyEventThatChangesTheAccessTokenReachesRealtime(event: AuthEvent) async {
-    let client = makeRealtimeAuthClient()
+  func anyEventThatChangesTheAccessTokenReachesRealtime(event: AuthEvent) async throws {
+    let client = try makeRealtimeAuthClient()
     let realtime = client.realtime
 
     await client.handleTokenChanged(event: event, session: .stub(accessToken: "new-token"))
@@ -896,8 +896,8 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() {
-    let client = SupabaseClient(
+  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -913,8 +913,8 @@ struct SupabaseClientTests {
 
   /// A third-party `accessToken` keeps the client from listening for auth events, so only the
   /// events a test delivers reach `handleTokenChanged`.
-  private func makeRealtimeAuthClient() -> SupabaseClient {
-    SupabaseClient(
+  private func makeRealtimeAuthClient() throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(

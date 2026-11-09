@@ -22,8 +22,8 @@ struct RealtimeChannelTests {
   let client: RealtimeClient
   let sut: RealtimeChannel
 
-  init() async {
-    client = RealtimeClient(
+  init() async throws {
+    client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: [.apikey: "test-key"])

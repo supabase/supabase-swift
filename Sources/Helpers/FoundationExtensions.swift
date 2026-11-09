@@ -90,6 +90,14 @@ extension URL {
     url.appendQueryItems(queryItems)
     return url
   }
+
+  /// `true` when the URL has a scheme and a non-empty host, which every client's base URL needs.
+  /// swift-http-types traps when it builds a request from a URL with no scheme.
+  package var hasSchemeAndHost: Bool {
+    guard let scheme, !scheme.isEmpty, let host = host(percentEncoded: false), !host.isEmpty
+    else { return false }
+    return true
+  }
 }
 
 extension [URLQueryItem] {

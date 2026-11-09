@@ -29,10 +29,10 @@ struct FunctionsIntegrationTests {
   static func client(
     apikey: String? = DotEnv.supabasePublishableKey,
     accessToken: (@Sendable () async throws -> String?)? = { DotEnv.supabasePublishableKey }
-  ) -> FunctionsClient {
+  ) throws -> FunctionsClient {
     var headers: HTTPFields = [:]
     if let apikey { headers[.apikey] = apikey }
-    return FunctionsClient(
+    return try FunctionsClient(
       configuration: .init(
         url: URL(string: "\(DotEnv.supabaseURL)/functions/v1")!,
         headers: headers,
@@ -41,7 +41,7 @@ struct FunctionsIntegrationTests {
     )
   }
 
-  let client = Self.client()
+  let client = try! Self.client()
 
   @Test
   func jsonBodyRoundTrips() async throws {
@@ -119,7 +119,7 @@ struct FunctionsIntegrationTests {
 
   @Test
   func missingAuthorizationIsPlatformError() async throws {
-    let client = Self.client(apikey: nil, accessToken: nil)
+    let client = try Self.client(apikey: nil, accessToken: nil)
     let error = await #expect(throws: FunctionsError.self) {
       try await client.invoke("echo")
     }
@@ -131,7 +131,7 @@ struct FunctionsIntegrationTests {
 
   @Test
   func newFormatPublishableKeyPassesVerifyJWTWithoutSession() async throws {
-    let client = Self.client(apikey: DotEnv.supabaseNewFormatPublishableKey, accessToken: nil)
+    let client = try Self.client(apikey: DotEnv.supabaseNewFormatPublishableKey, accessToken: nil)
     let echo: Echo = try await client.invoke("echo")
     #expect(echo.headers["authorization"] == nil)
   }

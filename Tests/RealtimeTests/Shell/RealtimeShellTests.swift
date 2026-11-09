@@ -316,8 +316,8 @@ struct RealtimeShellTests {
   // MARK: Released client and removed channel
 
   @Test
-  func concurrentChannelCallsReturnOneHandle() async {
-    let client = makeClient()
+  func concurrentChannelCallsReturnOneHandle() async throws {
+    let client = try makeClient()
     let handles = await withTaskGroup(of: RealtimeChannel.self) { group in
       for _ in 0..<100 { group.addTask { await client.channel("room") } }
       return await group.reduce(into: []) { $0.append($1) }
@@ -383,7 +383,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")
     try await host.subscribe(channel)
-    let other = RealtimeClient(
+    let other = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         observesAppLifecycle: false)
@@ -400,15 +400,15 @@ struct RealtimeShellTests {
 
   @Test
   func releasedClientActionsThrowClientReleased() async throws {
-    func makeChannel() async -> RealtimeChannel {
-      let client = RealtimeClient(
+    func makeChannel() async throws -> RealtimeChannel {
+      let client = try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
           observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
-    let channel = await makeChannel()
+    let channel = try await makeChannel()
     try #require(await waitUntil { channel.client == nil })
 
     await expectError(.clientReleased) { try await channel.subscribe() }
@@ -503,8 +503,8 @@ struct RealtimeShellTests {
 
   // MARK: Helpers
 
-  private func makeClient() -> RealtimeClient {
-    RealtimeClient(
+  private func makeClient() throws -> RealtimeClient {
+    try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         observesAppLifecycle: false)

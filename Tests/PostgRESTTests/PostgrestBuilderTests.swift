@@ -23,14 +23,15 @@ import Testing
 extension PostgrestMockerTests {
   @Suite(.mockerSerialized)
   struct PostgrestBuilderTests {
-    let fixture = PostgrestQueryFixture()
+    let fixture = try! PostgrestQueryFixture()
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
     @Test
     func customHeaderOnAPerCallBasis() throws {
       let url = URL(string: "http://localhost:54321/rest/v1")!
-      let postgrest1 = PostgrestClient(configuration: .init(url: url, headers: [.apikey: "foo"]))
+      let postgrest1 = try PostgrestClient(
+        configuration: .init(url: url, headers: [.apikey: "foo"]))
       let postgrest2 = try postgrest1.rpc("void_func").settingHeader(
         name: .apikey, value: "bar")
 
@@ -386,7 +387,7 @@ extension PostgrestMockerTests {
     @Test
     func insertPerCallEncoderOverridesClientDefault() async throws {
       let capturedBody = LockIsolated<Data?>(nil)
-      let sut = makeSUTWithCustomFetch { request in
+      let sut = try makeSUTWithCustomFetch { request in
         capturedBody.setValue(request.httpBody)
         return (Data(), self.makeHTTPURLResponse(statusCode: 201))
       }
@@ -407,7 +408,7 @@ extension PostgrestMockerTests {
     @Test
     func updatePerCallEncoderOverridesClientDefault() async throws {
       let capturedBody = LockIsolated<Data?>(nil)
-      let sut = makeSUTWithCustomFetch { request in
+      let sut = try makeSUTWithCustomFetch { request in
         capturedBody.setValue(request.httpBody)
         return (Data(), self.makeHTTPURLResponse(statusCode: 200))
       }
@@ -429,7 +430,7 @@ extension PostgrestMockerTests {
     @Test
     func upsertPerCallEncoderOverridesClientDefault() async throws {
       let capturedBody = LockIsolated<Data?>(nil)
-      let sut = makeSUTWithCustomFetch { request in
+      let sut = try makeSUTWithCustomFetch { request in
         capturedBody.setValue(request.httpBody)
         return (Data(), self.makeHTTPURLResponse(statusCode: 201))
       }
@@ -453,7 +454,7 @@ extension PostgrestMockerTests {
         let userId: Int
       }
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         (Data(#"{"user_id": 1}"#.utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
 
@@ -478,7 +479,7 @@ extension PostgrestMockerTests {
       let poisonedDecoder = JSONDecoder()
       poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
 
-      let sut = makeSUTWithCustomFetch(decoder: poisonedDecoder) { _ in
+      let sut = try makeSUTWithCustomFetch(decoder: poisonedDecoder) { _ in
         (
           Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
           self.makeHTTPURLResponse(statusCode: 400)
@@ -499,7 +500,7 @@ extension PostgrestMockerTests {
       let poisonedDecoder = JSONDecoder()
       poisonedDecoder.keyDecodingStrategy = .custom { _ in TestCodingKey(stringValue: "unmatched") }
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         (
           Data(#"{"code":"PGRST000","message":"Bad Request"}"#.utf8),
           self.makeHTTPURLResponse(statusCode: 400)
@@ -524,7 +525,7 @@ extension PostgrestMockerTests {
 
       let state = LockIsolated(MutableState())
 
-      let sut = makeSUTWithCustomFetch { request in
+      let sut = try makeSUTWithCustomFetch { request in
         state.withValue { state in
           state.callCount += 1
           state.capturedHeaders.append(
@@ -552,7 +553,7 @@ extension PostgrestMockerTests {
     func retryAfterSchemaChangeUsesInjectedClock() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 3 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 520))
@@ -581,7 +582,7 @@ extension PostgrestMockerTests {
     func retryOn520ForHEADRequest() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 520))
@@ -597,7 +598,7 @@ extension PostgrestMockerTests {
     func noRetryOn520ForPOSTRequest() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 520))
       }
@@ -614,7 +615,7 @@ extension PostgrestMockerTests {
     func noRetryOnNon520ErrorForGET() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         return (
           Data(#"{"message":"Bad Request"}"#.utf8),
@@ -635,7 +636,7 @@ extension PostgrestMockerTests {
     func noRetryOn500ForGET() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 500))
       }
@@ -652,7 +653,7 @@ extension PostgrestMockerTests {
     func retryOn503ForGETRequest() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 503))
@@ -669,7 +670,7 @@ extension PostgrestMockerTests {
     func retryOn503ForHEADRequest() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 503))
@@ -685,7 +686,7 @@ extension PostgrestMockerTests {
     func retryOnNetworkErrorForGET() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           throw URLError(.networkConnectionLost)
@@ -702,7 +703,7 @@ extension PostgrestMockerTests {
     func noRetryOnNetworkErrorForPOST() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         throw URLError(.networkConnectionLost)
       }
@@ -719,7 +720,7 @@ extension PostgrestMockerTests {
     func exhaustAllRetries() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 520))
       }
@@ -736,7 +737,7 @@ extension PostgrestMockerTests {
     func perRequestRetryDisabled() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch { _ in
+      let sut = try makeSUTWithCustomFetch { _ in
         callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 520))
       }
@@ -752,7 +753,7 @@ extension PostgrestMockerTests {
     @Test
     func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
       let seen = LockIsolated<[Duration?]>([])
-      let sut = PostgrestClient(
+      let sut = try PostgrestClient(
         configuration: .init(
           url: url,
           http: .init(
@@ -775,7 +776,7 @@ extension PostgrestMockerTests {
     func clientLevelRetryDisabled() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+      let sut = try makeSUTWithCustomFetch(retryEnabled: false) { _ in
         callCount.withValue { $0 += 1 }
         return (Data(), self.makeHTTPURLResponse(statusCode: 520))
       }
@@ -792,7 +793,7 @@ extension PostgrestMockerTests {
     func retryEnabledPerRequestOverridesClientDisabled() async throws {
       let callCount = LockIsolated(0)
 
-      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+      let sut = try makeSUTWithCustomFetch(retryEnabled: false) { _ in
         callCount.withValue { $0 += 1 }
         if callCount.value < 2 {
           return (Data(), self.makeHTTPURLResponse(statusCode: 520))
@@ -808,8 +809,8 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func transportFailureIsWrapped() async {
-      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in
+    func transportFailureIsWrapped() async throws {
+      let sut = try makeSUTWithCustomFetch(retryEnabled: false) { _ in
         throw URLError(.notConnectedToInternet)
       }
 
@@ -825,8 +826,8 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func cancellationIsNotWrapped() async {
-      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw CancellationError() }
+    func cancellationIsNotWrapped() async throws {
+      let sut = try makeSUTWithCustomFetch(retryEnabled: false) { _ in throw CancellationError() }
 
       await #expect(throws: CancellationError.self) {
         try await sut.from("users").select().execute()
@@ -834,9 +835,9 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func customFetchErrorIsNotWrapped() async {
+    func customFetchErrorIsNotWrapped() async throws {
       struct FetchError: Error {}
-      let sut = makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
+      let sut = try makeSUTWithCustomFetch(retryEnabled: false) { _ in throw FetchError() }
 
       await #expect(throws: FetchError.self) {
         try await sut.from("users").select().execute()
@@ -844,8 +845,8 @@ extension PostgrestMockerTests {
     }
 
     @Test
-    func undecodableSuccessBodyIsWrapped() async {
-      let sut = makeSUTWithCustomFetch { _ in
+    func undecodableSuccessBodyIsWrapped() async throws {
+      let sut = try makeSUTWithCustomFetch { _ in
         (Data("not json".utf8), self.makeHTTPURLResponse(statusCode: 200))
       }
 
@@ -864,7 +865,7 @@ extension PostgrestMockerTests {
       retryEnabled: Bool = true,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
       fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
-    ) -> PostgrestClient {
+    ) throws -> PostgrestClient {
       let transport = ClosureTransport { request, body in
         guard var urlRequest = URLRequest(httpRequest: request) else {
           throw URLError(.badURL)
@@ -876,7 +877,7 @@ extension PostgrestMockerTests {
         }
         return (head, data.isEmpty ? nil : HTTPBody(data))
       }
-      return PostgrestClient(
+      return try PostgrestClient(
         configuration: .init(
           url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled,
           clock: ImmediateRetryTestClock())

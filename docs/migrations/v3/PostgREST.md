@@ -76,7 +76,7 @@ let client = PostgrestClient(url: url)
 client.setAuth(token)
 
 // v3
-let client = PostgrestClient(
+let client = try PostgrestClient(
   configuration: .init(url: url, accessToken: { try await auth.session.accessToken })
 )
 ```
@@ -97,7 +97,9 @@ try await client.from("todos").setHeader(name: "Prefer", value: "params=single-o
 
 // v3
 var database: PostgrestClient?
-let client = PostgrestClient(configuration: .init(url: url, headers: [HTTPField.Name("Prefer")!: "params=single-object"]))
+let client = try PostgrestClient(
+  configuration: .init(url: url, headers: [HTTPField.Name("Prefer")!: "params=single-object"])
+)
 try await client.from("todos").select(count: .exact).execute()
 ```
 

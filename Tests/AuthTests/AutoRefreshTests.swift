@@ -47,7 +47,7 @@ struct AutoRefreshTests {
         defer { unblockMain.signal() }
         try #require(await waitUntil { mainIsBlocked.value })
 
-        let client = AuthClient(configuration: world.configuration(observesAppLifecycle: true))
+        let client = try AuthClient(configuration: world.configuration(observesAppLifecycle: true))
         try await client.seedSession(world.issueSession())
 
         let mainWasBlockedAtRegistration = LockIsolated(false)

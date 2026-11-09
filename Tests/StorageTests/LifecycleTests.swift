@@ -19,7 +19,7 @@ struct LifecycleTests {
   @Test
   func lifecycleDecodesTheRules() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = BucketRequestTests.makeClient(
+    let storage = try BucketRequestTests.makeClient(
       sent: sent,
       response: """
         {"rules":[{"id":"r1","status":"Disabled","filter":{},
@@ -42,7 +42,7 @@ struct LifecycleTests {
 
   @Test
   func lifecycleIsNilWithoutAPolicy() async throws {
-    let storage = BucketRequestTests.makeClient(
+    let storage = try BucketRequestTests.makeClient(
       status: .notFound,
       response:
         #"{"statusCode":"404","code":"NoSuchLifecycleConfiguration","error":"not_found","message":"none"}"#
@@ -53,7 +53,7 @@ struct LifecycleTests {
 
   @Test
   func lifecycleRethrowsOtherErrors() async throws {
-    let storage = BucketRequestTests.makeClient(
+    let storage = try BucketRequestTests.makeClient(
       status: .badRequest,
       response: #"{"statusCode":"400","code":"FeatureNotEnabled","error":"x","message":"off"}"#)
 
@@ -65,7 +65,7 @@ struct LifecycleTests {
   @Test
   func setLifecycleSendsTheRulesWithAnEmptyFilter() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = BucketRequestTests.makeClient(
+    let storage = try BucketRequestTests.makeClient(
       sent: sent,
       response: """
         {"rules":[{"id":"gen","status":"Enabled","filter":{},
@@ -89,7 +89,7 @@ struct LifecycleTests {
   @Test
   func deleteLifecycleSendsDelete() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = BucketRequestTests.makeClient(
+    let storage = try BucketRequestTests.makeClient(
       sent: sent, response: #"{"message":"Successfully deleted"}"#)
 
     try await storage.deleteLifecycle(forBucket: "a b")

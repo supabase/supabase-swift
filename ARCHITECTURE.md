@@ -90,7 +90,7 @@ Uses modern `HTTPTypes` for request/response handling. Every module shares one p
 The facade takes one `SupabaseClient.Configuration`, with one nested type per sub-client and `Global` for shared settings. Client setup types end in `Configuration`; `Options` is only for per-call settings (see CODE_STYLE.md "Client Configuration"). Every module client has the same shape: a nested `Configuration` that holds `url`, a public `configuration` property, and `init(configuration:)` as the only init.
 
 ```swift
-SupabaseClient(
+try SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
   configuration: SupabaseClient.Configuration(

@@ -223,7 +223,7 @@ struct StorageErrorTests {
   @Test
   func errorBodyIsCappedAtOneMebibyte() async throws {
     let oversized = Data(repeating: 0x78, count: StorageAPI.errorBodyCap + 4096)
-    let storage = StorageClient(
+    let storage = try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],

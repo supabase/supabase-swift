@@ -149,6 +149,7 @@ supporting_symbols:
   - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
+  - FunctionsError.Kind.invalidConfiguration
   - FunctionsError.Kind.~=
   - FunctionsError.init
   - FunctionsError.kind
@@ -156,6 +157,19 @@ supporting_symbols:
   - FunctionsError.response
   - FunctionsError.underlyingError
   - FunctionsError.description
+  # SupabaseClientError is thrown by SupabaseClient.init for a supabaseURL with
+  # no host, so a server can reject a bad tenant URL without crashing.
+  - SupabaseClientError
+  - SupabaseClientError.Kind
+  - SupabaseClientError.Kind.init
+  - SupabaseClientError.Kind.rawValue
+  - SupabaseClientError.Kind.invalidConfiguration
+  - SupabaseClientError.init
+  - SupabaseClientError.kind
+  - SupabaseClientError.message
+  - SupabaseClientError.response
+  - SupabaseClientError.underlyingError
+  - SupabaseClientError.description
   # StorageError (SDK-1788) is thrown by every storage.* capability rather than
   # owned by one. ServerError is the decoded Storage error payload.
   - StorageError
@@ -166,6 +180,7 @@ supporting_symbols:
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
+  - StorageError.Kind.invalidConfiguration
   - StorageError.Kind.~=
   - StorageError.ServerError
   - StorageError.ServerError.init
@@ -202,6 +217,7 @@ supporting_symbols:
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
   - PostgrestError.Kind.accessToken
+  - PostgrestError.Kind.invalidConfiguration
   - PostgrestError.Kind.~=
   - PostgrestError.Code
   - PostgrestError.Code.init
@@ -246,6 +262,7 @@ supporting_symbols:
   - AuthError.Kind.jwtVerificationFailed
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
+  - AuthError.Kind.invalidConfiguration
   - AuthError.Kind.sessionInvalidated
   - AuthError.Kind.idTokenMismatch
   - AuthError.Kind.storageUnavailable
@@ -399,6 +416,7 @@ supporting_symbols:
   - RealtimeError.Kind.server
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
+  - RealtimeError.Kind.invalidConfiguration
   - RealtimeError.init
   - RealtimeError.kind
   - RealtimeError.message

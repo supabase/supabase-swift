@@ -14,7 +14,7 @@ import Testing
 extension PostgrestMockerTests {
   @Suite(.mockerSerialized)
   struct PostgrestRpcBuilderTests {
-    let fixture = PostgrestQueryFixture()
+    let fixture = try! PostgrestQueryFixture()
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
@@ -258,10 +258,10 @@ extension PostgrestMockerTests {
 
     @Test
     func rpcWithCountKeepsClientPreferHeader() async throws {
-      let capture = QueryCapture()
+      let capture = try QueryCapture()
       var configuration = capture.client.configuration
       configuration.headers[HTTPField.Name("Prefer")!] = "tx=rollback"
-      let client = PostgrestClient(configuration: configuration)
+      let client = try PostgrestClient(configuration: configuration)
 
       try await client.rpc("hello", count: .estimated).execute()
 
@@ -270,10 +270,10 @@ extension PostgrestMockerTests {
 
     @Test
     func rpcWithCountReplacesClientCountPreference() async throws {
-      let capture = QueryCapture()
+      let capture = try QueryCapture()
       var configuration = capture.client.configuration
       configuration.headers[HTTPField.Name("Prefer")!] = "tx=rollback, count=estimated"
-      let client = PostgrestClient(configuration: configuration)
+      let client = try PostgrestClient(configuration: configuration)
 
       try await client.rpc("hello", count: .exact).execute()
 
