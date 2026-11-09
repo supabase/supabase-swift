@@ -11,6 +11,10 @@
 # matches, so dependency symbols in the graph do not count.
 set -euo pipefail
 
+# comm needs its input sorted in the collation it compares with. One locale for every sort and
+# comm: a UTF-8 locale on a CI runner otherwise reports false stale entries.
+export LC_ALL=C
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
 
@@ -49,20 +53,32 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 echo "Dumping public symbol graph..." >&2
-DUMP_FAILED=false
 find .build -name "*.symbols.json" -delete 2>/dev/null || true
 # A failing exit here isn't necessarily fatal: test targets can fail to
 # extract while library targets already landed first (same rationale as
-# supabase/sdk's own extraction step).
+# supabase/sdk's own extraction step). The module check below catches a
+# library target that did not land.
 if ! swift package ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} dump-symbol-graph --minimum-access-level public --skip-synthesized-members >/dev/null; then
-  echo "⚠️  dump-symbol-graph exited non-zero; results below may be incomplete." >&2
-  DUMP_FAILED=true
+  echo "⚠️  dump-symbol-graph exited non-zero; checking that every SDK module emitted a graph." >&2
 fi
 
 SGFILES_LIST="$TMP_DIR/symbol-graphs"
 find .build -name "*.symbols.json" > "$SGFILES_LIST"
-if [ ! -s "$SGFILES_LIST" ]; then
-  echo "error: no symbol graphs emitted" >&2
+
+# Files under Sources/, tracked or not, and those that supabase/sdk's check skips. git applies the
+# same gitignore rules to .sdk-parse-ignore. A module is a Sources/ directory with at least one
+# file that is not ignored, and each one must have emitted a symbol graph.
+git ls-files -co --exclude-standard -- Sources > "$TMP_DIR/source-files"
+git ls-files -cio --exclude-from=.sdk-parse-ignore -- Sources > "$TMP_DIR/ignored-files"
+MODULES="$(grep -vxF -f "$TMP_DIR/ignored-files" "$TMP_DIR/source-files" | cut -d/ -f2 | sort -u)"
+MISSING="$(
+  for module in $MODULES; do
+    grep -q "/$module\.symbols\.json$" "$SGFILES_LIST" || echo "  - $module"
+  done
+)"
+if [ -n "$MISSING" ]; then
+  echo "error: no symbol graph emitted for these modules:" >&2
+  echo "$MISSING" >&2
   exit 1
 fi
 
@@ -92,7 +108,7 @@ xargs jq -r --arg root "$ROOT/" '
        | if length == 1 then "Sources/" + $id[(2 + (.[0] | length)):(2 + (.[0] | length) + (.[0] | tonumber))] + "/" else "" end)
      end) + "\t"
     + (($p[:-1] + [($p[-1] | sub("\\(.*"; ""))]) | join("."))
-' < "$SGFILES_LIST" | LC_ALL=C sort -u > "$CODE_SYMBOLS"
+' < "$SGFILES_LIST" | sort -u > "$CODE_SYMBOLS"
 
 # Names swift package dump-symbol-graph can't see at all (currently just
 # leading-underscore members, e.g. FunctionsClient._invokeWithStreamedResponse)
@@ -103,41 +119,31 @@ MANIFEST_SYMBOLS="$TMP_DIR/manifest"
 grep -E '^[[:space:]]*-[[:space:]]+("[^"]+"|'"'"'[^'"'"']+'"'"'|[A-Za-z_])' "$COMPLIANCE_FILE" \
   | sed -E 's/^[[:space:]]*-[[:space:]]+//; s/[[:space:]]+#.*$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/' \
   | grep -vE '(^|\.)_[A-Za-z_]*$' \
-  | LC_ALL=C sort -u > "$MANIFEST_SYMBOLS"
+  | sort -u > "$MANIFEST_SYMBOLS"
 
-cut -f2 "$CODE_SYMBOLS" | LC_ALL=C sort -u > "$TMP_DIR/code-names"
+cut -f2 "$CODE_SYMBOLS" | sort -u > "$TMP_DIR/code-names"
 STALE="$(comm -13 "$TMP_DIR/code-names" "$MANIFEST_SYMBOLS")"
 
-# Files under Sources/, tracked or not, and those that supabase/sdk's check skips. git applies the
-# same gitignore rules to .sdk-parse-ignore.
-git ls-files -co --exclude-standard -- Sources > "$TMP_DIR/source-files"
-git ls-files -cio --exclude-from=.sdk-parse-ignore -- Sources > "$TMP_DIR/ignored-files"
-
 # Undeclared own-source symbols, as "<module>\t<name>". A synthesized symbol has no file, so it
-# counts when its module has at least one file that is not ignored.
+# counts when its module is one of $MODULES.
 UNDECLARED="$TMP_DIR/undeclared"
-awk -F'\t' '
+awk -F'\t' -v modules="${MODULES//$'\n'/ }" '
+  BEGIN { n = split(modules, list, " "); for (i = 1; i <= n; i++) counted[list[i]] = 1 }
   FILENAME == ARGV[1] { declared[$0] = 1; next }
   FILENAME == ARGV[2] { ignored[$0] = 1; next }
-  FILENAME == ARGV[3] { if (!($0 in ignored)) { split($0, path, "/"); counted[path[2]] = 1 }; next }
   $1 !~ /^Sources\// || ($2 in declared) { next }
   {
     split($1, path, "/")
     if ($1 ~ /\/$/ ? (path[2] in counted) : !($1 in ignored)) print path[2] "\t" $2
   }
-' "$MANIFEST_SYMBOLS" "$TMP_DIR/ignored-files" "$TMP_DIR/source-files" "$CODE_SYMBOLS" \
-  | LC_ALL=C sort -u > "$UNDECLARED"
+' "$MANIFEST_SYMBOLS" "$TMP_DIR/ignored-files" "$CODE_SYMBOLS" | sort -u > "$UNDECLARED"
 
 BASELINE="$TMP_DIR/baseline"
 cp "$BASELINE_FILE" "$BASELINE" 2>/dev/null || : > "$BASELINE"
 
 # The baseline only shrinks: an update drops the symbols that are now declared and never adds one.
 if [ "$UPDATE_BASELINE" = true ]; then
-  if [ "$DUMP_FAILED" = true ]; then
-    echo "error: not updating $BASELINE_FILE from an incomplete symbol graph." >&2
-    exit 1
-  fi
-  LC_ALL=C comm -12 "$UNDECLARED" "$BASELINE" > "$BASELINE_FILE"
+  comm -12 "$UNDECLARED" "$BASELINE" > "$BASELINE_FILE"
   cp "$BASELINE_FILE" "$BASELINE"
   echo "Updated $BASELINE_FILE."
 fi
@@ -153,8 +159,8 @@ if [ -n "$STALE" ]; then
   status=1
 fi
 
-NEW="$(LC_ALL=C comm -23 "$UNDECLARED" "$BASELINE")"
-FIXED="$(LC_ALL=C comm -13 "$UNDECLARED" "$BASELINE")"
+NEW="$(comm -23 "$UNDECLARED" "$BASELINE")"
+FIXED="$(comm -13 "$UNDECLARED" "$BASELINE")"
 
 if [ -n "$NEW" ]; then
   echo "❌ Public API not declared in $COMPLIANCE_FILE:"
