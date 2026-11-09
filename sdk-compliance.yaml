@@ -27,6 +27,13 @@ supporting_symbols:
   - JSONValue.doubleValue
   - JSONValue.description
   - JSONValue.rawValue
+  # The object and array shapes of a JSON value, and the helpers that decode them into a Decodable
+  # type or build them from an Encodable one.
+  - JSONObject
+  - JSONArray
+  - Array.decode
+  - Dictionary.decode
+  - Dictionary.init
 
   # The SDK's default coders, which read and write Postgres timestamps. Every client defaults to
   # them, and they are the starting point for a custom coder, so no one feature owns them.
@@ -85,6 +92,32 @@ supporting_symbols:
   - PostgrestArrayElement
   - PostgrestArrayElement.postgrestArrayElement
   - PostgrestFilterValue.postgrestArrayElement
+  # Scalar filter values. A `PostgrestFilterValue` renders itself into a filter's query string;
+  # every comparison filter takes one, so the protocol and its conformances belong to none of them.
+  - PostgrestFilterValue
+  - PostgrestFilterValue.rawValue
+  - String.rawValue
+  - Int.rawValue
+  - Int16.rawValue
+  - Int32.rawValue
+  - Int64.rawValue
+  - Double.rawValue
+  - Float.rawValue
+  - Decimal.rawValue
+  - Bool.rawValue
+  - UUID.rawValue
+  - Date.rawValue
+  - Array.rawValue
+  - Dictionary.rawValue
+  # The builder at each phase, named after the supabase-js builder classes.
+  - PostgrestQueryBuilder
+  - PostgrestFilterBuilder
+  - PostgrestTransformBuilder
+  # The options `execute(options:)` takes, shared by every query, mutation, and rpc.
+  - FetchOptions
+  - FetchOptions.init
+  - FetchOptions.head
+  - FetchOptions.count
   - PostgrestQueryPhase
   - PostgrestRequestBuilder
   - PostgrestRequestBuilder.Operator
@@ -110,11 +143,14 @@ supporting_symbols:
   - "&&"
 
   # The `PostgrestMacros` attributes. `@Table` synthesizes the relation
-  # conformance used by every database.* typed entry point, and the four
-  # markers are inputs to that one expansion rather than capabilities of their
-  # own. Attribute names are unprefixed on purpose — nothing re-exports
-  # `PostgrestMacros`, so a user opts in with an explicit import.
+  # conformance used by every database.* typed entry point, `@Function` does the
+  # same for a function the typed `rpc(_:)` calls, and the markers are inputs to
+  # those expansions rather than capabilities of their own. Attribute names are
+  # unprefixed on purpose — nothing re-exports `PostgrestMacros`, so a user opts
+  # in with an explicit import.
   - Table
+  - Function
+  - Column
   - SelectionOf
   - PrimaryKey
   - Default
@@ -306,6 +342,18 @@ supporting_symbols:
   # The configuration each client was created with, and the PostgREST logger, now public.
   - AuthClient.configuration
   - PostgrestClient.Configuration.logger
+  # PostgrestClient is the type every database.* capability hangs off; its configuration's
+  # connection settings are not a capability of their own.
+  - PostgrestClient
+  - PostgrestClient.init
+  - PostgrestClient.configuration
+  - PostgrestClient.Configuration
+  - PostgrestClient.Configuration.init
+  - PostgrestClient.Configuration.url
+  - PostgrestClient.Configuration.headers
+  - PostgrestClient.Configuration.defaultHeaders
+  - PostgrestClient.Configuration.encoder
+  - PostgrestClient.Configuration.decoder
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdminClient.mfa
@@ -477,6 +525,13 @@ supporting_symbols:
   - RealtimeClient.Configuration
   - RealtimeClient.Configuration.url
   - RealtimeClient.configuration
+  # The facade client and the module clients it exposes. Each module capability is declared on
+  # its own client; the facade is the entry point to all of them.
+  - SupabaseClient
+  - SupabaseClient.init
+  - SupabaseClient.auth
+  - SupabaseClient.functions
+  - SupabaseClient.storage
   # The facade configuration type, the client's copy of it, and its Realtime settings.
   - SupabaseClient.Configuration
   - SupabaseClient.configuration
@@ -1371,6 +1426,7 @@ features:
     status: implemented
     symbols:
       - SupabaseClient.Configuration.Global.headers
+      - SupabaseClient.headers
       - StorageClient.settingHeader
       - StorageBucket.settingHeader
 
@@ -1384,6 +1440,7 @@ features:
     status: implemented
     symbols:
       - PostgrestClient.from
+      - SupabaseClient.from
   database.query.select:
     status: implemented
     symbols:
@@ -1402,12 +1459,14 @@ features:
     status: implemented
     symbols:
       - PostgrestClient.schema
+      - SupabaseClient.schema
     supporting_symbols:
       - PostgrestClient.Configuration.schema
   database.query.rpc:
     status: implemented
     symbols:
       - PostgrestClient.rpc
+      - SupabaseClient.rpc
 
   database.mutate.insert:
     status: implemented
@@ -1716,6 +1775,8 @@ features:
     # the platform's `sb-error-code`, and the response header names) all belong to
     # the one invoke capability.
     supporting_symbols:
+      - FunctionsClient
+      - FunctionsClient.init
       - FunctionsClient.Configuration
       - FunctionsClient.Configuration.decoder
       - FunctionsClient.Configuration.headers
@@ -1724,6 +1785,8 @@ features:
       - FunctionsClient.Configuration.logger
       - FunctionsClient.Configuration.url
       - FunctionsClient.configuration
+      - FunctionInvokeOptions
+      - FunctionInvokeOptions.init
       - FunctionInvokeOptions.headers
       - FunctionInvokeOptions.query
       - FunctionBody
@@ -1864,16 +1927,22 @@ features:
     status: implemented
     symbols:
       - RealtimeClient.removeChannel
+      - SupabaseClient.removeChannel
   realtime.client.remove_all_channels:
     status: implemented
     symbols:
       - RealtimeClient.removeAllChannels
+      - SupabaseClient.removeAllChannels
   realtime.client.connection_state:
     status: implemented
     symbols:
       - RealtimeClient.status
     supporting_symbols:
       - RealtimeClient.statusChanges
+      - RealtimeClientStatus
+      - RealtimeClientStatus.disconnected
+      - RealtimeClientStatus.connecting
+      - RealtimeClientStatus.connected
       - RealtimeClientStatus.isConnected
       - RealtimeClientStatus.error
       - RealtimeClientStatus.reconnecting
@@ -1904,6 +1973,11 @@ features:
     supporting_symbols:
       - RealtimeChannel.status
       - RealtimeChannel.statusChanges
+      - RealtimeChannelStatus
+      - RealtimeChannelStatus.unsubscribed
+      - RealtimeChannelStatus.subscribing
+      - RealtimeChannelStatus.subscribed
+      - RealtimeChannelStatus.unsubscribing
       - RealtimeChannelStatus.isSubscribed
       - RealtimeChannelStatus.error
       - RealtimeChannelStatus.resubscribing
@@ -1948,6 +2022,12 @@ features:
     symbols:
       - RealtimeChannel.postgresChanges
     supporting_symbols:
+      - PostgresChangeEvent
+      - PostgresChangeEvent.init
+      - PostgresChangeEvent.insert
+      - PostgresChangeEvent.update
+      - PostgresChangeEvent.delete
+      - PostgresChangeEvent.all
       - PostgresChange
       - PostgresChange.kind
       - PostgresChange.schema
@@ -1992,6 +2072,13 @@ features:
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
+      - RealtimePostgresFilter.eq
+      - RealtimePostgresFilter.neq
+      - RealtimePostgresFilter.gt
+      - RealtimePostgresFilter.gte
+      - RealtimePostgresFilter.lt
+      - RealtimePostgresFilter.lte
+      - RealtimePostgresFilter.in
       - RealtimePostgresFilter.like
       - RealtimePostgresFilter.ilike
       - RealtimePostgresFilter.match
@@ -2006,6 +2093,7 @@ features:
       - RealtimePostgresIsValue.false
       - RealtimePostgresIsValue.unknown
     supporting_symbols:
+      - RealtimePostgresFilter
       - RealtimePostgresFilterValue
       - RealtimePostgresFilterValue.realtimeFilterValue
       - String.realtimeFilterValue

@@ -10,3 +10,7 @@ docs/
 Tests/
 TestHelpers/
 **/*Tests.swift
+
+# The macro implementations. They are public only so the compiler can load the plugin; no app
+# imports them.
+Sources/PostgrestMacrosPlugin/
