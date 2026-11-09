@@ -18,10 +18,6 @@ import Helpers
 /// Both `invoke` and `stream` go through ``exchange(name:body:options:configuration:http:)``;
 /// nothing else inspects a response head or relabels a transport failure.
 enum FunctionsAPI {
-  /// The most bytes of a non-2xx body kept on ``FunctionsError/response``. The rest is dropped
-  /// so an unbounded error response cannot hold the call open or exhaust memory (SDK-1840).
-  static let maxErrorBodyBytes = 1 << 20
-
   /// Sent unless the configured or per-call headers set the same name.
   static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "functions-swift")]
 
@@ -79,7 +75,7 @@ enum FunctionsAPI {
   }
 
   /// Throws ``FunctionsError`` with kind `.relay` or `.server` when `head` is a failure, carrying
-  /// the first ``maxErrorBodyBytes`` of `body` and the platform's `sb-error-code`.
+  /// at most `HTTPClient.maxErrorBodyBytes` of `body` and the platform's `sb-error-code`.
   ///
   /// The relay check runs first: relay failures are non-2xx too.
   static func throwIfFailed(_ head: HTTPResponse, body: HTTPBody?) async throws {
@@ -95,13 +91,13 @@ enum FunctionsAPI {
       return
     }
 
-    var data = Data()
-    if let body {
-      for try await chunk in body {
-        data.append(contentsOf: chunk.prefix(maxErrorBodyBytes - data.count))
-        if data.count >= maxErrorBodyBytes { break }
+    // A relay failure can arrive with a 2xx status, which `HTTPClient` does not cap.
+    let data =
+      if let body {
+        try await Data(collecting: body, truncatingAt: HTTPClient.maxErrorBodyBytes)
+      } else {
+        Data()
       }
-    }
     throw FunctionsError(
       kind: kind,
       message: message,
@@ -116,9 +112,6 @@ enum FunctionsAPI {
   /// it is a `URLError`: the chain cannot tell one of those from the transport's own.
   static func mapTransportError(_ error: any Error) -> any Error {
     guard let urlError = error as? URLError else { return error }
-    // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
-    // task cancellation behind it (a middleware cancelled the request) stays a transport error.
-    if urlError.code == .cancelled, Task.isCancelled { return CancellationError() }
     return FunctionsError(
       kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
   }

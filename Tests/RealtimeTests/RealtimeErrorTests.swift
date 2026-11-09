@@ -33,10 +33,12 @@ struct RealtimeErrorTests {
     let error = RealtimeError(
       kind: .server,
       message: "Server error",
+      code: .malformedJWT,
       response: HTTPErrorResponse(status: 500, headers: HTTPFields(), body: Data())
     )
 
-    #expect(error.description == "RealtimeError(server): Server error [status 500]")
+    #expect(
+      error.description == "RealtimeError(server): Server error [status 500] [code MalformedJWT]")
   }
 
   @Test
@@ -325,5 +327,13 @@ struct RealtimeErrorTests {
     } catch {
       Issue.record("Expected RealtimeError.Code.unauthorized, got \(error)")
     }
+  }
+
+  @Test
+  func descriptionPrintsAServerReasonCodeOnce() {
+    let error = RealtimeError.joinError(reason: "InvalidJWTToken: Token has expired")
+
+    #expect(error.code == .invalidJWTToken)
+    #expect(error.description == "RealtimeError(unauthorized): InvalidJWTToken: Token has expired")
   }
 }

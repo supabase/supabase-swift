@@ -586,7 +586,7 @@ struct FunctionsClientTests {
   @Test
   func invoke_serverErrorBody_isCappedKeepingThePrefix() async throws {
     let sut = try makeSUT()
-    let cap = FunctionsAPI.maxErrorBodyBytes
+    let cap = HTTPClient.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
     Mock(
@@ -926,7 +926,7 @@ struct FunctionsClientTests {
   @Test
   func stream_serverErrorBody_isCappedKeepingThePrefix() async throws {
     let sut = try makeSUT()
-    let cap = FunctionsAPI.maxErrorBodyBytes
+    let cap = HTTPClient.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
     Mock(

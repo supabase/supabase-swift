@@ -151,7 +151,8 @@ struct PostgrestErrorTests {
     )
 
     #expect(
-      error.description == "PostgrestError(server): Row not found [status 406, request req-9]")
+      error.description
+        == "PostgrestError(server): Row not found [status 406, request req-9] [code PGRST116]")
   }
 
   @Test

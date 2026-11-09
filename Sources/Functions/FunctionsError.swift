@@ -147,11 +147,7 @@ public struct FunctionsError: SupabaseError {
   }
 
   public var description: String {
-    var text = formattedDescription(kind: kind.rawValue)
-    if let code {
-      text += " [code \(code.rawValue)]"
-    }
-    return text
+    formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }
 }
 

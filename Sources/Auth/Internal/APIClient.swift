@@ -22,12 +22,10 @@ extension HTTPClient {
     logger: Logging.Logger,
     retryEnabled: Bool = true
   ) {
-    var policy = retryEnabled ? RetryPolicy.default : .disabled
-    policy.retryableStatuses.remove(429)
-
     self.init(
       configuration: http,
-      retrying: RetryRequestInterceptor(policy: policy, clock: clock),
+      retrying: RetryRequestInterceptor(
+        policy: retryEnabled ? .default : .disabled, clock: clock),
       appending: [LoggerInterceptor(logger: logger)])
   }
 }

@@ -117,7 +117,10 @@ struct AuthErrorTests {
     #expect(error.code == .emailConflictIdentityNotDeletable)
     #expect(error.response?.status == 422)
     #expect(error.response?.requestID == "req-1")
-    #expect(error.description == "AuthError(server): API Error [status 422, request req-1]")
+    #expect(
+      error.description
+        == "AuthError(server): API Error [status 422, request req-1] [code email_conflict_identity_not_deletable]"
+    )
   }
 
   @Test
