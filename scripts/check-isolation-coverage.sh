@@ -8,7 +8,8 @@
 # - public async functions, including the nonisolated ones,
 # - public async properties (`{ get async }`),
 # - every public function and property declared in a public actor or in an extension of it, since
-#   a main-actor caller reaches those with `await` too.
+#   a main-actor caller reaches those with `await` too. Members of a type nested in the actor, or
+#   of an extension of such a type, are not isolated to the actor, so the check skips them.
 #
 # It matches by name only: a new overload, or a new member whose name the file already calls on
 # another type, passes without a call, so add those calls by hand. It does not see async
@@ -45,8 +46,9 @@ members=$(
         print "func $1\n" while $src =~ /\bpublic\s+${mods}func\s+(\w+)\s*(?:<[^>]*>)?\s*$params\s*async\b/g;
         print "var $1\n" while $src =~ /\bpublic\s+${mods}var\s+(\w+)\s*:[^{]*\{\s*get\s+async\b/g;
         next unless $actor;
-        while ($src =~ /\b(?:actor|extension)\s+(?:$actor)\b[^{]*(\{(?:[^{}]++|(?-1))*\})/g) {
+        while ($src =~ /\b(?:actor|extension)\s+(?:$actor)(?![\w.])[^{]*(\{(?:[^{}]++|(?-1))*\})/g) {
           my $body = $1;
+          $body =~ s/\b(?:struct|enum|class)\s+\w+[^{]*(\{(?:[^{}]++|(?-1))*\})//g;
           while ($body =~ /\bpublic\s+((?:(?:static|final|override|nonisolated)\s+)*)(func|var|let)\s+(\w+)/g) {
             next if $1 =~ /nonisolated/;
             print(($2 eq "func" ? "func" : "var") . " $3\n");

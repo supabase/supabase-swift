@@ -428,6 +428,46 @@ supporting_symbols:
   - SupabaseClient.Configuration
   - SupabaseClient.configuration
   - SupabaseClient.Configuration.Realtime
+  # Each facade setting and its nested configuration types.
+  - SupabaseClient.Configuration.database
+  - SupabaseClient.Configuration.auth
+  - SupabaseClient.Configuration.global
+  - SupabaseClient.Configuration.functions
+  - SupabaseClient.Configuration.realtime
+  - SupabaseClient.Configuration.storage
+  - SupabaseClient.Configuration.Database
+  - SupabaseClient.Configuration.Database.schema
+  - SupabaseClient.Configuration.Database.encoder
+  - SupabaseClient.Configuration.Database.decoder
+  - SupabaseClient.Configuration.Database.retry
+  - SupabaseClient.Configuration.Database.init
+  - SupabaseClient.Configuration.Auth
+  - SupabaseClient.Configuration.Auth.redirectToURL
+  - SupabaseClient.Configuration.Auth.storageKey
+  - SupabaseClient.Configuration.Auth.init
+  - SupabaseClient.Configuration.Global
+  - SupabaseClient.Configuration.Global.logger
+  - SupabaseClient.Configuration.Global.init
+  - SupabaseClient.Configuration.Functions
+  - SupabaseClient.Configuration.Functions.region
+  - SupabaseClient.Configuration.Functions.decoder
+  - SupabaseClient.Configuration.Functions.init
+  - SupabaseClient.Configuration.Storage
+  - SupabaseClient.Configuration.Storage.usesNewHostname
+  - SupabaseClient.Configuration.Storage.init
+  - SupabaseClient.Configuration.Realtime.headers
+  - SupabaseClient.Configuration.Realtime.heartbeatInterval
+  - SupabaseClient.Configuration.Realtime.requestTimeout
+  - SupabaseClient.Configuration.Realtime.connectOnSubscribe
+  - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
+  - SupabaseClient.Configuration.Realtime.handleAppLifecycle
+  - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
+  - SupabaseClient.Configuration.Realtime.serverLogLevel
+  - SupabaseClient.Configuration.Realtime.webSocketTransport
+  - SupabaseClient.Configuration.Realtime.http
+  - SupabaseClient.Configuration.Realtime.logger
+  - SupabaseClient.Configuration.Realtime.init
+  - SupabaseClient.Configuration.init
 
 features:
 
