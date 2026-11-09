@@ -391,9 +391,9 @@ struct RequestsTests {
   func adminListPasskeys() async throws {
     let sut = makeAdminSUT()
 
-    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    let userID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     await assert {
-      _ = try await sut.passkeys.list(forUser: userId)
+      _ = try await sut.passkeys.list(forUser: userID)
     }
   }
 
@@ -401,10 +401,10 @@ struct RequestsTests {
   func adminDeletePasskey() async throws {
     let sut = makeAdminSUT()
 
-    let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    let userID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let passkeyId = UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!
     await assert {
-      try await sut.passkeys.delete(id: passkeyId, forUser: userId)
+      try await sut.passkeys.delete(id: passkeyId, forUser: userID)
     }
   }
 
@@ -592,7 +592,7 @@ struct RequestsTests {
     await assert {
       _ = try await sut.mfa.challenge(
         factorID: UUID(uuidString: "00000000-0000-0000-0000-000000000123")!,
-        webAuthn: .init(rpId: "example.com", rpOrigins: ["https://example.com"])
+        webAuthn: .init(rpID: "example.com", rpOrigins: ["https://example.com"])
       )
     }
   }
@@ -1010,7 +1010,7 @@ struct RequestsTests {
     await assert {
       try await sut.oauth.createClient(
         params: CreateOAuthClientParams(
-          clientName: "Example", redirectUris: ["https://example.com/callback"])
+          clientName: "Example", redirectURIs: ["https://example.com/callback"])
       )
     }
   }

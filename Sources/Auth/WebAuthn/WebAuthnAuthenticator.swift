@@ -13,7 +13,7 @@
   ///
   /// This is an injectable seam: ``AuthPasskeys`` and ``AuthMFA`` orchestrate the network exchange
   /// around it and can be tested by substituting a fake. The ``live`` implementation requires a
-  /// real device, an Associated Domains entitlement (`webcredentials:<rpId>`), and a relying-party
+  /// real device, an Associated Domains entitlement (`webcredentials:<rpID>`), and a relying-party
   /// server hosting `.well-known/apple-app-site-association`, so it can only be exercised
   /// end-to-end on-device.
   struct WebAuthnAuthenticator: Sendable {

@@ -18,15 +18,15 @@ import Testing
 @Suite
 struct AuthAdminMFATests {
   let transport = RecordingTransport()
-  let userId = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
-  let factorId = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
+  let userID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+  let factorID = UUID(uuidString: "0d3aa138-da96-4aea-8d9e-c8b0e1234567")!
 
   @Test
   func listFactors() async throws {
     let responseData = """
       [
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "friendly_name": "My Phone",
           "factor_type": "totp",
           "status": "verified",
@@ -36,7 +36,7 @@ struct AuthAdminMFATests {
       ]
       """.data(using: .utf8)!
 
-    transport.stub(.get, "admin/users/\(userId)/factors", data: responseData) {
+    transport.stub(.get, "admin/users/\(userID)/factors", data: responseData) {
       #"""
       curl \
       	--header "Authorization: Bearer supabase.secret.key" \
@@ -49,10 +49,10 @@ struct AuthAdminMFATests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let factors = try await sut.mfa.listFactors(forUser: userId)
+    let factors = try await sut.mfa.listFactors(forUser: userID)
 
     #expect(factors.count == 1)
-    #expect(factors.first?.id == factorId)
+    #expect(factors.first?.id == factorID)
     #expect(factors.first?.friendlyName == "My Phone")
     #expect(factors.first?.factorType == "totp")
     #expect(factors.first?.status == .verified)
@@ -60,11 +60,11 @@ struct AuthAdminMFATests {
 
   @Test
   func listFactorsWithNoFactorsEnrolled() async throws {
-    transport.stub(.get, "admin/users/\(userId)/factors", data: Data("[]".utf8))
+    transport.stub(.get, "admin/users/\(userID)/factors", data: Data("[]".utf8))
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    #expect(try await sut.mfa.listFactors(forUser: userId).isEmpty)
+    #expect(try await sut.mfa.listFactors(forUser: userID).isEmpty)
   }
 
   @Test
@@ -72,7 +72,7 @@ struct AuthAdminMFATests {
     let responseData = """
       [
         {
-          "id": "\(factorId)",
+          "id": "\(factorID)",
           "factor_type": "phone",
           "status": "unverified",
           "created_at": "2024-01-01T00:00:00.000Z",
@@ -81,11 +81,11 @@ struct AuthAdminMFATests {
       ]
       """.data(using: .utf8)!
 
-    transport.stub(.get, "admin/users/\(userId)/factors", data: responseData)
+    transport.stub(.get, "admin/users/\(userID)/factors", data: responseData)
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let factors = try await sut.mfa.listFactors(forUser: userId)
+    let factors = try await sut.mfa.listFactors(forUser: userID)
 
     #expect(factors.first?.friendlyName == nil)
     #expect(factors.first?.factorType == "phone")
@@ -95,7 +95,7 @@ struct AuthAdminMFATests {
   func deleteFactor() async throws {
     let responseData = """
       {
-        "id": "\(factorId)",
+        "id": "\(factorID)",
         "friendly_name": "My Phone",
         "factor_type": "totp",
         "status": "verified",
@@ -104,7 +104,7 @@ struct AuthAdminMFATests {
       }
       """.data(using: .utf8)!
 
-    transport.stub(.delete, "admin/users/\(userId)/factors/\(factorId)", data: responseData) {
+    transport.stub(.delete, "admin/users/\(userID)/factors/\(factorID)", data: responseData) {
       #"""
       curl \
       	--request DELETE \
@@ -118,6 +118,6 @@ struct AuthAdminMFATests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    try await sut.mfa.deleteFactor(id: factorId, forUser: userId)
+    try await sut.mfa.deleteFactor(id: factorID, forUser: userID)
   }
 }

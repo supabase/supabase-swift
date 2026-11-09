@@ -90,8 +90,8 @@ struct PersistedUser: Codable, Sendable {
 
 struct PersistedIdentity: Codable, Sendable {
   var id: String
-  var identityId: UUID
-  var userId: UUID
+  var identityID: UUID
+  var userID: UUID
   var identityData: [String: JSONValue]?
   var provider: String
   var email: String?
@@ -101,8 +101,8 @@ struct PersistedIdentity: Codable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case id
-    case identityId = "identity_id"
-    case userId = "user_id"
+    case identityID = "identity_id"
+    case userID = "user_id"
     case identityData = "identity_data"
     case provider
     case email
@@ -228,8 +228,8 @@ extension PersistedIdentity {
   init(_ identity: UserIdentity) {
     self.init(
       id: identity.providerUserID,
-      identityId: identity.id,
-      userId: identity.userID,
+      identityID: identity.id,
+      userID: identity.userID,
       identityData: identity.identityData,
       provider: identity.provider.rawValue,
       email: identity.email,
@@ -241,9 +241,9 @@ extension PersistedIdentity {
 
   var identity: UserIdentity {
     UserIdentity(
-      id: identityId,
+      id: identityID,
       providerUserID: id,
-      userID: userId,
+      userID: userID,
       provider: Provider(rawValue: provider),
       identityData: identityData ?? [:],
       email: email,

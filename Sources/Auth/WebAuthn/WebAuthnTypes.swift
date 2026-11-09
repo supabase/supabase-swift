@@ -15,13 +15,18 @@ import Helpers
 @_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
-  public let rpId: String?
+  public let rpID: String?
 
   /// Allowed relying party origins (e.g. `https://example.com`).
   public let rpOrigins: [String]?
 
-  public init(rpId: String? = nil, rpOrigins: [String]? = nil) {
-    self.rpId = rpId
+  private enum CodingKeys: String, CodingKey {
+    case rpID = "rp_id"
+    case rpOrigins = "rp_origins"
+  }
+
+  public init(rpID: String? = nil, rpOrigins: [String]? = nil) {
+    self.rpID = rpID
     self.rpOrigins = rpOrigins
   }
 }
@@ -64,6 +69,11 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   /// argument of `navigator.credentials.create()`. Passkey endpoints send the inner object bare.
   /// Field names follow the W3C spec verbatim (camelCase) and are not transformed.
   public let credentialOptions: JSONValue
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case credentialOptions = "credential_options"
+  }
 }
 
 /// A passkey registered for the current user.
@@ -82,6 +92,13 @@ public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
 
   /// When the passkey was last used to authenticate, if ever.
   public let lastUsedAt: Date?
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName = "friendly_name"
+    case createdAt = "created_at"
+    case lastUsedAt = "last_used_at"
+  }
 
   public init(id: UUID, friendlyName: String?, createdAt: Date, lastUsedAt: Date?) {
     self.id = id
@@ -106,7 +123,9 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   public let expiresAt: Date
 
   private enum CodingKeys: String, CodingKey {
-    case challengeID = "challengeId", options, expiresAt
+    case challengeID = "challenge_id"
+    case options
+    case expiresAt = "expires_at"
   }
 
   public init(from decoder: any Decoder) throws {
@@ -132,7 +151,9 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   public let expiresAt: Date
 
   private enum CodingKeys: String, CodingKey {
-    case challengeID = "challengeId", options, expiresAt
+    case challengeID = "challenge_id"
+    case options
+    case expiresAt = "expires_at"
   }
 
   public init(from decoder: any Decoder) throws {
