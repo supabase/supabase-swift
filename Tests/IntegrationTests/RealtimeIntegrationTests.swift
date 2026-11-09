@@ -300,6 +300,40 @@
     }
 
     @Test
+    func heartbeatsNeverReplayAnEarlierEvent() async throws {
+      // A heartbeat goes out only when the test advances `clock`, so no heartbeat can start
+      // while `late` registers.
+      let clock = TestClock<Duration>()
+      let realtime = try RealtimeClient(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+          headers: [
+            "apikey": DotEnv.supabasePublishableKey,
+            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+          ],
+          heartbeatInterval: .seconds(1),
+          disconnectOnEmptyChannelsAfter: .seconds(3600),
+          observesAppLifecycle: false,
+          clock: clock
+        )
+      )
+      try await realtime.connect()
+
+      // Collect first and assert after `disconnect()`, so a failure cannot leave the socket open.
+      let early = await realtime.heartbeats()
+      await clock.advance(by: .seconds(1))
+      let firstCycle = try? await withTimeout(.seconds(5)) { await early.prefix(2).collect() }
+
+      let late = await realtime.heartbeats()
+      await clock.advance(by: .seconds(1))
+      let next = try? await withTimeout(.seconds(5)) { await late.first { _ in true } }
+      await realtime.disconnect()
+
+      #expect(firstCycle == [.sent, .acknowledged(latency: .zero)])
+      #expect(next == .sent, "a new stream starts with the next heartbeat, not the last ack")
+    }
+
+    @Test
     func customOptionsConnectSubscribeAndReceive() async throws {
       let realtime = try RealtimeClient(
         configuration: RealtimeClient.Configuration(

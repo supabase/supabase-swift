@@ -298,6 +298,10 @@ public final class AuthClient: Sendable {
 
   /// Returns a stream of every change of the auth state, starting with the current one.
   ///
+  /// Each element is an ``AuthChange``: the ``AuthEvent`` that caused the change and the full
+  /// ``AuthStatus`` after it. Because every element carries the status, this is a state stream:
+  /// it starts with the current status, as `onAuthStateChange` does in supabase-js.
+  ///
   /// The stream is registered when this method returns, so it loses no change, even one that
   /// happens before you start iterating. The first element is always
   /// ``AuthEvent/initialSession`` with the current ``status``, delivered once the client has read
