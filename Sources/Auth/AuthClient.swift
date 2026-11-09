@@ -988,7 +988,7 @@ public final class AuthClient: Sendable {
   /// Exchanges `code` with the first of `flows` that it belongs to.
   ///
   /// Without an ID, the code can belong to any of the flows, for example an email link that cannot
-  /// carry an ID. A ``ErrorCode/badCodeVerifier`` rejection means the code belongs to another
+  /// carry an ID. A ``AuthError/Code-swift.struct/badCodeVerifier`` rejection means the code belongs to another
   /// flow, so the client tries the next one. Any other rejection throws. A guessed flow is kept on
   /// every rejection, because a rejection does not prove the code was that flow's; the TTL drops
   /// it.
@@ -1003,7 +1003,7 @@ public final class AuthClient: Sendable {
         return (
           try await exchange(code: code, flow: flow, guessed: true, signOuts: signOuts), flow
         )
-      } catch let error as AuthError where error.errorCode == .badCodeVerifier {
+      } catch let error as AuthError where error.code == .badCodeVerifier {
         rejection = error
       }
     }
@@ -1812,6 +1812,6 @@ extension AuthError {
   /// Whether a logout answer means the server has nothing left to revoke for `scope`.
   fileprivate func meansNothingLeftToRevoke(for scope: SignOutScope) -> Bool {
     guard response?.status == .forbidden else { return false }
-    return errorCode == .userNotFound || (scope == .local && errorCode == .sessionNotFound)
+    return code == .userNotFound || (scope == .local && code == .sessionNotFound)
   }
 }

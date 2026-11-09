@@ -30,9 +30,9 @@ enum ErrorDecoder {
     switch Body(response: response, data: data) {
     case .legacy(let coded), .versioned(let coded):
       return AuthError(
-        kind: kindsByCode[coded.code, default: .server],
+        kind: coded.code.flatMap { kindsByCode[$0] } ?? .server,
         message: coded.message ?? statusMessage(status),
-        errorCode: coded.code,
+        code: coded.code,
         weakPasswordReasons: coded.weakPasswordReasons,
         response: errorResponse
       )
@@ -51,14 +51,13 @@ enum ErrorDecoder {
       return AuthError(
         kind: .server,
         message: statusMessage(status),
-        errorCode: .unexpectedFailure,
         response: errorResponse
       )
     }
   }
 
   /// Codes whose kind is not ``AuthError/Kind-swift.struct/server``.
-  private static let kindsByCode: [ErrorCode: AuthError.Kind] = [
+  private static let kindsByCode: [AuthError.Code: AuthError.Kind] = [
     .refreshTokenNotFound: .sessionInvalidated,
     .refreshTokenAlreadyUsed: .sessionInvalidated,
     .sessionExpired: .sessionInvalidated,
@@ -98,7 +97,7 @@ extension ErrorDecoder {
     case nonJSON
 
     struct Coded {
-      var code: ErrorCode
+      var code: AuthError.Code?
       var message: String?
       var weakPasswordReasons: [String]
     }
@@ -120,17 +119,18 @@ extension ErrorDecoder {
       if let errorCode = raw.errorCode {
         self = .legacy(
           Coded(
-            code: ErrorCode(errorCode), message: raw.msg ?? raw.message,
+            code: AuthError.Code(rawValue: errorCode), message: raw.msg ?? raw.message,
             weakPasswordReasons: reasons))
       } else if case .errorCode(let code)? = raw.code {
         self = .versioned(
           Coded(
-            code: ErrorCode(code), message: raw.message ?? raw.msg, weakPasswordReasons: reasons))
+            code: AuthError.Code(rawValue: code), message: raw.message ?? raw.msg,
+            weakPasswordReasons: reasons))
       } else if let error = raw.error {
         self = .oauth(error: error, description: raw.errorDescription)
       } else {
         self = .legacy(
-          Coded(code: .unknown, message: raw.msg ?? raw.message, weakPasswordReasons: reasons))
+          Coded(code: nil, message: raw.msg ?? raw.message, weakPasswordReasons: reasons))
       }
     }
   }

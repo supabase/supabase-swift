@@ -82,6 +82,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
 | `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
 | `ObservationToken` | removed; cancel the task that reads the stream |
+| Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `serverError?.code: String?`; Realtime `serverCode`, `RealtimeError.ServerCode`; Storage `serverStatusCode`, `serverError?.code` | `code: <Module>Error.Code?` on every module error; Storage's body status is `serverError?.statusCode` |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
@@ -94,6 +95,8 @@ Naming rules applied across all modules (the module tables list each symbol):
   their uses.
 - A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
+  Each one has `rawValue`, `init(rawValue:)` and a literal initializer, and no other
+  initializer: `ErrorCode("x")` is `AuthError.Code(rawValue: "x")` or the literal `"x"`.
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
 
@@ -232,6 +235,20 @@ A custom `ClientTransport` or middleware still sees `HTTPResponse`, which has `s
 Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorResponse?` (`status`,
 `HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
 module's error format gives kind `.server` with no `serverError`.
+
+Every module error has `kind` and `code: <Module>Error.Code?`, the machine-readable code the
+server sent. `code` is `nil` when the server sent none. A `catch` clause can name a kind or a code
+of any module directly:
+
+```swift
+do {
+  try await supabase.from("todos").insert(todo).execute()
+} catch PostgrestError.Code.uniqueViolation {
+  showDuplicate()
+} catch PostgrestError.Kind.transport {
+  showOfflineBanner()
+}
+```
 
 ```swift
 // v2

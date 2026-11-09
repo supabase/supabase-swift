@@ -408,6 +408,13 @@ struct WebSocketTests {
     }
 
   #endif
+
+  @Test
+  func closeCodeIntegerLiteral() {
+    let code: WebSocketCloseCode = 4001
+    #expect(code.rawValue == 4001)
+    #expect(WebSocketCloseCode.normalClosure == 1000)
+  }
 }
 
 #if canImport(Network)

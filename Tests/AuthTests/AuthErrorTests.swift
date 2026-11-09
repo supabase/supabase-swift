@@ -18,19 +18,25 @@ struct AuthErrorTests {
     let error = AuthError.sessionMissing
 
     #expect(error.kind == .sessionMissing)
-    #expect(error.errorCode == .sessionNotFound)
+    #expect(error.code == nil)
     #expect(error.message == "Auth session missing.")
     #expect(error.weakPasswordReasons.isEmpty)
     #expect(error.response == nil)
   }
 
   @Test
-  func defaultsForErrorCodeAndReasons() {
+  func codeIsNilWhenTheServerSentNone() {
     let error = AuthError(kind: .oauthFlowFailed, message: "Implicit grant failure")
 
-    #expect(error.errorCode == .unknown)
+    #expect(error.code == nil)
     #expect(error.weakPasswordReasons.isEmpty)
     #expect(error.errorDescription == "Implicit grant failure")
+  }
+
+  @Test
+  func clientSideFailuresHaveNoCode() {
+    #expect(AuthError.oauthFlowFailed("No redirect URL configured").code == nil)
+    #expect(AuthError.jwtVerificationFailed("expired").code == nil)
   }
 
   @Test
@@ -38,26 +44,25 @@ struct AuthErrorTests {
     let error = AuthError.oauthFlowFailed("No redirect URL configured")
 
     #expect(error.kind == .oauthFlowFailed)
-    #expect(error.errorCode == .unknown)
     #expect(error.response == nil)
     #expect(error.errorDescription == "No redirect URL configured")
   }
 
   @Test
-  func catchMatchesErrorCode() {
+  func catchMatchesCode() {
     func signIn() throws {
-      throw AuthError(kind: .server, message: "Invalid", errorCode: .invalidCredentials)
+      throw AuthError(kind: .server, message: "Invalid", code: .invalidCredentials)
     }
 
     var caught = false
     do {
       try signIn()
-    } catch ErrorCode.emailNotConfirmed {
+    } catch AuthError.Code.emailNotConfirmed {
       Issue.record("Matched the wrong code")
-    } catch ErrorCode.invalidCredentials {
+    } catch AuthError.Code.invalidCredentials {
       caught = true
     } catch {
-      Issue.record("Expected ErrorCode.invalidCredentials, got \(error)")
+      Issue.record("Expected AuthError.Code.invalidCredentials, got \(error)")
     }
     #expect(caught)
   }
@@ -67,7 +72,7 @@ struct AuthErrorTests {
     func refresh() throws {
       throw AuthError(
         kind: .sessionInvalidated, message: "Refresh Token Not Found",
-        errorCode: .refreshTokenNotFound)
+        code: .refreshTokenNotFound)
     }
 
     var caught = false
@@ -87,8 +92,15 @@ struct AuthErrorTests {
   func patternsDoNotMatchOtherErrors() {
     let error: any Error = URLError(.timedOut)
 
-    #expect(!(ErrorCode.unknown ~= error))
+    #expect(!(AuthError.Code.unexpectedFailure ~= error))
     #expect(!(AuthError.Kind.transport ~= error))
+  }
+
+  @Test
+  func codePatternDoesNotMatchAnErrorWithoutACode() {
+    let error: any Error = AuthError.sessionMissing
+
+    #expect(!(AuthError.Code.sessionNotFound ~= error))
   }
 
   @Test
@@ -98,11 +110,11 @@ struct AuthErrorTests {
     let error = AuthError(
       kind: .server,
       message: "API Error",
-      errorCode: .emailConflictIdentityNotDeletable,
+      code: .emailConflictIdentityNotDeletable,
       response: HTTPErrorResponse(status: 422, headers: headers, body: Data())
     )
 
-    #expect(error.errorCode == .emailConflictIdentityNotDeletable)
+    #expect(error.code == .emailConflictIdentityNotDeletable)
     #expect(error.response?.status == 422)
     #expect(error.response?.requestID == "req-1")
     #expect(error.description == "AuthError(server): API Error [status 422, request req-1]")
@@ -124,40 +136,32 @@ struct AuthErrorTests {
   }
 
   @Test
-  func webAuthnErrorCodeRawValues() {
-    #expect(ErrorCode.webAuthnChallengeNotFound.rawValue == "webauthn_challenge_not_found")
-    #expect(ErrorCode.webAuthnChallengeExpired.rawValue == "webauthn_challenge_expired")
-    #expect(ErrorCode.webAuthnVerificationFailed.rawValue == "webauthn_verification_failed")
-    #expect(ErrorCode.webAuthnCredentialExists.rawValue == "webauthn_credential_exists")
-    #expect(ErrorCode.tooManyPasskeys.rawValue == "too_many_passkeys")
+  func webAuthnCodeRawValues() {
+    #expect(AuthError.Code.webAuthnChallengeNotFound.rawValue == "webauthn_challenge_not_found")
+    #expect(AuthError.Code.webAuthnChallengeExpired.rawValue == "webauthn_challenge_expired")
+    #expect(AuthError.Code.webAuthnVerificationFailed.rawValue == "webauthn_verification_failed")
+    #expect(AuthError.Code.webAuthnCredentialExists.rawValue == "webauthn_credential_exists")
+    #expect(AuthError.Code.tooManyPasskeys.rawValue == "too_many_passkeys")
   }
 
   @Test
-  func errorCodeEquality() {
-    #expect(ErrorCode.badJWT == ErrorCode("bad_jwt"))
-    #expect(ErrorCode.sessionExpired == ErrorCode("session_expired"))
-    #expect(ErrorCode.badJWT != ErrorCode.sessionExpired)
+  func codeEquality() {
+    #expect(AuthError.Code.badJWT == AuthError.Code(rawValue: "bad_jwt"))
+    #expect(AuthError.Code.sessionExpired == "session_expired")
+    #expect(AuthError.Code.badJWT != AuthError.Code.sessionExpired)
   }
 
   @Test
-  func errorCodeRawValue() {
-    #expect(ErrorCode.badJWT.rawValue == "bad_jwt")
-    #expect(ErrorCode.sessionExpired.rawValue == "session_expired")
-    #expect(ErrorCode.unknown.rawValue == "unknown")
+  func codeAcceptsAStringLiteral() {
+    let code: AuthError.Code = "custom_error"
+
+    #expect(code.rawValue == "custom_error")
+    #expect(AuthError.Code.badJWT.rawValue == "bad_jwt")
   }
 
   @Test
-  func errorCodeInitWithString() {
-    let code1 = ErrorCode("custom_error")
-    #expect(code1.rawValue == "custom_error")
-
-    let code2 = ErrorCode(rawValue: "another_error")
-    #expect(code2.rawValue == "another_error")
-  }
-
-  @Test
-  func errorCodeHashable() {
-    let set: Set<ErrorCode> = [.badJWT, .sessionExpired, .userNotFound]
+  func codeHashable() {
+    let set: Set<AuthError.Code> = [.badJWT, .sessionExpired, .userNotFound]
     #expect(set.contains(.badJWT))
     #expect(set.contains(.sessionExpired))
     #expect(!set.contains(.emailExists))

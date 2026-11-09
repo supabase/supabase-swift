@@ -144,6 +144,7 @@ supporting_symbols:
   - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
+  - FunctionsError.Kind.~=
   - FunctionsError.init
   - FunctionsError.kind
   - FunctionsError.message
@@ -160,6 +161,7 @@ supporting_symbols:
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
+  - StorageError.Kind.~=
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
@@ -175,9 +177,7 @@ supporting_symbols:
   - StorageClient.Configuration.logger
   - StorageClient.Configuration.usesNewHostname
   - StorageClient.Configuration.clock
-  - StorageError.ServerError.code
   - StorageError.code
-  - StorageError.serverStatusCode
   - StorageError.isNotFound
   - StorageError.init
   - StorageError.kind
@@ -197,21 +197,39 @@ supporting_symbols:
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
   - PostgrestError.Kind.accessToken
+  - PostgrestError.Kind.~=
+  - PostgrestError.Code
+  - PostgrestError.Code.init
+  - PostgrestError.Code.rawValue
+  - PostgrestError.Code.~=
+  - PostgrestError.Code.uniqueViolation
+  - PostgrestError.Code.foreignKeyViolation
+  - PostgrestError.Code.notNullViolation
+  - PostgrestError.Code.checkViolation
+  - PostgrestError.Code.invalidTextRepresentation
+  - PostgrestError.Code.insufficientPrivilege
+  - PostgrestError.Code.undefinedTable
+  - PostgrestError.Code.undefinedColumn
+  - PostgrestError.Code.undefinedFunction
+  - PostgrestError.Code.serializationFailure
+  - PostgrestError.Code.deadlockDetected
+  - PostgrestError.Code.queryCanceled
+  - PostgrestError.Code.raiseException
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
-  - PostgrestError.ServerError.code
   - PostgrestError.ServerError.message
   - PostgrestError.ServerError.details
   - PostgrestError.ServerError.hint
   - PostgrestError.init
   - PostgrestError.kind
   - PostgrestError.message
+  - PostgrestError.code
   - PostgrestError.serverError
   - PostgrestError.response
   - PostgrestError.underlyingError
   - PostgrestError.description
   # AuthError (SDK-1788) is thrown by every auth.* capability rather than owned
-  # by one. ErrorCode values are attributed to their features below.
+  # by one. AuthError.Code values are attributed to their features below.
   - AuthError
   - AuthError.Kind
   - AuthError.Kind.init
@@ -233,7 +251,7 @@ supporting_symbols:
   - AuthError.init
   - AuthError.kind
   - AuthError.message
-  - AuthError.errorCode
+  - AuthError.code
   - AuthError.weakPasswordReasons
   - AuthError.oauthError
   - AuthError.isRetryable
@@ -242,7 +260,10 @@ supporting_symbols:
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
-  - ErrorCode.~=
+  - AuthError.Code
+  - AuthError.Code.init
+  - AuthError.Code.rawValue
+  - AuthError.Code.~=
   # AuthAdminClient (SDK-2074) is the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
   - AuthAdminClient
@@ -387,38 +408,40 @@ supporting_symbols:
   - RealtimeError.Kind.channelClosed
   - RealtimeError.Kind.channelRemoved
   - RealtimeError.Kind.payloadTooLarge
-  - RealtimeError.serverCode
+  - RealtimeError.Kind.~=
+  - RealtimeError.code
   - RealtimeError.isRetryable
   # The code the server prefixes to a join or channel error reason (SDK-2098).
-  - RealtimeError.ServerCode
-  - RealtimeError.ServerCode.init
-  - RealtimeError.ServerCode.rawValue
-  - RealtimeError.ServerCode.topicNameRequired
-  - RealtimeError.ServerCode.invalidJWTToken
-  - RealtimeError.ServerCode.malformedJWT
-  - RealtimeError.ServerCode.jwtSignatureError
-  - RealtimeError.ServerCode.jwtSignerError
-  - RealtimeError.ServerCode.unauthorized
-  - RealtimeError.ServerCode.privateOnly
-  - RealtimeError.ServerCode.tenantNotFound
-  - RealtimeError.ServerCode.realtimeDisabledForTenant
-  - RealtimeError.ServerCode.realtimeDisabledForConfiguration
-  - RealtimeError.ServerCode.unableToReplayMessages
-  - RealtimeError.ServerCode.channelRateLimitReached
-  - RealtimeError.ServerCode.connectionRateLimitReached
-  - RealtimeError.ServerCode.clientJoinRateLimitReached
-  - RealtimeError.ServerCode.realtimeRestarting
-  - RealtimeError.ServerCode.initializingProjectConnection
-  - RealtimeError.ServerCode.increaseConnectionPool
-  - RealtimeError.ServerCode.databaseLackOfConnections
-  - RealtimeError.ServerCode.databaseConnectionRateLimitReached
-  - RealtimeError.ServerCode.unableToConnectToProject
-  - RealtimeError.ServerCode.queryCanceled
-  - RealtimeError.ServerCode.missingPartition
-  - RealtimeError.ServerCode.timeoutOnRpcCall
-  - RealtimeError.ServerCode.errorOnRpcCall
-  - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
-  - RealtimeError.ServerCode.unknownErrorOnChannel
+  - RealtimeError.Code
+  - RealtimeError.Code.init
+  - RealtimeError.Code.~=
+  - RealtimeError.Code.rawValue
+  - RealtimeError.Code.topicNameRequired
+  - RealtimeError.Code.invalidJWTToken
+  - RealtimeError.Code.malformedJWT
+  - RealtimeError.Code.jwtSignatureError
+  - RealtimeError.Code.jwtSignerError
+  - RealtimeError.Code.unauthorized
+  - RealtimeError.Code.privateOnly
+  - RealtimeError.Code.tenantNotFound
+  - RealtimeError.Code.realtimeDisabledForTenant
+  - RealtimeError.Code.realtimeDisabledForConfiguration
+  - RealtimeError.Code.unableToReplayMessages
+  - RealtimeError.Code.channelRateLimitReached
+  - RealtimeError.Code.connectionRateLimitReached
+  - RealtimeError.Code.clientJoinRateLimitReached
+  - RealtimeError.Code.realtimeRestarting
+  - RealtimeError.Code.initializingProjectConnection
+  - RealtimeError.Code.increaseConnectionPool
+  - RealtimeError.Code.databaseLackOfConnections
+  - RealtimeError.Code.databaseConnectionRateLimitReached
+  - RealtimeError.Code.unableToConnectToProject
+  - RealtimeError.Code.queryCanceled
+  - RealtimeError.Code.missingPartition
+  - RealtimeError.Code.timeoutOnRpcCall
+  - RealtimeError.Code.errorOnRpcCall
+  - RealtimeError.Code.postgresChangesSubscribeTimeout
+  - RealtimeError.Code.unknownErrorOnChannel
   # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
   - RealtimeClient.Configuration.requestTimeout
@@ -624,8 +647,8 @@ features:
       - Web3Chain.rawValue
       - Web3Chain.ethereum
       - Web3Chain.solana
-      - ErrorCode.web3ProviderDisabled
-      - ErrorCode.web3UnsupportedChain
+      - AuthError.Code.web3ProviderDisabled
+      - AuthError.Code.web3UnsupportedChain
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
@@ -1173,8 +1196,8 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.denyAuthorization
-      - ErrorCode.oauthAuthorizationNotFound
-      - ErrorCode.featureDisabled
+      - AuthError.Code.oauthAuthorizationNotFound
+      - AuthError.Code.featureDisabled
   auth.oauth_server.list_grants:
     status: implemented
     symbols:
@@ -1188,7 +1211,7 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.revokeGrant
-      - ErrorCode.oauthConsentNotFound
+      - AuthError.Code.oauthConsentNotFound
 
   auth.oauth_admin.create_client:
     status: implemented
@@ -1616,6 +1639,10 @@ features:
     status: implemented
     symbols:
       - ExplainFormat
+      - ExplainFormat.init
+      - ExplainFormat.rawValue
+      - ExplainFormat.text
+      - ExplainFormat.json
   database.using_modifiers.max_affected_rows:
     status: implemented
     symbols:
@@ -1704,6 +1731,7 @@ features:
       - FunctionsError.Code.edgeRuntimeServiceDegraded
       - FunctionsError.Code.idleTimeout
       - FunctionsError.Code.init
+      - FunctionsError.Code.~=
       - FunctionsError.Code.invalidResponseStatusCode
       - FunctionsError.Code.invalidURL
       - FunctionsError.Code.notFound
@@ -2614,6 +2642,7 @@ features:
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init
+      - StorageError.Code.~=
       - StorageError.Code.rawValue
       - StorageError.Code.noSuchBucket
       - StorageError.Code.noSuchLifecycleConfiguration

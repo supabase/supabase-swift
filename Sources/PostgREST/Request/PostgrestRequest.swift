@@ -148,23 +148,11 @@ public struct _PostgrestRequest: Sendable {
       return try decoded(data)
     }
 
-    guard let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data)
-    else {
-      throw PostgrestError(
-        kind: .server,
-        message: "Unexpected response with status code \(response.status.code).",
-        response: HTTPErrorResponse(response, body: data)
-      )
-    }
-    if nullOnNoRows, serverError.code == "PGRST116", serverError.matchedZeroRows {
+    let error = PostgrestError.server(response, body: data)
+    if nullOnNoRows, error.code == "PGRST116", error.serverError?.matchedZeroRows == true {
       return try decoded(Data("null".utf8))
     }
-    throw PostgrestError(
-      kind: .server,
-      message: serverError.message,
-      serverError: serverError,
-      response: HTTPErrorResponse(response, body: data)
-    )
+    throw error
   }
 
   func httpRequest(for configuration: PostgrestClient.Configuration) -> HTTPTypes.HTTPRequest {

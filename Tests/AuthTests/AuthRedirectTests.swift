@@ -23,7 +23,7 @@ struct AuthRedirectTests {
     "Confirmation+link+accepted.+Please+proceed+to+confirm+link+sent+to+the+other+email"
 
   private static let linkExpired = AuthError.oauthFlowFailed(
-    "Link expired", errorCode: ErrorCode("otp_expired"))
+    "Link expired", code: "otp_expired")
 
   @Test(arguments: ["inf", "nan", "1e30"])
   func anExpiryOutOfRangeIsAnErrorNotACrash(expiresIn: String) throws {
@@ -54,20 +54,20 @@ struct AuthRedirectTests {
     ),
     (
       "myapp://cb?error=access_denied",
-      .error(.oauthFlowFailed("access_denied", errorCode: .unknown))
+      .error(.oauthFlowFailed("access_denied"))
     ),
     (
       "myapp://cb#error=access_denied",
-      .error(.oauthFlowFailed("access_denied", errorCode: .unknown))
+      .error(.oauthFlowFailed("access_denied"))
     ),
     (
       "myapp://cb?error=access_denied&error_description=User+denied+access",
-      .error(.oauthFlowFailed("User denied access", errorCode: .unknown))
+      .error(.oauthFlowFailed("User denied access"))
     ),
     (
       "myapp://cb#error_code=otp_expired",
       .error(
-        .oauthFlowFailed("The redirect reports an error.", errorCode: ErrorCode("otp_expired")))
+        .oauthFlowFailed("The redirect reports an error.", code: "otp_expired"))
     ),
     (
       "myapp://cb?message=Confirmation+link+accepted&sb=",

@@ -206,7 +206,7 @@ extension AuthClientTests {
       _ = try await sut.claims()
     }
     #expect(refreshError?.kind == .sessionInvalidated)
-    #expect(refreshError?.errorCode == .refreshTokenNotFound)
+    #expect(refreshError?.code == .refreshTokenNotFound)
 
     let signedOutError = await #expect(throws: AuthError.self) {
       _ = try await sut.claims()
@@ -493,7 +493,7 @@ extension AuthClientTests {
       Issue.record("Expected failure")
     } catch let error as AuthError {
       #expect(error.kind == .transport)
-      #expect(error.errorCode == .unknown)
+      #expect(error.code == nil)
       #expect((error.underlyingError as? URLError)?.code == .notConnectedToInternet)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -512,7 +512,7 @@ extension AuthClientTests {
       Issue.record("Expected failure")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .unexpectedFailure)
+      #expect(error.code == nil)
       #expect(error.response?.status == 502)
       #expect(error.response?.body == Data("<html>bad gateway</html>".utf8))
     } catch {

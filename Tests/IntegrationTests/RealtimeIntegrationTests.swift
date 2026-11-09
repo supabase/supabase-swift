@@ -528,10 +528,10 @@
 
         let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
         #expect(error?.kind == .unauthorized)
-        #expect(error?.serverCode == .unauthorized)
+        #expect(error?.code == .unauthorized)
         #expect(error?.isRetryable == false)
         #expect(await channel.status == .failed)
-        #expect(await channel.status.error?.serverCode == .unauthorized)
+        #expect(await channel.status.error?.code == .unauthorized)
       }
     }
 

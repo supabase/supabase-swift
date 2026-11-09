@@ -23,23 +23,23 @@ passes its cap.
 ### Body status and HTTP status
 
 On the object, bucket and render routes, Storage answers nearly every failure with HTTP 400. The
-real outcome is in the body. So branch on ``StorageError/code`` or
-``StorageError/serverStatusCode``, not on `response?.status`.
+real outcome is in the body. So branch on ``StorageError/code`` or the status in
+``StorageError/serverError``, not on `response?.status`.
 
 ```swift
 do {
   try await supabase.storage.from("avatars").upload(path: "user123.png", data: imageData)
-} catch let error as StorageError where error.code == .keyAlreadyExists {
+} catch StorageError.Code.keyAlreadyExists {
   askToReplace()
-} catch let error as StorageError where error.serverStatusCode == 413 {
+} catch let error as StorageError where error.serverError?.statusCode == 413 {
   showTooLarge()
 }
 ```
 
 - ``StorageError/code`` is the machine-readable code, such as ``StorageError/Code/noSuchKey``.
-- ``StorageError/serverStatusCode`` is the status Storage put in the body, such as `404`.
-- ``StorageError/serverError`` is the whole decoded body. It is `nil` when the body was not a
-  Storage error payload, for example a page from a proxy.
+- ``StorageError/serverError`` is the rest of the decoded body. Its `statusCode` is the status
+  Storage put in the body, such as `404`. It is `nil` when the body was not a Storage error
+  payload, for example a page from a proxy.
 - ``StorageError/response`` holds the HTTP status, the headers and the body, capped at 1 MiB. Its
   `requestID` is the value to quote to Supabase support.
 
