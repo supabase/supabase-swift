@@ -34,7 +34,7 @@ struct SupabaseClientStorageKeyTests {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), storageKey: "my-key")
       )
     )
@@ -47,7 +47,7 @@ struct SupabaseClientStorageKeyTests {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "test-key",
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
@@ -57,11 +57,12 @@ struct SupabaseClientStorageKeyTests {
     "project-ref", "https:///rest/v1", "//project-ref.supabase.co", "mailto:someone@example.com",
   ])
   func constructingAClientWithoutASchemeOrHostThrows(url: String) throws {
+    let url = try #require(URL(string: url))
     let error = #expect(throws: SupabaseClientError.self) {
       try SupabaseClient(
-        supabaseURL: try #require(URL(string: url)),
+        supabaseURL: url,
         supabaseKey: "anon-key",
-        options: SupabaseClientOptions(auth: .init(storage: InMemoryAuthStorage()))
+        configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
       )
     }
     #expect(error?.kind == .invalidConfiguration)

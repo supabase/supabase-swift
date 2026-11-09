@@ -21,7 +21,7 @@ public import HTTPTypes
 /// }
 /// let client = try SupabaseClient(
 ///   supabaseURL: url, supabaseKey: key,
-///   options: .init(global: .init(http: .init(transport: RecordingTransport())))
+///   configuration: .init(global: .init(http: .init(transport: RecordingTransport())))
 /// )
 /// ```
 ///

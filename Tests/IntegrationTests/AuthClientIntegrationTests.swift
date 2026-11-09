@@ -25,12 +25,12 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct AuthClientIntegrationTests {
-  let authClient = makeClient()
+  let authClient = try! makeClient()
 
   static let authURL = URL(string: "\(DotEnv.supabaseURL)/auth/v1")!
 
   static func makeAdminClient() -> AuthAdminClient {
-    AuthAdminClient(url: authURL, secretKey: DotEnv.supabaseSecretKey)
+    AuthAdminClient(configuration: .init(url: authURL, secretKey: DotEnv.supabaseSecretKey))
   }
 
   static func makeClient(
@@ -39,9 +39,9 @@ struct AuthClientIntegrationTests {
     storageKey: String = "sb-test-\(UUID().uuidString)-auth-token",
     redirectTo: URL? = nil,
     logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth")
-  ) -> AuthClient {
+  ) throws -> AuthClient {
     let key = serviceRole ? DotEnv.supabaseSecretKey : DotEnv.supabasePublishableKey
-    return AuthClient(
+    return try AuthClient(
       configuration: AuthClient.Configuration(
         url: authURL,
         storageKey: storageKey,
@@ -59,7 +59,7 @@ struct AuthClientIntegrationTests {
   @Test
   func tokensAndPasswordsNeverReachTheLogs() async throws {
     let recorder = LogRecorder()
-    let client = Self.makeClient(logger: recorder.makeLogger())
+    let client = try Self.makeClient(logger: recorder.makeLogger())
     let email = mockEmail()
     let password = mockPassword()
 
@@ -85,7 +85,7 @@ struct AuthClientIntegrationTests {
     let signedIn = try await authClient.session()
     let (storage, key) = try storing(signedIn, expiredBy: 60)
 
-    let client = Self.makeClient(storage: storage, storageKey: key)
+    let client = try Self.makeClient(storage: storage, storageKey: key)
     var changes = client.events().makeAsyncIterator()
 
     let initial = try #require(await changes.next())
@@ -105,7 +105,7 @@ struct AuthClientIntegrationTests {
     rejected.refreshToken = "aaaaaaaaaaaa"
     let (storage, key) = try storing(rejected, expiredBy: 60)
 
-    let client = Self.makeClient(storage: storage, storageKey: key)
+    let client = try Self.makeClient(storage: storage, storageKey: key)
     var changes = client.events().makeAsyncIterator()
 
     let initial = try #require(await changes.next())
@@ -132,7 +132,7 @@ struct AuthClientIntegrationTests {
   func importSessionSignsInASecondClientOnce() async throws {
     try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
-    let client2 = Self.makeClient()
+    let client2 = try Self.makeClient()
     await client2.initialization()
     let events = client2.events()
 
@@ -758,7 +758,7 @@ struct AuthClientIntegrationTests {
     let location = try await redirectLocation(of: link.properties.actionLink)
     #expect(location.fragment?.contains("access_token=") == true)
     // The link goes to the Site URL, so the client needs it as its callback.
-    let client = Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
+    let client = try Self.makeClient(redirectTo: URL(string: "http://127.0.0.1:3000")!)
 
     let result = try await client.handleRedirect(location)
     guard case .signedIn(let session, _) = result else {
@@ -858,7 +858,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func generateLinkRecovery() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let client = try Self.makeClient(serviceRole: true)
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     let password = mockPassword()
@@ -908,7 +908,7 @@ struct AuthClientIntegrationTests {
 
   @Test
   func verifyOTPForSecureEmailChange() async throws {
-    let client = Self.makeClient(serviceRole: true)
+    let client = try Self.makeClient(serviceRole: true)
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     let newEmail = mockEmail()
@@ -1078,7 +1078,7 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
-    let otherDevice = Self.makeClient()
+    let otherDevice = try Self.makeClient()
     try await otherDevice.signIn(email: email, password: password)
     return (authClient, otherDevice)
   }

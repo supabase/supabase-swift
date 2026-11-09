@@ -35,10 +35,10 @@ final class RealtimeTests: Sendable {
   let sut: RealtimeClient
   let testClock: SignalingTestClock
 
-  let heartbeatInterval = RealtimeClientOptions.defaultHeartbeatInterval
+  let heartbeatInterval = RealtimeClient.Configuration.defaultHeartbeatInterval
   /// The upper bound of the first reconnect wait under the default full-jitter backoff.
   let reconnectDelay: Duration = .seconds(1)
-  let timeout = RealtimeClientOptions.defaultRequestTimeout
+  let timeout = RealtimeClient.Configuration.defaultRequestTimeout
 
   init() {
     let (client, server) = FakeWebSocket.fakes()
@@ -48,8 +48,8 @@ final class RealtimeTests: Sendable {
     testClock = SignalingTestClock()
 
     sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         accessToken: {
           "custom.access.token"
@@ -65,8 +65,8 @@ final class RealtimeTests: Sendable {
   func transport() async throws {
     try await withMainSerialExecutor {
       let client = RealtimeClient(
-        url: url,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: url,
           headers: ["apikey": apiKey],
           serverLogLevel: .warning,
           accessToken: {
@@ -693,8 +693,8 @@ final class RealtimeTests: Sendable {
       struct FetchError: Error {}
 
       let sut = RealtimeClient(
-        url: url,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: url,
           headers: ["apikey": apiKey],
           accessToken: { throw FetchError() }
         ),
@@ -725,8 +725,8 @@ final class RealtimeTests: Sendable {
       let shouldThrow = LockIsolated(false)
 
       let sut = RealtimeClient(
-        url: url,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: url,
           headers: ["apikey": apiKey],
           accessToken: {
             if shouldThrow.value { throw FetchError() }
@@ -994,8 +994,8 @@ final class RealtimeTests: Sendable {
 
   private func makeClientWithDeferredDisconnect(delay: Duration) -> RealtimeClient {
     RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         disconnectOnEmptyChannelsAfter: delay
       ),

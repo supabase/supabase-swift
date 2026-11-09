@@ -29,7 +29,7 @@ extension StorageMockerTests {
 
       return StorageVectorsClient(
         api: try StorageAPI(
-          configuration: StorageClientConfiguration(
+          configuration: StorageClient.Configuration(
             url: url,
             headers: [:],
             http: .init(transport: URLSessionTransport(session: session)))

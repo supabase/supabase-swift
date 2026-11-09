@@ -35,7 +35,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return try StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [
             .init("apikey")!:
@@ -97,7 +97,7 @@ extension StorageMockerTests {
     func urlConstructionWithNewHostname(input: String, expected: String, description: String) throws
     {
       let storage = try StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: URL(string: input)!,
           headers: [:],
           usesNewHostname: true
@@ -120,7 +120,7 @@ extension StorageMockerTests {
     )
     func urlConstructionWithoutNewHostname(input: String) throws {
       let storage = try StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: URL(string: input)!,
           headers: [:],
           usesNewHostname: false

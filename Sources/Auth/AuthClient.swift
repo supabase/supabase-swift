@@ -145,7 +145,8 @@ public final class AuthClient: Sendable {
   private var api: SessionAPIClient { dependencies.sessionAPI }
   private var authAPI: AuthAPI { dependencies.authAPI }
 
-  var configuration: AuthClient.Configuration { dependencies.configuration }
+  /// The configuration this client was created with.
+  public var configuration: Configuration { dependencies.configuration }
 
   private let now: @Sendable () -> Date
   private var sessionManager: SessionManager { dependencies.sessionManager }
@@ -237,6 +238,7 @@ public final class AuthClient: Sendable {
     self.clientID = clientID
     var configuration = configuration
     configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "auth"
 
     let logger: Logging.Logger = {
       var logger = configuration.logger

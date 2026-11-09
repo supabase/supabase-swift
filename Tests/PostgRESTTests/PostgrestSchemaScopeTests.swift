@@ -122,7 +122,7 @@ struct PostgrestSchemaScopeTests {
     @Test
     func scopingAClientThatAlreadyHasASchemaTraps() async {
       await #expect(processExitsWith: .failure) {
-        _ = QueryCapture().client.schema("other").schema(PrivateSchema.self)
+        _ = try QueryCapture().client.schema("other").schema(PrivateSchema.self)
       }
     }
   #endif

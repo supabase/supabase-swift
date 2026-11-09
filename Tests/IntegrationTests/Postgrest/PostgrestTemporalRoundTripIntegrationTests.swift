@@ -18,8 +18,10 @@ struct TemporalTimestamps {
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestTemporalRoundTripIntegrationTests {
   let client = try! PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: ["apikey": DotEnv.supabasePublishableKey]
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: ["apikey": DotEnv.supabasePublishableKey]
+    )
   )
 
   let instant = Date(timeIntervalSince1970: TimeInterval(Int.random(in: 0..<2_000_000_000)))

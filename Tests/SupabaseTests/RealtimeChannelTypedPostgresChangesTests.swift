@@ -129,8 +129,8 @@ struct RealtimeChannelTypedPostgresChangesTests {
   @Test
   func streamsTypedChangesForTheRelationTableAndFilter() async throws {
     let client = try RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions()
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!)
     )
     let channel = await client.channel("todos")
 
@@ -208,8 +208,8 @@ struct RealtimeChannelTypedPostgresChangesTests {
     }
 
     let client = try RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions()
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!)
     )
     let channel = await client.channel("secrets")
 

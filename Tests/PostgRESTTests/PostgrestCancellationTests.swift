@@ -47,19 +47,19 @@ struct PostgrestCancellationTests {
     transport: ClosureTransport,
     retryEnabled: Bool = false,
     clock: any Clock<Duration> = ContinuousClock()
-  ) -> PostgrestClient {
-    PostgrestClient(
+  ) throws -> PostgrestClient {
+    try PostgrestClient(
       configuration: .init(
         url: URL(string: "http://localhost:54321/rest/v1")!,
         http: .init(transport: transport),
-        retryEnabled: retryEnabled),
-      clock: clock)
+        retryEnabled: retryEnabled,
+        clock: clock))
   }
 
   @Test
-  func cancellingATypedQueryTearsDownTheExchange() async {
+  func cancellingATypedQueryTearsDownTheExchange() async throws {
     let hanging = HangingTransport()
-    let client = makeClient(transport: hanging.transport)
+    let client = try makeClient(transport: hanging.transport)
 
     let task = Task {
       try await client.from(Todo.self).select().execute()
@@ -72,9 +72,9 @@ struct PostgrestCancellationTests {
   }
 
   @Test
-  func cancellingAnUntypedQueryTearsDownTheExchange() async {
+  func cancellingAnUntypedQueryTearsDownTheExchange() async throws {
     let hanging = HangingTransport()
-    let client = makeClient(transport: hanging.transport)
+    let client = try makeClient(transport: hanging.transport)
 
     let task = Task {
       try await client.from("todos").select().execute()
@@ -100,10 +100,10 @@ struct PostgrestCancellationTests {
   }
 
   @Test
-  func cancellingDuringRetryBackoffStopsRetrying() async {
+  func cancellingDuringRetryBackoffStopsRetrying() async throws {
     let attempts = LockIsolated(0)
     let clock = SleepUntilCancelledClock()
-    let client = makeClient(
+    let client = try makeClient(
       transport: ClosureTransport { _, _ in
         attempts.withValue { $0 += 1 }
         return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)

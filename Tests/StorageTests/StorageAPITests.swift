@@ -24,7 +24,7 @@ struct StorageAPITests {
     let url = try #require(URL(string: url))
     let error = #expect(throws: StorageError.self) {
       try StorageClient(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
           usesNewHostname: usesNewHostname
@@ -38,7 +38,7 @@ struct StorageAPITests {
     StorageClient, LockIsolated<[String]>
   ) {
     let attempts = LockIsolated<[String]>([])
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(

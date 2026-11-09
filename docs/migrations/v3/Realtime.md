@@ -99,8 +99,8 @@ Changes that still compile but behave differently. Check each one by hand.
   `.unsubscribed`. A server close during the join also ends in `.failed`. A cancelled
   `subscribe()` or `disconnect()` still ends in `.unsubscribed`.
 - **`SupabaseClient` uses the global logger for Realtime when you pass none.** A `logger:` you
-  pass in `SupabaseClientOptions(realtime:)` is kept. With `nil`, the default, Realtime uses
-  `GlobalOptions.logger`.
+  pass in `SupabaseClient.Configuration.Realtime` is kept. With `nil`, the default, Realtime uses
+  `Configuration.Global.logger`.
 - **No global `URLSession` for the WebSocket.** Realtime no longer takes the global session. For
   certificate pinning, pass a transport (see [`session:` is replaced by
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
@@ -146,8 +146,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientV2`, `RealtimeChannelV2` | `RealtimeClient`, `RealtimeChannel` |
 | `RealtimeClientV2.subscriptions`, `channels` (`[String: RealtimeChannelV2]`) | `await RealtimeClient.channels` (`[RealtimeChannel]`, order not specified) |
 | `RealtimeClientV2.push(_:)` | removed; use `RealtimeChannel.broadcast` |
-| `RealtimeClientV2.Configuration` | `RealtimeClientOptions` |
-| `RealtimeClientV2.init(config:)` | `RealtimeClient.init(url:options:)` |
+| `RealtimeClientV2.Configuration`, `RealtimeClientOptions` | `RealtimeClient.Configuration`, which holds `url` |
+| `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` (`SupabaseClient` sends the Auth token) |
+| `RealtimeClientV2.init(config:)`, `RealtimeClient(url:options:)` | `RealtimeClient(configuration:)` |
 | `RealtimeClientV2.addChannel(_:)` | removed; the client tracks channels |
 | `RealtimeClientV2.Status` | `RealtimeClientStatus`, with values (see below) |
 | `RealtimeClientV2.connect()` | `connect() async throws` |
@@ -177,8 +178,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `RealtimeMessageV2`, `PushStatus` | removed; the client builds and reads the protocol messages, and a push throws `RealtimeError` (see [Pushes throw](#pushes-throw-instead-of-returning-a-status)) |
-| `RealtimeClientOptions(fetch:)` | `RealtimeClientOptions(http:)` |
-| `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger?` |
+| `RealtimeClientOptions(fetch:)` | `RealtimeClient.Configuration(url:http:)` |
+| `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger`, defaults to a logger labeled `io.supabase.realtime` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
 | `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
 | `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
@@ -453,8 +454,8 @@ Pass `Duration` values. Convert a `TimeInterval` with `.seconds(value)`.
 let options = RealtimeClientOptions(heartbeatInterval: 30, timeoutInterval: 15)
 try await channel.httpSend(event: "ping", message: ["n": 1], timeout: 3)
 // v3
-let options = RealtimeClientOptions(
-  heartbeatInterval: .seconds(30), requestTimeout: .seconds(15)
+let configuration = RealtimeClient.Configuration(
+  url: realtimeURL, heartbeatInterval: .seconds(30), requestTimeout: .seconds(15)
 )
 try await channel.httpSend(event: "ping", payload: ["n": 1], timeout: .seconds(3))
 ```
@@ -469,7 +470,8 @@ refuses the upgrade, so the client knows whether to retry.
 // v2
 let options = RealtimeClientOptions(session: pinnedSession)
 // v3
-let options = RealtimeClientOptions(
+let configuration = RealtimeClient.Configuration(
+  url: realtimeURL,
   webSocketTransport: URLSessionWebSocketTransport(
     configuration: pinnedSession.configuration,
     delegate: pinnedSession.delegate
@@ -484,7 +486,8 @@ forever. In v3, `connect()` on watchOS throws a non-retryable `.transport` error
 TN3135. If the app runs in a context that TN3135 allows, such as audio streaming, opt in:
 
 ```swift
-let options = RealtimeClientOptions(
+let configuration = RealtimeClient.Configuration(
+  url: realtimeURL,
   webSocketTransport: URLSessionWebSocketTransport(allowsWatchOSConnections: true)
 )
 ```
@@ -497,7 +500,9 @@ REST broadcast calls go through a `ClientTransport`.
 // v2
 let options = RealtimeClientOptions(fetch: { try await session.data(for: $0) })
 // v3
-let options = RealtimeClientOptions(http: .init(transport: URLSessionTransport(session: session)))
+let configuration = RealtimeClient.Configuration(
+  url: realtimeURL, http: .init(transport: URLSessionTransport(session: session))
+)
 ```
 
 ## `RealtimeError` is a struct

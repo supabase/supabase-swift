@@ -21,9 +21,9 @@ enum StorageIntegration {
   static func client(
     headers: HTTPFields = [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"],
     middlewares: [any ClientMiddleware] = []
-  ) -> StorageClient {
-    try! StorageClient(
-      configuration: StorageClientConfiguration(
+  ) throws -> StorageClient {
+    try StorageClient(
+      configuration: StorageClient.Configuration(
         url: url,
         headers: headers,
         http: HTTPClientConfiguration(middlewares: middlewares)
@@ -59,7 +59,7 @@ enum StorageIntegration {
     _ = try await URLSession.shared.data(for: request)
   }
 
-  static let admin = client()
+  static let admin = try! client()
 
   static func newBucket(
     _ prefix: String, options: CreateBucketOptions = CreateBucketOptions(isPublic: true)

@@ -19,7 +19,7 @@ struct VectorListingTests {
     throws -> StorageVectorsClient
   {
     try StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
         http: .init(

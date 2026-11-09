@@ -23,7 +23,7 @@ struct TusSessionTests {
   ) throws -> TusSession {
     TusSession(
       api: try StorageAPI(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: supabaseURL,
           headers: [.authorization: "Bearer test.api.key", .xClientInfo: "storage-swift/x.y.z"],
           http: .init(
@@ -106,7 +106,7 @@ struct TusSessionTests {
     let sent = LockIsolated<URL?>(nil)
     let sut = TusSession(
       api: try StorageAPI(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: URL(string: "https://ref.supabase.co/storage/v1")!,
           headers: [:],
           http: .init(

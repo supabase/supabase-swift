@@ -91,7 +91,7 @@ struct ResumableUploadTests {
   private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
     -> StorageBucket
   {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }))

@@ -159,9 +159,9 @@ struct SessionTimingTests {
         url: clientURL,
         storageKey: uniqueStorageKey(),
         storage: InMemoryAuthStorage(),
-        http: .init(transport: transport),
         autoRefresh: .manual,
         observesAppLifecycle: false,
+        http: .init(transport: transport),
         now: { now }
       )
     )

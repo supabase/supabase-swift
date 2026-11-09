@@ -16,7 +16,7 @@ public import HTTPTypes
 ///
 /// ```swift
 /// let storage = try StorageClient(
-///   configuration: StorageClientConfiguration(
+///   configuration: StorageClient.Configuration(
 ///     url: url,
 ///     headers: ["apikey": key],
 ///     http: HTTPClientConfiguration(

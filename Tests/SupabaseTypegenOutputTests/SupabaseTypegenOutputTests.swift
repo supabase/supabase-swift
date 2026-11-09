@@ -24,8 +24,10 @@ func recordingClient(body: String = "[]") throws -> (PostgrestClient, RecordingT
     (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data(body.utf8))
   }
   let client = try PostgrestClient(
-    url: URL(string: "https://example.supabase.co")!,
-    http: .init(transport: transport)
+    configuration: .init(
+      url: URL(string: "https://example.supabase.co")!,
+      http: .init(transport: transport)
+    )
   )
   return (client, transport)
 }

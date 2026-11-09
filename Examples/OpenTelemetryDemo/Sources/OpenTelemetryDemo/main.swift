@@ -39,7 +39,7 @@ config.protocolClasses = [RequestPrintingProtocol.self]
 let supabase = try SupabaseClient(
   supabaseURL: URL(string: "https://example.supabase.co")!,
   supabaseKey: "demo-anon-key",
-  options: SupabaseClientOptions(
+  configuration: SupabaseClient.Configuration(
     auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
     global: .init(
       http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))

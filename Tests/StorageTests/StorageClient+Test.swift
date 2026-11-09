@@ -16,7 +16,7 @@ extension StorageClient {
     http: HTTPClientConfiguration = .init()
   ) throws -> StorageClient {
     try StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: supabaseURL)!,
         headers: [
           .authorization: "Bearer \(apiKey)",

@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import Helpers
@@ -11,14 +12,38 @@ import Testing
 @Suite
 struct StorageClientConfigurationTests {
   @Test
-  func loggerIsTaggedWithSystemMetadata() {
-    let configuration = StorageClientConfiguration(
-      url: URL(string: "http://localhost")!,
-      headers: [:],
-      logger: Logging.Logger(label: "test")
-    )
+  func loggerSetAfterInitIsTaggedWithSystemMetadata() throws {
+    var configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+    configuration.logger = Logging.Logger(label: "test")
 
-    #expect(configuration.logger[metadataKey: "system"] == "storage")
+    let client = try StorageClient(configuration: configuration)
+
+    #expect(client.configuration.logger[metadataKey: "system"] == "storage")
+  }
+
+  @Test
+  func headersDefaultToEmpty() {
+    let configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+
+    #expect(configuration.headers.isEmpty)
+  }
+
+  @Test
+  func everyFieldIsMutable() {
+    var configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
+    let clock = TestClock<Duration>()
+
+    configuration.http = HTTPClientConfiguration(timeout: .seconds(7))
+    configuration.logger = Logging.Logger(label: "replaced")
+    configuration.usesNewHostname = true
+    configuration.retryEnabled = false
+    configuration.clock = clock
+
+    #expect(configuration.http.timeout == .seconds(7))
+    #expect(configuration.logger.label == "replaced")
+    #expect(configuration.usesNewHostname)
+    #expect(!configuration.retryEnabled)
+    #expect(configuration.clock as? TestClock<Duration> === clock)
   }
 
   private func makeSUT(
@@ -27,7 +52,7 @@ struct StorageClientConfigurationTests {
     requests: LockIsolated<[HTTPRequest]>
   ) throws -> StorageClient {
     try StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: headers,
         http: .init(
@@ -109,7 +134,7 @@ struct StorageClientConfigurationTests {
   @Test
   func settingHeaderMergesWithoutRebuildingTheClient() async throws {
     let storage = try StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "https://project.supabase.co/storage/v1")!,
         headers: [.xClientInfo: "custom/1"],
         usesNewHostname: true

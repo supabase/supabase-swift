@@ -77,7 +77,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
 | `StorageHTTPSession` | `any ClientTransport` |
 | `fetch:` argument on `AuthClient`, `AuthClient.Configuration`, `PostgrestClient`, `PostgrestClient.Configuration`, `FunctionsClient`, `RealtimeClientOptions` | `http: HTTPClientConfiguration` |
-| `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
+| `StorageClientConfiguration(session:)` | `StorageClient.Configuration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
 | `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
@@ -141,7 +141,7 @@ var logger = Logger(label: "myapp")
 logger.logLevel = .debug
 let client = try SupabaseClient(
   supabaseURL: url, supabaseKey: key,
-  options: .init(global: .init(logger: logger))
+  configuration: .init(global: .init(logger: logger))
 )
 ```
 
@@ -173,9 +173,9 @@ let storage = SupabaseStorageClient(
 
 // v3
 let http = HTTPClientConfiguration(transport: URLSessionTransport(session: session))
-let database = try PostgrestClient(url: databaseURL, http: http)
+let database = try PostgrestClient(configuration: .init(url: databaseURL, http: http))
 let storage = try StorageClient(
-  configuration: StorageClientConfiguration(url: storageURL, headers: headers, http: http)
+  configuration: .init(url: storageURL, headers: headers, http: http)
 )
 ```
 
@@ -263,12 +263,12 @@ is enough.
 
 | Initializer | Throws |
 | --- | --- |
-| `SupabaseClient(supabaseURL:supabaseKey:)`, `SupabaseClient(supabaseURL:supabaseKey:options:)` | `SupabaseClientError` |
+| `SupabaseClient(supabaseURL:supabaseKey:configuration:)` | `SupabaseClientError` |
 | `AuthClient(configuration:)` | `AuthError` |
-| `PostgrestClient(configuration:)`, `PostgrestClient(url:…)` | `PostgrestError` |
+| `PostgrestClient(configuration:)` | `PostgrestError` |
 | `StorageClient(configuration:)` | `StorageError` |
 | `FunctionsClient(configuration:)` | `FunctionsError` |
-| `RealtimeClient(url:options:)` | `RealtimeError` |
+| `RealtimeClient(configuration:)` | `RealtimeError` |
 
 The sub-clients of a `SupabaseClient`, such as `supabase.storage` and `supabase.realtime`, do not
 throw: `SupabaseClient` checks the URL once, when you create it.
@@ -280,7 +280,7 @@ let database = PostgrestClient(url: databaseURL)
 
 // v3
 let supabase = try SupabaseClient(supabaseURL: url, supabaseKey: key)
-let database = try PostgrestClient(url: databaseURL)
+let database = try PostgrestClient(configuration: .init(url: databaseURL))
 ```
 
 ### SDK `async` functions run on the caller's executor
@@ -311,15 +311,15 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Your `Authorization` header wins.** PostgREST, Storage and Functions set `Authorization`
   only when the request does not have one. In v2, the session token replaced a header that you
   set with `setHeader`. Search for `Authorization` set on a builder, a Storage `setHeader`, or
-  `FunctionInvokeOptions.headers`. A middleware in `GlobalOptions.http.middlewares` no longer
+  `FunctionInvokeOptions.headers`. A middleware in `Configuration.Global.http.middlewares` no longer
   sees `Authorization` on these requests; read it in a `ClientTransport`.
 - **Access-token errors fail the request.** If the session refresh or your
-  `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
+  `Configuration.Auth.accessToken` closure throws, the request now fails with that error. In v2 the
   request went out with the API key. Only a missing session still falls back to the key. A
   refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
 - **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
-  you set in `SupabaseClientOptions(realtime:)`. With `nil`, the default, it uses
-  `GlobalOptions.logger`.
+  you set in `SupabaseClient.Configuration.Realtime`. With `nil`, the default, it uses
+  `Configuration.Global.logger`.
 - **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
   a Realtime client that already exists. A client built later fetches the current token itself.
 - **Realtime gets the token after every session change.** `SupabaseClient` pushes the access
@@ -327,33 +327,66 @@ Changes that still compile but behave differently. Check each one by hand.
   `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
   `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
 - **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
-  for certificate pinning), pass `RealtimeClientOptions(webSocketTransport:)` a
+  for certificate pinning), pass `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a
   `URLSessionWebSocketTransport` built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
-  `FunctionsOptions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
+  `Configuration.Functions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 
 ### Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
+| `SupabaseClientOptions` | `SupabaseClient.Configuration`; see below |
+| `SupabaseClient(supabaseURL:supabaseKey:options:)` | `SupabaseClient(supabaseURL:supabaseKey:configuration:)` |
+| `SupabaseClientOptions.db`, `DatabaseOptions` | `Configuration.database`, `Configuration.Database` |
+| `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
+| `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
 | `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
-| `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
-| `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |
-| `AuthOptions.autoRefreshToken: Bool` | `AuthOptions.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
+| `GlobalOptions(session:)` | `Configuration.Global(http: .init(transport: URLSessionTransport(session:)))` |
+| `GlobalOptions.logger: (any SupabaseLogger)?` | `Configuration.Global.logger: Logging.Logger` |
+| `AuthOptions.autoRefreshToken: Bool` | `Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions.flowType: AuthFlowType` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `supabase.handle(_:)` | `supabase.handleRedirect(_:)`; see [Auth.md](docs/migrations/v3/Auth.md) |
-| `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
-| `FunctionsOptions.region: String?` | `FunctionsOptions.region: FunctionRegion?` |
+| `StorageOptions.useNewHostname` | `Configuration.Storage.usesNewHostname` |
+| `FunctionsOptions.region: String?` | `Configuration.Functions.region: FunctionRegion?` |
+
+### `SupabaseClientOptions` is `SupabaseClient.Configuration`
+
+The options type moves into `SupabaseClient` and the init label is `configuration:`. Each nested
+type drops its `Options` suffix, and `db` is `database`. Every field is a `var`, so you can build
+a value and change it before you create the client. `client.configuration` returns the value
+that the client uses.
+
+The Realtime field takes `SupabaseClient.Configuration.Realtime`, not `RealtimeClientOptions`. It
+has no `accessToken`: `SupabaseClient` sends the Auth token to Realtime. To supply your own token,
+set `Configuration.Auth.accessToken`.
+
+```swift
+// v2
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: SupabaseClientOptions(
+    db: .init(schema: "app"),
+    global: .init(headers: ["x-app": "demo"])
+  )
+)
+
+// v3
+var configuration = SupabaseClient.Configuration()
+configuration.database.schema = "app"
+configuration.global.headers = ["x-app": "demo"]
+let client = try SupabaseClient(supabaseURL: url, supabaseKey: key, configuration: configuration)
+```
 
 ### `GlobalOptions.session` is removed
 
 Configure the `URLSession` on the transport. One `http` value covers every sub-client.
-`AuthOptions` also gains `http`, `logger` and `clock` to override the global value for Auth
+`Configuration.Auth` also gains `http`, `logger` and `clock` to override the global value for Auth
 alone; `nil` means the global value.
 
 ```swift
@@ -361,7 +394,7 @@ alone; `nil` means the global value.
 options: .init(global: .init(session: mySession))
 
 // v3
-options: .init(
+configuration: .init(
   global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
   // Only if the WebSocket needs the session:
   realtime: .init(
@@ -372,17 +405,17 @@ options: .init(
 )
 ```
 
-### `FunctionsOptions` takes a `FunctionRegion`
+### `Configuration.Functions` takes a `FunctionRegion`
 
 The `String?` initializer is removed. A string literal still compiles; a `String` variable needs
-a conversion. `FunctionsOptions` also gains `http` and `logger`; `nil` means the global value.
+a conversion. `Configuration.Functions` also gains `http` and `logger`; `nil` means the global value.
 
 ```swift
 // v2
 let options = SupabaseClientOptions(functions: .init(region: settings.functionsRegion))
 
 // v3
-let options = SupabaseClientOptions(
+let configuration = SupabaseClient.Configuration(
   functions: .init(region: FunctionRegion(rawValue: settings.functionsRegion))
 )
 ```

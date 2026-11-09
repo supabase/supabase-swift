@@ -12,12 +12,14 @@ struct PostgrestLogLeakTests {
   @Test
   func aSecretInTheQueryNeverReachesTheLog() async throws {
     let sut = try PostgrestClient(
-      url: URL(string: "http://localhost:54321/rest/v1")!,
-      logger: recorder.makeLogger(),
-      http: .init(
-        transport: ClosureTransport { _, _ in
-          (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
-        })
+      configuration: .init(
+        url: URL(string: "http://localhost:54321/rest/v1")!,
+        http: .init(
+          transport: ClosureTransport { _, _ in
+            (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+          }),
+        logger: recorder.makeLogger()
+      )
     )
 
     try await sut.from("invites").select().eq("code", value: "pg-secret-1").execute()

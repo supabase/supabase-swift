@@ -40,10 +40,12 @@ struct User: Codable, Hashable {
 )
 struct PostgrestIntegrationTests {
   let client = try! PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: [
-      "Apikey": DotEnv.supabasePublishableKey
-    ]
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: [
+        "Apikey": DotEnv.supabasePublishableKey
+      ]
+    )
   )
 
   init() async throws {

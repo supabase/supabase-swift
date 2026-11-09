@@ -13,7 +13,7 @@ import Testing
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil), .serialized)
 struct StorageVectorsClientIntegrationTests {
   let vectors = try! StorageClient(
-    configuration: StorageClientConfiguration(
+    configuration: StorageClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
         .authorization: "Bearer \(DotEnv.supabaseSecretKey)"

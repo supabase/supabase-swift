@@ -41,7 +41,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func whereAppliesAFlatFilter() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select()
       .where { $0.isDone.eq(false) && $0.priority.gt(3) }
@@ -52,7 +52,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func whereAppliesANestedGroup() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select()
       .where { ($0.isDone.eq(false) && $0.priority.gt(3)) || $0.id.eq(7) }
@@ -62,7 +62,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func repeatedWhereAccumulates() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select()
       .where { $0.isDone.eq(false) }
@@ -74,7 +74,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func whereWorksOnAMutation() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).delete().where { $0.id.eq(7) }.execute()
     #expect(capture.query?.contains("id=eq.7") == true)
     #expect(capture.httpMethod == "DELETE")
@@ -82,7 +82,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func aFilterCanBeAssembledInsideTheClosure() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     let minimumPriority: Int? = 3
     _ = try await capture.client.from(Todo.self)
       .select()
@@ -98,7 +98,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func orderUsesTheNamespaceColumnName() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select().order { $0.dueDate.asc() }.limit(5).execute()
     #expect(capture.query?.contains("order=due_at.asc") == true)
@@ -107,7 +107,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func orderWithoutADirectionSendsTheBareColumn() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().order { $0.dueDate }.execute()
     #expect(capture.query?.contains("order=due_at") == true)
     #expect(capture.query?.contains("order=due_at.asc") == false)
@@ -116,7 +116,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func directedAndDirectionlessKeysMergeInOrder() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select().order { $0.priority.desc() }.order { $0.id }.execute()
     #expect(capture.query?.contains("order=priority.desc,id") == true)
@@ -124,7 +124,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func nullPlacementIsOmittedUnlessAskedFor() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().order { $0.dueDate.desc() }.execute()
     #expect(capture.query?.contains("order=due_at.desc") == true)
     #expect(capture.query?.contains("nulls") == false)
@@ -132,7 +132,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func nullPlacementIsChainedWhenWanted() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select().order { $0.dueDate.desc().nulls(.first) }.execute()
     #expect(capture.query?.contains("order=due_at.desc.nullsfirst") == true)
@@ -140,7 +140,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func aPlacementDoesNotRequireADirection() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select().order { $0.dueDate.nulls(.last) }.execute()
     #expect(capture.query?.contains("order=due_at.nullslast") == true)
@@ -150,7 +150,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func repeatedOrderAppendsASecondKey() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select().order { $0.priority.desc() }.order { $0.id.asc() }.execute()
     #expect(capture.query?.contains("order=priority.desc,id.asc") == true)
@@ -158,7 +158,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func branchingTwoChainsDoesNotAlias() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     let base = capture.client.from(Todo.self).select()
 
     _ = try await base.where { $0.isDone.eq(true) }.execute()
@@ -171,7 +171,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func rangeSendsOffsetAndLimit() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().range(10...19).execute()
     #expect(capture.query?.contains("offset=10") == true)
     #expect(capture.query?.contains("limit=10") == true)
@@ -179,7 +179,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func rangeFromZeroSendsAZeroOffset() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().range(0...0).execute()
     #expect(capture.query?.contains("offset=0") == true)
     #expect(capture.query?.contains("limit=1") == true)
@@ -187,7 +187,7 @@ struct PostgrestQueryWhereTests {
 
   @Test
   func rangeChainsAfterWhereAndOrder() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select()
       .where { $0.isDone.eq(false) }

@@ -386,7 +386,7 @@ extension RealtimeClient {
   }
 
   private nonisolated func callAccessToken(generation: Int) -> Task<Void, Never> {
-    let provider = options.accessToken
+    let provider = configuration.accessToken
     return Task(priority: .medium) { [inbox, logger] in
       var token: String?
       if let provider {
@@ -401,7 +401,7 @@ extension RealtimeClient {
   }
 
   private nonisolated func accessTokenTimeout(generation: Int) -> Task<Void, Never> {
-    let timeout = options.requestTimeout
+    let timeout = configuration.requestTimeout
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = clock
     return sleepThenRun(on: clock, after: timeout) { [inbox, logger] in

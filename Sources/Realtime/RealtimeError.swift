@@ -40,7 +40,7 @@ public struct RealtimeError: SupabaseError {
     }
 
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout. Retry, or raise ``RealtimeClientOptions/requestTimeout`` if it happens often.
+    /// timeout. Retry, or raise ``RealtimeClient/Configuration/requestTimeout`` if it happens often.
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
@@ -85,8 +85,8 @@ public struct RealtimeError: SupabaseError {
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
-    /// ``RealtimeClient/init(url:options:)`` refused the URL: it has no scheme or no host. Fix
-    /// the URL. No client was created.
+    /// ``RealtimeClient/init(configuration:)`` refused the configuration: its URL has no scheme
+    /// or no host. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
 
     /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.

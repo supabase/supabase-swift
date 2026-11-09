@@ -44,7 +44,7 @@ func makeSupabaseClient(autoRefresh: AuthClient.AutoRefreshPolicy) throws -> Sup
   return try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key",
-    options: .init(
+    configuration: .init(
       auth: .init(
         storage: KeychainStorage(accessGroup: accessGroup),
         autoRefresh: autoRefresh
