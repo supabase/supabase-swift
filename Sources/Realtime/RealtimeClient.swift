@@ -175,8 +175,8 @@ public actor RealtimeClient {
   var lastChannelID: UInt64 = 0
   /// The published client status.
   let statusFanout = Fanout<RealtimeClientStatus>(retaining: .disconnected(nil))
-  /// The published heartbeats. Retains nothing until the first heartbeat, then the latest one.
-  let heartbeatFanout = Fanout<HeartbeatEvent>(retaining: nil)
+  /// The published heartbeats. An event fan-out, so a new stream sees only later heartbeats.
+  let heartbeatFanout = Fanout<HeartbeatEvent>()
   /// The last stream id issued. Ids only grow, so no two streams share one.
   var lastStreamID: UInt64 = 0
 
@@ -372,9 +372,9 @@ public actor RealtimeClient {
   /// An async stream that emits each step of the heartbeat cycle.
   ///
   /// The client sends a heartbeat at each ``Configuration/heartbeatInterval``
-  /// interval to keep the connection alive. The stream replays the latest event, if any, and
-  /// then emits every later one. Cancelling the iterating task ends the stream; so does
-  /// releasing the client.
+  /// interval to keep the connection alive. The stream is registered before this method returns
+  /// and emits every event from then on. It never replays an earlier event. Cancelling the
+  /// iterating task ends the stream; so does releasing the client.
   ///
   /// ```swift
   /// for await event in await client.heartbeats() {

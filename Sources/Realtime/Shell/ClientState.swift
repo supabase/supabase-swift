@@ -89,22 +89,18 @@ final class Fanout<Element: Sendable> {
   }
 
   private var subscribers: [StreamID: Subscriber] = [:]
-  private let retains: Bool
   private var isFinished = false
 
   /// The latest element of a state fan-out, or `nil` for an event fan-out.
   private(set) var current: Element?
 
   /// An event fan-out: subscribers see only the elements yielded after they subscribe.
-  init() {
-    retains = false
-  }
+  init() {}
 
   /// A state fan-out: subscribers first receive the latest element, or `initial` before the
-  /// first yield. With a `nil` `initial`, subscribers receive nothing until the first yield.
-  init(retaining initial: Element?) {
+  /// first yield.
+  init(retaining initial: Element) {
     current = initial
-    retains = true
   }
 
   deinit {
@@ -140,7 +136,7 @@ final class Fanout<Element: Sendable> {
   /// Drops the subscribers whose consumer already ended the stream.
   func yield(_ element: Element) {
     guard !isFinished else { return }
-    if retains { current = element }
+    if current != nil { current = element }
     for (id, subscriber) in subscribers where subscriber.filter?(element) ?? true {
       if case .terminated = subscriber.continuation.yield(element) {
         subscribers[id] = nil

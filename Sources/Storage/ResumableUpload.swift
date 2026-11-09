@@ -19,13 +19,13 @@ import Logging
 /// ```swift
 /// let upload = try bucket.resumableUpload(path: "video.mp4", fileURL: url)
 /// try await upload.start()
-/// for await progress in upload.progress { … }
+/// for await progress in upload.progress() { … }
 /// let object = try await upload.result
 /// ```
 ///
 /// The handle outlives whoever created it, like a `Task`. Cancelling a task that awaits
-/// ``start()``, ``result``, ``progress`` or ``states`` only ends that await; the upload keeps
-/// going until ``pause()``, ``cancel()``, completion or failure. After a network failure the
+/// ``start()``, ``result``, ``progress()`` or ``statusChanges()`` only ends that await; the
+/// upload keeps going until ``pause()``, ``cancel()``, completion or failure. After a network failure the
 /// upload retries, with a `HEAD` for the server's offset before each attempt, until
 /// ``ResumableUploadConfiguration/retryTimeout`` is spent; then it fails and its record stays
 /// on disk for ``resume()``, in this process or the next.
@@ -47,7 +47,7 @@ public actor ResumableUpload {
   }
 
   /// Where an upload is.
-  public enum State: Sendable {
+  public enum Status: Sendable {
     /// Created, not started.
     case pending
     /// Sending chunks, or waiting to retry.
@@ -93,12 +93,12 @@ public actor ResumableUpload {
   /// The size of the upload.
   public nonisolated let totalBytes: Int64
 
-  /// Where the upload is now. ``states`` reports every change.
-  public private(set) var state: State = .pending {
+  /// Where the upload is now. ``statusChanges()`` reports every change.
+  public private(set) var status: Status {
     didSet {
-      stateBroadcaster.yield(state)
-      if state.isTerminal {
-        stateBroadcaster.finish()
+      statusBroadcaster.yield(status)
+      if status.isTerminal {
+        statusBroadcaster.finish()
         progressBroadcaster.finish()
         Self.live.withValue { if $0[liveKey]?.upload === self { $0.removeValue(forKey: liveKey) } }
       }
@@ -115,7 +115,7 @@ public actor ResumableUpload {
   private var startInProgress = false
   private let progressBroadcaster = StreamBroadcaster<TransferProgress>(
     bufferingPolicy: .bufferingNewest(1))
-  private let stateBroadcaster = StreamBroadcaster<State>(bufferingPolicy: .unbounded)
+  private let statusBroadcaster: StreamBroadcaster<Status>
 
   /// The handles that are not yet terminal, one per record, so two callers asking for the
   /// same upload drive one tus session instead of two. Held weakly, so a handle that never
@@ -188,14 +188,19 @@ public actor ResumableUpload {
     self.options = options
     self.api = api
     self.store = ResumableStore(configuration: api.configuration.resumable)
+    let initial = Status.pending
+    self.status = initial
+    self.statusBroadcaster = StreamBroadcaster(initial: initial, bufferingPolicy: .unbounded)
   }
 
   /// The server-confirmed bytes, as each chunk lands. A late subscriber gets the latest value
   /// first; the stream ends with the upload.
-  public nonisolated var progress: AsyncStream<TransferProgress> { progressBroadcaster.stream() }
+  public nonisolated func progress() -> AsyncStream<TransferProgress> {
+    progressBroadcaster.stream()
+  }
 
-  /// Every change of ``state``, ending after a terminal one.
-  public nonisolated var states: AsyncStream<State> { stateBroadcaster.stream() }
+  /// The current ``status`` first, then every change, ending after a terminal one.
+  public nonisolated func statusChanges() -> AsyncStream<Status> { statusBroadcaster.stream() }
 
   /// The uploaded object once every byte is on the server.
   ///
@@ -203,17 +208,15 @@ public actor ResumableUpload {
   ///   ``cancel()`` or when the awaiting task is cancelled.
   public var result: UploadedObject {
     get async throws {
-      let states = states
-      if let outcome = try outcome(of: state) { return outcome }
-      for await state in states {
-        if let outcome = try outcome(of: state) { return outcome }
+      for await status in statusChanges() {
+        if let outcome = try outcome(of: status) { return outcome }
       }
       throw CancellationError()
     }
   }
 
-  private func outcome(of state: State) throws -> UploadedObject? {
-    switch state {
+  private func outcome(of status: Status) throws -> UploadedObject? {
+    switch status {
     case .completed(let object): object
     case .failed(let error): throw error
     case .cancelled: throw CancellationError()
@@ -225,31 +228,31 @@ public actor ResumableUpload {
   /// sending chunks. Returns as soon as the first request is answered; ``result`` awaits the
   /// rest. Does nothing once started.
   ///
-  /// - Throws: ``StorageError`` when the server refuses the upload, in which case ``state`` is
-  ///   ``State/failed(_:)``.
+  /// - Throws: ``StorageError`` when the server refuses the upload, in which case ``status`` is
+  ///   ``Status/failed(_:)``.
   public func start() async throws {
-    guard case .pending = state, !startInProgress else { return }
+    guard case .pending = status, !startInProgress else { return }
     startInProgress = true
     let key = liveKey
     claimLive(key)
     defer {
       startInProgress = false
-      switch state {
+      switch status {
       case .uploading: break
       default: releaseStart(key)
       }
     }
     do {
       let record = try await loadOrCreateRecord()
-      guard case .pending = state else { return }
+      guard case .pending = status else { return }
       self.record = record
-      state = .uploading
+      status = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {
       throw CancellationError()
     } catch {
       let error = storageError(error)
-      state = .failed(error)
+      status = .failed(error)
       throw error
     }
   }
@@ -277,30 +280,30 @@ public actor ResumableUpload {
   /// Stops after the chunk in flight lands. The record stays, so ``resume()`` continues from
   /// the server's offset.
   public func pause() {
-    guard case .uploading = state else { return }
+    guard case .uploading = status else { return }
     pauseRequested = true
-    state = .paused
+    status = .paused
   }
 
   /// Continues a paused or failed upload from the offset the server reports.
   public func resume() async throws {
-    switch state {
+    switch status {
     case .paused, .failed: break
     case .pending, .uploading, .completed, .cancelled: return
     }
     await loop?.value
     guard record != nil else { return try await start() }
     claimLive(liveKey)
-    state = .uploading
+    status = .uploading
     startLoop(from: 0, next: .resync)
   }
 
   /// Aborts the upload: the chunk in flight is dropped, the server's copy is deleted (best
   /// effort), and so are the record and any sandbox copy.
   public func cancel() async {
-    guard !state.isTerminal else { return }
+    guard !status.isTerminal else { return }
     loop?.cancel()
-    state = .cancelled
+    status = .cancelled
     await loop?.value
     if let record {
       await TusSession(api: api).terminate(record.uploadURL)
@@ -360,7 +363,7 @@ public actor ResumableUpload {
         fail(storageError(error), keepRecord: false)
         break
       }
-      if state.isTerminal { break }
+      if status.isTerminal { break }
     }
     loop = nil
   }
@@ -395,12 +398,12 @@ public actor ResumableUpload {
       path: path,
       fullPath: response?.key ?? "\(bucketID)/\(path)")
     if let record { store.remove(record) }
-    state = .completed(object)
+    status = .completed(object)
   }
 
   private func fail(_ error: StorageError, keepRecord: Bool) {
     if !keepRecord, let record { store.remove(record) }
-    state = .failed(error)
+    status = .failed(error)
   }
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
@@ -469,7 +472,7 @@ public actor ResumableUpload {
 }
 
 /// Fans one producer out to any number of `AsyncStream` consumers. A new consumer gets the
-/// latest element first.
+/// latest element first, or `initial` before the first yield.
 final class StreamBroadcaster<Element: Sendable>: Sendable {
   private struct Subscribers {
     var continuations: [UUID: AsyncStream<Element>.Continuation] = [:]
@@ -477,10 +480,14 @@ final class StreamBroadcaster<Element: Sendable>: Sendable {
     var finished = false
   }
 
-  private let subscribers = LockIsolated(Subscribers())
+  private let subscribers: LockIsolated<Subscribers>
   private let bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy
 
-  init(bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy) {
+  init(
+    initial: Element? = nil,
+    bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy
+  ) {
+    self.subscribers = LockIsolated(Subscribers(latest: initial))
     self.bufferingPolicy = bufferingPolicy
   }
 

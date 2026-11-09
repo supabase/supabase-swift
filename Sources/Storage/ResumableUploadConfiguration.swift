@@ -20,7 +20,8 @@ public struct ResumableUploadConfiguration: Sendable {
 
   /// How long an upload keeps retrying after a network failure before it fails. The waits
   /// between attempts grow with jitter; once their sum passes this, the upload is
-  /// ``ResumableUpload/State/failed(_:)`` and its record stays for a later ``ResumableUpload/resume()``.
+  /// ``ResumableUpload/Status/failed(_:)`` and its record stays for a later
+  /// ``ResumableUpload/resume()``.
   public var retryTimeout: Duration
 
   /// Where upload records and sandbox copies live. `nil` uses `Application Support`; pass an app

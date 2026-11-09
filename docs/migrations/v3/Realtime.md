@@ -295,7 +295,9 @@ let channel = await supabase.channel("room") {
 attempt number, the wait before the next attempt, and the error. They are not `Equatable`: use
 `isConnected`, `isSubscribed` and `error`, or match a case. `heartbeats()` emits
 `HeartbeatEvent`: `.sent`, `.acknowledged(latency:)` and `.timedOut`. Any reply acknowledges a
-heartbeat, so there is no `.error` event.
+heartbeat, so there is no `.error` event. Like every event stream, `heartbeats()` emits only the
+heartbeats after the call and never replays an earlier one. `HeartbeatEvent` and
+`RealtimeChannelEvent` are `Hashable`.
 
 ```swift
 // v2

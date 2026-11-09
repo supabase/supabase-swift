@@ -164,7 +164,7 @@ struct AppLifecycleView: View {
 
   private func description(of event: HeartbeatEvent?) -> String {
     switch event {
-    case nil: "Waiting for the first heartbeat"
+    case nil: "Waiting for the next heartbeat"
     case .sent: "Sent, waiting for the server"
     case .acknowledged(let latency):
       "Acknowledged in \(latency.formatted(.units(allowed: [.milliseconds], width: .abbreviated)))"

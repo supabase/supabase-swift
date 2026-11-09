@@ -120,17 +120,16 @@ struct RealtimeClientChannelsTests {
   }
 
   @Test
-  func heartbeatsReplayLatestOnly() async {
+  func heartbeatsNeverReplay() async {
     let early = await client.heartbeats()
-    #expect(await client.latestHeartbeat == nil)
-
     await client.publishHeartbeat(.sent)
 
     var earlyIterator = early.makeAsyncIterator()
     #expect(await earlyIterator.next() == .sent)
 
     var lateIterator = await client.heartbeats().makeAsyncIterator()
-    #expect(await lateIterator.next() == .sent)
+    await client.publishHeartbeat(.timedOut)
+    #expect(await lateIterator.next() == .timedOut, "an event stream starts with the next event")
   }
 
   @Test
@@ -218,9 +217,6 @@ private final class IdleDisconnectHarness: Sendable {
 }
 
 extension RealtimeClient {
-  /// The heartbeat a new ``heartbeats()`` stream replays first, if any.
-  fileprivate var latestHeartbeat: HeartbeatEvent? { heartbeatFanout.current }
-
   /// Publishes `event` as the core's `.publishHeartbeat` effect would.
   fileprivate func publishHeartbeat(_ event: HeartbeatEvent) {
     heartbeatFanout.yield(event)
