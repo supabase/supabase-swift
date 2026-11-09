@@ -43,7 +43,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokePerCallHeaderOverrideIsNotClobberedByLiveAccessToken() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -69,7 +69,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokeWithoutSessionDoesNotThrow() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -92,7 +92,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
       configuration: SupabaseClient.Configuration(
@@ -116,7 +116,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
     struct TokenError: Error {}
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -138,7 +138,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokeUsesLiveAccessTokenWhenNoOverrideIsGiven() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -161,7 +161,7 @@ struct SupabaseClientFunctionsAuthTests {
   @Test
   func functionsInvokeSendsNoBearerWhenTheProviderReturnsTheNewFormatKey() async throws {
     FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
       configuration: SupabaseClient.Configuration(

@@ -16,14 +16,14 @@ extension StorageMockerTests {
   struct StorageBucketTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    private func makeSUT() -> StorageClient {
+    private func makeSUT() throws -> StorageClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
       configuration.protocolClasses = [MockingURLProtocol.self]
       let session = URLSession(configuration: configuration)
 
-      return StorageClient(
+      return try StorageClient(
         configuration: StorageClient.Configuration(
           url: url,
           headers: [
@@ -35,9 +35,9 @@ extension StorageMockerTests {
     }
 
     private func makeRequestCapturingSUT(request captured: LockIsolated<HTTPRequest?>)
-      -> StorageClient
+      throws -> StorageClient
     {
-      StorageClient(
+      try StorageClient(
         configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
@@ -60,9 +60,9 @@ extension StorageMockerTests {
     }
 
     private func makeBodyCapturingSUT(body captured: LockIsolated<Data?>, response: String)
-      -> StorageClient
+      throws -> StorageClient
     {
-      StorageClient(
+      try StorageClient(
         configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
@@ -81,9 +81,9 @@ extension StorageMockerTests {
     }
 
     private func makeFailingSUT(_ failure: @escaping @Sendable () throws -> Never)
-      -> StorageClient
+      throws -> StorageClient
     {
-      StorageClient(
+      try StorageClient(
         configuration: StorageClient.Configuration(
           url: url,
           headers: [:],
@@ -93,8 +93,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func transportFailureIsWrapped() async {
-      let storage = makeFailingSUT { throw URLError(.timedOut) }
+    func transportFailureIsWrapped() async throws {
+      let storage = try makeFailingSUT { throw URLError(.timedOut) }
 
       do {
         _ = try await storage.from("bucket").list()
@@ -109,8 +109,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func cancellationIsNotWrapped() async {
-      let storage = makeFailingSUT { throw CancellationError() }
+    func cancellationIsNotWrapped() async throws {
+      let storage = try makeFailingSUT { throw CancellationError() }
 
       await #expect(throws: CancellationError.self) {
         _ = try await storage.from("bucket").list()
@@ -118,8 +118,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func cancelledURLErrorWithoutTaskCancellationIsWrapped() async {
-      let storage = makeFailingSUT { throw URLError(.cancelled) }
+    func cancelledURLErrorWithoutTaskCancellationIsWrapped() async throws {
+      let storage = try makeFailingSUT { throw URLError(.cancelled) }
 
       do {
         _ = try await storage.from("bucket").list()
@@ -133,8 +133,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func cancellingTheTaskThrowsCancellationError() async {
-      let storage = makeSUT()
+    func cancellingTheTaskThrowsCancellationError() async throws {
+      let storage = try makeSUT()
       let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
 
       var mock = Mock(
@@ -163,9 +163,9 @@ extension StorageMockerTests {
     }
 
     @Test
-    func customFetchErrorIsNotWrapped() async {
+    func customFetchErrorIsNotWrapped() async throws {
       struct FetchError: Error {}
-      let storage = makeFailingSUT { throw FetchError() }
+      let storage = try makeFailingSUT { throw FetchError() }
 
       await #expect(throws: FetchError.self) {
         _ = try await storage.from("bucket").list()
@@ -173,8 +173,8 @@ extension StorageMockerTests {
     }
 
     @Test
-    func undecodableSuccessBodyIsWrapped() async {
-      let storage = makeSUT()
+    func undecodableSuccessBodyIsWrapped() async throws {
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -195,14 +195,14 @@ extension StorageMockerTests {
     }
 
     @Test
-    func configuration() {
-      let storage = makeSUT()
+    func configuration() throws {
+      let storage = try makeSUT()
       #expect(storage.from("bucket").configuration.url == url)
     }
 
     @Test
     func listFiles() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -245,7 +245,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesWithPartialSortByColumn() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -274,7 +274,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesWithPartialSortByOrder() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -303,7 +303,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesWithFullSortByOverride() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -332,7 +332,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesPreservesDefaultLimitWhenOnlyOffsetProvided() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -361,7 +361,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesPreservesDefaultOffsetWhenOnlyLimitProvided() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -390,7 +390,7 @@ extension StorageMockerTests {
 
     @Test
     func listFilesWithExplicitZeroLimitIsNotTreatedAsMissing() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/list/bucket"),
@@ -421,7 +421,7 @@ extension StorageMockerTests {
     @Test
     func listFilesSendsSearchExactMatchAndVersionFilters() async throws {
       let body = LockIsolated<Data?>(nil)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+      let storage = try makeBodyCapturingSUT(body: body, response: "[]")
 
       _ = try await storage.from("bucket").list(
         path: "folder/a.txt",
@@ -438,7 +438,7 @@ extension StorageMockerTests {
 
     @Test
     func move() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/move"),
@@ -469,7 +469,7 @@ extension StorageMockerTests {
 
     @Test
     func copy() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/copy"),
@@ -509,7 +509,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket/file.txt"),
@@ -548,7 +548,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURL_emptyTransformIsNotSent() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket/file.txt"),
@@ -584,7 +584,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURL_malformedSignedURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket/file.txt"),
@@ -615,7 +615,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURL_download() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket/file.txt"),
@@ -653,8 +653,8 @@ extension StorageMockerTests {
     }
 
     @Test(arguments: [Duration.zero, .milliseconds(999), .seconds(-5)])
-    func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async {
-      let storage = makeFailingSUT {
+    func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async throws {
+      let storage = try makeFailingSUT {
         Issue.record("A request was sent"); throw URLError(.badURL)
       }
 
@@ -672,7 +672,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURLs() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket"),
@@ -732,7 +732,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURLs_download() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket"),
@@ -791,7 +791,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURLs_withNullSignedURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket"),
@@ -836,7 +836,7 @@ extension StorageMockerTests {
 
     @Test
     func remove() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket"),
@@ -889,7 +889,7 @@ extension StorageMockerTests {
 
     @Test
     func nonSuccessStatusCode() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/move"),
@@ -932,7 +932,7 @@ extension StorageMockerTests {
 
     @Test
     func nonSuccessStatusCodeWithNonJSONResponse() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/move"),
@@ -969,7 +969,7 @@ extension StorageMockerTests {
 
     @Test
     func nonSuccessStatusCodeExposesTheServerErrorCode() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/missing.txt"),
@@ -1010,7 +1010,7 @@ extension StorageMockerTests {
 
     @Test
     func updateFromData() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1060,7 +1060,7 @@ extension StorageMockerTests {
 
     @Test
     func uploadReturnsCleanedPath() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/folder/file.txt"),
@@ -1091,7 +1091,7 @@ extension StorageMockerTests {
 
     @Test
     func uploadFromURL_honorsContentType() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1138,7 +1138,7 @@ extension StorageMockerTests {
 
     @Test
     func updateFromURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1189,7 +1189,7 @@ extension StorageMockerTests {
 
     @Test
     func download() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1216,7 +1216,7 @@ extension StorageMockerTests {
 
     @Test
     func download_versionId() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1244,7 +1244,7 @@ extension StorageMockerTests {
 
     @Test
     func download_withEmptyImageTransform() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1263,7 +1263,7 @@ extension StorageMockerTests {
 
     @Test
     func getPublicURL_withEmptyImageTransform() throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let publicURL = try storage.from("bucket")
         .publicURL(path: "image.png", options: PublicURLOptions(transform: ImageTransform()))
@@ -1280,7 +1280,7 @@ extension StorageMockerTests {
 
     @Test
     func getPublicURL_withActualImageTransform() throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let publicURL = try storage.from("bucket")
         .publicURL(
@@ -1294,7 +1294,7 @@ extension StorageMockerTests {
 
     @Test
     func getPublicURLStripsLeadingSlash() throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let publicURL = try storage.from("bucket")
         .publicURL(path: "/folder/image.png")
@@ -1307,7 +1307,7 @@ extension StorageMockerTests {
 
     @Test
     func downloadStripsLeadingSlash() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),
@@ -1334,7 +1334,7 @@ extension StorageMockerTests {
 
     @Test
     func getPublicURLCollapsesRepeatedAndTrailingSlashes() throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let publicURL = try storage.from("bucket")
         .publicURL(path: "folder//image.png/")
@@ -1347,7 +1347,7 @@ extension StorageMockerTests {
 
     @Test
     func downloadCollapsesRepeatedAndTrailingSlashes() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/folder/file.txt"),
@@ -1371,7 +1371,7 @@ extension StorageMockerTests {
         let destinationKey: String
       }
       let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(body: body, response: "{}")
+      let storage = try makeBodyCapturingSUT(body: body, response: "{}")
 
       try await storage.from("bucket").move(from: "/folder/a.png", to: "folder//b.png/")
 
@@ -1387,7 +1387,7 @@ extension StorageMockerTests {
         let destinationKey: String
       }
       let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(
+      let storage = try makeBodyCapturingSUT(
         body: body, response: #"{"Key":"bucket/folder/b.png"}"#)
 
       try await storage.from("bucket").copy(from: "/folder/a.png", to: "folder//b.png/")
@@ -1403,7 +1403,7 @@ extension StorageMockerTests {
         let prefixes: [String]
       }
       let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+      let storage = try makeBodyCapturingSUT(body: body, response: "[]")
 
       try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
 
@@ -1417,7 +1417,7 @@ extension StorageMockerTests {
         let paths: [String]
       }
       let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+      let storage = try makeBodyCapturingSUT(body: body, response: "[]")
 
       _ = try await storage.from("bucket")
         .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: .seconds(60))
@@ -1432,7 +1432,7 @@ extension StorageMockerTests {
         let prefix: String
       }
       let body = LockIsolated(Data?.none)
-      let storage = makeBodyCapturingSUT(body: body, response: "[]")
+      let storage = try makeBodyCapturingSUT(body: body, response: "[]")
 
       _ = try await storage.from("bucket").list(path: "/folder//nested/")
 
@@ -1442,7 +1442,7 @@ extension StorageMockerTests {
 
     @Test
     func download_withOptions() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let imageData = try! Data(
         contentsOf: Bundle.module.url(forResource: "sadcat", withExtension: "jpg")!)
@@ -1474,7 +1474,7 @@ extension StorageMockerTests {
 
     @Test
     func info() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/info/bucket/file.txt"),
@@ -1508,7 +1508,7 @@ extension StorageMockerTests {
 
     @Test
     func exists() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/info/bucket/file.txt"),
@@ -1535,7 +1535,7 @@ extension StorageMockerTests {
 
     @Test
     func existsIsFalseForNoSuchKey() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/info/bucket/file.txt"),
@@ -1555,7 +1555,7 @@ extension StorageMockerTests {
 
     @Test
     func existsIsFalseForABody404WithoutACode() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/info/bucket/file.txt"),
@@ -1577,7 +1577,7 @@ extension StorageMockerTests {
     func existsRethrowsOtherServerErrors(raw: String, status: String, code: StorageError.Code)
       async throws
     {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/info/bucket/file.txt"),
@@ -1599,7 +1599,7 @@ extension StorageMockerTests {
 
     @Test
     func purgeCache() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
@@ -1624,7 +1624,7 @@ extension StorageMockerTests {
 
     @Test
     func purgeCacheTransformationsOnly() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("cdn/bucket/folder/file.txt"),
@@ -1651,7 +1651,7 @@ extension StorageMockerTests {
 
     @Test
     func purgeCachePercentEncodesThePath() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("cdn/bucket/folder/my file.png"),
@@ -1676,7 +1676,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedUploadURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
@@ -1715,7 +1715,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedUploadURL_withUpsert() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
@@ -1758,7 +1758,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedUploadURLCleansPath() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
@@ -1793,7 +1793,7 @@ extension StorageMockerTests {
 
     @Test
     func uploadToSignedURLCleansPath() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
@@ -1833,7 +1833,7 @@ extension StorageMockerTests {
 
     @Test
     func uploadToSignedURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
@@ -1873,7 +1873,7 @@ extension StorageMockerTests {
     @Test
     func uploadToSignedURLDerivesContentTypeFromPathExtensionWhenOptionsOmitted() async throws {
       let request = LockIsolated(HTTPRequest?.none)
-      let storage = makeRequestCapturingSUT(request: request)
+      let storage = try makeRequestCapturingSUT(request: request)
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
@@ -1888,7 +1888,7 @@ extension StorageMockerTests {
     @Test
     func uploadToSignedURLFromFileURLDerivesContentTypeWhenOptionsOmitted() async throws {
       let request = LockIsolated(HTTPRequest?.none)
-      let storage = makeRequestCapturingSUT(request: request)
+      let storage = try makeRequestCapturingSUT(request: request)
 
       _ = try await storage.from("bucket")
         .uploadToSignedURL(
@@ -1902,7 +1902,7 @@ extension StorageMockerTests {
 
     @Test
     func uploadToSignedURL_fromFileURL() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
@@ -1950,7 +1950,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURL_cacheNonce() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket/file.txt"),
@@ -1977,7 +1977,7 @@ extension StorageMockerTests {
 
     @Test
     func createSignedURLs_cacheNonce() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/sign/bucket"),
@@ -2011,7 +2011,7 @@ extension StorageMockerTests {
 
     @Test
     func getPublicURL_cacheNonce() throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       let url = storage.from("bucket").publicURL(
         path: "file.txt", options: PublicURLOptions(cacheNonce: "abc123"))
@@ -2021,7 +2021,7 @@ extension StorageMockerTests {
 
     @Test
     func download_cacheNonce() async throws {
-      let storage = makeSUT()
+      let storage = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("object/bucket/file.txt"),

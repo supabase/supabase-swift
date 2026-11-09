@@ -945,15 +945,15 @@ struct RealtimeChannelSubscriptionTests {
   /// Without an attempt limit, a channel that outlives its client must not retry forever.
   @Test(.timeLimit(.minutes(1)))
   func subscribeAfterTheClientIsReleasedThrowsAtOnce() async throws {
-    func makeChannel() async -> RealtimeChannel {
-      let client = RealtimeClient(
+    func makeChannel() async throws -> RealtimeChannel {
+      let client = try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
           observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
-    let channel = await makeChannel()
+    let channel = try await makeChannel()
     try #require(await waitUntil { channel.client == nil })
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }

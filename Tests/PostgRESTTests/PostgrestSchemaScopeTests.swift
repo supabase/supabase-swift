@@ -55,7 +55,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func fromQueriesTheRelationInItsOwnSchema() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.from(Secret.self).select().execute()
 
@@ -64,7 +64,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func fromSendsNoProfileForARelationInTheDefaultSchema() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.from(Todo.self).select().execute()
 
@@ -73,7 +73,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func theScopeQueriesItsSchema() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.schema(PrivateSchema.self).from(Secret.self).select().execute()
 
@@ -83,7 +83,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func thePublicScopeSendsItsProfile() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.schema(_PublicSchema.self).from(Todo.self).select().execute()
 
@@ -92,7 +92,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func insertSendsTheRelationsProfile() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.from(Secret.self).insert(Secret.Draft(id: 1)).execute()
 
@@ -102,7 +102,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func aSchemaSetOnTheClientWins() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.schema("other").from(Secret.self).select().execute()
 
@@ -111,7 +111,7 @@ struct PostgrestSchemaScopeTests {
 
   @Test
   func anExplicitPublicSchemaOnTheClientWins() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.schema("public").from(Secret.self).select().execute()
 
@@ -122,7 +122,7 @@ struct PostgrestSchemaScopeTests {
     @Test
     func scopingAClientThatAlreadyHasASchemaTraps() async {
       await #expect(processExitsWith: .failure) {
-        _ = QueryCapture().client.schema("other").schema(PrivateSchema.self)
+        _ = try QueryCapture().client.schema("other").schema(PrivateSchema.self)
       }
     }
   #endif

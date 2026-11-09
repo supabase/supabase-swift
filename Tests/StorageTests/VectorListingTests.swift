@@ -16,9 +16,9 @@ import Testing
 @Suite
 struct VectorListingTests {
   static func makeVectors(bodies: LockIsolated<[String]> = .init([]), responses: [String])
-    -> StorageVectorsClient
+    throws -> StorageVectorsClient
   {
-    StorageClient(
+    try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -41,7 +41,7 @@ struct VectorListingTests {
   @Test
   func listBucketsFollowsNextTokenAcrossPages() async throws {
     let bodies = LockIsolated<[String]>([])
-    let vectors = Self.makeVectors(
+    let vectors = try Self.makeVectors(
       bodies: bodies,
       responses: [
         #"{"vectorBuckets":[{"vectorBucketName":"a","creationTime":1730000000}],"nextToken":"t1"}"#,
@@ -66,7 +66,7 @@ struct VectorListingTests {
 
   @Test
   func listIndexesPagesEndWithoutNextToken() async throws {
-    let vectors = Self.makeVectors(responses: [
+    let vectors = try Self.makeVectors(responses: [
       #"{"indexes":[{"indexName":"i1","vectorBucketName":"b"}],"nextToken":"t1"}"#,
       #"{"indexes":[{"indexName":"i2","vectorBucketName":"b"}]}"#,
     ])
@@ -83,7 +83,7 @@ struct VectorListingTests {
   @Test
   func listVectorsPageAfterSendsTheToken() async throws {
     let bodies = LockIsolated<[String]>([])
-    let vectors = Self.makeVectors(bodies: bodies, responses: [#"{"vectors":[{"key":"k"}]}"#])
+    let vectors = try Self.makeVectors(bodies: bodies, responses: [#"{"vectors":[{"key":"k"}]}"#])
 
     let page = try await vectors.from("b").from("i").listVectors().page(after: "t9")
 

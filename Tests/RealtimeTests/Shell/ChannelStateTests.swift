@@ -15,8 +15,8 @@ struct ChannelStateTests {
   let tableB = PostgresJoinConfig(event: .all, schema: "public", table: "b")
   let channelID = ChannelID(rawValue: 1)
 
-  func makeState() -> ChannelState {
-    let client = RealtimeClient(
+  func makeState() throws -> ChannelState {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         observesAppLifecycle: false))
@@ -39,8 +39,8 @@ struct ChannelStateTests {
   }
 
   @Test
-  func joinSnapshotKeepsBindingRegistrationOrder() {
-    let state = makeState()
+  func joinSnapshotKeepsBindingRegistrationOrder() throws {
+    let state = try makeState()
     let changesB = state.addPostgresStream(id(1), tableB, onTermination: {})
     let changesA = state.addPostgresStream(id(2), tableA, onTermination: {})
 
@@ -53,8 +53,8 @@ struct ChannelStateTests {
   }
 
   @Test
-  func presenceIsEnabledWhileAPresenceStreamIsOpen() {
-    let state = makeState()
+  func presenceIsEnabledWhileAPresenceStreamIsOpen() throws {
+    let state = try makeState()
     #expect(!state.joinSnapshot.presenceEnabled)
 
     let states = state.presenceStates.subscribe(id(1), onTermination: {})
@@ -69,8 +69,8 @@ struct ChannelStateTests {
   }
 
   @Test
-  func removeStreamDropsOnlyThatStream() {
-    let state = makeState()
+  func removeStreamDropsOnlyThatStream() throws {
+    let state = try makeState()
     let changes = state.addPostgresStream(id(1), tableA, onTermination: {})
     let events = state.events.subscribe(id(2), onTermination: {})
 
@@ -85,7 +85,7 @@ struct ChannelStateTests {
 
   @Test
   func postgresChangeGoesOnlyToMatchingBindings() async throws {
-    let state = makeState()
+    let state = try makeState()
     let changesA = state.addPostgresStream(id(1), tableA, onTermination: {})
     let changesB = state.addPostgresStream(id(2), tableB, onTermination: {})
     let change = try change(table: "b")
@@ -99,7 +99,7 @@ struct ChannelStateTests {
 
   @Test
   func deliveryReachesTheMatchingFanouts() async throws {
-    let state = makeState()
+    let state = try makeState()
     let events = state.events.subscribe(id(1), onTermination: {})
     let broadcasts = state.broadcasts.subscribe(id(2), onTermination: {})
     let presenceChanges = state.presenceChanges.subscribe(id(3), onTermination: {})
@@ -124,8 +124,8 @@ struct ChannelStateTests {
   }
 
   @Test
-  func finishAllEndsEveryStreamAndSpendsTheState() async {
-    let state = makeState()
+  func finishAllEndsEveryStreamAndSpendsTheState() async throws {
+    let state = try makeState()
     let status = state.status.subscribe(id(1), onTermination: {})
     let changes = state.addPostgresStream(id(2), tableA, onTermination: {})
 
@@ -140,8 +140,8 @@ struct ChannelStateTests {
   }
 
   @Test
-  func releasingChannelStateEndsEveryStream() async {
-    var state: ChannelState? = makeState()
+  func releasingChannelStateEndsEveryStream() async throws {
+    var state: ChannelState? = try makeState()
     let status = state!.status.subscribe(id(1), onTermination: {})
     let events = state!.events.subscribe(id(2), onTermination: {})
     let broadcasts = state!.broadcasts.subscribe(id(3), onTermination: {})

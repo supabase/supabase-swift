@@ -18,8 +18,8 @@ struct RealtimeClientConfigurationTests {
   private let url = URL(string: "http://localhost:54321/realtime/v1")!
 
   @Test
-  func clientExposesTheConfigurationItWasCreatedWith() {
-    let client = RealtimeClient(
+  func clientExposesTheConfigurationItWasCreatedWith() throws {
+    let client = try RealtimeClient(
       configuration: .init(url: url, heartbeatInterval: .seconds(7), observesAppLifecycle: false)
     )
 
@@ -33,8 +33,8 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func initializesWithoutAnAPIKeyInsteadOfTrapping() {
-    let client = RealtimeClient(
+  func initializesWithoutAnAPIKeyInsteadOfTrapping() throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
         headers: [:])
@@ -78,8 +78,8 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func reconnectBackoffIsFullJitterWithA1sBaseAnd30sCap() {
-    let client = RealtimeClient(
+  func reconnectBackoffIsFullJitterWithA1sBaseAnd30sCap() throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
         observesAppLifecycle: false)
@@ -134,7 +134,7 @@ struct RealtimeClientConfigurationTests {
     let transport = CountingTransport()
     var configuration = RealtimeClient.Configuration(url: url, observesAppLifecycle: false)
     configuration.webSocketTransport = transport
-    let client = RealtimeClient(configuration: configuration)
+    let client = try RealtimeClient(configuration: configuration)
 
     try await client.connect()
 
@@ -186,8 +186,8 @@ struct RealtimeClientConfigurationTests {
     (.warning, "warn"),
     (.error, "error"),
   ])
-  func serverLogLevelAddsTheQueryItem(level: RealtimeServerLogLevel, expected: String) {
-    let client = RealtimeClient(
+  func serverLogLevelAddsTheQueryItem(level: RealtimeServerLogLevel, expected: String) throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
         observesAppLifecycle: false,
@@ -199,8 +199,8 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func noServerLogLevelAddsNoQueryItem() {
-    let client = RealtimeClient(
+  func noServerLogLevelAddsNoQueryItem() throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
         observesAppLifecycle: false)
@@ -217,8 +217,8 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func clientTagsTheGivenLoggerWithSystemMetadata() {
-    let client = RealtimeClient(
+  func clientTagsTheGivenLoggerWithSystemMetadata() throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://example.supabase.co/realtime/v1")!,
         observesAppLifecycle: false,
@@ -230,14 +230,25 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func clientUsesTheDefaultLoggerWhenNoneIsGiven() {
-    let client = RealtimeClient(
+  func clientUsesTheDefaultLoggerWhenNoneIsGiven() throws {
+    let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://example.supabase.co/realtime/v1")!,
         observesAppLifecycle: false)
     )
     #expect(client.logger.label == "io.supabase.realtime")
     #expect(client.logger[metadataKey: "system"] == "realtime")
+  }
+
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: RealtimeError.self) {
+      try RealtimeClient(configuration: .init(url: url))
+    }
+    #expect(error?.kind == .invalidConfiguration)
   }
 }
 

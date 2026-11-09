@@ -17,7 +17,7 @@ import Testing
   extension PostgrestMockerTests {
     @Suite(.mockerSerialized)
     struct DeferredRequestSnapshotTests {
-      let fixture = PostgrestQueryFixture()
+      let fixture = try! PostgrestQueryFixture()
 
       @Test
       func mismatchedRequestSnapshotIsReported() async throws {

@@ -18,7 +18,7 @@ extension SupabaseClient {
   /// var configuration = SupabaseClient.Configuration()
   /// configuration.database.schema = "private"
   /// configuration.global.headers["X-App"] = "my-app"
-  /// let supabase = SupabaseClient(
+  /// let supabase = try SupabaseClient(
   ///   supabaseURL: supabaseURL,
   ///   supabaseKey: supabaseKey,
   ///   configuration: configuration

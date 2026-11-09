@@ -293,6 +293,9 @@ public struct AuthError: SupabaseError {
     /// was missing a field, or the authenticator returned an unexpected credential. Nothing to
     /// retry; report it. ``AuthError/underlyingError`` is the `DecodingError` when there was one.
     public static let decoding: Kind = "decoding"
+    /// ``AuthClient/init(configuration:)`` refused the configuration: its URL has no scheme or no
+    /// host. Fix the configuration. No client was created.
+    public static let invalidConfiguration: Kind = "invalidConfiguration"
     /// A token refresh finished after the session it started from was signed out or replaced, so
     /// its rotated tokens were dropped rather than applied to whichever session is stored now.
     /// Ignore the result; the stored session is unchanged. Distinct from ``sessionMissing``: a

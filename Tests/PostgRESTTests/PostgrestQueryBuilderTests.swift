@@ -14,14 +14,14 @@ import Testing
 extension PostgrestMockerTests {
   @Suite(.mockerSerialized)
   struct PostgrestQueryBuilderTests {
-    let fixture = PostgrestQueryFixture()
+    let fixture = try! PostgrestQueryFixture()
     var url: URL { fixture.url }
     var sut: PostgrestClient { fixture.sut }
 
-    private func sut(withPreferHeader value: String) -> PostgrestClient {
+    private func sut(withPreferHeader value: String) throws -> PostgrestClient {
       var configuration = sut.configuration
       configuration.headers["Prefer"] = value
-      return PostgrestClient(configuration: configuration)
+      return try PostgrestClient(configuration: configuration)
     }
 
     @Test

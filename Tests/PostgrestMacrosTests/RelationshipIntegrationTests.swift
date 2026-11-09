@@ -84,7 +84,7 @@ struct RelationshipIntegrationTests {
 struct RelationshipScopeIntegrationTests {
   @Test
   func requiringMarksTheGeneratedEmbedAndPrefixesTheScope() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(RelationshipTodo.self)
       .select(RelationshipTodoWithComments.self)
@@ -100,7 +100,7 @@ struct RelationshipScopeIntegrationTests {
 
   @Test
   func aToOneScopeIsPrefixedByItsAlias() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(RelationshipComment.self)
       .select(RelationshipCommentWithAuthor.self)

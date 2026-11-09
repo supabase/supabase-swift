@@ -26,7 +26,7 @@ extension JSONDecoder {
   /// ```swift
   /// let decoder = JSONDecoder.supabase()
   /// decoder.keyDecodingStrategy = .convertFromSnakeCase
-  /// let supabase = SupabaseClient(
+  /// let supabase = try SupabaseClient(
   ///   supabaseURL: url,
   ///   supabaseKey: key,
   ///   configuration: .init(
@@ -73,7 +73,7 @@ extension JSONEncoder {
   /// ```swift
   /// let encoder = JSONEncoder.supabase()
   /// encoder.keyEncodingStrategy = .convertToSnakeCase
-  /// let supabase = SupabaseClient(
+  /// let supabase = try SupabaseClient(
   ///   supabaseURL: url,
   ///   supabaseKey: key,
   ///   configuration: .init(database: .init(encoder: encoder))

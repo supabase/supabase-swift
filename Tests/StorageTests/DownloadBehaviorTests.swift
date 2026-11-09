@@ -11,8 +11,8 @@ import Testing
 struct DownloadBehaviorURLTests {
   let bucket: StorageBucket
 
-  init() {
-    bucket = StorageClient.test(
+  init() throws {
+    bucket = try StorageClient.test(
       supabaseURL: "http://localhost:54321/storage/v1",
       apiKey: "test-api-key"
     ).from("test-bucket")

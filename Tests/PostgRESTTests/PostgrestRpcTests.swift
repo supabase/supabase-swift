@@ -79,7 +79,7 @@ struct PostgrestRpcTests {
 
   @Test
   func postsTheArgumentsAsTheBody() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.rpc(search).execute()
     #expect(capture.httpMethod == "POST")
     #expect(capture.path == "/rpc/search_todos")
@@ -92,13 +92,13 @@ struct PostgrestRpcTests {
   /// spellings produce the same request.
   @Test
   func readOnlySendsAGetWithTheArgumentsInTheQuery() async throws {
-    let typed = QueryCapture()
+    let typed = try QueryCapture()
     _ = try await typed.client.rpc(search).readOnly().execute()
     #expect(typed.httpMethod == "GET")
     #expect(typed.bodyString == nil)
     #expect(typed.query == "keyword=milk&limit=3&tags={a,b c}")
 
-    let untyped = QueryCapture()
+    let untyped = try QueryCapture()
     _ = try await untyped.client.rpc("search_todos", params: search, get: true).execute()
     #expect(
       Set(typed.query?.split(separator: "&") ?? [])
@@ -108,7 +108,7 @@ struct PostgrestRpcTests {
 
   @Test
   func filtersOrderingAndPagingApplyToTheRows() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.rpc(search)
       .where { $0.isDone.eq(false) }
       .order { $0.id.desc() }
@@ -122,7 +122,7 @@ struct PostgrestRpcTests {
   /// A generated method is a call to `rpc(_:)`, so it sends the same request.
   @Test
   func aGeneratedMethodCallsRpc() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.rpc
       .searchTodos(keyword: "milk", limit: 3, tags: ["a", "b c"])
       .where { $0.isDone.eq(false) }
@@ -136,7 +136,7 @@ struct PostgrestRpcTests {
 
   @Test
   func readOnlyKeepsTheArgumentsAheadOfTheFilters() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.rpc(search).readOnly()
       .rows().where { $0.isDone.eq(false) }.execute()
     #expect(capture.httpMethod == "GET")
@@ -145,7 +145,7 @@ struct PostgrestRpcTests {
 
   @Test
   func aScalarResultDecodes() async throws {
-    let capture = QueryCapture(body: "3")
+    let capture = try QueryCapture(body: "3")
     let count = try await capture.client.rpc(CountTodos(done: true)).execute().value
     #expect(count == 3)
     #expect(capture.bodyString == #"{"done":true}"#)
@@ -153,7 +153,7 @@ struct PostgrestRpcTests {
 
   @Test
   func aVoidFunctionIgnoresTheEmptyBody() async throws {
-    let capture = QueryCapture(body: "")
+    let capture = try QueryCapture(body: "")
     _ = try await capture.client.rpc(Ping()).execute()
     #expect(capture.path == "/rpc/ping")
     #expect(capture.bodyString == "{}")
@@ -161,18 +161,18 @@ struct PostgrestRpcTests {
 
   @Test
   func theFunctionsSchemaSetsTheProfileHeader() async throws {
-    let posted = QueryCapture(body: "1")
+    let posted = try QueryCapture(body: "1")
     _ = try await posted.client.rpc(Audit()).execute()
     #expect(posted.header("Content-Profile") == "private")
 
-    let read = QueryCapture(body: "1")
+    let read = try QueryCapture(body: "1")
     _ = try await read.client.rpc(Audit()).readOnly().execute()
     #expect(read.header("Accept-Profile") == "private")
   }
 
   @Test
   func aNonObjectArgumentReportsAndStaysAPost() async throws {
-    let capture = QueryCapture(body: "1")
+    let capture = try QueryCapture(body: "1")
     let call = try capture.client.rpc(Pair())
     let reporter = RecordingIssueReporter()
     let readOnly = withIssueReporters([reporter]) { call.readOnly() }

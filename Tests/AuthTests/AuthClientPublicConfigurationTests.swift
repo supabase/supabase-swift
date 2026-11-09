@@ -7,9 +7,9 @@ import Testing
 @Suite
 struct AuthClientPublicConfigurationTests {
   @Test
-  func clientExposesTheConfigurationItWasCreatedWith() {
+  func clientExposesTheConfigurationItWasCreatedWith() throws {
     let url = URL(string: "http://localhost:54321/auth/v1")!
-    let client = AuthClient(
+    let client = try AuthClient(
       configuration: .init(
         url: url,
         storageKey: "public-configuration",
