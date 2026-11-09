@@ -59,7 +59,7 @@ final class StorageResumableIntegrationTests {
   }
 
   private func waitForFirstChunk(of upload: ResumableUpload) async {
-    for await progress in upload.progress where progress.completedBytes > 0 { return }
+    for await progress in upload.progress() where progress.completedBytes > 0 { return }
   }
 
   private func expectObject(_ client: StorageClient, path: String) async throws {
@@ -73,7 +73,11 @@ final class StorageResumableIntegrationTests {
   func uploadsALargeFileInChunks() async throws {
     let client = client()
     let upload = try bucket(client).resumableUpload(path: "whole.bin", fileURL: fileURL)
-    let progress = upload.progress
+    let progress = upload.progress()
+    var statuses = upload.statusChanges().makeAsyncIterator()
+    guard case .pending? = await statuses.next() else {
+      Issue.record("a new upload's status stream starts with .pending"); return
+    }
 
     try await upload.start()
     let object = try await upload.result
@@ -98,7 +102,7 @@ final class StorageResumableIntegrationTests {
     try await upload.start()
     await waitForFirstChunk(of: upload)
     await upload.pause()
-    guard case .paused = await upload.state else {
+    guard case .paused = await upload.status else {
       Issue.record("Expected a paused upload")
       return
     }
@@ -120,7 +124,7 @@ final class StorageResumableIntegrationTests {
     await waitForFirstChunk(of: upload)
     await upload.cancel()
 
-    guard case .cancelled = await upload.state else {
+    guard case .cancelled = await upload.status else {
       Issue.record("Expected a cancelled upload")
       return
     }

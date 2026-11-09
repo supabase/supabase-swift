@@ -300,6 +300,34 @@
     }
 
     @Test
+    func heartbeatsNeverReplayAnEarlierEvent() async throws {
+      let realtime = RealtimeClient(
+        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
+        options: RealtimeClientOptions(
+          headers: [
+            "apikey": DotEnv.supabasePublishableKey,
+            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+          ],
+          heartbeatInterval: .seconds(1),
+          handleAppLifecycle: false
+        )
+      )
+      try await realtime.connect()
+
+      // Collect first and assert after `disconnect()`, so a failure cannot leave the socket open.
+      let early = await realtime.heartbeats()
+      let acknowledged = try? await withTimeout(.seconds(5)) {
+        await early.first { if case .acknowledged = $0 { true } else { false } }
+      }
+      let late = await realtime.heartbeats()
+      let next = try? await withTimeout(.seconds(5)) { await late.first { _ in true } }
+      await realtime.disconnect()
+
+      #expect(acknowledged != nil)
+      #expect(next == .sent, "a new stream starts with the next heartbeat, not the last ack")
+    }
+
+    @Test
     func customOptionsConnectSubscribeAndReceive() async throws {
       let realtime = RealtimeClient(
         url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),

@@ -7,6 +7,20 @@ struct RealtimeStatusTests {
   static let dropped = RealtimeError.socketClosed(code: .goingAway, reason: nil)
 
   @Test
+  func eventTypesAreHashable() {
+    let channelEvents: Set<RealtimeChannelEvent> = [
+      .resubscribed, .postgresChangesFailed("a"), .postgresChangesFailed("a"),
+      .replicationFailed("a"),
+    ]
+    #expect(channelEvents.count == 3)
+
+    let heartbeats: Set<HeartbeatEvent> = [
+      .sent, .acknowledged(latency: .milliseconds(5)), .acknowledged(latency: .milliseconds(5)),
+    ]
+    #expect(heartbeats.count == 2)
+  }
+
+  @Test
   func clientStatusPredicates() {
     #expect(RealtimeClientStatus.connected.isConnected)
     #expect(RealtimeClientStatus.connected.error == nil)

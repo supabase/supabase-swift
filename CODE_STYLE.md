@@ -69,7 +69,7 @@ These rules add to the Swift API Design Guidelines. They make the same idea read
 ## Streams and Events
 
 - Every observable source is a method that returns a stream, never a callback or a token. A snapshot property may sit beside it, but the stream itself is never a property. Name it `statusChanges()` for state, and `events()` or `<noun>s()` for discrete events. A `status` snapshot property sits next to `statusChanges()`.
-- A state stream emits the current value first, then every change. An event stream never replays.
+- A state stream emits the current value first, then every change. An event stream never replays. A stream whose elements carry the full state is a state stream, whatever it is named: `AuthClient.events()` yields `AuthChange`, which holds the `AuthStatus`, so it starts with `initialSession`, as `onAuthStateChange` does in supabase-js.
 - Status and event streams are `AsyncStream` and never throw; a failure shows up in the status. Data streams and paged sequences can throw.
 - Each call returns a new stream for one consumer. The stream ends when the consuming task is cancelled or when the owner is released.
 - A one-shot call takes a `progress:` closure. A long-lived handle exposes progress as a stream.

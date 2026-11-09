@@ -30,7 +30,7 @@ that upload can also continue after a relaunch.
 let upload = try supabase.storage.from("videos").resumableUpload(path: "trip.mov", fileURL: url)
 try await upload.start()
 
-for await progress in upload.progress {
+for await progress in upload.progress() {
   print(progress.fractionCompleted ?? 0)
 }
 let object = try await upload.result
@@ -38,14 +38,15 @@ let object = try await upload.result
 
 - `start()` creates the upload on the server, or finds the one a previous run left. It returns
   once the first request is answered; it does not wait for the whole file.
-- `progress` is an `AsyncStream` of ``TransferProgress``, the bytes the server has confirmed. A
-  late subscriber gets the latest value first. The stream ends with the upload.
-- `states` is an `AsyncStream` of every change of `state`: `pending`, `uploading`, `paused`,
-  `completed(_:)`, `failed(_:)` and `cancelled`. It ends after a terminal state.
+- `progress()` returns an `AsyncStream` of ``TransferProgress``, the bytes the server has
+  confirmed. A late subscriber gets the latest value first. The stream ends with the upload.
+- `statusChanges()` returns an `AsyncStream` that starts with the current `status`, then emits
+  every change: `pending`, `uploading`, `paused`, `completed(_:)`, `failed(_:)` and
+  `cancelled`. It ends after a terminal status.
 - `result` waits for the end and returns the ``UploadedObject``, or throws.
 
 A handle outlives the task that made it, like a `Task`. Cancelling a task that awaits `start()`,
-`result`, `progress` or `states` ends only that await. The upload keeps going.
+`result`, `progress()` or `statusChanges()` ends only that await. The upload keeps going.
 
 The same file to the same path in the same bucket is the same upload. Asking for it again
 returns the same handle while one is alive, so two screens never send it twice.
@@ -94,7 +95,7 @@ for upload in try await supabase.storage.resumableUploads.resumeAll() {
 
 - `pending()` returns a handle for every record, oldest first, without starting them.
 - `resumeAll()` returns the same handles, each started or resumed. A server refusal does not
-  throw there; it shows in that upload's `state` and `result`.
+  throw there; it shows in that upload's `status` and `result`.
 - `clear()` deletes every record and copy that is not in flight in this process.
 
 A record expires when the server says the upload has, or after 24 hours when the server sends no

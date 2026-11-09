@@ -111,8 +111,8 @@ struct ResumableUploadTests {
       Self.appended(offset: 20, complete: true),
     ])
     let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
-    let progress = upload.progress
-    let states = upload.states
+    let progress = upload.progress()
+    let statuses = upload.statusChanges()
 
     #expect(upload.totalBytes == 20)
     #expect(upload.bucketID == "bucket")
@@ -139,13 +139,13 @@ struct ResumableUploadTests {
     #expect(completed.last == 20, "a late reader gets the newest value, as the stream buffers one")
     #expect(completed == completed.sorted())
     var seen: [String] = []
-    for await state in states {
-      seen.append(state.name)
-      if case .completed = state { break }
+    for await status in statuses {
+      seen.append(status.name)
+      if case .completed = status { break }
     }
-    #expect(seen == ["uploading", "completed"])
+    #expect(seen == ["pending", "uploading", "completed"])
     #expect(try store.records().isEmpty)
-    guard case .completed(let final) = await upload.state else {
+    guard case .completed(let final) = await upload.status else {
       Issue.record("not completed"); return
     }
     #expect(final == object)
@@ -159,7 +159,7 @@ struct ResumableUploadTests {
     let error = await #expect(throws: StorageError.self) { try await upload.start() }
 
     #expect(error?.code == StorageError.Code.entityTooLarge)
-    guard case .failed = await upload.state else { Issue.record("not failed"); return }
+    guard case .failed = await upload.status else { Issue.record("not failed"); return }
     await #expect(throws: StorageError.self) { try await upload.result }
   }
 
@@ -259,7 +259,7 @@ struct ResumableUploadTests {
     while script.log.value.count < 2 { await Task.yield() }
 
     await upload.pause()
-    guard case .paused = await upload.state else { Issue.record("not paused"); return }
+    guard case .paused = await upload.status else { Issue.record("not paused"); return }
     open.yield()
     while await upload.isRunning { await Task.yield() }
     #expect(script.log.value.count == 2)
@@ -293,7 +293,7 @@ struct ResumableUploadTests {
 
     await upload.cancel()
 
-    guard case .cancelled = await upload.state else { Issue.record("not cancelled"); return }
+    guard case .cancelled = await upload.status else { Issue.record("not cancelled"); return }
     #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
     #expect(try store.records().isEmpty)
     await #expect(throws: CancellationError.self) { try await upload.result }
@@ -392,7 +392,7 @@ struct ResumableUploadTests {
   }
 }
 
-extension ResumableUpload.State {
+extension ResumableUpload.Status {
   fileprivate var name: String {
     switch self {
     case .pending: "pending"

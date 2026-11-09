@@ -406,6 +406,8 @@ extension RealtimeClientStatus {
 
 /// A server event about a ``RealtimeChannel``, emitted by ``RealtimeChannel/events()``.
 ///
+/// The set of cases is fixed until the next major version, so a `switch` needs no `default`.
+///
 /// ## Topics
 /// ### Events
 /// - ``resubscribed``
@@ -413,7 +415,7 @@ extension RealtimeClientStatus {
 /// - ``postgresChangesFailed(_:)``
 /// - ``replicationReady``
 /// - ``replicationFailed(_:)``
-public enum RealtimeChannelEvent: Sendable, Equatable {
+public enum RealtimeChannelEvent: Hashable, Sendable {
   /// The channel joined again after it was subscribed, for example after a reconnect. Events
   /// sent while it was away were missed; reload any state built from them.
   case resubscribed
@@ -444,12 +446,14 @@ public enum RealtimeChannelEvent: Sendable, Equatable {
 /// the next one is due and the server has not acknowledged the previous one, the client
 /// reports ``timedOut`` and reconnects.
 ///
+/// The set of cases is fixed until the next major version, so a `switch` needs no `default`.
+///
 /// ## Topics
 /// ### Events
 /// - ``sent``
 /// - ``acknowledged(latency:)``
 /// - ``timedOut``
-public enum HeartbeatEvent: Sendable, Equatable {
+public enum HeartbeatEvent: Hashable, Sendable {
   /// The client sent a heartbeat.
   case sent
 

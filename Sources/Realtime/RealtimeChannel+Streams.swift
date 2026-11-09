@@ -188,8 +188,10 @@ extension RealtimeChannel {
   ///
   /// The stream emits ``RealtimeChannelEvent/resubscribed`` when the channel joins again after
   /// a reconnect or a rejoin, and reports whether the server set up the channel's Postgres
-  /// changes subscriptions. Cancelling the iterating task ends the stream; so does removing the
-  /// channel from its client.
+  /// changes subscriptions. The stream is registered before this method returns and emits only
+  /// the events from then on; it never replays an earlier event. Read the channel's state with
+  /// ``status`` and ``statusChanges()``. Cancelling the iterating task ends the stream; so does
+  /// removing the channel from its client.
   ///
   /// ```swift
   /// for await event in await channel.events() {

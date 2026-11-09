@@ -36,7 +36,7 @@ public struct ResumableUploadRegistry: Sendable {
   }
 
   /// A handle for every record on disk, oldest first. An upload already in flight in this
-  /// process is returned as the same handle; the others are ``ResumableUpload/State/pending``
+  /// process is returned as the same handle; the others are ``ResumableUpload/Status/pending``
   /// until ``ResumableUpload/start()``.
   ///
   /// - Throws: The file system's error when the record directory cannot be read.
@@ -45,13 +45,14 @@ public struct ResumableUploadRegistry: Sendable {
   }
 
   /// ``pending()``, with every upload started or resumed. A refusal by the server does not
-  /// throw here; it shows in that upload's ``ResumableUpload/state`` and ``ResumableUpload/result``.
+  /// throw here; it shows in that upload's ``ResumableUpload/status`` and
+  /// ``ResumableUpload/result``.
   ///
   /// - Throws: The file system's error when the record directory cannot be read.
   public func resumeAll() async throws -> [ResumableUpload] {
     let uploads = try pending()
     for upload in uploads {
-      switch await upload.state {
+      switch await upload.status {
       case .pending: try? await upload.start()
       case .paused, .failed: try? await upload.resume()
       case .uploading, .completed, .cancelled: break

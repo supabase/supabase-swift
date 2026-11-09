@@ -12,7 +12,7 @@ import SwiftUI
 @Observable @MainActor
 final class ResumableUploadModel {
   private(set) var upload: ResumableUpload?
-  private(set) var state: ResumableUpload.State = .pending
+  private(set) var status: ResumableUpload.Status = .pending
   private(set) var progress: TransferProgress?
   private(set) var pending: [ResumableUpload] = []
   var error: Error?
@@ -21,7 +21,7 @@ final class ResumableUploadModel {
   private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
   var isActive: Bool {
-    switch state {
+    switch status {
     case .pending, .uploading, .paused: upload != nil
     case .completed, .failed, .cancelled: false
     }
@@ -46,7 +46,7 @@ final class ResumableUploadModel {
   func resume() async {
     guard let upload else { return }
     do {
-      if case .pending = await upload.state {
+      if case .pending = await upload.status {
         try await upload.start()
       } else {
         try await upload.resume()
@@ -80,14 +80,14 @@ final class ResumableUploadModel {
     progress = nil
     observers = [
       Task { [weak self] in
-        for await state in upload.states {
+        for await status in upload.statusChanges() {
           guard let self else { return }
-          self.state = state
-          extendBackgroundExecution(while: state)
+          self.status = status
+          extendBackgroundExecution(while: status)
         }
       },
       Task { [weak self] in
-        for await progress in upload.progress {
+        for await progress in upload.progress() {
           self?.progress = progress
         }
       },
@@ -96,8 +96,8 @@ final class ResumableUploadModel {
 
   /// Asks iOS for a short extension while a chunk is in flight, so a user who backgrounds the
   /// app mid-chunk does not lose it; the SDK resumes from the last confirmed offset either way.
-  private func extendBackgroundExecution(while state: ResumableUpload.State) {
-    if case .uploading = state {
+  private func extendBackgroundExecution(while status: ResumableUpload.Status) {
+    if case .uploading = status {
       guard backgroundTask == .invalid else { return }
       backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "resumable-upload") {
         [weak self] in
@@ -179,7 +179,7 @@ struct ResumableUploadView: View {
           }
 
           HStack {
-            switch model.state {
+            switch model.status {
             case .uploading:
               Button("Pause") { Task { await model.pause() } }
             case .paused, .pending:
@@ -256,7 +256,7 @@ struct ResumableUploadView: View {
   }
 
   private var stateLabel: String {
-    switch model.state {
+    switch model.status {
     case .pending: "Pending"
     case .uploading: "Uploading"
     case .paused: "Paused"

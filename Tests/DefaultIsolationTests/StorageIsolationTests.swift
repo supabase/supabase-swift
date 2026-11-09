@@ -107,9 +107,9 @@ enum StorageIsolationTests {
     await upload.pause()
     await upload.cancel()
     _ = try await upload.result
-    _ = await upload.state
-    for await progress in upload.progress { _ = progress }
-    for await state in upload.states { _ = state }
+    _ = await upload.status
+    for await progress in upload.progress() { _ = progress }
+    for await status in upload.statusChanges() { _ = status }
 
     _ = try await storage.resumableUploads.resumeAll()
   }

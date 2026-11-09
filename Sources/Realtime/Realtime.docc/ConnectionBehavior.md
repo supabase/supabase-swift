@@ -86,6 +86,7 @@ client closes the socket and reconnects. So a dead socket is found within two in
 the app returns to the foreground, a liveness probe finds it sooner; see
 <doc:ConnectionBehavior#Background-and-foreground-on-iOS>.
 ``RealtimeClient/heartbeats()`` reports each step, with the round-trip latency of each answer.
+It is an event stream: it reports the steps after the call and never replays an earlier one.
 
 The heartbeat runs on ``RealtimeClientOptions/clock``, a `ContinuousClock` by default. That
 clock keeps counting while the device sleeps, so after a long sleep the next heartbeat is due at
