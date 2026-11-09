@@ -51,10 +51,14 @@ struct StorageVectorsClientIntegrationTests {
     let bucketName = "test-vector-bucket"
     try await vectors.createBucket(bucketName)
 
-    let matching = try await vectors.listBuckets(prefix: "test-vector-").page()
+    let matching = try await vectors.listBuckets(
+      options: ListVectorBucketsOptions(prefix: "test-vector-")
+    ).page()
     #expect(matching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
-    let nonMatching = try await vectors.listBuckets(prefix: "no-such-prefix-").page()
+    let nonMatching = try await vectors.listBuckets(
+      options: ListVectorBucketsOptions(prefix: "no-such-prefix-")
+    ).page()
     #expect(!nonMatching.vectorBuckets.contains { $0.vectorBucketName == bucketName })
 
     try await vectors.deleteBucket(bucketName)

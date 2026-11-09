@@ -364,4 +364,11 @@ struct TypesTests {
       """
     return try AuthClient.Configuration.jsonDecoder.decode(User.self, from: Data(json.utf8))
   }
+
+  @Test
+  func generateLinkTypeStringLiteral() {
+    let type: GenerateLinkType = "future_link"
+    #expect(type.rawValue == "future_link")
+    #expect(GenerateLinkType.magiclink == "magiclink")
+  }
 }

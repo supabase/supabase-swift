@@ -171,7 +171,8 @@ struct TusSessionTests {
       try await sut.create(
         bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
     }
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
   }
 
   @Test
@@ -244,7 +245,7 @@ struct TusSessionTests {
       Issue.record("Expected offsetConflict, got \(String(describing: error))")
       return
     }
-    #expect(storageError.serverStatusCode == 409)
+    #expect(storageError.serverError?.statusCode == 409)
   }
 
   @Test

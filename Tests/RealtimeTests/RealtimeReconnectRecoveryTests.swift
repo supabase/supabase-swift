@@ -268,7 +268,7 @@ struct RealtimeReconnectRecoveryTests {
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(1),
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: { "token" }
       ),
       wsTransport: { _, _ in

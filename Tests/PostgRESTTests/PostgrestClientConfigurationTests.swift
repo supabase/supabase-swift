@@ -36,6 +36,15 @@ struct PostgrestClientConfigurationTests {
   }
 
   @Test
+  func eachConfigurationGetsItsOwnDefaultCoders() {
+    let first = PostgrestClient.Configuration(url: url)
+    let second = PostgrestClient.Configuration(url: url)
+
+    #expect(first.encoder !== second.encoder)
+    #expect(first.decoder !== second.decoder)
+  }
+
+  @Test
   func schemaKeepsTheClock() throws {
     let client = try PostgrestClient(configuration: .init(url: url, clock: SuspendingClock()))
 

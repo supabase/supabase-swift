@@ -22,7 +22,7 @@ struct ServerErrorRejoinTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     var events = await channel.events().makeAsyncIterator()
     let firstJoin = try await host.subscribe(channel)
@@ -55,7 +55,7 @@ struct ServerErrorRejoinTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
 

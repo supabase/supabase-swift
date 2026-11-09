@@ -186,7 +186,7 @@ public actor RealtimeClient {
   nonisolated let inbox: AsyncStream<Input>.Continuation
 
   /// Yields the app lifecycle changes into ``inbox`` when
-  /// ``Configuration/handleAppLifecycle`` is `true`. It holds only the inbox, so `deinit`
+  /// ``Configuration/observesAppLifecycle`` is `true`. It holds only the inbox, so `deinit`
   /// cancels it.
   let lifecycleTask: Task<Void, Never>?
 
@@ -282,7 +282,7 @@ public actor RealtimeClient {
     let (inputs, inbox) = AsyncStream.makeStream(of: Input.self, bufferingPolicy: .unbounded)
     self.inbox = inbox
     lifecycleTask =
-      configuration.handleAppLifecycle
+      configuration.observesAppLifecycle
       ? Task.named("supabase.realtime.lifecycle") { [inbox] in
         var isLaunchState = true
         for await event in await lifecycleEvents() {
@@ -482,7 +482,7 @@ public actor RealtimeClient {
   /// Records whether the socket is connected as the app enters the background.
   ///
   /// Runs when the inbox delivers ``Input/appBackground``, which the lifecycle task yields when
-  /// ``Configuration/handleAppLifecycle`` is `true`.
+  /// ``Configuration/observesAppLifecycle`` is `true`.
   func handleAppBackground() {
     apply(.appBackground)
   }
@@ -492,7 +492,7 @@ public actor RealtimeClient {
   /// since gone away.
   ///
   /// Runs when the inbox delivers ``Input/appForeground``, which the lifecycle task yields when
-  /// ``Configuration/handleAppLifecycle`` is `true`.
+  /// ``Configuration/observesAppLifecycle`` is `true`.
   func handleAppForeground() {
     apply(.appForeground)
   }

@@ -159,10 +159,65 @@ struct ResumableStoreTests {
     let copy = store.fileURL(for: record)
     #expect(FileManager.default.fileExists(atPath: copy.path))
 
-    try store.remove(record)
+    store.remove(record)
 
     #expect(try store.record(fingerprint: "f1") == nil)
     #expect(!FileManager.default.fileExists(atPath: copy.path))
+  }
+
+  @Test
+  func removingAContainerRecordKeepsAFileNamedLikeASandboxCopy() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let record = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))
+    try store.save(record)
+    let other = store.directory.appendingPathComponent("f1.bin")
+    try Data("app".utf8).write(to: other)
+
+    store.remove(record)
+
+    #expect(try store.record(fingerprint: "f1") == nil)
+    #expect(FileManager.default.fileExists(atPath: other.path))
+  }
+
+  @Test
+  func aCorruptRecordIsRemovedWithItsSandboxCopyAndSkipped() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let good = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))
+    try store.save(good)
+    let fingerprint = String(repeating: "c", count: 64)
+    let corrupt = store.directory.appendingPathComponent("\(fingerprint).json")
+    let copy = store.directory.appendingPathComponent("\(fingerprint).bin")
+    try Data("{\"fingerprint\":".utf8).write(to: corrupt)
+    try Data("abc".utf8).write(to: copy)
+
+    #expect(try store.records() == [good])
+    #expect(!FileManager.default.fileExists(atPath: corrupt.path))
+    #expect(!FileManager.default.fileExists(atPath: copy.path))
+  }
+
+  @Test
+  func aJSONFileTheStoreDidNotWriteIsSkippedButKept() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let good = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))
+    try store.save(good)
+    let foreign = store.directory.appendingPathComponent("settings.json")
+    try Data("{\"theme\":\"dark\"}".utf8).write(to: foreign)
+
+    #expect(try store.records() == [good])
+    #expect(FileManager.default.fileExists(atPath: foreign.path))
+  }
+
+  @Test
+  func aRecordThatCannotBeReadIsSkippedButKept() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let good = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))
+    try store.save(good)
+    let unreadable = store.directory.appendingPathComponent("f2.json")
+    try FileManager.default.createDirectory(at: unreadable, withIntermediateDirectories: true)
+
+    #expect(try store.records() == [good])
+    #expect(FileManager.default.fileExists(atPath: unreadable.path))
+    #expect(throws: (any Error).self) { try store.record(fingerprint: "f2") }
   }
 
   @Test

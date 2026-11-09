@@ -148,9 +148,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Payload too large")
-      #expect(error.serverError?.code == .entityTooLarge)
+      #expect(error.code == .entityTooLarge)
       #expect(error.message == "The object exceeded the maximum allowed size")
-      #expect(error.serverStatusCode == 413)
+      #expect(error.serverError?.statusCode == 413)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -192,9 +192,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "invalid_mime_type")
-      #expect(error.serverError?.code == .invalidMimeType)
+      #expect(error.code == .invalidMimeType)
       #expect(error.message == "mime type image/jpeg is not supported")
-      #expect(error.serverStatusCode == 415)
+      #expect(error.serverError?.statusCode == 415)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -246,9 +246,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Duplicate")
-      #expect(error.serverError?.code == .keyAlreadyExists)
+      #expect(error.code == .keyAlreadyExists)
       #expect(error.message == "The resource already exists")
-      #expect(error.serverStatusCode == 409)
+      #expect(error.serverError?.statusCode == 409)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -477,7 +477,7 @@ final class StorageBucketIntegrationTests {
 
     #expect(error?.kind == .server)
     #expect(error?.code == .invalidKey)
-    #expect(error?.serverStatusCode == 400)
+    #expect(error?.serverError?.statusCode == 400)
     #expect(error?.message == "Invalid key: \(input)")
   }
 
@@ -518,7 +518,7 @@ final class StorageBucketIntegrationTests {
       let error = await StorageIntegration.storageError(operation)
       #expect(error?.kind == .server)
       #expect(error?.code == .noSuchKey)
-      #expect(error?.serverStatusCode == 404)
+      #expect(error?.serverError?.statusCode == 404)
       #expect(error?.response?.status == 400)
       #expect(error?.isNotFound == true)
       #expect(error?.serverError?.error == "not_found")
@@ -545,7 +545,7 @@ final class StorageBucketIntegrationTests {
     }
     #expect(error?.code == .noSuchBucket)
     #expect(error?.isNotFound == true)
-    #expect(error?.serverStatusCode == 404)
+    #expect(error?.serverError?.statusCode == 404)
   }
 
   @Test
@@ -557,7 +557,7 @@ final class StorageBucketIntegrationTests {
       try await api.upload(path: uploadPath, data: file)
     }
     #expect(error?.code == .keyAlreadyExists)
-    #expect(error?.serverStatusCode == 409)
+    #expect(error?.serverError?.statusCode == 409)
     #expect(error?.serverError?.error == "Duplicate")
 
     let replacement = Data("replacement".utf8)
@@ -579,7 +579,7 @@ final class StorageBucketIntegrationTests {
       try await anon.from(bucketName).upload(path: "anon.txt", data: file)
     }
     #expect(error?.code == .accessDenied)
-    #expect(error?.serverStatusCode == 403)
+    #expect(error?.serverError?.statusCode == 403)
     #expect(error?.message == "new row violates row-level security policy")
   }
 

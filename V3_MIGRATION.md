@@ -73,6 +73,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `AnyJSON` | `JSONValue` |
+| `AnyJSON.encoder`, `AnyJSON.decoder` | removed; see [Default coders](#default-coders) |
 | `SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, `OSLogSupabaseLogger` | `Logging.Logger` from swift-log |
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
 | `StorageHTTPSession` | `any ClientTransport` |
@@ -82,6 +83,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
 | `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
 | `ObservationToken` | removed; cancel the task that reads the stream |
+| Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `serverError?.code: String?`; Realtime `serverCode`, `RealtimeError.ServerCode`; Storage `serverStatusCode`, `serverError?.code` | `code: <Module>Error.Code?` on every module error; Storage's body status is `serverError?.statusCode` |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
@@ -94,6 +96,31 @@ Naming rules applied across all modules (the module tables list each symbol):
   their uses.
 - A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
+  Each one has `rawValue`, `init(rawValue:)` and a literal initializer, and no other
+  initializer: `ErrorCode("x")` is `AuthError.Code(rawValue: "x")` or the literal `"x"`.
+
+### Default coders
+
+`JSONEncoder.supabase()` and `JSONDecoder.supabase()` are public. They write and read `Date` the
+way Postgres does: ISO 8601 with fractional seconds, with or without an offset. Foundation's
+`.iso8601` strategy reads neither form. Each call returns a new coder. To change one setting, start
+from them so dates still work. The shared `AnyJSON.encoder`, `AnyJSON.decoder`, and
+`PostgrestClient.Configuration.jsonEncoder` and `.jsonDecoder` are gone.
+
+Every per-call `encoder:` and `decoder:` parameter is optional. `nil` uses the client's configured
+coder, or `JSONEncoder.supabase()` / `JSONDecoder.supabase()` where the client has none.
+
+```swift
+// v2
+let decoder = AnyJSON.decoder
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)  // payload: JSONObject
+
+// v3
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)
+```
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
 
@@ -233,6 +260,20 @@ Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorRe
 `HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
 module's error format gives kind `.server` with no `serverError`.
 
+Every module error has `kind` and `code: <Module>Error.Code?`, the machine-readable code the
+server sent. `code` is `nil` when the server sent none. A `catch` clause can name a kind or a code
+of any module directly:
+
+```swift
+do {
+  try await supabase.from("todos").insert(todo).execute()
+} catch PostgrestError.Code.uniqueViolation {
+  showDuplicate()
+} catch PostgrestError.Kind.transport {
+  showOfflineBanner()
+}
+```
+
 ```swift
 // v2
 } catch let error as HTTPError {
@@ -341,12 +382,14 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SupabaseClientOptions.db`, `DatabaseOptions` | `Configuration.database`, `Configuration.Database` |
 | `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
 | `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
+| `RealtimeClientOptions(handleAppLifecycle:)` | `Configuration.Realtime(observesAppLifecycle:)` |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
 | `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `Configuration.Global(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `Configuration.Global.logger: Logging.Logger` |
+| `AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `Configuration.Auth.redirectTo`, `Configuration.Auth(redirectTo:)` |
 | `AuthOptions.autoRefreshToken: Bool` | `Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |

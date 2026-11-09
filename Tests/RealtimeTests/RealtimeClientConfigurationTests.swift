@@ -20,7 +20,7 @@ struct RealtimeClientConfigurationTests {
   @Test
   func clientExposesTheConfigurationItWasCreatedWith() throws {
     let client = try RealtimeClient(
-      configuration: .init(url: url, heartbeatInterval: .seconds(7), handleAppLifecycle: false)
+      configuration: .init(url: url, heartbeatInterval: .seconds(7), observesAppLifecycle: false)
     )
 
     #expect(client.configuration.url == url)
@@ -52,7 +52,8 @@ struct RealtimeClientConfigurationTests {
     #expect(RealtimeClient.Configuration.defaultRequestTimeout == .seconds(10))
     #expect(options.connectOnSubscribe)
     #expect(options.disconnectOnEmptyChannelsAfter == .seconds(50))
-    #expect(options.handleAppLifecycle == RealtimeClient.Configuration.defaultHandleAppLifecycle)
+    #expect(
+      options.observesAppLifecycle == RealtimeClient.Configuration.defaultObservesAppLifecycle)
     #expect(options.monitorsNetworkPath == RealtimeClient.Configuration.defaultMonitorsNetworkPath)
     #expect(options.serverLogLevel == nil)
   }
@@ -81,7 +82,7 @@ struct RealtimeClientConfigurationTests {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false)
+        observesAppLifecycle: false)
     )
 
     #expect(client.reconnectBackoff.delay(forAttempt: 1, random: { $0.upperBound }) == .seconds(1))
@@ -131,7 +132,7 @@ struct RealtimeClientConfigurationTests {
   @Test
   func webSocketTransportIsUsed() async throws {
     let transport = CountingTransport()
-    var configuration = RealtimeClient.Configuration(url: url, handleAppLifecycle: false)
+    var configuration = RealtimeClient.Configuration(url: url, observesAppLifecycle: false)
     configuration.webSocketTransport = transport
     let client = try RealtimeClient(configuration: configuration)
 
@@ -167,7 +168,7 @@ struct RealtimeClientConfigurationTests {
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         headers: headers,
-        handleAppLifecycle: false),
+        observesAppLifecycle: false),
       wsTransport: { _, fields in
         captured.setValue(fields)
         return FakeWebSocket.fakes().0
@@ -189,7 +190,7 @@ struct RealtimeClientConfigurationTests {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         serverLogLevel: level)
     )
 
@@ -202,7 +203,7 @@ struct RealtimeClientConfigurationTests {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false)
+        observesAppLifecycle: false)
     )
 
     let items = URLComponents(url: client.webSocketURL, resolvingAgainstBaseURL: false)?.queryItems
@@ -220,7 +221,7 @@ struct RealtimeClientConfigurationTests {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://example.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         logger: Logging.Logger(label: "test")
       )
     )
@@ -233,7 +234,7 @@ struct RealtimeClientConfigurationTests {
     let client = try RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://example.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false)
+        observesAppLifecycle: false)
     )
     #expect(client.logger.label == "io.supabase.realtime")
     #expect(client.logger[metadataKey: "system"] == "realtime")

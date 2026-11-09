@@ -265,7 +265,7 @@ struct RealtimeClientAccessTokenTests {
     let client = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: provider.callback),
       wsTransport: { _, _ in FakeWebSocket.fakes().0 },
       http: HTTPClient(transport: RecordingTransport()),
@@ -386,7 +386,7 @@ struct RealtimeClientAccessTokenTests {
         url: RealtimeTestHost.url,
         headers: headers,
         heartbeatInterval: .seconds(3600),
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: provider.callback
       )
     )

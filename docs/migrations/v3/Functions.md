@@ -131,8 +131,10 @@ for try await chunk in response.body {
 
 ## `FunctionsError` is a struct
 
-The enum cases are gone. Match on `kind` instead. The status and body are in `response`.
-`Kind` is an open set, so keep a fallback branch.
+The enum cases are gone. Match on `kind` instead. The status and body are in `response`, and
+the platform's `sb-error-code` header is in `code`. `Kind` and `Code` are open sets, so keep a
+fallback branch. A `catch` clause can name a kind or a code directly, as in
+`catch FunctionsError.Kind.transport` or `catch FunctionsError.Code.notFound`.
 
 | v2 | v3 |
 | --- | --- |

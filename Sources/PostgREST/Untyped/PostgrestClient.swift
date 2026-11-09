@@ -54,7 +54,8 @@ public struct PostgrestClient: Sendable {
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
   /// you need fine-grained control over the client, such as supplying a custom ``http`` transport
-  /// or middleware chain, or a custom ``jsonEncoder``/``jsonDecoder``.
+  /// or middleware chain, or a custom ``encoder`` and ``decoder``. Start a custom coder from
+  /// `JSONEncoder.supabase()` or `JSONDecoder.supabase()`, so `Date` values keep working.
   ///
   /// ## Topics
   ///
@@ -77,8 +78,6 @@ public struct PostgrestClient: Sendable {
   ///
   /// ### Defaults
   ///
-  /// - ``jsonEncoder``
-  /// - ``jsonDecoder``
   /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
@@ -100,27 +99,31 @@ public struct PostgrestClient: Sendable {
 
     /// The `JSONEncoder` used to serialize request bodies.
     ///
-    /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
+    /// Defaults to a new `JSONEncoder.supabase()`, which writes `Date` values the way Postgres
+    /// reads them.
+    ///
     /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     ///
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses ``jsonEncoder``, so a key strategy here cannot change the column names it
-    /// derives from `CodingKeys`.
+    /// always uses a fixed `JSONEncoder.supabase()`, so a key strategy here cannot change the
+    /// column names it derives from `CodingKeys`.
     public var encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
     ///
-    /// Defaults to ``jsonDecoder``, which is pre-configured with Supabase-compatible settings.
+    /// Defaults to a new `JSONDecoder.supabase()`, which reads `Date` values the way Postgres
+    /// writes them.
+    ///
     /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
     ///
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses ``jsonDecoder``, so a key strategy here cannot change the column names it
-    /// derives from `CodingKeys`.
+    /// always uses a fixed `JSONDecoder.supabase()`, so a key strategy here cannot change the
+    /// column names it derives from `CodingKeys`.
     public var decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
@@ -170,8 +173,10 @@ public struct PostgrestClient: Sendable {
     ///   - headers: Additional HTTP headers sent with every request.
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-    ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
-    ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
+    ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to a new
+    ///     `JSONEncoder.supabase()`.
+    ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new
+    ///     `JSONDecoder.supabase()`.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
     ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
     ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
@@ -181,8 +186,8 @@ public struct PostgrestClient: Sendable {
       headers: [String: String] = [:],
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-      encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      encoder: JSONEncoder = .supabase(),
+      decoder: JSONDecoder = .supabase(),
       retryEnabled: Bool = true,
       accessToken: (@Sendable () async throws -> String?)? = nil,
       clock: any Clock<Duration> = ContinuousClock()

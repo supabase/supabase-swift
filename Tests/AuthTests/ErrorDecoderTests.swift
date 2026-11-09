@@ -50,7 +50,7 @@ struct ErrorDecoderTests {
     let error = try Self.decode(status: 400, body: body)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .invalidCredentials)
+    #expect(error.code == .invalidCredentials)
     #expect(error.message == "Invalid login credentials")
     #expect(error.oauthError == nil)
     #expect(error.response?.status == 400)
@@ -67,7 +67,7 @@ struct ErrorDecoderTests {
         """#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .weakPassword)
+    #expect(error.code == .weakPassword)
     #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
   }
 
@@ -78,7 +78,7 @@ struct ErrorDecoderTests {
       body: #"{"code":403,"error_code":"session_not_found","msg":"Session not found"}"#)
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .sessionNotFound)
+    #expect(error.code == .sessionNotFound)
     #expect(error.message == "Session not found")
   }
 
@@ -88,7 +88,7 @@ struct ErrorDecoderTests {
       status: 500, body: #"{"code":500,"msg":"Error sending confirmation email"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .unknown)
+    #expect(error.code == nil)
     #expect(error.message == "Error sending confirmation email")
   }
 
@@ -100,7 +100,7 @@ struct ErrorDecoderTests {
       status: 400, body: #"{"code":"invalid_credentials","message":"Invalid login credentials"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .invalidCredentials)
+    #expect(error.code == .invalidCredentials)
     #expect(error.message == "Invalid login credentials")
     #expect(error.oauthError == nil)
   }
@@ -114,7 +114,7 @@ struct ErrorDecoderTests {
          "weak_password":{"reasons":["pwned"]}}
         """#)
 
-    #expect(error.errorCode == .weakPassword)
+    #expect(error.code == .weakPassword)
     #expect(error.weakPasswordReasons == ["pwned"])
   }
 
@@ -126,7 +126,7 @@ struct ErrorDecoderTests {
       request: Self.refreshRequest)
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .refreshTokenNotFound)
+    #expect(error.code == .refreshTokenNotFound)
     #expect(error.message == "Invalid Refresh Token")
   }
 
@@ -136,7 +136,7 @@ struct ErrorDecoderTests {
       status: 400, body: #"{"code":"added_next_release","message":"Something new"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode.rawValue == "added_next_release")
+    #expect(error.code?.rawValue == "added_next_release")
   }
 
   // MARK: OAuth-style shape
@@ -150,7 +150,7 @@ struct ErrorDecoderTests {
 
     #expect(error.kind == .server)
     #expect(error.oauthError == "invalid nonce")
-    #expect(error.errorCode == .unknown)
+    #expect(error.code == nil)
     #expect(error.message == "Nonces mismatch")
   }
 
@@ -195,7 +195,7 @@ struct ErrorDecoderTests {
 
     #expect(error.kind == .server)
     #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
-    #expect(error.errorCode == .unexpectedFailure)
+    #expect(error.code == nil)
     #expect(error.response?.body == Data(body.utf8))
   }
 
@@ -206,7 +206,7 @@ struct ErrorDecoderTests {
       body: #"{"code":"invalid_credentials","message":"Not from GoTrue"}"#,
       contentType: "text/plain")
 
-    #expect(error.errorCode == .unexpectedFailure)
+    #expect(error.code == nil)
     #expect(error.message == "HTTP 502: \(HTTPURLResponse.localizedString(forStatusCode: 502))")
   }
 
@@ -236,7 +236,7 @@ struct ErrorDecoderTests {
     )
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .sessionExpired)
+    #expect(error.code == .sessionExpired)
   }
 
   @Test

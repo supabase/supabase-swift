@@ -135,7 +135,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
     let channel = await client.channel("todos")
 
     let changes = await channel.postgresChanges(
-      for: RealtimeTodo.self, event: .insert, where: { $0.priority.gt(3) && $0.title.eq("milk") }
+      of: RealtimeTodo.self, event: .insert, where: { $0.priority.gt(3) && $0.title.eq("milk") }
     )
 
     let expectedConfig = PostgresJoinConfig(
@@ -213,7 +213,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
     )
     let channel = await client.channel("secrets")
 
-    let changes = await channel.postgresChanges(for: Secret.self)
+    let changes = await channel.postgresChanges(of: Secret.self)
     withExtendedLifetime(changes) {}
 
     let configs = await client.bindings(of: channel)

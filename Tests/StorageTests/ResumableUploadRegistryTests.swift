@@ -70,11 +70,11 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func pendingReturnsAHandlePerRecordOldestFirst() throws {
+  func pendingReturnsAHandlePerRecordOldestFirst() async throws {
     let a = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
 
-    let uploads = try storage.resumableUploads.pending()
+    let uploads = try await storage.resumableUploads.pending()
 
     #expect(uploads.map(\.id.rawValue) == ["a", "b"])
     #expect(uploads[0].bucketID == a.bucketID)
@@ -88,7 +88,7 @@ struct ResumableUploadRegistryTests {
     let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
     try await upload.start()
 
-    let pending = try storage.resumableUploads.pending()
+    let pending = try await storage.resumableUploads.pending()
 
     #expect(pending.count == 1)
     #expect(pending.first === upload)
@@ -139,7 +139,7 @@ struct ResumableUploadRegistryTests {
     try await upload.start()
     let record = try #require(try store.record(fingerprint: upload.id.rawValue))
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
     #expect(try store.records().map(\.fingerprint) == [upload.id.rawValue])
     #expect(FileManager.default.fileExists(atPath: store.fileURL(for: record).path))
@@ -148,11 +148,11 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func clearRemovesTheRecordsOfHandlesThatNeverStarted() throws {
+  func clearRemovesTheRecordsOfHandlesThatNeverStarted() async throws {
     _ = try saveRecord(fingerprint: "a")
-    let pending = try storage.resumableUploads.pending()
+    let pending = try await storage.resumableUploads.pending()
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
     #expect(try store.records().isEmpty)
     withExtendedLifetime(pending) {}
@@ -170,12 +170,62 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func clearRemovesEveryRecord() throws {
+  func clearRemovesEveryRecord() async throws {
     _ = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
-    #expect(try storage.resumableUploads.pending().isEmpty)
+    #expect(try await storage.resumableUploads.pending().isEmpty)
+  }
+
+  @Test
+  func aCorruptRecordDoesNotBlockPendingAndClearRemovesIt() async throws {
+    _ = try saveRecord(fingerprint: "a")
+    let corrupt = store.directory.appendingPathComponent(
+      "\(String(repeating: "b", count: 64)).json")
+    try Data("not json".utf8).write(to: corrupt)
+
+    let pending = try await storage.resumableUploads.pending()
+    #expect(pending.map(\.id.rawValue) == ["a"])
+    #expect(!FileManager.default.fileExists(atPath: corrupt.path))
+
+    try await storage.resumableUploads.clear()
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func clearKeepsTheRecordOfAnUploadThatIsStillStarting() async throws {
+    let record = try saveRecord(fingerprint: "a")
+    let upload = try #require(try await storage.resumableUploads.pending().first)
+    let starting = Task { try await upload.start() }
+    await waitUntil { requests.value.contains { $0.hasPrefix("HEAD") } }
+
+    try await storage.resumableUploads.clear()
+
+    #expect(try store.record(fingerprint: "a")?.uploadURL == record.uploadURL)
+    #expect(FileManager.default.fileExists(atPath: store.fileURL(for: record).path))
+    starting.cancel()
+    _ = await starting.result
+  }
+
+  enum RegistryCall: CaseIterable, Sendable {
+    case pending, clear
+  }
+
+  @Test(arguments: RegistryCall.allCases)
+  func throwsStorageErrorWhenTheRecordDirectoryCannotBeRead(_ call: RegistryCall) async throws {
+    try Data().write(to: root.appendingPathComponent("store"))
+    let registry = try storage.resumableUploads
+
+    let error = await #expect(throws: StorageError.self) {
+      switch call {
+      case .pending: _ = try await registry.pending()
+      case .clear: try await registry.clear()
+      }
+    }
+
+    #expect(error?.kind == .invalidRequest)
+    #expect(error?.underlyingError != nil)
   }
 }

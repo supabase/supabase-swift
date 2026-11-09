@@ -10,8 +10,6 @@ supporting_symbols:
   - JSONValue.init
   - JSONValue.decode
   - JSONValue.encode
-  - JSONValue.decoder
-  - JSONValue.encoder
   - JSONValue.null
   - JSONValue.bool
   - JSONValue.integer
@@ -29,6 +27,11 @@ supporting_symbols:
   - JSONValue.doubleValue
   - JSONValue.description
   - JSONValue.rawValue
+
+  # The SDK's default coders, which read and write Postgres timestamps. Every client defaults to
+  # them, and they are the starting point for a custom coder, so no one feature owns them.
+  - JSONDecoder.supabase
+  - JSONEncoder.supabase
 
   # The injected clock is a testability seam shared across Auth's token auto-refresh and
   # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
@@ -145,6 +148,7 @@ supporting_symbols:
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
   - FunctionsError.Kind.invalidConfiguration
+  - FunctionsError.Kind.~=
   - FunctionsError.init
   - FunctionsError.kind
   - FunctionsError.message
@@ -175,6 +179,7 @@ supporting_symbols:
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
   - StorageError.Kind.invalidConfiguration
+  - StorageError.Kind.~=
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
@@ -190,9 +195,7 @@ supporting_symbols:
   - StorageClient.Configuration.logger
   - StorageClient.Configuration.usesNewHostname
   - StorageClient.Configuration.clock
-  - StorageError.ServerError.code
   - StorageError.code
-  - StorageError.serverStatusCode
   - StorageError.isNotFound
   - StorageError.init
   - StorageError.kind
@@ -213,21 +216,39 @@ supporting_symbols:
   - PostgrestError.Kind.invalidRequest
   - PostgrestError.Kind.accessToken
   - PostgrestError.Kind.invalidConfiguration
+  - PostgrestError.Kind.~=
+  - PostgrestError.Code
+  - PostgrestError.Code.init
+  - PostgrestError.Code.rawValue
+  - PostgrestError.Code.~=
+  - PostgrestError.Code.uniqueViolation
+  - PostgrestError.Code.foreignKeyViolation
+  - PostgrestError.Code.notNullViolation
+  - PostgrestError.Code.checkViolation
+  - PostgrestError.Code.invalidTextRepresentation
+  - PostgrestError.Code.insufficientPrivilege
+  - PostgrestError.Code.undefinedTable
+  - PostgrestError.Code.undefinedColumn
+  - PostgrestError.Code.undefinedFunction
+  - PostgrestError.Code.serializationFailure
+  - PostgrestError.Code.deadlockDetected
+  - PostgrestError.Code.queryCanceled
+  - PostgrestError.Code.raiseException
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
-  - PostgrestError.ServerError.code
   - PostgrestError.ServerError.message
   - PostgrestError.ServerError.details
   - PostgrestError.ServerError.hint
   - PostgrestError.init
   - PostgrestError.kind
   - PostgrestError.message
+  - PostgrestError.code
   - PostgrestError.serverError
   - PostgrestError.response
   - PostgrestError.underlyingError
   - PostgrestError.description
   # AuthError (SDK-1788) is thrown by every auth.* capability rather than owned
-  # by one. ErrorCode values are attributed to their features below.
+  # by one. AuthError.Code values are attributed to their features below.
   - AuthError
   - AuthError.Kind
   - AuthError.Kind.init
@@ -250,7 +271,7 @@ supporting_symbols:
   - AuthError.init
   - AuthError.kind
   - AuthError.message
-  - AuthError.errorCode
+  - AuthError.code
   - AuthError.weakPasswordReasons
   - AuthError.oauthError
   - AuthError.isRetryable
@@ -259,7 +280,10 @@ supporting_symbols:
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
-  - ErrorCode.~=
+  - AuthError.Code
+  - AuthError.Code.init
+  - AuthError.Code.rawValue
+  - AuthError.Code.~=
   # AuthAdminClient (SDK-2074) is the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
   - AuthAdminClient
@@ -405,38 +429,40 @@ supporting_symbols:
   - RealtimeError.Kind.channelClosed
   - RealtimeError.Kind.channelRemoved
   - RealtimeError.Kind.payloadTooLarge
-  - RealtimeError.serverCode
+  - RealtimeError.Kind.~=
+  - RealtimeError.code
   - RealtimeError.isRetryable
   # The code the server prefixes to a join or channel error reason (SDK-2098).
-  - RealtimeError.ServerCode
-  - RealtimeError.ServerCode.init
-  - RealtimeError.ServerCode.rawValue
-  - RealtimeError.ServerCode.topicNameRequired
-  - RealtimeError.ServerCode.invalidJWTToken
-  - RealtimeError.ServerCode.malformedJWT
-  - RealtimeError.ServerCode.jwtSignatureError
-  - RealtimeError.ServerCode.jwtSignerError
-  - RealtimeError.ServerCode.unauthorized
-  - RealtimeError.ServerCode.privateOnly
-  - RealtimeError.ServerCode.tenantNotFound
-  - RealtimeError.ServerCode.realtimeDisabledForTenant
-  - RealtimeError.ServerCode.realtimeDisabledForConfiguration
-  - RealtimeError.ServerCode.unableToReplayMessages
-  - RealtimeError.ServerCode.channelRateLimitReached
-  - RealtimeError.ServerCode.connectionRateLimitReached
-  - RealtimeError.ServerCode.clientJoinRateLimitReached
-  - RealtimeError.ServerCode.realtimeRestarting
-  - RealtimeError.ServerCode.initializingProjectConnection
-  - RealtimeError.ServerCode.increaseConnectionPool
-  - RealtimeError.ServerCode.databaseLackOfConnections
-  - RealtimeError.ServerCode.databaseConnectionRateLimitReached
-  - RealtimeError.ServerCode.unableToConnectToProject
-  - RealtimeError.ServerCode.queryCanceled
-  - RealtimeError.ServerCode.missingPartition
-  - RealtimeError.ServerCode.timeoutOnRpcCall
-  - RealtimeError.ServerCode.errorOnRpcCall
-  - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
-  - RealtimeError.ServerCode.unknownErrorOnChannel
+  - RealtimeError.Code
+  - RealtimeError.Code.init
+  - RealtimeError.Code.~=
+  - RealtimeError.Code.rawValue
+  - RealtimeError.Code.topicNameRequired
+  - RealtimeError.Code.invalidJWTToken
+  - RealtimeError.Code.malformedJWT
+  - RealtimeError.Code.jwtSignatureError
+  - RealtimeError.Code.jwtSignerError
+  - RealtimeError.Code.unauthorized
+  - RealtimeError.Code.privateOnly
+  - RealtimeError.Code.tenantNotFound
+  - RealtimeError.Code.realtimeDisabledForTenant
+  - RealtimeError.Code.realtimeDisabledForConfiguration
+  - RealtimeError.Code.unableToReplayMessages
+  - RealtimeError.Code.channelRateLimitReached
+  - RealtimeError.Code.connectionRateLimitReached
+  - RealtimeError.Code.clientJoinRateLimitReached
+  - RealtimeError.Code.realtimeRestarting
+  - RealtimeError.Code.initializingProjectConnection
+  - RealtimeError.Code.increaseConnectionPool
+  - RealtimeError.Code.databaseLackOfConnections
+  - RealtimeError.Code.databaseConnectionRateLimitReached
+  - RealtimeError.Code.unableToConnectToProject
+  - RealtimeError.Code.queryCanceled
+  - RealtimeError.Code.missingPartition
+  - RealtimeError.Code.timeoutOnRpcCall
+  - RealtimeError.Code.errorOnRpcCall
+  - RealtimeError.Code.postgresChangesSubscribeTimeout
+  - RealtimeError.Code.unknownErrorOnChannel
   # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
   - RealtimeClient.Configuration.requestTimeout
@@ -466,10 +492,10 @@ supporting_symbols:
   - SupabaseClient.Configuration.Database.schema
   - SupabaseClient.Configuration.Database.encoder
   - SupabaseClient.Configuration.Database.decoder
-  - SupabaseClient.Configuration.Database.retry
+  - SupabaseClient.Configuration.Database.retryEnabled
   - SupabaseClient.Configuration.Database.init
   - SupabaseClient.Configuration.Auth
-  - SupabaseClient.Configuration.Auth.redirectToURL
+  - SupabaseClient.Configuration.Auth.redirectTo
   - SupabaseClient.Configuration.Auth.storageKey
   - SupabaseClient.Configuration.Auth.init
   - SupabaseClient.Configuration.Global
@@ -487,7 +513,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.requestTimeout
   - SupabaseClient.Configuration.Realtime.connectOnSubscribe
   - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
-  - SupabaseClient.Configuration.Realtime.handleAppLifecycle
+  - SupabaseClient.Configuration.Realtime.observesAppLifecycle
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
   - SupabaseClient.Configuration.Realtime.serverLogLevel
   - SupabaseClient.Configuration.Realtime.webSocketTransport
@@ -642,8 +668,8 @@ features:
       - Web3Chain.rawValue
       - Web3Chain.ethereum
       - Web3Chain.solana
-      - ErrorCode.web3ProviderDisabled
-      - ErrorCode.web3UnsupportedChain
+      - AuthError.Code.web3ProviderDisabled
+      - AuthError.Code.web3UnsupportedChain
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
@@ -1191,8 +1217,8 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.denyAuthorization
-      - ErrorCode.oauthAuthorizationNotFound
-      - ErrorCode.featureDisabled
+      - AuthError.Code.oauthAuthorizationNotFound
+      - AuthError.Code.featureDisabled
   auth.oauth_server.list_grants:
     status: implemented
     symbols:
@@ -1206,7 +1232,7 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.revokeGrant
-      - ErrorCode.oauthConsentNotFound
+      - AuthError.Code.oauthConsentNotFound
 
   auth.oauth_admin.create_client:
     status: implemented
@@ -1634,6 +1660,10 @@ features:
     status: implemented
     symbols:
       - ExplainFormat
+      - ExplainFormat.init
+      - ExplainFormat.rawValue
+      - ExplainFormat.text
+      - ExplainFormat.json
   database.using_modifiers.max_affected_rows:
     status: implemented
     symbols:
@@ -1722,6 +1752,7 @@ features:
       - FunctionsError.Code.edgeRuntimeServiceDegraded
       - FunctionsError.Code.idleTimeout
       - FunctionsError.Code.init
+      - FunctionsError.Code.~=
       - FunctionsError.Code.invalidResponseStatusCode
       - FunctionsError.Code.invalidURL
       - FunctionsError.Code.notFound
@@ -1953,7 +1984,7 @@ features:
       - RealtimeChannel.presenceChanges
       - RealtimeChannel.presenceStates
     supporting_symbols:
-      - RealtimeChannelConfiguration.Presence.enabled
+      - RealtimeChannelConfiguration.Presence.isEnabled
       - PresenceChange
       - PresenceChange.init
       - PresenceChange.joins
@@ -2096,11 +2127,11 @@ features:
       - RealtimeServerLogLevel.error
   realtime.configuration.foreground_liveness_probe:
     status: implemented
-    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.handleAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
+    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.observesAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
     symbols:
       - RealtimeClient.Configuration.init
-      - RealtimeClient.Configuration.handleAppLifecycle
-      - RealtimeClient.Configuration.defaultHandleAppLifecycle
+      - RealtimeClient.Configuration.observesAppLifecycle
+      - RealtimeClient.Configuration.defaultObservesAppLifecycle
   realtime.configuration.network_path_wake:
     status: implemented
     note: "NWPathMonitor reports a satisfied path as a wake hint that cuts a reconnect backoff short. The hint never gates a connect. The option defaults to off on watchOS and has no effect on Linux, which has no path monitor."
@@ -2632,6 +2663,7 @@ features:
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init
+      - StorageError.Code.~=
       - StorageError.Code.rawValue
       - StorageError.Code.noSuchBucket
       - StorageError.Code.noSuchLifecycleConfiguration

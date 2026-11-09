@@ -230,7 +230,7 @@ struct PostgrestEmbeddedScopeTests {
     } throws: { error in
       guard let error = error as? PostgrestError else { return false }
       return error.kind == .server
-        && error.serverError?.code == "PGRST201"
+        && error.code == "PGRST201"
         && error.serverError?.hint?.contains("comments!comments_todo_id_fkey") == true
         && error.response?.status == 300
     }

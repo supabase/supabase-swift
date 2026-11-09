@@ -182,7 +182,7 @@ public struct AuthPasskeys: Sendable {
     /// - Throws: `CancellationError` when the user dismisses the sheet. An error of kind
     ///   ``AuthError/Kind-swift.struct/passkeyCeremonyFailed`` when the authenticator fails. On
     ///   iOS 18, macOS 15, and visionOS 2 or later, its code is
-    ///   ``ErrorCode/webAuthnCredentialExists`` when this device already holds one of the user's
+    ///   ``AuthError/Code-swift.struct/webAuthnCredentialExists`` when this device already holds one of the user's
     ///   passkeys.
     @discardableResult
     @MainActor

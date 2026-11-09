@@ -22,8 +22,8 @@ enum AuthRedirect: Sendable, Equatable {
 
     if items["error"] != nil || items["error_code"] != nil || items["error_description"] != nil {
       let message = items["error_description"] ?? items["error"] ?? "The redirect reports an error."
-      let errorCode = items["error_code"].map { ErrorCode($0) } ?? .unknown
-      return .error(.oauthFlowFailed(message, errorCode: errorCode))
+      let code = items["error_code"].map(AuthError.Code.init(rawValue:))
+      return .error(.oauthFlowFailed(message, code: code))
     }
 
     if let message = items["message"], items["sb"] != nil {
@@ -109,7 +109,7 @@ enum AuthRedirect: Sendable, Equatable {
     case (.implicit(let a, let aType), .implicit(let b, let bType)): a == b && aType == bType
     case (.emailChangePending(let a), .emailChangePending(let b)): a == b
     case (.error(let a), .error(let b)):
-      a.kind == b.kind && a.message == b.message && a.errorCode == b.errorCode
+      a.kind == b.kind && a.message == b.message && a.code == b.code
     default: false
     }
   }

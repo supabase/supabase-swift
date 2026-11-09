@@ -62,7 +62,7 @@ final class VectorIndexClientIntegrationTests {
       )
     )
 
-    let index = try await bucket.indexDetails(indexName)
+    let index = try await bucket.index(indexName)
     #expect(index.indexName == indexName)
     #expect(index.vectorBucketName == bucketName)
     #expect(index.dataType == .float32)
@@ -83,7 +83,7 @@ final class VectorIndexClientIntegrationTests {
     let indexName = "test-index"
     let bucket = vectors.from(bucketName)
     try await bucket.createIndex(indexName, dimension: 3, distanceMetric: .cosine)
-    let index = bucket.index(indexName)
+    let index = bucket.from(indexName)
 
     try await index.putVectors([
       VectorEntry(
@@ -115,7 +115,7 @@ final class VectorIndexClientIntegrationTests {
     let indexName = "test-index"
     let bucket = vectors.from(bucketName)
     try await bucket.createIndex(indexName, dimension: 2, distanceMetric: .cosine)
-    let index = bucket.index(indexName)
+    let index = bucket.from(indexName)
 
     try await index.putVectors([
       VectorEntry(key: "close", data: VectorData(float32: [1.0, 0.0])),

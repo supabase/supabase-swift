@@ -309,7 +309,7 @@
             "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
           ],
           requestTimeout: .seconds(10),
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           serverLogLevel: .warning,
           webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral)
         )
@@ -528,10 +528,10 @@
 
         let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
         #expect(error?.kind == .unauthorized)
-        #expect(error?.serverCode == .unauthorized)
+        #expect(error?.code == .unauthorized)
         #expect(error?.isRetryable == false)
         #expect(await channel.status == .failed)
-        #expect(await channel.status.error?.serverCode == .unauthorized)
+        #expect(await channel.status.error?.code == .unauthorized)
       }
     }
 
@@ -747,7 +747,7 @@
         let skippedKey = UUID().uuidString
 
         let changes = await channel.postgresChanges(
-          for: KeyValueStorage.self,
+          of: KeyValueStorage.self,
           event: .insert,
           where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
         )
@@ -789,7 +789,7 @@
       let results = LockIsolated<[[KeyValueStorage]]>([])
       let iteration = Task {
         for try await rows in client.stream(
-          KeyValueStorage.self, where: { $0.key.in([first, second]) })
+          of: KeyValueStorage.self, where: { $0.key.in([first, second]) })
         {
           results.withValue { $0.append(rows) }
         }
@@ -1109,7 +1109,7 @@
         let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
         let bob = await client2.realtime.channel(topic) {
           $0.presence.key = "bob"
-          $0.presence.enabled = true
+          $0.presence.isEnabled = true
         }
         try await ana.subscribe()
         try await bob.subscribe()
@@ -1312,7 +1312,7 @@
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: ["apikey": DotEnv.supabasePublishableKey],
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           accessToken: accessToken,
           clock: testClock
         )

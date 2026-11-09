@@ -70,7 +70,7 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A rejected session has its own kind.** When the server rejects the session or its refresh
   token (`refresh_token_not_found`, `refresh_token_already_used`, `session_expired`,
   `session_not_found`, `user_banned`), the error kind is `.sessionInvalidated`, not
-  `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
+  `.sessionMissing`. `code` and `message` keep the server's values. `.sessionMissing` now
   means only that no session is stored. Search for `.sessionMissing`. To send the user back to
   sign-in, react to the `.signedOut` event (see the next entry on refresh failures).
 - **The stored session has a new format.** The first read after the upgrade rewrites the stored
@@ -254,7 +254,7 @@ Changes that still compile but behave differently. Check each one by hand.
   uppercase; compare `UUID` values, not strings.
 - **`claims()` throws the refresh error.** When the stored session is expired and its refresh
   fails, `claims()` throws the error that `session` throws, such as `.sessionInvalidated` with
-  `errorCode` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
+  `code` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
   session. `.sessionMissing` now means only that no user is signed in.
 - **A token without `exp` or `sub` fails verification.** `claims(jwt:)` throws
   `.jwtVerificationFailed` for a token without an `exp` claim or a `sub` claim, before it sends
@@ -283,7 +283,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
 | `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
 | `AuthClient.Configuration.redirectToURL` | `redirectTo` |
-| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth(redirectToURL:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
+| `SupabaseClientOptions.AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth.redirectTo`, `Auth(redirectTo:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
 | `AuthClient.Configuration` `let` properties | `var` properties |
 | `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
@@ -592,11 +592,12 @@ auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verificatio
 `.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
 `AuthClient` and `SupabaseClient` have the method.
 
-A URL is an auth redirect only when it opens a known callback: `redirectToURL` (Auth's
-`Configuration.redirectTo`) or the `redirectTo` you passed when a flow started. Scheme, host, port,
-and path must match; a trailing slash is ignored. Your own links, such as
-`myapp://invite?code=ABC`, return `nil`. With no callback known, no URL is an auth redirect, so set
-`redirectToURL`. A callback that only a per-call `redirectTo` names is known while its flow waits,
+A URL is an auth redirect only when it opens a known callback: the configured `redirectTo`
+(`SupabaseClient.Configuration.Auth.redirectTo` or Auth's `Configuration.redirectTo`) or the
+`redirectTo` you passed when a flow started. Scheme, host, port, and path must match; a trailing
+slash is ignored. Your own links, such as `myapp://invite?code=ABC`, return `nil`. With no callback
+known, no URL is an auth redirect, so set the configured `redirectTo`. A callback that only a
+per-call `redirectTo` names is known while its flow waits,
 so an error redirect that arrives after the flow expired returns `nil`. A URL with a `message` item is an email-change redirect only when it also has the
 `sb` marker. Auth servers before v2.186.0 do not send `sb`, so `handleRedirect(_:)` returns `nil`
 for their email-change redirects.
@@ -695,16 +696,34 @@ let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.
 
 ## `AuthError` is a struct
 
-`AuthError` is a struct with `kind`, `message`, `errorCode`, `weakPasswordReasons`,
-`oauthError`, `response` and `underlyingError`. Match on `kind` and `errorCode` instead of enum
-cases: `catch ErrorCode.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
+`AuthError` is a struct with `kind`, `message`, `code`, `weakPasswordReasons`, `oauthError`,
+`response` and `underlyingError`. Match on `kind` and `code` instead of enum cases:
+`catch AuthError.Code.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
 `isRetryable` says whether to send the request again. `AuthError` is no longer `Equatable`.
+
+The top-level `ErrorCode` is now `AuthError.Code`, and `errorCode` is now `code`. `code` is
+optional: it is `nil` when the server sent no code, such as for an OAuth-style response, a body
+that is not JSON, `AuthError.sessionMissing`, or a local JWT check. There is no `.unknown`
+placeholder. Replace `error.errorCode == .unknown` with `error.code == nil`. Build a code from a
+string literal or with `init(rawValue:)`; `ErrorCode("x")` no longer compiles.
+
+Three errors no longer carry a code that the SDK made up. Match on `kind` for them instead:
+
+| Before | Now |
+| --- | --- |
+| `AuthError.sessionMissing` with `.sessionNotFound` | `kind == .sessionMissing`, `code == nil` |
+| A local JWT verification failure with `.invalidJWT` | `kind == .jwtVerificationFailed`, `code == nil` |
+| A non-JSON error body, such as a proxy's HTML page, with `.unexpectedFailure` | `kind == .server`, `code == nil`; read `response?.status` |
+
+`catch AuthError.Code.sessionNotFound`, `.invalidJWT` and `.unexpectedFailure` now match only when
+GoTrue sent that code.
 
 | v2 | v3 |
 | --- | --- |
 | `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `catch AuthError.Kind.sessionMissing` (nothing stored) or `catch AuthError.Kind.sessionInvalidated` (the server rejected the session) |
-| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
-| `.weakPassword(message, reasons)` | `error.errorCode == .weakPassword`; `error.weakPasswordReasons` |
+| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.code`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
+| `.weakPassword(message, reasons)` | `error.code == .weakPassword`; `error.weakPasswordReasons` |
+| `ErrorCode`, `error.errorCode`, `ErrorCode("x")`, `ErrorCode.unknown` | `AuthError.Code`, `error.code` (optional), `"x"` or `AuthError.Code(rawValue: "x")`, `nil` |
 | `.pkceGrantCodeExchange(...)`, `.implicitGrantRedirect(message)`, `.pkce(_:)`, `.invalidImplicitGrantFlowURL`, `.invalidRedirectScheme` | `error.kind == .oauthFlowFailed` |
 | `.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` |
 | `.refreshDiscarded` | `error.kind == .refreshDiscarded` |
@@ -724,7 +743,7 @@ do {
 do {
   try await supabase.auth.signIn(email: email, password: password)
 } catch let error as AuthError where error.kind == .server {
-  print(error.response?.status.code ?? 0, error.errorCode, error.message)
+  print(error.response?.status.code ?? 0, error.code?.rawValue ?? "", error.message)
 } catch AuthError.Kind.sessionMissing, AuthError.Kind.sessionInvalidated {
   showLogin()
 }

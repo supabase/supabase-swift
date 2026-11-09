@@ -18,7 +18,7 @@ struct RealtimeClientChannelsTests {
     configuration: RealtimeClient.Configuration(
       url: URL(string: "http://localhost:54321/realtime/v1")!,
       disconnectOnEmptyChannelsAfter: .zero,
-      handleAppLifecycle: false
+      observesAppLifecycle: false
     )
   )
 
@@ -190,7 +190,7 @@ private final class IdleDisconnectHarness: Sendable {
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         disconnectOnEmptyChannelsAfter: .seconds(5),
-        handleAppLifecycle: false
+        observesAppLifecycle: false
       ),
       wsTransport: { _, _ in socket },
       http: HTTPClient(transport: RecordingTransport()),

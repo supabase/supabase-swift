@@ -40,7 +40,7 @@ struct RealtimeIsolationTests {
     let client = try! RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         webSocketTransport: RefusingTransport())
     )
     var rows: [Row] = []

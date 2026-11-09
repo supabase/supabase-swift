@@ -90,10 +90,11 @@ try await custom.from("avatars").list()
 
 ## `StorageError` is a struct
 
-`StorageError` has `kind`, `message`, `code`, `serverStatusCode`, `isNotFound`, `serverError`,
-`response` and `underlyingError`. The body fields `statusCode` and `error` moved to
-`serverError`, and `statusCode` is an `Int?`. Every failed request throws `StorageError`, never
-`HTTPError`. `StorageError` is not `Decodable`.
+`StorageError` has `kind`, `message`, `code`, `isNotFound`, `serverError`, `response` and
+`underlyingError`. The body's `code` is `StorageError.code`, a `StorageError.Code?` that is `nil`
+when Storage sent no code. The body fields `statusCode` and `error` moved to `serverError`, and
+`statusCode` is an `Int?`. Every failed request throws `StorageError`, never `HTTPError`.
+`StorageError` and `StorageError.ServerError` are not `Decodable`.
 
 ```swift
 // v2
@@ -103,13 +104,20 @@ try await custom.from("avatars").list()
 // v3
 } catch let error as StorageError where error.isNotFound {
   print(error.serverError?.error ?? "", error.message)
-} catch let error as StorageError where error.code == .keyAlreadyExists {
+} catch StorageError.Code.keyAlreadyExists {
   // ...
 }
 ```
 
-Branch on `isNotFound`, `code` or `serverStatusCode`. Storage sends HTTP 400 for most failures and
-puts the real status in the body, so `response?.status` is usually `400 Bad Request`.
+Branch on `isNotFound`, `code` or `serverError?.statusCode`. A `catch` clause can name a code or a
+kind directly, as in `catch StorageError.Code.noSuchKey` or `catch StorageError.Kind.transport`.
+Storage sends HTTP 400 for most failures and puts the real status in the body, so
+`response?.status` is usually `400 Bad Request`.
+
+A resumable upload error has no `code`. The tus routes answer with a plain-text body and no code,
+and the SDK no longer guesses one from the status. Branch on `serverError?.statusCode` instead:
+`404` for an upload that is gone, `409` for a path that already holds an object, and `413` for a
+file that is too large.
 
 ## `UploadOptions` replaces `FileOptions`
 
@@ -264,7 +272,20 @@ Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `Resu
 `StorageClient.Configuration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+return a `PageSequence` and take `pageSize` instead of `maxResults`. Their pages are
 `VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
-`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
-`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.
+`listBuckets`, `listIndexes`, `vectors(keys:)`, `listVectors`, and `queryVectors` take their
+optional settings in `ListVectorBucketsOptions`, `ListIndexesOptions`, `GetVectorsOptions`,
+`ListVectorsOptions`, and `QueryVectorsOptions`. The vector models have public memberwise inits
+for fixtures.
+
+`VectorBucketClient` follows the same getter pattern as `StorageClient`: `from(_:)` returns a
+client and the noun returns details.
+
+| v2 | v3 |
+|----|----|
+| `vectors.listBuckets(prefix: "docs", maxResults: 100)` | `vectors.listBuckets(options: .init(prefix: "docs", pageSize: 100))` |
+| `try await vectors.getBucket("docs")` | `try await vectors.bucket("docs")` |
+| `bucket.listIndexes(prefix: "emb", maxResults: 100)` | `bucket.listIndexes(options: .init(prefix: "emb", pageSize: 100))` |
+| `bucket.index("embeddings")` (a `VectorIndexClient`) | `bucket.from("embeddings")` |
+| `try await bucket.getIndex("embeddings")` (a `VectorIndex`) | `try await bucket.index("embeddings")` |

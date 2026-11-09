@@ -396,7 +396,7 @@ struct AuthClientIntegrationTests {
       try await authClient.unlinkIdentity(identity)
       Issue.record("Expect failure")
     } catch let error as AuthError {
-      #expect(error.errorCode == .singleIdentityNotDeletable)
+      #expect(error.code == .singleIdentityNotDeletable)
     }
   }
 

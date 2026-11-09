@@ -101,7 +101,7 @@ struct AuthMFAIntegrationTests {
       try await auth.mfa.verify(
         factorID: enrollment.id, challengeID: challenge.id, code: "000000")
     }
-    expectNoDifference(error?.errorCode, .mfaVerificationFailed)
+    expectNoDifference(error?.code, .mfaVerificationFailed)
     expectNoDifference(auth.currentSession, session)
   }
 

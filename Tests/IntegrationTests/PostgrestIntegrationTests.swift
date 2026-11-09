@@ -147,4 +147,23 @@ struct PostgrestIntegrationTests {
       .ilike("email", pattern: "johndoe+test%").execute().value
     #expect(fetchedUsers[...] == users[1...2])
   }
+
+  @Test
+  func aDuplicateKeyIsAUniqueViolation() async throws {
+    struct TodoWithID: Encodable {
+      let id: UUID
+      let description: String
+      let tags: [String]
+    }
+    let todo = TodoWithID(id: UUID(), description: "duplicate", tags: [])
+    try await client.from("todos").insert(todo).execute()
+
+    do {
+      try await client.from("todos").insert(todo).execute()
+      Issue.record("Expected a unique violation")
+    } catch PostgrestError.Code.uniqueViolation {
+    } catch {
+      Issue.record("Expected PostgrestError.Code.uniqueViolation, got \(error)")
+    }
+  }
 }

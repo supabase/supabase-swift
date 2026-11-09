@@ -124,7 +124,7 @@ public final class SupabaseClient: Sendable {
         logger: configuration.global.logger,
         encoder: configuration.database.encoder,
         decoder: configuration.database.decoder,
-        retryEnabled: configuration.database.retry,
+        retryEnabled: configuration.database.retryEnabled,
         clock: clock
       )
     )
@@ -249,7 +249,7 @@ public final class SupabaseClient: Sendable {
       storageKey: configuration.auth.storageKey ?? defaultStorageKey,
       headers: _headers,
       storage: configuration.auth.storage,
-      redirectTo: configuration.auth.redirectToURL,
+      redirectTo: configuration.auth.redirectTo,
       autoRefresh: configuration.auth.accessToken == nil
         ? configuration.auth.autoRefresh : .disabled,
       observesAppLifecycle: configuration.auth.observesAppLifecycle,
@@ -432,7 +432,7 @@ public final class SupabaseClient: Sendable {
   ///
   /// Pass the URLs that reach your auth callback. ``AuthClient/isAuthRedirect(_:)`` checks one. A
   /// URL that is not an auth redirect returns `nil`: only a URL that opens
-  /// ``SupabaseClient/Configuration/Auth/redirectToURL`` or the redirect URL of a pending flow is
+  /// ``SupabaseClient/Configuration/Auth/redirectTo`` or the redirect URL of a pending flow is
   /// one. The same URL can arrive more than once; the later deliveries get the first result and
   /// send no request.
   ///
@@ -641,7 +641,7 @@ public final class SupabaseClient: Sendable {
         requestTimeout: realtime.requestTimeout,
         connectOnSubscribe: realtime.connectOnSubscribe,
         disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
-        handleAppLifecycle: realtime.handleAppLifecycle,
+        observesAppLifecycle: realtime.observesAppLifecycle,
         monitorsNetworkPath: realtime.monitorsNetworkPath,
         serverLogLevel: realtime.serverLogLevel,
         accessToken: { [weak self] in try await self?._getAccessToken() },

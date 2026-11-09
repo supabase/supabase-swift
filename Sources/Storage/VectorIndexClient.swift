@@ -14,10 +14,10 @@ import HTTPTypes
 
 /// A client scoped to a single vector index, for reading and writing its vector data.
 ///
-/// Obtain an instance via ``VectorBucketClient/index(_:)``:
+/// Obtain an instance via ``VectorBucketClient/from(_:)``:
 ///
 /// ```swift
-/// let index = client.storage.vectors.from("documents").index("embeddings")
+/// let index = client.storage.vectors.from("documents").from("embeddings")
 ///
 /// try await index.putVectors([
 ///   VectorEntry(key: "doc-1", data: VectorData(float32: [0.1, 0.2, 0.3]), metadata: ["title": "Intro"])
@@ -371,6 +371,25 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
   /// `returnDistance: true`. Only populated by
   /// ``VectorIndexClient/queryVectors(_:topK:options:)``.
   public var distance: Double?
+
+  /// Creates a ``VectorMatch``.
+  ///
+  /// - Parameters:
+  ///   - key: The vector's unique key.
+  ///   - data: The vector's embedding data, if returned.
+  ///   - metadata: The vector's metadata, if returned.
+  ///   - distance: The similarity distance from the query vector, if returned.
+  public init(
+    key: String,
+    data: VectorData? = nil,
+    metadata: [String: JSONValue]? = nil,
+    distance: Double? = nil
+  ) {
+    self.key = key
+    self.data = data
+    self.metadata = metadata
+    self.distance = distance
+  }
 }
 
 /// A parallel scan segment for
@@ -503,6 +522,16 @@ public struct VectorPage: Sendable {
 
   /// The pagination token to pass to fetch the next page, or `nil` when there are no more results.
   public var nextToken: String?
+
+  /// Creates a ``VectorPage``.
+  ///
+  /// - Parameters:
+  ///   - vectors: The vectors in this page.
+  ///   - nextToken: The pagination token for the next page, or `nil` for the last page.
+  public init(vectors: [VectorMatch], nextToken: String? = nil) {
+    self.vectors = vectors
+    self.nextToken = nextToken
+  }
 }
 
 /// The result of a similarity search, as returned by
@@ -516,4 +545,14 @@ public struct QueryVectorsResponse: Sendable {
 
   /// The distance metric used for the similarity search.
   public var distanceMetric: VectorDistanceMetric?
+
+  /// Creates a ``QueryVectorsResponse``.
+  ///
+  /// - Parameters:
+  ///   - vectors: The nearest vectors, ordered by ascending distance.
+  ///   - distanceMetric: The distance metric used for the similarity search.
+  public init(vectors: [VectorMatch], distanceMetric: VectorDistanceMetric? = nil) {
+    self.vectors = vectors
+    self.distanceMetric = distanceMetric
+  }
 }

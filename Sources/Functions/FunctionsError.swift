@@ -154,3 +154,35 @@ public struct FunctionsError: SupabaseError {
     return text
   }
 }
+
+extension FunctionsError.Kind {
+  /// Matches a ``FunctionsError`` of this ``FunctionsError/kind``, so a `catch` clause can name the kind
+  /// directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.functions.invoke("hello")
+  /// } catch FunctionsError.Kind.transport {
+  ///   showOfflineBanner()
+  /// }
+  /// ```
+  public static func ~= (kind: FunctionsError.Kind, error: any Error) -> Bool {
+    (error as? FunctionsError)?.kind == kind
+  }
+}
+
+extension FunctionsError.Code {
+  /// Matches a ``FunctionsError`` with this ``FunctionsError/code``, so a `catch` clause can name the code
+  /// directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.functions.invoke("hello")
+  /// } catch FunctionsError.Code.notFound {
+  ///   deployFunction()
+  /// }
+  /// ```
+  public static func ~= (code: FunctionsError.Code, error: any Error) -> Bool {
+    (error as? FunctionsError)?.code == code
+  }
+}

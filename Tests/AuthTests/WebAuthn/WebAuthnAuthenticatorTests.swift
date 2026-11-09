@@ -29,7 +29,7 @@
         WebAuthnAuthenticator.ceremonyError(from: underlying) as? AuthError)
 
       #expect(error.kind == .passkeyCeremonyFailed)
-      #expect(error.errorCode == .unknown)
+      #expect(error.code == nil)
       #expect((error.underlyingError as? ASAuthorizationError)?.code == .failed)
     }
 
@@ -43,7 +43,7 @@
             from: ASAuthorizationError(.matchedExcludedCredential)) as? AuthError)
 
         #expect(error.kind == .passkeyCeremonyFailed)
-        #expect(error.errorCode == .webAuthnCredentialExists)
+        #expect(error.code == .webAuthnCredentialExists)
       }
     #endif
 

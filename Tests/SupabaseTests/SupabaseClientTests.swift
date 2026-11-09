@@ -52,6 +52,15 @@ func makeMockSession() -> URLSession {
 @Suite
 struct SupabaseClientTests {
   @Test
+  func eachDatabaseConfigurationGetsItsOwnDefaultCoders() {
+    let first = SupabaseClient.Configuration.Database()
+    let second = SupabaseClient.Configuration.Database()
+
+    #expect(first.encoder !== second.encoder)
+    #expect(first.decoder !== second.decoder)
+  }
+
+  @Test
   func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
     let client = try SupabaseClient(
@@ -217,11 +226,25 @@ struct SupabaseClientTests {
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
-        database: SupabaseClient.Configuration.Database(retry: false),
+        database: SupabaseClient.Configuration.Database(retryEnabled: false),
         auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
       )
     )
     #expect(noRetryClient.rest.configuration.retryEnabled == false)
+  }
+
+  @Test
+  func realtimeObservesAppLifecycleForwardsToRealtimeClient() throws {
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
+      )
+    )
+
+    #expect(client.realtime.configuration.observesAppLifecycle == false)
   }
 
   @Test
@@ -896,7 +919,7 @@ struct SupabaseClientTests {
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), accessToken: { nil }),
-        realtime: SupabaseClient.Configuration.Realtime(handleAppLifecycle: false)
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
       )
     )
   }

@@ -571,7 +571,7 @@ struct RealtimeChannelSubscriptionTests {
     try h.fail(join, reason: "PostgresChangesSubscribeTimeout: Timed out after 15000ms")
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
-    #expect(error?.serverCode == .postgresChangesSubscribeTimeout)
+    #expect(error?.code == .postgresChangesSubscribeTimeout)
     #expect(h.sent(ChannelEvent.join).count == 1)
     #expect(await channel.status.error != nil)
     withExtendedLifetime(changes) {}
@@ -605,7 +605,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .unauthorized)
-    #expect(error?.serverCode == .unauthorized)
+    #expect(error?.code == .unauthorized)
     #expect(error?.isRetryable == false)
     #expect(h.clock.now == start)
     #expect(await channel.status == .failed)
@@ -669,7 +669,7 @@ struct RealtimeChannelSubscriptionTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await subscription.value }
     #expect(error?.kind == .unauthorized)
-    #expect(error?.serverCode == .invalidJWTToken)
+    #expect(error?.code == .invalidJWTToken)
     #expect(h.clock.now == start)
     #expect(h.sent(ChannelEvent.join).count == 2)
   }
@@ -949,7 +949,7 @@ struct RealtimeChannelSubscriptionTests {
       let client = try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false)
+          observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
@@ -1322,7 +1322,7 @@ struct RealtimeChannelSubscriptionTests {
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
           connectOnSubscribe: connectOnSubscribe,
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           accessToken: {
             let call = accessTokenCalls.withValue {
               $0 += 1

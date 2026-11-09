@@ -79,4 +79,23 @@ struct FunctionsErrorTests {
 
     #expect((error as? any SupabaseError)?.message == "offline")
   }
+
+  @Test
+  func catchMatchesKindAndCode() {
+    let error: any Error = FunctionsError(kind: .server, message: "gone", code: .notFound)
+
+    #expect(FunctionsError.Kind.server ~= error)
+    #expect(!(FunctionsError.Kind.transport ~= error))
+    #expect(FunctionsError.Code.notFound ~= error)
+    #expect(!(FunctionsError.Code.bootError ~= error))
+    #expect(!(FunctionsError.Code.notFound ~= URLError(.timedOut)))
+    #expect(!(FunctionsError.Kind.server ~= URLError(.timedOut)))
+
+    do {
+      throw error
+    } catch FunctionsError.Code.notFound {
+    } catch {
+      Issue.record("Expected FunctionsError.Code.notFound, got \(error)")
+    }
+  }
 }

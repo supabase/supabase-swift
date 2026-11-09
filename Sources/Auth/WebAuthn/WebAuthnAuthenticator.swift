@@ -83,13 +83,13 @@
       guard let error = error as? ASAuthorizationError else { return error }
       if error.code == .canceled { return CancellationError() }
 
-      var errorCode = ErrorCode.unknown
+      var code: AuthError.Code?
       #if !os(tvOS)
         if #available(iOS 18, macOS 15, visionOS 2, *), error.code == .matchedExcludedCredential {
-          errorCode = .webAuthnCredentialExists
+          code = .webAuthnCredentialExists
         }
       #endif
-      return AuthError.passkeyCeremonyFailed(error, errorCode: errorCode)
+      return AuthError.passkeyCeremonyFailed(error, code: code)
     }
   }
 

@@ -47,12 +47,12 @@ public struct PresenceEntry: Sendable, Hashable {
   ///
   /// - Parameters:
   ///   - type: The target type. Can be inferred from context.
-  ///   - decoder: The decoder to use. Defaults to ``JSONValue/decoder``.
+  ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
   /// - Returns: The decoded payload.
   /// - Throws: A `DecodingError` when the payload does not match `T`.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
-    decoder: JSONDecoder = JSONValue.decoder
+    decoder: JSONDecoder? = nil
   ) throws -> T {
     try payload.decode(as: T.self, decoder: decoder)
   }
@@ -84,7 +84,7 @@ public struct PresenceState: Sendable, Hashable {
   ///
   /// - Parameters:
   ///   - type: The target type. Can be inferred from context.
-  ///   - decoder: The decoder to use. Defaults to ``JSONValue/decoder``.
+  ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
   ///   - ignoringUndecodable: When `true`, entries that do not decode as `T` are skipped, and
   ///     keys with no decoded entry are left out. Clients that track other payloads, or none,
   ///     do not make the call fail. Defaults to `true`.
@@ -93,7 +93,7 @@ public struct PresenceState: Sendable, Hashable {
   ///   decode as `T`.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
-    decoder: JSONDecoder = JSONValue.decoder,
+    decoder: JSONDecoder? = nil,
     ignoringUndecodable: Bool = true
   ) throws -> [String: [T]] {
     var decoded: [String: [T]] = [:]
