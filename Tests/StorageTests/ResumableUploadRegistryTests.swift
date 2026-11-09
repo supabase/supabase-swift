@@ -25,7 +25,7 @@ struct ResumableUploadRegistryTests {
   }
 
   private var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(

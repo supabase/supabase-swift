@@ -103,7 +103,7 @@ removed the next time it is read.
 
 ### Configuration
 
-`StorageClientConfiguration.resumable` takes a `ResumableUploadConfiguration`:
+`StorageClient.Configuration.resumable` takes a `ResumableUploadConfiguration`:
 
 - `chunkSize` is the bytes per request. Hosted Supabase accepts exactly 6 MiB, the default, for
   every chunk but the last. Change it only for a self-hosted Storage set up for another size.
@@ -112,7 +112,7 @@ removed the next time it is read.
   app group container to share uploads with an app extension.
 
 ```swift
-var configuration = StorageClientConfiguration(url: storageURL, headers: headers)
+var configuration = StorageClient.Configuration(url: storageURL, headers: headers)
 configuration.resumable = ResumableUploadConfiguration(directory: appGroupURL)
 let storage = StorageClient(configuration: configuration)
 ```
@@ -123,5 +123,5 @@ A record keeps the chunk size it was created with, so a change applies to new up
 
 On hosted Supabase, resumable uploads always go to the direct storage host,
 `<project-ref>.storage.supabase.co`, as the tus endpoint requires. This happens whatever
-``StorageClientConfiguration/usesNewHostname`` says. Other requests are not affected, and a
+``StorageClient/Configuration/usesNewHostname`` says. Other requests are not affected, and a
 self-hosted URL is used as it is.

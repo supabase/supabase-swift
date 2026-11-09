@@ -23,8 +23,8 @@ same error instead of retrying the join. Without the check the connection would 
 If your app runs in a context that TN3135 allows, such as audio streaming, opt in:
 
 ```swift
-var options = RealtimeClientOptions()
-options.webSocketTransport = URLSessionWebSocketTransport(allowsWatchOSConnections: true)
+var configuration = RealtimeClient.Configuration(url: realtimeURL)
+configuration.webSocketTransport = URLSessionWebSocketTransport(allowsWatchOSConnections: true)
 ```
 
 With the opt-in, the transport also gives up on a handshake that does not finish within the
@@ -44,11 +44,11 @@ builds on Linux, but Linux and Android are not supported for production use.
 If the default transport does not work on your platform, implement ``WebSocketTransport`` over
 another WebSocket stack, such as one built on SwiftNIO. See <doc:CustomTransports>.
 
-``RealtimeClientOptions/handleAppLifecycle`` is on by default on iOS, macOS, tvOS and visionOS.
-On watchOS it is off by default, and you can turn it on. On Linux and Android its default is
-`false`, and setting it to `true` does nothing.
+``RealtimeClient/Configuration/handleAppLifecycle`` is on by default on iOS, macOS, tvOS and
+visionOS. On watchOS it is off by default, and you can turn it on. On Linux and Android its
+default is `false`, and setting it to `true` does nothing.
 
-``RealtimeClientOptions/monitorsNetworkPath`` is on by default on iOS, macOS, tvOS and visionOS.
+``RealtimeClient/Configuration/monitorsNetworkPath`` is on by default on iOS, macOS, tvOS and visionOS.
 On watchOS it is off, because the system keeps reporting an unsatisfied path to ordinary apps,
 so the hint may never fire. Linux and Android have no path monitor, so the option does nothing
 there.

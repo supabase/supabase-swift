@@ -13,8 +13,8 @@ extension SupabaseClient {
   static let thirdPartyAuthWithClerk = SupabaseClient(
     supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
     supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
-    options: SupabaseClientOptions(
-      auth: SupabaseClientOptions.AuthOptions(
+    configuration: SupabaseClient.Configuration(
+      auth: SupabaseClient.Configuration.Auth(
         accessToken: {
           try await Clerk.shared.session?.getToken()?.jwt
         }

@@ -154,8 +154,8 @@ struct StoredSessionTests {
         url: url,
         storageKey: key,
         storage: localStorage,
-        http: http,
-        autoRefresh: .manual
+        autoRefresh: .manual,
+        http: http
       )
     )
   }

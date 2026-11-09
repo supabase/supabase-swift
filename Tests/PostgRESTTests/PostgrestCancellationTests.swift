@@ -52,8 +52,8 @@ struct PostgrestCancellationTests {
       configuration: .init(
         url: URL(string: "http://localhost:54321/rest/v1")!,
         http: .init(transport: transport),
-        retryEnabled: retryEnabled),
-      clock: clock)
+        retryEnabled: retryEnabled,
+        clock: clock))
   }
 
   @Test

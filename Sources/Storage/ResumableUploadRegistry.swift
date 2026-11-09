@@ -8,7 +8,7 @@
 import Foundation
 
 extension StorageClient {
-  /// The resumable uploads this client's ``StorageClientConfiguration/resumable`` directory
+  /// The resumable uploads this client's ``StorageClient/Configuration/resumable`` directory
   /// holds records for: the ones in flight, paused, or left by a previous run.
   ///
   /// - Warning: Experimental. See ``ResumableUpload``.

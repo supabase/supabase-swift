@@ -64,7 +64,11 @@ struct PostgrestRequestTests {
   @Test
   func makeRequestSeedsTheClientHeaders() {
     let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["apikey": "key"])
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: ["apikey": "key"]
+      )
+    )
     let request = client.makeRequest("todos")
     #expect(request.headerFields[HTTPField.Name("apikey")!] == "key")
   }
@@ -72,7 +76,11 @@ struct PostgrestRequestTests {
   @Test
   func aRequestHeaderReplacesTheClientHeader() {
     let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["Prefer": "tx=rollback"])
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: ["Prefer": "tx=rollback"]
+      )
+    )
     var request = client.makeRequest("todos")
     request.headerFields[.prefer] = "count=exact"
     #expect(request.httpRequest(for: client.configuration).headerFields[.prefer] == "count=exact")
@@ -81,7 +89,11 @@ struct PostgrestRequestTests {
   @Test
   func aClientHeaderRemovedFromTheRequestStaysRemoved() {
     let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["apikey": "key"])
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: ["apikey": "key"]
+      )
+    )
     var request = client.makeRequest("todos")
     request.headerFields[HTTPField.Name("apikey")!] = nil
     let sent = request.httpRequest(for: client.configuration)

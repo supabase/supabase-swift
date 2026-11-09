@@ -11,8 +11,9 @@ struct RealtimeReconnectRecoveryTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeOptions(timeout: Duration = .seconds(3)) -> RealtimeClientOptions {
-    RealtimeClientOptions(
+  private func makeConfiguration(timeout: Duration = .seconds(3)) -> RealtimeClient.Configuration {
+    RealtimeClient.Configuration(
+      url: url,
       headers: ["apikey": apiKey],
       heartbeatInterval: .seconds(10),
       requestTimeout: timeout,
@@ -48,8 +49,7 @@ struct RealtimeReconnectRecoveryTests {
     let connectAttempts = LockIsolated(0)
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let attempt = connectAttempts.withValue { count -> Int in
           count += 1
@@ -93,8 +93,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -150,8 +149,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -212,8 +210,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(timeout: .seconds(3)),
+      configuration: makeConfiguration(timeout: .seconds(3)),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -266,13 +263,13 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(1),
-        accessToken: { "token" },
-        handleAppLifecycle: false
+        handleAppLifecycle: false,
+        accessToken: { "token" }
       ),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()

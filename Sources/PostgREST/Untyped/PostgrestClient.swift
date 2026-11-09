@@ -15,8 +15,10 @@ public import Logging
 ///
 /// ```swift
 /// let client = PostgrestClient(
-///   url: URL(string: "https://<project>.supabase.co/rest/v1")!,
-///   headers: ["apikey": "<anon-key>"]
+///   configuration: .init(
+///     url: URL(string: "https://<project>.supabase.co/rest/v1")!,
+///     headers: ["apikey": "<anon-key>"]
+///   )
 /// )
 ///
 /// // SELECT * FROM todos
@@ -32,7 +34,6 @@ public import Logging
 /// ### Creating a Client
 ///
 /// - ``init(configuration:)``
-/// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
 /// - ``Configuration``
 ///
 /// ### Querying and Mutating Data
@@ -59,7 +60,7 @@ public struct PostgrestClient: Sendable {
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
+  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:accessToken:clock:)``
   ///
   /// ### Configuration Properties
   ///
@@ -67,10 +68,12 @@ public struct PostgrestClient: Sendable {
   /// - ``schema``
   /// - ``headers``
   /// - ``http``
+  /// - ``logger``
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
   /// - ``accessToken``
+  /// - ``clock``
   ///
   /// ### Defaults
   ///
@@ -90,6 +93,11 @@ public struct PostgrestClient: Sendable {
     /// The transport and middleware chain every request goes through.
     public var http: HTTPClientConfiguration
 
+    /// The logger for request and response diagnostics. Defaults to a build-config-aware
+    /// logger. The client removes tokens, secrets, and URL query strings from each line before
+    /// your handler sees it, and tags the logger with the `system` metadata key set to `postgrest`.
+    public var logger: Logging.Logger
+
     /// The `JSONEncoder` used to serialize request bodies.
     ///
     /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
@@ -101,7 +109,7 @@ public struct PostgrestClient: Sendable {
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
     /// always uses ``jsonEncoder``, so a key strategy here cannot change the column names it
     /// derives from `CodingKeys`.
-    public let encoder: JSONEncoder
+    public var encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
     ///
@@ -113,7 +121,7 @@ public struct PostgrestClient: Sendable {
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
     /// always uses ``jsonDecoder``, so a key strategy here cannot change the column names it
     /// derives from `CodingKeys`.
-    public let decoder: JSONDecoder
+    public var decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
     ///
@@ -146,7 +154,13 @@ public struct PostgrestClient: Sendable {
     /// ``PostgrestError/underlyingError``.
     public var accessToken: (@Sendable () async throws -> String?)?
 
-    let logger: Logging.Logger
+    /// The clock the waits between retries sleep on.
+    ///
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive retries deterministically in
+    /// tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
+    public var clock: any Clock<Duration>
 
     /// Creates a new ``Configuration``.
     ///
@@ -154,94 +168,50 @@ public struct PostgrestClient: Sendable {
     ///   - url: The base URL of the PostgREST endpoint.
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
-    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
     ///   - http: The transport and middleware chain every request goes through.
+    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
     ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
     ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
+    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
       schema: String? = nil,
       headers: [String: String] = [:],
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       http: HTTPClientConfiguration = .init(),
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
       decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
       retryEnabled: Bool = true,
-      accessToken: (@Sendable () async throws -> String?)? = nil
+      accessToken: (@Sendable () async throws -> String?)? = nil,
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.url = url
       self.schema = schema
       self.headers = headers
-      var logger = logger.redactingSecrets()
-      logger[metadataKey: "system"] = "postgrest"
-      self.logger = logger
       self.http = http
+      self.logger = logger
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
       self.accessToken = accessToken
+      self.clock = clock
     }
   }
 
   /// The configuration this client was created with.
   public let configuration: Configuration
-  let clock: any Clock<Duration>
 
-  /// Creates a ``PostgrestClient`` from an existing ``Configuration``.
+  /// Creates a ``PostgrestClient`` from a ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
   public init(configuration: Configuration) {
-    self.init(configuration: configuration, clock: ContinuousClock())
-  }
-
-  init(configuration: Configuration, clock: any Clock<Duration>) {
     var configuration = configuration
     configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "postgrest"
     self.configuration = configuration
-    self.clock = clock
-  }
-
-  /// Creates a ``PostgrestClient`` with individual configuration parameters.
-  ///
-  /// This is a convenience initializer that constructs a ``Configuration`` internally.
-  /// Use ``init(configuration:)`` when you need to share or reuse a configuration value.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL of the PostgREST endpoint.
-  ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
-  ///   - headers: Additional HTTP headers sent with every request.
-  ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-  ///   - http: The transport and middleware chain every request goes through.
-  ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
-  ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
-  ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-  ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
-  public init(
-    url: URL,
-    schema: String? = nil,
-    headers: [String: String] = [:],
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-    http: HTTPClientConfiguration = .init(),
-    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-    retryEnabled: Bool = true,
-    accessToken: (@Sendable () async throws -> String?)? = nil
-  ) {
-    self.init(
-      configuration: Configuration(
-        url: url,
-        schema: schema,
-        headers: headers,
-        logger: logger,
-        http: http,
-        encoder: encoder,
-        decoder: decoder,
-        retryEnabled: retryEnabled,
-        accessToken: accessToken
-      )
-    )
   }
 
   /// Returns a query builder targeting the specified table or view.
@@ -349,7 +319,7 @@ public struct PostgrestClient: Sendable {
   public func schema(_ schema: String) -> PostgrestClient {
     var configuration = configuration
     configuration.schema = schema
-    return PostgrestClient(configuration: configuration, clock: clock)
+    return PostgrestClient(configuration: configuration)
   }
 
   /// One query item per argument, in key order, for a `GET` call's arguments.
