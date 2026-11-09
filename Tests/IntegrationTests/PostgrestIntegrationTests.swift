@@ -40,10 +40,12 @@ struct User: Codable, Hashable {
 )
 struct PostgrestIntegrationTests {
   let client = PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: [
-      "Apikey": DotEnv.supabasePublishableKey
-    ]
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: [
+        "Apikey": DotEnv.supabasePublishableKey
+      ]
+    )
   )
 
   init() async throws {
@@ -144,5 +146,24 @@ struct PostgrestIntegrationTests {
     let fetchedUsers: [User] = try await client.from("users").select()
       .ilike("email", pattern: "johndoe+test%").execute().value
     #expect(fetchedUsers[...] == users[1...2])
+  }
+
+  @Test
+  func aDuplicateKeyIsAUniqueViolation() async throws {
+    struct TodoWithID: Encodable {
+      let id: UUID
+      let description: String
+      let tags: [String]
+    }
+    let todo = TodoWithID(id: UUID(), description: "duplicate", tags: [])
+    try await client.from("todos").insert(todo).execute()
+
+    do {
+      try await client.from("todos").insert(todo).execute()
+      Issue.record("Expected a unique violation")
+    } catch PostgrestError.Code.uniqueViolation {
+    } catch {
+      Issue.record("Expected PostgrestError.Code.uniqueViolation, got \(error)")
+    }
   }
 }

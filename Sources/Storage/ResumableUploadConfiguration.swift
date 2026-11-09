@@ -9,7 +9,7 @@ public import Foundation
 
 /// How ``ResumableUpload`` chunks, retries and persists an upload.
 ///
-/// Set it on ``StorageClientConfiguration/resumable``.
+/// Set it on ``StorageClient/Configuration/resumable``.
 ///
 /// - Warning: Experimental. See ``ResumableUpload``.
 @_spi(Experimental)

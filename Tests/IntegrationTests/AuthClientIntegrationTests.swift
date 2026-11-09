@@ -30,7 +30,7 @@ struct AuthClientIntegrationTests {
   static let authURL = URL(string: "\(DotEnv.supabaseURL)/auth/v1")!
 
   static func makeAdminClient() -> AuthAdminClient {
-    AuthAdminClient(url: authURL, secretKey: DotEnv.supabaseSecretKey)
+    AuthAdminClient(configuration: .init(url: authURL, secretKey: DotEnv.supabaseSecretKey))
   }
 
   static func makeClient(
@@ -396,7 +396,7 @@ struct AuthClientIntegrationTests {
       try await authClient.unlinkIdentity(identity)
       Issue.record("Expect failure")
     } catch let error as AuthError {
-      #expect(error.errorCode == .singleIdentityNotDeletable)
+      #expect(error.code == .singleIdentityNotDeletable)
     }
   }
 

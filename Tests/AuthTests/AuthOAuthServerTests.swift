@@ -34,8 +34,8 @@ struct AuthOAuthServerTests {
         storageKey: uniqueStorageKey(),
         headers: HTTPFields(["apikey": "supabase.publishable.key"]),
         storage: storage,
-        http: .init(transport: transport),
-        autoRefresh: .manual),
+        autoRefresh: .manual,
+        http: .init(transport: transport)),
       pkce: .live,
       platform: .live)
   }
@@ -282,7 +282,7 @@ struct AuthOAuthServerTests {
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .oauthAuthorizationNotFound)
+      #expect(error.code == .oauthAuthorizationNotFound)
     }
   }
 
@@ -424,7 +424,7 @@ struct AuthOAuthServerTests {
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .oauthConsentNotFound)
+      #expect(error.code == .oauthConsentNotFound)
     }
   }
 }

@@ -35,18 +35,18 @@ struct RealtimeLifecycleTests {
   }
 
   private func makeClient(
-    handleAppLifecycle: Bool = false, monitorsNetworkPath: Bool = false,
+    observesAppLifecycle: Bool = false, monitorsNetworkPath: Bool = false,
     reconnectBackoff: BackoffPolicy? = nil,
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
       noLifecycleEvents
   ) -> RealtimeClient {
     RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
-        accessToken: { "custom.access.token" },
-        handleAppLifecycle: handleAppLifecycle,
-        monitorsNetworkPath: monitorsNetworkPath
+        observesAppLifecycle: observesAppLifecycle,
+        monitorsNetworkPath: monitorsNetworkPath,
+        accessToken: { "custom.access.token" }
       ),
       wsTransport: { [servers, answersHeartbeats] _, _ in
         let (client, server) = FakeWebSocket.fakes()
@@ -264,8 +264,8 @@ struct RealtimeLifecycleTests {
     let rejoinJoinTopics = LockIsolated<Set<String>>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: url,
         headers: ["apikey": apiKey],
         accessToken: { "custom.access.token" }
       ),
@@ -417,7 +417,7 @@ struct RealtimeLifecycleTests {
     let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
 
     func scope() async throws {
-      let sut = makeClient(handleAppLifecycle: true, lifecycleEvents: { events })
+      let sut = makeClient(observesAppLifecycle: true, lifecycleEvents: { events })
       box.client = sut
       try await sut.connect()
       lifecycle.yield(.foreground)
@@ -459,10 +459,10 @@ struct RealtimeLifecycleTests {
   }
 
   @Test
-  func handleAppLifecycleFalseDoesNotObserveTheLifecycle() async {
+  func observesAppLifecycleFalseDoesNotObserveTheLifecycle() async {
     let observed = LockIsolated(false)
     let sut = makeClient(
-      handleAppLifecycle: false,
+      observesAppLifecycle: false,
       lifecycleEvents: {
         observed.setValue(true)
         return AsyncStream { $0.finish() }
@@ -479,7 +479,7 @@ struct RealtimeLifecycleTests {
     guard #available(iOS 26, macOS 26, tvOS 26, watchOS 26, visionOS 26, *) else { return }
     let name = LockIsolated<String??>(nil)
     let sut = makeClient(
-      handleAppLifecycle: true,
+      observesAppLifecycle: true,
       lifecycleEvents: {
         name.setValue(.some(Task.name))
         return AsyncStream { $0.finish() }
@@ -496,7 +496,7 @@ struct RealtimeLifecycleTests {
   @Test(arguments: [AppLifecycleEvent.foreground, .systemDidWake])
   func aReturnToTheForegroundProbesTheSocket(_ event: AppLifecycleEvent) async throws {
     let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
-    let sut = makeClient(handleAppLifecycle: true, lifecycleEvents: { events })
+    let sut = makeClient(observesAppLifecycle: true, lifecycleEvents: { events })
     try await sut.connect()
     let heartbeats = await sut.heartbeats()
 

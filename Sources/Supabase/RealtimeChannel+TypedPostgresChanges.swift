@@ -20,7 +20,7 @@ extension RealtimeChannel {
   /// The stream shapes the join request. Open it before you call ``RealtimeChannel/subscribe()``.
   ///
   /// ```swift
-  /// let changes = await channel.postgresChanges(for: Todo.self, where: { $0.listID.eq(listID) })
+  /// let changes = await channel.postgresChanges(of: Todo.self, where: { $0.listID.eq(listID) })
   /// try await channel.subscribe()
   /// for await change in changes {
   ///   switch change.kind {
@@ -46,35 +46,37 @@ extension RealtimeChannel {
   ///   - relation: The relation to watch.
   ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
   ///   - filter: Builds the filter from the relation's columns, or `nil` for every row.
-  ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. Defaults to the decoder
-  ///     PostgREST uses, so a row decodes the same from a query and from a change.
+  ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses the decoder of the
+  ///     typed query API, a `JSONDecoder.supabase()`, so a row decodes the same from a query and
+  ///     from a change.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
   @_spi(Experimental)
   nonisolated public func postgresChanges<R: _PostgrestRelation>(
-    for relation: R.Type,
+    of relation: R.Type,
     event: PostgresChangeEvent = .all,
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+    decoder: JSONDecoder? = nil
   ) async -> AsyncStream<TypedPostgresChange<R>> {
     let rawFilter = filter.map { $0(R.columns).realtimeFilter }
     return await postgresChanges(
       of: R.self, event: event, schema: R.schema, table: R.relationName, rawFilter: rawFilter,
-      select: nil, decoder: decoder
+      select: nil, decoder: decoder ?? PostgrestClient.Configuration.jsonDecoder
     )
   }
 
-  // Without the SPI import the solver reports "extra argument 'for' in call". This visible twin
-  // catches the call and names the fix. The extra `Void` parameter only avoids a redeclaration.
+  // Without the SPI import the solver reports "missing argument for parameter 'table'". This
+  // visible twin catches the call and names the fix. The extra `Void` parameter only avoids a
+  // redeclaration.
   @available(
     *, unavailable,
     message:
       "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
   )
   nonisolated public func postgresChanges<R: _PostgrestRelation>(
-    for relation: R.Type,
+    of relation: R.Type,
     event: PostgresChangeEvent = .all,
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+    decoder: JSONDecoder? = nil,
     _: Void = ()
   ) async -> AsyncStream<TypedPostgresChange<R>> {
     fatalError()

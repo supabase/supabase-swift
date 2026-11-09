@@ -75,9 +75,9 @@ struct StorageClientIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Bucket not found")
-      #expect(error.serverError?.code == .noSuchBucket)
+      #expect(error.code == .noSuchBucket)
       #expect(error.message == "Bucket not found")
-      #expect(error.serverStatusCode == 404)
+      #expect(error.serverError?.statusCode == 404)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -124,14 +124,14 @@ struct StorageClientIntegrationTests {
         options: UploadOptions(contentType: "text/plain"))
     }
     #expect(tooBig?.code == .entityTooLarge)
-    #expect(tooBig?.serverStatusCode == 413)
+    #expect(tooBig?.serverError?.statusCode == 413)
 
     let wrongType = await StorageIntegration.storageError {
       try await storage.from(name).upload(
         path: "img.jpg", data: Data("x".utf8), options: UploadOptions(contentType: "image/jpeg"))
     }
     #expect(wrongType?.code == .invalidMimeType)
-    #expect(wrongType?.serverStatusCode == 415)
+    #expect(wrongType?.serverError?.statusCode == 415)
   }
 
   @Test
@@ -180,7 +180,7 @@ struct StorageClientIntegrationTests {
     }
 
     #expect(error?.code == .bucketAlreadyExists)
-    #expect(error?.serverStatusCode == 409)
+    #expect(error?.serverError?.statusCode == 409)
   }
 
   @Test
@@ -194,7 +194,7 @@ struct StorageClientIntegrationTests {
     }
 
     #expect(error?.code == .resourceNotEmpty)
-    #expect(error?.serverStatusCode == 409)
+    #expect(error?.serverError?.statusCode == 409)
   }
 
   @Test
@@ -206,7 +206,7 @@ struct StorageClientIntegrationTests {
     }
 
     #expect(error?.code == .accessDenied)
-    #expect(error?.serverStatusCode == 403)
+    #expect(error?.serverError?.statusCode == 403)
     #expect(error?.response?.status == 400)
   }
 
@@ -222,7 +222,7 @@ struct StorageClientIntegrationTests {
     #expect((error?.response?.status.code ?? 0) >= 400)
     #if os(macOS)
       #expect(error?.code == .invalidRequest)
-      #expect(error?.serverStatusCode == 400)
+      #expect(error?.serverError?.statusCode == 400)
     #endif
   }
 
@@ -301,7 +301,7 @@ struct StorageClientIntegrationTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseSecretKey,
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
 
     let payload = Data("from SupabaseClient".utf8)
     try await client.storage.from(name).upload(path: "file.txt", data: payload)
@@ -316,13 +316,13 @@ struct StorageClientIntegrationTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseNewFormatPublishableKey,
-      options: SupabaseClientOptions(auth: .init(storage: InMemoryTestStorage())))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
 
     #expect(try await client.storage.from(name).list().isEmpty)
     let error = await StorageIntegration.storageError {
       try await client.storage.from(name).upload(path: "anon.txt", data: Data("a".utf8))
     }
     #expect(error?.code == .accessDenied)
-    #expect(error?.serverStatusCode == 403)
+    #expect(error?.serverError?.statusCode == 403)
   }
 }

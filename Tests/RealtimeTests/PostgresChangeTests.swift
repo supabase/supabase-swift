@@ -190,6 +190,19 @@ struct PostgresChangeTests {
   }
 
   @Test
+  func rowDecodeWithANilDecoderReadsPostgresTimestamps() throws {
+    struct Stamped: Decodable, Equatable {
+      let createdAt: Date
+      enum CodingKeys: String, CodingKey { case createdAt = "created_at" }
+    }
+    let row = PostgresRow(values: ["created_at": "1970-01-01T00:00:00+00"])
+
+    #expect(
+      try row.decode(as: Stamped.self, decoder: nil)
+        == Stamped(createdAt: Date(timeIntervalSince1970: 0)))
+  }
+
+  @Test
   func rowDecodeFailureThrowsADecodingError() throws {
     let change = try PostgresChange(payload: data("INSERT", record: ["id": "x"]))
     let record = try #require(change.record)

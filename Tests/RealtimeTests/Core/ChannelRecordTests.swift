@@ -72,7 +72,7 @@ struct ChannelRecordTests {
   ])
   func aSubscriptionWithPresenceOnAcceptsAPresenceStream(phase: Phase) {
     var configuration = RealtimeChannelConfiguration()
-    configuration.presence.enabled = true
+    configuration.presence.isEnabled = true
     var record = ChannelRecord(topic: "room", configuration: configuration)
     record.phase = phase
 

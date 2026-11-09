@@ -17,8 +17,9 @@ struct ChannelStateTests {
 
   func makeState() -> ChannelState {
     let client = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        observesAppLifecycle: false))
     return ChannelState(
       handle: RealtimeChannel(
         id: channelID, topic: "room", configuration: RealtimeChannelConfiguration(),

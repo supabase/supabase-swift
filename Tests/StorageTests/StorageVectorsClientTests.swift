@@ -29,7 +29,7 @@ extension StorageMockerTests {
 
       return StorageVectorsClient(
         api: StorageAPI(
-          configuration: StorageClientConfiguration(
+          configuration: StorageClient.Configuration(
             url: url,
             headers: [:],
             http: .init(transport: URLSessionTransport(session: session)))
@@ -101,7 +101,9 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await vectors.listBuckets(prefix: "doc", pageSize: 2).page()
+      let response = try await vectors.listBuckets(
+        options: ListVectorBucketsOptions(prefix: "doc", pageSize: 2)
+      ).page()
       #expect(response.vectorBuckets.map(\.vectorBucketName) == ["documents", "images"])
       #expect(response.nextToken == "page-2")
     }

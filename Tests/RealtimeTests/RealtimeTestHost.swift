@@ -34,14 +34,16 @@ final class RealtimeTestHost: Sendable {
     var observers: [Task<Void, Never>] = []
   }
 
+  static let url = URL(string: "http://localhost:54321/realtime/v1")!
+
   private let state = LockIsolated(State())
   private let signal: AsyncStream<Void>
   private let signalContinuation: AsyncStream<Void>.Continuation
 
   init(
-    url: URL = URL(string: "http://localhost:54321/realtime/v1")!,
-    options: RealtimeClientOptions = RealtimeClientOptions(
-      handleAppLifecycle: false, monitorsNetworkPath: false),
+    configuration: RealtimeClient.Configuration = RealtimeClient.Configuration(
+      url: RealtimeTestHost.url,
+      observesAppLifecycle: false, monitorsNetworkPath: false),
     http: HTTPClient = HTTPClient(transport: RecordingTransport()),
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
       noLifecycleEvents
@@ -54,8 +56,7 @@ final class RealtimeTestHost: Sendable {
     let continuation = signalContinuation
 
     client = RealtimeClient(
-      url: url,
-      options: options,
+      configuration: configuration,
       wsTransport: { _, _ in
         let (socket, server) = FakeWebSocket.fakes()
         let observer = Task {

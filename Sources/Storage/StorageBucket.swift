@@ -77,7 +77,7 @@ public struct StorageBucket: Sendable {
   let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
-  public var configuration: StorageClientConfiguration { api.configuration }
+  public var configuration: StorageClient.Configuration { api.configuration }
 
   init(id: String, api: StorageAPI) {
     self.id = id
@@ -261,7 +261,7 @@ public struct StorageBucket: Sendable {
       url: api.configuration.url, bucketID: id, path: key.path, fileURL: fileURL)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
-        id: ResumableUpload.ID(rawValue: fingerprint),
+        fingerprint: fingerprint,
         bucketID: id, path: key.path, totalBytes: size, input: .file(fileURL),
         options: options.inferringContentType(from: fileURL), api: api)
     }
@@ -288,7 +288,7 @@ public struct StorageBucket: Sendable {
       url: api.configuration.url, bucketID: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
-        id: ResumableUpload.ID(rawValue: fingerprint),
+        fingerprint: fingerprint,
         bucketID: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
         options: options, api: api)
     }
@@ -699,7 +699,7 @@ public struct StorageBucket: Sendable {
       _ = try await info(path: path)
       return true
     } catch let error as StorageError
-      where error.code == .noSuchKey || (error.code == nil && error.serverStatusCode == 404)
+      where error.code == .noSuchKey || (error.code == nil && error.serverError?.statusCode == 404)
     {
       return false
     }

@@ -113,7 +113,7 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// Set it when the app opens ``RealtimeChannel/presenceStates()`` or
     /// ``RealtimeChannel/presenceChanges()`` only after the channel subscribes, such as from a
     /// view that appears later, or reads ``RealtimeChannel/presenceState`` with no stream open.
-    public var enabled = false
+    public var isEnabled = false
 
     /// Creates presence options with no key.
     public init() {}

@@ -104,7 +104,7 @@ struct StorageBucketPathTests {
     response: String, requests: LockIsolated<[HTTPRequest]>, bodies: LockIsolated<[Data]>
   ) -> StorageBucket {
     StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
         http: .init(
@@ -197,7 +197,7 @@ struct StorageBucketPathTests {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
     let bucket = StorageClient(
-      configuration: StorageClientConfiguration(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
         http: .init(

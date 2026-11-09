@@ -25,8 +25,8 @@ struct QueryCapture {
     status: HTTPTypes.HTTPResponse.Status = .ok,
     responseHeaders: [String: String] = [:],
     headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"],
-    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+    encoder: JSONEncoder = .supabase(),
+    decoder: JSONDecoder = .supabase()
   ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
@@ -35,25 +35,27 @@ struct QueryCapture {
       fields[HTTPField.Name(entry.key)!] = entry.value
     }
     client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!,
-      headers: headers,
-      http: .init(
-        transport: ClosureTransport { request, requestBody in
-          captured.setValue(request)
-          let data: Data? =
-            if let requestBody {
-              try await Data(collecting: requestBody, upTo: .max)
-            } else {
-              nil
-            }
-          capturedBody.setValue(data)
-          return (
-            HTTPTypes.HTTPResponse(status: status, headerFields: headerFields),
-            HTTPBody(Data(body.utf8))
-          )
-        }),
-      encoder: encoder,
-      decoder: decoder
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: headers,
+        http: .init(
+          transport: ClosureTransport { request, requestBody in
+            captured.setValue(request)
+            let data: Data? =
+              if let requestBody {
+                try await Data(collecting: requestBody, upTo: .max)
+              } else {
+                nil
+              }
+            capturedBody.setValue(data)
+            return (
+              HTTPTypes.HTTPResponse(status: status, headerFields: headerFields),
+              HTTPBody(Data(body.utf8))
+            )
+          }),
+        encoder: encoder,
+        decoder: decoder
+      )
     )
   }
 

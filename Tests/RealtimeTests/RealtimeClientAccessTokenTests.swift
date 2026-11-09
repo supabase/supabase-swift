@@ -263,8 +263,10 @@ struct RealtimeClientAccessTokenTests {
     let gate = CallbackGate()
     let provider = TokenProvider { call in call == 1 ? await gate.park() : "second" }
     let client = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(accessToken: provider.callback, handleAppLifecycle: false),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        observesAppLifecycle: false,
+        accessToken: provider.callback),
       wsTransport: { _, _ in FakeWebSocket.fakes().0 },
       http: HTTPClient(transport: RecordingTransport()),
       clock: clock
@@ -272,7 +274,7 @@ struct RealtimeClientAccessTokenTests {
 
     async let token = client.currentAccessToken()
     await gate.waitForCall()
-    await clock.advance(by: RealtimeClientOptions.defaultRequestTimeout)
+    await clock.advance(by: RealtimeClient.Configuration.defaultRequestTimeout)
     #expect(await token == nil)
 
     await client.setAuth()
@@ -380,11 +382,12 @@ struct RealtimeClientAccessTokenTests {
     _ provider: TokenProvider, headers: [String: String] = [:]
   ) async -> RealtimeTestHost {
     await RealtimeTestHost(
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
         headers: headers,
         heartbeatInterval: .seconds(3600),
-        accessToken: provider.callback,
-        handleAppLifecycle: false
+        observesAppLifecycle: false,
+        accessToken: provider.callback
       )
     )
   }

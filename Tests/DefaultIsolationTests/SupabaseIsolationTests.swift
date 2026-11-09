@@ -9,7 +9,7 @@ import Foundation
 @_spi(Experimental) import PostgrestMacros
 @_spi(Experimental) import Supabase
 
-/// A keyed relation, so `LiveQuery` and `SupabaseClient.stream(_:where:)` can match changes to
+/// A keyed relation, so `LiveQuery` and `SupabaseClient.stream(of:where:)` can match changes to
 /// rows.
 @Table("rooms")
 struct IsolationRoom {
@@ -33,18 +33,18 @@ enum SupabaseIsolationTests {
   }
 
   static func typedStream(_ client: SupabaseClient) async throws {
-    for try await rooms in client.stream(IsolationRoom.self) { _ = rooms }
-    for try await rooms in client.stream(IsolationRoom.self, where: { $0.id.gt(0) }) {
+    for try await rooms in client.stream(of: IsolationRoom.self) { _ = rooms }
+    for try await rooms in client.stream(of: IsolationRoom.self, where: { $0.id.gt(0) }) {
       _ = rooms
     }
   }
 
   static func typedPostgresChanges(_ channel: RealtimeChannel) async throws {
-    for await change in await channel.postgresChanges(for: IsolationRoom.self) {
+    for await change in await channel.postgresChanges(of: IsolationRoom.self) {
       _ = try change.row()
     }
     for await change in await channel.postgresChanges(
-      for: IsolationRoom.self, event: .insert, where: { $0.id.eq(1) })
+      of: IsolationRoom.self, event: .insert, where: { $0.id.eq(1) })
     {
       _ = try change.row()
     }

@@ -237,7 +237,8 @@ public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleB
 /// ### Creating a Custom Format
 ///
 /// - ``init(rawValue:)``
-public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
+/// - ``init(stringLiteral:)``
+public struct ExplainFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   /// The raw PostgREST format string (e.g., `"text"` or `"json"`).
   public let rawValue: String
 
@@ -250,15 +251,20 @@ public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
     self.rawValue = rawValue
   }
 
+  /// Creates an ``ExplainFormat`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Human-readable text output (the default).
   ///
   /// Produces the same indented text that `EXPLAIN` prints in `psql`. // cspell:ignore psql
-  public static let text = ExplainFormat(rawValue: "text")
+  public static let text: ExplainFormat = "text"
 
   /// Machine-readable JSON output.
   ///
   /// Useful when you want to programmatically inspect or visualize the query plan.
-  public static let json = ExplainFormat(rawValue: "json")
+  public static let json: ExplainFormat = "json"
 }
 
 /// Options for controlling whether the response body is returned and how rows are counted.

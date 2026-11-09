@@ -1154,11 +1154,13 @@ struct RequestsTests {
     line: UInt = #line
   ) -> AuthAdminClient {
     AuthAdminClient(
-      url: clientURL,
-      secretKey: "dummy.secret.key",
-      http: .init(
-        transport: snapshotTransport(
-          record: false, fetch: nil, file: file, testName: testName, line: line))
+      configuration: .init(
+        url: clientURL,
+        secretKey: "dummy.secret.key",
+        http: .init(
+          transport: snapshotTransport(
+            record: false, fetch: nil, file: file, testName: testName, line: line))
+      )
     )
   }
 
@@ -1206,10 +1208,10 @@ struct RequestsTests {
       headers: HTTPFields(["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"]),
       storage: InMemoryTestStorage(),
       redirectTo: redirectTo,
+      autoRefresh: .manual,
       http: .init(
         transport: snapshotTransport(
           record: record, fetch: fetch, file: file, testName: testName, line: line)),
-      autoRefresh: .manual,
       now: date
     )
 

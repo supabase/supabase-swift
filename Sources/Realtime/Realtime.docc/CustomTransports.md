@@ -5,7 +5,7 @@ Replace the WebSocket stack, pin certificates, or drive the client from a test.
 ## Overview
 
 The client reaches the network only through ``WebSocketTransport``. Set
-``RealtimeClientOptions/webSocketTransport`` to use your own; leave it `nil` for
+``RealtimeClient/Configuration/webSocketTransport`` to use your own; leave it `nil` for
 ``URLSessionWebSocketTransport``.
 
 ### Pinning certificates
@@ -29,8 +29,8 @@ nonisolated final class PinningDelegate: NSObject, URLSessionDelegate {
   }
 }
 
-var options = RealtimeClientOptions()
-options.webSocketTransport = URLSessionWebSocketTransport(delegate: PinningDelegate())
+var configuration = RealtimeClient.Configuration(url: realtimeURL)
+configuration.webSocketTransport = URLSessionWebSocketTransport(delegate: PinningDelegate())
 ```
 
 `isPinned(_:)` is your check, for example a comparison of the leaf certificate's public key with
@@ -120,7 +120,7 @@ connection.receive(
 )
 ```
 
-Set ``RealtimeClientOptions/handleAppLifecycle`` and ``RealtimeClientOptions/monitorsNetworkPath``
+Set ``RealtimeClient/Configuration/observesAppLifecycle`` and ``RealtimeClient/Configuration/monitorsNetworkPath``
 to `false` in tests, so a real app notification or network change cannot reach your client. To
 control the heartbeat timer and the reconnect waits, pass a `TestClock` as
-``RealtimeClientOptions/clock``.
+``RealtimeClient/Configuration/clock``.

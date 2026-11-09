@@ -6,18 +6,22 @@
 //
 
 import Foundation
+import HTTPTypes
 
 /// An error thrown by the PostgREST client.
 ///
-/// Check ``kind`` to learn what failed. For ``Kind-swift.struct/server``, ``serverError`` holds
-/// the body PostgREST returned (`code`, `message`, `details`, `hint`) and ``response`` holds the
-/// status, headers and request id.
+/// Check ``kind`` to learn what failed. For ``Kind-swift.struct/server``, ``code`` holds the
+/// PostgreSQL or PostgREST error code, ``serverError`` holds the rest of the body PostgREST
+/// returned (`message`, `details`, `hint`), and ``response`` holds the status, headers and
+/// request id.
 ///
 /// ```swift
 /// do {
 ///   try await supabase.from("todos").insert(todo).execute()
-/// } catch let error as PostgrestError where error.serverError?.code == "23505" {
-///   showDuplicate(error.serverError?.details)
+/// } catch PostgrestError.Code.uniqueViolation {
+///   showDuplicate()
+/// } catch let error as PostgrestError where error.code == .foreignKeyViolation {
+///   showMissingParent(error.serverError?.details)
 /// }
 /// ```
 public struct PostgrestError: SupabaseError {
@@ -33,9 +37,10 @@ public struct PostgrestError: SupabaseError {
       self.init(rawValue: value)
     }
 
-    /// PostgREST answered with a non-2xx status. Branch on ``PostgrestError/response`` for the
-    /// status code and on ``PostgrestError/serverError`` for the PostgreSQL or PostgREST error
-    /// code; `serverError` is `nil` when the body was not a PostgREST error payload.
+    /// PostgREST answered with a non-2xx status. Branch on ``PostgrestError/code`` for the
+    /// PostgreSQL or PostgREST error code and on ``PostgrestError/response`` for the status
+    /// code; ``PostgrestError/serverError`` is `nil` when the body was not a PostgREST error
+    /// payload.
     public static let server: Kind = "server"
     /// No response arrived, so whether the database applied the request is unknown. Retry reads
     /// freely; before retrying a write, check that it was not applied.
@@ -55,10 +60,58 @@ public struct PostgrestError: SupabaseError {
     public static let accessToken: Kind = "accessToken"
   }
 
-  /// The error body PostgREST returns for a rejected request, with its wire field names.
-  public struct ServerError: Decodable, Hashable, Sendable {
-    /// The PostgREST or PostgreSQL error code, e.g. `"PGRST116"` or `"23505"`.
-    public var code: String?
+  /// A PostgreSQL `SQLSTATE` or a PostgREST `PGRST` code, as PostgREST sends it in the `code`
+  /// field of an error body.
+  ///
+  /// The static members name common PostgreSQL codes. Any other code, such as `"PGRST116"`,
+  /// round-trips through ``rawValue``, so compare with a string literal and keep a fallback
+  /// branch. The full lists are the PostgreSQL "Error Codes" appendix and the PostgREST "Errors"
+  /// reference.
+  public struct Code: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The code as PostgREST sends it, such as `"23505"`.
+    public let rawValue: String
+
+    /// Creates a code from the value PostgREST sends.
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    /// Creates a code from a string literal.
+    public init(stringLiteral value: String) {
+      self.init(rawValue: value)
+    }
+
+    /// `23505`: a row with the same value in a unique column or primary key already exists.
+    public static let uniqueViolation: Code = "23505"
+    /// `23503`: the row references a row that does not exist, or is still referenced.
+    public static let foreignKeyViolation: Code = "23503"
+    /// `23502`: a `NOT NULL` column got `NULL`.
+    public static let notNullViolation: Code = "23502"
+    /// `23514`: a `CHECK` constraint rejected the row.
+    public static let checkViolation: Code = "23514"
+    /// `22P02`: a value is not valid input for its column type, such as text for a `uuid`.
+    public static let invalidTextRepresentation: Code = "22P02"
+    /// `42501`: the role lacks a privilege, or a row level security policy rejected the row.
+    public static let insufficientPrivilege: Code = "42501"
+    /// `42P01`: the table or view does not exist.
+    public static let undefinedTable: Code = "42P01"
+    /// `42703`: the column does not exist.
+    public static let undefinedColumn: Code = "42703"
+    /// `42883`: no function matches the name and argument types.
+    public static let undefinedFunction: Code = "42883"
+    /// `40001`: a serializable transaction could not complete. Retry it.
+    public static let serializationFailure: Code = "40001"
+    /// `40P01`: the transaction was chosen as a deadlock victim. Retry it.
+    public static let deadlockDetected: Code = "40P01"
+    /// `57014`: the statement was canceled, for example by `statement_timeout`.
+    public static let queryCanceled: Code = "57014"
+    /// `P0001`: a PL/pgSQL `RAISE EXCEPTION` without its own `ERRCODE`.
+    public static let raiseException: Code = "P0001"
+  }
+
+  /// The error body PostgREST returns for a rejected request, without its code, which is
+  /// ``PostgrestError/code``.
+  public struct ServerError: Hashable, Sendable {
     /// The human-readable message.
     public var message: String
     /// Additional detail, as returned by PostgREST in the `details` field.
@@ -66,22 +119,112 @@ public struct PostgrestError: SupabaseError {
     /// A hint on how to fix the problem, when PostgREST sends one.
     public var hint: String?
 
-    public init(code: String? = nil, message: String, details: String? = nil, hint: String? = nil) {
-      self.code = code
+    public init(message: String, details: String? = nil, hint: String? = nil) {
       self.message = message
       self.details = details
       self.hint = hint
     }
+  }
+
+  public var kind: Kind
+  public var message: String
+  /// The PostgreSQL or PostgREST error code, such as ``Code-swift.struct/uniqueViolation`` or
+  /// `"PGRST116"`. `nil` when the server sent none.
+  public var code: Code?
+  /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
+  /// a PostgREST error payload; `nil` otherwise.
+  public var serverError: ServerError?
+  public var response: HTTPErrorResponse?
+  public var underlyingError: (any Error)?
+
+  public init(
+    kind: Kind,
+    message: String,
+    code: Code? = nil,
+    serverError: ServerError? = nil,
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.kind = kind
+    self.message = message
+    self.code = code
+    self.serverError = serverError
+    self.response = response
+    self.underlyingError = underlyingError
+  }
+
+  public var description: String {
+    formattedDescription(kind: kind.rawValue)
+  }
+}
+
+extension PostgrestError.Kind {
+  /// Matches a ``PostgrestError`` of this ``PostgrestError/kind``, so a `catch` clause can name
+  /// the kind directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.from("todos").select().execute()
+  /// } catch PostgrestError.Kind.transport {
+  ///   showOfflineBanner()
+  /// }
+  /// ```
+  public static func ~= (kind: PostgrestError.Kind, error: any Error) -> Bool {
+    (error as? PostgrestError)?.kind == kind
+  }
+}
+
+extension PostgrestError.Code {
+  /// Matches a ``PostgrestError`` with this ``PostgrestError/code``, so a `catch` clause can name
+  /// the code directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await supabase.from("todos").insert(todo).execute()
+  /// } catch PostgrestError.Code.uniqueViolation {
+  ///   showDuplicate()
+  /// }
+  /// ```
+  public static func ~= (code: PostgrestError.Code, error: any Error) -> Bool {
+    (error as? PostgrestError)?.code == code
+  }
+}
+
+extension PostgrestError {
+  /// The error for a non-2xx response: the decoded body when it is a PostgREST error payload, or
+  /// the status alone.
+  static func server(_ response: HTTPResponse, body: Data) -> PostgrestError {
+    let errorResponse = HTTPErrorResponse(response, body: body)
+    guard let decoded = try? JSONDecoder().decode(Body.self, from: body) else {
+      return PostgrestError(
+        kind: .server,
+        message: "Unexpected response with status code \(response.status.code).",
+        response: errorResponse
+      )
+    }
+    return PostgrestError(
+      kind: .server,
+      message: decoded.serverError.message,
+      code: decoded.code,
+      serverError: decoded.serverError,
+      response: errorResponse
+    )
+  }
+
+  /// A decoded PostgREST error body: the code goes to ``PostgrestError/code`` and the rest to
+  /// ``PostgrestError/ServerError``.
+  struct Body: Decodable {
+    var code: Code?
+    var serverError: ServerError
 
     private enum CodingKeys: String, CodingKey {
       case code, message, details, hint
     }
 
-    public init(from decoder: any Decoder) throws {
+    init(from decoder: any Decoder) throws {
       let container = try decoder.container(keyedBy: CodingKeys.self)
-      code = try container.decodeIfPresent(String.self, forKey: .code)
-      message = try container.decode(String.self, forKey: .message)
-      hint = try container.decodeIfPresent(String.self, forKey: .hint)
+      code = try container.decodeIfPresent(String.self, forKey: .code).map(Code.init(rawValue:))
+      let details: String?
       switch try container.decodeIfPresent(JSONValue.self, forKey: .details) {
       case nil, .null:
         details = nil
@@ -94,33 +237,11 @@ public struct PostgrestError: SupabaseError {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         details = String(decoding: try encoder.encode(structured), as: UTF8.self)
       }
+      serverError = ServerError(
+        message: try container.decode(String.self, forKey: .message),
+        details: details,
+        hint: try container.decodeIfPresent(String.self, forKey: .hint))
     }
-  }
-
-  public var kind: Kind
-  public var message: String
-  /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
-  /// a PostgREST error payload; `nil` otherwise.
-  public var serverError: ServerError?
-  public var response: HTTPErrorResponse?
-  public var underlyingError: (any Error)?
-
-  public init(
-    kind: Kind,
-    message: String,
-    serverError: ServerError? = nil,
-    response: HTTPErrorResponse? = nil,
-    underlyingError: (any Error)? = nil
-  ) {
-    self.kind = kind
-    self.message = message
-    self.serverError = serverError
-    self.response = response
-    self.underlyingError = underlyingError
-  }
-
-  public var description: String {
-    formattedDescription(kind: kind.rawValue)
   }
 }
 

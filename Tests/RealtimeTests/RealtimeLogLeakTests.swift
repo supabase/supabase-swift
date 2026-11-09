@@ -12,8 +12,9 @@ struct RealtimeLogLeakTests {
   @Test
   func theClientLoggerRedactsTokens() {
     let client = RealtimeClient(
-      url: URL(string: "ws://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(logger: recorder.makeLogger())
+      configuration: .init(
+        url: URL(string: "ws://localhost:54321/realtime/v1")!,
+        logger: recorder.makeLogger())
     )
 
     client.logger.error("rejoin failed: access_token=rt-secret-1")

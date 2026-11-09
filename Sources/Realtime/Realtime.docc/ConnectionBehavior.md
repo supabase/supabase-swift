@@ -80,7 +80,7 @@ follows depends on the message:
 
 ### Heartbeat and liveness
 
-The client sends a heartbeat every ``RealtimeClientOptions/heartbeatInterval`` (25 seconds by
+The client sends a heartbeat every ``RealtimeClient/Configuration/heartbeatInterval`` (25 seconds by
 default). When the next heartbeat is due and the server has not answered the last one, the
 client closes the socket and reconnects. So a dead socket is found within two intervals. When
 the app returns to the foreground, a liveness probe finds it sooner; see
@@ -88,7 +88,7 @@ the app returns to the foreground, a liveness probe finds it sooner; see
 ``RealtimeClient/heartbeats()`` reports each step, with the round-trip latency of each answer.
 It is an event stream: it reports the steps after the call and never replays an earlier one.
 
-The heartbeat runs on ``RealtimeClientOptions/clock``, a `ContinuousClock` by default. That
+The heartbeat runs on ``RealtimeClient/Configuration/clock``, a `ContinuousClock` by default. That
 clock keeps counting while the device sleeps, so after a long sleep the next heartbeat is due at
 once.
 
@@ -101,7 +101,7 @@ after, and may close the socket while it is suspended. Disconnecting first gains
   reconnect, a join of every channel, and a presence leave and join that everyone else sees.
 - A suspended app cannot finish a clean leave without a background task.
 
-When the app comes back, the client recovers. With ``RealtimeClientOptions/handleAppLifecycle``
+When the app comes back, the client recovers. With ``RealtimeClient/Configuration/observesAppLifecycle``
 on (the default on iOS, macOS, tvOS and visionOS), the client checks the socket on foreground:
 
 - If it is waiting before a reconnect attempt, it tries again at once.
@@ -120,7 +120,7 @@ keeps its connection.
 
 ### Network changes
 
-With ``RealtimeClientOptions/monitorsNetworkPath`` on (the default on iOS, macOS, tvOS and
+With ``RealtimeClient/Configuration/monitorsNetworkPath`` on (the default on iOS, macOS, tvOS and
 visionOS), the client watches the network path. When the path becomes satisfied while the client
 is waiting before a reconnect attempt, it tries again at once instead of sleeping out the rest of
 the wait. A path that flaps in bad reception cannot start an attempt per report: a hint never
@@ -159,12 +159,12 @@ struct RoomView: View {
 ```
 
 The socket closes when the last channel is removed, after
-``RealtimeClientOptions/disconnectOnEmptyChannelsAfter``. Set that option to `.zero` to close it
+``RealtimeClient/Configuration/disconnectOnEmptyChannelsAfter``. Set that option to `.zero` to close it
 at once.
 
 ### Idle socket
 
-With ``RealtimeClientOptions/connectOnSubscribe`` on (the default), a subscribe opens the socket
+With ``RealtimeClient/Configuration/connectOnSubscribe`` on (the default), a subscribe opens the socket
 when it is closed. When the last channel is removed, the socket stays open for
-``RealtimeClientOptions/disconnectOnEmptyChannelsAfter`` (50 seconds by default) in case a new
+``RealtimeClient/Configuration/disconnectOnEmptyChannelsAfter`` (50 seconds by default) in case a new
 channel comes, then closes. ``RealtimeClient/removeAllChannels()`` closes it at once.

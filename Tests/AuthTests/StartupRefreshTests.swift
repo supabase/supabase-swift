@@ -330,12 +330,12 @@ struct StartupRefreshTests {
         url: clientURL,
         storageKey: key,
         storage: storage ?? localStorage,
-        http: HTTPClientConfiguration(transport: http),
         autoRefresh: autoRefresh,
         observesAppLifecycle: startsInBackground,
+        initialRefreshTimeout: initialRefreshTimeout,
+        http: HTTPClientConfiguration(transport: http),
         clock: clock,
-        now: { Self.now },
-        initialRefreshTimeout: initialRefreshTimeout
+        now: { Self.now }
       ),
       pkce: .live,
       platform: platform

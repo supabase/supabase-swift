@@ -34,8 +34,8 @@ struct AuthMFARecoveryCodesTests {
         storageKey: uniqueStorageKey(),
         headers: HTTPFields(["apikey": "supabase.publishable.key"]),
         storage: storage,
-        http: .init(transport: transport),
-        autoRefresh: .manual),
+        autoRefresh: .manual,
+        http: .init(transport: transport)),
       pkce: .live,
       platform: .live)
   }

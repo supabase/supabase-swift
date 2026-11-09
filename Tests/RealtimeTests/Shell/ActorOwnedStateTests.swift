@@ -47,8 +47,9 @@ struct ActorOwnedStateTests {
       changes: AsyncStream<PostgresChange>
     ) {
       let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(handleAppLifecycle: false),
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          observesAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -163,8 +164,10 @@ struct ActorOwnedStateTests {
   @Test
   func neverSubscribedHandleKeepsTheSocketWhenTheLastSubscribedOneGoes() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
-        disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        disconnectOnEmptyChannelsAfter: .seconds(5),
+        observesAppLifecycle: false))
     let subscribed = await host.client.channel("subscribed")
     let join = try await host.subscribe(subscribed)
     let neverSubscribed = await host.client.channel("never-subscribed")

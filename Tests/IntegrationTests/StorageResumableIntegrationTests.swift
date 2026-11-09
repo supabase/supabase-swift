@@ -47,7 +47,7 @@ final class StorageResumableIntegrationTests {
   }
 
   private func client() -> StorageClient {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: StorageIntegration.url,
       headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
     configuration.resumable = ResumableUploadConfiguration(directory: directory)
@@ -91,7 +91,7 @@ final class StorageResumableIntegrationTests {
     }
     #expect(last == Int64(Self.fileSize))
     try await expectObject(client, path: "whole.bin")
-    #expect(try client.resumableUploads.pending().isEmpty)
+    #expect(try await client.resumableUploads.pending().isEmpty)
   }
 
   @Test
@@ -106,13 +106,13 @@ final class StorageResumableIntegrationTests {
       Issue.record("Expected a paused upload")
       return
     }
-    #expect(try client.resumableUploads.pending().count == 1)
+    #expect(try await client.resumableUploads.pending().count == 1)
 
     try await upload.resume()
     _ = try await upload.result
 
     try await expectObject(client, path: "paused.bin")
-    #expect(try client.resumableUploads.pending().isEmpty)
+    #expect(try await client.resumableUploads.pending().isEmpty)
   }
 
   @Test
@@ -129,7 +129,7 @@ final class StorageResumableIntegrationTests {
       return
     }
     await #expect(throws: CancellationError.self) { try await upload.result }
-    #expect(try client.resumableUploads.pending().isEmpty)
+    #expect(try await client.resumableUploads.pending().isEmpty)
     #expect(try await bucket(client).exists(path: "cancelled.bin") == false)
   }
 
@@ -148,6 +148,25 @@ final class StorageResumableIntegrationTests {
     _ = try await resumed[0].result
 
     try await expectObject(second, path: "relaunched.bin")
-    #expect(try second.resumableUploads.pending().isEmpty)
+    #expect(try await second.resumableUploads.pending().isEmpty)
+  }
+
+  @Test
+  func aCorruptRecordDoesNotBlockRelaunchRecovery() async throws {
+    let first = client()
+    let upload = try bucket(first).resumableUpload(path: "corrupt-neighbor.bin", fileURL: fileURL)
+    try await upload.start()
+    await waitForFirstChunk(of: upload)
+    await upload.pause()
+    let corrupt = directory.appendingPathComponent("\(String(repeating: "c", count: 64)).json")
+    try Data("{".utf8).write(to: corrupt)
+
+    let second = client()
+    let resumed = try await second.resumableUploads.resumeAll()
+    #expect(resumed.map(\.id) == [upload.id])
+    _ = try await resumed[0].result
+
+    try await expectObject(second, path: "corrupt-neighbor.bin")
+    #expect(!FileManager.default.fileExists(atPath: corrupt.path))
   }
 }

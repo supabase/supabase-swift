@@ -55,8 +55,10 @@ struct RealtimeShellTests {
   @Test
   func joinSendsTheClientInfoHeaderAsItsVersion() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
-        headers: ["X-Client-Info": "my-app/1.2"], handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        headers: ["X-Client-Info": "my-app/1.2"],
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
 
     let join = try await host.subscribe(channel)
@@ -69,7 +71,10 @@ struct RealtimeShellTests {
   @Test
   func staleTimerFireIsIgnored() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
@@ -96,7 +101,10 @@ struct RealtimeShellTests {
   @Test
   func rejoinBackoffWaitsOneTwoFiveThenTenSeconds() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     var waits: [Duration] = []
@@ -195,7 +203,10 @@ struct RealtimeShellTests {
   @Test
   func disconnectDrainIsBoundedByRequestTimeout() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        observesAppLifecycle: false))
     let (socket, release) = try await stallBroadcast(on: host)
     defer { release() }
 
@@ -235,9 +246,11 @@ struct RealtimeShellTests {
   func accessTokenCallbackTimeoutAppliesNil() async throws {
     let called = LockIsolated(false)
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
         requestTimeout: .seconds(5),
+        observesAppLifecycle: false,
         accessToken: {
           called.setValue(true)
           // Never yields; the loop ends only when the call is cancelled.
@@ -245,8 +258,7 @@ struct RealtimeShellTests {
           for await _ in never {}
           continuation.finish()
           return "never"
-        },
-        handleAppLifecycle: false
+        }
       ))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
@@ -264,10 +276,11 @@ struct RealtimeShellTests {
   func failingAccessTokenCallbackStillLetsTheJoinGo() async throws {
     struct Failure: Error {}
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
-        accessToken: { throw Failure() },
-        handleAppLifecycle: false
+        observesAppLifecycle: false,
+        accessToken: { throw Failure() }
       ))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
@@ -283,8 +296,10 @@ struct RealtimeShellTests {
   @Test
   func removingTheLastSubscribedChannelKeepsANeverSubscribedOneConnected() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
-        disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        disconnectOnEmptyChannelsAfter: .seconds(5),
+        observesAppLifecycle: false))
     let subscribed = await host.client.channel("subscribed")
     let join = try await host.subscribe(subscribed)
     _ = await host.client.channel("never-subscribed")
@@ -369,8 +384,9 @@ struct RealtimeShellTests {
     let channel = await host.client.channel("room")
     try await host.subscribe(channel)
     let other = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        observesAppLifecycle: false)
     )
     _ = await other.channel("room")
 
@@ -386,8 +402,9 @@ struct RealtimeShellTests {
   func releasedClientActionsThrowClientReleased() async throws {
     func makeChannel() async -> RealtimeChannel {
       let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(handleAppLifecycle: false)
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
@@ -418,8 +435,10 @@ struct RealtimeShellTests {
   @Test
   func spentHandleActionsThrowChannelRemoved() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(
-        disconnectOnEmptyChannelsAfter: .seconds(5), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        disconnectOnEmptyChannelsAfter: .seconds(5),
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
     let removal = Task { await host.client.removeChannel(channel) }
@@ -461,8 +480,9 @@ struct RealtimeShellTests {
 
     func scope() async throws {
       let client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(handleAppLifecycle: false),
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
+          observesAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -485,8 +505,9 @@ struct RealtimeShellTests {
 
   private func makeClient() -> RealtimeClient {
     RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        observesAppLifecycle: false)
     )
   }
 

@@ -158,8 +158,7 @@ extension RealtimeClient {
   /// The backoff jitter is pinned to the top of its range, so the n-th reconnect waits exactly
   /// `min(30s, reconnectDelay · 2^(n-1))`.
   init(
-    url: URL,
-    options: RealtimeClientOptions,
+    configuration: RealtimeClient.Configuration,
     wsTransport: @escaping @Sendable (URL, HTTPFields) async throws -> any WebSocketConnection,
     http: HTTPClient,
     clock: any Clock<Duration>,
@@ -169,8 +168,7 @@ extension RealtimeClient {
       noLifecycleEvents
   ) {
     self.init(
-      url: url,
-      options: options,
+      configuration: configuration,
       transport: ClosureWebSocketTransport(open: wsTransport),
       http: http,
       clock: clock,

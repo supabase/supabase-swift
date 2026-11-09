@@ -18,10 +18,10 @@ struct SupabaseClientRealtimeTokenTests {
     SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
+      configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryTestStorage(), autoRefresh: .manual, accessToken: accessToken),
         global: .init(http: .init(transport: transport)),
-        realtime: RealtimeClientOptions(handleAppLifecycle: false)
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
       )
     )
   }

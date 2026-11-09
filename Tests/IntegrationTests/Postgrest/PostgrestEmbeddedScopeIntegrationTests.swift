@@ -58,8 +58,10 @@ struct PostWithDiscussion {
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestEmbeddedScopeIntegrationTests {
   let client = PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: ["apikey": DotEnv.supabasePublishableKey]
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: ["apikey": DotEnv.supabasePublishableKey]
+    )
   )
 
   @Test
@@ -182,7 +184,7 @@ struct PostgrestEmbeddedScopeIntegrationTests {
     } throws: { error in
       guard let error = error as? PostgrestError else { return false }
       return error.kind == .server
-        && error.serverError?.code == "PGRST201"
+        && error.code == "PGRST201"
         && error.serverError?.details?.contains("discussion_id") == true
         && error.serverError?.hint?.contains("posts!") == true
         && error.response?.status == 300

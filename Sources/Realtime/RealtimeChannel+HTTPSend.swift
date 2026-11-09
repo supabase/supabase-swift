@@ -22,20 +22,20 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
-  ///   - encoder: The encoder for `payload`. Defaults to the encoder the SDK uses for requests.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
+  ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
   /// - Throws: An `EncodingError` when `payload` does not encode, and ``RealtimeError`` with kind
   ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, `.channelRemoved`, or
   ///   `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
-    encoder: JSONEncoder = .supabase(),
+    encoder: JSONEncoder? = nil,
     timeout: Duration? = nil
   ) async throws {
     try await httpSend(
       event: event,
-      body: try encoder.encode(payload),
+      body: try (encoder ?? JSONValue.encoder).encode(payload),
       contentType: "application/json",
       timeout: timeout
     )
@@ -53,7 +53,7 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClientOptions/requestTimeout``.
+  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport`,
   ///   `.timeout`, `.channelRemoved`, or `.notConnected` when the client was released.
   public func httpSend(
@@ -93,7 +93,7 @@ extension RealtimeChannel {
     let data: Data
     do {
       (response, data) = try await withTimeout(
-        timeout ?? client.options.requestTimeout, clock: client.clock
+        timeout ?? client.configuration.requestTimeout, clock: client.clock
       ) {
         try await client.http.send(request, body: body)
       }

@@ -29,12 +29,12 @@ extension StorageMockerTests {
 
       return StorageVectorsClient(
         api: StorageAPI(
-          configuration: StorageClientConfiguration(
+          configuration: StorageClient.Configuration(
             url: url,
             headers: [:],
             http: .init(transport: URLSessionTransport(session: session)))
         )
-      ).from("documents").index("embeddings")
+      ).from("documents").from("embeddings")
     }
 
     @Test

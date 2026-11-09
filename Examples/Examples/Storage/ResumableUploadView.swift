@@ -36,7 +36,7 @@ final class ResumableUploadModel {
     } catch {
       self.error = error
     }
-    refreshPending()
+    await refreshPending()
   }
 
   func pause() async {
@@ -58,7 +58,7 @@ final class ResumableUploadModel {
 
   func cancel() async {
     await upload?.cancel()
-    refreshPending()
+    await refreshPending()
   }
 
   func resume(_ pending: ResumableUpload) async {
@@ -66,9 +66,9 @@ final class ResumableUploadModel {
     await resume()
   }
 
-  func refreshPending() {
+  func refreshPending() async {
     do {
-      pending = try supabaseClient.storage.resumableUploads.pending()
+      pending = try await supabaseClient.storage.resumableUploads.pending()
     } catch {
       self.error = error
     }
@@ -222,7 +222,7 @@ struct ResumableUploadView: View {
     .navigationTitle("Resumable Upload")
     .gitHubSourceLink()
     .task {
-      model.refreshPending()
+      await model.refreshPending()
       do {
         buckets = try await supabaseClient.storage.listBuckets()
         selectedBucket = buckets.first?.id ?? ""

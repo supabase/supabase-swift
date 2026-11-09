@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 13/08/26.
 //
 
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -30,6 +31,7 @@ struct AuthClientConfigurationTests {
     #expect(configuration.autoRefresh == .automatic)
     #expect(configuration.observesAppLifecycle)
     #expect(configuration.initialRefreshTimeout == .seconds(5))
+    #expect(configuration.retryEnabled)
   }
 
   @Test
@@ -70,7 +72,9 @@ struct AuthClientConfigurationTests {
     try await storage.save(
       PersistedSessionCodec.encode(Session.valid), key: "custom-key")
     let configuration = AuthClient.Configuration(
-      url: url, storageKey: "custom-key", storage: storage)
+      url: url,
+      storageKey: "custom-key",
+      storage: storage)
 
     let sut = AuthClient(configuration: configuration)
     await sut.initialization()
@@ -92,6 +96,28 @@ struct AuthClientConfigurationTests {
 
     #expect(dependenciesLogger[metadataKey: "system"] == "auth")
     #expect(dependenciesLogger[metadataKey: "client_id"] != nil)
+  }
+
+  @Test(arguments: [(true, 3), (false, 1)])
+  func retryEnabledControlsWhetherAGetIsRetried(retryEnabled: Bool, attempts: Int) async {
+    let requests = LockIsolated(0)
+    var configuration = AuthClient.Configuration(
+      url: url,
+      storageKey: uniqueStorageKey(),
+      storage: InMemoryAuthStorage(),
+      http: .init(
+        transport: ClosureTransport { _, _ in
+          requests.withValue { $0 += 1 }
+          return (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil)
+        }),
+      clock: ImmediateClock()
+    )
+    configuration.retryEnabled = retryEnabled
+    let sut = AuthClient(configuration: configuration)
+
+    _ = try? await sut.user(jwt: "token")
+
+    #expect(requests.value == attempts)
   }
 
   @Test
@@ -140,16 +166,17 @@ struct AuthClientConfigurationTests {
   }
 
   @Test
-  func loggerRedactsSecretsBeforeTheCallersHandlerSeesThem() {
+  func loggerSetAfterInitRedactsSecretsBeforeTheCallersHandlerSeesThem() {
     let recorder = LogRecorder()
-    let configuration = AuthClient.Configuration(
+    var configuration = AuthClient.Configuration(
       url: URL(string: "http://localhost")!,
       storageKey: "key",
-      storage: InMemoryAuthStorage(),
-      logger: recorder.makeLogger()
+      storage: InMemoryAuthStorage()
     )
+    configuration.logger = recorder.makeLogger()
+    let sut = AuthClient(configuration: configuration)
 
-    configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
+    sut.configuration.logger.warning("refresh failed: refresh_token=r-secret-1")
 
     #expect(recorder.entries == ["refresh failed: refresh_token=<redacted> system=auth"])
   }

@@ -38,9 +38,10 @@ struct RealtimeIsolationTests {
 
   final class Model {
     let client = RealtimeClient(
-      url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
-      options: RealtimeClientOptions(
-        webSocketTransport: RefusingTransport(), handleAppLifecycle: false)
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
+        observesAppLifecycle: false,
+        webSocketTransport: RefusingTransport())
     )
     var rows: [Row] = []
     var changes: [PostgresChange] = []

@@ -25,7 +25,7 @@ extension AuthAdminClient {
     secretKey: String = "supabase.secret.key", http transport: any ClientTransport
   ) -> AuthAdminClient {
     AuthAdminClient(
-      url: clientURL, secretKey: secretKey, http: .init(transport: transport))
+      configuration: .init(url: clientURL, secretKey: secretKey, http: .init(transport: transport)))
   }
 }
 
@@ -61,8 +61,8 @@ extension AuthClient {
         url: clientURL,
         storageKey: uniqueStorageKey(),
         storage: storage,
-        http: .init(transport: http),
-        autoRefresh: autoRefresh
+        autoRefresh: autoRefresh,
+        http: .init(transport: http)
       ),
       pkce: .live,
       platform: .live

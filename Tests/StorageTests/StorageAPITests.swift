@@ -21,7 +21,7 @@ struct StorageAPITests {
     func newHostnameWithoutAHostTraps() async {
       await #expect(processExitsWith: .failure) {
         _ = StorageAPI(
-          configuration: StorageClientConfiguration(
+          configuration: StorageClient.Configuration(
             url: URL(string: "project-ref")!,
             headers: [:],
             usesNewHostname: true
@@ -35,7 +35,7 @@ struct StorageAPITests {
     StorageClient, LockIsolated<[String]>
   ) {
     let attempts = LockIsolated<[String]>([])
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(

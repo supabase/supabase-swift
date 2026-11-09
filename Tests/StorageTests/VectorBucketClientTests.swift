@@ -29,7 +29,7 @@ extension StorageMockerTests {
 
       return StorageVectorsClient(
         api: StorageAPI(
-          configuration: StorageClientConfiguration(
+          configuration: StorageClient.Configuration(
             url: url,
             headers: [:],
             http: .init(transport: URLSessionTransport(session: session)))
@@ -87,7 +87,7 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let index = try await bucket.indexDetails("embeddings")
+      let index = try await bucket.index("embeddings")
       #expect(index.indexName == "embeddings")
       #expect(index.vectorBucketName == "documents")
       #expect(index.dataType == .float32)
@@ -113,15 +113,17 @@ extension StorageMockerTests {
         ]
       ).register()
 
-      let response = try await bucket.listIndexes(prefix: "e", pageSize: 2).page()
+      let response = try await bucket.listIndexes(
+        options: ListIndexesOptions(prefix: "e", pageSize: 2)
+      ).page()
       #expect(response.indexes.map(\.indexName) == ["embeddings", "summaries"])
       #expect(response.nextToken == "page-2")
     }
 
     @Test
-    func indexReturnsScopedClient() {
+    func fromReturnsScopedIndexClient() {
       let bucket = makeSUT()
-      let index = bucket.index("embeddings")
+      let index = bucket.from("embeddings")
       #expect(index.vectorBucketName == "documents")
       #expect(index.indexName == "embeddings")
     }

@@ -30,7 +30,7 @@ extension PostgrestMockerTests {
     @Test
     func customHeaderOnAPerCallBasis() throws {
       let url = URL(string: "http://localhost:54321/rest/v1")!
-      let postgrest1 = PostgrestClient(url: url, headers: ["apikey": "foo"])
+      let postgrest1 = PostgrestClient(configuration: .init(url: url, headers: ["apikey": "foo"]))
       let postgrest2 = try postgrest1.rpc("void_func").settingHeader(
         name: .init("apikey")!, value: "bar")
 
@@ -189,7 +189,7 @@ extension PostgrestMockerTests {
           .value
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
-        #expect(error.serverError?.code == "PGRST116")
+        #expect(error.code == "PGRST116")
       }
     }
 
@@ -490,7 +490,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.serverError?.code == "PGRST000")
+        #expect(error.code == "PGRST000")
       }
     }
 
@@ -511,7 +511,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.serverError?.code == "PGRST000")
+        #expect(error.code == "PGRST000")
       }
     }
 
@@ -753,13 +753,16 @@ extension PostgrestMockerTests {
     func perCallTimeoutOverridesTheConfiguredTimeout() async throws {
       let seen = LockIsolated<[Duration?]>([])
       let sut = PostgrestClient(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { _, _ in
-            seen.withValue { $0.append(RequestTimeout.current) }
-            return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
-          },
-          timeout: .seconds(7)))
+        configuration: .init(
+          url: url,
+          http: .init(
+            transport: ClosureTransport { _, _ in
+              seen.withValue { $0.append(RequestTimeout.current) }
+              return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
+            },
+            timeout: .seconds(7))
+        )
+      )
 
       try await sut.from("users").select().execute()
       try await sut.from("users").select().timeout(.seconds(3)).execute()
@@ -875,8 +878,8 @@ extension PostgrestMockerTests {
       }
       return PostgrestClient(
         configuration: .init(
-          url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled),
-        clock: ImmediateRetryTestClock()
+          url: url, http: .init(transport: transport), decoder: decoder, retryEnabled: retryEnabled,
+          clock: ImmediateRetryTestClock())
       )
     }
 

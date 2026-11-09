@@ -59,11 +59,13 @@ dragarcia
 dummysignature
 ecdsa
 emailotp
+ERRCODE
 halfvec
 emaillink
 enotconn
 entrancy
 eproto
+ERRCODE
 errno
 etag
 ethereum
@@ -205,6 +207,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+SQLSTATE
 subclassing
 subheadline
 Subview

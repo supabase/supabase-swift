@@ -5,7 +5,7 @@ Broadcast, presence and Postgres changes over one WebSocket, as async streams.
 ## Overview
 
 ``RealtimeClient`` owns the socket. Get it from `supabase.realtime`, or build one with
-``RealtimeClient/init(url:options:)``. A ``RealtimeChannel`` is one topic on that socket. The
+``RealtimeClient/init(configuration:)``. A ``RealtimeChannel`` is one topic on that socket. The
 client is an actor that owns the state of every channel. A channel is a handle to that state,
 so you `await` its reads and stream methods too (see <doc:Isolation>).
 
@@ -49,7 +49,7 @@ result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``.
 ### Client
 
 - ``RealtimeClient``
-- ``RealtimeClientOptions``
+- ``RealtimeClient/Configuration``
 - ``RealtimeServerLogLevel``
 
 ### Channels

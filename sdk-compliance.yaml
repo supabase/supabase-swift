@@ -10,8 +10,6 @@ supporting_symbols:
   - JSONValue.init
   - JSONValue.decode
   - JSONValue.encode
-  - JSONValue.decoder
-  - JSONValue.encoder
   - JSONValue.null
   - JSONValue.bool
   - JSONValue.integer
@@ -30,25 +28,30 @@ supporting_symbols:
   - JSONValue.description
   - JSONValue.rawValue
 
+  # The SDK's default coders, which read and write Postgres timestamps. Every client defaults to
+  # them, and they are the starting point for a custom coder, so no one feature owns them.
+  - JSONDecoder.supabase
+  - JSONEncoder.supabase
+
   # The injected clock is a testability seam shared across Auth's token auto-refresh and
   # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
-  # capability any one feature implements. `SupabaseClient` forwards `GlobalOptions.clock` to the
+  # capability any one feature implements. `SupabaseClient` forwards `Configuration.Global.clock` to the
   # per-sub-client properties, so all three spell the same knob at a different layer.
-  - SupabaseClientOptions.GlobalOptions.clock
-  - SupabaseClientOptions.AuthOptions.clock
+  - SupabaseClient.Configuration.Global.clock
+  - SupabaseClient.Configuration.Auth.clock
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
-  - RealtimeClientOptions.clock
+  - RealtimeClient.Configuration.clock
   # The default redirect URL every Auth call uses when it does not pass its own, and the members
   # of `Session` that record and encode when the client received it. Shared across Auth features,
   # not a capability of one.
   - AuthClient.Configuration.redirectTo
   - Session.receivedAt
   - Session.encode
-  # A per-module logger override on the facade, mirroring `GlobalOptions.logger`; a logging
+  # A per-module logger override on the facade, mirroring `Configuration.Global.logger`; a logging
   # knob, not a capability.
-  - SupabaseClientOptions.FunctionsOptions.logger
-  - SupabaseClientOptions.AuthOptions.logger
+  - SupabaseClient.Configuration.Functions.logger
+  - SupabaseClient.Configuration.Auth.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -144,6 +147,7 @@ supporting_symbols:
   - FunctionsError.Kind.server
   - FunctionsError.Kind.transport
   - FunctionsError.Kind.decoding
+  - FunctionsError.Kind.~=
   - FunctionsError.init
   - FunctionsError.kind
   - FunctionsError.message
@@ -160,6 +164,7 @@ supporting_symbols:
   - StorageError.Kind.transport
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
+  - StorageError.Kind.~=
   - StorageError.ServerError
   - StorageError.ServerError.init
   - StorageError.ServerError.statusCode
@@ -168,15 +173,14 @@ supporting_symbols:
   - StorageClient
   - StorageClient.init
   - StorageClient.configuration
-  - StorageClientConfiguration
-  - StorageClientConfiguration.init
-  - StorageClientConfiguration.url
-  - StorageClientConfiguration.headers
-  - StorageClientConfiguration.logger
-  - StorageClientConfiguration.usesNewHostname
-  - StorageError.ServerError.code
+  - StorageClient.Configuration
+  - StorageClient.Configuration.init
+  - StorageClient.Configuration.url
+  - StorageClient.Configuration.headers
+  - StorageClient.Configuration.logger
+  - StorageClient.Configuration.usesNewHostname
+  - StorageClient.Configuration.clock
   - StorageError.code
-  - StorageError.serverStatusCode
   - StorageError.isNotFound
   - StorageError.init
   - StorageError.kind
@@ -196,21 +200,39 @@ supporting_symbols:
   - PostgrestError.Kind.decoding
   - PostgrestError.Kind.invalidRequest
   - PostgrestError.Kind.accessToken
+  - PostgrestError.Kind.~=
+  - PostgrestError.Code
+  - PostgrestError.Code.init
+  - PostgrestError.Code.rawValue
+  - PostgrestError.Code.~=
+  - PostgrestError.Code.uniqueViolation
+  - PostgrestError.Code.foreignKeyViolation
+  - PostgrestError.Code.notNullViolation
+  - PostgrestError.Code.checkViolation
+  - PostgrestError.Code.invalidTextRepresentation
+  - PostgrestError.Code.insufficientPrivilege
+  - PostgrestError.Code.undefinedTable
+  - PostgrestError.Code.undefinedColumn
+  - PostgrestError.Code.undefinedFunction
+  - PostgrestError.Code.serializationFailure
+  - PostgrestError.Code.deadlockDetected
+  - PostgrestError.Code.queryCanceled
+  - PostgrestError.Code.raiseException
   - PostgrestError.ServerError
   - PostgrestError.ServerError.init
-  - PostgrestError.ServerError.code
   - PostgrestError.ServerError.message
   - PostgrestError.ServerError.details
   - PostgrestError.ServerError.hint
   - PostgrestError.init
   - PostgrestError.kind
   - PostgrestError.message
+  - PostgrestError.code
   - PostgrestError.serverError
   - PostgrestError.response
   - PostgrestError.underlyingError
   - PostgrestError.description
   # AuthError (SDK-1788) is thrown by every auth.* capability rather than owned
-  # by one. ErrorCode values are attributed to their features below.
+  # by one. AuthError.Code values are attributed to their features below.
   - AuthError
   - AuthError.Kind
   - AuthError.Kind.init
@@ -232,7 +254,7 @@ supporting_symbols:
   - AuthError.init
   - AuthError.kind
   - AuthError.message
-  - AuthError.errorCode
+  - AuthError.code
   - AuthError.weakPasswordReasons
   - AuthError.oauthError
   - AuthError.isRetryable
@@ -241,11 +263,32 @@ supporting_symbols:
   - AuthError.description
   - AuthError.sessionMissing
   - AuthError.refreshDiscarded
-  - ErrorCode.~=
+  - AuthError.Code
+  - AuthError.Code.init
+  - AuthError.Code.rawValue
+  - AuthError.Code.~=
   # AuthAdminClient (SDK-2074) is the standalone admin client that every
   # auth.admin.* capability runs on, rather than belonging to one of them.
   - AuthAdminClient
   - AuthAdminClient.init
+  - AuthAdminClient.configuration
+  - AuthAdminClient.Configuration
+  - AuthAdminClient.Configuration.init
+  - AuthAdminClient.Configuration.url
+  - AuthAdminClient.Configuration.secretKey
+  - AuthAdminClient.Configuration.headers
+  - AuthAdminClient.Configuration.http
+  - AuthAdminClient.Configuration.logger
+  - AuthClient.Configuration.retryEnabled
+  - AuthAdminClient.Configuration.retryEnabled
+  - AuthAdminClient.Configuration.clock
+  # Descriptions that hide the secret key.
+  - AuthAdminClient.Configuration.description
+  - AuthAdminClient.Configuration.debugDescription
+  - AuthAdminClient.Configuration.customMirror
+  # The configuration each client was created with, and the PostgREST logger, now public.
+  - AuthClient.configuration
+  - PostgrestClient.Configuration.logger
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
   # auth.admin.delete_mfa_factor rather than owned by one.
   - AuthAdminClient.mfa
@@ -368,50 +411,98 @@ supporting_symbols:
   - RealtimeError.Kind.channelClosed
   - RealtimeError.Kind.channelRemoved
   - RealtimeError.Kind.payloadTooLarge
-  - RealtimeError.serverCode
+  - RealtimeError.Kind.~=
+  - RealtimeError.code
   - RealtimeError.isRetryable
   # The code the server prefixes to a join or channel error reason (SDK-2098).
-  - RealtimeError.ServerCode
-  - RealtimeError.ServerCode.init
-  - RealtimeError.ServerCode.rawValue
-  - RealtimeError.ServerCode.topicNameRequired
-  - RealtimeError.ServerCode.invalidJWTToken
-  - RealtimeError.ServerCode.malformedJWT
-  - RealtimeError.ServerCode.jwtSignatureError
-  - RealtimeError.ServerCode.jwtSignerError
-  - RealtimeError.ServerCode.unauthorized
-  - RealtimeError.ServerCode.privateOnly
-  - RealtimeError.ServerCode.tenantNotFound
-  - RealtimeError.ServerCode.realtimeDisabledForTenant
-  - RealtimeError.ServerCode.realtimeDisabledForConfiguration
-  - RealtimeError.ServerCode.unableToReplayMessages
-  - RealtimeError.ServerCode.channelRateLimitReached
-  - RealtimeError.ServerCode.connectionRateLimitReached
-  - RealtimeError.ServerCode.clientJoinRateLimitReached
-  - RealtimeError.ServerCode.realtimeRestarting
-  - RealtimeError.ServerCode.initializingProjectConnection
-  - RealtimeError.ServerCode.increaseConnectionPool
-  - RealtimeError.ServerCode.databaseLackOfConnections
-  - RealtimeError.ServerCode.databaseConnectionRateLimitReached
-  - RealtimeError.ServerCode.unableToConnectToProject
-  - RealtimeError.ServerCode.queryCanceled
-  - RealtimeError.ServerCode.missingPartition
-  - RealtimeError.ServerCode.timeoutOnRpcCall
-  - RealtimeError.ServerCode.errorOnRpcCall
-  - RealtimeError.ServerCode.postgresChangesSubscribeTimeout
-  - RealtimeError.ServerCode.unknownErrorOnChannel
+  - RealtimeError.Code
+  - RealtimeError.Code.init
+  - RealtimeError.Code.~=
+  - RealtimeError.Code.rawValue
+  - RealtimeError.Code.topicNameRequired
+  - RealtimeError.Code.invalidJWTToken
+  - RealtimeError.Code.malformedJWT
+  - RealtimeError.Code.jwtSignatureError
+  - RealtimeError.Code.jwtSignerError
+  - RealtimeError.Code.unauthorized
+  - RealtimeError.Code.privateOnly
+  - RealtimeError.Code.tenantNotFound
+  - RealtimeError.Code.realtimeDisabledForTenant
+  - RealtimeError.Code.realtimeDisabledForConfiguration
+  - RealtimeError.Code.unableToReplayMessages
+  - RealtimeError.Code.channelRateLimitReached
+  - RealtimeError.Code.connectionRateLimitReached
+  - RealtimeError.Code.clientJoinRateLimitReached
+  - RealtimeError.Code.realtimeRestarting
+  - RealtimeError.Code.initializingProjectConnection
+  - RealtimeError.Code.increaseConnectionPool
+  - RealtimeError.Code.databaseLackOfConnections
+  - RealtimeError.Code.databaseConnectionRateLimitReached
+  - RealtimeError.Code.unableToConnectToProject
+  - RealtimeError.Code.queryCanceled
+  - RealtimeError.Code.missingPartition
+  - RealtimeError.Code.timeoutOnRpcCall
+  - RealtimeError.Code.errorOnRpcCall
+  - RealtimeError.Code.postgresChangesSubscribeTimeout
+  - RealtimeError.Code.unknownErrorOnChannel
   # The server-reply timeout governs subscribe, unsubscribe,
   # broadcast and broadcast_http alike rather than being owned by one.
-  - RealtimeClientOptions.requestTimeout
+  - RealtimeClient.Configuration.requestTimeout
   # Connection plumbing every realtime.* capability uses: the upgrade headers and the
   # HTTP client REST broadcasts go through.
-  - RealtimeClientOptions.headers
-  - RealtimeClientOptions.http
-  - RealtimeClientOptions.defaultRequestTimeout
-  - RealtimeClientOptions.connectOnSubscribe
-  - RealtimeClientOptions.defaultConnectOnSubscribe
-  # The options type itself.
-  - RealtimeClientOptions
+  - RealtimeClient.Configuration.headers
+  - RealtimeClient.Configuration.http
+  - RealtimeClient.Configuration.defaultRequestTimeout
+  - RealtimeClient.Configuration.connectOnSubscribe
+  - RealtimeClient.Configuration.defaultConnectOnSubscribe
+  # The configuration type itself, its url, and the client's copy of it.
+  - RealtimeClient.Configuration
+  - RealtimeClient.Configuration.url
+  - RealtimeClient.configuration
+  # The facade configuration type, the client's copy of it, and its Realtime settings.
+  - SupabaseClient.Configuration
+  - SupabaseClient.configuration
+  - SupabaseClient.Configuration.Realtime
+  # Each facade setting and its nested configuration types.
+  - SupabaseClient.Configuration.database
+  - SupabaseClient.Configuration.auth
+  - SupabaseClient.Configuration.global
+  - SupabaseClient.Configuration.functions
+  - SupabaseClient.Configuration.realtime
+  - SupabaseClient.Configuration.storage
+  - SupabaseClient.Configuration.Database
+  - SupabaseClient.Configuration.Database.schema
+  - SupabaseClient.Configuration.Database.encoder
+  - SupabaseClient.Configuration.Database.decoder
+  - SupabaseClient.Configuration.Database.retryEnabled
+  - SupabaseClient.Configuration.Database.init
+  - SupabaseClient.Configuration.Auth
+  - SupabaseClient.Configuration.Auth.redirectTo
+  - SupabaseClient.Configuration.Auth.storageKey
+  - SupabaseClient.Configuration.Auth.init
+  - SupabaseClient.Configuration.Global
+  - SupabaseClient.Configuration.Global.logger
+  - SupabaseClient.Configuration.Global.init
+  - SupabaseClient.Configuration.Functions
+  - SupabaseClient.Configuration.Functions.region
+  - SupabaseClient.Configuration.Functions.decoder
+  - SupabaseClient.Configuration.Functions.init
+  - SupabaseClient.Configuration.Storage
+  - SupabaseClient.Configuration.Storage.usesNewHostname
+  - SupabaseClient.Configuration.Storage.init
+  - SupabaseClient.Configuration.Realtime.headers
+  - SupabaseClient.Configuration.Realtime.heartbeatInterval
+  - SupabaseClient.Configuration.Realtime.requestTimeout
+  - SupabaseClient.Configuration.Realtime.connectOnSubscribe
+  - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
+  - SupabaseClient.Configuration.Realtime.observesAppLifecycle
+  - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
+  - SupabaseClient.Configuration.Realtime.serverLogLevel
+  - SupabaseClient.Configuration.Realtime.webSocketTransport
+  - SupabaseClient.Configuration.Realtime.http
+  - SupabaseClient.Configuration.Realtime.logger
+  - SupabaseClient.Configuration.Realtime.init
+  - SupabaseClient.Configuration.init
 
 features:
 
@@ -559,8 +650,8 @@ features:
       - Web3Chain.rawValue
       - Web3Chain.ethereum
       - Web3Chain.solana
-      - ErrorCode.web3ProviderDisabled
-      - ErrorCode.web3UnsupportedChain
+      - AuthError.Code.web3ProviderDisabled
+      - AuthError.Code.web3UnsupportedChain
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
@@ -740,8 +831,8 @@ features:
       - AuthClient.AutoRefreshPolicy.automatic
       - AuthClient.AutoRefreshPolicy.manual
       - AuthClient.AutoRefreshPolicy.disabled
-      - SupabaseClientOptions.AuthOptions.autoRefresh
-      - SupabaseClientOptions.AuthOptions.observesAppLifecycle
+      - SupabaseClient.Configuration.Auth.autoRefresh
+      - SupabaseClient.Configuration.Auth.observesAppLifecycle
   auth.session.sign_out_reason:
     status: implemented
     symbols:
@@ -1108,8 +1199,8 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.denyAuthorization
-      - ErrorCode.oauthAuthorizationNotFound
-      - ErrorCode.featureDisabled
+      - AuthError.Code.oauthAuthorizationNotFound
+      - AuthError.Code.featureDisabled
   auth.oauth_server.list_grants:
     status: implemented
     symbols:
@@ -1123,7 +1214,7 @@ features:
     status: implemented
     symbols:
       - AuthOAuthServer.revokeGrant
-      - ErrorCode.oauthConsentNotFound
+      - AuthError.Code.oauthConsentNotFound
 
   auth.oauth_admin.create_client:
     status: implemented
@@ -1155,7 +1246,7 @@ features:
   client.authentication_integration.third_party_auth:
     status: implemented
     symbols:
-      - SupabaseClientOptions.AuthOptions.accessToken
+      - SupabaseClient.Configuration.Auth.accessToken
   client.authentication_integration.cross_client_token_sync:
     status: implemented
     note: "Automatic and always-on whenever AuthOptions.accessToken (third_party_auth) is nil: SupabaseClient listens to AuthClient.events() and pushes the current token to realtime/database/storage/functions. There is no separate opt-in symbol."
@@ -1179,7 +1270,7 @@ features:
   client.session_management.custom_storage:
     status: implemented
     symbols:
-      - SupabaseClientOptions.AuthOptions.storage
+      - SupabaseClient.Configuration.Auth.storage
       - AuthClient.Configuration.storage
     supporting_symbols:
       - AuthStorage
@@ -1211,12 +1302,12 @@ features:
   client.request_configuration.custom_http_client:
     status: implemented
     symbols:
-      - SupabaseClientOptions.GlobalOptions.http
+      - SupabaseClient.Configuration.Global.http
       - AuthClient.Configuration.http
       - PostgrestClient.Configuration.http
-      - StorageClientConfiguration.http
-      - SupabaseClientOptions.FunctionsOptions.http
-      - SupabaseClientOptions.AuthOptions.http
+      - StorageClient.Configuration.http
+      - SupabaseClient.Configuration.Functions.http
+      - SupabaseClient.Configuration.Auth.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init
@@ -1261,7 +1352,7 @@ features:
   client.request_configuration.global_headers:
     status: implemented
     symbols:
-      - SupabaseClientOptions.GlobalOptions.headers
+      - SupabaseClient.Configuration.Global.headers
       - StorageClient.settingHeader
       - StorageBucket.settingHeader
 
@@ -1551,6 +1642,10 @@ features:
     status: implemented
     symbols:
       - ExplainFormat
+      - ExplainFormat.init
+      - ExplainFormat.rawValue
+      - ExplainFormat.text
+      - ExplainFormat.json
   database.using_modifiers.max_affected_rows:
     status: implemented
     symbols:
@@ -1583,10 +1678,11 @@ features:
     status: implemented
     symbols:
       - PostgrestClient.Configuration.retryEnabled
+      - PostgrestClient.Configuration.clock
       - PostgrestRequestBuilder.retry
   database.configuration.request_timeout:
     status: implemented
-    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or GlobalOptions.http through SupabaseClient), or per request with timeout(_:)."
+    note: "A Duration, not milliseconds, and an idle timeout (URLRequest.timeoutInterval) rather than a total deadline. Set per client on HTTPClientConfiguration.timeout (PostgrestClient.Configuration.http, or SupabaseClient.Configuration.Global.http through SupabaseClient), or per request with timeout(_:)."
     symbols:
       - HTTPClientConfiguration.timeout
       - PostgrestRequestBuilder.timeout
@@ -1638,6 +1734,7 @@ features:
       - FunctionsError.Code.edgeRuntimeServiceDegraded
       - FunctionsError.Code.idleTimeout
       - FunctionsError.Code.init
+      - FunctionsError.Code.~=
       - FunctionsError.Code.invalidResponseStatusCode
       - FunctionsError.Code.invalidURL
       - FunctionsError.Code.notFound
@@ -1869,7 +1966,7 @@ features:
       - RealtimeChannel.presenceChanges
       - RealtimeChannel.presenceStates
     supporting_symbols:
-      - RealtimeChannelConfiguration.Presence.enabled
+      - RealtimeChannelConfiguration.Presence.isEnabled
       - PresenceChange
       - PresenceChange.init
       - PresenceChange.joins
@@ -1952,9 +2049,9 @@ features:
 
   realtime.configuration.custom_websocket_transport:
     status: implemented
-    note: "RealtimeClientOptions.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
+    note: "RealtimeClient.Configuration.webSocketTransport takes any WebSocketTransport; nil uses URLSessionWebSocketTransport, which an app can also configure (for example, for certificate pinning)."
     symbols:
-      - RealtimeClientOptions.webSocketTransport
+      - RealtimeClient.Configuration.webSocketTransport
       - URLSessionWebSocketTransport
       - URLSessionWebSocketTransport.connect
       - URLSessionWebSocketTransport.init
@@ -1982,27 +2079,27 @@ features:
     status: implemented
     note: "A heartbeat with no reply by the next tick marks the socket dead and starts a reconnect, so detection takes at most two intervals. There is no separate heartbeat timeout, the same as supabase-js."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.heartbeatInterval
-      - RealtimeClientOptions.defaultHeartbeatInterval
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.heartbeatInterval
+      - RealtimeClient.Configuration.defaultHeartbeatInterval
   realtime.configuration.access_token_callback:
     status: implemented
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.accessToken
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.accessToken
   realtime.configuration.deferred_disconnect:
     status: implemented
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.disconnectOnEmptyChannelsAfter
-      - RealtimeClientOptions.defaultDisconnectOnEmptyChannelsAfter
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.disconnectOnEmptyChannelsAfter
+      - RealtimeClient.Configuration.defaultDisconnectOnEmptyChannelsAfter
   realtime.configuration.custom_logger:
     status: implemented
-    note: "RealtimeClientOptions.logger takes an optional swift-log Logger, which carries its own level; nil uses the default logger, or the global logger in SupabaseClient. RealtimeClientOptions.serverLogLevel sets the server-side log level."
+    note: "RealtimeClient.Configuration.logger takes a swift-log Logger, which carries its own level; it defaults to a logger labeled io.supabase.realtime, and SupabaseClient passes SupabaseClient.Configuration.Realtime.logger, or its global logger when that is nil. RealtimeClient.Configuration.serverLogLevel sets the server-side log level."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.logger
-      - RealtimeClientOptions.serverLogLevel
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.logger
+      - RealtimeClient.Configuration.serverLogLevel
     supporting_symbols:
       - RealtimeServerLogLevel
       - RealtimeServerLogLevel.init
@@ -2012,18 +2109,18 @@ features:
       - RealtimeServerLogLevel.error
   realtime.configuration.foreground_liveness_probe:
     status: implemented
-    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClientOptions.handleAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
+    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.observesAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.handleAppLifecycle
-      - RealtimeClientOptions.defaultHandleAppLifecycle
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.observesAppLifecycle
+      - RealtimeClient.Configuration.defaultObservesAppLifecycle
   realtime.configuration.network_path_wake:
     status: implemented
     note: "NWPathMonitor reports a satisfied path as a wake hint that cuts a reconnect backoff short. The hint never gates a connect. The option defaults to off on watchOS and has no effect on Linux, which has no path monitor."
     symbols:
-      - RealtimeClientOptions.init
-      - RealtimeClientOptions.monitorsNetworkPath
-      - RealtimeClientOptions.defaultMonitorsNetworkPath
+      - RealtimeClient.Configuration.init
+      - RealtimeClient.Configuration.monitorsNetworkPath
+      - RealtimeClient.Configuration.defaultMonitorsNetworkPath
 
   realtime.configuration.binary_protocol:
     status: implemented
@@ -2548,6 +2645,7 @@ features:
     supporting_symbols:
       - StorageError.Code
       - StorageError.Code.init
+      - StorageError.Code.~=
       - StorageError.Code.rawValue
       - StorageError.Code.noSuchBucket
       - StorageError.Code.noSuchLifecycleConfiguration
@@ -2614,5 +2712,5 @@ features:
     status: implemented
     note: "Reads only: GET, HEAD and list(). Uploads, moves, copies, removals and bucket changes are never replayed."
     symbols:
-      - StorageClientConfiguration.retryEnabled
-      - SupabaseClientOptions.StorageOptions.retryEnabled
+      - StorageClient.Configuration.retryEnabled
+      - SupabaseClient.Configuration.Storage.retryEnabled

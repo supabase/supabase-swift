@@ -23,7 +23,7 @@ struct TusSessionTests {
   ) -> TusSession {
     TusSession(
       api: StorageAPI(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: supabaseURL,
           headers: [.authorization: "Bearer test.api.key", .xClientInfo: "storage-swift/x.y.z"],
           http: .init(
@@ -106,7 +106,7 @@ struct TusSessionTests {
     let sent = LockIsolated<URL?>(nil)
     let sut = TusSession(
       api: StorageAPI(
-        configuration: StorageClientConfiguration(
+        configuration: StorageClient.Configuration(
           url: URL(string: "https://ref.supabase.co/storage/v1")!,
           headers: [:],
           http: .init(
@@ -171,7 +171,8 @@ struct TusSessionTests {
       try await sut.create(
         bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
     }
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
   }
 
   @Test
@@ -244,7 +245,7 @@ struct TusSessionTests {
       Issue.record("Expected offsetConflict, got \(String(describing: error))")
       return
     }
-    #expect(storageError.serverStatusCode == 409)
+    #expect(storageError.serverError?.statusCode == 409)
   }
 
   @Test

@@ -15,13 +15,13 @@ struct SupabaseClientAuthOptionsTests {
   private let url = URL(string: "https://project-ref.supabase.co")!
 
   private func makeClient(
-    auth: SupabaseClientOptions.AuthOptions,
-    global: SupabaseClientOptions.GlobalOptions = .init()
+    auth: SupabaseClient.Configuration.Auth,
+    global: SupabaseClient.Configuration.Global = .init()
   ) -> SupabaseClient {
     SupabaseClient(
       supabaseURL: url,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(auth: auth, global: global)
+      configuration: SupabaseClient.Configuration(auth: auth, global: global)
     )
   }
 
@@ -36,6 +36,16 @@ struct SupabaseClientAuthOptionsTests {
 
     #expect(client.auth.configuration.clock as AnyObject === authClock)
     #expect(client.clock as AnyObject === globalClock)
+  }
+
+  @Test
+  func redirectToForwardsToTheAuthClient() {
+    let redirect = URL(string: "com.example.app://callback")!
+    let client = makeClient(
+      auth: .init(storage: InMemoryAuthStorage(), redirectTo: redirect, autoRefresh: .manual)
+    )
+
+    #expect(client.auth.configuration.redirectTo == redirect)
   }
 
   @Test

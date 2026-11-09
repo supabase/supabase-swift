@@ -97,7 +97,7 @@ import Testing
     FailedAnswer(.internalServerError, nil),
   ])
   func localThrowsAFailedLogoutAndStaysSignedOut(answer: FailedAnswer) async throws {
-    http.respond { _, _ in errorResponse(answer.status, answer.errorCode) }
+    http.respond { _, _ in errorResponse(answer.status, answer.code) }
     try await sut.seedSession(.valid)
 
     let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .local) }
@@ -138,7 +138,7 @@ import Testing
     FailedAnswer(.internalServerError, nil),
   ])
   func localThrowsAFailedRefreshAndStaysSignedOut(answer: FailedAnswer) async throws {
-    http.respond(when: isTokenRequest) { _, _ in errorResponse(answer.status, answer.errorCode) }
+    http.respond(when: isTokenRequest) { _, _ in errorResponse(answer.status, answer.code) }
     try await sut.seedSession(.expired)
 
     let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .local) }
@@ -211,7 +211,7 @@ import Testing
     FailedAnswer(.internalServerError, nil),
   ])
   func globalKeepsTheSessionWhenTheLogoutFails(answer: FailedAnswer) async throws {
-    http.respond { _, _ in errorResponse(answer.status, answer.errorCode) }
+    http.respond { _, _ in errorResponse(answer.status, answer.code) }
     try await sut.seedSession(.valid)
 
     let (_, changes) = try await sut.recordingChanges {
@@ -241,12 +241,12 @@ import Testing
     FailedAnswer(.badRequest, "validation_failed"),
   ])
   func globalSignsOutAsUserInitiatedWhenTheRefreshIsRejected(answer: FailedAnswer) async throws {
-    http.respond(when: isTokenRequest) { _, _ in errorResponse(answer.status, answer.errorCode) }
+    http.respond(when: isTokenRequest) { _, _ in errorResponse(answer.status, answer.code) }
     try await sut.seedSession(.expired)
 
     let (_, changes) = try await sut.recordingChanges {
       let error = await #expect(throws: AuthError.self) { try await sut.signOut(scope: .global) }
-      expectNoDifference(error?.errorCode.rawValue, answer.errorCode)
+      expectNoDifference(error?.code?.rawValue, answer.code)
     }
 
     #expect(logoutRequests.isEmpty)
@@ -392,7 +392,7 @@ import Testing
     FailedAnswer(.internalServerError, nil),
   ])
   func othersKeepsTheLocalSessionWhenTheLogoutFails(answer: FailedAnswer) async throws {
-    http.respond { _, _ in errorResponse(answer.status, answer.errorCode) }
+    http.respond { _, _ in errorResponse(answer.status, answer.code) }
     try await sut.seedSession(.valid)
 
     await #expect(throws: AuthError.self) { try await sut.signOut(scope: .others) }
@@ -441,15 +441,15 @@ import Testing
 
   struct FailedAnswer: Sendable, CustomTestStringConvertible {
     let status: HTTPResponse.Status
-    let errorCode: String?
+    let code: String?
 
-    init(_ status: HTTPResponse.Status, _ errorCode: String?) {
+    init(_ status: HTTPResponse.Status, _ code: String?) {
       self.status = status
-      self.errorCode = errorCode
+      self.code = code
     }
 
     var testDescription: String {
-      "\(status.code) \(errorCode ?? "")"
+      "\(status.code) \(code ?? "")"
     }
   }
 

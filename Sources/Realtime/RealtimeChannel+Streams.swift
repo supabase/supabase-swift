@@ -104,8 +104,8 @@ extension RealtimeChannel {
   ///   - table: The table name.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
   ///   - select: Restricts the change payload to a subset of columns.
-  ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. Defaults to the decoder the SDK
-  ///     uses for server responses.
+  ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses
+  ///     `JSONDecoder.supabase()`.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
   public func postgresChanges<Row: Decodable>(
     of _: Row.Type,
@@ -114,7 +114,7 @@ extension RealtimeChannel {
     table: String,
     filter: RealtimePostgresFilter? = nil,
     select: [String]? = nil,
-    decoder: JSONDecoder = .supabase()
+    decoder: JSONDecoder? = nil
   ) async -> AsyncStream<TypedPostgresChange<Row>> {
     await postgresChanges(
       of: Row.self, event: event, schema: schema, table: table, rawFilter: filter?.value,
@@ -131,13 +131,14 @@ extension RealtimeChannel {
     table: String,
     rawFilter: String?,
     select: [String]?,
-    decoder: JSONDecoder
+    decoder: JSONDecoder?
   ) async -> AsyncStream<TypedPostgresChange<Row>> {
     let changes = await postgresChanges(
       event: event, schema: schema, table: table, filter: rawFilter, select: select
     )
     return AsyncStream(
-      TypedPostgresChanges<Row>(base: changes, decoder: UncheckedSendable(decoder)))
+      TypedPostgresChanges<Row>(
+        base: changes, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
   }
 
   /// One stream of the changes for `bindings`, the channel events, and the status changes, in

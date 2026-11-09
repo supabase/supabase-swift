@@ -8,7 +8,7 @@
 import Foundation
 
 extension StorageClient {
-  /// The resumable uploads this client's ``StorageClientConfiguration/resumable`` directory
+  /// The resumable uploads this client's ``StorageClient/Configuration/resumable`` directory
   /// holds records for: the ones in flight, paused, or left by a previous run.
   ///
   /// - Warning: Experimental. See ``ResumableUpload``.
@@ -37,10 +37,13 @@ public struct ResumableUploadRegistry: Sendable {
 
   /// A handle for every record on disk, oldest first. An upload already in flight in this
   /// process is returned as the same handle; the others are ``ResumableUpload/Status/pending``
-  /// until ``ResumableUpload/start()``.
+  /// until ``ResumableUpload/start()``. A record that does not decode is deleted; one that
+  /// cannot be read, for example while data protection locks it, is skipped. Reads the disk off
+  /// the caller's actor.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
-  public func pending() throws -> [ResumableUpload] {
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
+  @concurrent
+  public func pending() async throws -> [ResumableUpload] {
     try store.records().map { ResumableUpload.handle(record: $0, api: api) }
   }
 
@@ -48,9 +51,9 @@ public struct ResumableUploadRegistry: Sendable {
   /// throw here; it shows in that upload's ``ResumableUpload/status`` and
   /// ``ResumableUpload/result``.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
   public func resumeAll() async throws -> [ResumableUpload] {
-    let uploads = try pending()
+    let uploads = try await pending()
     for upload in uploads {
       switch await upload.status {
       case .pending: try? await upload.start()
@@ -62,13 +65,16 @@ public struct ResumableUploadRegistry: Sendable {
   }
 
   /// Deletes the record and sandbox copy of every upload that is not in flight in this
-  /// process. An upload in flight keeps its files until it completes or is cancelled.
+  /// process. An upload in flight keeps its files until it completes or is cancelled, and a
+  /// record that cannot be read, for example while data protection locks it, is kept. Works on
+  /// the disk off the caller's actor.
   ///
-  /// - Throws: The file system's error when the record directory cannot be read.
-  public func clear() throws {
-    for record in try store.records()
-    where !ResumableUpload.isLive(fingerprint: record.fingerprint, api: api) {
-      try store.remove(record)
+  /// - Throws: ``StorageError`` when the record directory cannot be read.
+  @concurrent
+  public func clear() async throws {
+    let store = store
+    for record in try store.records() {
+      ResumableUpload.removeUnlessLive(record, from: store, api: api)
     }
   }
 }

@@ -583,7 +583,7 @@ struct AuthClientTests {
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)
-      #expect(error.errorCode == .web3UnsupportedChain)
+      #expect(error.code == .web3UnsupportedChain)
       #expect(error.response?.status == 400)
     }
   }
@@ -975,8 +975,8 @@ struct AuthClientTests {
       headers: HTTPFields(["apikey": apiKey]),
       storage: storage,
       redirectTo: redirectTo,
-      http: .init(transport: transport),
       autoRefresh: autoRefresh,
+      http: .init(transport: transport),
       now: date)
 
     var pkce = PKCE.live

@@ -77,7 +77,7 @@ extension EnvironmentValues {
 let supabaseClient = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
-  options: .init(
-    auth: .init(redirectToURL: Constants.redirectToURL)
+  configuration: .init(
+    auth: .init(redirectTo: Constants.redirectToURL)
   )
 )
