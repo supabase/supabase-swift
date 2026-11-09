@@ -18,7 +18,7 @@ struct PostgrestClientInfoFeaturesTests {
   static let typedClientInfo = clientInfo + "; features=typed-api"
 
   private func capture() throws -> QueryCapture {
-    try QueryCapture(headers: ["X-Client-Info": Self.clientInfo])
+    try QueryCapture(headers: [.xClientInfo: Self.clientInfo])
   }
 
   @Test

@@ -1,6 +1,6 @@
 import ConcurrencyExtras
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 import Helpers
 import IssueReporting
 import Logging
@@ -120,7 +120,7 @@ public final class SupabaseClient: Sendable {
       configuration: .init(
         url: databaseURL,
         schema: configuration.database.schema,
-        headers: dataHeaders.dictionary,
+        headers: dataHeaders,
         http: authenticatedHTTP(staleTokenRejection: .postgrest),
         logger: configuration.global.logger,
         encoder: configuration.database.encoder,
@@ -175,23 +175,20 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  /// ``_headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
+  /// ``headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
   /// bearer is the bearer middleware's job, so a per-call header and the session token both win
   /// over the key.
   var dataHeaders: HTTPFields {
-    var headers = _headers
+    var headers = self.headers
     headers[.authorization] = nil
     return headers
   }
 
-  let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
-  /// This dictionary is read-only. To supply custom headers, set
+  /// These headers are read-only. To supply custom headers, set
   /// ``SupabaseClient/Configuration/Global/headers`` when initializing the client.
-  public var headers: [String: String] {
-    _headers.dictionary
-  }
+  public let headers: HTTPFields
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
@@ -235,21 +232,15 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields(defaultHeaders)
-      .merging(
-        with: HTTPFields(
-          [
-            "Authorization": "Bearer \(supabaseKey)",
-            "Apikey": supabaseKey,
-          ]
-        )
-      )
-      .merging(with: HTTPFields(configuration.global.headers))
+    headers =
+      defaultHeaders
+      .merging(with: [.authorization: "Bearer \(supabaseKey)", .apikey: supabaseKey])
+      .merging(with: configuration.global.headers)
 
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       storageKey: configuration.auth.storageKey ?? defaultStorageKey,
-      headers: _headers,
+      headers: headers,
       storage: configuration.auth.storage,
       redirectTo: configuration.auth.redirectTo,
       autoRefresh: configuration.auth.accessToken == nil
@@ -638,9 +629,8 @@ public final class SupabaseClient: Sendable {
     return try! RealtimeClient(
       configuration: .init(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
-        // Through `HTTPFields`, so names compare without regard to case and the global headers
-        // win.
-        headers: HTTPFields(realtime.headers).merging(with: _headers).dictionary,
+        // The global headers win.
+        headers: realtime.headers.merging(with: headers),
         heartbeatInterval: realtime.heartbeatInterval,
         requestTimeout: realtime.requestTimeout,
         connectOnSubscribe: realtime.connectOnSubscribe,

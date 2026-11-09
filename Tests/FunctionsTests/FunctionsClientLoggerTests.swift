@@ -54,7 +54,7 @@ struct FunctionsClientLoggerTests {
     let sut = try FunctionsClient(
       configuration: .init(
         url: url,
-        headers: [HTTPField.Name("apikey")!: apiKey],
+        headers: [.apikey: apiKey],
         http: .init(
           transport: ClosureTransport { _, _ in
             (HTTPTypes.HTTPResponse(status: .ok), nil)

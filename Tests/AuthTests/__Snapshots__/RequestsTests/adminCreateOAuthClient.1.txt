@@ -2,7 +2,7 @@ curl \
 	--request POST \
 	--header "Authorization: Bearer dummy.secret.key" \
 	--header "Content-Type: application/json" \
-	--header "X-Client-Info: auth-swift/0.0.0" \
+	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
 	--header "X-Supabase-Api-Version: 2024-01-01" \
 	--header "apikey: dummy.secret.key" \
 	--data "{\"client_name\":\"Example\",\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \

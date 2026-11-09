@@ -18,6 +18,9 @@ import Helpers
 /// Both `invoke` and `stream` go through ``exchange(name:body:options:configuration:http:)``;
 /// nothing else inspects a response head or relabels a transport failure.
 enum FunctionsAPI {
+  /// Sent unless the configured or per-call headers set the same name.
+  static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "functions-swift")]
+
   /// Builds the request head and body for one invocation. Pure: no token lookup, no I/O.
   ///
   /// Headers merge lowest to highest: `X-Client-Info`, then `configuration.headers`, then the
@@ -31,8 +34,7 @@ enum FunctionsAPI {
     options: FunctionInvokeOptions,
     configuration: FunctionsClient.Configuration
   ) -> (HTTPRequest, HTTPBody?) {
-    var headers: HTTPFields = [.xClientInfo: "functions-swift/\(version)"]
-    headers.merge(with: configuration.headers)
+    var headers = defaultHeaders.merging(with: configuration.headers)
     if let body { headers[.contentType] = body.contentType }
     headers.merge(with: options.headers)
 

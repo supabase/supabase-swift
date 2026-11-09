@@ -83,7 +83,7 @@ StorageClientConfiguration(url: url, headers: ["apikey": key])
 storage.setHeader("v", forKey: "X-Custom")
 try await storage.from("avatars").list()
 // v3
-StorageClient.Configuration(url: url, headers: [HTTPField.Name("apikey")!: key])
+StorageClient.Configuration(url: url, headers: [.apikey: key])
 let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v")
 try await custom.from("avatars").list()
 ```

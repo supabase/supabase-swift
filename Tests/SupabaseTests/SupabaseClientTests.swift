@@ -83,7 +83,7 @@ struct SupabaseClientTests {
     let logger = Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     let customSchema = "custom_schema"
     let localStorage = InMemoryAuthStorage()
-    let customHeaders = ["header_field": "header_value"]
+    let customHeaders: HTTPFields = [HTTPField.Name("header_field")!: "header_value"]
 
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -102,7 +102,7 @@ struct SupabaseClientTests {
           region: .apNortheast1
         ),
         realtime: SupabaseClient.Configuration.Realtime(
-          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
+          headers: [HTTPField.Name("custom_realtime_header_key")!: "custom_realtime_header_value"]
         )
       )
     )
@@ -116,21 +116,21 @@ struct SupabaseClientTests {
         == "https://project-ref.supabase.co/functions/v1"
     )
 
-    assertInlineSnapshot(of: client.headers, as: .customDump) {
-      """
+    expectNoDifference(
+      client.headers,
       [
-        "Apikey": "PUBLISHABLE_KEY",
-        "Authorization": "Bearer PUBLISHABLE_KEY",
-        "X-Client-Info": "supabase-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
-        "header_field": "header_value"
+        .apikey: "PUBLISHABLE_KEY",
+        .authorization: "Bearer PUBLISHABLE_KEY",
+        .xClientInfo:
+          "supabase-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
+        HTTPField.Name("header_field")!: "header_value",
       ]
-      """
-    }
-    expectNoDifference(client.headers, client.auth.configuration.headers.dictionary)
+    )
+    expectNoDifference(client.headers, client.auth.configuration.headers)
     var dataHeaders = client.headers
-    dataHeaders["Authorization"] = nil
-    expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
-    expectNoDifference(dataHeaders, client.storage.configuration.headers.dictionary)
+    dataHeaders[.authorization] = nil
+    expectNoDifference(dataHeaders, client.functions.configuration.headers)
+    expectNoDifference(dataHeaders, client.storage.configuration.headers)
     expectNoDifference(dataHeaders, client.rest.configuration.headers)
 
     #expect(client.functions.configuration.region == .apNortheast1)
@@ -138,7 +138,7 @@ struct SupabaseClientTests {
     let realtimeURL = client.realtime.configuration.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
 
-    let expectedRealtimeHeader = client._headers.merging(with: [
+    let expectedRealtimeHeader = client.headers.merging(with: [
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
     )
@@ -178,15 +178,15 @@ struct SupabaseClientTests {
       configuration: SupabaseClient.Configuration(
         auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
         realtime: SupabaseClient.Configuration.Realtime(headers: [
-          "apikey": "other", "X-Custom": "1",
+          .apikey: "other", HTTPField.Name("X-Custom")!: "1",
         ])
       )
     )
 
     let headers = client.realtime.headers
-    #expect(headers[values: .apiKey] == ["PUBLISHABLE_KEY"])
+    #expect(headers[values: .apikey] == ["PUBLISHABLE_KEY"])
     #expect(headers[HTTPField.Name("x-custom")!] == "1")
-    #expect(client.realtime.configuration.headers["X-Custom"] == "1")
+    #expect(client.realtime.configuration.headers[HTTPField.Name("X-Custom")!] == "1")
   }
 
   @Test
@@ -619,7 +619,7 @@ struct SupabaseClientTests {
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
-    #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
+    #expect(client.functions.configuration.headers[.apikey] == "sb_publishable_abc123")
   }
 
   @Test
@@ -632,7 +632,7 @@ struct SupabaseClientTests {
 
     let headers = client.storage.configuration.headers
     #expect(headers[.authorization] == nil)
-    #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
+    #expect(headers[.apikey] == "sb_publishable_abc123")
   }
 
   @Test
@@ -644,7 +644,7 @@ struct SupabaseClientTests {
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
-    #expect(client.functions.configuration.headers[.init("Apikey")!] == "legacy-jwt-key")
+    #expect(client.functions.configuration.headers[.apikey] == "legacy-jwt-key")
   }
 
   @Test

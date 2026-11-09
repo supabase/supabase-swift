@@ -216,7 +216,7 @@ struct InboxTests {
     let host = await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
-        headers: ["Authorization": "Bearer stored"],
+        headers: [.authorization: "Bearer stored"],
         requestTimeout: .seconds(5),
         observesAppLifecycle: false,
         accessToken: {

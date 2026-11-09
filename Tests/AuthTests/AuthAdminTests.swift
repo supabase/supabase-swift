@@ -28,9 +28,9 @@ struct AuthAdminTests {
     #expect(request.method == .delete)
     #expect(request.url?.path == "/auth/v1/admin/users/\(id)")
     #expect(request.headerFields[.authorization] == "Bearer secret.key")
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "secret.key")
+    #expect(request.headerFields[.apikey] == "secret.key")
     #expect(
-      request.headerFields[HTTPField.Name("X-Client-Info")!]?.hasPrefix("auth-swift/") == true)
+      request.headerFields[.xClientInfo]?.hasPrefix("auth-swift/") == true)
   }
 
   @Test
@@ -49,7 +49,7 @@ struct AuthAdminTests {
 
     let request = try #require(transport.requests.first?.head)
     #expect(request.headerFields[HTTPField.Name("X-Custom")!] == "1")
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "secret.key")
+    #expect(request.headerFields[.apikey] == "secret.key")
   }
 
   @Test
@@ -89,7 +89,7 @@ struct AuthAdminTests {
   func describingTheConfigurationHidesTheSecretKey() {
     let configuration = AuthAdminClient.Configuration(
       url: clientURL, secretKey: "sb_secret_abc",
-      headers: [HTTPField.Name("apikey")!: "sb_secret_abc"])
+      headers: [.apikey: "sb_secret_abc"])
     var dumped = ""
     dump(configuration, to: &dumped)
 
@@ -138,7 +138,7 @@ struct AuthAdminTests {
 
     let request = try #require(transport.requests.first?.head)
     #expect(request.headerFields[.authorization] == nil)
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "sb_secret_abc")
+    #expect(request.headerFields[.apikey] == "sb_secret_abc")
   }
 
   @Test(arguments: [

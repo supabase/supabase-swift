@@ -109,11 +109,11 @@ struct StorageClientTests {
         #"""
         curl \
         	--request POST \
-        	--header "Apikey: test.api.key" \
         	--header "Authorization: Bearer test.api.key" \
         	--header "Cache-Control: max-age=14400" \
         	--header "Content-Type: text/plain" \
         	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "apikey: test.api.key" \
         	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
         	--header "x-upsert: false" \
         	--data "test data" \
@@ -154,11 +154,11 @@ struct StorageClientTests {
         #"""
         curl \
         	--request POST \
-        	--header "Apikey: test.api.key" \
         	--header "Authorization: Bearer test.api.key" \
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Type: image/jpeg" \
         	--header "X-Client-Info: storage-swift/x.y.z" \
+        	--header "apikey: test.api.key" \
         	--header "x-metadata: eyJrZXkiOiJ2YWx1ZSJ9" \
         	--header "x-upsert: false" \
         	"http://localhost:54321/storage/v1/object/tests/sadcat.jpg"

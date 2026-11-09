@@ -19,7 +19,7 @@ public import HTTPTypes
 /// let storage = try StorageClient(
 ///   configuration: StorageClient.Configuration(
 ///     url: url,
-///     headers: ["apikey": key],
+///     headers: [.apikey: key],
 ///     http: HTTPClientConfiguration(
 ///       middlewares: [AccessTokenMiddleware { try await tokenProvider.current() }]
 ///     )
