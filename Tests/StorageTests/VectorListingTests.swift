@@ -49,7 +49,9 @@ struct VectorListingTests {
       ])
 
     var buckets: [VectorBucket] = []
-    for try await bucket in vectors.listBuckets(prefix: "x", pageSize: 1) {
+    for try await bucket in vectors.listBuckets(
+      options: ListVectorBucketsOptions(prefix: "x", pageSize: 1))
+    {
       buckets.append(bucket)
     }
 
@@ -83,7 +85,7 @@ struct VectorListingTests {
     let bodies = LockIsolated<[String]>([])
     let vectors = Self.makeVectors(bodies: bodies, responses: [#"{"vectors":[{"key":"k"}]}"#])
 
-    let page = try await vectors.from("b").index("i").listVectors().page(after: "t9")
+    let page = try await vectors.from("b").from("i").listVectors().page(after: "t9")
 
     #expect(page.vectors.map(\.key) == ["k"])
     #expect(

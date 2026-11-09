@@ -264,7 +264,20 @@ Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `Resu
 `StorageClient.Configuration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+return a `PageSequence` and take `pageSize` instead of `maxResults`. Their pages are
 `VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
-`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
-`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.
+`listBuckets`, `listIndexes`, `vectors(keys:)`, `listVectors`, and `queryVectors` take their
+optional settings in `ListVectorBucketsOptions`, `ListIndexesOptions`, `GetVectorsOptions`,
+`ListVectorsOptions`, and `QueryVectorsOptions`. The vector models have public memberwise inits
+for fixtures.
+
+`VectorBucketClient` follows the same getter pattern as `StorageClient`: `from(_:)` returns a
+client and the noun returns details.
+
+| v2 | v3 |
+|----|----|
+| `vectors.listBuckets(prefix: "docs", maxResults: 100)` | `vectors.listBuckets(options: .init(prefix: "docs", pageSize: 100))` |
+| `try await vectors.getBucket("docs")` | `try await vectors.bucket("docs")` |
+| `bucket.listIndexes(prefix: "emb", maxResults: 100)` | `bucket.listIndexes(options: .init(prefix: "emb", pageSize: 100))` |
+| `bucket.index("embeddings")` (a `VectorIndexClient`) | `bucket.from("embeddings")` |
+| `try await bucket.getIndex("embeddings")` (a `VectorIndex`) | `try await bucket.index("embeddings")` |

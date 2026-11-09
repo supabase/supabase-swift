@@ -33,7 +33,8 @@ import HTTPTypes
 ///
 /// - ``createBucket(_:)``
 /// - ``bucket(_:)``
-/// - ``listBuckets(prefix:pageSize:)``
+/// - ``listBuckets(options:)``
+/// - ``ListVectorBucketsOptions``
 /// - ``VectorBucketPage``
 /// - ``deleteBucket(_:)``
 ///
@@ -109,7 +110,7 @@ public struct StorageVectorsClient: Sendable {
   /// request as you iterate.
   ///
   /// ```swift
-  /// for try await bucket in client.storage.vectors.listBuckets(prefix: "docs") {
+  /// for try await bucket in client.storage.vectors.listBuckets(options: .init(prefix: "docs")) {
   ///   print(bucket.vectorBucketName)
   /// }
   ///
@@ -119,14 +120,11 @@ public struct StorageVectorsClient: Sendable {
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
-  /// - Parameters:
-  ///   - prefix: Returns only buckets whose name starts with this prefix. Pass `nil` for all buckets.
-  ///   - pageSize: The maximum number of buckets per page (up to 500).
+  /// - Parameter options: The name prefix filter and page size.
   /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
   ///   when the API rejects a request.
   public func listBuckets(
-    prefix: String? = nil,
-    pageSize: Int? = nil
+    options: ListVectorBucketsOptions = ListVectorBucketsOptions()
   ) -> PageSequence<VectorBucket, VectorBucketPage, String> {
     PageSequence(
       fetch: { [api] nextToken in
@@ -136,7 +134,8 @@ public struct StorageVectorsClient: Sendable {
             url: api.configuration.url.appendingPathComponent("vector/ListVectorBuckets")
           ),
           body: JSONEncoder.storage.encode(
-            VectorBucketListBody(maxResults: pageSize, nextToken: nextToken, prefix: prefix)
+            VectorBucketListBody(
+              maxResults: options.pageSize, nextToken: nextToken, prefix: options.prefix)
           )
         )
         .decoded(decoder: .vectors)
@@ -189,6 +188,28 @@ private struct ListVectorBucketsResponseBody: Decodable {
   var nextToken: String?
 }
 
+/// Options for ``StorageVectorsClient/listBuckets(options:)``.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct ListVectorBucketsOptions: Sendable, Hashable {
+  /// Returns only buckets whose name starts with this prefix. `nil` returns all buckets.
+  public var prefix: String?
+
+  /// The maximum number of buckets per page (up to 500). `nil` uses the server default.
+  public var pageSize: Int?
+
+  /// Creates a ``ListVectorBucketsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - prefix: Returns only buckets whose name starts with this prefix.
+  ///   - pageSize: The maximum number of buckets per page (up to 500).
+  public init(prefix: String? = nil, pageSize: Int? = nil) {
+    self.prefix = prefix
+    self.pageSize = pageSize
+  }
+}
+
 /// A vector bucket, as returned by ``StorageVectorsClient``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
@@ -199,10 +220,20 @@ public struct VectorBucket: Decodable, Sendable, Hashable {
 
   /// When the bucket was created, if known.
   public var creationTime: Date?
+
+  /// Creates a ``VectorBucket``.
+  ///
+  /// - Parameters:
+  ///   - vectorBucketName: The name of the vector bucket.
+  ///   - creationTime: When the bucket was created, if known.
+  public init(vectorBucketName: String, creationTime: Date? = nil) {
+    self.vectorBucketName = vectorBucketName
+    self.creationTime = creationTime
+  }
 }
 
 /// A page of vector buckets, as returned by
-/// ``StorageVectorsClient/listBuckets(prefix:pageSize:)``.
+/// ``StorageVectorsClient/listBuckets(options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -212,4 +243,14 @@ public struct VectorBucketPage: Sendable {
 
   /// The pagination token to pass to fetch the next page, or `nil` when there are no more results.
   public var nextToken: String?
+
+  /// Creates a ``VectorBucketPage``.
+  ///
+  /// - Parameters:
+  ///   - vectorBuckets: The buckets in this page.
+  ///   - nextToken: The pagination token for the next page, or `nil` for the last page.
+  public init(vectorBuckets: [VectorBucket], nextToken: String? = nil) {
+    self.vectorBuckets = vectorBuckets
+    self.nextToken = nextToken
+  }
 }

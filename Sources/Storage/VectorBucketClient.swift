@@ -19,7 +19,7 @@ import HTTPTypes
 /// ```swift
 /// let bucket = client.storage.vectors.from("documents")
 /// try await bucket.createIndex("embeddings", dimension: 1536, distanceMetric: .cosine)
-/// let index = bucket.index("embeddings")
+/// let index = bucket.from("embeddings")
 /// ```
 ///
 /// - Warning: Vector buckets are a public alpha feature of Supabase Storage and this API is
@@ -31,13 +31,14 @@ import HTTPTypes
 /// ### Managing indexes
 ///
 /// - ``createIndex(_:dimension:distanceMetric:dataType:metadataConfiguration:)``
-/// - ``indexDetails(_:)``
-/// - ``listIndexes(prefix:pageSize:)``
+/// - ``index(_:)``
+/// - ``listIndexes(options:)``
+/// - ``ListIndexesOptions``
 /// - ``deleteIndex(_:)``
 ///
 /// ### Accessing vector data
 ///
-/// - ``index(_:)``
+/// - ``from(_:)``
 @_spi(Experimental)
 public struct VectorBucketClient: Sendable {
   /// The name of the vector bucket this client operates on.
@@ -102,7 +103,7 @@ public struct VectorBucketClient: Sendable {
   /// Retrieves metadata for an existing vector index in this bucket.
   ///
   /// ```swift
-  /// let index = try await bucket.indexDetails("embeddings")
+  /// let index = try await bucket.index("embeddings")
   /// print(index.dimension)
   /// ```
   ///
@@ -111,7 +112,7 @@ public struct VectorBucketClient: Sendable {
   /// - Parameter indexName: The name of the index to retrieve.
   /// - Returns: The matching ``VectorIndex``.
   /// - Throws: ``StorageError`` when the API rejects the request.
-  public func indexDetails(_ indexName: String) async throws -> VectorIndex {
+  public func index(_ indexName: String) async throws -> VectorIndex {
     let response: GetIndexResponseBody = try await api.execute(
       HTTPRequest(
         method: .post,
@@ -129,22 +130,18 @@ public struct VectorBucketClient: Sendable {
   /// request as you iterate.
   ///
   /// ```swift
-  /// for try await index in bucket.listIndexes(prefix: "embeddings-") {
+  /// for try await index in bucket.listIndexes(options: .init(prefix: "embeddings-")) {
   ///   print(index.indexName)
   /// }
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
-  /// - Parameters:
-  ///   - prefix: Returns only indexes whose name starts with this prefix. Pass `nil` for all
-  ///     indexes.
-  ///   - pageSize: The maximum number of indexes per page (up to 500).
+  /// - Parameter options: The name prefix filter and page size.
   /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
   ///   when the API rejects a request.
   public func listIndexes(
-    prefix: String? = nil,
-    pageSize: Int? = nil
+    options: ListIndexesOptions = ListIndexesOptions()
   ) -> PageSequence<VectorIndexSummary, VectorIndexPage, String> {
     PageSequence(
       fetch: { [api, vectorBucketName] nextToken in
@@ -156,8 +153,8 @@ public struct VectorBucketClient: Sendable {
           body: JSONEncoder.storage.encode(
             ListIndexesBody(
               vectorBucketName: vectorBucketName,
-              prefix: prefix,
-              maxResults: pageSize,
+              prefix: options.prefix,
+              maxResults: options.pageSize,
               nextToken: nextToken
             )
           )
@@ -195,7 +192,7 @@ public struct VectorBucketClient: Sendable {
   /// Returns a client scoped to the given index, for reading and writing vector data.
   ///
   /// ```swift
-  /// let index = client.storage.vectors.from("documents").index("embeddings")
+  /// let index = client.storage.vectors.from("documents").from("embeddings")
   /// try await index.putVectors([
   ///   VectorEntry(key: "doc-1", data: VectorData(float32: [0.1, 0.2, 0.3]))
   /// ])
@@ -205,7 +202,7 @@ public struct VectorBucketClient: Sendable {
   ///
   /// - Parameter indexName: The name of the index.
   /// - Returns: A ``VectorIndexClient`` configured for the given index.
-  public func index(_ indexName: String) -> VectorIndexClient {
+  public func from(_ indexName: String) -> VectorIndexClient {
     VectorIndexClient(
       vectorBucketName: vectorBucketName,
       indexName: indexName,
@@ -383,10 +380,38 @@ public struct VectorIndex: Decodable, Sendable, Hashable {
 
   /// When the index was created, if known.
   public var creationTime: Date?
+
+  /// Creates a ``VectorIndex``.
+  ///
+  /// - Parameters:
+  ///   - indexName: The name of the index.
+  ///   - vectorBucketName: The name of the vector bucket this index belongs to.
+  ///   - dataType: The data type of the vector components.
+  ///   - dimension: The dimensionality of vectors stored in this index.
+  ///   - distanceMetric: The similarity metric used when querying this index.
+  ///   - metadataConfiguration: Which metadata keys are excluded from filtering, if any.
+  ///   - creationTime: When the index was created, if known.
+  public init(
+    indexName: String,
+    vectorBucketName: String,
+    dataType: VectorDataType,
+    dimension: Int,
+    distanceMetric: VectorDistanceMetric,
+    metadataConfiguration: VectorIndexMetadataConfiguration? = nil,
+    creationTime: Date? = nil
+  ) {
+    self.indexName = indexName
+    self.vectorBucketName = vectorBucketName
+    self.dataType = dataType
+    self.dimension = dimension
+    self.distanceMetric = distanceMetric
+    self.metadataConfiguration = metadataConfiguration
+    self.creationTime = creationTime
+  }
 }
 
 /// A summary of a vector index, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:pageSize:)``.
+/// ``VectorBucketClient/listIndexes(options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -399,10 +424,22 @@ public struct VectorIndexSummary: Decodable, Sendable, Hashable {
 
   /// When the index was created, if known.
   public var creationTime: Date?
+
+  /// Creates a ``VectorIndexSummary``.
+  ///
+  /// - Parameters:
+  ///   - indexName: The name of the index.
+  ///   - vectorBucketName: The name of the vector bucket this index belongs to.
+  ///   - creationTime: When the index was created, if known.
+  public init(indexName: String, vectorBucketName: String, creationTime: Date? = nil) {
+    self.indexName = indexName
+    self.vectorBucketName = vectorBucketName
+    self.creationTime = creationTime
+  }
 }
 
 /// A page of vector indexes, as returned by
-/// ``VectorBucketClient/listIndexes(prefix:pageSize:)``.
+/// ``VectorBucketClient/listIndexes(options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -412,4 +449,36 @@ public struct VectorIndexPage: Sendable {
 
   /// The pagination token to pass to fetch the next page, or `nil` when there are no more results.
   public var nextToken: String?
+
+  /// Creates a ``VectorIndexPage``.
+  ///
+  /// - Parameters:
+  ///   - indexes: The indexes in this page.
+  ///   - nextToken: The pagination token for the next page, or `nil` for the last page.
+  public init(indexes: [VectorIndexSummary], nextToken: String? = nil) {
+    self.indexes = indexes
+    self.nextToken = nextToken
+  }
+}
+
+/// Options for ``VectorBucketClient/listIndexes(options:)``.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct ListIndexesOptions: Sendable, Hashable {
+  /// Returns only indexes whose name starts with this prefix. `nil` returns all indexes.
+  public var prefix: String?
+
+  /// The maximum number of indexes per page (up to 500). `nil` uses the server default.
+  public var pageSize: Int?
+
+  /// Creates a ``ListIndexesOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - prefix: Returns only indexes whose name starts with this prefix.
+  ///   - pageSize: The maximum number of indexes per page (up to 500).
+  public init(prefix: String? = nil, pageSize: Int? = nil) {
+    self.prefix = prefix
+    self.pageSize = pageSize
+  }
 }

@@ -34,7 +34,7 @@ extension StorageMockerTests {
             headers: [:],
             http: .init(transport: URLSessionTransport(session: session)))
         )
-      ).from("documents").index("embeddings")
+      ).from("documents").from("embeddings")
     }
 
     @Test

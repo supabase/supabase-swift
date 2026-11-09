@@ -154,22 +154,31 @@ struct ResumableStore: Sendable {
     guard FileManager.default.fileExists(atPath: url.path) else { return nil }
     let record = try Self.decoder.decode(ResumableUploadRecord.self, from: Data(contentsOf: url))
     guard !isStale(record) else {
-      try remove(record)
+      remove(record)
       return nil
     }
     return record
   }
 
   /// Every live record, oldest first. Stale ones are removed on the way.
+  ///
+  /// - Throws: ``StorageError`` when the directory or a record cannot be read.
   func records() throws -> [ResumableUploadRecord] {
     guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-    return try FileManager.default.contentsOfDirectory(atPath: directory.path)
-      .filter { $0.hasSuffix(".json") }
-      .compactMap { try record(fingerprint: String($0.dropLast(".json".count))) }
-      .sorted { $0.createdAt < $1.createdAt }
+    do {
+      return try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        .filter { $0.hasSuffix(".json") }
+        .compactMap { try record(fingerprint: String($0.dropLast(".json".count))) }
+        .sorted { $0.createdAt < $1.createdAt }
+    } catch {
+      throw StorageError(
+        kind: .invalidRequest,
+        message: "The resumable upload records could not be read.",
+        underlyingError: error)
+    }
   }
 
-  func remove(_ record: ResumableUploadRecord) throws {
+  func remove(_ record: ResumableUploadRecord) {
     try? FileManager.default.removeItem(at: recordURL(fingerprint: record.fingerprint))
     if record.source == .sandboxCopy {
       try? FileManager.default.removeItem(at: sandboxCopyURL(fingerprint: record.fingerprint))
