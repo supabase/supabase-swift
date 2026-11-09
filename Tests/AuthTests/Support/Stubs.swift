@@ -6,7 +6,8 @@ import TestHelpers
 @testable import Auth
 
 extension RecordingTransport {
-  /// Answers `method` requests to `path` (under `clientURL`) with `status` and `data`.
+  /// Answers `method` requests to `path` (under `clientURL`) with `status` and `data`, sent as
+  /// JSON when it is not empty, whatever its bytes.
   ///
   /// See ``RecordingTransport/stub(_:_:query:status:data:headers:fileID:filePath:function:line:column:snapshot:)``
   /// for how requests match and how the trailing snapshot is compared.
@@ -25,7 +26,8 @@ extension RecordingTransport {
   ) {
     stub(
       method, clientURL.appendingPathComponent(path), query: query, status: status, data: data,
-      fileID: fileID, filePath: filePath, function: function, line: line, column: column,
+      headers: data.isEmpty ? [:] : [.contentType: "application/json"], fileID: fileID,
+      filePath: filePath, function: function, line: line, column: column,
       snapshot: snapshot)
   }
 

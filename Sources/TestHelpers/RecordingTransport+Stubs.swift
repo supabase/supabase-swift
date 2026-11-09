@@ -18,8 +18,8 @@ import Testing
 extension RecordingTransport {
   /// Answers `method` requests to `url` with `status`, `data`, and `headers`.
   ///
-  /// A request matches when its method and path are equal to the stub's and every pair in `query`
-  /// is among its query items. An empty `query` matches any query string. When two stubs match,
+  /// A request matches when its method, scheme, host, port, and path are equal to the stub's and
+  /// every pair in `query` is among its query items. An empty `query` matches any query string. When two stubs match,
   /// the one registered first answers.
   ///
   /// The response gets `Content-Type: application/json` when `data` is JSON and `headers` has no
@@ -117,9 +117,12 @@ extension RecordingTransport {
   private static func matches(
     _ method: HTTPRequest.Method, _ url: URL, _ query: [(String, String)]
   ) -> @Sendable (HTTPRequest) -> Bool {
-    let expectedPath = url.path
+    let expected = url
     return { request in
-      guard request.method == method, let url = request.url, url.path == expectedPath else {
+      guard request.method == method, let url = request.url,
+        url.scheme == expected.scheme, url.host == expected.host, url.port == expected.port,
+        url.path == expected.path
+      else {
         return false
       }
       let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []

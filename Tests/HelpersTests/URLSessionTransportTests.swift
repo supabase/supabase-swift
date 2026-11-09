@@ -66,6 +66,7 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     var status: Int
     var headers: [String: String]
     var data: Data
+    var holdsResponse: Bool
     var onRequest: @Sendable (URLRequest) throws -> Void
   }
 
@@ -99,6 +100,7 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
       client?.urlProtocol(self, didFailWithError: error)
       return
     }
+    guard !stub.holdsResponse else { return }
     client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
     client?.urlProtocol(self, didLoad: stub.data)
     client?.urlProtocolDidFinishLoading(self)
@@ -120,12 +122,13 @@ final class URLSessionTransportTests: Sendable {
     status: Int = 200,
     headers: [String: String] = [:],
     data: Data = Data(),
+    holdsResponse: Bool = false,
     onRequest: @escaping @Sendable (URLRequest) throws -> Void = { _ in }
   ) -> URLSessionTransport {
     StubURLProtocol.register(
       .init(
         method: method.rawValue, url: url, status: status, headers: headers, data: data,
-        onRequest: onRequest))
+        holdsResponse: holdsResponse, onRequest: onRequest))
     return makeTransport()
   }
 
@@ -154,6 +157,19 @@ final class URLSessionTransportTests: Sendable {
     #expect(body.length == .known(2))
     let data = try await Data(collecting: body, upTo: 100)
     #expect(data == Data("ok".utf8))
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func cancellingTheCallerCancelsTheURLSessionTask() async throws {
+    let (requested, onRequested) = AsyncStream<Void>.makeStream()
+    let transport = makeTransport(.get, holdsResponse: true) { _ in onRequested.yield() }
+
+    let task = Task { try await transport.send(HTTPRequest(method: .get, url: url), body: nil) }
+    for await _ in requested { break }
+    task.cancel()
+
+    let error = await #expect(throws: URLError.self) { try await task.value }
+    #expect(error?.code == .cancelled)
   }
 
   @Test

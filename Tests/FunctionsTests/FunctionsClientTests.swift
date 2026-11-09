@@ -1,7 +1,6 @@
 import Foundation
 import HTTPTypes
 import Helpers
-import InlineSnapshotTesting
 import TestHelpers
 import Testing
 
