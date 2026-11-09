@@ -15,7 +15,7 @@ public import HTTPTypes
 /// `HTTPClientConfiguration`, which is the one place a token enters a request:
 ///
 /// ```swift
-/// let storage = StorageClient(
+/// let storage = try StorageClient(
 ///   configuration: StorageClientConfiguration(
 ///     url: url,
 ///     headers: ["apikey": key],

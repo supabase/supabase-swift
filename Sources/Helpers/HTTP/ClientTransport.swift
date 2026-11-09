@@ -19,7 +19,7 @@ public import HTTPTypes
 ///     (HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
 ///   }
 /// }
-/// let client = SupabaseClient(
+/// let client = try SupabaseClient(
 ///   supabaseURL: url, supabaseKey: key,
 ///   options: .init(global: .init(http: .init(transport: RecordingTransport())))
 /// )

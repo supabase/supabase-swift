@@ -18,8 +18,8 @@ struct StorageLogLeakTests {
       @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
         HTTPTypes.HTTPResponse, HTTPBody?
       )
-  ) -> StorageClient {
-    StorageClient(
+  ) throws -> StorageClient {
+    try StorageClient(
       configuration: StorageClientConfiguration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -30,7 +30,7 @@ struct StorageLogLeakTests {
 
   @Test
   func aSignedUploadTokenNeverReachesTheLog() async throws {
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data(#"{"Key":"bucket/file.txt"}"#.utf8)))
     }
 
@@ -43,7 +43,7 @@ struct StorageLogLeakTests {
 
   @Test
   func aFailedSignedUploadLogsNoToken() async throws {
-    let sut = makeSUT { request, _ in
+    let sut = try makeSUT { request, _ in
       throw URLError(
         .timedOut, userInfo: [NSURLErrorFailingURLStringErrorKey: request.url!.absoluteString])
     }
@@ -57,7 +57,7 @@ struct StorageLogLeakTests {
 
   @Test
   func aSignedURLInTheResponseNeverReachesTheLog() async throws {
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(status: .ok),
         HTTPBody(Data(#"{"signedURL":"/object/sign/bucket/file.txt?token=st-secret-2"}"#.utf8))
