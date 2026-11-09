@@ -240,8 +240,10 @@ This project uses the [Swift Testing](https://developer.apple.com/documentation/
 - Use snapshot testing for complex data structures (via swift-snapshot-testing); `assertSnapshot`/`assertInlineSnapshot` work inside `@Test` functions
 - Stub HTTP at the `ClientTransport` seam with `ClosureTransport` or `RecordingTransport` from
   TestHelpers, passed as `http: HTTPClientConfiguration(transport:)`. Facade tests pass it through
-  `global.http`. Use `URLProtocol` only in `URLSessionTransportTests`. Do not copy these stubs into
-  a test target. Some older tests still use Mocker; do not add new ones (SDK-2883).
+  `global.http`. `RecordingTransport.stub(_:_:status:data:headers:) { snapshot }` answers a method
+  and path and compares an inline curl snapshot of the request. Use `URLProtocol` only in the tests
+  of the URLSession adapters (`URLSessionTransportTests`, `WebSocketTests`). Do not copy these
+  stubs into a test target.
 - Use CustomDump for test assertions with better output
 - Keep integration tests separate in `IntegrationTests` directory
 - Test targets get full Swift 6 language mode checking, matching production targets

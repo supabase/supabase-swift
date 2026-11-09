@@ -83,15 +83,6 @@
       }
     },
     {
-      "identity" : "mocker",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/WeTransfer/Mocker",
-      "state" : {
-        "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
-        "version" : "3.0.2"
-      }
-    },
-    {
       "identity" : "simplekeychain",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/auth0/SimpleKeychain",
