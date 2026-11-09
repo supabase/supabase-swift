@@ -1,112 +1,73 @@
-import ConcurrencyExtras
 import Foundation
+import HTTPTypes
+import TestHelpers
 import Testing
 
 @testable import Supabase
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-private final class PostgrestAuthCapturingProtocol: URLProtocol {
-  private static let storage = LockIsolated<URLRequest?>(nil)
-  static var capturedRequest: URLRequest? {
-    get { storage.value }
-    set { storage.setValue(newValue) }
-  }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    Self.capturedRequest = request
-    let response = HTTPURLResponse(
-      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
-      headerFields: ["Content-Type": "application/json"]
-    )!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Data("[]".utf8))
-    client?.urlProtocolDidFinishLoading(self)
-  }
-
-  override func stopLoading() {}
-}
-
-private func makePostgrestAuthCapturingSession() -> URLSession {
-  let config = URLSessionConfiguration.ephemeral
-  config.protocolClasses = [PostgrestAuthCapturingProtocol.self]
-  return URLSession(configuration: config)
-}
-
-@Suite(.serialized)
+@Suite
 struct SupabaseClientPostgrestAuthTests {
-  @Test
-  func restRequestUsesLiveAccessToken() async throws {
-    PostgrestAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
+  private let transport = RecordingTransport { _, _ in
+    (
+      HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+      Data("[]".utf8)
+    )
+  }
+
+  private func makeClient(auth: SupabaseClient.Configuration.Auth) throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { "live-session-token" }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
-        )
+        auth: auth,
+        global: SupabaseClient.Configuration.Global(http: .init(transport: transport))
+      )
+    )
+  }
+
+  @Test
+  func restRequestUsesLiveAccessToken() async throws {
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "live-session-token" }
       )
     )
 
     _ = try await client.from("todos").select().execute()
 
-    let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer live-session-token")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer live-session-token")
   }
 
   @Test
   func restRequestPerCallAuthorizationWinsOverLiveAccessToken() async throws {
-    PostgrestAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { "live-session-token" }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "live-session-token" }
       )
     )
 
     _ = try await client.from("todos").select()
       .settingHeader(name: .authorization, value: "Bearer per-call-override").execute()
 
-    let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer per-call-override")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer per-call-override")
   }
 
   @Test
   func restRequestWithoutSessionFallsBackToSupabaseKey() async throws {
-    PostgrestAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          autoRefresh: .manual
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makePostgrestAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        autoRefresh: .manual
       )
     )
 
     _ = try await client.from("todos").select().execute()
 
-    let request = try #require(PostgrestAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
 }

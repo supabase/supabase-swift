@@ -1,11 +1,9 @@
 import Foundation
+import HTTPTypes
+import TestHelpers
 import Testing
 
 @testable import Supabase
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
 
 #if OpenTelemetry
   import OpenTelemetryApi
@@ -14,15 +12,12 @@ import Testing
 
 @Suite(.serialized)
 struct TracingTests {
-  @Test
-  func noActiveSpanProducesNilHeader() {
-    #expect(TraceContext.traceParentHeader() == nil)
+  private let transport = RecordingTransport { _, _ in
+    (HTTPResponse(status: .ok), Data("[]".utf8))
   }
 
-  @Test
-  func tracePropagationIsNoOpWithoutActiveSpan() async throws {
-    RequestCapturingProtocol.capturedRequests = []
-    let client = try SupabaseClient(
+  private func makeClient() throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
@@ -30,16 +25,24 @@ struct TracingTests {
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeMockSession()))
-        )
+        global: SupabaseClient.Configuration.Global(http: .init(transport: transport))
       )
     )
+  }
+
+  @Test
+  func noActiveSpanProducesNilHeader() {
+    #expect(TraceContext.traceParentHeader() == nil)
+  }
+
+  @Test
+  func tracePropagationIsNoOpWithoutActiveSpan() async throws {
+    let client = try makeClient()
 
     _ = try? await client.from("todos").select().execute()
 
-    let request = try #require(RequestCapturingProtocol.capturedRequests.first)
-    #expect(request.value(forHTTPHeaderField: "traceparent") == nil)
+    let request = try #require(transport.requests.first)
+    #expect(request.head.headerFields[HTTPField.Name("traceparent")!] == nil)
   }
 
   #if OpenTelemetry
@@ -49,20 +52,7 @@ struct TracingTests {
       let span = tracer.spanBuilder(spanName: "test-span").startSpan()
       defer { span.end() }
 
-      RequestCapturingProtocol.capturedRequests = []
-      let client = try SupabaseClient(
-        supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-        supabaseKey: "PUBLISHABLE_KEY",
-        configuration: SupabaseClient.Configuration(
-          auth: SupabaseClient.Configuration.Auth(
-            storage: InMemoryAuthStorage(),
-            autoRefresh: .manual
-          ),
-          global: SupabaseClient.Configuration.Global(
-            http: .init(transport: URLSessionTransport(session: makeMockSession()))
-          )
-        )
-      )
+      let client = try makeClient()
 
       try await OpenTelemetry.instance.contextProvider.withActiveSpan(span) {
         _ = try? await client.from("todos").select().execute()
@@ -71,8 +61,8 @@ struct TracingTests {
       let context = span.context
       let expected =
         "00-\(context.traceId.hexString)-\(context.spanId.hexString)-\(context.traceFlags.hexString)"
-      let request = try #require(RequestCapturingProtocol.capturedRequests.first)
-      #expect(request.value(forHTTPHeaderField: "traceparent") == expected)
+      let request = try #require(transport.requests.first)
+      #expect(request.head.headerFields[HTTPField.Name("traceparent")!] == expected)
     }
   #endif
 }
