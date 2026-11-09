@@ -50,8 +50,8 @@ extension SupabaseError {
 
 extension SupabaseError {
   /// Shared `description` layout for every module error:
-  /// `TypeName(kind): message [status 404, request abc]`.
-  package func formattedDescription(kind: String) -> String {
+  /// `TypeName(kind): message [status 404, request abc] [code xyz]`.
+  package func formattedDescription(kind: String, code: String? = nil) -> String {
     var text = "\(String(describing: Self.self))(\(kind)): \(message)"
     if let response {
       text += " [status \(response.status.code)"
@@ -59,6 +59,9 @@ extension SupabaseError {
         text += ", request \(requestID)"
       }
       text += "]"
+    }
+    if let code {
+      text += " [code \(code)]"
     }
     return text
   }

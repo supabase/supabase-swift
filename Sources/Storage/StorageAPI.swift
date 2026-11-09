@@ -130,19 +130,13 @@ struct StorageAPI: Sendable {
     } catch {
       throw Self.transportError(error)
     }
-    let mapped = body?.mapError(Self.transportError)
-
     guard (200..<300).contains(response.status.code) else {
-      let data =
-        if let mapped {
-          try await Data(collecting: mapped, truncatingAt: Self.errorBodyCap)
-        } else {
-          Data()
-        }
+      // `HTTPClient` has already buffered and capped this non-2xx body.
+      let data = if let body { try await Data(collecting: body, upTo: .max) } else { Data() }
       throw Self.serverError(response, body: data)
     }
 
-    return (response, mapped)
+    return (response, body?.mapError(Self.transportError))
   }
 
   /// Relabels the network layer's own failures. `CancellationError`, and anything thrown by user
@@ -150,16 +144,9 @@ struct StorageAPI: Sendable {
   /// as themselves.
   private static func transportError(_ error: any Error) -> any Error {
     guard let urlError = error as? URLError else { return error }
-    // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
-    // task cancellation behind it (a middleware cancelled the request) stays a transport error.
-    if urlError.code == .cancelled, Task.isCancelled { return CancellationError() }
     return StorageError(
       kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
   }
-
-  /// How much of an error body is kept. A failure never needs more, and a request that reached
-  /// the wrong host can answer with a page or a file.
-  static let errorBodyCap = 1 << 20
 
   /// The ``StorageError`` for a non-2xx response: the decoded JSON body when there is one, the
   /// text of a plain-text body (the tus routes answer that way), or the status alone.
@@ -195,21 +182,6 @@ struct StorageAPI: Sendable {
       message: "Unexpected response with status code \(status).",
       response: httpResponse
     )
-  }
-}
-
-extension Data {
-  /// Collects `body` and stops after `cap` bytes instead of throwing, for bodies that are only
-  /// reported, never used.
-  fileprivate init(collecting body: HTTPBody, truncatingAt cap: Int) async throws {
-    self.init()
-    for try await chunk in body {
-      append(contentsOf: chunk)
-      if count >= cap {
-        removeSubrange(cap...)
-        break
-      }
-    }
   }
 }
 

@@ -86,6 +86,23 @@ struct PostgrestCancellationTests {
     #expect(hanging.sawCancellation.value)
   }
 
+  @Test
+  func cancellingDuringTheResponseBodyThrowsCancellationError() async throws {
+    let reading = LockIsolated(false)
+    let client = try makeClient(
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), .cancelledRead { reading.setValue(true) })
+      })
+
+    let task = Task {
+      try await client.from(Todo.self).select().execute()
+    }
+    await waitUntil { reading.value }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
+
   private struct SleepUntilCancelledClock: Clock {
     let inner = ContinuousClock()
     let sleeping = LockIsolated(false)

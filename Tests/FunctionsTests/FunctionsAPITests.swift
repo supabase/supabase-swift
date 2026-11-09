@@ -344,4 +344,17 @@ struct FunctionsAPITests {
         fileID: fileID, file: filePath, function: function, line: line, column: column)
     #endif
   }
+
+  @Test
+  func relayErrorBodyIsCappedEvenWithA2xxStatus() async throws {
+    var head = HTTPResponse(status: .ok)
+    head.headerFields[.xRelayError] = "true"
+    let body = HTTPBody(Data(repeating: 0x78, count: HTTPClient.maxErrorBodyBytes + 4096))
+
+    await #expect {
+      try await FunctionsAPI.throwIfFailed(head, body: body)
+    } throws: { error in
+      (error as? FunctionsError)?.response?.body.count == HTTPClient.maxErrorBodyBytes
+    }
+  }
 }

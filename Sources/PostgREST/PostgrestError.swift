@@ -157,7 +157,7 @@ public struct PostgrestError: SupabaseError {
   }
 
   public var description: String {
-    formattedDescription(kind: kind.rawValue)
+    formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }
 }
 

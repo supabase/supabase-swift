@@ -73,7 +73,17 @@ Uses modern `HTTPTypes` for request/response handling. Every module shares one p
 
 **Access token.** Middleware is the one way to put a token on an HTTP request. HTTP modules have no `accessToken` setting. A standalone client gets a token from an `AccessTokenMiddleware` that the caller adds to `http.middlewares`. Through the facade, the SDK adds its Auth middleware instead. Both run inside the retry. A provider failure is `<Module>Error(kind: .accessToken)` in every module, standalone and through the facade. Realtime is the one exception: the socket needs the token outside any HTTP request (join, token refresh), so `RealtimeClient.Configuration.accessToken` is its only token source, and `httpSend` uses it too. Do not add `AccessTokenMiddleware` to Realtime's `http`.
 
-**Retries.** Only `retryEnabled` turns retry on or off. Every retry goes through `RetryRequestInterceptor` on the injected clock. Each module's policy (statuses, methods, attempts) is listed in one table in this file. A 429 is retried only with `Retry-After`, the same way in every module that retries.
+**Retries.** Only `retryEnabled` turns retry on or off. Every retry goes through `RetryRequestInterceptor` on the injected clock. Each module's policy (statuses, methods, attempts) is listed in the table below. A 429 is retried only with `Retry-After`, the same way in every module that retries.
+
+| Module            | Methods                                                  | Statuses                                       | Attempts | Backoff (base, cap) |
+| ----------------- | -------------------------------------------------------- | ---------------------------------------------- | -------- | ------------------- |
+| Auth              | `GET`                                                    | 408, 429, 500, 502–504, 520–524, 530           | 3        | 500 ms, 20 s        |
+| PostgREST         | `GET`, `HEAD`                                            | 503, 520                                       | 4        | 1 s, 30 s           |
+| Storage           | `GET`, `HEAD`, `OPTIONS`, and the listing calls (`POST`) | 408, 429, 500, 502–504, 520–524, 530           | 3        | 500 ms, 20 s        |
+| Functions         | none                                                     | none                                           | 1        | none                |
+| Realtime httpSend | none                                                     | none                                           | 1        | none                |
+
+Every module that retries also retries the transient `URLError`s in `RetryRequestInterceptor.retryableURLErrorCodes`. Every other Auth request (token, sign-out, OTP, and so on) is retried only after a connection failure in `connectionFailureURLErrorCodes`, never after a response: the server cannot have seen it. A `Retry-After` wait is honored up to the cap. A request with a single-pass body is never retried.
 
 **Timeouts.** A parameter named `timeout` always means the idle timeout, as in `URLRequest.timeoutInterval`, and a timeout fails as `.transport`. A total deadline needs a different name.
 

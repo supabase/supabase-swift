@@ -223,6 +223,19 @@ extension Data {
     }
     self = data
   }
+
+  /// Collects `body` and stops after `cap` bytes instead of throwing, for bodies that are only
+  /// reported, never used.
+  package init(collecting body: HTTPBody, truncatingAt cap: Int) async throws {
+    self.init()
+    if case .known(let count) = body.length, count > 0 {
+      reserveCapacity(Int(clamping: Swift.min(count, Int64(cap))))
+    }
+    for try await chunk in body {
+      append(contentsOf: chunk.prefix(cap - count))
+      if count >= cap { break }
+    }
+  }
 }
 
 extension HTTPBody {

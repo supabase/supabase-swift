@@ -390,8 +390,8 @@ actor SessionStore {
       do {
         session = try await RefreshSignpost.interval { try await request(refreshToken) }
       } catch {
-        // Only a sign-out cancels a flight. A transport can report that cancel as another error,
-        // such as `URLError.cancelled` from a response body.
+        // Only a sign-out cancels a flight. A custom transport or middleware can report that
+        // cancel as another error.
         if Task.isCancelled { throw CancellationError() }
         if refreshesHeldSession {
           let reasons = refreshFlights[refreshToken]?.signOutReasons ?? [signOutReason]

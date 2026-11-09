@@ -12,8 +12,8 @@
 /// default ``URLSessionTransport`` over `URLSession.shared`.
 /// Middlewares run in array order for requests (index 0 first) and in reverse for responses,
 /// before the SDK's own middlewares and the transport. In a module that retries (Auth,
-/// PostgREST) the retry middleware sits outside them, so a retried request runs through them
-/// once per attempt.
+/// PostgREST, Storage) the retry middleware sits outside them, so a retried request runs through
+/// them once per attempt.
 ///
 /// ```swift
 /// let configuration = SupabaseClient.Configuration(
