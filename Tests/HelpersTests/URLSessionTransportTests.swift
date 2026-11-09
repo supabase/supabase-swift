@@ -57,7 +57,7 @@ extension InputStream {
   }
 }
 
-/// Answers each request with the stub registered for its host. Every test uses its own host, so
+/// Answers each request with the stub registered for its URL. Every test uses its own URL, so
 /// tests run in parallel without seeing each other's stubs.
 private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
   struct Stub: Sendable {
@@ -69,14 +69,14 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     var onRequest: @Sendable (URLRequest) throws -> Void
   }
 
-  private static let stubs = LockIsolated<[String: Stub]>([:])
+  private static let stubs = LockIsolated<[URL: Stub]>([:])
 
   static func register(_ stub: Stub) {
-    stubs.withValue { $0[stub.url.host ?? ""] = stub }
+    stubs.withValue { $0[stub.url] = stub }
   }
 
-  static func remove(host: String) {
-    stubs.withValue { $0[host] = nil }
+  static func remove(_ url: URL) {
+    stubs.withValue { $0[url] = nil }
   }
 
   override static func canInit(with request: URLRequest) -> Bool { true }
@@ -85,8 +85,7 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
 
   override func startLoading() {
     guard
-      let stub = Self.stubs.value[request.url?.host ?? ""],
-      request.httpMethod == stub.method, request.url == stub.url,
+      let url = request.url, let stub = Self.stubs.value[url], request.httpMethod == stub.method,
       let response = HTTPURLResponse(
         url: stub.url, statusCode: stub.status, httpVersion: "HTTP/1.1",
         headerFields: stub.headers)
@@ -110,11 +109,10 @@ private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
 
 @Suite
 final class URLSessionTransportTests: Sendable {
-  let host = "\(UUID().uuidString.lowercased()).test"
-  var url: URL { URL(string: "https://\(host)/path")! }
+  let url = URL(string: "https://\(UUID().uuidString.lowercased()).test/path")!
 
   deinit {
-    StubURLProtocol.remove(host: host)
+    StubURLProtocol.remove(url)
   }
 
   private func makeTransport(

@@ -128,20 +128,16 @@ struct StorageBucketTests {
   @Test
   func cancellingTheTaskThrowsCancellationError() async throws {
     let storage = try makeSUT()
-    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+    let inFlight = Gate()
 
+    // URLSession fails a cancelled task with `URLError(.cancelled)`, not `CancellationError`.
     transport.stub(.post, url.appendingPathComponent("object/list/bucket")) { _, _ in
-      onRequestStarted.yield()
-      do {
-        try await Task.sleep(for: .seconds(10))
-      } catch is CancellationError {
-        throw URLError(.cancelled)
-      }
-      return (HTTPResponse(status: .ok), Data("[]".utf8))
+      await inFlight.pass()
+      throw URLError(.cancelled)
     }
 
     let task = Task { try await storage.from("bucket").list() }
-    for await _ in requestStarted { break }
+    await inFlight.arrivals(1)
     task.cancel()
 
     do {

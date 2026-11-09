@@ -322,20 +322,7 @@ struct FunctionsClientTests {
   func invoke_badServerResponse_wrapsAsTransport() async throws {
     let sut = try makeSUT()
 
-    transport.stub(.post, url.appendingPathComponent("hello_world")) { request, body in
-      #if !os(Linux) && !os(Android)
-        assertInlineSnapshot(
-          of: try RecordingTransport.curlRequest(request, body: body), as: ._curl
-        ) {
-          #"""
-          curl \
-          	--request POST \
-          	--header "X-Client-Info: functions-swift/0.0.0" \
-          	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-          	"http://localhost:5432/functions/v1/hello_world"
-          """#
-        }
-      #endif
+    transport.stub(.post, url.appendingPathComponent("hello_world")) { _, _ in
       throw URLError(.badServerResponse)
     }
 
@@ -347,6 +334,16 @@ struct FunctionsClientTests {
       #expect((error.underlyingError as? URLError)?.code == .badServerResponse)
     } catch {
       Issue.record("Unexpected error thrown \(error)")
+    }
+
+    try transport.assertFirstRequestSnapshot(.post, url.appendingPathComponent("hello_world")) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/hello_world"
+      """#
     }
   }
 
@@ -472,20 +469,16 @@ struct FunctionsClientTests {
   @Test
   func invoke_cancellingTheTask_throwsCancellationError() async throws {
     let sut = try makeSUT()
-    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+    let inFlight = Gate()
 
+    // URLSession fails a cancelled task with `URLError(.cancelled)`, not `CancellationError`.
     transport.stub(.post, url.appendingPathComponent("hello_world")) { _, _ in
-      onRequestStarted.yield()
-      do {
-        try await Task.sleep(for: .seconds(10))
-      } catch is CancellationError {
-        throw URLError(.cancelled)
-      }
-      return (HTTPTypes.HTTPResponse(status: .ok), Data())
+      await inFlight.pass()
+      throw URLError(.cancelled)
     }
 
     let task = Task { try await sut.invoke("hello_world") }
-    for await _ in requestStarted { break }
+    await inFlight.arrivals(1)
     task.cancel()
 
     do {

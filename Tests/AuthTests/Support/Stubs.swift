@@ -46,6 +46,22 @@ extension RecordingTransport {
     requests(method, clientURL.appendingPathComponent(path))
   }
 
+  /// Compares the first `method` request to `path` with an inline snapshot, in curl form.
+  func assertFirstRequestSnapshot(
+    _ method: HTTPRequest.Method,
+    _ path: String,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    function: StaticString = #function,
+    line: UInt = #line,
+    column: UInt = #column,
+    matches expected: (() -> String)? = nil
+  ) throws {
+    try assertFirstRequestSnapshot(
+      method, clientURL.appendingPathComponent(path), fileID: fileID, filePath: filePath,
+      function: function, line: line, column: column, matches: expected)
+  }
+
   /// The JSON body of the last `method` request to `path`, or `nil` when none had a body.
   func lastJSONBody(_ method: HTTPRequest.Method, _ path: String) throws -> JSONValue? {
     guard let body = requests(method, path).last?.body else { return nil }

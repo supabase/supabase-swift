@@ -1049,32 +1049,6 @@ enum MockData {
   )
 }
 
-extension RecordingTransport {
-  /// Compares the first `method` request to `path` with an inline snapshot, in curl form, for a
-  /// test whose stub is the closure form of `stub`, which has no snapshot of its own.
-  ///
-  /// Linux skips it, as the curl snapshot differs there.
-  fileprivate func assertFirstRequestSnapshot(
-    _ method: HTTPRequest.Method,
-    _ path: String,
-    fileID: StaticString = #fileID,
-    filePath: StaticString = #filePath,
-    function: StaticString = #function,
-    line: UInt = #line,
-    column: UInt = #column,
-    matches expected: (() -> String)? = nil
-  ) throws {
-    #if !os(Linux) && !os(Android)
-      let (head, body) = try #require(requests(method, path).first)
-      var urlRequest = try #require(URLRequest(httpRequest: head))
-      urlRequest.httpBody = body
-      assertInlineSnapshot(
-        of: urlRequest, as: ._curl, matches: expected,
-        fileID: fileID, file: filePath, function: function, line: line, column: column)
-    #endif
-  }
-}
-
 #if canImport(AuthenticationServices) && !os(watchOS)
   extension WebAuthnAuthenticator {
     /// An authenticator whose ceremonies return `{}` unless a test overrides them.

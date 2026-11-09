@@ -46,6 +46,16 @@ struct RecordingTransportStubTests {
     #expect(response.headerFields[.contentType] == "text/plain")
   }
 
+  @Test
+  func stubSendsNoContentTypeForABodyThatIsNotJSON() async throws {
+    let transport = RecordingTransport()
+    transport.stub(.get, baseURL, data: Data("relay failed".utf8))
+
+    let (response, _) = try await transport.send(HTTPRequest(method: .get, url: baseURL), body: nil)
+
+    #expect(response.headerFields[.contentType] == nil)
+  }
+
   #if !os(Linux) && !os(Android)
     @Test
     func mismatchedRequestSnapshotFailsTheSendingTest() async throws {
