@@ -43,7 +43,7 @@ final class RealtimeTestHost: Sendable {
   init(
     configuration: RealtimeClient.Configuration = RealtimeClient.Configuration(
       url: RealtimeTestHost.url,
-      handleAppLifecycle: false, monitorsNetworkPath: false),
+      observesAppLifecycle: false, monitorsNetworkPath: false),
     http: HTTPClient = HTTPClient(transport: RecordingTransport()),
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
       noLifecycleEvents

@@ -193,9 +193,9 @@ struct RealtimeChannelPresenceTests {
   }
 
   @Test
-  func theEnabledOptionTurnsPresenceOnWithoutAStream() async throws {
+  func presenceIsEnabledTurnsPresenceOnWithoutAStream() async throws {
     let host = await RealtimeTestHost()
-    let channel = await host.client.channel("room") { $0.presence.enabled = true }
+    let channel = await host.client.channel("room") { $0.presence.isEnabled = true }
     let join = try await subscribe(channel, on: host)
 
     #expect(join.presenceEnabled == true)

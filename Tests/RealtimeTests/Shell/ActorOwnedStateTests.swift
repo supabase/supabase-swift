@@ -49,7 +49,7 @@ struct ActorOwnedStateTests {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false),
+          observesAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -167,7 +167,7 @@ struct ActorOwnedStateTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         disconnectOnEmptyChannelsAfter: .seconds(5),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let subscribed = await host.client.channel("subscribed")
     let join = try await host.subscribe(subscribed)
     let neverSubscribed = await host.client.channel("never-subscribed")

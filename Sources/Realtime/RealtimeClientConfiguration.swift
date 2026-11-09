@@ -34,7 +34,7 @@ extension RealtimeClient {
   /// - ``disconnectOnEmptyChannelsAfter``
   /// ### Behavior
   /// - ``connectOnSubscribe``
-  /// - ``handleAppLifecycle``
+  /// - ``observesAppLifecycle``
   /// - ``monitorsNetworkPath``
   /// ### Logging
   /// - ``logger``
@@ -46,10 +46,10 @@ extension RealtimeClient {
   /// - ``defaultRequestTimeout``
   /// - ``defaultConnectOnSubscribe``
   /// - ``defaultDisconnectOnEmptyChannelsAfter``
-  /// - ``defaultHandleAppLifecycle``
+  /// - ``defaultObservesAppLifecycle``
   /// - ``defaultMonitorsNetworkPath``
   /// ### Initialization
-  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:handleAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
+  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
   public struct Configuration: Sendable {
     /// The Realtime server URL, such as `https://<project>.supabase.co/realtime/v1`.
     public var url: URL
@@ -107,7 +107,7 @@ extension RealtimeClient {
     ///
     /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on watchOS, where you can turn it
     /// on, and on Linux and Android, where it does nothing.
-    public var handleAppLifecycle: Bool
+    public var observesAppLifecycle: Bool
 
     /// Whether to watch the network path and reconnect as soon as the network is back.
     ///
@@ -179,10 +179,10 @@ extension RealtimeClient {
     public static let defaultDisconnectOnEmptyChannelsAfter: Duration =
       defaultHeartbeatInterval * 2
 
-    /// Default value for ``handleAppLifecycle``.
+    /// Default value for ``observesAppLifecycle``.
     ///
     /// Returns `true` on iOS, macOS, tvOS, and visionOS; `false` on all other platforms.
-    public static let defaultHandleAppLifecycle: Bool = {
+    public static let defaultObservesAppLifecycle: Bool = {
       #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
         return true
       #else
@@ -210,7 +210,7 @@ extension RealtimeClient {
     ///   - requestTimeout: How long to wait for the server to answer a request. Defaults to ``defaultRequestTimeout``.
     ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
     ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
-    ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
+    ///   - observesAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultObservesAppLifecycle``.
     ///   - monitorsNetworkPath: Whether to reconnect as soon as the network path is satisfied again. Defaults to ``defaultMonitorsNetworkPath``.
     ///   - serverLogLevel: How much the Realtime server logs for this connection. Defaults to `nil`.
     ///   - accessToken: Optional async closure that returns the current access token.
@@ -227,7 +227,7 @@ extension RealtimeClient {
       requestTimeout: Duration = Self.defaultRequestTimeout,
       connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
       disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
-      handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle,
+      observesAppLifecycle: Bool = Self.defaultObservesAppLifecycle,
       monitorsNetworkPath: Bool = Self.defaultMonitorsNetworkPath,
       serverLogLevel: RealtimeServerLogLevel? = nil,
       accessToken: (@Sendable () async throws -> String?)? = nil,
@@ -242,7 +242,7 @@ extension RealtimeClient {
       self.requestTimeout = requestTimeout
       self.connectOnSubscribe = connectOnSubscribe
       self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
-      self.handleAppLifecycle = handleAppLifecycle
+      self.observesAppLifecycle = observesAppLifecycle
       self.monitorsNetworkPath = monitorsNetworkPath
       self.serverLogLevel = serverLogLevel
       self.accessToken = accessToken

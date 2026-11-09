@@ -283,7 +283,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
 | `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
 | `AuthClient.Configuration.redirectToURL` | `redirectTo` |
-| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth(redirectToURL:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
+| `SupabaseClientOptions.AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth.redirectTo`, `Auth(redirectTo:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
 | `AuthClient.Configuration` `let` properties | `var` properties |
 | `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
@@ -592,11 +592,12 @@ auth redirect, and a `RedirectResult` otherwise: `.signedIn(Session, verificatio
 `.emailChangePending(message:)`. `isAuthRedirect(_:)` checks a URL without handling it. Both
 `AuthClient` and `SupabaseClient` have the method.
 
-A URL is an auth redirect only when it opens a known callback: `redirectToURL` (Auth's
-`Configuration.redirectTo`) or the `redirectTo` you passed when a flow started. Scheme, host, port,
-and path must match; a trailing slash is ignored. Your own links, such as
-`myapp://invite?code=ABC`, return `nil`. With no callback known, no URL is an auth redirect, so set
-`redirectToURL`. A callback that only a per-call `redirectTo` names is known while its flow waits,
+A URL is an auth redirect only when it opens a known callback: the configured `redirectTo`
+(`SupabaseClient.Configuration.Auth.redirectTo` or Auth's `Configuration.redirectTo`) or the
+`redirectTo` you passed when a flow started. Scheme, host, port, and path must match; a trailing
+slash is ignored. Your own links, such as `myapp://invite?code=ABC`, return `nil`. With no callback
+known, no URL is an auth redirect, so set the configured `redirectTo`. A callback that only a
+per-call `redirectTo` names is known while its flow waits,
 so an error redirect that arrives after the flow expired returns `nil`. A URL with a `message` item is an email-change redirect only when it also has the
 `sb` marker. Auth servers before v2.186.0 do not send `sb`, so `handleRedirect(_:)` returns `nil`
 for their email-change redirects.

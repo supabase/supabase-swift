@@ -170,7 +170,7 @@ import Testing
         url: URL(string: "http://127.0.0.1:\(port)")!,
         heartbeatInterval: .seconds(30),
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         monitorsNetworkPath: false
       )
       return RealtimeClient(

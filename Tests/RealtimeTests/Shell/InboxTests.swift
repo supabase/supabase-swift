@@ -86,7 +86,7 @@ struct InboxTests {
     let client = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
-        handleAppLifecycle: false),
+        observesAppLifecycle: false),
       wsTransport: { _, _ in
         let (open, continuation) = AsyncStream<Void>.makeStream()
         attempts.withValue { $0.append(continuation) }
@@ -131,7 +131,7 @@ struct InboxTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
@@ -191,7 +191,7 @@ struct InboxTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         disconnectOnEmptyChannelsAfter: .seconds(5),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
     let removal = Task { await host.client.removeChannel(channel) }
@@ -218,7 +218,7 @@ struct InboxTests {
         url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
         requestTimeout: .seconds(5),
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: {
           let (returned, continuation) = AsyncStream<Void>.makeStream()
           calls.withValue { $0.append(continuation) }
@@ -306,7 +306,7 @@ struct InboxTests {
   func appLifecycleEventsGoThroughTheInbox() async throws {
     let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
     let host = await RealtimeTestHost(
-      configuration: .init(url: RealtimeTestHost.url, handleAppLifecycle: true),
+      configuration: .init(url: RealtimeTestHost.url, observesAppLifecycle: true),
       lifecycleEvents: { events }
     )
     try await host.client.connect()
@@ -333,7 +333,7 @@ struct InboxTests {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false),
+          observesAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -393,7 +393,7 @@ struct InboxTests {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
-        handleAppLifecycle: false),
+        observesAppLifecycle: false),
       wsTransport: { _, _ in FakeWebSocket.fakes().0 },
       http: HTTPClient(transport: RecordingTransport()),
       clock: TestClock<Duration>()

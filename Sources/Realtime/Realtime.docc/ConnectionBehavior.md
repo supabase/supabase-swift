@@ -100,7 +100,7 @@ after, and may close the socket while it is suspended. Disconnecting first gains
   reconnect, a join of every channel, and a presence leave and join that everyone else sees.
 - A suspended app cannot finish a clean leave without a background task.
 
-When the app comes back, the client recovers. With ``RealtimeClient/Configuration/handleAppLifecycle``
+When the app comes back, the client recovers. With ``RealtimeClient/Configuration/observesAppLifecycle``
 on (the default on iOS, macOS, tvOS and visionOS), the client checks the socket on foreground:
 
 - If it is waiting before a reconnect attempt, it tries again at once.

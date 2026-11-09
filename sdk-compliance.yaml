@@ -474,10 +474,10 @@ supporting_symbols:
   - SupabaseClient.Configuration.Database.schema
   - SupabaseClient.Configuration.Database.encoder
   - SupabaseClient.Configuration.Database.decoder
-  - SupabaseClient.Configuration.Database.retry
+  - SupabaseClient.Configuration.Database.retryEnabled
   - SupabaseClient.Configuration.Database.init
   - SupabaseClient.Configuration.Auth
-  - SupabaseClient.Configuration.Auth.redirectToURL
+  - SupabaseClient.Configuration.Auth.redirectTo
   - SupabaseClient.Configuration.Auth.storageKey
   - SupabaseClient.Configuration.Auth.init
   - SupabaseClient.Configuration.Global
@@ -495,7 +495,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.requestTimeout
   - SupabaseClient.Configuration.Realtime.connectOnSubscribe
   - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
-  - SupabaseClient.Configuration.Realtime.handleAppLifecycle
+  - SupabaseClient.Configuration.Realtime.observesAppLifecycle
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
   - SupabaseClient.Configuration.Realtime.serverLogLevel
   - SupabaseClient.Configuration.Realtime.webSocketTransport
@@ -1966,7 +1966,7 @@ features:
       - RealtimeChannel.presenceChanges
       - RealtimeChannel.presenceStates
     supporting_symbols:
-      - RealtimeChannelConfiguration.Presence.enabled
+      - RealtimeChannelConfiguration.Presence.isEnabled
       - PresenceChange
       - PresenceChange.init
       - PresenceChange.joins
@@ -2109,11 +2109,11 @@ features:
       - RealtimeServerLogLevel.error
   realtime.configuration.foreground_liveness_probe:
     status: implemented
-    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.handleAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
+    note: "On the foreground signal the client sends a heartbeat at once and reconnects without a backoff wait if there is no reply in 5 seconds. The signal is the app entering the foreground on iOS, tvOS and visionOS, and the Mac waking from sleep on macOS. RealtimeClient.Configuration.observesAppLifecycle turns it off. Not applicable where no foreground signal exists (watchOS, Linux)."
     symbols:
       - RealtimeClient.Configuration.init
-      - RealtimeClient.Configuration.handleAppLifecycle
-      - RealtimeClient.Configuration.defaultHandleAppLifecycle
+      - RealtimeClient.Configuration.observesAppLifecycle
+      - RealtimeClient.Configuration.defaultObservesAppLifecycle
   realtime.configuration.network_path_wake:
     status: implemented
     note: "NWPathMonitor reports a satisfied path as a wake hint that cuts a reconnect backoff short. The hint never gates a connect. The option defaults to off on watchOS and has no effect on Linux, which has no path monitor."

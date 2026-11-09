@@ -39,6 +39,16 @@ struct SupabaseClientAuthOptionsTests {
   }
 
   @Test
+  func redirectToForwardsToTheAuthClient() {
+    let redirect = URL(string: "com.example.app://callback")!
+    let client = makeClient(
+      auth: .init(storage: InMemoryAuthStorage(), redirectTo: redirect, autoRefresh: .manual)
+    )
+
+    #expect(client.auth.configuration.redirectTo == redirect)
+  }
+
+  @Test
   func authClockFallsBackToTheGlobalClock() {
     let globalClock = TestClock<Duration>()
     let client = makeClient(

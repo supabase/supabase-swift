@@ -353,12 +353,14 @@ Changes that still compile but behave differently. Check each one by hand.
 | `SupabaseClientOptions.db`, `DatabaseOptions` | `Configuration.database`, `Configuration.Database` |
 | `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
 | `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
+| `RealtimeClientOptions(handleAppLifecycle:)` | `Configuration.Realtime(observesAppLifecycle:)` |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
 | `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `Configuration.Global(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `Configuration.Global.logger: Logging.Logger` |
+| `AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `Configuration.Auth.redirectTo`, `Configuration.Auth(redirectTo:)` |
 | `AuthOptions.autoRefreshToken: Bool` | `Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |

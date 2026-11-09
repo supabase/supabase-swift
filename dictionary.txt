@@ -59,6 +59,7 @@ dragarcia
 dummysignature
 ecdsa
 emailotp
+ERRCODE
 halfvec
 emaillink
 enotconn

@@ -58,7 +58,7 @@ extension SupabaseClient {
 
       /// Whether to automatically retry transient (network, 503 or 520) PostgREST errors on GET
       /// and HEAD requests. Defaults to `true`.
-      public var retry: Bool
+      public var retryEnabled: Bool
 
       /// Creates the database settings.
       /// - Parameters:
@@ -67,17 +67,17 @@ extension SupabaseClient {
       ///     `JSONEncoder.supabase()`.
       ///   - decoder: The decoder for responses of the untyped API. Defaults to a new
       ///     `JSONDecoder.supabase()`.
-      ///   - retry: Whether to retry transient errors on GET and HEAD requests.
+      ///   - retryEnabled: Whether to retry transient errors on GET and HEAD requests.
       public init(
         schema: String? = nil,
         encoder: JSONEncoder = .supabase(),
         decoder: JSONDecoder = .supabase(),
-        retry: Bool = true
+        retryEnabled: Bool = true
       ) {
         self.schema = schema
         self.encoder = encoder
         self.decoder = decoder
-        self.retry = retry
+        self.retryEnabled = retryEnabled
       }
     }
 
@@ -88,7 +88,7 @@ extension SupabaseClient {
       public var storage: (any AuthStorage)?
 
       /// Default URL to be used for redirect on the flows that requires it.
-      public var redirectToURL: URL?
+      public var redirectTo: URL?
 
       /// Optional key name used for storing tokens in local storage.
       public var storageKey: String?
@@ -128,7 +128,7 @@ extension SupabaseClient {
       /// Creates the Auth settings.
       /// - Parameters:
       ///   - storage: Where the session is stored. `nil` uses the platform default.
-      ///   - redirectToURL: The default redirect URL for Auth flows.
+      ///   - redirectTo: The default redirect URL for Auth flows.
       ///   - storageKey: The storage key for the session. `nil` derives it from the project.
       ///   - autoRefresh: When the client refreshes the session.
       ///   - observesAppLifecycle: Whether auto refresh follows the app's foreground state.
@@ -140,7 +140,7 @@ extension SupabaseClient {
       ///     used.
       public init(
         storage: (any AuthStorage)? = nil,
-        redirectToURL: URL? = nil,
+        redirectTo: URL? = nil,
         storageKey: String? = nil,
         autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
         observesAppLifecycle: Bool = true,
@@ -150,7 +150,7 @@ extension SupabaseClient {
         accessToken: (@Sendable () async throws -> String?)? = nil
       ) {
         self.storage = storage
-        self.redirectToURL = redirectToURL
+        self.redirectTo = redirectTo
         self.storageKey = storageKey
         self.autoRefresh = autoRefresh
         self.observesAppLifecycle = observesAppLifecycle
@@ -301,8 +301,8 @@ extension SupabaseClient {
       public var disconnectOnEmptyChannelsAfter: Duration
 
       /// Whether the client follows the app lifecycle. See
-      /// ``RealtimeClient/Configuration/handleAppLifecycle``.
-      public var handleAppLifecycle: Bool
+      /// ``RealtimeClient/Configuration/observesAppLifecycle``.
+      public var observesAppLifecycle: Bool
 
       /// Whether the client reconnects as soon as the network is back. See
       /// ``RealtimeClient/Configuration/monitorsNetworkPath``.
@@ -331,7 +331,7 @@ extension SupabaseClient {
       ///   - requestTimeout: How long a push waits for the server reply.
       ///   - connectOnSubscribe: Whether subscribing to a channel connects the socket.
       ///   - disconnectOnEmptyChannelsAfter: How long the socket stays open with no channels.
-      ///   - handleAppLifecycle: Whether the client follows the app lifecycle.
+      ///   - observesAppLifecycle: Whether the client follows the app lifecycle.
       ///   - monitorsNetworkPath: Whether the client reconnects when the network comes back.
       ///   - serverLogLevel: The server-side log level. `nil` uses the server default.
       ///   - webSocketTransport: The WebSocket stack. `nil` uses the default transport.
@@ -344,7 +344,7 @@ extension SupabaseClient {
         connectOnSubscribe: Bool = RealtimeClient.Configuration.defaultConnectOnSubscribe,
         disconnectOnEmptyChannelsAfter: Duration = RealtimeClient.Configuration
           .defaultDisconnectOnEmptyChannelsAfter,
-        handleAppLifecycle: Bool = RealtimeClient.Configuration.defaultHandleAppLifecycle,
+        observesAppLifecycle: Bool = RealtimeClient.Configuration.defaultObservesAppLifecycle,
         monitorsNetworkPath: Bool = RealtimeClient.Configuration.defaultMonitorsNetworkPath,
         serverLogLevel: RealtimeServerLogLevel? = nil,
         webSocketTransport: (any WebSocketTransport)? = nil,
@@ -356,7 +356,7 @@ extension SupabaseClient {
         self.requestTimeout = requestTimeout
         self.connectOnSubscribe = connectOnSubscribe
         self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
-        self.handleAppLifecycle = handleAppLifecycle
+        self.observesAppLifecycle = observesAppLifecycle
         self.monitorsNetworkPath = monitorsNetworkPath
         self.serverLogLevel = serverLogLevel
         self.webSocketTransport = webSocketTransport
