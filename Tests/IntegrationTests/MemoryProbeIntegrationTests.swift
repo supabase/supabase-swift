@@ -103,7 +103,7 @@
     var authHeaders: HTTPFields {
       [
         .authorization: "Bearer \(DotEnv.supabaseSecretKey)",
-        .init("apikey")!: DotEnv.supabaseSecretKey,
+        .apikey: DotEnv.supabaseSecretKey,
       ]
     }
 

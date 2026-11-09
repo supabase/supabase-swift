@@ -12,7 +12,7 @@ middleware.
 let functions = FunctionsClient(
   configuration: .init(
     url: URL(string: "https://<ref>.supabase.co/functions/v1")!,
-    headers: [HTTPField.Name("apikey")!: "sb_publishable_…"],
+    headers: [.apikey: "sb_publishable_…"],
     region: .usEast1,
     accessToken: { await tokenStore.current }
   )

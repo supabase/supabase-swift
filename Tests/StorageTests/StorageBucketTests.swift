@@ -27,7 +27,7 @@ extension StorageMockerTests {
         configuration: StorageClient.Configuration(
           url: url,
           headers: [
-            .init("apikey")!:
+            .apikey:
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
           ],
           http: .init(transport: URLSessionTransport(session: session)))
@@ -230,7 +230,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 83" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -258,7 +258,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 89" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -287,7 +287,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 84" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"desc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -316,7 +316,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 90" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":100,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"updated_at\",\"order\":\"desc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -345,7 +345,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 84" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":100,\"offset\":10,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -374,7 +374,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 82" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":50,\"offset\":0,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -403,7 +403,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 81" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"limit\":0,\"offset\":5,\"prefix\":\"folder\",\"sortBy\":{\"column\":\"name\",\"order\":\"asc\"}}" \
         	"http://localhost:54321/storage/v1/object/list/bucket"
@@ -453,7 +453,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 82" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"new\/path.txt\",\"sourceKey\":\"old\/path.txt\"}" \
         	"http://localhost:54321/storage/v1/object/move"
@@ -490,7 +490,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 86" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"dest\/file.txt\",\"sourceKey\":\"source\/file.txt\"}" \
         	"http://localhost:54321/storage/v1/object/copy"
@@ -530,7 +530,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 18" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"expiresIn\":3600}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket/file.txt"
@@ -569,7 +569,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 18" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"expiresIn\":3600}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket/file.txt"
@@ -636,7 +636,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 18" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"expiresIn\":3600}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket/file.txt"
@@ -700,7 +700,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 51" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"expiresIn\":3600,\"paths\":[\"file.txt\",\"file2.txt\"]}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket"
@@ -760,7 +760,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 51" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"expiresIn\":3600,\"paths\":[\"file.txt\",\"file2.txt\"]}" \
         	"http://localhost:54321/storage/v1/object/sign/bucket"
@@ -871,7 +871,7 @@ extension StorageMockerTests {
         	--request DELETE \
         	--header "Content-Length: 38" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"prefixes\":[\"file1.txt\",\"file2.txt\"]}" \
         	"http://localhost:54321/storage/v1/object/bucket"
@@ -910,7 +910,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 73" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
         	"http://localhost:54321/storage/v1/object/move"
@@ -947,7 +947,7 @@ extension StorageMockerTests {
         	--request POST \
         	--header "Content-Length: 73" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "{\"bucketId\":\"bucket\",\"destinationKey\":\"destination\",\"sourceKey\":\"source\"}" \
         	"http://localhost:54321/storage/v1/object/move"
@@ -990,7 +990,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/bucket/missing.txt"
         """#
@@ -1033,7 +1033,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 11" \
         	--header "Content-Type: text/plain" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-metadata: eyJtb2RlIjoidGVzdCJ9" \
         	--data "hello world" \
@@ -1114,7 +1114,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 13" \
         	--header "Content-Type: image/png" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: false" \
         	--data "hello world!
@@ -1161,7 +1161,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 13" \
         	--header "Content-Type: text/plain" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-metadata: eyJtb2RlIjoidGVzdCJ9" \
         	--data "hello world!
@@ -1201,7 +1201,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt"
         """#
@@ -1229,7 +1229,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt?versionId=v1"
         """#
@@ -1319,7 +1319,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt"
         """#
@@ -1458,7 +1458,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/render/image/authenticated/bucket/sadcat.txt?resize=cover"
         """#
@@ -1494,7 +1494,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/info/bucket/file.txt"
         """#
@@ -1521,7 +1521,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/info/bucket/file.txt"
         """#
@@ -1612,7 +1612,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request DELETE \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt"
         """#
@@ -1638,7 +1638,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request DELETE \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/cdn/bucket/folder/file.txt?transformations=true"
         """#
@@ -1664,7 +1664,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request DELETE \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/cdn/bucket/folder/my%20file.png"
         """#
@@ -1695,7 +1695,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt"
         """#
@@ -1734,7 +1734,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--header "x-upsert: true" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt"
@@ -1777,7 +1777,7 @@ extension StorageMockerTests {
         #"""
         curl \
         	--request POST \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt"
         """#
@@ -1815,7 +1815,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 11" \
         	--header "Content-Type: text/plain" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
@@ -1855,7 +1855,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 11" \
         	--header "Content-Type: text/plain" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "hello world" \
         	"http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
@@ -1924,7 +1924,7 @@ extension StorageMockerTests {
         	--header "Cache-Control: max-age=3600" \
         	--header "Content-Length: 13" \
         	--header "Content-Type: text/plain" \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "X-Mode: test" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	--data "hello world!
@@ -2034,7 +2034,7 @@ extension StorageMockerTests {
       .snapshotRequest {
         #"""
         curl \
-        	--header "X-Client-Info: storage-swift/0.0.0" \
+        	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/storage/v1/object/bucket/file.txt?cacheNonce=abc123"
         """#

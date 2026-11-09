@@ -570,7 +570,7 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
     let anon = StorageIntegration.client(headers: [
       .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
-      .init("apikey")!: DotEnv.supabasePublishableKey,
+      .apikey: DotEnv.supabasePublishableKey,
     ])
 
     #expect(try await anon.from(bucketName).list().isEmpty)

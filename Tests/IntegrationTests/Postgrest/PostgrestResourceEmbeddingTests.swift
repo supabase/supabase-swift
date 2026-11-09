@@ -16,7 +16,7 @@ struct PostgrestResourceEmbeddingTests {
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.supabasePublishableKey
+        .apikey: DotEnv.supabasePublishableKey
       ]
     )
   )

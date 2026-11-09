@@ -305,8 +305,8 @@
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [
-            "apikey": DotEnv.supabasePublishableKey,
-            "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
+            .apikey: DotEnv.supabasePublishableKey,
+            .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
           ],
           requestTimeout: .seconds(10),
           observesAppLifecycle: false,
@@ -1311,7 +1311,7 @@
       RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-          headers: ["apikey": DotEnv.supabasePublishableKey],
+          headers: [.apikey: DotEnv.supabasePublishableKey],
           observesAppLifecycle: false,
           accessToken: accessToken,
           clock: testClock

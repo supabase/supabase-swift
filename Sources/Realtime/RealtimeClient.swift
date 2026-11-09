@@ -62,6 +62,8 @@ public actor RealtimeClient {
   nonisolated let logger: Logger
   /// `configuration.headers` with `X-Client-Info` added when the app did not set it.
   nonisolated let headers: HTTPFields
+  /// Sent unless `configuration.headers` sets the same name.
+  static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "realtime-swift")]
   nonisolated let transport: any WebSocketTransport
   nonisolated let http: HTTPClient
   nonisolated let serializer = RealtimeSerializer()
@@ -249,10 +251,7 @@ public actor RealtimeClient {
     lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
       AppLifecycle.live.events
   ) {
-    var headers = HTTPFields(configuration.headers)
-    if headers[.xClientInfo] == nil {
-      headers[.xClientInfo] = "realtime-swift/\(version)"
-    }
+    let headers = Self.defaultHeaders.merging(with: configuration.headers)
 
     let logger = Self.logger(for: configuration)
     self.configuration = configuration
@@ -267,7 +266,7 @@ public actor RealtimeClient {
     self.jitter = jitter
     self.webSocketURL = Self.realtimeWebSocketURL(
       baseURL: Self.realtimeBaseURL(url: configuration.url),
-      apikey: headers[.apiKey],
+      apikey: headers[.apikey],
       serverLogLevel: configuration.serverLogLevel
     )
 

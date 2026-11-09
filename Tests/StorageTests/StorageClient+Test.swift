@@ -20,7 +20,7 @@ extension StorageClient {
         url: URL(string: supabaseURL)!,
         headers: [
           .authorization: "Bearer \(apiKey)",
-          .init("Apikey")!: apiKey,
+          .apikey: apiKey,
           .xClientInfo: "storage-swift/x.y.z",
         ],
         http: http)

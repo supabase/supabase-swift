@@ -21,7 +21,7 @@ import Testing
 struct AuthAPITests {
   let api = AuthAPI(
     url: URL(string: "http://localhost:54321/auth/v1")!,
-    headers: [HTTPField.Name("apikey")!: "dummy.api.key"],
+    headers: [.apikey: "dummy.api.key"],
     defaultRedirectURL: URL(string: "https://example.com/callback"),
     encoder: AuthClient.Configuration.jsonEncoder,
     decoder: AuthClient.Configuration.jsonDecoder,
@@ -132,7 +132,7 @@ struct AuthAPITests {
   func everyRequestSendsTheAPIVersionAndTheAPIKey() throws {
     for head in try everyRequest() {
       #expect(head.headerFields[.apiVersionHeaderName] == "2024-01-01", "\(head.path ?? "")")
-      #expect(head.headerFields[HTTPField.Name("apikey")!] == "dummy.api.key", "\(head.path ?? "")")
+      #expect(head.headerFields[.apikey] == "dummy.api.key", "\(head.path ?? "")")
     }
   }
 

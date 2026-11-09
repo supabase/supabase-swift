@@ -133,14 +133,15 @@ struct AuthClientConfigurationTests {
           return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("{}".utf8)))
         })
     )
-    configuration.headers[HTTPField.Name("apikey")!] = "publishable"
+    configuration.headers[.apikey] = "publishable"
     let sut = AuthClient(configuration: configuration)
 
     _ = try? await sut.user(jwt: "token")
 
     let request = try #require(requests.value.first)
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "publishable")
-    #expect(request.headerFields[HTTPField.Name("X-Client-Info")!] == "auth-swift/\(version)")
+    #expect(request.headerFields[.apikey] == "publishable")
+    #expect(
+      request.headerFields[.xClientInfo] == clientInfo(library: "auth-swift"))
   }
 
   @Test
@@ -156,13 +157,13 @@ struct AuthClientConfigurationTests {
           return (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("{}".utf8)))
         })
     )
-    configuration.headers[HTTPField.Name("X-Client-Info")!] = "my-wrapper/1.0"
+    configuration.headers[.xClientInfo] = "my-wrapper/1.0"
     let sut = AuthClient(configuration: configuration)
 
     _ = try? await sut.user(jwt: "token")
 
     let request = try #require(requests.value.first)
-    #expect(request.headerFields[HTTPField.Name("X-Client-Info")!] == "my-wrapper/1.0")
+    #expect(request.headerFields[.xClientInfo] == "my-wrapper/1.0")
   }
 
   @Test

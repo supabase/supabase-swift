@@ -53,7 +53,7 @@ struct BuildURLRequestTests {
       configuration: .init(
         url: url,
         schema: nil,
-        headers: ["X-Client-Info": "postgrest-swift/x.y.z"],
+        headers: [.xClientInfo: "postgrest-swift/x.y.z"],
         http: .init(
           transport: ClosureTransport { request, body in
             guard let runningTestCase = runningTestCase.value else {
@@ -267,7 +267,7 @@ struct BuildURLRequestTests {
   @Test
   func sessionConfiguration() {
     let client = PostgrestClient(configuration: .init(url: url, schema: nil))
-    let clientInfoHeader = client.configuration.headers["X-Client-Info"]
+    let clientInfoHeader = client.configuration.headers[.xClientInfo]
     #expect(clientInfoHeader != nil)
   }
 }

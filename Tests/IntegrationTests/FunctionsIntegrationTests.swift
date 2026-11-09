@@ -31,7 +31,7 @@ struct FunctionsIntegrationTests {
     accessToken: (@Sendable () async throws -> String?)? = { DotEnv.supabasePublishableKey }
   ) -> FunctionsClient {
     var headers: HTTPFields = [:]
-    if let apikey { headers[HTTPField.Name("apikey")!] = apikey }
+    if let apikey { headers[.apikey] = apikey }
     return FunctionsClient(
       configuration: .init(
         url: URL(string: "\(DotEnv.supabaseURL)/functions/v1")!,

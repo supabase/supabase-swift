@@ -31,7 +31,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&status=not.eq.OFFLINE"
         """#
@@ -59,7 +59,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?or=(status.eq.OFFLINE,username.eq.test)&select=*"
         """#
@@ -87,7 +87,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?messages.or=(public.eq.true,recipient_id.eq.1)&select=*"
         """#
@@ -115,7 +115,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?address=cs.%7B%22postcode%22:90210%7D&select=*"
         """#
@@ -143,7 +143,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?description=fts(english).programmer&select=*"
         """#
@@ -171,7 +171,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?age=gte.18&select=*&status=eq.active"
         """#
@@ -200,7 +200,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?email=like.%25@example.com&select=*"
         """#
@@ -228,7 +228,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?email=ilike.%25@EXAMPLE.COM&select=*"
         """#
@@ -256,7 +256,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?deleted_at=is.null&select=*"
         """#
@@ -284,7 +284,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&status=in.(active,pending)"
         """#
@@ -312,7 +312,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&status=not.in.(archived,deleted)"
         """#
@@ -340,7 +340,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&tags=in.(%22a,b%22,%22c(d)%22,plain)"
         """#
@@ -368,7 +368,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?roles=cd.%7Badmin,user%7D&select=*"
         """#
@@ -396,7 +396,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?age_range=sl.%5B18,25)&fifth_range=adj.%5B55,65)&fourth_range=nxr.%5B45,55)&other_range=sr.%5B25,35)&select=*&third_range=nxl.%5B35,45)"
         """#
@@ -428,7 +428,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?schedule=ov.%7B9:00,17:00%7D&select=*"
         """#
@@ -456,7 +456,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?role=eq.admin&select=*&status=eq.active"
         """#
@@ -484,7 +484,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?created_at=gt.2023-01-01&select=*"
         """#
@@ -512,7 +512,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&status=neq.inactive"
         """#
@@ -540,7 +540,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?age=gt.21&select=*"
         """#
@@ -568,7 +568,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?age=lt.65&select=*"
         """#
@@ -596,7 +596,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?age=lte.65&select=*"
         """#
@@ -624,7 +624,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?name=like(all).%7B%25test%25,%25user%25%7D&select=*"
         """#
@@ -652,7 +652,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?name=like(any).%7B%25test%25,%25user%25%7D&select=*"
         """#
@@ -680,7 +680,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?name=ilike(all).%7B%25TEST%25,%25USER%25%7D&select=*"
         """#
@@ -708,7 +708,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?name=ilike(any).%7B%25TEST%25,%25USER%25%7D&select=*"
         """#
@@ -736,7 +736,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?description=fts.programmer&select=*"
         """#
@@ -764,7 +764,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?email=match.%5E.+@.+%5C..+$&select=*"
         """#
@@ -792,7 +792,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?name=imatch.%5Ejohn&select=*"
         """#
@@ -820,7 +820,7 @@ extension PostgrestMockerTests {
         curl \
         	--header "Accept: application/json" \
         	--header "Content-Type: application/json" \
-        	--header "X-Client-Info: postgrest-swift/0.0.0" \
+        	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/rest/v1/users?select=*&status=isdistinct.null"
         """#

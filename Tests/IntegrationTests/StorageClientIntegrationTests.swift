@@ -238,7 +238,7 @@ struct StorageClientIntegrationTests {
     }
     let calls = Calls()
     let client = StorageIntegration.client(
-      headers: [.init("apikey")!: DotEnv.supabasePublishableKey],
+      headers: [.apikey: DotEnv.supabasePublishableKey],
       middlewares: [
         AccessTokenMiddleware {
           await calls.bump()
@@ -257,7 +257,7 @@ struct StorageClientIntegrationTests {
     let name = try await StorageIntegration.newBucket("anon")
     defer { StorageIntegration.dropBucket(name) }
     let client = StorageIntegration.client(
-      headers: [.init("apikey")!: DotEnv.supabasePublishableKey],
+      headers: [.apikey: DotEnv.supabasePublishableKey],
       middlewares: [AccessTokenMiddleware { nil }])
 
     #expect(try await client.from(name).list().isEmpty)
@@ -286,7 +286,7 @@ struct StorageClientIntegrationTests {
     defer { StorageIntegration.dropBucket(name) }
     try await StorageIntegration.admin.from(name).upload(path: "seed.txt", data: Data("seed".utf8))
 
-    let anon = StorageIntegration.client(headers: [.init("apikey")!: DotEnv.supabasePublishableKey])
+    let anon = StorageIntegration.client(headers: [.apikey: DotEnv.supabasePublishableKey])
     let elevated = anon.settingHeader(
       name: .authorization, value: "Bearer \(DotEnv.supabaseSecretKey)")
 

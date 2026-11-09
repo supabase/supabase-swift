@@ -5,24 +5,6 @@
 //  Created by Guilherme Souza on 06/03/25.
 //
 
-import Foundation
+import Helpers
 
-let defaultHeaders: [String: String] = {
-  var clientInfo = "supabase-swift/\(version)"
-
-  if let platform {
-    clientInfo += "; platform=\(platform)"
-  }
-
-  if let platformVersion {
-    clientInfo += "; platform-version=\(platformVersion)"
-  }
-
-  clientInfo += "; runtime=swift"
-
-  if let runtimeVersion {
-    clientInfo += "; runtime-version=\(runtimeVersion)"
-  }
-
-  return ["X-Client-Info": clientInfo]
-}()
+let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "supabase-swift")]

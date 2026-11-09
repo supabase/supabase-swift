@@ -17,7 +17,7 @@ extension SupabaseClient {
   /// ```swift
   /// var configuration = SupabaseClient.Configuration()
   /// configuration.database.schema = "private"
-  /// configuration.global.headers["X-App"] = "my-app"
+  /// configuration.global.headers[HTTPField.Name("X-App")!] = "my-app"
   /// let supabase = SupabaseClient(
   ///   supabaseURL: supabaseURL,
   ///   supabaseKey: supabaseKey,
@@ -164,7 +164,7 @@ extension SupabaseClient {
     /// Settings shared across all Supabase sub-clients.
     public struct Global: Sendable {
       /// Optional headers for initializing the client, it will be passed down to all sub-clients.
-      public var headers: [String: String]
+      public var headers: HTTPFields
 
       /// The logger to use across all Supabase sub-packages. Defaults to a build-config-aware
       /// logger: visible (warning+) in debug builds, silent in release builds.
@@ -200,7 +200,7 @@ extension SupabaseClient {
       ///   - clock: The clock every time-based sub-client behavior sleeps on. Defaults to
       ///     `ContinuousClock()`.
       public init(
-        headers: [String: String] = [:],
+        headers: HTTPFields = [:],
         http: HTTPClientConfiguration = .init(),
         logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase"),
         clock: any Clock<Duration> = ContinuousClock()
@@ -282,7 +282,7 @@ extension SupabaseClient {
     public struct Realtime: Sendable {
       /// Headers sent with the WebSocket upgrade request. The global headers and the `apikey`
       /// header win over a header set here; names compare without regard to case.
-      public var headers: [String: String]
+      public var headers: HTTPFields
 
       /// How often the client sends a heartbeat. See
       /// ``RealtimeClient/Configuration/heartbeatInterval``.
@@ -338,7 +338,7 @@ extension SupabaseClient {
       ///   - http: The HTTP settings for `RealtimeChannel.httpSend` calls.
       ///   - logger: The logger for Realtime. `nil` uses the global logger.
       public init(
-        headers: [String: String] = [:],
+        headers: HTTPFields = [:],
         heartbeatInterval: Duration = RealtimeClient.Configuration.defaultHeartbeatInterval,
         requestTimeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout,
         connectOnSubscribe: Bool = RealtimeClient.Configuration.defaultConnectOnSubscribe,

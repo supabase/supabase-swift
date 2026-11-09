@@ -52,15 +52,16 @@ struct StorageAPI: Sendable {
   /// Builds the request for each route under ``configuration``'s URL.
   let requests: StorageRequests
 
+  /// Sent unless the configured headers set the same name.
+  static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "storage-swift")]
+
   /// Creates a ``StorageAPI`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, and transport.
   init(configuration: StorageClient.Configuration) {
     var configuration = configuration
-    if configuration.headers[.xClientInfo] == nil {
-      configuration.headers[.xClientInfo] = "storage-swift/\(version)"
-    }
+    configuration.headers = Self.defaultHeaders.merging(with: configuration.headers)
     configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "storage"
 

@@ -66,11 +66,11 @@ struct PostgrestRequestTests {
     let client = PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
-        headers: ["apikey": "key"]
+        headers: [.apikey: "key"]
       )
     )
     let request = client.makeRequest("todos")
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "key")
+    #expect(request.headerFields[.apikey] == "key")
   }
 
   @Test
@@ -78,7 +78,7 @@ struct PostgrestRequestTests {
     let client = PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
-        headers: ["Prefer": "tx=rollback"]
+        headers: [HTTPField.Name("Prefer")!: "tx=rollback"]
       )
     )
     var request = client.makeRequest("todos")
@@ -91,13 +91,13 @@ struct PostgrestRequestTests {
     let client = PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
-        headers: ["apikey": "key"]
+        headers: [.apikey: "key"]
       )
     )
     var request = client.makeRequest("todos")
-    request.headerFields[HTTPField.Name("apikey")!] = nil
+    request.headerFields[.apikey] = nil
     let sent = request.httpRequest(for: client.configuration)
-    #expect(sent.headerFields[HTTPField.Name("apikey")!] == nil)
+    #expect(sent.headerFields[.apikey] == nil)
   }
 
   @Test
@@ -128,7 +128,7 @@ struct PostgrestRequestTests {
 
   @Test
   func typedPreferMergesWithTheClientPrefer() async throws {
-    let capture = QueryCapture(headers: ["Prefer": "tx=rollback"])
+    let capture = QueryCapture(headers: [HTTPField.Name("Prefer")!: "tx=rollback"])
     try await capture.client.from(Todo.self).delete().all().execute(count: .exact)
     let prefer = try #require(capture.header("Prefer"))
     #expect(prefer.contains("tx=rollback"))

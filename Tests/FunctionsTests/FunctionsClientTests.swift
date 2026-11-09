@@ -33,7 +33,7 @@ struct FunctionsClientTests {
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
 
-  private var headers: HTTPFields { [HTTPField.Name("apikey")!: apiKey] }
+  private var headers: HTTPFields { [.apikey: apiKey] }
 
   private func makeSUT(
     region: FunctionRegion? = nil,
@@ -78,7 +78,7 @@ struct FunctionsClientTests {
       configuration: .init(url: url, headers: headers, region: .saEast1))
 
     #expect(client.configuration.region == .saEast1)
-    #expect(client.configuration.headers[.init("apikey")!] == apiKey)
+    #expect(client.configuration.headers[.apikey] == apiKey)
     #expect(client.configuration.url == url)
   }
 
@@ -194,7 +194,7 @@ struct FunctionsClientTests {
       	--request POST \
       	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Custom-Key: value" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"name\":\"Supabase\"}" \
@@ -225,7 +225,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello"
       """#
@@ -258,7 +258,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request DELETE \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
@@ -284,7 +284,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world?key=value"
       """#
@@ -313,7 +313,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
@@ -338,7 +338,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
@@ -362,7 +362,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
@@ -386,7 +386,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
@@ -417,7 +417,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
@@ -452,7 +452,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
@@ -485,7 +485,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
@@ -854,7 +854,7 @@ struct FunctionsClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
       """#
@@ -883,7 +883,7 @@ struct FunctionsClientTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer stream.token" \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
       """#

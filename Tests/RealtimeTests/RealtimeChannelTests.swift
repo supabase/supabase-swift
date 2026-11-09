@@ -26,7 +26,7 @@ struct RealtimeChannelTests {
     client = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"])
+        headers: [.apikey: "test-key"])
     )
     sut = await client.channel("topic")
   }
@@ -68,7 +68,7 @@ struct RealtimeChannelTests {
       let socket = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "https://localhost:54321/realtime/v1")!,
-          headers: ["apikey": "test-key"],
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
@@ -124,7 +124,7 @@ struct RealtimeChannelTests {
       let socket = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "https://localhost:54321/realtime/v1")!,
-          headers: ["apikey": "test-key"],
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
@@ -248,7 +248,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -303,7 +303,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"]),
+        headers: [.apikey: "test-key"]),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -333,7 +333,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -363,7 +363,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -394,7 +394,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -418,7 +418,7 @@ struct RealtimeChannelTests {
     )
     #expect(request.head.method == .post)
     #expect(request.head.headerFields[.authorization] == "Bearer test-token")
-    #expect(request.head.headerFields[.apiKey] == "test-key")
+    #expect(request.head.headerFields[.apikey] == "test-key")
     #expect(request.head.headerFields[.contentType] == "application/json")
 
     let body = try JSONDecoder().decode([String: String].self, from: request.body ?? Data())
@@ -436,7 +436,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -466,7 +466,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -499,7 +499,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"]),
+        headers: [.apikey: "test-key"]),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -528,7 +528,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -558,7 +558,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
@@ -585,7 +585,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
@@ -608,7 +608,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
@@ -632,7 +632,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         requestTimeout: .seconds(5),
         accessToken: { "test-token" }
       ),
@@ -660,7 +660,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         requestTimeout: .seconds(5),
         accessToken: { "test-token" }
       ),
@@ -689,7 +689,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -718,7 +718,7 @@ struct RealtimeChannelTests {
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: ["apikey": "test-key"],
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -748,7 +748,7 @@ struct RealtimeChannelTests {
       let socket = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "https://localhost:54321/realtime/v1")!,
-          headers: ["apikey": "test-key"],
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },

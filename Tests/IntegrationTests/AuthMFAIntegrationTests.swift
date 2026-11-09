@@ -23,7 +23,7 @@ struct AuthMFAIntegrationTests {
       url: URL(string: "\(DotEnv.supabaseURL)/auth/v1")!,
       storageKey: "sb-test-\(UUID().uuidString)-auth-token",
       headers: [
-        HTTPField.Name("apikey")!: DotEnv.supabasePublishableKey,
+        .apikey: DotEnv.supabasePublishableKey,
         .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
       ],
       storage: InMemoryTestStorage()

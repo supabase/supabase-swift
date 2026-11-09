@@ -216,9 +216,7 @@ The dividing line is *when the value is fixed*, not who supplied it.
   Degrading instead would bury the mistake behind an unrelated failure much later.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
-  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
-  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
-  which a proxy or a hostile server controls.
+  otherwise `reportIssue` and fall back.
 
 A value being "user input" is not on its own a reason to avoid trapping — `supabaseURL` is user
 input and traps. A value being *dynamic* is. See SDK-1793.
