@@ -30,7 +30,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageBucketIntegrationTests {
-  let storage = StorageIntegration.client()
+  let storage = try! StorageIntegration.client()
 
   var bucketName = ""
   var file = Data()
@@ -568,7 +568,7 @@ final class StorageBucketIntegrationTests {
   @Test
   func anonRoleIsFilteredByRowLevelSecurity() async throws {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
-    let anon = StorageIntegration.client(headers: [
+    let anon = try StorageIntegration.client(headers: [
       .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
       .init("apikey")!: DotEnv.supabasePublishableKey,
     ])

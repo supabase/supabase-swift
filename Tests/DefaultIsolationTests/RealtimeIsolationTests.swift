@@ -37,7 +37,7 @@ struct RealtimeIsolationTests {
   }
 
   final class Model {
-    let client = RealtimeClient(
+    let client = try! RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://project-ref.supabase.co/realtime/v1")!,
         observesAppLifecycle: false,

@@ -12,11 +12,11 @@ import Testing
 @Suite
 struct StorageClientConfigurationTests {
   @Test
-  func loggerSetAfterInitIsTaggedWithSystemMetadata() {
+  func loggerSetAfterInitIsTaggedWithSystemMetadata() throws {
     var configuration = StorageClient.Configuration(url: URL(string: "http://localhost")!)
     configuration.logger = Logging.Logger(label: "test")
 
-    let client = StorageClient(configuration: configuration)
+    let client = try StorageClient(configuration: configuration)
 
     #expect(client.configuration.logger[metadataKey: "system"] == "storage")
   }
@@ -50,8 +50,8 @@ struct StorageClientConfigurationTests {
     headers: HTTPFields,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     requests: LockIsolated<[HTTPRequest]>
-  ) -> StorageClient {
-    StorageClient(
+  ) throws -> StorageClient {
+    try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: headers,
@@ -71,7 +71,7 @@ struct StorageClientConfigurationTests {
   @Test
   func accessTokenMiddlewareSendsTheBearer() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
-    let storage = makeSUT(headers: [:], accessToken: { "token-1" }, requests: requests)
+    let storage = try makeSUT(headers: [:], accessToken: { "token-1" }, requests: requests)
 
     _ = try await storage.listBuckets()
 
@@ -82,7 +82,7 @@ struct StorageClientConfigurationTests {
   func accessTokenMiddlewareResolvesPerRequest() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let counter = LockIsolated(0)
-    let storage = makeSUT(
+    let storage = try makeSUT(
       headers: [:],
       accessToken: {
         counter.withValue {
@@ -103,7 +103,7 @@ struct StorageClientConfigurationTests {
   @Test
   func nilTokenSendsNoAuthorization() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
-    let storage = makeSUT(headers: [:], accessToken: { nil }, requests: requests)
+    let storage = try makeSUT(headers: [:], accessToken: { nil }, requests: requests)
 
     _ = try await storage.listBuckets()
 
@@ -113,7 +113,7 @@ struct StorageClientConfigurationTests {
   @Test
   func staticAuthorizationHeaderWinsOverAccessTokenMiddleware() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
-    let storage = makeSUT(
+    let storage = try makeSUT(
       headers: [.authorization: "Bearer static"], accessToken: { "token-1" }, requests: requests)
 
     _ = try await storage.listBuckets()
@@ -124,7 +124,7 @@ struct StorageClientConfigurationTests {
   @Test
   func xClientInfoIsMatchedCaseInsensitively() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
-    let storage = makeSUT(headers: [.init("x-client-info")!: "my-app/1.0"], requests: requests)
+    let storage = try makeSUT(headers: [.init("x-client-info")!: "my-app/1.0"], requests: requests)
 
     _ = try await storage.listBuckets()
 
@@ -133,7 +133,7 @@ struct StorageClientConfigurationTests {
 
   @Test
   func settingHeaderMergesWithoutRebuildingTheClient() async throws {
-    let storage = StorageClient(
+    let storage = try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "https://project.supabase.co/storage/v1")!,
         headers: [.xClientInfo: "custom/1"],

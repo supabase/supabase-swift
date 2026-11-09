@@ -88,12 +88,14 @@ struct ResumableUploadTests {
     try Data((0..<20).map(UInt8.init)).write(to: fileURL)
   }
 
-  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageBucket
+  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
+    -> StorageBucket
   {
-    makeStorage(script, retryTimeout: retryTimeout).from("bucket")
+    try makeStorage(script, retryTimeout: retryTimeout).from("bucket")
   }
 
-  private func makeStorage(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageClient
+  private func makeStorage(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
+    -> StorageClient
   {
     var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
@@ -102,7 +104,7 @@ struct ResumableUploadTests {
     configuration.resumable = ResumableUploadConfiguration(
       chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
     configuration.clock = ImmediateClock()
-    return StorageClient(configuration: configuration)
+    return try StorageClient(configuration: configuration)
   }
 
   private var store: ResumableStore {
@@ -319,7 +321,7 @@ struct ResumableUploadTests {
       },
       Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
     ])
-    let storage = makeStorage(script, retryTimeout: .zero)
+    let storage = try makeStorage(script, retryTimeout: .zero)
     let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
     try await upload.start()
     await #expect(throws: StorageError.self) { try await upload.result }

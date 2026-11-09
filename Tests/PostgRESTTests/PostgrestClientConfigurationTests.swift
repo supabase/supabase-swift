@@ -9,11 +9,11 @@ struct PostgrestClientConfigurationTests {
   private let url = URL(string: "http://localhost")!
 
   @Test
-  func loggerSetAfterInitIsTaggedWithSystemMetadata() {
+  func loggerSetAfterInitIsTaggedWithSystemMetadata() throws {
     var configuration = PostgrestClient.Configuration(url: url)
     configuration.logger = Logging.Logger(label: "test")
 
-    let client = PostgrestClient(configuration: configuration)
+    let client = try PostgrestClient(configuration: configuration)
 
     #expect(client.configuration.logger[metadataKey: "system"] == "postgrest")
   }
@@ -45,12 +45,23 @@ struct PostgrestClientConfigurationTests {
   }
 
   @Test
-  func schemaKeepsTheClock() {
-    let client = PostgrestClient(configuration: .init(url: url, clock: SuspendingClock()))
+  func schemaKeepsTheClock() throws {
+    let client = try PostgrestClient(configuration: .init(url: url, clock: SuspendingClock()))
 
     let scoped = client.schema("other")
 
     #expect(scoped.configuration.schema == "other")
     #expect(scoped.configuration.clock is SuspendingClock)
+  }
+
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: PostgrestError.self) {
+      try PostgrestClient(configuration: .init(url: url))
+    }
+    #expect(error?.kind == .invalidConfiguration)
   }
 }

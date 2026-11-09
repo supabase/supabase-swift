@@ -33,7 +33,7 @@ struct DefaultIsolationTests {
   }
 
   final class Model {
-    let client = SupabaseClient(
+    let client = try! SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "anon-key",
       configuration: SupabaseClient.Configuration(auth: .init(storage: NoopAuthStorage()))

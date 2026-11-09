@@ -20,7 +20,7 @@ extension StorageMockerTests {
   struct VectorIndexClientTests {
     let url = URL(string: "http://localhost:54321/storage/v1")!
 
-    private func makeSUT() -> VectorIndexClient {
+    private func makeSUT() throws -> VectorIndexClient {
       Mocker.removeAll()
 
       let configuration = URLSessionConfiguration.ephemeral
@@ -28,7 +28,7 @@ extension StorageMockerTests {
       let session = URLSession(configuration: configuration)
 
       return StorageVectorsClient(
-        api: StorageAPI(
+        api: try StorageAPI(
           configuration: StorageClient.Configuration(
             url: url,
             headers: [:],
@@ -39,7 +39,7 @@ extension StorageMockerTests {
 
     @Test
     func putVectors() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/PutVectors"),
@@ -58,7 +58,7 @@ extension StorageMockerTests {
 
     @Test
     func deleteVectors() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/DeleteVectors"),
@@ -71,7 +71,7 @@ extension StorageMockerTests {
 
     @Test
     func getVectorsDecodesVectors() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/GetVectors"),
@@ -95,7 +95,7 @@ extension StorageMockerTests {
 
     @Test
     func listVectorsDecodesVectorsAndNextToken() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/ListVectors"),
@@ -118,7 +118,7 @@ extension StorageMockerTests {
 
     @Test
     func queryVectorsDecodesMatchesAndDistanceMetric() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/QueryVectors"),
@@ -143,7 +143,7 @@ extension StorageMockerTests {
 
     @Test
     func forbiddenThrowsStorageError() async throws {
-      let index = makeSUT()
+      let index = try makeSUT()
 
       Mock(
         url: url.appendingPathComponent("vector/PutVectors"),

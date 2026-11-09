@@ -25,23 +25,25 @@ struct ResumableUploadRegistryTests {
   }
 
   private var storage: StorageClient {
-    var configuration = StorageClient.Configuration(
-      url: URL(string: "http://localhost:54321/storage/v1")!,
-      headers: [:],
-      http: .init(
-        transport: ClosureTransport { [requests, responses] request, _ in
-          requests.withValue { $0.append("\(request.method.rawValue) \(request.path ?? "")") }
-          guard
-            let (response, body) = responses.withValue({ $0.isEmpty ? nil : $0.removeFirst() })
-          else {
-            try await Task.sleep(for: .seconds(60))
-            throw URLError(.cancelled)
-          }
-          return (response, body.isEmpty ? nil : HTTPBody(body))
-        }))
-    configuration.resumable = ResumableUploadConfiguration(
-      chunkSize: 8, directory: root.appendingPathComponent("store"))
-    return StorageClient(configuration: configuration)
+    get throws {
+      var configuration = StorageClient.Configuration(
+        url: URL(string: "http://localhost:54321/storage/v1")!,
+        headers: [:],
+        http: .init(
+          transport: ClosureTransport { [requests, responses] request, _ in
+            requests.withValue { $0.append("\(request.method.rawValue) \(request.path ?? "")") }
+            guard
+              let (response, body) = responses.withValue({ $0.isEmpty ? nil : $0.removeFirst() })
+            else {
+              try await Task.sleep(for: .seconds(60))
+              throw URLError(.cancelled)
+            }
+            return (response, body.isEmpty ? nil : HTTPBody(body))
+          }))
+      configuration.resumable = ResumableUploadConfiguration(
+        chunkSize: 8, directory: root.appendingPathComponent("store"))
+      return try StorageClient(configuration: configuration)
+    }
   }
 
   private var store: ResumableStore {
@@ -217,7 +219,7 @@ struct ResumableUploadRegistryTests {
   @Test(arguments: RegistryCall.allCases)
   func throwsStorageErrorWhenTheRecordDirectoryCannotBeRead(_ call: RegistryCall) async throws {
     try Data().write(to: root.appendingPathComponent("store"))
-    let registry = storage.resumableUploads
+    let registry = try storage.resumableUploads
 
     let error = await #expect(throws: StorageError.self) {
       switch call {

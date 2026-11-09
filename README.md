@@ -79,7 +79,7 @@ You can also add individual libraries (`Auth`, `Functions`, `PostgREST`, `Postgr
 ### Initialize the client
 
 ```swift
-let client = SupabaseClient(
+let client = try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key"
 )
@@ -88,7 +88,7 @@ let client = SupabaseClient(
 ### Initialize with custom options
 
 ```swift
-let client = SupabaseClient(
+let client = try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key",
     configuration: SupabaseClient.Configuration(

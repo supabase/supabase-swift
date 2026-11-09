@@ -29,7 +29,7 @@ struct PostgrestSourceTests {
 
   @Test
   func fromUsesTheRelationName() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().execute()
     #expect(capture.path?.hasSuffix("/todos") == true)
     #expect(capture.query?.contains("select=*") == true)
@@ -37,7 +37,7 @@ struct PostgrestSourceTests {
 
   @Test
   func selectDecodesIntoTheRelationType() async throws {
-    let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
     let todos = try await capture.client.from(Todo.self).select().execute().value
     #expect(todos.count == 1)
     #expect(todos.first?.task == "buy milk")

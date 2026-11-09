@@ -16,7 +16,7 @@ import Logging
 /// Create one instance per Supabase project and share it across your app.
 ///
 /// ```swift
-/// let supabase = SupabaseClient(
+/// let supabase = try SupabaseClient(
 ///   supabaseURL: URL(string: "https://your-project.supabase.co")!,
 ///   supabaseKey: "your-anon-key"
 /// )
@@ -114,7 +114,9 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
-    PostgrestClient(
+    // `init` checked `supabaseURL`, so `databaseURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    try! PostgrestClient(
       configuration: .init(
         url: databaseURL,
         schema: configuration.database.schema,
@@ -141,7 +143,9 @@ public final class SupabaseClient: Sendable {
       clock: clock
     )
     storageConfiguration.resumable = configuration.storage.resumable
-    return StorageClient(configuration: storageConfiguration)
+    // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
+    // swift-format-ignore: NeverUseForceTry
+    return try! StorageClient(configuration: storageConfiguration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -204,11 +208,23 @@ public final class SupabaseClient: Sendable {
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
   ///   - configuration: Settings for the client and its sub-clients.
+  /// - Throws: ``SupabaseClientError`` with kind
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no
+  ///   scheme or no host.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
     configuration: Configuration = .init()
-  ) {
+  ) throws {
+    guard supabaseURL.hasSchemeAndHost,
+      URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false) != nil,
+      let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL)
+    else {
+      throw SupabaseClientError(
+        kind: .invalidConfiguration,
+        message: "supabaseURL must be a valid URL with a scheme and a host, got \(supabaseURL).")
+    }
+
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
     self.configuration = configuration
@@ -230,14 +246,6 @@ public final class SupabaseClient: Sendable {
       )
       .merging(with: HTTPFields(configuration.global.headers))
 
-    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
-      preconditionFailure(
-        """
-        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
-        """
-      )
-    }
-
     let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
       storageKey: configuration.auth.storageKey ?? defaultStorageKey,
@@ -255,7 +263,7 @@ public final class SupabaseClient: Sendable {
       logger: configuration.auth.logger ?? configuration.global.logger,
       clock: configuration.auth.clock ?? configuration.global.clock
     )
-    _auth = AuthClient(configuration: authConfiguration)
+    _auth = try AuthClient(configuration: authConfiguration)
 
     if configuration.auth.accessToken == nil {
       listenForAuthEvents()
@@ -590,7 +598,9 @@ public final class SupabaseClient: Sendable {
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    FunctionsClient(
+    // `init` checked `supabaseURL`, so `functionsURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    try! FunctionsClient(
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,
@@ -623,7 +633,9 @@ public final class SupabaseClient: Sendable {
       )
     }
 
-    return RealtimeClient(
+    // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    return try! RealtimeClient(
       configuration: .init(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
         // Through `HTTPFields`, so names compare without regard to case and the global headers

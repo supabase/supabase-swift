@@ -19,11 +19,11 @@ struct ChannelFeed {
   @Relationship(computed: \Channels.Columns.firstMessage) var first: Messages?
 }
 
-func recordingClient(body: String = "[]") -> (PostgrestClient, RecordingTransport) {
+func recordingClient(body: String = "[]") throws -> (PostgrestClient, RecordingTransport) {
   let transport = RecordingTransport { _, _ in
     (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data(body.utf8))
   }
-  let client = PostgrestClient(
+  let client = try PostgrestClient(
     configuration: .init(
       url: URL(string: "https://example.supabase.co")!,
       http: .init(transport: transport)
@@ -50,7 +50,7 @@ struct SupabaseTypegenOutputTests {
   func draftLeavesOutAnAlwaysIdentityColumn() async throws {
     #expect(Mirror(reflecting: Counters.Draft(count: 1)).children.map(\.label) == ["count"])
 
-    let (client, transport) = recordingClient()
+    let (client, transport) = try recordingClient()
     _ = try await client.from(Counters.self).insert(Counters.Draft(count: 1)).execute()
     #expect(
       transport.requests.first?.body.map { String(decoding: $0, as: UTF8.self) } == #"{"count":1}"#)
@@ -58,7 +58,7 @@ struct SupabaseTypegenOutputTests {
 
   @Test
   func generatedEnumIsAFilterOperand() async throws {
-    let (client, transport) = recordingClient(
+    let (client, transport) = try recordingClient(
       body: #"[{"id":"7c1f0f4e-5d3b-4b8e-9d8a-1b2c3d4e5f60","status":"OFFLINE"}]"#
     )
     let rows = try await client.from(Users.self).select()
@@ -80,7 +80,7 @@ struct SupabaseTypegenOutputTests {
         + "first:first_message(*)"
     )
 
-    let (client, transport) = recordingClient()
+    let (client, transport) = try recordingClient()
     _ = try await client.from(Channels.self).select(ChannelFeed.self)
       .where { $0.shoutedSlug.eq("GENERAL") }
       .execute()
@@ -93,7 +93,7 @@ struct SupabaseTypegenOutputTests {
 
   @Test
   func generatedFunctionCallSendsItsArgumentsAndFilters() async throws {
-    let (client, transport) = recordingClient()
+    let (client, transport) = try recordingClient()
     _ = try await client.rpc.searchMessages(query: "hello")
       .where { $0.channelID.eq(1) }
       .execute()
@@ -107,7 +107,7 @@ struct SupabaseTypegenOutputTests {
 
   @Test
   func overloadsAreToldApartByTheirLabels() async throws {
-    let (client, transport) = recordingClient()
+    let (client, transport) = try recordingClient()
     _ = try await client.rpc.messagesOf(channelSlug: "public", maxCount: 1).execute()
 
     let body = try #require(transport.requests.first?.body)
@@ -119,7 +119,7 @@ struct SupabaseTypegenOutputTests {
   /// A generated call is a `rpc(_:)` call, so `readOnly()` moves its arguments into the query.
   @Test
   func generatedFunctionCallCanBeReadOnly() async throws {
-    let (client, transport) = recordingClient()
+    let (client, transport) = try recordingClient()
     _ = try await client.rpc.searchMessages(query: "hello", channelID: 1)
       .readOnly()
       .where { $0.channelID.eq(1) }
@@ -135,7 +135,7 @@ struct SupabaseTypegenOutputTests {
 
   @Test
   func generatedFunctionWithAJsonBodySendsItWhole() async throws {
-    let (client, transport) = recordingClient(body: "[1,2]")
+    let (client, transport) = try recordingClient(body: "[1,2]")
     let echoed = try await client.rpc.echo([1, 2]).execute().value
 
     #expect(echoed == [1, 2])

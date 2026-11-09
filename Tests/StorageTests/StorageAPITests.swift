@@ -16,22 +16,25 @@ import Testing
 
 @Suite
 struct StorageAPITests {
-  #if os(macOS) || os(Linux)
-    @Test
-    func newHostnameWithoutAHostTraps() async {
-      await #expect(processExitsWith: .failure) {
-        _ = StorageAPI(
-          configuration: StorageClient.Configuration(
-            url: URL(string: "project-ref")!,
-            headers: [:],
-            usesNewHostname: true
-          )
+  @Test(
+    arguments: [
+      "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+    ], [false, true])
+  func throwsWhenTheURLHasNoSchemeOrHost(url: String, usesNewHostname: Bool) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: StorageError.self) {
+      try StorageClient(
+        configuration: StorageClient.Configuration(
+          url: url,
+          headers: [:],
+          usesNewHostname: usesNewHostname
         )
-      }
+      )
     }
-  #endif
+    #expect(error?.kind == .invalidConfiguration)
+  }
 
-  private func makeSUT(retryEnabled: Bool = true) -> (
+  private func makeSUT(retryEnabled: Bool = true) throws -> (
     StorageClient, LockIsolated<[String]>
   ) {
     let attempts = LockIsolated<[String]>([])
@@ -46,12 +49,12 @@ struct StorageAPITests {
       retryEnabled: retryEnabled
     )
     configuration.clock = ImmediateClock()
-    return (StorageClient(configuration: configuration), attempts)
+    return (try StorageClient(configuration: configuration), attempts)
   }
 
   @Test
-  func listIsRetriedPerPolicy() async {
-    let (storage, attempts) = makeSUT()
+  func listIsRetriedPerPolicy() async throws {
+    let (storage, attempts) = try makeSUT()
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.from("bucket").list()
@@ -61,8 +64,8 @@ struct StorageAPITests {
   }
 
   @Test
-  func getIsRetriedPerPolicy() async {
-    let (storage, attempts) = makeSUT()
+  func getIsRetriedPerPolicy() async throws {
+    let (storage, attempts) = try makeSUT()
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.listBuckets()
@@ -72,8 +75,8 @@ struct StorageAPITests {
   }
 
   @Test
-  func uploadIsNeverRetried() async {
-    let (storage, attempts) = makeSUT()
+  func uploadIsNeverRetried() async throws {
+    let (storage, attempts) = try makeSUT()
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.from("bucket").upload(path: "file.txt", data: Data("x".utf8))
@@ -83,8 +86,8 @@ struct StorageAPITests {
   }
 
   @Test
-  func retryEnabledFalseDisablesRetries() async {
-    let (storage, attempts) = makeSUT(retryEnabled: false)
+  func retryEnabledFalseDisablesRetries() async throws {
+    let (storage, attempts) = try makeSUT(retryEnabled: false)
 
     await #expect(throws: StorageError.self) {
       _ = try await storage.from("bucket").list()

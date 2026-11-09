@@ -32,17 +32,22 @@ struct StorageAPI: Sendable {
 
   /// `url` with `project-ref.supabase.co` rewritten to `project-ref.storage.supabase.co`; any
   /// other host is returned as is.
-  static func storageHost(_ url: URL) -> URL {
-    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-      let host = components.host
+  static func storageHost(_ url: URL) throws -> URL {
+    guard url.hasSchemeAndHost,
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let host = components.host, !host.isEmpty
     else {
-      preconditionFailure("Storage client initialized with an invalid URL: \(url)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "StorageClient configured with a URL that has no scheme or host: \(url)")
     }
     guard isLegacySupabaseHost(host) else { return url }
 
     components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
     guard let rewritten = components.url else {
-      preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "Rewriting the storage host produced an invalid URL: \(components)")
     }
     return rewritten
   }
@@ -56,7 +61,9 @@ struct StorageAPI: Sendable {
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, and transport.
-  init(configuration: StorageClient.Configuration) {
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidConfiguration``
+  ///   if the configuration's URL has no scheme, no host, or cannot be split into components.
+  init(configuration: StorageClient.Configuration) throws {
     var configuration = configuration
     if configuration.headers[.xClientInfo] == nil {
       configuration.headers[.xClientInfo] = "storage-swift/\(version)"
@@ -65,11 +72,11 @@ struct StorageAPI: Sendable {
     configuration.logger[metadataKey: "system"] = "storage"
 
     if configuration.usesNewHostname == true {
-      configuration.url = Self.storageHost(configuration.url)
+      configuration.url = try Self.storageHost(configuration.url)
     }
 
     self.configuration = configuration
-    self.requests = StorageRequests(url: configuration.url)
+    self.requests = try StorageRequests(url: configuration.url)
   }
 
   /// Returns a copy with `value` merged into ``configuration``'s headers, included in all requests

@@ -28,7 +28,7 @@ struct SupabaseTypegenPostgrestTypegenOutputTests {
     let transport = RecordingTransport { _, _ in
       (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data("[]".utf8))
     }
-    let client = PostgrestClient(
+    let client = try PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
         http: .init(transport: transport)
@@ -48,7 +48,7 @@ struct SupabaseTypegenPostgrestTypegenOutputTests {
     let transport = RecordingTransport { _, _ in
       (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data("[]".utf8))
     }
-    let client = PostgrestClient(
+    let client = try PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
         http: .init(transport: transport)

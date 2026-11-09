@@ -13,7 +13,7 @@ expires. The client gets tokens from a closure, ``RealtimeClient/Configuration/a
 ``RealtimeClient/Configuration/accessToken`` returns the token to join with:
 
 ```swift
-let realtime = RealtimeClient(
+let realtime = try RealtimeClient(
   configuration: .init(
     url: URL(string: "https://<project-ref>.supabase.co/realtime/v1")!,
     headers: ["apikey": publishableKey],

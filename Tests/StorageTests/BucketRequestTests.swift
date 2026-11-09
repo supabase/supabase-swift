@@ -24,8 +24,8 @@ struct BucketRequestTests {
     sent: LockIsolated<[Sent]> = .init([]),
     status: HTTPResponse.Status = .ok,
     response: String
-  ) -> StorageClient {
-    StorageClient(
+  ) throws -> StorageClient {
+    try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
@@ -47,7 +47,7 @@ struct BucketRequestTests {
   @Test
   func listBucketsSendsTheOptionsAsQueryItems() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: "[]")
+    let storage = try Self.makeClient(sent: sent, response: "[]")
 
     _ = try await storage.listBuckets(
       options: BucketListOptions(
@@ -62,7 +62,7 @@ struct BucketRequestTests {
   @Test
   func listBucketsWithoutOptionsSendsNoQuery() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: "[]")
+    let storage = try Self.makeClient(sent: sent, response: "[]")
 
     _ = try await storage.listBuckets()
 
@@ -71,7 +71,7 @@ struct BucketRequestTests {
 
   @Test
   func bucketDecodesTypeAndOwnerId() async throws {
-    let storage = Self.makeClient(
+    let storage = try Self.makeClient(
       response: """
         [{"id":"a","name":"a","type":"ANALYTICS","owner_id":"u1","owner":"","public":false,
           "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
@@ -88,7 +88,7 @@ struct BucketRequestTests {
   @Test
   func createBucketSendsTheType() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
+    let storage = try Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
 
     try await storage.createBucket("t", options: CreateBucketOptions(type: .analytics))
 
@@ -97,7 +97,7 @@ struct BucketRequestTests {
 
   @Test
   func bucketDecodesTheVersioningStatus() async throws {
-    let storage = Self.makeClient(
+    let storage = try Self.makeClient(
       response: """
         [{"id":"a","name":"a","public":false,"versioning_status":"SUSPENDED",
           "created_at":"2024-01-01T00:00:00.000Z","updated_at":"2024-01-01T00:00:00.000Z"},
@@ -115,7 +115,7 @@ struct BucketRequestTests {
   @Test
   func createBucketSendsTheVersioningStatus() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
+    let storage = try Self.makeClient(sent: sent, response: #"{"name":"t"}"#)
 
     try await storage.createBucket("t", options: CreateBucketOptions(versioningStatus: .enabled))
 
@@ -125,7 +125,7 @@ struct BucketRequestTests {
   @Test
   func updateBucketSendsOnlyTheVersioningStatus() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
+    let storage = try Self.makeClient(sent: sent, response: #"{"message":"ok"}"#)
 
     try await storage.updateBucket("t", options: UpdateBucketOptions(versioningStatus: .suspended))
 
@@ -136,7 +136,7 @@ struct BucketRequestTests {
   @Test
   func purgeCacheWithoutABucketPurgesTheTenant() async throws {
     let sent = LockIsolated<[Sent]>([])
-    let storage = Self.makeClient(sent: sent, response: #"{"message":"success"}"#)
+    let storage = try Self.makeClient(sent: sent, response: #"{"message":"success"}"#)
 
     try await storage.purgeCache(bucket: nil, transformationsOnly: true)
 

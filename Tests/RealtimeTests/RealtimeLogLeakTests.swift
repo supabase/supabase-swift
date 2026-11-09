@@ -10,8 +10,8 @@ struct RealtimeLogLeakTests {
   private let recorder = LogRecorder()
 
   @Test
-  func theClientLoggerRedactsTokens() {
-    let client = RealtimeClient(
+  func theClientLoggerRedactsTokens() throws {
+    let client = try RealtimeClient(
       configuration: .init(
         url: URL(string: "ws://localhost:54321/realtime/v1")!,
         logger: recorder.makeLogger())

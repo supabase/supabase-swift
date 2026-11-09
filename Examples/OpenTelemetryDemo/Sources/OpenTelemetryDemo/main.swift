@@ -36,7 +36,7 @@ let tracer = tracerProvider.get(instrumentationName: "OpenTelemetryDemo")
 let config = URLSessionConfiguration.ephemeral
 config.protocolClasses = [RequestPrintingProtocol.self]
 
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: URL(string: "https://example.supabase.co")!,
   supabaseKey: "demo-anon-key",
   configuration: SupabaseClient.Configuration(

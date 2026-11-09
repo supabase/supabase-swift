@@ -14,7 +14,7 @@ public import Logging
 /// stored function.
 ///
 /// ```swift
-/// let client = PostgrestClient(
+/// let client = try PostgrestClient(
 ///   configuration: .init(
 ///     url: URL(string: "https://<project>.supabase.co/rest/v1")!,
 ///     headers: ["apikey": "<anon-key>"]
@@ -211,7 +211,20 @@ public struct PostgrestClient: Sendable {
   /// Creates a ``PostgrestClient`` from a ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
-  public init(configuration: Configuration) {
+  /// - Throws: ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no scheme or no host.
+  public init(configuration: Configuration) throws {
+    guard configuration.url.hasSchemeAndHost else {
+      throw PostgrestError(
+        kind: .invalidConfiguration,
+        message:
+          "PostgrestClient configured with a URL that has no scheme or host: \(configuration.url)")
+    }
+    self.init(checkedConfiguration: configuration)
+  }
+
+  /// Creates a client from a configuration whose URL ``init(configuration:)`` already accepted.
+  private init(checkedConfiguration configuration: Configuration) {
     var configuration = configuration
     configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
     configuration.logger = configuration.logger.redactingSecrets()
@@ -324,7 +337,7 @@ public struct PostgrestClient: Sendable {
   public func schema(_ schema: String) -> PostgrestClient {
     var configuration = configuration
     configuration.schema = schema
-    return PostgrestClient(configuration: configuration)
+    return PostgrestClient(checkedConfiguration: configuration)
   }
 
   /// One query item per argument, in key order, for a `GET` call's arguments.

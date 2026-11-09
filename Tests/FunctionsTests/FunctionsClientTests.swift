@@ -38,13 +38,13 @@ struct FunctionsClientTests {
   private func makeSUT(
     region: FunctionRegion? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) -> FunctionsClient {
+  ) throws -> FunctionsClient {
     Mocker.removeAll()
 
     let sessionConfiguration = URLSessionConfiguration.ephemeral
     sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
     let session = URLSession(configuration: sessionConfiguration)
-    return makeClient(
+    return try makeClient(
       region: region,
       http: .init(transport: URLSessionTransport(session: session)),
       accessToken: accessToken
@@ -56,8 +56,8 @@ struct FunctionsClientTests {
       @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
         HTTPTypes.HTTPResponse, HTTPBody?
       )
-  ) -> FunctionsClient {
-    makeClient(http: .init(transport: ClosureTransport(handler: transport)))
+  ) throws -> FunctionsClient {
+    try makeClient(http: .init(transport: ClosureTransport(handler: transport)))
   }
 
   private func makeClient(
@@ -65,16 +65,16 @@ struct FunctionsClientTests {
     http: HTTPClientConfiguration,
     decoder: JSONDecoder = .supabase(),
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) -> FunctionsClient {
-    FunctionsClient(
+  ) throws -> FunctionsClient {
+    try FunctionsClient(
       configuration: .init(
         url: url, headers: headers, region: region, http: http, decoder: decoder,
         accessToken: accessToken))
   }
 
   @Test
-  func `init`() async {
-    let client = FunctionsClient(
+  func `init`() async throws {
+    let client = try FunctionsClient(
       configuration: .init(url: url, headers: headers, region: .saEast1))
 
     #expect(client.configuration.region == .saEast1)
@@ -82,12 +82,23 @@ struct FunctionsClientTests {
     #expect(client.configuration.url == url)
   }
 
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: FunctionsError.self) {
+      try FunctionsClient(configuration: .init(url: url))
+    }
+    #expect(error?.kind == .invalidConfiguration)
+  }
+
   @Test
-  func initWithCustomDecoder() async {
+  func initWithCustomDecoder() async throws {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
 
-    let client = FunctionsClient(
+    let client = try FunctionsClient(
       configuration: .init(url: url, headers: headers, decoder: decoder))
 
     #expect(client.configuration.decoder === decoder)
@@ -95,7 +106,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeReturnsTheResponseHead() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -120,7 +131,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeDecodesISO8601DatesByDefault() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -139,7 +150,7 @@ struct FunctionsClientTests {
 
   @Test
   func perCallDecoderWinsOverTheClientDecoder() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -159,12 +170,12 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invokeWithABodyThatFailsToEncodeSendsNothing() async {
+  func invokeWithABodyThatFailsToEncodeSendsNothing() async throws {
     struct Failing: Encodable {
       struct Reason: Error {}
       func encode(to encoder: any Encoder) throws { throw Reason() }
     }
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       Issue.record("transport should not be called")
       return (HTTPTypes.HTTPResponse(status: .ok), nil)
     }
@@ -181,7 +192,7 @@ struct FunctionsClientTests {
 
   @Test
   func invoke() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: self.url.appendingPathComponent("hello_world"),
@@ -212,7 +223,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeReturningDecodable() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello"),
@@ -247,7 +258,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithCustomMethod() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -270,7 +281,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithQuery() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -301,7 +312,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithRegionDefinedInClient() async throws {
-    let sut = makeSUT(region: .caCentral1)
+    let sut = try makeSUT(region: .caCentral1)
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -326,7 +337,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithRegion() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -351,7 +362,7 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithoutRegion() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello-world"),
@@ -373,8 +384,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_badServerResponse_wrapsAsTransport() async {
-    let sut = makeSUT()
+  func invoke_badServerResponse_wrapsAsTransport() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -405,8 +416,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_shouldThrow_FunctionsError_httpError() async {
-    let sut = makeSUT()
+  func invoke_shouldThrow_FunctionsError_httpError() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -437,8 +448,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_shouldThrow_FunctionsError_relayError() async {
-    let sut = makeSUT()
+  func invoke_shouldThrow_FunctionsError_relayError() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -470,8 +481,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async {
-    let sut = makeSUT()
+  func invoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -503,8 +514,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_transportFailure_wrapsURLError() async {
-    let sut = makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
+  func invoke_transportFailure_wrapsURLError() async throws {
+    let sut = try makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
 
     do {
       try await sut.invoke("hello_world")
@@ -519,8 +530,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancellation_isNotWrapped() async {
-    let sut = makeSUT { _, _ in throw CancellationError() }
+  func invoke_cancellation_isNotWrapped() async throws {
+    let sut = try makeSUT { _, _ in throw CancellationError() }
 
     await #expect(throws: CancellationError.self) {
       try await sut.invoke("hello_world")
@@ -528,8 +539,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async {
-    let sut = makeSUT { _, _ in throw URLError(.cancelled) }
+  func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async throws {
+    let sut = try makeSUT { _, _ in throw URLError(.cancelled) }
 
     do {
       try await sut.invoke("hello_world")
@@ -543,8 +554,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancellingTheTask_throwsCancellationError() async {
-    let sut = makeSUT()
+  func invoke_cancellingTheTask_throwsCancellationError() async throws {
+    let sut = try makeSUT()
     let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
 
     var mock = Mock(
@@ -573,8 +584,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_serverErrorBody_isCappedKeepingThePrefix() async {
-    let sut = makeSUT()
+  func invoke_serverErrorBody_isCappedKeepingThePrefix() async throws {
+    let sut = try makeSUT()
     let cap = FunctionsAPI.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
@@ -597,9 +608,9 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_customFetchError_isNotWrapped() async {
+  func invoke_customFetchError_isNotWrapped() async throws {
     struct FetchError: Error {}
-    let sut = makeSUT { _, _ in throw FetchError() }
+    let sut = try makeSUT { _, _ in throw FetchError() }
 
     await #expect(throws: FetchError.self) {
       try await sut.invoke("hello_world")
@@ -607,8 +618,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_undecodableBody_wrapsDecodingError() async {
-    let sut = makeSUT()
+  func invoke_undecodableBody_wrapsDecodingError() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("hello_world"),
@@ -632,7 +643,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithTimeoutOverride() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -648,7 +659,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithDefaultTimeout() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -664,7 +675,7 @@ struct FunctionsClientTests {
   @Test
   func configuredTimeoutIntervalReplacesTheFunctionsDefault() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -684,7 +695,7 @@ struct FunctionsClientTests {
   @Test
   func accessTokenProviderSetsAuthorizationHeader() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -713,7 +724,7 @@ struct FunctionsClientTests {
     let tokenBox = TokenBox()
     let capture = Capture()
 
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await capture.record(request.headerFields[.authorization])
@@ -733,7 +744,7 @@ struct FunctionsClientTests {
   @Test
   func invokeOptionsHeaderOverridesAccessTokenProvider() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -769,7 +780,7 @@ struct FunctionsClientTests {
 
     let seenByMiddleware = CapturedRequestBox()
     let seenByTransport = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await seenByTransport.set(request, timeout: nil)
@@ -791,7 +802,7 @@ struct FunctionsClientTests {
   func accessTokenProviderErrorPropagatesToInvoke() async throws {
     struct TokenError: Error {}
 
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
@@ -808,7 +819,7 @@ struct FunctionsClientTests {
   @Test
   func streamReturnsTheHeadBeforeTheBodyAndYieldsEachChunk() async throws {
     let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(
           status: .ok,
@@ -833,7 +844,7 @@ struct FunctionsClientTests {
 
   @Test
   func streamWithNoBodyYieldsAnEmptyBody() async throws {
-    let sut = makeSUT { _, _ in (HTTPTypes.HTTPResponse(status: .ok), nil) }
+    let sut = try makeSUT { _, _ in (HTTPTypes.HTTPResponse(status: .ok), nil) }
 
     let response = try await sut.stream("stream")
 
@@ -842,7 +853,7 @@ struct FunctionsClientTests {
 
   @Test
   func streamDeliversAMockedEventStreamAsBytes() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -871,7 +882,7 @@ struct FunctionsClientTests {
 
   @Test
   func streamUsesAccessTokenProvider() async throws {
-    let sut = makeSUT(accessToken: { "stream.token" })
+    let sut = try makeSUT(accessToken: { "stream.token" })
 
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -896,9 +907,9 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func streamDoesNotWrapAccessTokenError() async {
+  func streamDoesNotWrapAccessTokenError() async throws {
     struct TokenError: Error {}
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
@@ -913,8 +924,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func stream_serverErrorBody_isCappedKeepingThePrefix() async {
-    let sut = makeSUT()
+  func stream_serverErrorBody_isCappedKeepingThePrefix() async throws {
+    let sut = try makeSUT()
     let cap = FunctionsAPI.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
@@ -938,8 +949,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func streamRelayErrorThrowsRelay() async {
-    let sut = makeSUT()
+  func streamRelayErrorThrowsRelay() async throws {
+    let sut = try makeSUT()
 
     Mock(
       url: url.appendingPathComponent("stream"),
@@ -966,7 +977,7 @@ struct FunctionsClientTests {
       $0.yield(ArraySlice("partial".utf8))
       $0.finish(throwing: URLError(.networkConnectionLost))
     }
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(status: .ok),
         HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
@@ -990,7 +1001,7 @@ struct FunctionsClientTests {
   @Test
   func streamCancellingTheIteratingTaskThrowsCancellationError() async throws {
     let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(status: .ok),
         HTTPBody(chunks, length: .unknown, iterationBehavior: .single)

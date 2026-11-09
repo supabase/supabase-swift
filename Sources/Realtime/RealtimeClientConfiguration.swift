@@ -18,7 +18,7 @@ extension RealtimeClient {
   /// )
   /// configuration.heartbeatInterval = .seconds(15)
   /// configuration.serverLogLevel = .warning
-  /// let client = RealtimeClient(configuration: configuration)
+  /// let client = try RealtimeClient(configuration: configuration)
   /// ```
   ///
   /// ## Topics

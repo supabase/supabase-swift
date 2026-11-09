@@ -15,7 +15,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct StorageClientIntegrationTests {
-  let storage = StorageIntegration.client()
+  let storage = try! StorageIntegration.client()
 
   init() async throws {
     let testBucketName = "test-bucket"
@@ -199,7 +199,7 @@ struct StorageClientIntegrationTests {
 
   @Test
   func malformedBearerIsAccessDenied() async throws {
-    let client = StorageIntegration.client(headers: [.authorization: "Bearer not-a-jwt"])
+    let client = try StorageIntegration.client(headers: [.authorization: "Bearer not-a-jwt"])
 
     let error = await StorageIntegration.storageError {
       _ = try await client.listBuckets()
@@ -212,7 +212,7 @@ struct StorageClientIntegrationTests {
 
   @Test
   func missingAuthorizationIsRefusedByTheServer() async throws {
-    let client = StorageIntegration.client(headers: [:])
+    let client = try StorageIntegration.client(headers: [:])
 
     let error = await StorageIntegration.storageError {
       _ = try await client.listBuckets()
@@ -237,7 +237,7 @@ struct StorageClientIntegrationTests {
       func bump() { count += 1 }
     }
     let calls = Calls()
-    let client = StorageIntegration.client(
+    let client = try StorageIntegration.client(
       headers: [.init("apikey")!: DotEnv.supabasePublishableKey],
       middlewares: [
         AccessTokenMiddleware {
@@ -256,7 +256,7 @@ struct StorageClientIntegrationTests {
   func nilTokenSendsNoBearer() async throws {
     let name = try await StorageIntegration.newBucket("anon")
     defer { StorageIntegration.dropBucket(name) }
-    let client = StorageIntegration.client(
+    let client = try StorageIntegration.client(
       headers: [.init("apikey")!: DotEnv.supabasePublishableKey],
       middlewares: [AccessTokenMiddleware { nil }])
 
@@ -269,7 +269,7 @@ struct StorageClientIntegrationTests {
 
   @Test
   func staticAuthorizationWinsOverTheMiddleware() async throws {
-    let client = StorageIntegration.client(
+    let client = try StorageIntegration.client(
       headers: [.authorization: "Bearer not-a-jwt"],
       middlewares: [AccessTokenMiddleware { DotEnv.supabaseSecretKey }])
 
@@ -286,7 +286,9 @@ struct StorageClientIntegrationTests {
     defer { StorageIntegration.dropBucket(name) }
     try await StorageIntegration.admin.from(name).upload(path: "seed.txt", data: Data("seed".utf8))
 
-    let anon = StorageIntegration.client(headers: [.init("apikey")!: DotEnv.supabasePublishableKey])
+    let anon = try StorageIntegration.client(headers: [
+      .init("apikey")!: DotEnv.supabasePublishableKey
+    ])
     let elevated = anon.settingHeader(
       name: .authorization, value: "Bearer \(DotEnv.supabaseSecretKey)")
 
@@ -298,7 +300,7 @@ struct StorageClientIntegrationTests {
   func supabaseClientWithTheSecretKeyBypassesRowLevelSecurity() async throws {
     let name = try await StorageIntegration.newBucket("supabase-client")
     defer { StorageIntegration.dropBucket(name) }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseSecretKey,
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
@@ -313,7 +315,7 @@ struct StorageClientIntegrationTests {
   func supabaseClientWithANewFormatKeySendsNoBearer() async throws {
     let name = try await StorageIntegration.newBucket("publishable")
     defer { StorageIntegration.dropBucket(name) }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: DotEnv.supabaseURL)!,
       supabaseKey: DotEnv.supabaseNewFormatPublishableKey,
       configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryTestStorage())))
