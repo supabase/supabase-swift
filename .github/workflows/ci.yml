@@ -36,6 +36,7 @@ jobs:
       package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
       integration: ${{ github.event_name != 'pull_request' || steps.filter.outputs.integration }}
       examples: ${{ github.event_name != 'pull_request' || steps.filter.outputs.examples }}
+      compliance: ${{ github.event_name != 'pull_request' || steps.filter.outputs.compliance }}
     steps:
       # Reads the PR's changed files from the API, so no checkout is needed.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -70,6 +71,10 @@ jobs:
               - Examples/**
               - scripts/xcodebuild.sh
               - .github/workflows/ci.yml
+            compliance:
+              - *swift
+              - sdk-compliance.yaml
+              - .sdk-parse-ignore
 
   macos:
     name: xcodebuild (macOS latest)
@@ -496,6 +501,31 @@ jobs:
       - name: Test docs
         run: ./scripts/test-docs.sh
 
+  # The undeclared public symbols must match scripts/compliance-baseline.txt, so new public API
+  # cannot land without an sdk-compliance.yaml entry.
+  compliance:
+    name: SDK compliance
+    needs: changes
+    if: needs.changes.outputs.compliance == 'true'
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache Swift build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: |
+            compliance-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            compliance-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-
+            compliance-${{ runner.os }}-
+      # The baseline was recorded with this Xcode; another SDK can change the symbol graph.
+      - name: Select Xcode 27.0
+        run: sudo xcode-select -s /Applications/Xcode_27.0.app
+      - name: Check sdk-compliance.yaml
+        run: ./scripts/check-compliance.sh
+
   format-check:
     name: Format check
     runs-on: blacksmith-6vcpu-macos-latest
@@ -568,6 +598,7 @@ jobs:
         examples-spm,
         spell-check,
         docs,
+        compliance,
         format-check,
         lint,
       ]

@@ -30,9 +30,10 @@ major-version migration guide (`V<N>_MIGRATION.md` and `docs/migrations/v<N>/`) 
 `.github/workflows/validate-capabilities.yml` calls supabase/sdk's reusable
 compliance workflow on every PR, and it does check for both newly added
 public API not listed in the manifest and registered symbols the code no
-longer has. But that workflow is not a required status check on `main` —
-only `CI Success` (this repo's own `ci.yml`) and the WIP/draft gate are —
-so a failing compliance check does not, by itself, block a merge.
+longer has. That workflow is not a required status check on `main`. Only
+`CI Success` (this repo's own `ci.yml`) and the WIP/draft gate are. The
+"SDK compliance" job in `ci.yml` is part of `CI Success`, and it runs
+`./scripts/check-compliance.sh`.
 
 **Any change to public API — adding, removing, renaming, or moving a
 symbol — updates `sdk-compliance.yaml` in the same commit.** This includes
@@ -47,10 +48,23 @@ format.
 ./scripts/check-compliance.sh
 ```
 
-This runs the same stale-entry check locally, without network access or a
-checkout of `supabase/sdk`. Run it yourself before pushing a public-API
-change — `validate-capabilities.yml` will eventually catch it too, but
-since it isn't a required check, nothing stops a merge if you don't.
+It needs no network access and no checkout of `supabase/sdk`. It fails when:
+
+- `sdk-compliance.yaml` declares a symbol the public API no longer has.
+- The undeclared public symbols differ from `scripts/compliance-baseline.txt`.
+  A symbol that is not in the baseline is new public API: declare it. A
+  baseline symbol that is now declared means the baseline is out of date:
+  run `./scripts/check-compliance.sh --update-baseline` and commit the
+  result. An update only removes symbols from the baseline. It never adds
+  one.
+
+Only symbols declared under `Sources/` count, minus the files that
+`.sdk-parse-ignore` matches. Only Auth still has undeclared symbols
+(SDK-2091).
+
+The symbol graph depends on the platform and the SDK. CI runs the check
+on macOS with Xcode 27.0, so run it there too. On Linux or another Xcode,
+some Apple-only APIs drop out and the check reports false results.
 
 What to declare: a type together with its public `init` and its members.
 Do not declare a member without its owning type. Declare every public macro.
