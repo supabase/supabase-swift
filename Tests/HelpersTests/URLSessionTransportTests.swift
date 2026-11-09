@@ -9,7 +9,6 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import HTTPTypesFoundation
-import Mocker
 import TestHelpers
 import Testing
 
@@ -19,11 +18,10 @@ import Testing
   import FoundationNetworking
 #endif
 
-// Mocker 3.0.2's `URLRequest.httpBodyStreamData()` is a `private extension`, not `public` as
-// documented, so it isn't visible here. URLSession converts a POST/PUT `httpBody` into an
-// `httpBodyStream` before `MockingURLProtocol` observes the request, so tests need their own
-// reader to recover the bytes. The stream is read until the writer closes it, which for a
-// streamed request body means until the transport has pumped every chunk through.
+// URLSession converts a POST/PUT `httpBody` into an `httpBodyStream` before a `URLProtocol`
+// observes the request, so the bytes are read back from the stream. The stream is read until the
+// writer closes it, which for a streamed request body means until the transport has pumped every
+// chunk through.
 extension URLRequest {
   fileprivate func testBodyData() -> Data? {
     guard let stream = httpBodyStream else { return httpBody }
@@ -59,31 +57,92 @@ extension InputStream {
   }
 }
 
-// Mocker's registry (`Mock.register()`, `Mocker.removeAll()`) is process-global, and each test
-// calls `removeAll()` in `makeTransport()`, so two tests running concurrently can wipe out one
-// another's registered mock. `.serialized` keeps this suite's own tests from racing, and
-// `.mockerSerialized` extends that to Mocker-backed suites in every other test target.
-@Suite(.serialized, .mockerSerialized)
-struct URLSessionTransportTests {
-  let url = URL(string: "https://example.com/path")!
+/// Answers each request with the stub registered for its host. Every test uses its own host, so
+/// tests run in parallel without seeing each other's stubs.
+private final class StubURLProtocol: URLProtocol, @unchecked Sendable {
+  struct Stub: Sendable {
+    var method: String
+    var url: URL
+    var status: Int
+    var headers: [String: String]
+    var data: Data
+    var onRequest: @Sendable (URLRequest) throws -> Void
+  }
+
+  private static let stubs = LockIsolated<[String: Stub]>([:])
+
+  static func register(_ stub: Stub) {
+    stubs.withValue { $0[stub.url.host ?? ""] = stub }
+  }
+
+  static func remove(host: String) {
+    stubs.withValue { $0[host] = nil }
+  }
+
+  override static func canInit(with request: URLRequest) -> Bool { true }
+
+  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    guard
+      let stub = Self.stubs.value[request.url?.host ?? ""],
+      request.httpMethod == stub.method, request.url == stub.url,
+      let response = HTTPURLResponse(
+        url: stub.url, statusCode: stub.status, httpVersion: "HTTP/1.1",
+        headerFields: stub.headers)
+    else {
+      client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
+      return
+    }
+    do {
+      try stub.onRequest(request)
+    } catch {
+      client?.urlProtocol(self, didFailWithError: error)
+      return
+    }
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(self, didLoad: stub.data)
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
+}
+
+@Suite
+final class URLSessionTransportTests: Sendable {
+  let host = "\(UUID().uuidString.lowercased()).test"
+  var url: URL { URL(string: "https://\(host)/path")! }
+
+  deinit {
+    StubURLProtocol.remove(host: host)
+  }
+
+  private func makeTransport(
+    _ method: HTTPRequest.Method,
+    status: Int = 200,
+    headers: [String: String] = [:],
+    data: Data = Data(),
+    onRequest: @escaping @Sendable (URLRequest) throws -> Void = { _ in }
+  ) -> URLSessionTransport {
+    StubURLProtocol.register(
+      .init(
+        method: method.rawValue, url: url, status: status, headers: headers, data: data,
+        onRequest: onRequest))
+    return makeTransport()
+  }
 
   private func makeTransport() -> URLSessionTransport {
-    Mocker.removeAll()
     let configuration = URLSessionConfiguration.ephemeral
-    configuration.protocolClasses = [MockingURLProtocol.self]
+    configuration.protocolClasses = [StubURLProtocol.self]
     return URLSessionTransport(session: URLSession(configuration: configuration))
   }
 
   @Test
   func getReturnsHeadAndStreamedBody() async throws {
-    let transport = makeTransport()
-    // Mocker doesn't compute Content-Length from the mocked data itself, so the header is
-    // supplied explicitly here to give `URLResponse.expectedContentLength` a known value.
-    Mock(
-      url: url, statusCode: 201,
-      data: [.get: Data("ok".utf8)],
-      additionalHeaders: ["X-Test": "1", "Content-Length": "2"]
-    ).register()
+    // The stub does not compute Content-Length from its data, so the header is supplied
+    // explicitly here to give `URLResponse.expectedContentLength` a known value.
+    let transport = makeTransport(
+      .get, status: 201, headers: ["X-Test": "1", "Content-Length": "2"], data: Data("ok".utf8))
 
     let (head, maybeBody) = try await transport.send(
       HTTPRequest(method: .get, url: url), body: nil)
@@ -101,11 +160,8 @@ struct URLSessionTransportTests {
 
   @Test
   func dataBodyIsUploadedWithContentLength() async throws {
-    let transport = makeTransport()
-    var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
     let seen = LockIsolated<URLRequest?>(nil)
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in seen.setValue(request) })
-    mock.register()
+    let transport = makeTransport(.post) { request in seen.setValue(request) }
 
     _ = try await transport.send(
       HTTPRequest(method: .post, url: url), body: HTTPBody(Data("abc".utf8)))
@@ -117,24 +173,21 @@ struct URLSessionTransportTests {
 
   @Test
   func fileBodyIsUploadedFromDisk() async throws {
-    let transport = makeTransport()
     let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try Data("file".utf8).write(to: fileURL)
     defer { try? FileManager.default.removeItem(at: fileURL) }
 
-    var mock = Mock(url: url, statusCode: 200, data: [.put: Data("done".utf8)])
     let seen = LockIsolated<Data?>(nil)
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+    let transport = makeTransport(.put, data: Data("done".utf8)) { request in
       seen.setValue(request.testBodyData())
-    })
-    mock.register()
+    }
 
     let (head, body) = try await transport.send(
       HTTPRequest(method: .put, url: url), body: try HTTPBody(fileURL: fileURL))
 
     #expect(head.status == 200)
     // swift-corelibs-foundation keeps a file upload on the task, not on the `URLRequest` that
-    // `MockingURLProtocol` observes, so the mock cannot see the body on Linux.
+    // the stub protocol observes, so the stub cannot see the body on Linux.
     #if !canImport(FoundationNetworking)
       #expect(seen.value == Data("file".utf8))
     #endif
@@ -143,20 +196,17 @@ struct URLSessionTransportTests {
 
   @Test
   func streamedBodyIsPulledWhileTheRequestIsInFlight() async throws {
-    let transport = makeTransport()
-    var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
     let secondChunkReleased = LockIsolated(false)
     let releasedBeforeRequestStarted = LockIsolated<Bool?>(nil)
     let seenContentLength = LockIsolated<String?>(nil)
     let seenBody = LockIsolated<Data?>(nil)
     let (requestStarted, started) = AsyncStream<Void>.makeStream()
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
+    let transport = makeTransport(.post) { request in
       releasedBeforeRequestStarted.setValue(secondChunkReleased.value)
       started.finish()
       seenContentLength.setValue(request.value(forHTTPHeaderField: "Content-Length"))
       seenBody.setValue(request.testBodyData())
-    })
-    mock.register()
+    }
 
     let chunks = AsyncThrowingStream<ArraySlice<UInt8>, any Error> { continuation in
       continuation.yield(ArraySlice("abc".utf8))
@@ -180,7 +230,7 @@ struct URLSessionTransportTests {
       #expect(releasedBeforeRequestStarted.value == false)
     #endif
     #expect(seenContentLength.value == "6")
-    // Linux uploads the spooled file from the task, which `MockingURLProtocol` cannot see.
+    // Linux uploads the spooled file from the task, which the stub protocol cannot see.
     #if !canImport(FoundationNetworking)
       #expect(seenBody.value == Data("abcdef".utf8))
     #endif
@@ -189,11 +239,8 @@ struct URLSessionTransportTests {
   #if canImport(FoundationNetworking)
     @Test
     func spooledBodyShorterThanDeclaredLengthFailsBeforeUploadOnLinux() async throws {
-      let transport = makeTransport()
       let started = LockIsolated(false)
-      var mock = Mock(url: url, statusCode: 200, data: [.post: Data()])
-      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in started.setValue(true) })
-      mock.register()
+      let transport = makeTransport(.post) { _ in started.setValue(true) }
       let chunks = AsyncStream<ArraySlice<UInt8>> {
         $0.yield(ArraySlice("abc".utf8))
         $0.finish()
@@ -340,13 +387,8 @@ struct URLSessionTransportTests {
 
   @Test
   func requestTimeoutTaskLocalIsAppliedToTheURLRequest() async throws {
-    let transport = makeTransport()
-    var mock = Mock(url: url, statusCode: 200, data: [.get: Data()])
     let seen = LockIsolated<TimeInterval?>(nil)
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { request in
-      seen.setValue(request.timeoutInterval)
-    })
-    mock.register()
+    let transport = makeTransport(.get) { request in seen.setValue(request.timeoutInterval) }
 
     try await RequestTimeout.$current.withValue(.seconds(150)) {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
@@ -357,9 +399,8 @@ struct URLSessionTransportTests {
 
   @Test
   func streamedResponseDeliversChunksAsReceived() async throws {
-    let transport = makeTransport()
     let payload = "data: 1\ndata: 2\ndata: 3\n"
-    Mock(url: url, statusCode: 200, data: [.get: Data(payload.utf8)]).register()
+    let transport = makeTransport(.get, data: Data(payload.utf8))
 
     var chunks: [String] = []
     let (_, maybeBody) = try await transport.send(
@@ -368,18 +409,14 @@ struct URLSessionTransportTests {
       chunks.append(String(decoding: chunk, as: UTF8.self))
     }
 
-    // Chunk boundaries follow URLSession's deliveries, never the payload. Mocker hands the
+    // Chunk boundaries follow URLSession's deliveries, never the payload. The stub hands the
     // whole body over in one `didLoad`, so exactly one chunk arrives and nothing is re-split.
     #expect(chunks == [payload])
   }
 
   @Test
   func streamedResponseFailureSurfacesAsThrownError() async throws {
-    let transport = makeTransport()
-    Mock(
-      url: url, statusCode: 200, data: [.get: Data()],
-      requestError: URLError(.notConnectedToInternet)
-    ).register()
+    let transport = makeTransport(.get) { _ in throw URLError(.notConnectedToInternet) }
 
     await #expect(throws: URLError.self) {
       _ = try await transport.send(HTTPRequest(method: .get, url: url), body: nil)
