@@ -15,7 +15,7 @@
 
   /// The rows of a relation, kept in sync with the database, as observable state.
   ///
-  /// It runs the same live query as ``SupabaseClient/stream(_:where:)`` and publishes the result
+  /// It runs the same live query as ``SupabaseClient/stream(of:where:)`` and publishes the result
   /// on the main actor. Nothing starts until you call ``run()``. In SwiftUI, call it from the
   /// `task` modifier, so the query ends when the view goes away:
   ///
@@ -119,7 +119,7 @@
   extension LiveQuery where R: _PostgrestKeyedRelation {
     /// Creates a live query for the rows of a relation.
     ///
-    /// The filter takes only what Realtime can run. See ``SupabaseClient/stream(_:where:)`` for
+    /// The filter takes only what Realtime can run. See ``SupabaseClient/stream(of:where:)`` for
     /// the operators, and for how the rows stay in sync.
     ///
     /// - Parameters:

@@ -747,7 +747,7 @@
         let skippedKey = UUID().uuidString
 
         let changes = await channel.postgresChanges(
-          for: KeyValueStorage.self,
+          of: KeyValueStorage.self,
           event: .insert,
           where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
         )
@@ -789,7 +789,7 @@
       let results = LockIsolated<[[KeyValueStorage]]>([])
       let iteration = Task {
         for try await rows in client.stream(
-          KeyValueStorage.self, where: { $0.key.in([first, second]) })
+          of: KeyValueStorage.self, where: { $0.key.in([first, second]) })
         {
           results.withValue { $0.append(rows) }
         }

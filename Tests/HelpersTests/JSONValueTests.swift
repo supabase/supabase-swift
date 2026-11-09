@@ -377,6 +377,28 @@ struct JSONValueTests {
   }
 
   @Test
+  func nilEncoderUsesTheSDKEncoder() throws {
+    let value = try JSONValue(["at": Date(timeIntervalSince1970: 0)], encoder: nil)
+    let object = try JSONObject(["at": Date(timeIntervalSince1970: 0)], encoder: nil)
+
+    #expect(value == ["at": "1970-01-01T00:00:00.000Z"])
+    #expect(object == ["at": "1970-01-01T00:00:00.000Z"])
+  }
+
+  @Test
+  func nilDecoderUsesTheSDKDecoder() throws {
+    struct Event: Decodable, Equatable {
+      let at: Date
+    }
+    let event: JSONObject = ["at": "1970-01-01T00:00:00+00:00"]
+    let expected = Event(at: Date(timeIntervalSince1970: 0))
+
+    #expect(try event.decode(as: Event.self, decoder: nil) == expected)
+    #expect(try JSONValue.object(event).decode(as: Event.self, decoder: nil) == expected)
+    #expect(try [JSONValue.object(event)].decode(as: Event.self, decoder: nil) == [expected])
+  }
+
+  @Test
   func jsonObjectInitFromCodableFailure() {
     #expect(throws: (any Error).self) {
       try JSONObject("not an object")

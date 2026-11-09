@@ -9,13 +9,13 @@ import Foundation
 import Supabase
 
 let encoder: JSONEncoder = {
-  let encoder = PostgrestClient.Configuration.jsonEncoder
+  let encoder = JSONEncoder.supabase()
   encoder.keyEncodingStrategy = .convertToSnakeCase
   return encoder
 }()
 
 let decoder: JSONDecoder = {
-  let decoder = PostgrestClient.Configuration.jsonDecoder
+  let decoder = JSONDecoder.supabase()
   decoder.keyDecodingStrategy = .convertFromSnakeCase
   return decoder
 }()

@@ -22,8 +22,15 @@ for await message in await channel.broadcasts(event: "cursor") {
 }
 ```
 
-The default decoder for broadcasts and rows is the one the SDK uses for server responses. It
-reads Postgres dates.
+Every `decoder:` and `encoder:` parameter is optional. `nil` uses `JSONDecoder.supabase()` or
+`JSONEncoder.supabase()`, which read and write Postgres dates. To change a setting, such as the key
+strategy, start from one of them so dates still work:
+
+```swift
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let message = try broadcast.decode(as: ChatMessage.self, decoder: decoder)
+```
 
 ### Typed Postgres changes
 

@@ -242,6 +242,35 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
+  func broadcast_nilEncoderIsTheSupabaseEncoder() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+
+    try await channel.broadcast(
+      event: "my_event", payload: ["at": Date(timeIntervalSince1970: 0)], encoder: nil)
+
+    let frame = try #require(await client.sentBinaryFrames().last)
+    #expect(frame.range(of: Data(#""at":"1970-01-01T00:00:00.000Z""#.utf8)) != nil)
+  }
+
+  @Test
+  func httpSend_nilEncoderIsTheSupabaseEncoder() async throws {
+    http.respond { _, _ in
+      (HTTPResponse(status: .init(code: 202)), Data())
+    }
+
+    let channel = await sut.channel("test")
+    try await channel.httpSend(
+      event: "my_event", payload: ["at": Date(timeIntervalSince1970: 0)], encoder: nil)
+
+    let body = try #require(http.requests.last?.body)
+    #expect(String(decoding: body, as: UTF8.self) == #"{"at":"1970-01-01T00:00:00.000Z"}"#)
+  }
+
+  @Test
   func httpSend_encodesPayloadWithTheGivenEncoder() async throws {
     http.respond { _, _ in
       (HTTPResponse(status: .init(code: 202)), Data())

@@ -63,13 +63,15 @@ extension SupabaseClient {
       /// Creates the database settings.
       /// - Parameters:
       ///   - schema: The Postgres schema queries target. `nil` uses `public`.
-      ///   - encoder: The encoder for request bodies of the untyped API.
-      ///   - decoder: The decoder for responses of the untyped API.
+      ///   - encoder: The encoder for request bodies of the untyped API. Defaults to a new
+      ///     `JSONEncoder.supabase()`.
+      ///   - decoder: The decoder for responses of the untyped API. Defaults to a new
+      ///     `JSONDecoder.supabase()`.
       ///   - retry: Whether to retry transient errors on GET and HEAD requests.
       public init(
         schema: String? = nil,
-        encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-        decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+        encoder: JSONEncoder = .supabase(),
+        decoder: JSONDecoder = .supabase(),
         retry: Bool = true
       ) {
         self.schema = schema
@@ -230,7 +232,8 @@ extension SupabaseClient {
       /// Creates the Edge Functions settings.
       /// - Parameters:
       ///   - region: The default region for invocations. `nil` lets the platform pick.
-      ///   - decoder: The decoder for function responses.
+      ///   - decoder: The decoder for function responses. Defaults to a new
+      ///     `JSONDecoder.supabase()`.
       ///   - http: Overrides the global HTTP settings for Functions. `nil` uses the global value.
       ///   - logger: Overrides the global logger for Functions. `nil` uses the global value.
       public init(

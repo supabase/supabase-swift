@@ -64,6 +64,7 @@ emaillink
 enotconn
 entrancy
 eproto
+ERRCODE
 errno
 etag
 ethereum
@@ -205,6 +206,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+SQLSTATE
 subclassing
 subheadline
 Subview

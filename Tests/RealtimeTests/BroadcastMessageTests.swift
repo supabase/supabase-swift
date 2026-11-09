@@ -54,6 +54,20 @@ struct BroadcastMessageTests {
   }
 
   @Test
+  func decodeWithANilDecoderReadsPostgresTimestamps() throws {
+    struct Stamped: Decodable, Equatable {
+      let at: Date
+    }
+    let message = try #require(
+      BroadcastMessage(
+        text(["type": "broadcast", "event": "m", "payload": ["at": "1970-01-01T00:00:00+00:00"]])))
+
+    #expect(
+      try message.decode(as: Stamped.self, decoder: nil)
+        == Stamped(at: Date(timeIntervalSince1970: 0)))
+  }
+
+  @Test
   func databaseOriginatedTextBroadcastCarriesIDAndReplayed() throws {
     let message = try #require(
       BroadcastMessage(

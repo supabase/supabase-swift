@@ -25,8 +25,8 @@ struct QueryCapture {
     status: HTTPTypes.HTTPResponse.Status = .ok,
     responseHeaders: [String: String] = [:],
     headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"],
-    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
+    encoder: JSONEncoder = .supabase(),
+    decoder: JSONDecoder = .supabase()
   ) {
     let captured = self.captured
     let capturedBody = self.capturedBody
