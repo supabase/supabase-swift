@@ -270,7 +270,7 @@ struct ResumableUploadTests {
     open.yield()
     while await upload.isRunning { await Task.yield() }
     #expect(script.log.value.count == 2)
-    #expect(try store.record(fingerprint: upload.id.rawValue)?.lastKnownOffset == 8)
+    #expect(try store.record(fingerprint: upload.fingerprint)?.lastKnownOffset == 8)
 
     try await upload.resume()
     _ = try await upload.result
@@ -330,7 +330,7 @@ struct ResumableUploadTests {
     while script.log.value.count < 4 { await Task.yield() }
     try await storage.resumableUploads.clear()
 
-    #expect(try store.record(fingerprint: upload.id.rawValue) != nil)
+    #expect(try store.record(fingerprint: upload.fingerprint) != nil)
     open.yield()
     try await resuming.value
     while await upload.isRunning { await Task.yield() }
