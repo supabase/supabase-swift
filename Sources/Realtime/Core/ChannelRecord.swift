@@ -54,7 +54,7 @@ struct ChannelRecord {
 
   /// Whether the joins of the subscription ask the server for presence.
   var joinsWithPresence: Bool {
-    snapshot.presenceEnabled || configuration.presence.enabled
+    snapshot.presenceEnabled || configuration.presence.isEnabled
   }
 
   /// Whether a presence stream opened now gets events. Before a subscription starts, the stream

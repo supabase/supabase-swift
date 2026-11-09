@@ -2,7 +2,7 @@
 //  AppLifecycleView.swift
 //  Examples
 //
-//  Manually verifies `RealtimeClient.Configuration.handleAppLifecycle`:
+//  Manually verifies `RealtimeClient.Configuration.observesAppLifecycle`:
 //  background the app, bring it back to foreground, and confirm the
 //  socket reconnects and the channel re-joins without user intervention.
 //

@@ -78,6 +78,6 @@ let supabaseClient = SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
   configuration: .init(
-    auth: .init(redirectToURL: Constants.redirectToURL)
+    auth: .init(redirectTo: Constants.redirectToURL)
   )
 )

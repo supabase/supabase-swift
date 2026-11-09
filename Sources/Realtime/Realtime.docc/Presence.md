@@ -34,7 +34,7 @@ no `nonisolated` in an app with default main actor isolation. See <doc:Isolation
 
 The server sends presence only to a join that asks for it. A channel asks for it when a
 presence stream is open at the time ``RealtimeChannel/subscribe()`` runs, or when
-``RealtimeChannelConfiguration/Presence-swift.struct/enabled`` is `true`. A successful
+``RealtimeChannelConfiguration/Presence-swift.struct/isEnabled`` is `true`. A successful
 ``RealtimeChannel/track(_:encoder:)`` also turns presence on until the channel joins again.
 
 While presence is on, you can open a stream after you subscribe, for example from a view that
@@ -43,7 +43,7 @@ appears later. The stream gets the changes from the next message on, and
 off, the stream reports an issue and finishes at once.
 
 ```swift
-let channel = await supabase.channel("room:42") { $0.presence.enabled = true }
+let channel = await supabase.channel("room:42") { $0.presence.isEnabled = true }
 try await channel.subscribe()
 // Later, in a view:
 for await state in await channel.presenceStates() { /* ... */ }

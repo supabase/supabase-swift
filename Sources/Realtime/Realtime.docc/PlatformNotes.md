@@ -44,7 +44,7 @@ builds on Linux, but Linux and Android are not supported for production use.
 If the default transport does not work on your platform, implement ``WebSocketTransport`` over
 another WebSocket stack, such as one built on SwiftNIO. See <doc:CustomTransports>.
 
-``RealtimeClient/Configuration/handleAppLifecycle`` is on by default on iOS, macOS, tvOS and
+``RealtimeClient/Configuration/observesAppLifecycle`` is on by default on iOS, macOS, tvOS and
 visionOS. On watchOS it is off by default, and you can turn it on. On Linux and Android its
 default is `false`, and setting it to `true` does nothing.
 

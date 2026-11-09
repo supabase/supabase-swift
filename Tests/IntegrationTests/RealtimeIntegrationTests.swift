@@ -309,7 +309,7 @@
             "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
           ],
           requestTimeout: .seconds(10),
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           serverLogLevel: .warning,
           webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral)
         )
@@ -1109,7 +1109,7 @@
         let ana = await client.realtime.channel(topic) { $0.presence.key = "ana" }
         let bob = await client2.realtime.channel(topic) {
           $0.presence.key = "bob"
-          $0.presence.enabled = true
+          $0.presence.isEnabled = true
         }
         try await ana.subscribe()
         try await bob.subscribe()
@@ -1312,7 +1312,7 @@
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: ["apikey": DotEnv.supabasePublishableKey],
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           accessToken: accessToken,
           clock: testClock
         )

@@ -58,7 +58,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         headers: ["X-Client-Info": "my-app/1.2"],
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
 
     let join = try await host.subscribe(channel)
@@ -74,7 +74,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     let join = try await host.receive(event: ChannelEvent.join)
@@ -104,7 +104,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let subscription = Task { try await channel.subscribe() }
     var waits: [Duration] = []
@@ -206,7 +206,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         requestTimeout: .seconds(10),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let (socket, release) = try await stallBroadcast(on: host)
     defer { release() }
 
@@ -250,7 +250,7 @@ struct RealtimeShellTests {
         url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
         requestTimeout: .seconds(5),
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: {
           called.setValue(true)
           // Never yields; the loop ends only when the call is cancelled.
@@ -279,7 +279,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         headers: ["Authorization": "Bearer stored"],
-        handleAppLifecycle: false,
+        observesAppLifecycle: false,
         accessToken: { throw Failure() }
       ))
     let channel = await host.client.channel("room")
@@ -299,7 +299,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         disconnectOnEmptyChannelsAfter: .seconds(5),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let subscribed = await host.client.channel("subscribed")
     let join = try await host.subscribe(subscribed)
     _ = await host.client.channel("never-subscribed")
@@ -386,7 +386,7 @@ struct RealtimeShellTests {
     let other = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
-        handleAppLifecycle: false)
+        observesAppLifecycle: false)
     )
     _ = await other.channel("room")
 
@@ -404,7 +404,7 @@ struct RealtimeShellTests {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false)
+          observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
@@ -438,7 +438,7 @@ struct RealtimeShellTests {
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
         disconnectOnEmptyChannelsAfter: .seconds(5),
-        handleAppLifecycle: false))
+        observesAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
     let removal = Task { await host.client.removeChannel(channel) }
@@ -482,7 +482,7 @@ struct RealtimeShellTests {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false),
+          observesAppLifecycle: false),
         wsTransport: { _, _ in
           let (socket, server) = FakeWebSocket.fakes()
           servers.withValue { $0.append(server) }
@@ -507,7 +507,7 @@ struct RealtimeShellTests {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "http://localhost:54321/realtime/v1")!,
-        handleAppLifecycle: false)
+        observesAppLifecycle: false)
     )
   }
 

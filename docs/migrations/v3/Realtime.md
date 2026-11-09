@@ -182,6 +182,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger`, defaults to a logger labeled `io.supabase.realtime` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |
 | `RealtimeClientOptions(timeoutInterval:)` | `requestTimeout:` |
+| `RealtimeClientOptions.handleAppLifecycle`, `defaultHandleAppLifecycle` | `observesAppLifecycle`, `defaultObservesAppLifecycle`, on `RealtimeClient.Configuration` and `SupabaseClient.Configuration.Realtime` |
 | `heartbeatInterval:`, `disconnectOnEmptyChannelsAfter:` (`TimeInterval`) | same names, `Duration` |
 | `RealtimeClientOptions(reconnectDelay:)`, `defaultReconnectDelay` | removed; the reconnect wait is internal (see [Silent changes](#silent-changes)) |
 | `RealtimeClientOptions(disconnectOnSessionLoss:)`, `defaultDisconnectOnSessionLoss` | removed; nothing read them |

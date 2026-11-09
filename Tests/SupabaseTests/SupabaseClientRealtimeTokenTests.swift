@@ -21,7 +21,7 @@ struct SupabaseClientRealtimeTokenTests {
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryTestStorage(), autoRefresh: .manual, accessToken: accessToken),
         global: .init(http: .init(transport: transport)),
-        realtime: SupabaseClient.Configuration.Realtime(handleAppLifecycle: false)
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
       )
     )
   }

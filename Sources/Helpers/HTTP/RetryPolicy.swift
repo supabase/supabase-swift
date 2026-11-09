@@ -19,7 +19,7 @@ package import HTTPTypes
 /// ``maxDelay``.
 ///
 /// `package` on purpose: which requests are safe to replay is the SDK's decision, so callers
-/// only switch retries on or off (`retryEnabled`, `db.retry`, `storage.retryEnabled`).
+/// only switch retries on or off (`retryEnabled`, `database.retryEnabled`, `storage.retryEnabled`).
 package struct RetryPolicy: Sendable, Hashable {
   /// Total attempts, including the first. `1` disables retries.
   package var maxAttempts: Int

@@ -949,7 +949,7 @@ struct RealtimeChannelSubscriptionTests {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: "http://localhost:54321/realtime/v1")!,
-          handleAppLifecycle: false)
+          observesAppLifecycle: false)
       )
       return await client.channel("room")
     }
@@ -1322,7 +1322,7 @@ struct RealtimeChannelSubscriptionTests {
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
           connectOnSubscribe: connectOnSubscribe,
-          handleAppLifecycle: false,
+          observesAppLifecycle: false,
           accessToken: {
             let call = accessTokenCalls.withValue {
               $0 += 1

@@ -99,7 +99,7 @@ extension RealtimeClient {
       """
       Cannot open "presence" streams for "\(state.handle.topic)" after `subscribe()`, because \
       presence is off for this channel. Open a presence stream before subscribing, or set \
-      `configuration.presence.enabled` to `true`.
+      `configuration.presence.isEnabled` to `true`.
       """
     )
     return false

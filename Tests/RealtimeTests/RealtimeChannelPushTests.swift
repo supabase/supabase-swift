@@ -226,7 +226,7 @@ struct RealtimeChannelPushTests {
           url: URL(string: "http://localhost:54321/realtime/v1")!,
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
-          handleAppLifecycle: false
+          observesAppLifecycle: false
         ),
         wsTransport: { _, _ in socket },
         http: HTTPClient(transport: RecordingTransport()),
