@@ -12,11 +12,11 @@ package import HTTPTypes
 ///
 /// One policy drives every module that retries (Auth, PostgREST, Storage, and the delay math of
 /// Realtime's reconnect). A request is retried when its method is in ``retryableMethods`` and
-/// the attempt either failed with a transient `URLError` or returned a status in
-/// ``retryableStatuses``. The wait between attempts is capped exponential backoff with equal
-/// jitter — `random(cap/2...cap)` where `cap = min(maxDelay, baseDelay · 2^(n-1))` for the n-th
-/// retry — unless the response carried a `Retry-After` header, which is honoured up to
-/// ``maxDelay``.
+/// the attempt either failed with a transient `URLError` or returned a response that
+/// ``retries(_:)`` accepts: a status in ``retryableStatuses``, and for a 429 a `Retry-After`.
+/// The wait between attempts is capped exponential backoff with equal jitter —
+/// `random(cap/2...cap)` where `cap = min(maxDelay, baseDelay · 2^(n-1))` for the n-th retry —
+/// unless the response carried a `Retry-After` header, which is honoured up to ``maxDelay``.
 ///
 /// `package` on purpose: which requests are safe to replay is the SDK's decision, so callers
 /// only switch retries on or off (`retryEnabled`, `database.retryEnabled`, `storage.retryEnabled`).
@@ -61,6 +61,14 @@ package struct RetryPolicy: Sendable, Hashable {
 }
 
 extension RetryPolicy {
+  /// Whether `response` is worth another attempt: its status is in ``retryableStatuses``, and a
+  /// 429 also carries `Retry-After`. Without one a 429 gives no safe time to come back, and a
+  /// rate limiter that counts every attempt would only spend more quota on a replay.
+  package func retries(_ response: HTTPTypes.HTTPResponse) -> Bool {
+    guard retryableStatuses.contains(response.status.code) else { return false }
+    return response.status != .tooManyRequests || response.headerFields[.retryAfter] != nil
+  }
+
   /// Equal-jitter backoff for the `retry`-th retry (1-based): a random duration in
   /// `cap/2...cap`, where `cap = min(maxDelay, baseDelay · 2^(retry-1))`.
   package func backoffDelay(retry: Int) -> Duration {

@@ -122,7 +122,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 2" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{}" \
@@ -151,7 +151,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 126" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"auth_code\":\"12345\",\"code_verifier\":\"nt_xCJhJXUsIlTmbE_b0r3VHDKLxFTAwXYSj1xF3ZPaulO2gejNornLLiW_C3Ru4w-5lqIh1XE2LTOsSKrj7iA\"}" \
@@ -213,7 +213,7 @@ struct AuthClientTests {
       #"""
       curl \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/auth/v1/user/identities/authorize?code_challenge=hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY&code_challenge_method=s256&provider=github&skip_http_redirect=true"
@@ -237,7 +237,7 @@ struct AuthClientTests {
       	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 166" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":true,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
@@ -291,7 +291,7 @@ struct AuthClientTests {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/auth/v1/admin/users"
@@ -321,7 +321,7 @@ struct AuthClientTests {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/auth/v1/admin/users"
@@ -337,7 +337,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 238" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"data\":{\"custom_key\":\"custom_value\"},\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\"}" \
@@ -366,7 +366,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 159" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"channel\":\"sms\",\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\",\"phone\":\"+1 202-918-2132\"}" \
@@ -428,7 +428,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 107" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\"}" \
@@ -453,7 +453,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 106" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\",\"phone\":\"+1 202-918-2132\"}" \
@@ -478,7 +478,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 167" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"access_token\":\"access-token\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"id_token\":\"id-token\",\"link_identity\":false,\"nonce\":\"nonce\",\"provider\":\"apple\"}" \
@@ -507,7 +507,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 448" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"chain\":\"ethereum\",\"gotrue_meta_security\":{\"captcha_token\":\"captcha-token\"},\"message\":\"example.com wants you to sign in with your Ethereum account:\n0x2c7536E3605D9C16a7a3D7b1898e529396a65c23\n\nURI: https:\/\/example.com\nVersion: 1\nChain ID: 1\nNonce: abc123\nIssued At: 2026-01-01T00:00:00.000Z\",\"signature\":\"0x468cc42ece552183597cbbbd0418a5d3efff707a1021a222ad16e55124327ee670d363a8ee08976b5bd5f7af5e3ac53a4e43983a9ac7f4853a75423fcc387ddc1c\"}" \
@@ -537,7 +537,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 305" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"chain\":\"solana\",\"message\":\"example.com wants you to sign in with your Solana account:\n4Cw1koUQtqybLFem7uqhzMBznMPGARbFS4cjaYbM9RnR\n\nURI: https:\/\/example.com\nVersion: 1\nIssued At: 2026-01-01T00:00:00.000Z\",\"signature\":\"dGVzdC1zaWduYXR1cmUtYnl0ZXMtdGhhdC1hcmUtNjQtYnl0ZXMtbG9uZy1mb3ItdGVzdGluZw==\"}" \
@@ -596,7 +596,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 235" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"code_challenge\":\"hgJeigklONUI1pKSS98MIAbtJGaNu0zJU1iSiFOn2lY\",\"code_challenge_method\":\"s256\",\"create_user\":true,\"data\":{\"custom_key\":\"custom_value\"},\"email\":\"example@mail.com\",\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"}}" \
@@ -625,7 +625,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 161" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"channel\":\"whatsapp\",\"create_user\":true,\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"phone\":\"+1 202-918-2132\"}" \
@@ -686,7 +686,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 33" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"refresh_token\":\"refresh-token\"}" \
@@ -708,7 +708,7 @@ struct AuthClientTests {
         #"""
         curl \
         	--header "Authorization: bearer accesstoken" \
-        	--header "X-Client-Info: auth-swift/0.0.0" \
+        	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
         	--header "X-Supabase-Api-Version: 2024-01-01" \
         	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
         	"http://localhost:54321/auth/v1/user"
@@ -745,7 +745,7 @@ struct AuthClientTests {
       #"""
       curl \
       	--header "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjo0ODUyMTYzNTkzLCJzdWIiOiJmMzNkM2VjOS1hMmVlLTQ3YzQtODBlMS01YmQ5MTlmM2Q4YjgiLCJlbWFpbCI6ImhpQGJpbmFyeXNjcmFwaW5nLmNvIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6e30sInJvbGUiOiJhdXRoZW50aWNhdGVkIn0.UiEhoahP9GNrBKw_OHBWyqYudtoIlZGkrjs7Qa8hU7I" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/auth/v1/user"
@@ -769,7 +769,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 39" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"refresh_token\":\"dummy-refresh-token\"}" \
@@ -793,7 +793,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 64" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"email\":\"example@mail.com\",\"token\":\"123456\",\"type\":\"magiclink\"}" \
@@ -824,7 +824,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 57" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"phone\":\"+1 202-918-2132\",\"token\":\"123456\",\"type\":\"sms\"}" \
@@ -849,7 +849,7 @@ struct AuthClientTests {
       	--request POST \
       	--header "Content-Length: 39" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"token_hash\":\"abc-def\",\"type\":\"email\"}" \
@@ -972,7 +972,7 @@ struct AuthClientTests {
     let configuration = AuthClient.Configuration(
       url: url,
       storageKey: storageKey,
-      headers: HTTPFields(["apikey": apiKey]),
+      headers: [.apikey: apiKey],
       storage: storage,
       redirectTo: redirectTo,
       autoRefresh: autoRefresh,

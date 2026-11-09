@@ -31,7 +31,7 @@ enum StaleTokenRejection: Sendable {
       return (response.status == .unauthorized && Self.functionsJWTCodes.contains(code), body)
     case .storage:
       guard response.status == .badRequest, let body else { return (false, body) }
-      let data = try await Data(collecting: body, upTo: .max)
+      let data = try await Data(collecting: body, truncatingAt: HTTPClient.maxErrorBodyBytes)
       let error = try? JSONDecoder().decode(StorageErrorBody.self, from: data)
       let rejectsToken =
         error?.code == StorageError.Code.accessDenied.rawValue
@@ -89,7 +89,7 @@ struct AuthMiddleware: ClientMiddleware {
     }
 
     if let responseBody {
-      _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
+      _ = try? await Data(collecting: responseBody, truncatingAt: HTTPClient.maxErrorBodyBytes)
     }
     return try await next(request.signed(with: retry.accessToken), body)
   }

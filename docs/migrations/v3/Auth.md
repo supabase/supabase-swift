@@ -1111,7 +1111,7 @@ let auth = AuthClient(
 )
 // v3
 var configuration = AuthClient.Configuration(url: url, storageKey: "sb-project-auth-token")
-configuration.headers[HTTPField.Name("apikey")!] = key
+configuration.headers[.apikey] = key
 configuration.redirectTo = redirect
 let auth = try AuthClient(configuration: configuration)
 ```

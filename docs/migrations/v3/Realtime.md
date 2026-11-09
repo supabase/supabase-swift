@@ -178,6 +178,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
 | `track(_:)`, `track(state: JSONObject)`, `untrack()` | `track(_:encoder:)` (a `JSONObject` is `Encodable`), `untrack()`; both `async throws` and always wait for the server reply |
 | `RealtimeMessageV2`, `PushStatus` | removed; the client builds and reads the protocol messages, and a push throws `RealtimeError` (see [Pushes throw](#pushes-throw-instead-of-returning-a-status)) |
+| `RealtimeClientOptions.headers: [String: String]` | `RealtimeClient.Configuration.headers: HTTPFields`, for example `[.apikey: key]` |
 | `RealtimeClientOptions(fetch:)` | `RealtimeClient.Configuration(url:http:)` |
 | `RealtimeClientOptions(logger: (any SupabaseLogger)?)` | `logger: Logging.Logger`, defaults to a logger labeled `io.supabase.realtime` |
 | `RealtimeClientOptions(vsn:)`, `RealtimeProtocolVersion` | removed; protocol 2.0.0 always |

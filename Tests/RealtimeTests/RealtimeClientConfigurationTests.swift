@@ -40,7 +40,7 @@ struct RealtimeClientConfigurationTests {
         headers: [:])
     )
 
-    #expect(client.headers[.apiKey] == nil)
+    #expect(client.headers[.apikey] == nil)
   }
 
   @Test
@@ -106,25 +106,27 @@ struct RealtimeClientConfigurationTests {
   }
 
   @Test
-  func headersAreReadableAsADictionary() {
-    var options = RealtimeClient.Configuration(url: url, headers: ["X-Custom": "1"])
-    options.headers["X-Other"] = "2"
+  func headersCanBeEdited() {
+    let custom = HTTPField.Name("X-Custom")!
+    let other = HTTPField.Name("X-Other")!
+    var options = RealtimeClient.Configuration(url: url, headers: [custom: "1"])
+    options.headers[other] = "2"
 
-    #expect(options.headers == ["X-Custom": "1", "X-Other": "2"])
+    #expect(options.headers == [custom: "1", other: "2"])
   }
 
   @Test
   func headersReachTheUpgradeRequest() async throws {
-    let headers = try await upgradeHeaders(for: ["X-Custom": "1", "apikey": "k"])
+    let headers = try await upgradeHeaders(for: [HTTPField.Name("X-Custom")!: "1", .apikey: "k"])
 
     #expect(headers[HTTPField.Name("X-Custom")!] == "1")
-    #expect(headers[.apiKey] == "k")
-    #expect(headers[.xClientInfo]?.hasPrefix("realtime-swift/") == true)
+    #expect(headers[.apikey] == "k")
+    #expect(headers[.xClientInfo] == clientInfo(library: "realtime-swift"))
   }
 
   @Test
   func customClientInfoIsKept() async throws {
-    let headers = try await upgradeHeaders(for: ["x-client-info": "my-app/1.0"])
+    let headers = try await upgradeHeaders(for: [.xClientInfo: "my-app/1.0"])
 
     #expect(headers[values: .xClientInfo] == ["my-app/1.0"])
   }
@@ -162,7 +164,7 @@ struct RealtimeClientConfigurationTests {
   }
 
   /// The headers the client sends with its WebSocket upgrade request.
-  private func upgradeHeaders(for headers: [String: String]) async throws -> HTTPFields {
+  private func upgradeHeaders(for headers: HTTPFields) async throws -> HTTPFields {
     let captured = LockIsolated<HTTPFields?>(nil)
     let client = RealtimeClient(
       configuration: RealtimeClient.Configuration(

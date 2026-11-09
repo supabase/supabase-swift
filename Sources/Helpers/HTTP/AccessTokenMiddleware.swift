@@ -11,14 +11,15 @@ public import HTTPTypes
 /// already carries `Authorization`. A per-call header therefore wins over the provider, and a
 /// `nil` token leaves the header off.
 ///
-/// `SupabaseClient` installs one for every sub-client. A standalone client adds it to its
+/// For a standalone client. `SupabaseClient` does not use it: it installs its own middleware,
+/// which takes the token from its `AuthClient` session. A standalone client adds this one to its
 /// `HTTPClientConfiguration`, which is the one place a token enters a request:
 ///
 /// ```swift
 /// let storage = try StorageClient(
 ///   configuration: StorageClient.Configuration(
 ///     url: url,
-///     headers: ["apikey": key],
+///     headers: [.apikey: key],
 ///     http: HTTPClientConfiguration(
 ///       middlewares: [AccessTokenMiddleware { try await tokenProvider.current() }]
 ///     )

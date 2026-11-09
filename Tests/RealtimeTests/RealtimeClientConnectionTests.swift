@@ -13,7 +13,7 @@ struct RealtimeClientConnectionTests {
 
   @Test
   func connectOpensTheSocketAndReportsConnectingThenConnected() async throws {
-    let h = Harness(headers: ["apikey": "key"])
+    let h = Harness(headers: [.apikey: "key"])
     var statuses = await h.client.statusChanges().makeAsyncIterator()
 
     try await h.client.connect()
@@ -28,7 +28,7 @@ struct RealtimeClientConnectionTests {
       connect.url.absoluteString
         == "ws://localhost:54321/realtime/v1/websocket?apikey=key&vsn=2.0.0"
     )
-    #expect(connect.headers[HTTPField.Name("apikey")!] == "key")
+    #expect(connect.headers[.apikey] == "key")
   }
 
   @Test
@@ -579,7 +579,7 @@ struct RealtimeClientConnectionTests {
     let servers: LockIsolated<[FakeWebSocket]>
 
     init(
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       heartbeatInterval: Duration = .seconds(3600),
       reconnectDelay: Duration = .seconds(1),
       reconnectBackoff: BackoffPolicy? = nil,

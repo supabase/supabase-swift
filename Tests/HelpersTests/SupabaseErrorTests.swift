@@ -18,7 +18,8 @@ struct SupabaseErrorTests {
     var message: String
     var response: HTTPErrorResponse?
     var underlyingError: (any Error)?
-    var description: String { formattedDescription(kind: kind) }
+    var code: String?
+    var description: String { formattedDescription(kind: kind, code: code) }
   }
 
   @Test
@@ -69,5 +70,17 @@ struct SupabaseErrorTests {
 
     let caught = thrown as? any SupabaseError
     #expect(caught?.message == "boom")
+  }
+
+  @Test
+  func descriptionWithCodeAppendsIt() {
+    let error = FixtureError(
+      kind: "server",
+      message: "Row not found",
+      response: HTTPErrorResponse(status: 404, headers: HTTPFields(), body: Data()),
+      code: "PGRST116"
+    )
+
+    #expect(error.description == "FixtureError(server): Row not found [status 404] [code PGRST116]")
   }
 }

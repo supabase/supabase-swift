@@ -26,7 +26,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         accessToken: {
           "custom.access.token"
         }

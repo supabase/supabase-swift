@@ -20,7 +20,7 @@ struct PostgrestQueryBuilderTests {
 
   private func sut(withPreferHeader value: String) throws -> PostgrestClient {
     var configuration = sut.configuration
-    configuration.headers["Prefer"] = value
+    configuration.headers[HTTPField.Name("Prefer")!] = value
     return try PostgrestClient(configuration: configuration)
   }
 
@@ -43,7 +43,7 @@ struct PostgrestQueryBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=*"
       """#
@@ -67,7 +67,7 @@ struct PostgrestQueryBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=somecolumn"
       """#
@@ -86,7 +86,7 @@ struct PostgrestQueryBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=some%22column%22"
       """#
@@ -107,7 +107,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: count=exact" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=*"
       """#
@@ -132,7 +132,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,count=exact" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=*"
       """#
@@ -158,7 +158,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 59" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=minimal,count=estimated" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"supabase\"},{\"id\":1,\"username\":\"supa\"}]" \
       	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
@@ -188,7 +188,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 11" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=minimal" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"a,b\":1}]" \
       	"http://localhost:54321/rest/v1/users?columns=%22a,b%22"
@@ -211,7 +211,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 30" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,return=minimal" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"supabase\"}" \
       	"http://localhost:54321/rest/v1/users"
@@ -234,7 +234,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 24" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,return=minimal,count=planned" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"username\":\"supabase2\"}" \
       	"http://localhost:54321/rest/v1/users?id=eq.1"
@@ -258,7 +258,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 60" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,resolution=merge-duplicates,return=minimal,count=estimated" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
       	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
@@ -303,7 +303,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 30" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: count=exact,return=representation" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"supabase\"}" \
       	"http://localhost:54321/rest/v1/users?limit=1&order=id.asc&select=id,username"
@@ -332,7 +332,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 27" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: resolution=ignore-duplicates" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users"
@@ -355,7 +355,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 27" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=minimal,missing=default" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users"
@@ -378,7 +378,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 60" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=minimal,count=estimated,missing=default" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
       	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22"
@@ -409,7 +409,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 60" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,resolution=merge-duplicates,return=minimal,count=estimated,missing=default" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "[{\"id\":1,\"username\":\"admin\"},{\"id\":2,\"username\":\"supabase\"}]" \
       	"http://localhost:54321/rest/v1/users?columns=%22id%22,%22username%22&on_conflict=username"
@@ -441,7 +441,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Content-Length: 27" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: resolution=ignore-duplicates,missing=default" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users"
@@ -467,7 +467,7 @@ struct PostgrestQueryBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: existing=value,count=estimated" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?username=eq.supabase"
       """#

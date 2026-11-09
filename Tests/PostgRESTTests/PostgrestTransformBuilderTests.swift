@@ -30,7 +30,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Content-Length: 27" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=representation" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users?select=username,%22first%20name%22"
@@ -73,7 +73,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/cities?countries.order=name.asc&select=name,country:countries(name)"
       """#
@@ -105,7 +105,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/cities?order=due_at.desc&select=*"
       """#
@@ -128,7 +128,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/cities?order=num_of_habitants.asc,name.desc.nullsfirst&select=name,num_of_habitants"
       """#
@@ -164,7 +164,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?cities.limit=1&select=name,cities(name)"
       """#
@@ -210,7 +210,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?limit=2&offset=0&select=name,cities(name)"
       """#
@@ -241,7 +241,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?cities.limit=2&cities.offset=0&select=name,cities(name)"
       """#
@@ -276,7 +276,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.object+json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?limit=1&select=name"
       """#
@@ -309,7 +309,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.object+json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?limit=1&select=name"
       """#
@@ -337,7 +337,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: text/csv" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -367,7 +367,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/geo+json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=area"
       """#
@@ -402,7 +402,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.plan+text; for=\"application/json\"; options=analyze|verbose;" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -426,7 +426,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.plan+json; for=\"application/json\"; options=analyze;" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -450,7 +450,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Content-Length: 20" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: handling=strict,max-affected=1" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users?id=eq.1"
@@ -475,7 +475,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Content-Length: 20" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: handling=strict,max-affected=5" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users?id=eq.1"
@@ -500,7 +500,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: handling=strict,max-affected=5" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?id=in.(1,2,3,4,5)"
       """#
@@ -523,7 +523,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: handling=strict,max-affected=10" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/delete_users"
       """#
@@ -543,7 +543,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: handling=strict,max-affected=3" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/users?select=*"
       """#
@@ -563,7 +563,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.array+json;nulls=stripped" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -586,7 +586,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Content-Length: 27" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: return=representation" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"id\":1,\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users?select=*"
@@ -608,7 +608,7 @@ struct PostgrestTransformBuilderTests {
       curl \
       	--header "Accept: application/vnd.pgrst.object+json;nulls=stripped" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -662,7 +662,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: tx=rollback" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/countries?select=*"
       """#
@@ -685,7 +685,7 @@ struct PostgrestTransformBuilderTests {
       	--header "Content-Length: 20" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: tx=rollback" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"username\":\"admin\"}" \
       	"http://localhost:54321/rest/v1/users?id=eq.1"

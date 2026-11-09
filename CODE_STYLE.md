@@ -220,9 +220,7 @@ The dividing line is *who can reach the value*, not who supplied it.
   traps too.
 - **Varies at runtime, or comes from the server** — a per-call parameter, a response header, a
   decoded payload, a WebSocket close code. Never trap. Throw if the context already throws;
-  otherwise `reportIssue` and fall back. `HTTPFields.init(_:)` drops invalid field names rather
-  than trapping precisely because `HTTPResponse.init` builds it from `response.allHeaderFields`,
-  which a proxy or a hostile server controls.
+  otherwise `reportIssue` and fall back.
 
 Degrading instead of throwing would bury the mistake behind an unrelated failure much later. See
 SDK-1793.

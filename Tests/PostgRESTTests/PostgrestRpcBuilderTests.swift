@@ -34,7 +34,7 @@ struct PostgrestRpcBuilderTests {
       	--request POST \
       	--header "Accept: application/vnd.pgrst.object+json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/list_stored_countries?id=eq.1"
       """#
@@ -60,7 +60,7 @@ struct PostgrestRpcBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/hello_world"
       """#
@@ -115,7 +115,7 @@ struct PostgrestRpcBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/sum?key=value&numbers=%7B1,2,3%7D"
       """#
@@ -148,7 +148,7 @@ struct PostgrestRpcBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/scalar?disabled=false&enabled=true&flags=%7Btrue,false,null%7D&maybe=null&nested=%7B%22a%22:1%7D&number=42"
       """#
@@ -177,7 +177,7 @@ struct PostgrestRpcBuilderTests {
       curl \
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/tagged?tags=%7B%22Paris,%20France%22,Oslo,%22%22,%22NULL%22,%22a%5C%22b%22,%22%7Bx%7D%22%7D"
       """#
@@ -203,7 +203,7 @@ struct PostgrestRpcBuilderTests {
       	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "Prefer: count=estimated" \
-      	--header "X-Client-Info: postgrest-swift/0.0.0" \
+      	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:54321/rest/v1/rpc/hello"
       """#
@@ -216,7 +216,7 @@ struct PostgrestRpcBuilderTests {
   func rpcWithCountKeepsClientPreferHeader() async throws {
     let capture = try QueryCapture()
     var configuration = capture.client.configuration
-    configuration.headers["Prefer"] = "tx=rollback"
+    configuration.headers[HTTPField.Name("Prefer")!] = "tx=rollback"
     let client = try PostgrestClient(configuration: configuration)
 
     try await client.rpc("hello", count: .estimated).execute()
@@ -228,7 +228,7 @@ struct PostgrestRpcBuilderTests {
   func rpcWithCountReplacesClientCountPreference() async throws {
     let capture = try QueryCapture()
     var configuration = capture.client.configuration
-    configuration.headers["Prefer"] = "tx=rollback, count=estimated"
+    configuration.headers[HTTPField.Name("Prefer")!] = "tx=rollback, count=estimated"
     let client = try PostgrestClient(configuration: configuration)
 
     try await client.rpc("hello", count: .exact).execute()

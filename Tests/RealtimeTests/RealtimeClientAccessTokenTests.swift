@@ -177,7 +177,7 @@ struct RealtimeClientAccessTokenTests {
   func aJoinDuringARefreshWaitsForTheNewToken() async {
     let gate = CallbackGate()
     let provider = TokenProvider { _ in await gate.park() }
-    let host = await makeHost(provider, headers: ["Authorization": "Bearer anon-key"])
+    let host = await makeHost(provider, headers: [.authorization: "Bearer anon-key"])
 
     let first = Task { await host.client.currentAccessToken() }
     await gate.waitForCall()
@@ -379,7 +379,7 @@ struct RealtimeClientAccessTokenTests {
   }
 
   private func makeHost(
-    _ provider: TokenProvider, headers: [String: String] = [:]
+    _ provider: TokenProvider, headers: HTTPFields = [:]
   ) async -> RealtimeTestHost {
     await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(

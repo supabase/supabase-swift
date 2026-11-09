@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Helpers
 import TestHelpers
 import Testing
 
@@ -222,7 +223,7 @@ struct StorageErrorTests {
 
   @Test
   func errorBodyIsCappedAtOneMebibyte() async throws {
-    let oversized = Data(repeating: 0x78, count: StorageAPI.errorBodyCap + 4096)
+    let oversized = Data(repeating: 0x78, count: HTTPClient.maxErrorBodyBytes + 4096)
     let storage = try StorageClient(
       configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
@@ -240,7 +241,7 @@ struct StorageErrorTests {
       guard let error = error as? StorageError, let body = error.response?.body else {
         return false
       }
-      return body.count == StorageAPI.errorBodyCap
+      return body.count == HTTPClient.maxErrorBodyBytes
     }
   }
 
@@ -272,11 +273,13 @@ struct StorageErrorTests {
     let error = StorageError(
       kind: .server,
       message: "Object not found",
+      code: .noSuchKey,
       serverError: .init(statusCode: 404, error: "not_found", message: "Object not found"),
       response: HTTPErrorResponse(status: 404, headers: HTTPFields(), body: Data())
     )
 
-    #expect(error.description == "StorageError(server): Object not found [status 404]")
+    #expect(
+      error.description == "StorageError(server): Object not found [status 404] [code NoSuchKey]")
   }
 
   @Test

@@ -139,9 +139,10 @@ public struct StorageError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
-  /// The kind and the message, plus the HTTP status and request id when a response arrived.
+  /// The kind and the message, plus the HTTP status and request id when a response arrived, and
+  /// the code when the server sent one.
   public var description: String {
-    formattedDescription(kind: kind.rawValue)
+    formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }
 }
 

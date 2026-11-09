@@ -9,6 +9,7 @@ import ConcurrencyExtras
 import Foundation
 import HTTPTypes
 import HTTPTypesFoundation
+import TestHelpers
 import Testing
 
 @testable import Helpers
@@ -201,5 +202,102 @@ struct HTTPClientTests {
     _ = try await client.stream(probeRequest, timeout: .seconds(9))
 
     #expect(seen.value == [.seconds(9), .seconds(9)])
+  }
+
+  /// A body of `count` bytes in 64 KiB chunks, so a cap lands inside a chunk.
+  private func chunkedBody(size count: Int) -> HTTPBody {
+    let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
+    for offset in stride(from: 0, to: count, by: 64 * 1024) {
+      continuation.yield(ArraySlice(repeating: 0x78, count: min(64 * 1024, count - offset)))
+    }
+    continuation.finish()
+    return HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
+  }
+
+  @Test
+  func cancelDuringTheHeadSurfacesAsCancellationError() async {
+    let started = LockIsolated(false)
+    let client = HTTPClient(
+      transport: ClosureTransport { _, _ in
+        started.setValue(true)
+        try? await Task.sleep(for: .seconds(3600))
+        throw URLError(.cancelled)
+      })
+
+    let task = Task { try await client.send(probeRequest) }
+    await waitUntil { started.value }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
+
+  @Test
+  func cancelDuringTheBodySurfacesAsCancellationError() async {
+    let reading = LockIsolated(false)
+    let client = HTTPClient(
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), .cancelledRead { reading.setValue(true) })
+      })
+
+    let task = Task { try await client.send(probeRequest) }
+    await waitUntil { reading.value }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
+
+  @Test
+  func cancelDuringAStreamedBodySurfacesAsCancellationError() async throws {
+    let reading = LockIsolated(false)
+    let client = HTTPClient(
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), .cancelledRead { reading.setValue(true) })
+      })
+
+    let (_, body) = try await client.stream(probeRequest)
+    let task = Task { for try await _ in try #require(body) {} }
+    await waitUntil { reading.value }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
+
+  @Test
+  func cancelledURLErrorWithoutTaskCancellationPassesThrough() async {
+    let client = HTTPClient(transport: ClosureTransport { _, _ in throw URLError(.cancelled) })
+
+    await #expect(throws: URLError(.cancelled)) { try await client.send(probeRequest) }
+  }
+
+  @Test
+  func nonSuccessBodyIsCappedAtOneMebibyte() async throws {
+    let cap = HTTPClient.maxErrorBodyBytes
+    let client = HTTPClient(
+      transport: ClosureTransport { _, _ in
+        (
+          HTTPTypes.HTTPResponse(status: .internalServerError),
+          self.chunkedBody(size: cap + 100_000)
+        )
+      })
+
+    let (_, data) = try await client.send(probeRequest)
+    let (_, body) = try await client.stream(probeRequest)
+
+    #expect(cap == 1 << 20)
+    #expect(data.count == cap)
+    #expect(try await Data(collecting: try #require(body), upTo: .max).count == cap)
+  }
+
+  @Test
+  func successBodyIsNotCapped() async throws {
+    let size = HTTPClient.maxErrorBodyBytes + 100_000
+    let client = HTTPClient(
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), self.chunkedBody(size: size))
+      })
+
+    let (_, data) = try await client.send(probeRequest)
+
+    #expect(data.count == size)
   }
 }

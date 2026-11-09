@@ -12,7 +12,7 @@ Storage URL and the headers every request carries, usually `apikey`.
 let storage = try StorageClient(
   configuration: StorageClient.Configuration(
     url: URL(string: "https://<ref>.supabase.co/storage/v1")!,
-    headers: [HTTPField.Name("apikey")!: "sb_publishable_…"],
+    headers: [.apikey: "sb_publishable_…"],
     http: HTTPClientConfiguration(
       middlewares: [AccessTokenMiddleware { try await tokenStore.current() }]
     )
@@ -79,8 +79,9 @@ but steady upload is not cut short. The default is 60 seconds.
 
 ``StorageClient/Configuration/retryEnabled`` is `true` by default. The SDK then retries reads that
 fail with a transient error or status: `GET` and `HEAD` requests and the listing calls, up to
-three attempts with jittered backoff. A `Retry-After` header is honored. Uploads, moves, copies,
-removals and bucket changes are never replayed. See <doc:HandlingErrors>.
+three attempts with jittered backoff. A `Retry-After` header is honored, and a 429 is retried only
+when it carries one. Uploads, moves, copies, removals and bucket changes are never replayed. See
+<doc:HandlingErrors>.
 
 ### Hostname and logger
 

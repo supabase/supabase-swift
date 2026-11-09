@@ -32,7 +32,7 @@ struct AuthOAuthServerTests {
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        headers: HTTPFields(["apikey": "supabase.publishable.key"]),
+        headers: [.apikey: "supabase.publishable.key"],
         storage: storage,
         autoRefresh: .manual,
         http: .init(transport: transport)),
@@ -232,7 +232,7 @@ struct AuthOAuthServerTests {
       #"""
       curl \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/oauth/authorizations/abc123def456"
@@ -299,7 +299,7 @@ struct AuthOAuthServerTests {
       	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 20" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	--data "{\"action\":\"approve\"}" \
@@ -332,7 +332,7 @@ struct AuthOAuthServerTests {
       	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 17" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	--data "{\"action\":\"deny\"}" \
@@ -371,7 +371,7 @@ struct AuthOAuthServerTests {
       #"""
       curl \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/user/oauth/grants"
@@ -395,7 +395,7 @@ struct AuthOAuthServerTests {
       curl \
       	--request DELETE \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/user/oauth/grants?client_id=E621E1F8-C36C-495A-93FC-0C247A3E6E5F"

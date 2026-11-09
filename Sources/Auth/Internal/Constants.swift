@@ -11,6 +11,5 @@ import HTTPTypes
 let defaultExpiryMargin: Duration = .seconds(30)
 
 extension HTTPField.Name {
-  static let apikeyHeaderName = HTTPField.Name("apikey")!
   static let apiVersionHeaderName = HTTPField.Name("X-Supabase-Api-Version")!
 }

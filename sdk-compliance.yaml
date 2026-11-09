@@ -137,6 +137,8 @@ supporting_symbols:
   - HTTPErrorResponse.body
   - HTTPErrorResponse.requestID
   - HTTPField.Name.sbRequestID
+  # The apikey header name every module and the facade send (SDK-2860).
+  - HTTPField.Name.apikey
   # FunctionsError (SDK-1788) is thrown by every functions.* capability rather
   # than owned by one.
   - FunctionsError

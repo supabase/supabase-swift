@@ -244,9 +244,11 @@ public struct RealtimeError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
-  /// The kind and the message, for logs.
+  /// The kind and the message, plus the HTTP status and the code when there are any, for logs.
   public var description: String {
-    formattedDescription(kind: kind.rawValue)
+    // A server reason already leads with its code (`"InvalidJWTToken: …"`), so print it once.
+    let code = code.flatMap { message.hasPrefix("\($0.rawValue): ") ? nil : $0.rawValue }
+    return formattedDescription(kind: kind.rawValue, code: code)
   }
 }
 

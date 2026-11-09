@@ -24,7 +24,7 @@ struct QueryCapture {
     body: String = "[]",
     status: HTTPTypes.HTTPResponse.Status = .ok,
     responseHeaders: [String: String] = [:],
-    headers: [String: String] = ["X-Client-Info": "postgrest-swift/test"],
+    headers: HTTPFields = [.xClientInfo: "postgrest-swift/test"],
     encoder: JSONEncoder = .supabase(),
     decoder: JSONDecoder = .supabase()
   ) throws {

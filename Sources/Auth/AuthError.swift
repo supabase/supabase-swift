@@ -365,13 +365,15 @@ public struct AuthError: SupabaseError {
   }
 
   public var description: String {
-    formattedDescription(kind: kind.rawValue)
+    formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }
 
   /// Whether the same request can succeed if sent again later.
   ///
   /// `true` for ``Kind-swift.struct/transport`` errors and for HTTP 408, 409, 429 and 5xx
-  /// responses. GoTrue sends no `Retry-After` header, so back off with jitter before retrying.
+  /// responses. This is advice for the app's own retry, not the SDK's: the SDK never replays a
+  /// 429 that has no `Retry-After`, and GoTrue sends none, so back off with jitter before
+  /// retrying.
   public var isRetryable: Bool {
     if kind == .transport { return true }
     guard let status = response?.status else { return false }

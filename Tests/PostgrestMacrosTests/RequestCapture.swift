@@ -25,7 +25,7 @@ struct RequestCapture {
     client = try PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
-        headers: ["X-Client-Info": "postgrest-swift/test"],
+        headers: [.xClientInfo: "postgrest-swift/test"],
         http: .init(transport: transport)
       )
     )
