@@ -142,7 +142,7 @@ struct RealtimeChannelPushTests {
 
     let error = await #expect(throws: RealtimeError.self) { try await push.value }
     #expect(error?.kind == .server)
-    #expect(error?.serverCode == .unauthorized)
+    #expect(error?.code == .unauthorized)
     #expect(error?.message == "Unauthorized: presence is private")
   }
 

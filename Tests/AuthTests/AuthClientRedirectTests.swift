@@ -325,7 +325,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.exchangeCodeForSession("one-time-code", flowID: flowID)
-    } throws: { ($0 as? AuthError)?.errorCode == .flowStateNotFound }
+    } throws: { ($0 as? AuthError)?.code == .flowStateNotFound }
 
     #expect(try storedFlow(flowID) == nil)
   }
@@ -383,7 +383,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.handleRedirect(url)
-    } throws: { ($0 as? AuthError)?.errorCode == .otpExpired }
+    } throws: { ($0 as? AuthError)?.code == .otpExpired }
   }
 
   @Test
@@ -443,7 +443,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.signInWithOTP(email: "user@example.com")
-    } throws: { ($0 as? AuthError)?.errorCode == .overEmailSendRateLimit }
+    } throws: { ($0 as? AuthError)?.code == .overEmailSendRateLimit }
     #expect(try pendingFlowCount() == 1)
 
     try await client.handleRedirect(callback)
@@ -836,7 +836,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.handleRedirect(callback)
-    } throws: { ($0 as? AuthError)?.errorCode == .badCodeVerifier }
+    } throws: { ($0 as? AuthError)?.code == .badCodeVerifier }
 
     #expect(race.requestCount(grantType: "pkce") == 2)
     #expect(try pendingFlowCount() == 2)
@@ -846,13 +846,13 @@ struct AuthClientRedirectTests {
   /// nothing either, so these errors do not say which flow the code belongs to.
   @Test(
     arguments: [
-      (HTTPResponse.Status.notFound, ErrorCode.flowStateNotFound),
+      (HTTPResponse.Status.notFound, AuthError.Code.flowStateNotFound),
       (.notFound, .flowStateExpired),
-      (.internalServerError, ErrorCode("unexpected_failure")),
+      (.internalServerError, "unexpected_failure"),
     ]
   )
   func withoutAnIDARejectionOtherThanABadVerifierKeepsEveryFlow(
-    status: HTTPResponse.Status, code: ErrorCode
+    status: HTTPResponse.Status, code: AuthError.Code
   ) async throws {
     race.answerCodeExchange {
       Race.error(status, code: code.rawValue, message: "rejected")
@@ -863,7 +863,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.handleRedirect(callback)
-    } throws: { ($0 as? AuthError)?.errorCode == code }
+    } throws: { ($0 as? AuthError)?.code == code }
 
     #expect(race.requestCount(grantType: "pkce") == 1)
     #expect(try pendingFlowCount() == 2)
@@ -880,7 +880,7 @@ struct AuthClientRedirectTests {
 
     await #expect {
       try await client.exchangeCodeForSession("one-time-code", flowID: b)
-    } throws: { ($0 as? AuthError)?.errorCode == .badCodeVerifier }
+    } throws: { ($0 as? AuthError)?.code == .badCodeVerifier }
 
     #expect(race.requestCount(grantType: "pkce") == 1)
     #expect(try storedFlow(a) != nil)

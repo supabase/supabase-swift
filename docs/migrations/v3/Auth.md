@@ -70,7 +70,7 @@ Changes that still compile but behave differently. Check each one by hand.
 - **A rejected session has its own kind.** When the server rejects the session or its refresh
   token (`refresh_token_not_found`, `refresh_token_already_used`, `session_expired`,
   `session_not_found`, `user_banned`), the error kind is `.sessionInvalidated`, not
-  `.sessionMissing`. `errorCode` and `message` keep the server's values. `.sessionMissing` now
+  `.sessionMissing`. `code` and `message` keep the server's values. `.sessionMissing` now
   means only that no session is stored. Search for `.sessionMissing`. To send the user back to
   sign-in, react to the `.signedOut` event (see the next entry on refresh failures).
 - **The stored session has a new format.** The first read after the upgrade rewrites the stored
@@ -254,7 +254,7 @@ Changes that still compile but behave differently. Check each one by hand.
   uppercase; compare `UUID` values, not strings.
 - **`claims()` throws the refresh error.** When the stored session is expired and its refresh
   fails, `claims()` throws the error that `session` throws, such as `.sessionInvalidated` with
-  `errorCode` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
+  `code` `refresh_token_not_found`. v2 threw `.sessionMissing` for every failure to get a
   session. `.sessionMissing` now means only that no user is signed in.
 - **A token without `exp` or `sub` fails verification.** `claims(jwt:)` throws
   `.jwtVerificationFailed` for a token without an `exp` claim or a `sub` claim, before it sends
@@ -695,16 +695,34 @@ let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.
 
 ## `AuthError` is a struct
 
-`AuthError` is a struct with `kind`, `message`, `errorCode`, `weakPasswordReasons`,
-`oauthError`, `response` and `underlyingError`. Match on `kind` and `errorCode` instead of enum
-cases: `catch ErrorCode.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
+`AuthError` is a struct with `kind`, `message`, `code`, `weakPasswordReasons`, `oauthError`,
+`response` and `underlyingError`. Match on `kind` and `code` instead of enum cases:
+`catch AuthError.Code.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
 `isRetryable` says whether to send the request again. `AuthError` is no longer `Equatable`.
+
+The top-level `ErrorCode` is now `AuthError.Code`, and `errorCode` is now `code`. `code` is
+optional: it is `nil` when the server sent no code, such as for an OAuth-style response, a body
+that is not JSON, `AuthError.sessionMissing`, or a local JWT check. There is no `.unknown`
+placeholder. Replace `error.errorCode == .unknown` with `error.code == nil`. Build a code from a
+string literal or with `init(rawValue:)`; `ErrorCode("x")` no longer compiles.
+
+Three errors no longer carry a code that the SDK made up. Match on `kind` for them instead:
+
+| Before | Now |
+| --- | --- |
+| `AuthError.sessionMissing` with `.sessionNotFound` | `kind == .sessionMissing`, `code == nil` |
+| A local JWT verification failure with `.invalidJWT` | `kind == .jwtVerificationFailed`, `code == nil` |
+| A non-JSON error body, such as a proxy's HTML page, with `.unexpectedFailure` | `kind == .server`, `code == nil`; read `response?.status` |
+
+`catch AuthError.Code.sessionNotFound`, `.invalidJWT` and `.unexpectedFailure` now match only when
+GoTrue sent that code.
 
 | v2 | v3 |
 | --- | --- |
 | `catch AuthError.sessionMissing`, `AuthError.sessionNotFound` | `catch AuthError.Kind.sessionMissing` (nothing stored) or `catch AuthError.Kind.sessionInvalidated` (the server rejected the session) |
-| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.errorCode`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
-| `.weakPassword(message, reasons)` | `error.errorCode == .weakPassword`; `error.weakPasswordReasons` |
+| `.api(message, errorCode, underlyingData, underlyingResponse)`, `AuthError.APIError` | `error.kind == .server`; `error.code`, `error.response?.status`, `error.response?.body`. The kind is `.sessionInvalidated` for the codes that end a session, and `.oauthFlowFailed` for `flow_state_not_found`, `flow_state_expired` and `bad_code_verifier` |
+| `.weakPassword(message, reasons)` | `error.code == .weakPassword`; `error.weakPasswordReasons` |
+| `ErrorCode`, `error.errorCode`, `ErrorCode("x")`, `ErrorCode.unknown` | `AuthError.Code`, `error.code` (optional), `"x"` or `AuthError.Code(rawValue: "x")`, `nil` |
 | `.pkceGrantCodeExchange(...)`, `.implicitGrantRedirect(message)`, `.pkce(_:)`, `.invalidImplicitGrantFlowURL`, `.invalidRedirectScheme` | `error.kind == .oauthFlowFailed` |
 | `.jwtVerificationFailed(message)` | `error.kind == .jwtVerificationFailed` |
 | `.refreshDiscarded` | `error.kind == .refreshDiscarded` |
@@ -724,7 +742,7 @@ do {
 do {
   try await supabase.auth.signIn(email: email, password: password)
 } catch let error as AuthError where error.kind == .server {
-  print(error.response?.status.code ?? 0, error.errorCode, error.message)
+  print(error.response?.status.code ?? 0, error.code?.rawValue ?? "", error.message)
 } catch AuthError.Kind.sessionMissing, AuthError.Kind.sessionInvalidated {
   showLogin()
 }

@@ -71,7 +71,8 @@ public enum WebSocketEvent: Sendable, Hashable {
 ///
 /// A struct rather than an enum: the peer can send any code in `1000...4999`, and application
 /// codes above 4000 are project-defined.
-public struct WebSocketCloseCode: RawRepresentable, Sendable, Hashable {
+public struct WebSocketCloseCode: RawRepresentable, Hashable, Sendable, ExpressibleByIntegerLiteral
+{
   /// The numeric status code.
   public let rawValue: Int
 
@@ -80,12 +81,17 @@ public struct WebSocketCloseCode: RawRepresentable, Sendable, Hashable {
     self.rawValue = rawValue
   }
 
+  /// Creates a close code from an integer literal.
+  public init(integerLiteral value: Int) {
+    self.init(rawValue: value)
+  }
+
   /// 1000: the connection did its job.
-  public static let normalClosure = WebSocketCloseCode(rawValue: 1000)
+  public static let normalClosure: WebSocketCloseCode = 1000
   /// 1001: an endpoint is going away, such as a server shutting down.
-  public static let goingAway = WebSocketCloseCode(rawValue: 1001)
+  public static let goingAway: WebSocketCloseCode = 1001
   /// 1002: an endpoint got a frame that breaks the protocol.
-  public static let protocolError = WebSocketCloseCode(rawValue: 1002)
+  public static let protocolError: WebSocketCloseCode = 1002
   /// 1006: the connection dropped without a close frame. Never sent on the wire.
-  public static let abnormalClosure = WebSocketCloseCode(rawValue: 1006)
+  public static let abnormalClosure: WebSocketCloseCode = 1006
 }

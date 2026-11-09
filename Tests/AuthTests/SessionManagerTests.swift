@@ -697,8 +697,8 @@ struct SessionManagerTests {
     now.withValue { $0.addTimeInterval(59) }
     let second = await Task { try await dependencies.redeem("limited") }.result
 
-    #expect((first.error as? AuthError)?.errorCode == .overRequestRateLimit)
-    #expect((second.error as? AuthError)?.errorCode == .overRequestRateLimit)
+    #expect((first.error as? AuthError)?.code == .overRequestRateLimit)
+    #expect((second.error as? AuthError)?.code == .overRequestRateLimit)
     expectNoDifference(tokenRequestCount, 1)
 
     now.withValue { $0.addTimeInterval(1) }
@@ -954,7 +954,7 @@ struct SessionManagerTests {
     now.withValue { $0.addTimeInterval(40) }
     let cached = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
-    #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+    #expect((cached.error as? AuthError)?.code == .refreshTokenAlreadyUsed)
     #expect(dependencies.sessionStore.currentStatus == .signedOut(.sessionRevoked))
     expectNoDifference(tokenRequestCount, 1)
   }
@@ -1000,7 +1000,7 @@ struct SessionManagerTests {
     _ = await Task { try await dependencies.redeem(held.refreshToken) }.result
 
     let afterSignOut = await Task { try await dependencies.redeem(held.refreshToken) }.result
-    #expect((afterSignOut.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+    #expect((afterSignOut.error as? AuthError)?.code == .refreshTokenAlreadyUsed)
 
     let collected = await settled(events, count: 2)
     expectNoDifference(tokenRequestCount, 1)
@@ -1071,7 +1071,7 @@ struct SessionManagerTests {
     let cached = await Task { try await dependencies.redeem("foreign") }.result
 
     let collected = await settled(events, count: 1)
-    #expect((cached.error as? AuthError)?.errorCode == .refreshTokenAlreadyUsed)
+    #expect((cached.error as? AuthError)?.code == .refreshTokenAlreadyUsed)
     #expect(dependencies.sessionStore.currentStatus == .signedIn(held))
     expectNoDifference(tokenRequestCount, 1)
     expectNoDifference(collected, [.initialSession])

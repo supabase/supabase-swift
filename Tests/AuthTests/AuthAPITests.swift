@@ -216,7 +216,7 @@ struct AuthAPITests {
         Data(#"{"code":"otp_disabled","message":"Signups not allowed for otp"}"#.utf8)
       )
     }
-    #expect(error.errorCode == .otpDisabled)
+    #expect(error.code == .otpDisabled)
     #expect(error.response?.status == 422)
   }
 

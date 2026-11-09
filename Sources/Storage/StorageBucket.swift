@@ -699,7 +699,7 @@ public struct StorageBucket: Sendable {
       _ = try await info(path: path)
       return true
     } catch let error as StorageError
-      where error.code == .noSuchKey || (error.code == nil && error.serverStatusCode == 404)
+      where error.code == .noSuchKey || (error.code == nil && error.serverError?.statusCode == 404)
     {
       return false
     }

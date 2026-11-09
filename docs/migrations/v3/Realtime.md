@@ -394,7 +394,7 @@ still writes the frames queued before it, up to the client's `requestTimeout`. W
   `kind == .timeout`.
 - The server rejected the push: the call throws `RealtimeError` with the server's reason in
   `message`, `kind == .payloadTooLarge` for an oversized payload and `.server` otherwise, and
-  `serverCode` set when the reason starts with a code.
+  `code` set when the reason starts with a code.
 - The channel left or the socket closed while waiting: `kind == .notSubscribed` or
   `.notConnected`.
 - The server closed the channel while waiting: `kind == .channelClosedByServer`.
@@ -509,7 +509,12 @@ let configuration = RealtimeClient.Configuration(
 
 Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.server` with
 `response` set. A network or WebSocket failure is `.transport`; `underlyingError` holds the
-cause when there is one.
+cause when there is one. When the server's error reason starts with a code, such as
+`Unauthorized`, `code` holds it as a `RealtimeError.Code`. A `catch` clause can name a kind or a
+code directly, as in `catch RealtimeError.Kind.unauthorized` or
+`catch RealtimeError.Code.privateOnly`.
+
+`WebSocketCloseCode` accepts an integer literal, as in `let code: WebSocketCloseCode = 4001`.
 
 `subscribe()` no longer gives up after a number of attempts, so there is no
 `maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or

@@ -782,7 +782,7 @@ extension AuthClientTests {
           try await sut.signIn(email: "banned@example.com", password: "secret")
           Issue.record("Expected failure")
         } catch {
-          #expect((error as? AuthError)?.errorCode == .userBanned)
+          #expect((error as? AuthError)?.code == .userBanned)
         }
       },
       expectedEvents: [.initialSession]

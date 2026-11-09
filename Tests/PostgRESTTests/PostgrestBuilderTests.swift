@@ -189,7 +189,7 @@ extension PostgrestMockerTests {
           .value
         Issue.record("Expected error to be thrown")
       } catch let error as PostgrestError {
-        #expect(error.serverError?.code == "PGRST116")
+        #expect(error.code == "PGRST116")
       }
     }
 
@@ -490,7 +490,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.serverError?.code == "PGRST000")
+        #expect(error.code == "PGRST000")
       }
     }
 
@@ -511,7 +511,7 @@ extension PostgrestMockerTests {
         Issue.record("Expected PostgrestError to be thrown")
       } catch let error as PostgrestError {
         #expect(error.message == "Bad Request")
-        #expect(error.serverError?.code == "PGRST000")
+        #expect(error.code == "PGRST000")
       }
     }
 
