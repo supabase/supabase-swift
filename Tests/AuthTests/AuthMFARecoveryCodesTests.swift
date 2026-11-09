@@ -32,7 +32,7 @@ struct AuthMFARecoveryCodesTests {
       configuration: .init(
         url: clientURL,
         storageKey: uniqueStorageKey(),
-        headers: HTTPFields(["apikey": "supabase.publishable.key"]),
+        headers: [.apikey: "supabase.publishable.key"],
         storage: storage,
         autoRefresh: .manual,
         http: .init(transport: transport)),
@@ -57,7 +57,7 @@ struct AuthMFARecoveryCodesTests {
       #"""
       curl \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/factors/recovery-codes"
@@ -96,7 +96,7 @@ struct AuthMFARecoveryCodesTests {
       	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 32" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	--data "{\"friendly_name\":\"Backup codes\"}" \
@@ -134,7 +134,7 @@ struct AuthMFARecoveryCodesTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/factors/recovery-codes"
@@ -168,7 +168,7 @@ struct AuthMFARecoveryCodesTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/factors/recovery-codes/regenerate"
@@ -192,7 +192,7 @@ struct AuthMFARecoveryCodesTests {
       	--header "Authorization: Bearer accesstoken" \
       	--header "Content-Length: 30" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	--data "{\"code\":\"K4M9-X7QP-2AB8-HT3Z\"}" \
@@ -230,7 +230,7 @@ struct AuthMFARecoveryCodesTests {
       curl \
       	--request DELETE \
       	--header "Authorization: Bearer accesstoken" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.publishable.key" \
       	"http://localhost:54321/auth/v1/factors/recovery-codes"

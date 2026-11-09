@@ -20,7 +20,7 @@ typealias AuthClientID = Int
 ///   url: URL(string: "https://<project>.supabase.co/auth/v1")!,
 ///   storageKey: "sb-<project>-auth-token"
 /// )
-/// configuration.headers[HTTPField.Name("apikey")!] = "<publishable-key>"
+/// configuration.headers[.apikey] = "<publishable-key>"
 /// let auth = try AuthClient(configuration: configuration)
 ///
 /// // Sign in

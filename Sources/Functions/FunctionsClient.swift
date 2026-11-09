@@ -8,8 +8,6 @@ public import Logging
   public import FoundationNetworking
 #endif
 
-let version = Helpers.version
-
 /// A client for invoking Supabase Edge Functions.
 ///
 /// Obtain one from `SupabaseClient.functions`, or build one standalone with

@@ -46,7 +46,7 @@ struct AuthClientIntegrationTests {
         url: authURL,
         storageKey: storageKey,
         headers: [
-          HTTPField.Name("apikey")!: key,
+          .apikey: key,
           .authorization: "Bearer \(key)",
         ],
         storage: storage,

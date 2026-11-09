@@ -12,7 +12,7 @@ extension StorageClient {
   /// ```swift
   /// let configuration = StorageClient.Configuration(
   ///   url: URL(string: "https://project.supabase.co/storage/v1")!,
-  ///   headers: [.init("apikey")!: key],
+  ///   headers: [.apikey: key],
   ///   http: HTTPClientConfiguration(
   ///     middlewares: [AccessTokenMiddleware { try await session.accessToken }]
   ///   )

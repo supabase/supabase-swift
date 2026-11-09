@@ -1205,7 +1205,7 @@ struct RequestsTests {
     let configuration = AuthClient.Configuration(
       url: clientURL,
       storageKey: uniqueStorageKey(),
-      headers: HTTPFields(["Apikey": "dummy.api.key", "X-Client-Info": "gotrue-swift/x.y.z"]),
+      headers: [HTTPField.Name("Apikey")!: "dummy.api.key", .xClientInfo: "gotrue-swift/x.y.z"],
       storage: InMemoryTestStorage(),
       redirectTo: redirectTo,
       autoRefresh: .manual,

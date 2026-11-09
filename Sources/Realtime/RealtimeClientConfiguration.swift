@@ -57,9 +57,9 @@ extension RealtimeClient {
     /// Headers sent with the WebSocket upgrade request.
     ///
     /// Header names compare without regard to case. `SupabaseClient` adds its own headers, such
-    /// as `apikey`, and those win over a header set here. The client adds
-    /// `X-Client-Info: realtime-swift/<version>` unless you set that header yourself.
-    public var headers: [String: String]
+    /// as `apikey`, and those win over a header set here. The client adds an `X-Client-Info`
+    /// header unless you set that header yourself.
+    public var headers: HTTPFields
 
     /// How often the client sends a heartbeat to keep the connection alive.
     ///
@@ -222,7 +222,7 @@ extension RealtimeClient {
     ///     test target yourself) to drive them deterministically in tests.
     public init(
       url: URL,
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
       requestTimeout: Duration = Self.defaultRequestTimeout,
       connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,

@@ -57,7 +57,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
-        headers: ["X-Client-Info": "my-app/1.2"],
+        headers: [.xClientInfo: "my-app/1.2"],
         observesAppLifecycle: false))
     let channel = await host.client.channel("room")
 
@@ -248,7 +248,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
-        headers: ["Authorization": "Bearer stored"],
+        headers: [.authorization: "Bearer stored"],
         requestTimeout: .seconds(5),
         observesAppLifecycle: false,
         accessToken: {
@@ -278,7 +278,7 @@ struct RealtimeShellTests {
     let host = await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
-        headers: ["Authorization": "Bearer stored"],
+        headers: [.authorization: "Bearer stored"],
         observesAppLifecycle: false,
         accessToken: { throw Failure() }
       ))

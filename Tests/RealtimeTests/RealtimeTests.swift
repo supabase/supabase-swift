@@ -50,7 +50,7 @@ final class RealtimeTests: Sendable {
     sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         accessToken: {
           "custom.access.token"
         }
@@ -67,7 +67,7 @@ final class RealtimeTests: Sendable {
       let client = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: url,
-          headers: ["apikey": apiKey],
+          headers: [.apikey: apiKey],
           serverLogLevel: .warning,
           accessToken: {
             "custom.access.token"
@@ -188,7 +188,7 @@ final class RealtimeTests: Sendable {
                   },
                   "private" : false
                 },
-                "version" : "realtime-swift\/0.0.0"
+                "version" : "realtime-swift\/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
               }
             ]
           }
@@ -276,7 +276,7 @@ final class RealtimeTests: Sendable {
               },
               "private" : false
             },
-            "version" : "realtime-swift\/0.0.0"
+            "version" : "realtime-swift\/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
           },
           "ref" : "2",
           "topic" : "realtime:public:messages"
@@ -301,7 +301,7 @@ final class RealtimeTests: Sendable {
               },
               "private" : false
             },
-            "version" : "realtime-swift\/0.0.0"
+            "version" : "realtime-swift\/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
           },
           "ref" : "3",
           "topic" : "realtime:public:messages"
@@ -660,7 +660,7 @@ final class RealtimeTests: Sendable {
         	--request POST \
         	--header "Authorization: Bearer custom.access.token" \
         	--header "Content-Type: application/json" \
-        	--header "apiKey: publishable.api.key" \
+        	--header "apikey: publishable.api.key" \
         	--data "{\"value\":42}" \
         	"http://localhost:54321/realtime/v1/api/broadcast/public%3Amessages/events/test"
         """#
@@ -695,7 +695,7 @@ final class RealtimeTests: Sendable {
       let sut = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: url,
-          headers: ["apikey": apiKey],
+          headers: [.apikey: apiKey],
           accessToken: { throw FetchError() }
         ),
         wsTransport: { [client = self.client] _, _ in client },
@@ -727,7 +727,7 @@ final class RealtimeTests: Sendable {
       let sut = RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: url,
-          headers: ["apikey": apiKey],
+          headers: [.apikey: apiKey],
           accessToken: {
             if shouldThrow.value { throw FetchError() }
             return validToken
@@ -996,7 +996,7 @@ final class RealtimeTests: Sendable {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         disconnectOnEmptyChannelsAfter: delay
       ),
       wsTransport: { [client = self.client] _, _ in client },

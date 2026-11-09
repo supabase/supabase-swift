@@ -12,7 +12,7 @@ Storage URL and the headers every request carries, usually `apikey`.
 let storage = try StorageClient(
   configuration: StorageClient.Configuration(
     url: URL(string: "https://<ref>.supabase.co/storage/v1")!,
-    headers: [HTTPField.Name("apikey")!: "sb_publishable_…"],
+    headers: [.apikey: "sb_publishable_…"],
     http: HTTPClientConfiguration(
       middlewares: [AccessTokenMiddleware { try await tokenStore.current() }]
     )

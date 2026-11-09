@@ -14,7 +14,7 @@ struct RealtimeColdStartTests {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(2),
         accessToken: { "token" }
@@ -99,7 +99,7 @@ struct RealtimeColdStartTests {
     let sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(5),
         accessToken: { "token" }
@@ -156,7 +156,7 @@ struct RealtimeColdStartTests {
     let sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         heartbeatInterval: .milliseconds(200),
         requestTimeout: .seconds(5),
         accessToken: { "token" }

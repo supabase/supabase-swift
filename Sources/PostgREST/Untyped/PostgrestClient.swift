@@ -17,7 +17,7 @@ public import Logging
 /// let client = try PostgrestClient(
 ///   configuration: .init(
 ///     url: URL(string: "https://<project>.supabase.co/rest/v1")!,
-///     headers: ["apikey": "<anon-key>"]
+///     headers: [.apikey: "<anon-key>"]
 ///   )
 /// )
 ///
@@ -75,10 +75,6 @@ public struct PostgrestClient: Sendable {
   /// - ``retryEnabled``
   /// - ``accessToken``
   /// - ``clock``
-  ///
-  /// ### Defaults
-  ///
-  /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
     public var url: URL
@@ -87,7 +83,10 @@ public struct PostgrestClient: Sendable {
     public var schema: String?
 
     /// Additional HTTP headers sent with every request.
-    public var headers: [String: String]
+    ///
+    /// Header names compare without regard to case. The client adds an `X-Client-Info` header
+    /// unless you set that header yourself.
+    public var headers: HTTPFields
 
     /// The transport and middleware chain every request goes through.
     public var http: HTTPClientConfiguration
@@ -183,7 +182,7 @@ public struct PostgrestClient: Sendable {
     public init(
       url: URL,
       schema: String? = nil,
-      headers: [String: String] = [:],
+      headers: HTTPFields = [:],
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       encoder: JSONEncoder = .supabase(),
@@ -226,7 +225,7 @@ public struct PostgrestClient: Sendable {
   /// Creates a client from a configuration whose URL ``init(configuration:)`` already accepted.
   private init(checkedConfiguration configuration: Configuration) {
     var configuration = configuration
-    configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    configuration.headers = Configuration.defaultHeaders.merging(with: configuration.headers)
     configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "postgrest"
     self.configuration = configuration

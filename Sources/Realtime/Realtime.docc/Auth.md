@@ -16,7 +16,7 @@ expires. The client gets tokens from a closure, ``RealtimeClient/Configuration/a
 let realtime = try RealtimeClient(
   configuration: .init(
     url: URL(string: "https://<project-ref>.supabase.co/realtime/v1")!,
-    headers: ["apikey": publishableKey],
+    headers: [.apikey: publishableKey],
     accessToken: { try await session.currentAccessToken() }
   )
 )

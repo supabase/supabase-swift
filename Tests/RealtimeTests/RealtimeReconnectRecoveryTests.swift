@@ -14,7 +14,7 @@ struct RealtimeReconnectRecoveryTests {
   private func makeConfiguration(timeout: Duration = .seconds(3)) -> RealtimeClient.Configuration {
     RealtimeClient.Configuration(
       url: url,
-      headers: ["apikey": apiKey],
+      headers: [.apikey: apiKey],
       heartbeatInterval: .seconds(10),
       requestTimeout: timeout,
       accessToken: { "token" }
@@ -265,7 +265,7 @@ struct RealtimeReconnectRecoveryTests {
     let sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         heartbeatInterval: .seconds(10),
         requestTimeout: .seconds(1),
         observesAppLifecycle: false,

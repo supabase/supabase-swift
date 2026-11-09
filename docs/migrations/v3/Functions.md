@@ -58,7 +58,7 @@ functions.setAuth(token: session.accessToken)
 let functions = try FunctionsClient(
   configuration: .init(
     url: url,
-    headers: [HTTPField.Name("apikey")!: apiKey],
+    headers: [.apikey: apiKey],
     region: .usEast1,
     accessToken: { await tokenStore.currentAccessToken }
   )
