@@ -108,7 +108,7 @@ Changes that still compile but behave differently. Check each one by hand.
   let client = SupabaseClient(
     supabaseURL: url,
     supabaseKey: key,
-    options: .init(auth: .init(storage: InMemoryAuthStorage()))
+    configuration: .init(auth: .init(storage: InMemoryAuthStorage()))
   )
   ```
 - **The stored session is read once.** The client reads `storage` once, right after it is created, and
@@ -283,7 +283,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.storageKey: String?` (default `supabase.auth.token`) | `storageKey: String`, required; `SupabaseClient` derives `sb-<project-ref>-auth-token` |
 | `AuthClient.Configuration.headers: [String: String]` | `HTTPFields` |
 | `AuthClient.Configuration.redirectToURL` | `redirectTo` |
-| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | unchanged; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
+| `SupabaseClientOptions.AuthOptions(redirectToURL:)` | `SupabaseClient.Configuration.Auth(redirectToURL:)`; `SupabaseClient` passes it to `AuthClient.Configuration.redirectTo` |
 | `AuthClient.Configuration` `let` properties | `var` properties |
 | `AuthClient.Configuration.defaultHeaders` | removed |
 | `AuthMetaSecurity`, `GoTrueMetaSecurity` | internal; pass `captchaToken:` |
@@ -311,7 +311,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `Session.expiresAt: TimeInterval`, `Session.expiresIn: TimeInterval` | `expiresAt: Date`, `expiresIn: Duration`; see below |
 | `Session.isExpired: Bool` | `Session.isExpired(at:leeway:)`; see below |
 | `PasskeyRegistrationOptions.expiresAt: TimeInterval`, `PasskeyAuthenticationOptions.expiresAt: TimeInterval` | `Date` |
-| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(url:secretKey:)`; see below |
+| `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(configuration: .init(url:secretKey:))`; see below |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
@@ -350,8 +350,9 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
 | `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` (`UserPage.audience` for users) |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
-| `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
+| `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `SupabaseClient.Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
+| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:clock:now:)`; `AuthClient.configuration` is public |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `MFAChallenge.id`, `challengeID:`: `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |
@@ -414,8 +415,10 @@ let supabase = SupabaseClient(supabaseURL: supabaseURL, supabaseKey: secretKey)
 try await supabase.auth.admin.deleteUser(id: userID)
 // v3
 let admin = AuthAdminClient(
-  url: supabaseURL.appendingPathComponent("auth/v1"),
-  secretKey: secretKey
+  configuration: .init(
+    url: supabaseURL.appendingPathComponent("auth/v1"),
+    secretKey: secretKey
+  )
 )
 try await admin.deleteUser(id: userID)
 ```
@@ -672,7 +675,7 @@ so email links and implicit tokens still work. Remove `flowType:` from `AuthClie
 // v2
 let options = SupabaseClientOptions(auth: .init(flowType: .pkce))
 // v3
-let options = SupabaseClientOptions(auth: .init())
+let configuration = SupabaseClient.Configuration(auth: .init())
 ```
 
 ## `oauthSignInURL` returns an `OAuthFlow`
@@ -1145,7 +1148,7 @@ let supabase = SupabaseClient(
 let supabase = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
-  options: .init(auth: .init(autoRefresh: .manual))
+  configuration: .init(auth: .init(autoRefresh: .manual))
 )
 ```
 
@@ -1184,7 +1187,7 @@ struct MyStorage: AuthStorage {
 let supabase = SupabaseClient(
   supabaseURL: url,
   supabaseKey: key,
-  options: .init(auth: .init(storage: MyStorage()))
+  configuration: .init(auth: .init(storage: MyStorage()))
 )
 ```
 

@@ -66,13 +66,13 @@ struct SupabaseClientTypedSchemaTests {
     return SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(schema: schema),
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(schema: schema),
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(
             transport: URLSessionTransport(session: URLSession(configuration: configuration))
           )
@@ -105,7 +105,7 @@ struct SupabaseClientTypedSchemaTests {
   }
 
   @Test
-  func aSchemaInTheDatabaseOptionsWins() async throws {
+  func aSchemaInTheDatabaseConfigurationWins() async throws {
     let supabase = makeClient(schema: "public")
 
     _ = try await supabase.from(Secret.self).select().execute()

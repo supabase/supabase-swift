@@ -25,7 +25,7 @@ struct ResumableUploadRegistryTests {
   }
 
   private var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(
@@ -68,11 +68,11 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func pendingReturnsAHandlePerRecordOldestFirst() throws {
+  func pendingReturnsAHandlePerRecordOldestFirst() async throws {
     let a = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
 
-    let uploads = try storage.resumableUploads.pending()
+    let uploads = try await storage.resumableUploads.pending()
 
     #expect(uploads.map(\.id.rawValue) == ["a", "b"])
     #expect(uploads[0].bucketID == a.bucketID)
@@ -86,7 +86,7 @@ struct ResumableUploadRegistryTests {
     let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
     try await upload.start()
 
-    let pending = try storage.resumableUploads.pending()
+    let pending = try await storage.resumableUploads.pending()
 
     #expect(pending.count == 1)
     #expect(pending.first === upload)
@@ -137,7 +137,7 @@ struct ResumableUploadRegistryTests {
     try await upload.start()
     let record = try #require(try store.record(fingerprint: upload.id.rawValue))
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
     #expect(try store.records().map(\.fingerprint) == [upload.id.rawValue])
     #expect(FileManager.default.fileExists(atPath: store.fileURL(for: record).path))
@@ -146,11 +146,11 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func clearRemovesTheRecordsOfHandlesThatNeverStarted() throws {
+  func clearRemovesTheRecordsOfHandlesThatNeverStarted() async throws {
     _ = try saveRecord(fingerprint: "a")
-    let pending = try storage.resumableUploads.pending()
+    let pending = try await storage.resumableUploads.pending()
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
     #expect(try store.records().isEmpty)
     withExtendedLifetime(pending) {}
@@ -168,12 +168,32 @@ struct ResumableUploadRegistryTests {
   }
 
   @Test
-  func clearRemovesEveryRecord() throws {
+  func clearRemovesEveryRecord() async throws {
     _ = try saveRecord(fingerprint: "a")
     _ = try saveRecord(fingerprint: "b")
 
-    try storage.resumableUploads.clear()
+    try await storage.resumableUploads.clear()
 
-    #expect(try storage.resumableUploads.pending().isEmpty)
+    #expect(try await storage.resumableUploads.pending().isEmpty)
+  }
+
+  enum RegistryCall: CaseIterable, Sendable {
+    case pending, clear
+  }
+
+  @Test(arguments: RegistryCall.allCases)
+  func throwsStorageErrorWhenTheRecordDirectoryCannotBeRead(_ call: RegistryCall) async throws {
+    try Data().write(to: root.appendingPathComponent("store"))
+    let registry = storage.resumableUploads
+
+    let error = await #expect(throws: StorageError.self) {
+      switch call {
+      case .pending: _ = try await registry.pending()
+      case .clear: try await registry.clear()
+      }
+    }
+
+    #expect(error?.kind == .invalidRequest)
+    #expect(error?.underlyingError != nil)
   }
 }

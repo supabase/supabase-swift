@@ -29,8 +29,10 @@ struct SupabaseTypegenPostgrestTypegenOutputTests {
       (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data("[]".utf8))
     }
     let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!,
-      http: .init(transport: transport)
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        http: .init(transport: transport)
+      )
     )
     _ = try await client.from(InventoryItems.self).select()
       .where { $0.status.eq(.stocked) }
@@ -47,8 +49,10 @@ struct SupabaseTypegenPostgrestTypegenOutputTests {
       (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), Data("[]".utf8))
     }
     let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!,
-      http: .init(transport: transport)
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        http: .init(transport: transport)
+      )
     )
     _ = try await client.from(Users.self).select(UserWithTodos.self)
       .where { $0.status.eq(.active) }

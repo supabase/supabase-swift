@@ -19,7 +19,10 @@ struct ServerErrorRejoinTests {
   @Test
   func serverErrorRejoinsAndEmitsResubscribed() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        handleAppLifecycle: false))
     let channel = await host.client.channel("room")
     var events = await channel.events().makeAsyncIterator()
     let firstJoin = try await host.subscribe(channel)
@@ -49,7 +52,10 @@ struct ServerErrorRejoinTests {
   @Test
   func pushWaitingForAReplyFailsWithChannelError() async throws {
     let host = await RealtimeTestHost(
-      options: RealtimeClientOptions(requestTimeout: .seconds(10), handleAppLifecycle: false))
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
+        requestTimeout: .seconds(10),
+        handleAppLifecycle: false))
     let channel = await host.client.channel("room")
     let join = try await host.subscribe(channel)
 

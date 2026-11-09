@@ -35,7 +35,7 @@
       client = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
-        options: SupabaseClientOptions(
+        configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client1") {
@@ -48,7 +48,7 @@
       client2 = SupabaseClient(
         supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
         supabaseKey: DotEnv.supabasePublishableKey,
-        options: SupabaseClientOptions(
+        configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
           global: .init(
             logger: Logging.Logger(label: "client2") {
@@ -302,16 +302,16 @@
     @Test
     func customOptionsConnectSubscribeAndReceive() async throws {
       let realtime = RealtimeClient(
-        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [
             "apikey": DotEnv.supabasePublishableKey,
             "Authorization": "Bearer \(DotEnv.supabasePublishableKey)",
           ],
           requestTimeout: .seconds(10),
+          handleAppLifecycle: false,
           serverLogLevel: .warning,
-          webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral),
-          handleAppLifecycle: false
+          webSocketTransport: URLSessionWebSocketTransport(configuration: .ephemeral)
         )
       )
       try await withMainSerialExecutor {
@@ -1309,11 +1309,11 @@
       accessToken: @escaping @Sendable () async throws -> String?
     ) -> RealtimeClient {
       RealtimeClient(
-        url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: ["apikey": DotEnv.supabasePublishableKey],
-          accessToken: accessToken,
           handleAppLifecycle: false,
+          accessToken: accessToken,
           clock: testClock
         )
       )

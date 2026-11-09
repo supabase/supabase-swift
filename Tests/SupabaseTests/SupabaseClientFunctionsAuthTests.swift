@@ -46,12 +46,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )
@@ -72,12 +72,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )
@@ -95,12 +95,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )
@@ -119,12 +119,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           accessToken: { throw TokenError() }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )
@@ -141,12 +141,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )
@@ -164,12 +164,12 @@ struct SupabaseClientFunctionsAuthTests {
     let client = SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: InMemoryAuthStorage(),
           accessToken: { "sb_publishable_abc123" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
         )
       )

@@ -116,7 +116,7 @@ public struct _PostgrestRequest: Sendable {
       configuration: configuration.http,
       retrying: RetryRequestInterceptor(
         policy: retries ? PostgrestClient.Configuration.retryPolicy : .disabled,
-        clock: client.clock),
+        clock: client.configuration.clock),
       appending: [LoggerInterceptor(logger: configuration.logger)])
 
     let response: HTTPTypes.HTTPResponse

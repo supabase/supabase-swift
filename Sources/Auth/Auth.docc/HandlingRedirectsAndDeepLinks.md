@@ -23,7 +23,7 @@ URL must also be on the redirect allow list of your Supabase project.
 let supabase = SupabaseClient(
   supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
   supabaseKey: "your-publishable-key",
-  options: .init(auth: .init(redirectToURL: URL(string: "com.example.app://callback")!))
+  configuration: .init(auth: .init(redirectToURL: URL(string: "com.example.app://callback")!))
 )
 ```
 

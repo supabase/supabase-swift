@@ -975,8 +975,8 @@ struct AuthClientTests {
       headers: HTTPFields(["apikey": apiKey]),
       storage: storage,
       redirectTo: redirectTo,
-      http: .init(transport: transport),
       autoRefresh: autoRefresh,
+      http: .init(transport: transport),
       now: date)
 
     var pkce = PKCE.live

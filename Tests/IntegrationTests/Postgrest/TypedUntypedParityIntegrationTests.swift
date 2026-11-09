@@ -13,8 +13,10 @@ import Testing
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct TypedUntypedParityIntegrationTests {
   let client = PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: ["apikey": DotEnv.supabasePublishableKey]
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: ["apikey": DotEnv.supabasePublishableKey]
+    )
   )
 
   private func expectSameRows(

@@ -29,7 +29,9 @@ struct VectorListingIntegrationTests {
     }
 
     var buckets: [VectorBucket] = []
-    for try await bucket in vectors.listBuckets(prefix: prefix, pageSize: 1) {
+    for try await bucket in vectors.listBuckets(
+      options: ListVectorBucketsOptions(prefix: prefix, pageSize: 1))
+    {
       buckets.append(bucket)
     }
     #expect(buckets.map(\.vectorBucketName).sorted() == names)
@@ -41,7 +43,7 @@ struct VectorListingIntegrationTests {
     }
     var pages = 0
     var indexes: [String] = []
-    for try await page in bucket.listIndexes(pageSize: 1).pages {
+    for try await page in bucket.listIndexes(options: ListIndexesOptions(pageSize: 1)).pages {
       pages += 1
       indexes += page.indexes.map(\.indexName)
     }
@@ -60,7 +62,7 @@ struct VectorListingIntegrationTests {
       }
     }
     try await vectors.from(name).createIndex("idx", dimension: 2, distanceMetric: .cosine)
-    let index = vectors.from(name).index("idx")
+    let index = vectors.from(name).from("idx")
     try await index.putVectors(
       (0..<3).map { VectorEntry(key: "k\($0)", data: VectorData(float32: [1, Float($0)])) })
 
@@ -83,7 +85,7 @@ struct VectorListingIntegrationTests {
       }
     }
     try await vectors.from(name).createIndex("idx", dimension: 2, distanceMetric: .cosine)
-    let index = vectors.from(name).index("idx")
+    let index = vectors.from(name).from("idx")
     let entries = { (count: Int) in
       (0..<count).map { VectorEntry(key: "k\($0)", data: VectorData(float32: [1, Float($0)])) }
     }

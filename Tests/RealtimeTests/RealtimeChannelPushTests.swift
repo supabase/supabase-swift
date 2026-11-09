@@ -215,15 +215,15 @@ struct RealtimeChannelPushTests {
     let server: FakeWebSocket
     let client: RealtimeClient
 
-    init(timeout: Duration = RealtimeClientOptions.defaultRequestTimeout) {
+    init(timeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout) {
       let clock = SignalingTestClock()
       let (socket, server) = FakeWebSocket.fakes()
       self.clock = clock
       self.socket = socket
       self.server = server
       client = RealtimeClient(
-        url: URL(string: "http://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "http://localhost:54321/realtime/v1")!,
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
           handleAppLifecycle: false

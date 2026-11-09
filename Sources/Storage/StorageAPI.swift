@@ -1,6 +1,7 @@
 import Foundation
 import HTTPTypes
 import IssueReporting
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -9,7 +10,7 @@ import IssueReporting
 /// Internal implementation detail shared by ``StorageClient``, ``StorageBucket``, and the
 /// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
-/// Holds the ``StorageClientConfiguration``, the ``StorageRequests`` builder for its base URL,
+/// Holds the ``StorageClient/Configuration``, the ``StorageRequests`` builder for its base URL,
 /// and sends requests through the shared `HTTPClient`. Each of the types above holds a
 /// ``StorageAPI`` value and delegates to it rather than inheriting from it.
 struct StorageAPI: Sendable {
@@ -46,7 +47,7 @@ struct StorageAPI: Sendable {
     return rewritten
   }
 
-  private(set) var configuration: StorageClientConfiguration
+  private(set) var configuration: StorageClient.Configuration
 
   /// Builds the request for each route under ``configuration``'s URL.
   let requests: StorageRequests
@@ -55,11 +56,13 @@ struct StorageAPI: Sendable {
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, and transport.
-  init(configuration: StorageClientConfiguration) {
+  init(configuration: StorageClient.Configuration) {
     var configuration = configuration
     if configuration.headers[.xClientInfo] == nil {
       configuration.headers[.xClientInfo] = "storage-swift/\(version)"
     }
+    configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "storage"
 
     if configuration.usesNewHostname == true {
       configuration.url = Self.storageHost(configuration.url)
@@ -90,7 +93,7 @@ struct StorageAPI: Sendable {
   /// Sends `request` with the client's default headers and returns the response body.
   ///
   /// Only `GET`, `HEAD` and ``StorageRequest/replayable`` requests are retried, and only when
-  /// ``StorageClientConfiguration/retryEnabled`` is `true`.
+  /// ``StorageClient/Configuration/retryEnabled`` is `true`.
   @discardableResult
   func execute(_ request: StorageRequest) async throws -> Data {
     guard let body = try await stream(request).body else { return Data() }

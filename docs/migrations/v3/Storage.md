@@ -24,7 +24,7 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Cancellation.** A cancelled Storage call throws `CancellationError`, not
   `URLError(.cancelled)`.
 - **Reads retry.** Transient failures of `GET` and `HEAD` requests now retry with backoff. Pass
-  `retryEnabled: false` to `StorageClientConfiguration` to turn this off.
+  `retryEnabled: false` to `StorageClient.Configuration` to turn this off.
 - **Headers are case-insensitive.** A `content-type` header now replaces `Content-Type` instead of
   sending both. A `Content-Type` in `UploadOptions.headers` wins over the inferred type.
 - **`update(path:)` ignores `upsert`.** `update` sends `PUT`, which always replaces. A signed-URL
@@ -40,9 +40,11 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageFileApi` | `StorageBucket` |
 | `class` `SupabaseStorageClient`, `StorageFileApi` | `struct` (no `weak`, `===`, or `AnyObject`) |
 | `StorageBucketApi`, `StorageApi` | removed; use `StorageClient` |
-| `StorageClientConfiguration(..., session:)` | `StorageClientConfiguration(..., http:)` (see the overview) |
+| `StorageClientConfiguration` | `StorageClient.Configuration` |
+| `StorageClientConfiguration(..., session:)` | `StorageClient.Configuration(..., http:)` (see the overview) |
 | `StorageClientConfiguration(..., encoder:, decoder:)` | removed |
-| `StorageClientConfiguration.useNewHostname` | `usesNewHostname` |
+| `StorageClientConfiguration.useNewHostname` | `StorageClient.Configuration.usesNewHostname` |
+| `StorageClientConfiguration(url:headers:...)`, `headers` required | `StorageClient.Configuration(url:headers:usesNewHostname:http:logger:retryEnabled:clock:)`, `headers` defaults to `[:]` |
 | `StorageHTTPSession` | `any ClientTransport` (see the overview) |
 | `JSONEncoder.defaultStorageEncoder`, `JSONDecoder.defaultStorageDecoder` | removed |
 | `getBucket(_:)` | `bucket(_:)` |
@@ -71,7 +73,7 @@ Changes that still compile but behave differently. Check each one by hand.
 
 ## `setHeader` is `settingHeader` and returns a new value
 
-`StorageClientConfiguration.headers` is `HTTPFields`. `setHeader(_:forKey:)` is
+`StorageClient.Configuration.headers` is `HTTPFields`. `setHeader(_:forKey:)` is
 `settingHeader(name:value:)`. It no longer changes the receiver: it returns a copy with the header.
 Use the returned value.
 
@@ -81,7 +83,7 @@ StorageClientConfiguration(url: url, headers: ["apikey": key])
 storage.setHeader("v", forKey: "X-Custom")
 try await storage.from("avatars").list()
 // v3
-StorageClientConfiguration(url: url, headers: [HTTPField.Name("apikey")!: key])
+StorageClient.Configuration(url: url, headers: [HTTPField.Name("apikey")!: key])
 let custom = storage.settingHeader(name: HTTPField.Name("X-Custom")!, value: "v")
 try await custom.from("avatars").list()
 ```
@@ -267,10 +269,23 @@ Storage names spell `ID` in capitals, like the rest of the SDK. The wire format 
 ## Experimental APIs
 
 Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `ResumableUpload`,
-`StorageClientConfiguration.resumable`), `storage.vectors` and `storage.analytics` are
+`StorageClient.Configuration.resumable`), `storage.vectors` and `storage.analytics` are
 `@_spi(Experimental)`. Import them with `@_spi(Experimental) import Supabase` (or
 `@_spi(Experimental) import Storage`). They may change in any release. The Vectors list methods now
-return a `PageSequence` and take `pageSize:` instead of `maxResults:`. Their pages are
+return a `PageSequence` and take `pageSize` instead of `maxResults`. Their pages are
 `VectorBucketPage`, `VectorIndexPage`, and `VectorPage`; call `.page()` for the first page.
-`vectors(keys:)`, `listVectors`, and `queryVectors` take their optional settings in
-`GetVectorsOptions`, `ListVectorsOptions`, and `QueryVectorsOptions`.
+`listBuckets`, `listIndexes`, `vectors(keys:)`, `listVectors`, and `queryVectors` take their
+optional settings in `ListVectorBucketsOptions`, `ListIndexesOptions`, `GetVectorsOptions`,
+`ListVectorsOptions`, and `QueryVectorsOptions`. The vector models have public memberwise inits
+for fixtures.
+
+`VectorBucketClient` follows the same getter pattern as `StorageClient`: `from(_:)` returns a
+client and the noun returns details.
+
+| v2 | v3 |
+|----|----|
+| `vectors.listBuckets(prefix: "docs", maxResults: 100)` | `vectors.listBuckets(options: .init(prefix: "docs", pageSize: 100))` |
+| `try await vectors.getBucket("docs")` | `try await vectors.bucket("docs")` |
+| `bucket.listIndexes(prefix: "emb", maxResults: 100)` | `bucket.listIndexes(options: .init(prefix: "emb", pageSize: 100))` |
+| `bucket.index("embeddings")` (a `VectorIndexClient`) | `bucket.from("embeddings")` |
+| `try await bucket.getIndex("embeddings")` (a `VectorIndex`) | `try await bucket.index("embeddings")` |

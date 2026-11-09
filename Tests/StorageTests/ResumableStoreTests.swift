@@ -159,7 +159,7 @@ struct ResumableStoreTests {
     let copy = store.fileURL(for: record)
     #expect(FileManager.default.fileExists(atPath: copy.path))
 
-    try store.remove(record)
+    store.remove(record)
 
     #expect(try store.record(fingerprint: "f1") == nil)
     #expect(!FileManager.default.fileExists(atPath: copy.path))

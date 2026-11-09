@@ -11,7 +11,7 @@ public import HTTPTypes
 /// Opens WebSocket connections for a ``RealtimeClient``.
 ///
 /// The client owns one connection at a time and reads it through ``WebSocketConnection``. The
-/// default is ``URLSessionWebSocketTransport``. Set ``RealtimeClientOptions/webSocketTransport``
+/// default is ``URLSessionWebSocketTransport``. Set ``RealtimeClient/Configuration/webSocketTransport``
 /// to use another WebSocket stack.
 ///
 /// A transport must report failures in a way the client can act on:
