@@ -146,4 +146,23 @@ final class StorageResumableIntegrationTests {
     try await expectObject(second, path: "relaunched.bin")
     #expect(try await second.resumableUploads.pending().isEmpty)
   }
+
+  @Test
+  func aCorruptRecordDoesNotBlockRelaunchRecovery() async throws {
+    let first = client()
+    let upload = try bucket(first).resumableUpload(path: "corrupt-neighbor.bin", fileURL: fileURL)
+    try await upload.start()
+    await waitForFirstChunk(of: upload)
+    await upload.pause()
+    let corrupt = directory.appendingPathComponent("\(String(repeating: "c", count: 64)).json")
+    try Data("{".utf8).write(to: corrupt)
+
+    let second = client()
+    let resumed = try await second.resumableUploads.resumeAll()
+    #expect(resumed.map(\.id) == [upload.id])
+    _ = try await resumed[0].result
+
+    try await expectObject(second, path: "corrupt-neighbor.bin")
+    #expect(!FileManager.default.fileExists(atPath: corrupt.path))
+  }
 }

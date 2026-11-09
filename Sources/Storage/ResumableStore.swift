@@ -148,11 +148,25 @@ struct ResumableStore: Sendable {
       to: recordURL(fingerprint: record.fingerprint), options: .atomic)
   }
 
-  /// The record, or `nil` when there is none or it is stale (a stale one is removed).
+  /// The record, or `nil` when there is none, it is stale, or it does not decode. A stale record
+  /// is removed with its sandbox copy, and so is one that does not decode when `fingerprint`
+  /// has the shape the store writes. Other files are left alone, since ``directory`` can be a
+  /// folder the app shares, such as an app group container.
+  ///
+  /// - Throws: The file system's error when the record exists but cannot be read, for example
+  ///   while data protection locks it. The record is kept.
   func record(fingerprint: String) throws -> ResumableUploadRecord? {
     let url = recordURL(fingerprint: fingerprint)
-    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-    let record = try Self.decoder.decode(ResumableUploadRecord.self, from: Data(contentsOf: url))
+    let data: Data
+    do {
+      data = try Data(contentsOf: url)
+    } catch CocoaError.fileReadNoSuchFile {
+      return nil
+    }
+    guard let record = try? Self.decoder.decode(ResumableUploadRecord.self, from: data) else {
+      if Self.isFingerprint(fingerprint) { removeFiles(fingerprint: fingerprint) }
+      return nil
+    }
     guard !isStale(record) else {
       remove(record)
       return nil
@@ -160,29 +174,45 @@ struct ResumableStore: Sendable {
     return record
   }
 
-  /// Every live record, oldest first. Stale ones are removed on the way.
+  /// Every live record, oldest first. Stale and corrupt ones are removed on the way (see
+  /// ``record(fingerprint:)``); one that cannot be read is skipped and kept.
   ///
-  /// - Throws: ``StorageError`` when the directory or a record cannot be read.
+  /// - Throws: ``StorageError`` when the directory cannot be read.
   func records() throws -> [ResumableUploadRecord] {
     guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+    let names: [String]
     do {
-      return try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        .filter { $0.hasSuffix(".json") }
-        .compactMap { try record(fingerprint: String($0.dropLast(".json".count))) }
-        .sorted { $0.createdAt < $1.createdAt }
+      names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
     } catch {
       throw StorageError(
         kind: .invalidRequest,
         message: "The resumable upload records could not be read.",
         underlyingError: error)
     }
+    return
+      names
+      .filter { $0.hasSuffix(".json") }
+      .compactMap { try? record(fingerprint: String($0.dropLast(".json".count))) }
+      .sorted { $0.createdAt < $1.createdAt }
   }
 
   func remove(_ record: ResumableUploadRecord) {
-    try? FileManager.default.removeItem(at: recordURL(fingerprint: record.fingerprint))
-    if record.source == .sandboxCopy {
-      try? FileManager.default.removeItem(at: sandboxCopyURL(fingerprint: record.fingerprint))
-    }
+    removeFiles(fingerprint: record.fingerprint)
+  }
+
+  /// Whether `name` is a hex SHA-256 digest, the only file name the store writes.
+  private static func isFingerprint(_ name: String) -> Bool {
+    name.utf8.count == 64
+      && name.utf8.allSatisfy {
+        (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0)
+          || (UInt8(ascii: "a")...UInt8(ascii: "f")).contains($0)
+      }
+  }
+
+  /// Deletes the record file and the sandbox copy, if any, for `fingerprint`.
+  private func removeFiles(fingerprint: String) {
+    try? FileManager.default.removeItem(at: recordURL(fingerprint: fingerprint))
+    try? FileManager.default.removeItem(at: sandboxCopyURL(fingerprint: fingerprint))
   }
 
   func removeAll() throws {

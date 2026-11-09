@@ -37,7 +37,9 @@ public struct ResumableUploadRegistry: Sendable {
 
   /// A handle for every record on disk, oldest first. An upload already in flight in this
   /// process is returned as the same handle; the others are ``ResumableUpload/State/pending``
-  /// until ``ResumableUpload/start()``. Reads the disk off the caller's actor.
+  /// until ``ResumableUpload/start()``. A record that does not decode is deleted; one that
+  /// cannot be read, for example while data protection locks it, is skipped. Reads the disk off
+  /// the caller's actor.
   ///
   /// - Throws: ``StorageError`` when the record directory cannot be read.
   @concurrent
@@ -62,16 +64,16 @@ public struct ResumableUploadRegistry: Sendable {
   }
 
   /// Deletes the record and sandbox copy of every upload that is not in flight in this
-  /// process. An upload in flight keeps its files until it completes or is cancelled. Works on
+  /// process. An upload in flight keeps its files until it completes or is cancelled, and a
+  /// record that cannot be read, for example while data protection locks it, is kept. Works on
   /// the disk off the caller's actor.
   ///
   /// - Throws: ``StorageError`` when the record directory cannot be read.
   @concurrent
   public func clear() async throws {
     let store = store
-    for record in try store.records()
-    where !ResumableUpload.isLive(fingerprint: record.fingerprint, api: api) {
-      store.remove(record)
+    for record in try store.records() {
+      ResumableUpload.removeUnlessLive(record, from: store, api: api)
     }
   }
 }
