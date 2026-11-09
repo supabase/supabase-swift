@@ -252,10 +252,13 @@ public actor ResumableUpload {
   }
 
   /// Marks this handle as the one driving its record, so ``ResumableUploadRegistry/clear()``
-  /// keeps the record and a second handle is never made for it.
+  /// keeps the record and a second handle is never made for it. Takes the entry from another
+  /// handle that has not started, such as one ``ResumableUploadRegistry/pending()`` made after
+  /// this one failed.
   private func claimLive(_ key: String) {
     Self.live.withValue { live in
-      if live[key]?.upload == nil || live[key]?.upload === self {
+      let entry = live[key]
+      if entry?.upload == nil || entry?.upload === self || entry?.started != true {
         live[key] = Live(upload: self, started: true)
       }
     }

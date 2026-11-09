@@ -197,7 +197,10 @@ struct ResumableStore: Sendable {
   }
 
   func remove(_ record: ResumableUploadRecord) {
-    removeFiles(fingerprint: record.fingerprint)
+    try? FileManager.default.removeItem(at: recordURL(fingerprint: record.fingerprint))
+    if record.source == .sandboxCopy {
+      try? FileManager.default.removeItem(at: sandboxCopyURL(fingerprint: record.fingerprint))
+    }
   }
 
   /// Whether `name` is a hex SHA-256 digest, the only file name the store writes.

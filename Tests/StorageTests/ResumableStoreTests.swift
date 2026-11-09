@@ -166,6 +166,20 @@ struct ResumableStoreTests {
   }
 
   @Test
+  func removingAContainerRecordKeepsAFileNamedLikeASandboxCopy() throws {
+    _ = try writeFile("video.mp4", in: container)
+    let record = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))
+    try store.save(record)
+    let other = store.directory.appendingPathComponent("f1.bin")
+    try Data("app".utf8).write(to: other)
+
+    store.remove(record)
+
+    #expect(try store.record(fingerprint: "f1") == nil)
+    #expect(FileManager.default.fileExists(atPath: other.path))
+  }
+
+  @Test
   func aCorruptRecordIsRemovedWithItsSandboxCopyAndSkipped() throws {
     _ = try writeFile("video.mp4", in: container)
     let good = record(fingerprint: "f1", source: .container(relativePath: "video.mp4"))

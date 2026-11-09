@@ -306,8 +306,10 @@ struct ResumableUploadTests {
     await #expect(throws: CancellationError.self) { try await upload.result }
   }
 
-  @Test
-  func clearKeepsTheRecordOfAFailedUploadThatIsResuming() async throws {
+  @Test(arguments: [false, true])
+  func clearKeepsTheRecordOfAFailedUploadThatIsResuming(
+    whileAnotherHandleIsPending: Bool
+  ) async throws {
     let (gate, open) = AsyncStream<Void>.makeStream()
     let script = Script([
       Self.created(offset: 0), Self.appended(offset: 8), Self.transportFailure,
@@ -321,6 +323,8 @@ struct ResumableUploadTests {
     let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
     try await upload.start()
     await #expect(throws: StorageError.self) { try await upload.result }
+    let pending = whileAnotherHandleIsPending ? try await storage.resumableUploads.pending() : []
+    #expect(pending.allSatisfy { $0 !== upload })
 
     let resuming = Task { try await upload.resume() }
     while script.log.value.count < 4 { await Task.yield() }
@@ -334,6 +338,7 @@ struct ResumableUploadTests {
       Issue.record("not completed: \(await upload.state)")
       return
     }
+    withExtendedLifetime(pending) {}
   }
 
   @Test
