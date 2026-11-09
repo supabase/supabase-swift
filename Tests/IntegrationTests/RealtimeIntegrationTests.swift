@@ -304,7 +304,7 @@
       // A heartbeat goes out only when the test advances `clock`, so no heartbeat can start
       // while `late` registers.
       let clock = TestClock<Duration>()
-      let realtime = RealtimeClient(
+      let realtime = try RealtimeClient(
         configuration: RealtimeClient.Configuration(
           url: URL(string: DotEnv.supabaseURL)!.appendingPathComponent("realtime/v1"),
           headers: [
