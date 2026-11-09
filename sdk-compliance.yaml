@@ -353,7 +353,6 @@ supporting_symbols:
   - PostgrestClient.Configuration.init
   - PostgrestClient.Configuration.url
   - PostgrestClient.Configuration.headers
-  - PostgrestClient.Configuration.defaultHeaders
   - PostgrestClient.Configuration.encoder
   - PostgrestClient.Configuration.decoder
   # The admin MFA namespace is shared by auth.admin.list_mfa_factors and
