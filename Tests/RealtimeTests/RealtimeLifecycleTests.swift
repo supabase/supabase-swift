@@ -43,7 +43,7 @@ struct RealtimeLifecycleTests {
     RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         observesAppLifecycle: observesAppLifecycle,
         monitorsNetworkPath: monitorsNetworkPath,
         accessToken: { "custom.access.token" }
@@ -266,7 +266,7 @@ struct RealtimeLifecycleTests {
     let sut = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: url,
-        headers: ["apikey": apiKey],
+        headers: [.apikey: apiKey],
         accessToken: { "custom.access.token" }
       ),
       wsTransport: { [servers, connectionCount, rejoinJoinTopics] _, _ in

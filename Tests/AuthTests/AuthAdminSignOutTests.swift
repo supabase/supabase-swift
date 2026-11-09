@@ -28,7 +28,7 @@ struct AuthAdminSignOutTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer users.access.token" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/logout?scope=global"
@@ -47,7 +47,7 @@ struct AuthAdminSignOutTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer users.access.token" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/logout?scope=local"
@@ -66,7 +66,7 @@ struct AuthAdminSignOutTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer users.access.token" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/logout?scope=others"

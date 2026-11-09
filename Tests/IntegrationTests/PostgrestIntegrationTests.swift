@@ -43,7 +43,7 @@ struct PostgrestIntegrationTests {
     configuration: .init(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "Apikey": DotEnv.supabasePublishableKey
+        .apikey: DotEnv.supabasePublishableKey
       ]
     )
   )

@@ -121,7 +121,7 @@ public struct AuthAdminClient: Sendable {
     self.configuration = configuration
 
     var headers = AuthClient.Configuration.defaultHeaders
-    headers[.apikeyHeaderName] = configuration.secretKey
+    headers[.apikey] = configuration.secretKey
     if !APIKeyFormat.isNew(configuration.secretKey) {
       headers[.authorization] = "Bearer \(configuration.secretKey)"
     }

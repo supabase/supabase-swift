@@ -24,7 +24,7 @@ struct FunctionsAPITests {
   let configuration = FunctionsClient.Configuration(
     url: URL(string: "http://localhost:5432/functions/v1")!,
     headers: [
-      HTTPField.Name("apikey")!: "supabase.publishable.key",
+      .apikey: "supabase.publishable.key",
       .xClientInfo: "functions-swift/x.y.z",
     ]
   )
@@ -230,7 +230,7 @@ struct FunctionsAPITests {
   func perCallHeadersWinOverClientHeaders() async throws {
     try await assertRequest(
       name: "hello-world",
-      options: .init(headers: [HTTPField.Name("apikey")!: "per-call", .xClientInfo: "app/1.0"])
+      options: .init(headers: [.apikey: "per-call", .xClientInfo: "app/1.0"])
     ) {
       """
       curl \\
@@ -260,7 +260,7 @@ struct FunctionsAPITests {
     let (request, _) = FunctionsAPI.makeRequest(
       name: "f", body: nil, options: .init(),
       configuration: .init(url: configuration.url))
-    #expect(request.headerFields[.xClientInfo] == "functions-swift/\(Functions.version)")
+    #expect(request.headerFields[.xClientInfo] == clientInfo(library: "functions-swift"))
   }
 
   struct HeadCase: Sendable, CustomTestStringConvertible {

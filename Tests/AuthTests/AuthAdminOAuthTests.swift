@@ -54,7 +54,7 @@ struct AuthAdminOAuthTests {
           #"""
           curl \
           	--header "Authorization: Bearer supabase.secret.key" \
-          	--header "X-Client-Info: auth-swift/0.0.0" \
+          	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
           	--header "X-Supabase-Api-Version: 2024-01-01" \
           	--header "apikey: supabase.secret.key" \
           	"http://localhost:54321/auth/v1/admin/oauth/clients"
@@ -109,7 +109,7 @@ struct AuthAdminOAuthTests {
       	--header "Authorization: Bearer supabase.secret.key" \
       	--header "Content-Length: 141" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	--data "{\"client_name\":\"Update Client name\",\"grant_types\":[\"authorization_code\",\"refresh_token\"],\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
@@ -158,7 +158,7 @@ struct AuthAdminOAuthTests {
       	--header "Authorization: Bearer supabase.secret.key" \
       	--header "Content-Length: 80" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	--data "{\"client_name\":\"New Client\",\"redirect_uris\":[\"https:\/\/example.com\/callback\"]}" \
@@ -201,7 +201,7 @@ struct AuthAdminOAuthTests {
       #"""
       curl \
       	--header "Authorization: Bearer supabase.secret.key" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
@@ -278,7 +278,7 @@ struct AuthAdminOAuthTests {
       curl \
       	--request DELETE \
       	--header "Authorization: Bearer supabase.secret.key" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
@@ -313,7 +313,7 @@ struct AuthAdminOAuthTests {
       curl \
       	--request POST \
       	--header "Authorization: Bearer supabase.secret.key" \
-      	--header "X-Client-Info: auth-swift/0.0.0" \
+      	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: supabase.secret.key" \
       	"http://localhost:54321/auth/v1/admin/oauth/clients/E621E1F8-C36C-495A-93FC-0C247A3E6E5F/regenerate_secret"

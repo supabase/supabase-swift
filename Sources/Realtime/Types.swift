@@ -229,10 +229,6 @@ public enum HeartbeatEvent: Hashable, Sendable {
   case timedOut
 }
 
-extension HTTPField.Name {
-  static let apiKey = Self("apiKey")!
-}
-
 /// How much the Realtime server logs for one connection.
 ///
 /// Set it on ``RealtimeClient/Configuration/serverLogLevel``. The client sends it as the `log_level`

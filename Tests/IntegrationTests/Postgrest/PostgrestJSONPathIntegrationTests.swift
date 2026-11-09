@@ -14,7 +14,7 @@ struct PostgrestJSONPathIntegrationTests {
   let client = try! PostgrestClient(
     configuration: .init(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-      headers: ["apikey": DotEnv.supabasePublishableKey]
+      headers: [.apikey: DotEnv.supabasePublishableKey]
     )
   )
 

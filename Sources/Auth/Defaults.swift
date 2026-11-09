@@ -9,6 +9,6 @@ extension AuthClient.Configuration {
 
   /// Sent unless the configured headers set the same name.
   static let defaultHeaders: HTTPFields = [
-    HTTPField.Name.xClientInfo: "auth-swift/\(version)"
+    .xClientInfo: clientInfo(library: "auth-swift")
   ]
 }

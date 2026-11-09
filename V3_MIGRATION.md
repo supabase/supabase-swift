@@ -67,6 +67,11 @@ Changes that still compile but behave differently. Check each one by hand.
   `HTTPBody(_:length:iterationBehavior: .single)`. A `.single` body with `length: .known(n)` must
   yield exactly `n` bytes, or the request fails with `HTTPBodyLengthMismatchError`. Search for
   `iterationBehavior: .single`.
+- **`X-Client-Info` names the platform in every module.** A standalone client now sends
+  `<module>-swift/<version>; platform=…; platform-version=…; runtime=swift; runtime-version=…`, as
+  `SupabaseClient` already did. A standalone `RealtimeClient` also sends this value as the `version`
+  of each channel join. An `X-Client-Info` header that you set still wins. Search for code that
+  parses this header, for example in a middleware or on your server.
 
 ### Renames and type changes
 
@@ -83,6 +88,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
 | `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
 | `ObservationToken` | removed; cancel the task that reads the stream |
+| `headers: [String: String]` on `PostgrestClient.Configuration`, `RealtimeClientOptions`, `GlobalOptions`, and `SupabaseClient` | `headers: HTTPFields`; write each key as an `HTTPField.Name`, for example `[.apikey: key]` or `[HTTPField.Name("x-app")!: "demo"]` |
+| `HTTPField.Name("apikey")!` | `.apikey` |
 | Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `serverError?.code: String?`; Realtime `serverCode`, `RealtimeError.ServerCode`; Storage `serverStatusCode`, `serverError?.code` | `code: <Module>Error.Code?` on every module error; Storage's body status is `serverError?.statusCode` |
 
 Naming rules applied across all modules (the module tables list each symbol):
@@ -389,6 +396,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
 | `GlobalOptions(session:)` | `Configuration.Global(http: .init(transport: URLSessionTransport(session:)))` |
 | `GlobalOptions.logger: (any SupabaseLogger)?` | `Configuration.Global.logger: Logging.Logger` |
+| `GlobalOptions.headers: [String: String]`, `RealtimeClientOptions.headers: [String: String]` | `Configuration.Global.headers: HTTPFields`, `Configuration.Realtime.headers: HTTPFields` |
+| `supabase.headers: [String: String]` | `supabase.headers: HTTPFields` |
 | `AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `Configuration.Auth.redirectTo`, `Configuration.Auth(redirectTo:)` |
 | `AuthOptions.autoRefreshToken: Bool` | `Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
@@ -422,7 +431,7 @@ let client = SupabaseClient(
 // v3
 var configuration = SupabaseClient.Configuration()
 configuration.database.schema = "app"
-configuration.global.headers = ["x-app": "demo"]
+configuration.global.headers = [HTTPField.Name("x-app")!: "demo"]
 let client = try SupabaseClient(supabaseURL: url, supabaseKey: key, configuration: configuration)
 ```
 

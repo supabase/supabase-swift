@@ -22,6 +22,9 @@ enum FunctionsAPI {
   /// so an unbounded error response cannot hold the call open or exhaust memory (SDK-1840).
   static let maxErrorBodyBytes = 1 << 20
 
+  /// Sent unless the configured or per-call headers set the same name.
+  static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "functions-swift")]
+
   /// Builds the request head and body for one invocation. Pure: no token lookup, no I/O.
   ///
   /// Headers merge lowest to highest: `X-Client-Info`, then `configuration.headers`, then the
@@ -35,8 +38,7 @@ enum FunctionsAPI {
     options: FunctionInvokeOptions,
     configuration: FunctionsClient.Configuration
   ) -> (HTTPRequest, HTTPBody?) {
-    var headers: HTTPFields = [.xClientInfo: "functions-swift/\(version)"]
-    headers.merge(with: configuration.headers)
+    var headers = defaultHeaders.merging(with: configuration.headers)
     if let body { headers[.contentType] = body.contentType }
     headers.merge(with: options.headers)
 
