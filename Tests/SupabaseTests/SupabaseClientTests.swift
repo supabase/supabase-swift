@@ -154,7 +154,7 @@ struct SupabaseClientTests {
     )
 
     let headers = client.realtime.headers
-    #expect(headers[values: .apikey] == ["PUBLISHABLE_KEY"])
+    #expect(headers[values: .apikey] == ["other"])
     #expect(headers[HTTPField.Name("x-custom")!] == "1")
     #expect(client.realtime.configuration.headers[HTTPField.Name("X-Custom")!] == "1")
   }
@@ -296,8 +296,8 @@ struct SupabaseClientTests {
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtime.configuration.http.middlewares.isEmpty,
-      "middlewares should stay as the caller passed them when they set a transport"
+      client.realtime.configuration.http.middlewares.contains { $0 is TraceContextMiddleware },
+      "SDK middlewares should stay installed when the caller sets a transport"
     )
   }
 

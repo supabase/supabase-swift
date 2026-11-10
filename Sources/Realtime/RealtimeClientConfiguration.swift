@@ -57,9 +57,9 @@ extension RealtimeClient {
     /// Headers sent with the WebSocket upgrade request and with every `RealtimeChannel.httpSend`
     /// request.
     ///
-    /// Header names compare without regard to case. `SupabaseClient` adds its own headers, such
-    /// as `apikey`, and those win over a header set here. The client adds an `X-Client-Info`
-    /// header unless you set that header yourself.
+    /// Header names compare without regard to case. `SupabaseClient` passes its own headers, such
+    /// as `apikey`, merged under `SupabaseClient.Configuration.Realtime.headers`. The client
+    /// adds an `X-Client-Info` header unless you set that header yourself.
     public var headers: HTTPFields
 
     /// How often the client sends a heartbeat to keep the connection alive.
