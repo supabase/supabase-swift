@@ -75,7 +75,40 @@ struct PostgrestRpcTests {
     }
   }
 
+  /// Numbers that a `Double` cannot hold exactly.
+  struct Precise: _PostgrestFunction {
+    typealias Result = [String]
+    static let functionName = "precise"
+    var big: UInt64
+    var amount: Decimal
+    var amounts: [Decimal]
+    var nested: [String: UInt64]
+  }
+
   private let search = SearchTodos(keyword: "milk", limit: 3, tags: ["a", "b c"])
+
+  private let precise = Precise(
+    big: 9_223_372_036_854_775_809,
+    amount: Decimal(string: "12345678901234567.89")!,
+    amounts: [Decimal(string: "0.1")!, Decimal(string: "98765432109876543.21")!],
+    nested: ["n": 18_446_744_073_709_551_615]
+  )
+
+  /// A `GET` call sends each number with the digits it was encoded with, so PostgREST runs the
+  /// function on the same value a `POST` would send.
+  @Test
+  func readOnlyKeepsTheExactDigitsOfLargeNumbers() async throws {
+    let expected =
+      #"amount=12345678901234567.89&amounts={0.1,98765432109876543.21}&big=9223372036854775809&nested={"n":18446744073709551615}"#
+
+    let typed = try QueryCapture()
+    _ = try await typed.client.rpc(precise).readOnly().execute()
+    #expect(typed.query == expected)
+
+    let untyped = try QueryCapture()
+    _ = try await untyped.client.rpc("precise", params: precise, get: true).execute()
+    #expect(untyped.query == expected)
+  }
 
   @Test
   func postsTheArgumentsAsTheBody() async throws {
