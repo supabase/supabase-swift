@@ -396,6 +396,31 @@
     }
 
     @Test
+    func broadcastAtTheHeaderLimitsRoundTrips() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        // The wire topic `realtime:<name>` and the event are each 255 bytes, the frame's limit.
+        let name = "limit-" + String(repeating: "t", count: 240)
+        let event = String(repeating: "e", count: 255)
+        let channel = await client.realtime.channel(name) {
+          $0.broadcast.receiveOwnMessages = true
+        }
+        let messages = await channel.broadcasts(event: event)
+        try await channel.subscribe()
+
+        try await channel.broadcast(event: event, payload: ["value": 1] as JSONObject)
+        let received = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+
+        #expect(received?.event == event)
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
     func aNewTokenIsSentToSubscribedChannelsAndTheServerKeepsThem() async throws {
       let client = client
       try await withMainSerialExecutor {

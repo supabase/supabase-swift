@@ -227,7 +227,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   - payload: The value to send. It must encode as a JSON object.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
-  ///   when `payload` does not encode as a JSON object, and nothing is sent;
+  ///   when `payload` does not encode as a JSON object, when `event` is over 255 UTF-8 bytes,
+  ///   or when the channel's ``topic`` is over 246 UTF-8 bytes, and nothing is sent;
   ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
   ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
   ///   arrived within the client's configured timeout, the server's reason as
@@ -248,8 +249,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``, except
-  ///   ``RealtimeError/Kind-swift.struct/invalidRequest``.
+  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``. Here
+  ///   ``RealtimeError/Kind-swift.struct/invalidRequest`` means only that `event` or the
+  ///   channel's ``topic`` is too long.
   public func broadcast(event: String, data: Data) async throws {
     try await broadcast(event: event, payload: .binary(data))
   }
