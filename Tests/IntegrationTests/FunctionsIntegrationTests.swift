@@ -36,7 +36,8 @@ struct FunctionsIntegrationTests {
       configuration: .init(
         url: URL(string: "\(DotEnv.supabaseURL)/functions/v1")!,
         headers: headers,
-        accessToken: accessToken
+        http: .init(
+          middlewares: accessToken.map { [AccessTokenMiddleware(getAccessToken: $0)] } ?? [])
       )
     )
   }

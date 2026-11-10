@@ -94,11 +94,15 @@ struct AuthMiddleware: ClientMiddleware {
     return try await next(request.signed(with: retry.accessToken), body)
   }
 
+  /// The session to sign with, or `nil` when no user is signed in. Any other failure means the
+  /// token could not be resolved, so the module throws its error with kind `accessToken`.
   private func signedInSession() async throws -> Session? {
-    do {
-      return try await auth.session()
-    } catch let error as AuthError where error.kind == .sessionMissing {
-      return nil
+    try await AccessTokenFailure.wrapping {
+      do {
+        return try await auth.session()
+      } catch let error as AuthError where error.kind == .sessionMissing {
+        return nil
+      }
     }
   }
 

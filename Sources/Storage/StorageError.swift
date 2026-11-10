@@ -52,6 +52,11 @@ public struct StorageError: SupabaseError {
     /// ``StorageClient/init(configuration:)`` refused the configuration: its URL has no scheme, no
     /// host, or cannot be split into components. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
+    /// The access token provider threw, so the request could not be authenticated and was not
+    /// sent. The provider is an `AccessTokenMiddleware` in ``StorageClient/Configuration/http``,
+    /// or `SupabaseClient`'s Auth session. ``StorageError/underlyingError`` is the provider's
+    /// error.
+    public static let accessToken: Kind = "accessToken"
   }
 
   /// A machine-readable code Storage sends alongside the error body.

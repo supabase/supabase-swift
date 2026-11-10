@@ -17,6 +17,7 @@ passes its cap.
 | ``StorageError/Kind-swift.struct/transport`` | No response arrived, or the connection dropped while a body streamed. | ``StorageError/underlyingError``, usually a `URLError` |
 | ``StorageError/Kind-swift.struct/decoding`` | A 2xx body could not be used. | ``StorageError/underlyingError``, the `DecodingError` |
 | ``StorageError/Kind-swift.struct/invalidRequest`` | The SDK refused to send, for example an empty path or a `..` segment. | ``StorageError/message`` |
+| ``StorageError/Kind-swift.struct/accessToken`` | The access token provider threw. Nothing was sent. | ``StorageError/underlyingError``, the provider's error |
 
 ``StorageError/Kind-swift.struct`` is an open set. Keep a fallback branch.
 

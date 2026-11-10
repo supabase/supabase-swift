@@ -61,7 +61,7 @@ public struct PostgrestClient: Sendable {
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:accessToken:clock:)``
+  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:)``
   ///
   /// ### Configuration Properties
   ///
@@ -73,7 +73,6 @@ public struct PostgrestClient: Sendable {
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
-  /// - ``accessToken``
   /// - ``clock``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
@@ -89,6 +88,21 @@ public struct PostgrestClient: Sendable {
     public var headers: HTTPFields
 
     /// The transport and middleware chain every request goes through.
+    ///
+    /// To send a user's access token, add an `AccessTokenMiddleware` to its middlewares. It runs
+    /// on every attempt, so a retried request gets a fresh token. A provider failure throws
+    /// ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/accessToken``. An
+    /// `Authorization` header in ``headers`` or on the request wins over the middleware.
+    ///
+    /// ```swift
+    /// let client = try PostgrestClient(
+    ///   configuration: .init(
+    ///     url: url,
+    ///     headers: [.apikey: key],
+    ///     http: .init(middlewares: [AccessTokenMiddleware { try await tokens.current() }])
+    ///   )
+    /// )
+    /// ```
     public var http: HTTPClientConfiguration
 
     /// The logger for request and response diagnostics. Defaults to a build-config-aware
@@ -145,17 +159,6 @@ public struct PostgrestClient: Sendable {
       retryableMethods: [.get, .head]
     )
 
-    /// An async closure returning the current access token, resolved fresh for every request and
-    /// sent as `Authorization: Bearer <token>`. `nil` (the default) sends no bearer token from this
-    /// closure. An `Authorization` header already present on the request — from `headers` above,
-    /// or from an explicit `PostgrestRequestBuilder.settingHeader(name: .authorization, ...)`
-    /// call — always takes precedence over this closure's result.
-    ///
-    /// If the closure throws, the request is not sent and fails with a ``PostgrestError`` of kind
-    /// ``PostgrestError/Kind/accessToken``, carrying the thrown error in
-    /// ``PostgrestError/underlyingError``.
-    public var accessToken: (@Sendable () async throws -> String?)?
-
     /// The clock the waits between retries sleep on.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive retries deterministically in
@@ -177,7 +180,6 @@ public struct PostgrestClient: Sendable {
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new
     ///     `JSONDecoder.supabase()`.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-    ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
     ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
@@ -188,7 +190,6 @@ public struct PostgrestClient: Sendable {
       encoder: JSONEncoder = .supabase(),
       decoder: JSONDecoder = .supabase(),
       retryEnabled: Bool = true,
-      accessToken: (@Sendable () async throws -> String?)? = nil,
       clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.url = url
@@ -199,7 +200,6 @@ public struct PostgrestClient: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
-      self.accessToken = accessToken
       self.clock = clock
     }
   }

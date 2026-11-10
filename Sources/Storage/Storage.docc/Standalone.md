@@ -28,8 +28,10 @@ is a programmer error and is reported where it was introduced.
 
 A user's token enters a request through the middleware chain, never through a configuration
 field. `AccessTokenMiddleware` calls its closure for every request and sends a non-`nil` result
-as `Authorization: Bearer <token>`. A token that rotates is therefore always current. Whatever
-the closure throws fails that request and reaches you unchanged.
+as `Authorization: Bearer <token>`. It runs on every attempt, so a token that rotates is always
+current, also on a retry. If the closure throws, the request is not sent and the call throws
+``StorageError`` with kind ``StorageError/Kind-swift.struct/accessToken``, and the closure's error
+in ``StorageError/underlyingError``.
 
 The middleware sets the header only when the request has none. A static `Authorization` in
 ``StorageClient/Configuration/headers`` is sent as it is and wins over the middleware, so leave it

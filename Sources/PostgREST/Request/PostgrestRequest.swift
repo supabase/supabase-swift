@@ -93,23 +93,7 @@ public struct _PostgrestRequest: Sendable {
     }
 
     let configuration = client.configuration
-    var request = httpRequest(for: configuration)
-
-    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil {
-      let token: String?
-      do {
-        token = try await accessToken()
-      } catch {
-        throw PostgrestError(
-          kind: .accessToken,
-          message: "The access token provider failed, so the request was not sent.",
-          underlyingError: error
-        )
-      }
-      if let token {
-        request.headerFields[.authorization] = "Bearer \(token)"
-      }
-    }
+    let request = httpRequest(for: configuration)
 
     let retries = retryEnabled ?? configuration.retryEnabled
     let http = HTTPClient(
@@ -126,6 +110,12 @@ public struct _PostgrestRequest: Sendable {
     } catch let urlError as URLError {
       throw PostgrestError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+    } catch let failure as AccessTokenFailure {
+      throw PostgrestError(
+        kind: .accessToken,
+        message: AccessTokenFailure.message,
+        underlyingError: failure.underlyingError
+      )
     }
 
     func decoded(_ payload: Data) throws -> PostgrestResponse<T> {

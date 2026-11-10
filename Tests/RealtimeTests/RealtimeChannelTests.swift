@@ -425,6 +425,98 @@ struct RealtimeChannelTests {
     #expect(body == ["data": "explicit"])
   }
 
+  private func makeHTTPSendSUT(
+    accessToken: @escaping @Sendable () async throws -> String?,
+    httpClient: RecordingTransport
+  ) -> RealtimeClient {
+    let (client, _) = FakeWebSocket.fakes()
+    return RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: accessToken
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+  }
+
+  @Test
+  func httpSendThrowsAccessTokenWhenTheProviderFails() async {
+    struct TokenError: Error {}
+    let httpClient = RecordingTransport()
+    let socket = makeHTTPSendSUT(accessToken: { throw TokenError() }, httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
+    }
+
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
+    #expect(httpClient.requests.isEmpty)
+  }
+
+  @Test
+  func httpSendCallsTheProviderForEveryRequest() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let calls = LockIsolated(0)
+    let socket = makeHTTPSendSUT(
+      accessToken: {
+        calls.withValue { $0 += 1 }
+        return "token-\(calls.value)"
+      },
+      httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "1"])
+    try await channel.httpSend(event: "test", payload: ["data": "2"])
+
+    #expect(
+      httpClient.requests.map { $0.head.headerFields[.authorization] } == [
+        "Bearer token-1", "Bearer token-2",
+      ])
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func httpSendTimesOutWhenTheProviderIgnoresCancellation() async {
+    let parked = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let httpClient = RecordingTransport()
+    let socket = makeHTTPSendSUT(
+      accessToken: {
+        // Ignores cancellation: only the release below resumes it.
+        await withCheckedContinuation { parked.setValue($0) }
+        return "late"
+      },
+      httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(
+        event: "test", payload: ["data": "test"], timeout: .milliseconds(50))
+    }
+
+    #expect(error?.kind == .timeout)
+    #expect(httpClient.requests.isEmpty)
+    await waitUntil { parked.value != nil }
+    parked.value?.resume()
+  }
+
+  @Test
+  func httpSendFallsBackToTheStoredTokenWhenTheProviderReturnsNil() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let socket = makeHTTPSendSUT(accessToken: { nil }, httpClient: httpClient)
+    await socket.setAuth("stored-token")
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
+
+    #expect(httpClient.requests.first?.head.headerFields[.authorization] == "Bearer stored-token")
+  }
+
   @Test
   func httpSendPercentEncodesTopicAndEventInURL() async throws {
     let httpClient = RecordingTransport()

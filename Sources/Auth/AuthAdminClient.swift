@@ -9,6 +9,7 @@ public import Foundation
 public import HTTPTypes
 public import Helpers
 public import Logging
+import IssueReporting
 
 /// A client for the Auth admin API, authenticated with the project's secret key.
 ///
@@ -118,6 +119,11 @@ public struct AuthAdminClient: Sendable {
   ///
   /// - Parameter configuration: The settings the client is created with.
   public init(configuration: Configuration) {
+    if configuration.http.containsAccessTokenMiddleware {
+      reportIssue(
+        "`AuthAdminClient.Configuration.http` holds an `AccessTokenMiddleware`. The admin client "
+          + "sends the secret key; remove the middleware.")
+    }
     self.configuration = configuration
 
     var headers = AuthClient.Configuration.defaultHeaders
