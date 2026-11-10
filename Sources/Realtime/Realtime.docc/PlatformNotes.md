@@ -16,9 +16,9 @@ that streams audio. See Apple's
 Outside those cases the system refuses the connection.
 
 ``URLSessionWebSocketTransport`` fails fast on watchOS. ``RealtimeClient/connect()`` throws a
-``RealtimeError/Kind-swift.struct/invalidRequest`` error that cites TN3135 and has
-``RealtimeError/isRetryable`` set to `false`, so ``RealtimeChannel/subscribe()`` fails with the
-same error instead of retrying the join. Without the check the connection would wait forever.
+``RealtimeError/Kind-swift.struct/invalidRequest`` error that cites TN3135. The client does not
+retry this kind, so ``RealtimeChannel/subscribe()`` fails with the same error instead of retrying
+the join. Without the check the connection would wait forever.
 
 If your app runs in a context that TN3135 allows, such as audio streaming, opt in:
 

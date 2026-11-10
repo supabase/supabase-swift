@@ -77,9 +77,8 @@ do {
 ```
 
 A denied join is final. ``RealtimeChannel/subscribe()`` throws a ``RealtimeError`` of kind
-``RealtimeError/Kind-swift.struct/unauthorized`` whose ``RealtimeError/isRetryable`` is `false`,
-and the channel stays in ``RealtimeChannelStatus/failed(_:)``. The client does not retry. This is
-what happens with the publishable key on a private channel: sign the user in, then subscribe
+``RealtimeError/Kind-swift.struct/unauthorized``, and the channel stays in
+``RealtimeChannelStatus/failed(_:)``. The client does not retry. This is what happens with the publishable key on a private channel: sign the user in, then subscribe
 again.
 
 The server works out the channel's permissions when the channel joins, from the policies, the

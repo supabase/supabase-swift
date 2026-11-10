@@ -884,7 +884,6 @@ struct SessionManagerTests {
 
     let error = try #require(result.error as? AuthError)
     #expect(error.kind == failure.kind)
-    #expect(error.isRetryable == failure.isRetryable)
     let (expectedStatus, expectedEvents): (AuthStatus, [AuthEvent]) =
       switch failure.outcome {
       case .keepsSession: (.signedIn(held), [.initialSession])
@@ -1082,7 +1081,6 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
   var testDescription: String
   var response: @Sendable () throws -> (HTTPResponse, Data)
   var kind: AuthError.Kind
-  var isRetryable: Bool
   var outcome = Outcome.keepsSession
 
   enum Outcome: Equatable {
@@ -1094,7 +1092,6 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
     _ code: String,
     status: HTTPResponse.Status,
     kind: AuthError.Kind = .sessionInvalidated,
-    isRetryable: Bool = false,
     outcome: Outcome = .keepsSession
   ) -> Self {
     Self(
@@ -1106,7 +1103,6 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
         )
       },
       kind: kind,
-      isRetryable: isRetryable,
       outcome: outcome
     )
   }
@@ -1115,8 +1111,7 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
     Self(
       testDescription: "HTTP \(status.code)",
       response: { (HTTPResponse(status: status), Data("<html></html>".utf8)) },
-      kind: .server,
-      isRetryable: true
+      kind: .server
     )
   }
 
@@ -1135,11 +1130,10 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
         )
       },
       kind: .sessionInvalidated,
-      isRetryable: false,
       outcome: .signsOut(.sessionExpired)
     ),
-    .coded("conflict", status: .conflict, kind: .server, isRetryable: true),
-    .coded("over_request_rate_limit", status: .tooManyRequests, kind: .server, isRetryable: true),
+    .coded("conflict", status: .conflict, kind: .server),
+    .coded("over_request_rate_limit", status: .tooManyRequests, kind: .server),
     .status(.requestTimeout),
     .status(.internalServerError),
     .status(.badGateway),
@@ -1147,8 +1141,7 @@ struct RefreshFailure: Sendable, CustomTestStringConvertible {
     Self(
       testDescription: "transport",
       response: { throw URLError(.notConnectedToInternet) },
-      kind: .transport,
-      isRetryable: true
+      kind: .transport
     ),
     .coded("validation_failed", status: .badRequest, kind: .server),
   ]

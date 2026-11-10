@@ -25,6 +25,8 @@ struct RealtimeCoreConnectionTests {
     code: WebSocketCloseCode(rawValue: 1001), reason: "going away")
   static let unreachable = RealtimeError.transport("unreachable")
   static let refused = RealtimeError.upgradeFailed(status: 401)
+  /// What a custom transport throws through the public init when it cannot open the URL.
+  static let cannotOpen = RealtimeError(kind: .invalidRequest, message: "unsupported scheme")
   static let jwtExpired = RealtimeError.socketClosed(
     code: WebSocketCloseCode(rawValue: 4001), reason: "jwt expired")
 
@@ -110,6 +112,11 @@ struct RealtimeCoreConnectionTests {
         from: .connecting(attempt: 3), .socketOpenFailed(Self.refused),
         to: .disconnected(Self.refused),
         effects: [.publishClientStatus(.disconnected(Self.refused))]),
+      // So does a transport that cannot open the URL at all.
+      Row(
+        from: .connecting(attempt: 3), .socketOpenFailed(Self.cannotOpen),
+        to: .disconnected(Self.cannotOpen),
+        effects: [.publishClientStatus(.disconnected(Self.cannotOpen))]),
       Row(from: waiting, .socketOpenFailed(Self.unreachable), to: waiting, effects: []),
       Row(
         from: .disconnected(nil), .socketOpenFailed(Self.unreachable), to: .disconnected(nil),

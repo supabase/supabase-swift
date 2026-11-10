@@ -126,7 +126,7 @@ public struct PostgresRow: Sendable, Hashable {
       return try values.decode(as: T.self, decoder: decoder)
     } catch {
       throw RealtimeError(
-        kind: .decoding, message: "Row did not decode as \(T.self).", isRetryable: false,
+        kind: .decoding, message: "Row did not decode as \(T.self).",
         underlyingError: error)
     }
   }
