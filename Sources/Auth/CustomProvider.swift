@@ -35,74 +35,125 @@ public struct CustomProviderType: RawRepresentable, Codable, Hashable, Sendable,
 /// ``identifier`` as the provider.
 public struct CustomProvider: Decodable, Hashable, Sendable, Identifiable {
   /// The provider's unique ID.
-  public let id: UUID
+  public var id: UUID
 
   /// Whether the provider uses OAuth 2.0 or OIDC.
-  public let providerType: CustomProviderType
+  public var providerType: CustomProviderType
 
   /// The name used to sign in with the provider. It starts with `custom:`, such as
   /// `custom:acme`.
-  public let identifier: String
+  public var identifier: String
 
   /// The name shown to people.
-  public let name: String
+  public var name: String
 
   /// The OAuth client ID.
-  public let clientID: String
+  public var clientID: String
 
   /// More client IDs that the server accepts when it checks an ID token.
-  public let acceptableClientIDs: [String]
+  public var acceptableClientIDs: [String]
 
   /// The scopes the server requests at the provider.
-  public let scopes: [String]
+  public var scopes: [String]
 
   /// The provider claims that the server copies as they are into the user's `custom_claims`.
-  public let customClaimsAllowlist: [String]
+  public var customClaimsAllowlist: [String]
 
   /// Whether the server uses PKCE with the provider.
-  public let pkceEnabled: Bool
+  public var pkceEnabled: Bool
 
   /// How the provider's claims map to Supabase user attributes.
-  public let attributeMapping: JSONObject
+  public var attributeMapping: JSONObject
 
   /// Extra query parameters the server adds to the authorization request.
-  public let authorizationParams: [String: String]
+  public var authorizationParams: [String: String]
 
   /// Whether users can sign in with the provider.
-  public let enabled: Bool
+  public var enabled: Bool
 
   /// Whether a user can sign in when the provider sends no email address.
-  public let emailOptional: Bool
+  public var emailOptional: Bool
 
   /// The OIDC issuer. OIDC providers only.
-  public let issuer: String?
+  public var issuer: String?
 
   /// The URL of the OIDC discovery document, when it is not under ``issuer``.
-  public let discoveryURL: URL?
+  public var discoveryURL: URL?
 
   /// Whether the server skips the ID token nonce check. OIDC providers only.
-  public let skipNonceCheck: Bool
+  public var skipNonceCheck: Bool
 
   /// The authorization endpoint. OAuth 2.0 providers only.
-  public let authorizationURL: URL?
+  public var authorizationURL: URL?
 
   /// The token endpoint. OAuth 2.0 providers only.
-  public let tokenURL: URL?
+  public var tokenURL: URL?
 
   /// The userinfo endpoint. OAuth 2.0 providers only.
-  public let userinfoURL: URL?
+  public var userinfoURL: URL?
 
   /// The JSON Web Key Set URL used to verify ID tokens.
-  public let jwksURI: URL?
+  public var jwksURI: URL?
 
   /// The discovery document the server fetched. OIDC providers only.
-  public let discoveryDocument: OIDCDiscoveryDocument?
+  public var discoveryDocument: OIDCDiscoveryDocument?
 
   /// When the provider was created.
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// When the provider was last updated.
-  public let updatedAt: Date
+  public var updatedAt: Date
+
+  /// Creates a ``CustomProvider``.
+  public init(
+    id: UUID,
+    providerType: CustomProviderType,
+    identifier: String,
+    name: String,
+    clientID: String,
+    acceptableClientIDs: [String],
+    scopes: [String],
+    customClaimsAllowlist: [String],
+    pkceEnabled: Bool,
+    attributeMapping: JSONObject,
+    authorizationParams: [String: String],
+    enabled: Bool,
+    emailOptional: Bool,
+    issuer: String? = nil,
+    discoveryURL: URL? = nil,
+    skipNonceCheck: Bool,
+    authorizationURL: URL? = nil,
+    tokenURL: URL? = nil,
+    userinfoURL: URL? = nil,
+    jwksURI: URL? = nil,
+    discoveryDocument: OIDCDiscoveryDocument? = nil,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.id = id
+    self.providerType = providerType
+    self.identifier = identifier
+    self.name = name
+    self.clientID = clientID
+    self.acceptableClientIDs = acceptableClientIDs
+    self.scopes = scopes
+    self.customClaimsAllowlist = customClaimsAllowlist
+    self.pkceEnabled = pkceEnabled
+    self.attributeMapping = attributeMapping
+    self.authorizationParams = authorizationParams
+    self.enabled = enabled
+    self.emailOptional = emailOptional
+    self.issuer = issuer
+    self.discoveryURL = discoveryURL
+    self.skipNonceCheck = skipNonceCheck
+    self.authorizationURL = authorizationURL
+    self.tokenURL = tokenURL
+    self.userinfoURL = userinfoURL
+    self.jwksURI = jwksURI
+    self.discoveryDocument = discoveryDocument
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -167,31 +218,54 @@ public struct CustomProvider: Decodable, Hashable, Sendable, Identifiable {
 /// The OIDC discovery document the server fetched for a ``CustomProvider``.
 public struct OIDCDiscoveryDocument: Decodable, Hashable, Sendable {
   /// The issuer identifier.
-  public let issuer: String
+  public var issuer: String
 
   /// The authorization endpoint.
-  public let authorizationEndpoint: URL
+  public var authorizationEndpoint: URL
 
   /// The token endpoint.
-  public let tokenEndpoint: URL
+  public var tokenEndpoint: URL
 
   /// The userinfo endpoint.
-  public let userinfoEndpoint: URL?
+  public var userinfoEndpoint: URL?
 
   /// The JSON Web Key Set URL.
-  public let jwksURI: URL
+  public var jwksURI: URL
 
   /// The scopes the provider supports.
-  public let scopesSupported: [String]?
+  public var scopesSupported: [String]?
 
   /// The response types the provider supports.
-  public let responseTypesSupported: [String]?
+  public var responseTypesSupported: [String]?
 
   /// The grant types the provider supports.
-  public let grantTypesSupported: [String]?
+  public var grantTypesSupported: [String]?
 
   /// The subject identifier types the provider supports.
-  public let subjectTypesSupported: [String]?
+  public var subjectTypesSupported: [String]?
+
+  /// Creates an ``OIDCDiscoveryDocument``.
+  public init(
+    issuer: String,
+    authorizationEndpoint: URL,
+    tokenEndpoint: URL,
+    userinfoEndpoint: URL? = nil,
+    jwksURI: URL,
+    scopesSupported: [String]? = nil,
+    responseTypesSupported: [String]? = nil,
+    grantTypesSupported: [String]? = nil,
+    subjectTypesSupported: [String]? = nil
+  ) {
+    self.issuer = issuer
+    self.authorizationEndpoint = authorizationEndpoint
+    self.tokenEndpoint = tokenEndpoint
+    self.userinfoEndpoint = userinfoEndpoint
+    self.jwksURI = jwksURI
+    self.scopesSupported = scopesSupported
+    self.responseTypesSupported = responseTypesSupported
+    self.grantTypesSupported = grantTypesSupported
+    self.subjectTypesSupported = subjectTypesSupported
+  }
 
   private enum CodingKeys: String, CodingKey {
     case issuer

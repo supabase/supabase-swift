@@ -520,13 +520,24 @@ public enum SignedURLResult: Sendable {
 /// - ``token``
 public struct SignedUploadURL: Sendable {
   /// The fully constructed signed upload URL.
-  public let signedURL: URL
+  public var signedURL: URL
 
   /// The destination file path within the bucket.
-  public let path: String
+  public var path: String
 
   /// The upload authentication token extracted from ``signedURL``.
-  public let token: String
+  public var token: String
+
+  /// Creates a ``SignedUploadURL``.
+  public init(
+    signedURL: URL,
+    path: String,
+    token: String
+  ) {
+    self.signedURL = signedURL
+    self.path = path
+    self.token = token
+  }
 }
 
 /// The object an upload, update, or signed-URL upload created.
@@ -541,13 +552,13 @@ public struct SignedUploadURL: Sendable {
 public struct UploadedObject: Hashable, Sendable {
   /// The unique identifier assigned to the object. `nil` after a signed-URL or resumable
   /// upload, which Storage answers without one.
-  public let id: UUID?
+  public var id: UUID?
 
   /// The normalized file path within the bucket, as provided to the upload call.
-  public let path: String
+  public var path: String
 
   /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
-  public let fullPath: String
+  public var fullPath: String
 
   /// Creates an ``UploadedObject``.
   ///

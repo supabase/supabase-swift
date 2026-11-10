@@ -59,6 +59,27 @@ public struct PostgresChange: Sendable, Hashable {
   /// level security hides the row from the subscriber.
   public var errors: [String]
 
+  /// Creates a ``PostgresChange``.
+  public init(
+    kind: Kind,
+    schema: String,
+    table: String,
+    commitTimestamp: Date,
+    columns: [PostgresColumn],
+    record: PostgresRow? = nil,
+    oldRecord: PostgresRow? = nil,
+    errors: [String] = []
+  ) {
+    self.kind = kind
+    self.schema = schema
+    self.table = table
+    self.commitTimestamp = commitTimestamp
+    self.columns = columns
+    self.record = record
+    self.oldRecord = oldRecord
+    self.errors = errors
+  }
+
   /// Reads the `data` object of a `postgres_changes` message.
   init(payload: JSONObject) throws(RealtimeError) {
     guard let type = payload["type"]?.stringValue else {
@@ -100,12 +121,28 @@ public struct PostgresColumn: Sendable, Hashable {
   public var name: String
   /// The Postgres type name, such as `"int8"` or `"timestamptz"`.
   public var type: String
+
+  /// Creates a ``PostgresColumn``.
+  public init(
+    name: String,
+    type: String
+  ) {
+    self.name = name
+    self.type = type
+  }
 }
 
 /// A row of a ``PostgresChange``, as the JSON the server sent.
 public struct PostgresRow: Sendable, Hashable {
   /// The column values, by column name.
   public var values: JSONObject
+
+  /// Creates a ``PostgresRow``.
+  public init(
+    values: JSONObject
+  ) {
+    self.values = values
+  }
 
   /// The value of `column`, or `nil` when the row does not have it.
   public subscript(column: String) -> JSONValue? {

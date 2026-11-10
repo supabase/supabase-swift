@@ -13,14 +13,14 @@ import Foundation
 /// `page(after:)` with a ``nextCursor`` you kept.
 public struct ObjectPage: Sendable {
   /// The objects on this page, with full keys as names.
-  public let objects: [StorageObject]
+  public var objects: [StorageObject]
 
   /// The folders on this page, as full prefixes ending in `/`. Empty unless the listing is
   /// ``ObjectListingOptions/delimited``.
-  public let folders: [String]
+  public var folders: [String]
 
   /// The cursor for the next page, or `nil` on the last page.
-  public let nextCursor: String?
+  public var nextCursor: String?
 
   /// Whether another page follows this one.
   public var hasNext: Bool { nextCursor != nil }
