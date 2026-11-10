@@ -210,4 +210,28 @@ struct AuthClientConfigurationTests {
     }
     #expect(error?.kind == .invalidConfiguration)
   }
+
+  // `reportIssue` reaches `withKnownIssue` only on Darwin.
+  #if canImport(Darwin)
+    @Test
+    func accessTokenMiddlewareInHTTPReportsAnIssue() {
+      var configuration = AuthClient.Configuration(
+        url: url, storageKey: "key", storage: InMemoryTestStorage())
+      configuration.http.middlewares = [AccessTokenMiddleware { "token" }]
+
+      withKnownIssue {
+        _ = try? AuthClient(configuration: configuration)
+      }
+    }
+
+    @Test
+    func accessTokenMiddlewareInAdminHTTPReportsAnIssue() {
+      withKnownIssue {
+        _ = AuthAdminClient(
+          configuration: .init(
+            url: url, secretKey: "secret.key",
+            http: .init(middlewares: [AccessTokenMiddleware { "token" }])))
+      }
+    }
+  #endif
 }

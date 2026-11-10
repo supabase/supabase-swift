@@ -122,6 +122,58 @@ struct StorageClientConfigurationTests {
   }
 
   @Test
+  func accessTokenProviderFailureThrowsAStorageError() async throws {
+    struct TokenError: Error {}
+    let requests = LockIsolated<[HTTPRequest]>([])
+    let storage = try makeSUT(headers: [:], accessToken: { throw TokenError() }, requests: requests)
+
+    let error = await #expect(throws: StorageError.self) {
+      _ = try await storage.listBuckets()
+    }
+
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
+    #expect(requests.value.isEmpty)
+  }
+
+  @Test
+  func retriedRequestGetsAFreshToken() async throws {
+    let requests = LockIsolated<[HTTPRequest]>([])
+    let counter = LockIsolated(0)
+    let storage = try StorageClient(
+      configuration: StorageClient.Configuration(
+        url: URL(string: "http://localhost:54321/storage/v1")!,
+        http: .init(
+          transport: ClosureTransport { request, _ in
+            requests.withValue { $0.append(request) }
+            guard requests.value.count > 1 else {
+              return (HTTPResponse(status: .serviceUnavailable), nil)
+            }
+            return (
+              HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+              HTTPBody(Data("[]".utf8))
+            )
+          },
+          middlewares: [
+            AccessTokenMiddleware {
+              counter.withValue {
+                $0 += 1; return "token-\($0)"
+              }
+            }
+          ]
+        ),
+        clock: ImmediateClock()
+      ))
+
+    _ = try await storage.listBuckets()
+
+    #expect(
+      requests.value.map { $0.headerFields[.authorization] } == [
+        "Bearer token-1", "Bearer token-2",
+      ])
+  }
+
+  @Test
   func xClientInfoIsMatchedCaseInsensitively() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let storage = try makeSUT(headers: [.init("x-client-info")!: "my-app/1.0"], requests: requests)

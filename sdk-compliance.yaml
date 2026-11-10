@@ -188,6 +188,7 @@ supporting_symbols:
   - FunctionsError.Kind.invalidConfiguration
   - FunctionsError.Kind.~=
   - FunctionsError.Kind.invalidRequest
+  - FunctionsError.Kind.accessToken
   - FunctionsError.init
   - FunctionsError.kind
   - FunctionsError.message
@@ -218,6 +219,7 @@ supporting_symbols:
   - StorageError.Kind.decoding
   - StorageError.Kind.invalidRequest
   - StorageError.Kind.invalidConfiguration
+  - StorageError.Kind.accessToken
   - StorageError.Kind.~=
   - StorageError.ServerError
   - StorageError.ServerError.init
@@ -460,6 +462,7 @@ supporting_symbols:
   - RealtimeError.Kind.rawValue
   - RealtimeError.Kind.timeout
   - RealtimeError.Kind.accessTokenMissing
+  - RealtimeError.Kind.accessToken
   - RealtimeError.Kind.channelClosedByServer
   - RealtimeError.Kind.channelError
   - RealtimeError.Kind.server
@@ -1752,9 +1755,10 @@ features:
 
   database.configuration.access_token:
     status: implemented
-    note: "The token can be a static value via `headers`, or resolved per request from a callback (`PostgrestClient.Configuration.accessToken`), invoked fresh for every `execute()` so an in-flight request's own call already fixed its header before any later mutation to whatever the callback reads from. A throwing callback fails the request before it is sent, as a `PostgrestError` of kind `accessToken` with the callback's error in `underlyingError`."
+    note: "The token can be a static value via `headers`, or resolved per request attempt from a callback through an `AccessTokenMiddleware` in `PostgrestClient.Configuration.http`, so a retried request gets a fresh token. A static or per-call `Authorization` header wins over the middleware. A throwing callback fails the request before it is sent, as a `PostgrestError` of kind `accessToken` with the callback's error in `underlyingError`."
     symbols:
-      - PostgrestClient.Configuration.accessToken
+      - AccessTokenMiddleware
+      - PostgrestError.Kind.accessToken
   database.configuration.auto_retry:
     status: implemented
     symbols:
@@ -1841,14 +1845,15 @@ features:
       - HTTPField.Name.xRegion
       - HTTPField.Name.xRelayError
       - HTTPField.Name.xSbEdgeRegion
-  # No runtime setter exists; the token is supplied as an `accessToken`
-  # closure at construction time and re-invoked on every request, so
+  # No runtime setter exists; the token comes from an `AccessTokenMiddleware`
+  # in `FunctionsClient.Configuration.http`, re-invoked on every request, so
   # "updating" the token means having the closure read from a mutable
-  # source — this is how SupabaseClient itself wires it.
+  # source. A static or per-call `Authorization` header wins.
   functions.invocation.auth_token:
     status: implemented
     symbols:
-      - FunctionsClient.Configuration.accessToken
+      - AccessTokenMiddleware
+      - FunctionsError.Kind.accessToken
   # The method is `HTTPRequest.Method` from swift-http-types (re-exported); no SDK-owned type.
   functions.invocation.method_override:
     status: implemented

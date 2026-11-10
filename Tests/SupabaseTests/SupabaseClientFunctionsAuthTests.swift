@@ -76,21 +76,6 @@ struct SupabaseClientFunctionsAuthTests {
   }
 
   @Test
-  func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
-    struct TokenError: Error {}
-    let client = try makeClient(
-      auth: SupabaseClient.Configuration.Auth(
-        storage: InMemoryAuthStorage(),
-        accessToken: { throw TokenError() }
-      )
-    )
-
-    await #expect(throws: TokenError.self) {
-      try await client.functions.invoke("hello-world")
-    }
-  }
-
-  @Test
   func functionsInvokeUsesLiveAccessTokenWhenNoOverrideIsGiven() async throws {
     let client = try makeClient(
       auth: SupabaseClient.Configuration.Auth(

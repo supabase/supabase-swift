@@ -226,6 +226,11 @@ public actor RealtimeClient {
         message:
           "RealtimeClient configured with a URL that has no scheme or host: \(configuration.url)")
     }
+    if configuration.http.containsAccessTokenMiddleware {
+      reportIssue(
+        "`RealtimeClient.Configuration.http` holds an `AccessTokenMiddleware`. Realtime takes its "
+          + "token from `Configuration.accessToken`; remove the middleware.")
+    }
     let interceptors: [any ClientMiddleware] = [
       LoggerInterceptor(logger: Self.logger(for: configuration))
     ]
@@ -612,12 +617,33 @@ public actor RealtimeClient {
   /// The token channels join with.
   var accessToken: String? { core.tokens.token }
 
-  /// The token an HTTP request sends, refreshed from the `accessToken` callback first unless it
-  /// was called within ``accessTokenRefreshInterval``. A call in flight is waited for: the
-  /// stored token may be expired, or the key from the `Authorization` header.
-  func currentAccessToken() async -> String? {
-    await refreshAccessToken()
-    return core.tokens.token
+  /// The token an `httpSend` request sends. The `accessToken` callback runs for every request,
+  /// with no refresh interval, so its failure reaches the caller. A `nil` result, or no
+  /// callback, sends the stored token: one set with ``setAuth(_:)``, or the key from the
+  /// `Authorization` header.
+  ///
+  /// - Throws: ``RealtimeError`` with kind `.accessToken` when the callback throws, or
+  ///   `.accessTokenMissing` when there is no token at all.
+  func httpSendAccessToken() async throws -> String {
+    if let provider = configuration.accessToken {
+      // An unstructured task, so a callback that ignores cancellation cannot hold `httpSend`
+      // past its timeout: the wait ends on cancellation and the callback finishes on its own.
+      let fetch = Task { try await AccessTokenFailure.wrapping(provider) }
+      do {
+        let token = try await withTaskCancellationHandler {
+          try await cancellableValue(of: fetch)
+        } onCancel: {
+          fetch.cancel()
+        }
+        if let token { return token }
+      } catch let failure as AccessTokenFailure {
+        throw RealtimeError(
+          kind: .accessToken, message: AccessTokenFailure.message,
+          underlyingError: failure.underlyingError)
+      }
+    }
+    guard let token = core.tokens.token else { throw RealtimeError.accessTokenMissing }
+    return token
   }
 
   /// Updates the JWT access token used for channel authorization and Realtime RLS.

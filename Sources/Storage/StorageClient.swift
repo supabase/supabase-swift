@@ -61,6 +61,11 @@ extension StorageClient {
     @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
 
     /// The transport and middleware chain every request goes through.
+    ///
+    /// To send a user's access token, add an `AccessTokenMiddleware` to its middlewares. It runs
+    /// on every attempt, so a retried request gets a fresh token. A provider failure throws
+    /// ``StorageError`` with kind ``StorageError/Kind-swift.struct/accessToken``. An
+    /// `Authorization` header in ``headers`` wins over the middleware.
     public var http: HTTPClientConfiguration
 
     /// The logger used for debugging HTTP interactions. Defaults to a build-config-aware logger.

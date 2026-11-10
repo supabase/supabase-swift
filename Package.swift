@@ -95,7 +95,6 @@ let package = Package(
       name: "Functions",
       dependencies: [
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]

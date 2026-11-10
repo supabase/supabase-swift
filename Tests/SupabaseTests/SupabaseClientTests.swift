@@ -385,9 +385,11 @@ struct SupabaseClientTests {
       )
     )
 
-    await #expect(throws: TokenProviderError.self) {
+    let error = await #expect(throws: PostgrestError.self) {
       try await client.rpc("some_fn").execute()
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenProviderError)
   }
 
   @Test

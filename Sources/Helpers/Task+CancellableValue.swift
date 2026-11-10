@@ -3,7 +3,7 @@ import ConcurrencyExtras
 /// Waits for the value of `task`, but throws `CancellationError` as soon as the caller is
 /// cancelled. Cancelling the caller does not cancel `task`, so other callers that wait for the
 /// same task still get its result.
-func cancellableValue<Success: Sendable>(
+package func cancellableValue<Success: Sendable>(
   of task: Task<Success, any Error>
 ) async throws -> Success {
   let waiter = LockIsolated(CancellableWaiter<Success>.pending)

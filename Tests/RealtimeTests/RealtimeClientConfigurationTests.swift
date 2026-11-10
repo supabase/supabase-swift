@@ -252,6 +252,19 @@ struct RealtimeClientConfigurationTests {
     }
     #expect(error?.kind == .invalidConfiguration)
   }
+
+  // `reportIssue` reaches `withKnownIssue` only on Darwin.
+  #if canImport(Darwin)
+    @Test
+    func accessTokenMiddlewareInHTTPReportsAnIssue() {
+      withKnownIssue {
+        _ = try? RealtimeClient(
+          configuration: .init(
+            url: URL(string: "https://localhost:54321/realtime/v1")!,
+            http: .init(middlewares: [AccessTokenMiddleware { "token" }])))
+      }
+    }
+  #endif
 }
 
 private final class CountingTransport: WebSocketTransport {

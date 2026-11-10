@@ -30,6 +30,13 @@ When the token is a JWT, the client also calls the closure 60 seconds before the
 while it is connected, and sends the new token to every joined channel. So a channel does not
 reach the server's expiry check.
 
+``RealtimeChannel/httpSend(event:payload:encoder:timeout:)`` calls the closure for every request,
+with no 10-second limit. If the closure throws, `httpSend` throws ``RealtimeError`` with kind
+``RealtimeError/Kind-swift.struct/accessToken``. A `nil` result sends the current token.
+
+This closure is Realtime's only token source, for the socket and for `httpSend`. Do not add an
+`AccessTokenMiddleware` to ``RealtimeClient/Configuration/http``.
+
 `SupabaseClient` sets this closure for you. It returns the signed-in user's token. After every
 sign-in, token refresh and sign-out, `SupabaseClient` also sends the new token with
 ``RealtimeClient/setAuth(_:)``; after a sign-out, that is the project key.

@@ -21,6 +21,9 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Network and decoding errors are wrapped.** `URLError` and `DecodingError` arrive as
   `StorageError` with kind `.transport` or `.decoding`; the original is in `underlyingError`.
   Search for `as URLError` and `as DecodingError` near Storage calls.
+- **Token errors are wrapped.** A token provider that throws (an `AccessTokenMiddleware`, or the
+  session through `SupabaseClient`) gives `StorageError` with kind `.accessToken`; the original is
+  in `underlyingError`.
 - **Cancellation.** A cancelled Storage call throws `CancellationError`, not
   `URLError(.cancelled)`.
 - **Reads retry.** Transient failures of `GET` and `HEAD` requests now retry with backoff. Pass

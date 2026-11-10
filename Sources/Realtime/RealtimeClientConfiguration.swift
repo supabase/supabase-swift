@@ -131,12 +131,17 @@ extension RealtimeClient {
     /// The WebSocket does not use it; see ``webSocketTransport``.
     public var http: HTTPClientConfiguration
 
-    /// Returns the access token channels join with.
+    /// Returns the access token channels join with and `httpSend` sends.
     ///
     /// The client calls it before a join, when a heartbeat goes out, and one minute before the
     /// token's `exp`, at most once every 10 seconds. A call that throws, returns `nil`, or does not
     /// return within ``requestTimeout`` keeps the current token. `SupabaseClient` sets it to the
     /// signed-in user's token.
+    ///
+    /// `httpSend` calls it for every request. If it throws, `httpSend` throws ``RealtimeError``
+    /// with kind ``RealtimeError/Kind-swift.struct/accessToken``.
+    ///
+    /// This is Realtime's only token source. Do not add an `AccessTokenMiddleware` to ``http``.
     public var accessToken: (@Sendable () async throws -> String?)?
 
     /// The logger for the client's own diagnostics.

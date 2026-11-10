@@ -42,8 +42,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | v2 | v3 |
 | --- | --- |
 | `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
-| `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.Configuration.init` |
-| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:accessToken:clock:))`; the flat init is gone, and `http` now comes before `logger` |
+| `PostgrestClient.setAuth(_:)` | `AccessTokenMiddleware` in `Configuration.http`; see [Access token](#access-token) |
+| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:))`; the flat init is gone, and `http` now comes before `logger` |
 | `Configuration.headers: [String: String]` | `Configuration.headers: HTTPFields`, for example `[.apikey: key]` |
 | `PostgrestClient.Configuration.defaultHeaders` | removed; the client still adds `X-Client-Info` unless you set it |
 | `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` and `Configuration.clock` are public too |
@@ -81,11 +81,16 @@ client.setAuth(token)
 
 // v3
 let client = try PostgrestClient(
-  configuration: .init(url: url, accessToken: { try await auth.session.accessToken })
+  configuration: .init(
+    url: url,
+    http: .init(middlewares: [AccessTokenMiddleware { try await auth.session().accessToken }])
+  )
 )
 ```
 
-An `Authorization` header in `headers:` or from `settingHeader` wins over the closure.
+The middleware runs on every attempt, so a retried request gets a fresh token. A provider that
+throws fails the request with a `PostgrestError` of kind `.accessToken`. An `Authorization` header
+in `headers:` or from `settingHeader` wins over the middleware.
 
 ## Value-type builders
 
@@ -152,8 +157,8 @@ try await scoped.execute()
 `underlyingError`. The body's `code` is `PostgrestError.code`, a `PostgrestError.Code?` with
 static members for common PostgreSQL codes, such as `.uniqueViolation` for `23505`. The rest of
 the PostgREST body (`message`, `details`, `hint`) moves to `serverError`. `HTTPError`, `URLError` and `DecodingError` from a query now arrive as a
-`PostgrestError` with kind `.server`, `.transport` or `.decoding`. A throwing `accessToken`
-closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
+`PostgrestError` with kind `.server`, `.transport` or `.decoding`. A token provider that
+throws gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 
 ```swift
 // v2
