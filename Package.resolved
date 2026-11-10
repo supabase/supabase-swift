@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/21-DOT-DEV/swift-secp256k1.git",
       "state" : {
-        "revision" : "e70a10e036a55fffea31568f0af92d69b6d449cd",
-        "version" : "0.23.2"
+        "revision" : "bcd6dd8e615ce243eab7097f213c8c4b39305a2e",
+        "version" : "0.24.0"
       }
     },
     {
