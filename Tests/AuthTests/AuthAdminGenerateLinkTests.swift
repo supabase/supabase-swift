@@ -50,7 +50,7 @@ struct AuthAdminGenerateLinkTests {
       .signUp(
         email: "test@example.com",
         password: "password",
-        data: ["full_name": "John Doe"]
+        userMetadata: ["full_name": "John Doe"]
       )
     )
 

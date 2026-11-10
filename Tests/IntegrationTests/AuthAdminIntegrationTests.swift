@@ -21,7 +21,7 @@ struct AuthAdminIntegrationTests {
   func customProviderLifecycle() async throws {
     let identifier = "custom:swift-\(UUID().uuidString.prefix(8).lowercased())"
 
-    var params = CreateCustomProviderParams.oauth2(
+    var params = CreateCustomProvider.oauth2(
       identifier: identifier,
       name: "Swift Integration",
       clientID: "client-id",
@@ -63,7 +63,7 @@ struct AuthAdminIntegrationTests {
 
     let updated = try await admin.customProviders.update(
       identifier: identifier,
-      params: UpdateCustomProviderParams(name: "Renamed", customClaimsAllowlist: ["groups", "org"])
+      UpdateCustomProvider(name: "Renamed", customClaimsAllowlist: ["groups", "org"])
     )
     #expect(updated.name == "Renamed")
     #expect(updated.customClaimsAllowlist == ["groups", "org"])
@@ -76,7 +76,7 @@ struct AuthAdminIntegrationTests {
     for _ in 0..<3 {
       let email = "paging-\(UUID().uuidString.prefix(8).lowercased())@example.com"
       ids.append(
-        try await admin.createUser(AdminUserAttributes(email: email, confirmsEmail: true)).id)
+        try await admin.createUser(AdminCreateUser(email: email, confirmsEmail: true)).id)
     }
 
     do {
@@ -107,17 +107,17 @@ struct AuthAdminIntegrationTests {
     let id = UUID()
 
     let user = try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, id: id, password: password))
+      AdminCreateUser(id: id, email: email, password: password, confirmsEmail: true))
     #expect(user.id == id)
 
     do {
       try await admin.updateUser(
-        id: id, attributes: AdminUserAttributes(banDuration: .seconds(3_600)))
+        id: id, AdminUpdateUser(banDuration: .seconds(3_600)))
       await #expect(throws: AuthError.self) {
         try await AuthClientIntegrationTests.makeClient().signIn(email: email, password: password)
       }
 
-      try await admin.updateUser(id: id, attributes: AdminUserAttributes(banDuration: .zero))
+      try await admin.updateUser(id: id, AdminUpdateUser(banDuration: .zero))
       _ = try await AuthClientIntegrationTests.makeClient().signIn(email: email, password: password)
     } catch {
       try? await admin.deleteUser(id: id)

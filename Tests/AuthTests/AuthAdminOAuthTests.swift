@@ -43,8 +43,7 @@ struct AuthAdminOAuthTests {
             "created_at": "2024-01-01T00:00:00.000Z",
             "updated_at": "2024-01-01T00:00:00.000Z"
           }
-        ],
-        "aud": "authenticated"
+        ]
       }
       """.data(using: .utf8)!
 
@@ -64,24 +63,18 @@ struct AuthAdminOAuthTests {
       return (
         HTTPResponse(
           status: .ok,
-          headerFields: [
-            .contentType: "application/json",
-            HTTPField.Name("x-total-count")!: "1",
-            .link: "<https://example.com?page=1>; rel=\"last\"",
-          ]),
+          headerFields: [.contentType: "application/json"]),
         responseData
       )
     }
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let response = try await sut.oauth.listClients()
+    let clients = try await sut.oauth.listClients()
 
-    #expect(response.clients.count == 1)
-    #expect(response.clients[0].clientID == clientID)
-    #expect(response.clients[0].clientName == "Test Client")
-    #expect(response.audience == "authenticated")
-    #expect(response.total == 1)
+    #expect(clients.count == 1)
+    #expect(clients[0].clientID == clientID)
+    #expect(clients[0].clientName == "Test Client")
   }
 
   @Test
@@ -121,7 +114,7 @@ struct AuthAdminOAuthTests {
 
     let client = try await sut.oauth.updateClient(
       id: clientID,
-      params: UpdateOAuthClientParams(
+      UpdateOAuthClient(
         clientName: "Update Client name",
         redirectURIs: ["https://example.com/callback"],
         grantTypes: [.authorizationCode, .refreshToken]
@@ -168,12 +161,12 @@ struct AuthAdminOAuthTests {
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let params = CreateOAuthClientParams(
+    let newClient = CreateOAuthClient(
       clientName: "New Client",
       redirectURIs: ["https://example.com/callback"]
     )
 
-    let client = try await sut.oauth.createClient(params: params)
+    let client = try await sut.oauth.createClient(newClient)
 
     #expect(client.clientID == clientID)
     #expect(client.clientName == "New Client")
@@ -329,33 +322,18 @@ struct AuthAdminOAuthTests {
   }
 
   @Test
-  func listOAuthClientsWithAnEmptyLinkHeader() async throws {
-    let responseData = """
-      {
-        "clients": [],
-        "aud": "authenticated"
-      }
-      """.data(using: .utf8)!
-
+  func listOAuthClientsWithNoClients() async throws {
     transport.stub(.get, "admin/oauth/clients") { _, _ in
       (
-        HTTPResponse(
-          status: .ok,
-          headerFields: [
-            .contentType: "application/json",
-            HTTPField.Name("x-total-count")!: "0",
-            .link: "",
-          ]),
-        responseData
+        HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+        Data("{}".utf8)
       )
     }
 
     let sut = AuthAdminClient.testing(http: transport)
 
-    let response = try await sut.oauth.listClients()
+    let clients = try await sut.oauth.listClients()
 
-    #expect(response.clients.isEmpty)
-    #expect(response.nextPage == nil)
-    #expect(response.lastPage == 0)
+    #expect(clients.isEmpty)
   }
 }

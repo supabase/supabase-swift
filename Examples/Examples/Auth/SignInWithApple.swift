@@ -93,7 +93,7 @@ struct SignInWithApple: View {
       // so checking if it is non-nil to not erase data on login.
       if let fullName {
         _ = try? await supabase.auth.updateUser(
-          UserAttributes(userMetadata: ["full_name": .string(fullName)]))
+          UpdateUser(userMetadata: ["full_name": .string(fullName)]))
       }
     }
     actionState = .result(result)

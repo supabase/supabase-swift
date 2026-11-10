@@ -28,7 +28,7 @@ public import Foundation
 ///
 /// ### Managing grants
 /// - ``listGrants()``
-/// - ``revokeGrant(id:)``
+/// - ``revokeGrant(clientID:)``
 public struct AuthOAuthServer: Sendable {
   /// Held strongly: the client vends this value and never stores it, so there is no cycle, and a
   /// value kept past its call site keeps the client alive instead of dangling.
@@ -42,8 +42,8 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// If the user already has an active consent covering the requested
   /// scopes for this client, the server auto-approves the request and this
-  /// returns ``OAuthAuthorizationDetailsResponse/redirect(_:)`` instead of
-  /// ``OAuthAuthorizationDetailsResponse/details(_:)`` — callers must handle
+  /// returns ``OAuthAuthorizationDetailsResult/redirect(_:)`` instead of
+  /// ``OAuthAuthorizationDetailsResult/details(_:)`` — callers must handle
   /// both cases.
   ///
   /// - Important: Call this before ``approveAuthorization(id:)``
@@ -57,7 +57,7 @@ public struct AuthOAuthServer: Sendable {
   /// - Returns: Either the details to present for consent, or a redirect if already approved.
   public func authorizationDetails(
     id: String
-  ) async throws -> OAuthAuthorizationDetailsResponse {
+  ) async throws -> OAuthAuthorizationDetailsResult {
     try await api.authorizedExecute { authAPI.oauthAuthorizationDetails(id: id, accessToken: $0) }
   }
 
@@ -110,8 +110,10 @@ public struct AuthOAuthServer: Sendable {
   /// This marks the consent as revoked, deletes active sessions for that
   /// OAuth client, and invalidates its associated refresh tokens.
   ///
-  /// - Parameter id: The unique identifier of the OAuth client to revoke access for.
-  public func revokeGrant(id: UUID) async throws {
-    try await api.authorizedExecute { authAPI.revokeOAuthGrant(clientID: id, accessToken: $0) }
+  /// - Parameter clientID: The ID of the OAuth client to revoke access for.
+  public func revokeGrant(clientID: UUID) async throws {
+    try await api.authorizedExecute {
+      authAPI.revokeOAuthGrant(clientID: clientID, accessToken: $0)
+    }
   }
 }

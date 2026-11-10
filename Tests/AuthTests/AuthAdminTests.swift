@@ -151,31 +151,54 @@ struct AuthAdminTests {
     (Duration(secondsComponent: Int64.min, attosecondsComponent: -1), "\(Int64.min)ns"),
   ])
   func banDurationIsAGoDurationString(duration: Duration, expected: String) throws {
-    let body = try AuthClient.Configuration.jsonEncoder.encode(
-      AdminUserAttributes(banDuration: duration))
-    let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-    #expect(json?["ban_duration"] as? String == expected)
+    for body in [
+      try AuthClient.Configuration.jsonEncoder.encode(AdminCreateUser(banDuration: duration)),
+      try AuthClient.Configuration.jsonEncoder.encode(AdminUpdateUser(banDuration: duration)),
+    ] {
+      let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+      #expect(json?["ban_duration"] as? String == expected)
+    }
   }
 
   @Test
-  func encodeSendsEveryAttribute() throws {
-    let attributes = AdminUserAttributes(
-      appMetadata: [:], banDuration: .seconds(1), email: "e", confirmsEmail: true, id: UUID(),
-      nonce: "n", password: "p", passwordHash: "h", phone: "1", confirmsPhone: true, role: "r",
-      userMetadata: [:])
-    let body = try AuthClient.Configuration.jsonEncoder.encode(attributes)
+  func createUserSendsEveryField() throws {
+    let user = AdminCreateUser(
+      id: UUID(), email: "e", phone: "1", password: "p", passwordHash: "h", confirmsEmail: true,
+      confirmsPhone: true, role: "r", userMetadata: [:], appMetadata: [:], banDuration: .seconds(1))
+    let body = try AuthClient.Configuration.jsonEncoder.encode(user)
     let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-    #expect(json?.count == Mirror(reflecting: attributes).children.count)
+    #expect(
+      json?.keys.sorted() == [
+        "app_metadata", "ban_duration", "email", "email_confirm", "id", "password", "password_hash",
+        "phone", "phone_confirm", "role", "user_metadata",
+      ])
   }
 
   @Test
-  func unsetAttributesAreLeftOut() throws {
+  func updateUserSendsEveryField() throws {
+    let changes = AdminUpdateUser(
+      email: "e", phone: "1", password: "p", confirmsEmail: true, confirmsPhone: true, role: "r",
+      userMetadata: [:], appMetadata: [:], banDuration: .seconds(1))
+    let body = try AuthClient.Configuration.jsonEncoder.encode(changes)
+    let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+    #expect(
+      json?.keys.sorted() == [
+        "app_metadata", "ban_duration", "email", "email_confirm", "password", "phone",
+        "phone_confirm", "role", "user_metadata",
+      ])
+  }
+
+  @Test
+  func unsetFieldsAreLeftOut() throws {
     let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
     let body = try AuthClient.Configuration.jsonEncoder.encode(
-      AdminUserAttributes(confirmsEmail: true, id: id))
+      AdminCreateUser(id: id, confirmsEmail: true))
     let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
     #expect(json?.keys.sorted() == ["email_confirm", "id"])
     #expect(json?["id"] as? String == id.uuidString)
+
+    let update = try AuthClient.Configuration.jsonEncoder.encode(AdminUpdateUser())
+    #expect(String(decoding: update, as: UTF8.self) == "{}")
   }
 }
 

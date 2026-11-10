@@ -22,7 +22,7 @@ Changes that still compile but behave differently. Check each one by hand.
   has no effect. The compiler only gives an "unused result" warning. Chain the call, or assign
   its result. The same holds for `settingHeader`.
 - **Enum-like values accept any raw value.** `init(rawValue:)` on `PostgrestOperator`,
-  `CountOption`, `PostgrestReturningOptions` and `TextSearchType` never returns `nil` now, so an
+  `CountOption`, `PostgrestReturning` and `TextSearchType` never returns `nil` now, so an
   `X(rawValue: s) != nil` check is always `true`. String interpolation prints
   `CountOption(rawValue: "exact")`, not `exact`. Use `.rawValue` where you need the string.
 - **Error responses always decode.** A PostgREST error body is decoded with a fixed decoder, not
@@ -54,7 +54,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgrestClient`, builders: `final class` | `struct` |
 | `PostgrestBuilder` | `any PostgrestExecutableBuilder`, or `PostgrestFilterBuilder` / `PostgrestTransformBuilder` |
 | `PostgrestFilterBuilder.Operator`: `enum` | `PostgrestOperator` struct (`Operator` is a type alias) |
-| `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members |
+| `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members; `PostgrestReturningOptions` is `PostgrestReturning` |
 | `insert(…)`, `upsert(…)` return `PostgrestFilterBuilder` | return `PostgrestTransformBuilder` |
 | `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.status: HTTPResponse.Status`, `.headers: HTTPFields` |
 | `PostgrestResponse.status: Int` | `PostgrestResponse.status: HTTPResponse.Status`; use `.status.code` for the `Int` |
@@ -69,7 +69,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [`PostgrestError` is a struct](#postgresterror-is-a-struct) |
 | `Helpers.PostgrestError`, also visible through `import Auth`, `Functions`, `Realtime` or `Storage` | `PostgREST.PostgrestError`; import `PostgREST` or `Supabase` |
 
-A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturningOptions` or
+A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturning` or
 `TextSearchType` needs a `default:` case. `PostgrestOperator.allCases` is gone.
 
 ## Access token

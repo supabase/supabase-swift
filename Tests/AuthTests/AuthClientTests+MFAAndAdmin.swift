@@ -598,14 +598,14 @@ extension AuthClientTests {
       """#
     }
 
-    let attributes = AdminUserAttributes(
+    let changes = AdminUpdateUser(
       phone: "1234567890",
       userMetadata: [
         "full_name": "John Doe"
       ]
     )
 
-    let user = try await sut.updateUser(id: id, attributes: attributes)
+    let user = try await sut.updateUser(id: id, changes)
 
     expectNoDifference(user.id, id)
   }
@@ -629,14 +629,14 @@ extension AuthClientTests {
       """#
     }
 
-    let attributes = AdminUserAttributes(
+    let user = AdminCreateUser(
       email: "test@example.com",
+      phone: "1234567890",
       password: "password",
-      passwordHash: "password",
-      phone: "1234567890"
+      passwordHash: "password"
     )
 
-    _ = try await sut.createUser(attributes)
+    _ = try await sut.createUser(user)
   }
 
   @Test
@@ -658,15 +658,15 @@ extension AuthClientTests {
       """#
     }
 
-    let attributes = AdminUserAttributes(
+    let user = AdminCreateUser(
       email: "test@example.com",
-      confirmsEmail: true,
-      password: "password",
       phone: "1234567890",
+      password: "password",
+      confirmsEmail: true,
       confirmsPhone: true
     )
 
-    _ = try await sut.createUser(attributes)
+    _ = try await sut.createUser(user)
   }
 
   @Test
@@ -691,7 +691,7 @@ extension AuthClientTests {
 
     let user = try await sut.updateUser(
       id: id,
-      attributes: AdminUserAttributes(confirmsEmail: true)
+      AdminUpdateUser(confirmsEmail: true)
     )
 
     expectNoDifference(user.id, id)

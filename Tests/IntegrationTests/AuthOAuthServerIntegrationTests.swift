@@ -70,7 +70,7 @@ struct AuthOAuthServerIntegrationTests {
     let admin = AuthClientIntegrationTests.makeAdminClient()
     let redirectURI = "https://example.com/callback"
     let oauthClient = try await admin.oauth.createClient(
-      params: CreateOAuthClientParams(
+      CreateOAuthClient(
         clientName: "Integration Test Client",
         redirectURIs: [redirectURI]
       )
@@ -102,12 +102,25 @@ struct AuthOAuthServerIntegrationTests {
     let grants = try await authClient.oauthServer.listGrants()
     #expect(grants.contains { $0.client.id == oauthClient.clientID })
 
-    try await authClient.oauthServer.revokeGrant(id: oauthClient.clientID)
+    try await authClient.oauthServer.revokeGrant(clientID: oauthClient.clientID)
 
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
     #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientID })
 
     try await admin.oauth.deleteClient(id: oauthClient.clientID)
+  }
+
+  @Test
+  func listClientsReturnsCreatedClients() async throws {
+    let admin = AuthClientIntegrationTests.makeAdminClient()
+    let created = try await admin.oauth.createClient(
+      CreateOAuthClient(clientName: "Listed Client", redirectURIs: ["https://example.com/callback"])
+    )
+
+    let clients = try await admin.oauth.listClients()
+    #expect(clients.contains { $0.clientID == created.clientID })
+
+    try await admin.oauth.deleteClient(id: created.clientID)
   }
 
   @Test
@@ -119,7 +132,7 @@ struct AuthOAuthServerIntegrationTests {
     let admin = AuthClientIntegrationTests.makeAdminClient()
     let redirectURI = "https://example.com/callback"
     let oauthClient = try await admin.oauth.createClient(
-      params: CreateOAuthClientParams(
+      CreateOAuthClient(
         clientName: "Integration Test Client (deny)",
         redirectURIs: [redirectURI]
       )

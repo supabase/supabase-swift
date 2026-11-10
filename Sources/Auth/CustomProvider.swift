@@ -211,7 +211,7 @@ public struct OIDCDiscoveryDocument: Decodable, Hashable, Sendable {
 /// Use ``oauth2(identifier:name:clientID:clientSecret:authorizationURL:tokenURL:userinfoURL:)``
 /// or ``oidc(identifier:name:clientID:clientSecret:issuer:)`` to set the required fields, then
 /// set the optional ones.
-public struct CreateCustomProviderParams: Encodable, Hashable, Sendable {
+public struct CreateCustomProvider: Encodable, Hashable, Sendable {
   /// Whether the provider uses OAuth 2.0 or OIDC.
   public var providerType: CustomProviderType
 
@@ -298,18 +298,18 @@ public struct CreateCustomProviderParams: Encodable, Hashable, Sendable {
     authorizationURL: URL,
     tokenURL: URL,
     userinfoURL: URL
-  ) -> CreateCustomProviderParams {
-    var params = CreateCustomProviderParams(
+  ) -> CreateCustomProvider {
+    var provider = CreateCustomProvider(
       providerType: .oauth2,
       identifier: identifier,
       name: name,
       clientID: clientID,
       clientSecret: clientSecret
     )
-    params.authorizationURL = authorizationURL
-    params.tokenURL = tokenURL
-    params.userinfoURL = userinfoURL
-    return params
+    provider.authorizationURL = authorizationURL
+    provider.tokenURL = tokenURL
+    provider.userinfoURL = userinfoURL
+    return provider
   }
 
   /// The settings for an OIDC provider.
@@ -322,16 +322,16 @@ public struct CreateCustomProviderParams: Encodable, Hashable, Sendable {
     clientID: String,
     clientSecret: String,
     issuer: String
-  ) -> CreateCustomProviderParams {
-    var params = CreateCustomProviderParams(
+  ) -> CreateCustomProvider {
+    var provider = CreateCustomProvider(
       providerType: .oidc,
       identifier: identifier,
       name: name,
       clientID: clientID,
       clientSecret: clientSecret
     )
-    params.issuer = issuer
-    return params
+    provider.issuer = issuer
+    return provider
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -359,11 +359,11 @@ public struct CreateCustomProviderParams: Encodable, Hashable, Sendable {
 }
 
 /// The changes to a custom provider, passed to
-/// ``AuthAdminCustomProviders/update(identifier:params:)``.
+/// ``AuthAdminCustomProviders/update(identifier:_:)``.
 ///
 /// The server changes only the fields you set. A field left `nil` keeps its stored value. The
 /// provider type and identifier cannot change.
-public struct UpdateCustomProviderParams: Encodable, Hashable, Sendable {
+public struct UpdateCustomProvider: Encodable, Hashable, Sendable {
   /// The name shown to people.
   public var name: String?
 

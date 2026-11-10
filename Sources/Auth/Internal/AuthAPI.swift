@@ -583,7 +583,7 @@ extension AuthAPI {
   }
 
   func updateUser(
-    _ user: UserAttributes,
+    _ user: UpdateUser,
     redirectTo: URL?,
     pkce: PKCEChallenge?,
     accessToken: String
@@ -617,12 +617,12 @@ extension AuthAPI {
   func oauthAuthorizationDetails(
     id: String,
     accessToken: String
-  ) -> AuthRequest<OAuthAuthorizationDetailsResponse> {
+  ) -> AuthRequest<OAuthAuthorizationDetailsResult> {
     request(
       .get,
       url: url.appendingPathComponent("oauth/authorizations").appendingPathComponent(id),
       authorization: bearer(accessToken),
-      decode: decoding(OAuthAuthorizationDetailsResponse.self))
+      decode: decoding(OAuthAuthorizationDetailsResult.self))
   }
 
   func oauthConsent(

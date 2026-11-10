@@ -26,14 +26,14 @@ struct OptionsTests {
 
   @Test
   func returningOptionsStringLiteral() {
-    let returning: PostgrestReturningOptions = "future_returning_mode"
+    let returning: PostgrestReturning = "future_returning_mode"
     #expect(returning.rawValue == "future_returning_mode")
   }
 
   @Test
   func returningOptionsHashability() {
-    let returning1: PostgrestReturningOptions = .minimal
-    let returning2: PostgrestReturningOptions = "minimal"
+    let returning1: PostgrestReturning = .minimal
+    let returning2: PostgrestReturning = "minimal"
     #expect(returning1 == returning2)
   }
 

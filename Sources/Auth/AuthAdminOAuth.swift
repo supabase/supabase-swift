@@ -18,10 +18,10 @@ public import Foundation
 /// ## Topics
 ///
 /// ### Managing clients
-/// - ``listClients(params:)``
-/// - ``createClient(params:)``
+/// - ``listClients()``
+/// - ``createClient(_:)``
 /// - ``client(id:)``
-/// - ``updateClient(id:params:)``
+/// - ``updateClient(id:_:)``
 /// - ``deleteClient(id:)``
 /// - ``regenerateClientSecret(id:)``
 public struct AuthAdminOAuth: Sendable {
@@ -30,14 +30,14 @@ public struct AuthAdminOAuth: Sendable {
   var api: APIClient { admin.api }
   var authAPI: AuthAPI { admin.authAPI }
 
-  /// Lists all OAuth clients with optional pagination.
+  /// Lists every OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
+  /// The server returns every client in one response, newest first. It does not page this list.
+  ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func listClients(
-    params: PageParams? = nil
-  ) async throws -> ListOAuthClientsPaginatedResponse {
-    try await api.execute(authAPI.adminListOAuthClients(params: params))
+  public func listClients() async throws -> [OAuthClient] {
+    try await api.execute(authAPI.adminListOAuthClients())
   }
 
   /// Creates a new OAuth client.
@@ -45,8 +45,8 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
-  public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
-    try await api.execute(authAPI.adminCreateOAuthClient(params: params))
+  public func createClient(_ client: CreateOAuthClient) async throws -> OAuthClient {
+    try await api.execute(authAPI.adminCreateOAuthClient(client))
   }
 
   /// Gets details of a specific OAuth client.
@@ -62,13 +62,13 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter id: The unique identifier of the OAuth client.
-  /// - Parameter params: The fields to update.
+  /// - Parameter changes: The fields to update.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func updateClient(
     id: UUID,
-    params: UpdateOAuthClientParams
+    _ changes: UpdateOAuthClient
   ) async throws -> OAuthClient {
-    try await api.execute(authAPI.adminUpdateOAuthClient(id: id, params: params))
+    try await api.execute(authAPI.adminUpdateOAuthClient(id: id, changes))
   }
 
   /// Deletes an OAuth client.

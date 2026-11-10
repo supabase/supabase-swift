@@ -151,23 +151,23 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 
 /// Controls which rows PostgREST returns after a write operation.
 ///
-/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
+/// Pass a ``PostgrestReturning`` value to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
 /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
 /// or ``PostgrestRequestBuilder/delete(returning:count:)`` to specify what the server sends back.
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)
 /// for more detail.
-public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
+public struct PostgrestReturning: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
   public let rawValue: String
 
-  /// Creates a ``PostgrestReturningOptions`` from a raw string value.
+  /// Creates a ``PostgrestReturning`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``PostgrestReturningOptions`` from a string literal.
+  /// Creates a ``PostgrestReturning`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
@@ -176,13 +176,13 @@ public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
   ///
   /// Use this option when you do not need the affected rows, as it avoids
   /// the overhead of serializing and transmitting them.
-  public static let minimal: PostgrestReturningOptions = "minimal"
+  public static let minimal: PostgrestReturning = "minimal"
 
   /// Returns a copy of the written rows.
   ///
   /// Use this option (or chain `.select()` after the call) when you need the
   /// server-generated values such as `id`, `created_at`, or computed columns.
-  public static let representation: PostgrestReturningOptions = "representation"
+  public static let representation: PostgrestReturning = "representation"
 }
 
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
