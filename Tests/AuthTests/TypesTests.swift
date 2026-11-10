@@ -18,7 +18,7 @@ struct TypesTests {
 
   @Test
   func sdkCodersLeaveFreeFormKeysAlone() throws {
-    let attributes = UserAttributes(userMetadata: ["firstName": "Ada", "snake_key": 1])
+    let attributes = UpdateUser(userMetadata: ["firstName": "Ada", "snake_key": 1])
 
     let body = try AuthClient.Configuration.jsonEncoder.encode(attributes)
     let sent = try JSONDecoder().decode([String: [String: JSONValue]].self, from: body)

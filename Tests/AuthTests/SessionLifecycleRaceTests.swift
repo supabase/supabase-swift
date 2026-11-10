@@ -56,7 +56,7 @@ struct SessionLifecycleRaceTests {
 
     let refresh = Task { try await client.refreshSession() }
     await gate.arrivals(1)
-    try await client.updateUser(UserAttributes(userMetadata: ["nickname": "updated"]))
+    try await client.updateUser(UpdateUser(userMetadata: ["nickname": "updated"]))
     gate.open()
     _ = try await refresh.value
 

@@ -611,7 +611,7 @@ extension AuthEventMatrixTests.Row {
     operation("updateUser", starting: .signedIn, emits: [.userUpdated], leaves: .signedIn) {
       world, client in
       world.answerUserUpdate(with: Race.user(nickname: "new"))
-      _ = try await client.updateUser(UserAttributes(userMetadata: ["nickname": "new"]))
+      _ = try await client.updateUser(UpdateUser(userMetadata: ["nickname": "new"]))
     },
 
     operation(

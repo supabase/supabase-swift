@@ -315,23 +315,31 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(configuration: .init(url:secretKey:))`; see below |
 | `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
-| `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:attributes:)` |
-| `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)` |
+| `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:_:)`, which takes an `AdminUpdateUser`; see below |
+| `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)`, which takes an `AdminCreateUser`; see below |
 | `AuthAdmin.inviteUserByEmail(_:data:redirectTo:)` | `AuthAdminClient.inviteUser(email:userMetadata:redirectTo:)`; `userMetadata` is a `JSONObject` |
 | `AuthAdmin.listUsers(params: PageParams(page:perPage:))` | `AuthAdminClient.listUsers(page:pageSize:)`; `users(pageSize:)` returns a `PageSequence` over every page |
 | `ListUsersPaginatedResponse` | `UserPage`, with only `let` properties |
 | `AuthAdmin.generateLink(params:)` | `AuthAdminClient.generateLink(_:)` |
+| `GenerateLinkParams` | `GenerateLink` |
+| `GenerateLinkParams.signUp(…data:…)`, `.invite(…data:…)`, `.magicLink(…data:…)` | `userMetadata:` (a `JSONObject`) |
+| `UserAttributes` | `UpdateUser` |
 | `GenerateLinkProperties.redirectTo: URL` | `URL?` |
-| `AdminUserAttributes.id: String?` | `UUID?` |
+| `AdminUserAttributes.id: String?` | `AdminCreateUser.id: UUID?` |
 | `AdminUserAttributes.banDuration: String?` (`"24h"`, `"none"`) | `Duration?` (`.seconds(86_400)`, `.zero` to lift the ban) |
+| `AdminUserAttributes.appMetadata`, `.userMetadata`: `[String: AnyJSON]?` | `JSONObject?` |
+| `AuthAdminOAuth.listClients(params:)` returns `ListOAuthClientsPaginatedResponse` | `AuthAdminOAuth.listClients()` returns `[OAuthClient]`. The server does not page this list, and the v2 response could not decode its body |
+| `AuthAdminOAuth.createClient(params:)` | `AuthAdminOAuth.createClient(_:)` |
+| `CreateOAuthClientParams`, `UpdateOAuthClientParams` | `CreateOAuthClient`, `UpdateOAuthClient` |
 | `AuthAdminOAuth.getClient(clientId:)` | `AuthAdminOAuth.client(id:)` |
-| `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:params:)` |
+| `AuthAdminOAuth.updateClient(clientId:params:)` | `AuthAdminOAuth.updateClient(id:_:)` |
 | `AuthAdminOAuth.deleteClient(clientId:)` | `AuthAdminOAuth.deleteClient(id:)` |
 | `AuthAdminOAuth.regenerateClientSecret(clientId:)` | `AuthAdminOAuth.regenerateClientSecret(id:)` |
 | `AuthOAuthServer.getAuthorizationDetails(authorizationId:)` | `AuthOAuthServer.authorizationDetails(id:)` |
 | `AuthOAuthServer.approveAuthorization(authorizationId:)` | `AuthOAuthServer.approveAuthorization(id:)` |
 | `AuthOAuthServer.denyAuthorization(authorizationId:)` | `AuthOAuthServer.denyAuthorization(id:)` |
-| `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(id:)` |
+| `AuthOAuthServer.revokeGrant(clientId:)` | `AuthOAuthServer.revokeGrant(clientID:)` |
+| `OAuthAuthorizationDetailsResponse` | `OAuthAuthorizationDetailsResult` |
 | `AuthMFA.getAuthenticatorAssuranceLevel()`, `AuthMFAGetAuthenticatorAssuranceLevelResponse` | `AuthMFA.assuranceLevel()`, `AssuranceLevelInfo`; see below |
 | `AuthClient.getOAuthSignInURL(...)` | `AuthClient.oauthSignInURL(...)` |
 | `AuthClient.getLinkIdentityURL(...)` | `AuthClient.linkIdentityURL(...)` |
@@ -348,8 +356,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `try await auth.session` | `try await auth.session()` |
 | `AuthClient.setSession(accessToken:refreshToken:)` | `AuthClient.importSession(accessToken:refreshToken:)`; it emits only `.signedIn`, not `.tokenRefreshed` then `.signedIn` |
 | `AuthClient.refreshSession(refreshToken:)` | `AuthClient.refreshSession()`; see below |
-| `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `AdminUserAttributes.confirmsEmail`, `.confirmsPhone` |
-| `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` (`UserPage.audience` for users) |
+| `AdminUserAttributes.emailConfirm`, `.phoneConfirm` | `confirmsEmail`, `confirmsPhone` on `AdminCreateUser` and `AdminUpdateUser` |
+| `User.aud`, `ListUsersPaginatedResponse.aud`, `ListOAuthClientsPaginatedResponse.aud` | `.audience` (`UserPage.audience` for users; the OAuth client list has no audience) |
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `SupabaseClient.Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
@@ -396,7 +404,7 @@ wire keys do not change.
 | v3 pre-release | v3 |
 | --- | --- |
 | `OAuthClient.clientId`, `.clientUri`, `.logoUri`, `.redirectUris` | `clientID`, `clientURI`, `logoURI`, `redirectURIs` |
-| `CreateOAuthClientParams` and `UpdateOAuthClientParams`: `clientUri`, `logoUri`, `redirectUris` | `clientURI`, `logoURI`, `redirectURIs` |
+| `CreateOAuthClient` and `UpdateOAuthClient` (were `*Params`): `clientUri`, `logoUri`, `redirectUris` | `clientURI`, `logoURI`, `redirectURIs` |
 | `OAuthAuthorizationClient.logoUri` | `logoURI` |
 | `OAuthAuthorizationDetails.authorizationId`, `.redirectUri` | `authorizationID`, `redirectURI` |
 | `WebAuthnChallengeOptions.rpId` | `rpID` |
@@ -444,6 +452,23 @@ let admin = AuthAdminClient(
   )
 )
 try await admin.deleteUser(id: userID)
+```
+
+## `AdminUserAttributes` is `AdminCreateUser` and `AdminUpdateUser`
+
+Create and update take separate types. Only `AdminCreateUser` has `id` and `passwordHash`, because
+the server reads them only on create. `nonce` is removed: the admin endpoints never read it.
+
+```swift
+// v2
+let user = try await supabase.auth.admin.createUser(
+  attributes: AdminUserAttributes(email: email, emailConfirm: true))
+_ = try await supabase.auth.admin.updateUserById(
+  user.id, attributes: AdminUserAttributes(banDuration: "24h"))
+
+// v3
+let user = try await admin.createUser(AdminCreateUser(email: email, confirmsEmail: true))
+_ = try await admin.updateUser(id: user.id, AdminUpdateUser(banDuration: .seconds(86_400)))
 ```
 
 ## `refreshSession(refreshToken:)` is gone

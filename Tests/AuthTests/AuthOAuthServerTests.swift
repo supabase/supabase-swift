@@ -61,7 +61,7 @@ struct AuthOAuthServerTests {
       """.data(using: .utf8)!
 
     let response = try AuthClient.Configuration.jsonDecoder.decode(
-      OAuthAuthorizationDetailsResponse.self, from: json
+      OAuthAuthorizationDetailsResult.self, from: json
     )
 
     guard case .details(let details) = response else {
@@ -99,7 +99,7 @@ struct AuthOAuthServerTests {
       """.data(using: .utf8)!
 
     let response = try AuthClient.Configuration.jsonDecoder.decode(
-      OAuthAuthorizationDetailsResponse.self, from: json
+      OAuthAuthorizationDetailsResult.self, from: json
     )
 
     guard case .details(let details) = response else {
@@ -127,7 +127,7 @@ struct AuthOAuthServerTests {
       """.data(using: .utf8)!
 
     let response = try AuthClient.Configuration.jsonDecoder.decode(
-      OAuthAuthorizationDetailsResponse.self, from: json
+      OAuthAuthorizationDetailsResult.self, from: json
     )
 
     guard case .details(let details) = response else {
@@ -150,7 +150,7 @@ struct AuthOAuthServerTests {
       """.data(using: .utf8)!
 
     let response = try AuthClient.Configuration.jsonDecoder.decode(
-      OAuthAuthorizationDetailsResponse.self, from: json
+      OAuthAuthorizationDetailsResult.self, from: json
     )
 
     guard case .redirect(let redirect) = response else {
@@ -162,7 +162,7 @@ struct AuthOAuthServerTests {
   }
 
   @Test
-  func decodeOAuthAuthorizationDetailsResponseSurfacesTheDetailsError() throws {
+  func decodeOAuthAuthorizationDetailsResultSurfacesTheDetailsError() throws {
     let json = """
       {
         "authorization_id": "abc123def456",
@@ -181,7 +181,7 @@ struct AuthOAuthServerTests {
 
     let error = try #require(throws: DecodingError.self) {
       try AuthClient.Configuration.jsonDecoder.decode(
-        OAuthAuthorizationDetailsResponse.self, from: json
+        OAuthAuthorizationDetailsResult.self, from: json
       )
     }
     #expect("\(error)".lowercased().contains("uuid"), "got \(error)")
@@ -405,7 +405,7 @@ struct AuthOAuthServerTests {
     let sut = makeSUT()
     try await sut.seedSession(.valid)
 
-    try await sut.oauthServer.revokeGrant(id: clientID)
+    try await sut.oauthServer.revokeGrant(clientID: clientID)
   }
 
   @Test
@@ -420,7 +420,7 @@ struct AuthOAuthServerTests {
     try await sut.seedSession(.valid)
 
     do {
-      try await sut.oauthServer.revokeGrant(id: clientID)
+      try await sut.oauthServer.revokeGrant(clientID: clientID)
       Issue.record("Expected AuthError.server")
     } catch let error as AuthError {
       #expect(error.kind == .server)

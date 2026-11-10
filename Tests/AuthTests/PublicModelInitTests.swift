@@ -69,10 +69,6 @@ import Testing
     flow.url = URL(string: "https://example.org")!
     #expect(flow.url.host == "example.org")
 
-    var params = PageParams(page: 1)
-    params.perPage = 50
-    #expect(params.perPage == 50)
-
     var page = UserPage(users: [], audience: "", nextPage: nil, lastPage: 1, total: 0)
     page.total = 3
     #expect(page.total == 3)
@@ -89,11 +85,6 @@ import Testing
       registrationType: .manual, createdAt: date, updatedAt: date)
     client.clientName = "App"
     #expect(client.clientName == "App")
-
-    var list = ListOAuthClientsPaginatedResponse(
-      clients: [client], audience: "", nextPage: nil, lastPage: 1, total: 1)
-    list.clients = []
-    #expect(list.clients.isEmpty)
 
     let authClient = OAuthAuthorizationClient(id: id)
     let user = OAuthAuthorizationUser(id: id)

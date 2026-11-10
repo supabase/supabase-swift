@@ -314,7 +314,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.updateUser(
-        UserAttributes(
+        UpdateUser(
           email: "example@mail.com",
           phone: "+1 202-918-2132",
           password: "another.pass",
@@ -333,7 +333,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.updateUser(
-        UserAttributes(password: "new-pass", currentPassword: "old-pass")
+        UpdateUser(password: "new-pass", currentPassword: "old-pass")
       )
     }
   }
@@ -892,7 +892,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.oauthServer.revokeGrant(
-        id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
+        clientID: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!)
     }
   }
 
@@ -912,7 +912,7 @@ struct RequestsTests {
     await assert {
       try await sut.updateUser(
         id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-        attributes: AdminUserAttributes(banDuration: .seconds(86_400), email: "new@mail.com")
+        AdminUpdateUser(email: "new@mail.com", banDuration: .seconds(86_400))
       )
     }
   }
@@ -923,8 +923,8 @@ struct RequestsTests {
 
     await assert {
       try await sut.createUser(
-        AdminUserAttributes(
-          email: "example@mail.com", confirmsEmail: true, password: "the.pass")
+        AdminCreateUser(
+          email: "example@mail.com", password: "the.pass", confirmsEmail: true)
       )
     }
   }
@@ -999,7 +999,7 @@ struct RequestsTests {
     let sut = makeAdminSUT()
 
     await assert {
-      _ = try await sut.oauth.listClients(params: PageParams(page: 1, perPage: 5))
+      _ = try await sut.oauth.listClients()
     }
   }
 
@@ -1009,7 +1009,7 @@ struct RequestsTests {
 
     await assert {
       try await sut.oauth.createClient(
-        params: CreateOAuthClientParams(
+        CreateOAuthClient(
           clientName: "Example", redirectURIs: [URL(string: "https://example.com/callback")!])
       )
     }
@@ -1032,7 +1032,7 @@ struct RequestsTests {
     await assert {
       _ = try await sut.oauth.updateClient(
         id: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
-        params: UpdateOAuthClientParams(clientName: "Renamed")
+        UpdateOAuthClient(clientName: "Renamed")
       )
     }
   }
@@ -1064,7 +1064,7 @@ struct RequestsTests {
     await assert {
       try await sut.updateUser(
         id: UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!,
-        attributes: AdminUserAttributes(banDuration: .zero)
+        AdminUpdateUser(banDuration: .zero)
       )
     }
   }
@@ -1092,7 +1092,7 @@ struct RequestsTests {
   func adminCreateCustomProvider() async {
     let sut = makeAdminSUT()
 
-    var params = CreateCustomProviderParams.oauth2(
+    var params = CreateCustomProvider.oauth2(
       identifier: "custom:acme",
       name: "Acme",
       clientID: "client-id",
@@ -1125,7 +1125,7 @@ struct RequestsTests {
     await assert {
       try await sut.customProviders.update(
         identifier: "custom:acme",
-        params: UpdateCustomProviderParams(name: "Acme Inc.", customClaimsAllowlist: [])
+        UpdateCustomProvider(name: "Acme Inc.", customClaimsAllowlist: [])
       )
     }
   }

@@ -375,14 +375,11 @@ supporting_symbols:
   - OAuthClient.clientURI
   - OAuthClient.logoURI
   - OAuthClient.redirectURIs
-  - CreateOAuthClientParams.clientURI
-  - CreateOAuthClientParams.redirectURIs
-  - UpdateOAuthClientParams.clientURI
-  - UpdateOAuthClientParams.logoURI
-  - UpdateOAuthClientParams.redirectURIs
-  # AdminUserAttributes is the request body of both auth.admin.create_user and
-  # auth.admin.update_user; its encoder maps banDuration to a Go duration string.
-  - AdminUserAttributes.encode
+  - CreateOAuthClient.clientURI
+  - CreateOAuthClient.redirectURIs
+  - UpdateOAuthClient.clientURI
+  - UpdateOAuthClient.logoURI
+  - UpdateOAuthClient.redirectURIs
   # The custom providers namespace and its types are shared by every
   # auth.admin.*_provider capability rather than owned by one.
   - AuthAdminClient.customProviders
@@ -868,9 +865,14 @@ features:
     symbols:
       - AuthClient.updateUser
     supporting_symbols:
-      - UserAttributes
-      - UserAttributes.userMetadata
-      - UserAttributes.currentPassword
+      - UpdateUser
+      - UpdateUser.init
+      - UpdateUser.email
+      - UpdateUser.phone
+      - UpdateUser.password
+      - UpdateUser.nonce
+      - UpdateUser.userMetadata
+      - UpdateUser.currentPassword
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -1092,6 +1094,21 @@ features:
     status: implemented
     symbols:
       - AuthAdminClient.createUser
+    supporting_symbols:
+      - AdminCreateUser
+      - AdminCreateUser.init
+      - AdminCreateUser.id
+      - AdminCreateUser.email
+      - AdminCreateUser.phone
+      - AdminCreateUser.password
+      - AdminCreateUser.passwordHash
+      - AdminCreateUser.confirmsEmail
+      - AdminCreateUser.confirmsPhone
+      - AdminCreateUser.role
+      - AdminCreateUser.userMetadata
+      - AdminCreateUser.appMetadata
+      - AdminCreateUser.banDuration
+      - AdminCreateUser.encode
   auth.admin.delete_user:
     status: implemented
     symbols:
@@ -1100,6 +1117,19 @@ features:
     status: implemented
     symbols:
       - AuthAdminClient.updateUser
+    supporting_symbols:
+      - AdminUpdateUser
+      - AdminUpdateUser.init
+      - AdminUpdateUser.email
+      - AdminUpdateUser.phone
+      - AdminUpdateUser.password
+      - AdminUpdateUser.confirmsEmail
+      - AdminUpdateUser.confirmsPhone
+      - AdminUpdateUser.role
+      - AdminUpdateUser.userMetadata
+      - AdminUpdateUser.appMetadata
+      - AdminUpdateUser.banDuration
+      - AdminUpdateUser.encode
   auth.admin.get_user:
     status: implemented
     symbols:
@@ -1139,13 +1169,13 @@ features:
     status: implemented
     symbols:
       - AuthAdminClient.generateLink
-      - GenerateLinkParams
-      - GenerateLinkParams.signUp
-      - GenerateLinkParams.invite
-      - GenerateLinkParams.magicLink
-      - GenerateLinkParams.recovery
-      - GenerateLinkParams.emailChangeCurrent
-      - GenerateLinkParams.emailChangeNew
+      - GenerateLink
+      - GenerateLink.signUp
+      - GenerateLink.invite
+      - GenerateLink.magicLink
+      - GenerateLink.recovery
+      - GenerateLink.emailChangeCurrent
+      - GenerateLink.emailChangeNew
       - GenerateLinkResponse
       - GenerateLinkResponse.properties
       - GenerateLinkResponse.user
@@ -1178,30 +1208,30 @@ features:
     status: implemented
     symbols:
       - AuthAdminCustomProviders.create
-      - CreateCustomProviderParams
-      - CreateCustomProviderParams.init
-      - CreateCustomProviderParams.oauth2
-      - CreateCustomProviderParams.oidc
-      - CreateCustomProviderParams.providerType
-      - CreateCustomProviderParams.identifier
-      - CreateCustomProviderParams.name
-      - CreateCustomProviderParams.clientID
-      - CreateCustomProviderParams.clientSecret
-      - CreateCustomProviderParams.acceptableClientIDs
-      - CreateCustomProviderParams.scopes
-      - CreateCustomProviderParams.customClaimsAllowlist
-      - CreateCustomProviderParams.pkceEnabled
-      - CreateCustomProviderParams.attributeMapping
-      - CreateCustomProviderParams.authorizationParams
-      - CreateCustomProviderParams.enabled
-      - CreateCustomProviderParams.emailOptional
-      - CreateCustomProviderParams.issuer
-      - CreateCustomProviderParams.discoveryURL
-      - CreateCustomProviderParams.skipNonceCheck
-      - CreateCustomProviderParams.authorizationURL
-      - CreateCustomProviderParams.tokenURL
-      - CreateCustomProviderParams.userinfoURL
-      - CreateCustomProviderParams.jwksURI
+      - CreateCustomProvider
+      - CreateCustomProvider.init
+      - CreateCustomProvider.oauth2
+      - CreateCustomProvider.oidc
+      - CreateCustomProvider.providerType
+      - CreateCustomProvider.identifier
+      - CreateCustomProvider.name
+      - CreateCustomProvider.clientID
+      - CreateCustomProvider.clientSecret
+      - CreateCustomProvider.acceptableClientIDs
+      - CreateCustomProvider.scopes
+      - CreateCustomProvider.customClaimsAllowlist
+      - CreateCustomProvider.pkceEnabled
+      - CreateCustomProvider.attributeMapping
+      - CreateCustomProvider.authorizationParams
+      - CreateCustomProvider.enabled
+      - CreateCustomProvider.emailOptional
+      - CreateCustomProvider.issuer
+      - CreateCustomProvider.discoveryURL
+      - CreateCustomProvider.skipNonceCheck
+      - CreateCustomProvider.authorizationURL
+      - CreateCustomProvider.tokenURL
+      - CreateCustomProvider.userinfoURL
+      - CreateCustomProvider.jwksURI
   auth.admin.delete_provider:
     status: implemented
     symbols:
@@ -1210,26 +1240,26 @@ features:
     status: implemented
     symbols:
       - AuthAdminCustomProviders.update
-      - UpdateCustomProviderParams
-      - UpdateCustomProviderParams.init
-      - UpdateCustomProviderParams.name
-      - UpdateCustomProviderParams.clientID
-      - UpdateCustomProviderParams.clientSecret
-      - UpdateCustomProviderParams.acceptableClientIDs
-      - UpdateCustomProviderParams.scopes
-      - UpdateCustomProviderParams.customClaimsAllowlist
-      - UpdateCustomProviderParams.pkceEnabled
-      - UpdateCustomProviderParams.attributeMapping
-      - UpdateCustomProviderParams.authorizationParams
-      - UpdateCustomProviderParams.enabled
-      - UpdateCustomProviderParams.emailOptional
-      - UpdateCustomProviderParams.issuer
-      - UpdateCustomProviderParams.discoveryURL
-      - UpdateCustomProviderParams.skipNonceCheck
-      - UpdateCustomProviderParams.authorizationURL
-      - UpdateCustomProviderParams.tokenURL
-      - UpdateCustomProviderParams.userinfoURL
-      - UpdateCustomProviderParams.jwksURI
+      - UpdateCustomProvider
+      - UpdateCustomProvider.init
+      - UpdateCustomProvider.name
+      - UpdateCustomProvider.clientID
+      - UpdateCustomProvider.clientSecret
+      - UpdateCustomProvider.acceptableClientIDs
+      - UpdateCustomProvider.scopes
+      - UpdateCustomProvider.customClaimsAllowlist
+      - UpdateCustomProvider.pkceEnabled
+      - UpdateCustomProvider.attributeMapping
+      - UpdateCustomProvider.authorizationParams
+      - UpdateCustomProvider.enabled
+      - UpdateCustomProvider.emailOptional
+      - UpdateCustomProvider.issuer
+      - UpdateCustomProvider.discoveryURL
+      - UpdateCustomProvider.skipNonceCheck
+      - UpdateCustomProvider.authorizationURL
+      - UpdateCustomProvider.tokenURL
+      - UpdateCustomProvider.userinfoURL
+      - UpdateCustomProvider.jwksURI
   auth.admin.get_provider:
     status: implemented
     symbols:
@@ -1257,10 +1287,10 @@ features:
       - AuthClient.oauthServer
       - AuthOAuthServer
       - AuthOAuthServer.authorizationDetails
-      - OAuthAuthorizationDetailsResponse
-      - OAuthAuthorizationDetailsResponse.details
-      - OAuthAuthorizationDetailsResponse.redirect
-      - OAuthAuthorizationDetailsResponse.init
+      - OAuthAuthorizationDetailsResult
+      - OAuthAuthorizationDetailsResult.details
+      - OAuthAuthorizationDetailsResult.redirect
+      - OAuthAuthorizationDetailsResult.init
       - OAuthAuthorizationDetails
       - OAuthAuthorizationDetails.authorizationID
       - OAuthAuthorizationDetails.redirectURI
@@ -1310,6 +1340,13 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.createClient
+    supporting_symbols:
+      - CreateOAuthClient
+      - CreateOAuthClient.init
+      - CreateOAuthClient.clientName
+      - CreateOAuthClient.grantTypes
+      - CreateOAuthClient.responseTypes
+      - CreateOAuthClient.scope
   auth.oauth_admin.delete_client:
     status: implemented
     symbols:
@@ -1322,7 +1359,6 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.listClients
-      - ListOAuthClientsPaginatedResponse.init
   auth.oauth_admin.regenerate_client_secret:
     status: implemented
     symbols:
@@ -1331,6 +1367,11 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.updateClient
+    supporting_symbols:
+      - UpdateOAuthClient
+      - UpdateOAuthClient.init
+      - UpdateOAuthClient.clientName
+      - UpdateOAuthClient.grantTypes
 
   # ── Client ─────────────────────────────────────────────────────────────────
 
@@ -1512,11 +1553,11 @@ features:
       - PostgrestRequestBuilder.upsert
       - PostgrestRequestBuilder.delete
     supporting_symbols:
-      - PostgrestReturningOptions
-      - PostgrestReturningOptions.init
-      - PostgrestReturningOptions.rawValue
-      - PostgrestReturningOptions.minimal
-      - PostgrestReturningOptions.representation
+      - PostgrestReturning
+      - PostgrestReturning.init
+      - PostgrestReturning.rawValue
+      - PostgrestReturning.minimal
+      - PostgrestReturning.representation
 
   database.using_filters.eq:
     status: implemented

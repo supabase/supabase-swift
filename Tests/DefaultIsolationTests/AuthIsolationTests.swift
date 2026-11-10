@@ -18,12 +18,13 @@ import Foundation
 enum AuthIsolationTests {
   /// Arguments the calls below need. Nothing creates one: it only has to type-check.
   struct Inputs {
-    var adminUserAttributes: AdminUserAttributes
-    var generateLinkParams: GenerateLinkParams
-    var createCustomProviderParams: CreateCustomProviderParams
-    var updateCustomProviderParams: UpdateCustomProviderParams
-    var createOAuthClientParams: CreateOAuthClientParams
-    var updateOAuthClientParams: UpdateOAuthClientParams
+    var adminCreateUser: AdminCreateUser
+    var adminUpdateUser: AdminUpdateUser
+    var generateLink: GenerateLink
+    var createCustomProvider: CreateCustomProvider
+    var updateCustomProvider: UpdateCustomProvider
+    var createOAuthClient: CreateOAuthClient
+    var updateOAuthClient: UpdateOAuthClient
     var idTokenCredentials: IDTokenCredentials
     var web3Credentials: Web3Credentials
     var ssoTarget: SSOTarget
@@ -31,7 +32,7 @@ enum AuthIsolationTests {
     var phoneOTPType: PhoneOTPType
     var resendEmailType: ResendEmailType
     var resendPhoneType: ResendPhoneType
-    var userAttributes: UserAttributes
+    var userAttributes: UpdateUser
     var identity: UserIdentity
   }
 
@@ -139,19 +140,19 @@ enum AuthIsolationTests {
     _ = try await oauthServer.approveAuthorization(id: "id")
     _ = try await oauthServer.denyAuthorization(id: "id")
     _ = try await oauthServer.listGrants()
-    try await oauthServer.revokeGrant(id: UUID())
+    try await oauthServer.revokeGrant(clientID: UUID())
   }
 
   static func admin(_ admin: AuthAdminClient, _ inputs: Inputs) async throws {
     let id = UUID()
 
     _ = try await admin.user(id: id)
-    _ = try await admin.createUser(inputs.adminUserAttributes)
-    _ = try await admin.updateUser(id: id, attributes: inputs.adminUserAttributes)
+    _ = try await admin.createUser(inputs.adminCreateUser)
+    _ = try await admin.updateUser(id: id, inputs.adminUpdateUser)
     try await admin.deleteUser(id: id)
     _ = try await admin.inviteUser(email: "user@example.com")
     _ = try await admin.listUsers()
-    _ = try await admin.generateLink(inputs.generateLinkParams)
+    _ = try await admin.generateLink(inputs.generateLink)
     try await admin.signOut(jwt: "jwt")
     var users = admin.users().makeAsyncIterator()
     _ = try await users.next()
@@ -160,17 +161,17 @@ enum AuthIsolationTests {
     try await admin.mfa.deleteFactor(id: id, forUser: id)
 
     _ = try await admin.oauth.listClients()
-    _ = try await admin.oauth.createClient(params: inputs.createOAuthClientParams)
+    _ = try await admin.oauth.createClient(inputs.createOAuthClient)
     _ = try await admin.oauth.client(id: id)
-    _ = try await admin.oauth.updateClient(id: id, params: inputs.updateOAuthClientParams)
+    _ = try await admin.oauth.updateClient(id: id, inputs.updateOAuthClient)
     try await admin.oauth.deleteClient(id: id)
     _ = try await admin.oauth.regenerateClientSecret(id: id)
 
     _ = try await admin.customProviders.list()
-    _ = try await admin.customProviders.create(inputs.createCustomProviderParams)
+    _ = try await admin.customProviders.create(inputs.createCustomProvider)
     _ = try await admin.customProviders.provider(identifier: "custom:acme")
     _ = try await admin.customProviders.update(
-      identifier: "custom:acme", params: inputs.updateCustomProviderParams)
+      identifier: "custom:acme", inputs.updateCustomProvider)
     try await admin.customProviders.delete(identifier: "custom:acme")
 
     _ = try await admin.passkeys.list(forUser: id)

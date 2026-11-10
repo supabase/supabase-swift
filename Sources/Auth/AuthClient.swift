@@ -108,7 +108,7 @@ typealias AuthClientID = Int
 /// - ``user()``
 /// - ``user(jwt:)``
 /// - ``updateUser(_:redirectTo:)``
-/// - ``UserAttributes``
+/// - ``UpdateUser``
 /// - ``reauthenticate()``
 /// - ``resetPassword(email:options:)``
 ///
@@ -1411,7 +1411,7 @@ public final class AuthClient: Sendable {
 
   /// Sends a one-time code to the email or phone of the signed-in user.
   ///
-  /// Pass the code as ``UserAttributes/nonce`` to ``updateUser(_:redirectTo:)`` when the project
+  /// Pass the code as ``UpdateUser/nonce`` to ``updateUser(_:redirectTo:)`` when the project
   /// needs a recent sign-in to change the password.
   public func reauthenticate() async throws {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
@@ -1456,36 +1456,36 @@ public final class AuthClient: Sendable {
   /// rotates them while the request is in flight. When another user signs in while the request is
   /// in flight, the client keeps that user's session as it is.
   ///
-  /// Set ``UserAttributes/currentPassword`` when you change the password and the project requires
-  /// the current password for that change. When `attributes` changes the email, the client starts
+  /// Set ``UpdateUser/currentPassword`` when you change the password and the project requires
+  /// the current password for that change. When `changes` changes the email, the client starts
   /// an email change flow. Pass the redirect URL that comes back to ``handleRedirect(_:)``.
   ///
   /// - Parameters:
-  ///   - attributes: The values to change.
+  ///   - changes: The values to change.
   ///   - redirectTo: The URL that the confirmation link of an email change opens.
   /// - Returns: The updated user.
   /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
   ///   request.
   @discardableResult
   public func updateUser(
-    _ attributes: UserAttributes,
+    _ changes: UpdateUser,
     redirectTo: URL? = nil
   ) async throws -> User {
-    guard attributes.email != nil else {
-      return try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: nil)
+    guard changes.email != nil else {
+      return try await sendUserUpdate(changes, redirectTo: redirectTo, pkce: nil)
     }
     return try await withFlow(.emailChange, redirectTo: redirectTo) {
-      try await sendUserUpdate(attributes, redirectTo: redirectTo, pkce: $0.challenge)
+      try await sendUserUpdate(changes, redirectTo: redirectTo, pkce: $0.challenge)
     }
   }
 
   private func sendUserUpdate(
-    _ attributes: UserAttributes,
+    _ changes: UpdateUser,
     redirectTo: URL?,
     pkce: PKCEChallenge?
   ) async throws -> User {
     let updatedUser = try await api.authorizedExecute {
-      try authAPI.updateUser(attributes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
+      try authAPI.updateUser(changes, redirectTo: redirectTo, pkce: pkce, accessToken: $0)
     }
     try await sessionStore.commit(.userUpdated(updatedUser, event: .userUpdated))
     return updatedUser

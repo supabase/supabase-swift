@@ -100,7 +100,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   is sent.
   public func insert(
     _ values: some Encodable,
-    returning: PostgrestReturningOptions? = nil,
+    returning: PostgrestReturning? = nil,
     count: CountOption? = nil,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
@@ -175,7 +175,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   public func upsert(
     _ values: some Encodable,
     onConflict: String? = nil,
-    returning: PostgrestReturningOptions? = nil,
+    returning: PostgrestReturning? = nil,
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false,
     defaultToNull: Bool = true,
@@ -243,7 +243,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   is sent.
   public func update(
     _ values: some Encodable,
-    returning: PostgrestReturningOptions? = nil,
+    returning: PostgrestReturning? = nil,
     count: CountOption? = nil,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
@@ -291,7 +291,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are deleted.
   public func delete(
-    returning: PostgrestReturningOptions? = nil,
+    returning: PostgrestReturning? = nil,
     count: CountOption? = nil
   ) -> PostgrestFilterBuilder {
     var copy = PostgrestFilterBuilder(carryingFrom: self)
