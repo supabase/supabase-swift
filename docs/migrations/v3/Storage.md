@@ -272,9 +272,9 @@ Storage names spell `ID` in capitals, like the rest of the SDK. The wire format 
 ## One type and one name per field
 
 A field has the same name and type when you send it and when you read it back. The wire format
-does not change.
+does not change. From v2, apply the renames above first.
 
-| v2 and v3 pre-release | v3 |
+| v3 pre-release | v3 |
 | --- | --- |
 | `StorageObject.version`, `ObjectInfo.version` | `versionID`, the name the options and `ObjectVersion` use |
 | `ObjectInfo.cacheControl`, `ObjectMetadata.cacheControl`, `DownloadResponse.cacheControl: String?` | `CacheControl?`, the type `UploadOptions` and `CopyOptions` take; read the header string with `.rawValue` |

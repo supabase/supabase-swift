@@ -407,9 +407,9 @@ wire keys do not change.
 ## Links are `URL`
 
 A link has the same type when you send it and when you read it back. The wire format does not
-change. Build each value with `URL(string:)`.
+change. Build each value with `URL(string:)`. From v2, apply the acronym renames above first.
 
-| v2 and v3 pre-release | v3 |
+| v3 pre-release | v3 |
 | --- | --- |
 | `User.actionLink: String?` | `URL?`, like `GenerateLinkProperties.actionLink` |
 | `OAuthClient.clientURI`, `.logoURI: String?` | `URL?` |
