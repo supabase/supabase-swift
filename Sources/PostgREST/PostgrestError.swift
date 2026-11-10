@@ -266,3 +266,19 @@ extension PostgrestError.ServerError {
     return count == 0
   }
 }
+
+extension JSONEncoder {
+  /// Encodes a request body as JSON.
+  ///
+  /// - Throws: ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/invalidRequest``
+  ///   when `value` does not encode. Nothing is sent.
+  func encodeRequestBody(_ value: some Encodable) throws -> Data {
+    do {
+      return try encode(value)
+    } catch {
+      throw PostgrestError(
+        kind: .invalidRequest, message: "The request body cannot be encoded as JSON.",
+        underlyingError: error)
+    }
+  }
+}

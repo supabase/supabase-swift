@@ -85,8 +85,8 @@ struct RealtimeChannelTypedPostgresChangesTests {
   }()
 
   @Test(arguments: renderings)
-  func rendersTheRealtimeFilterGrammar(filter: Filter, expected: String) {
-    #expect(filter.realtimeFilter == expected)
+  func rendersTheRealtimeFilterGrammar(filter: Filter, expected: String) throws {
+    #expect(try filter.realtimeFilter == expected)
   }
 
   static let rejections: [(Filter, String)] = {
@@ -116,15 +116,22 @@ struct RealtimeChannelTypedPostgresChangesTests {
     }
   }
 
-  #if os(macOS) || os(Linux)
-    @Test
-    func trapsOnAFilterRealtimeCannotRun() async {
-      await #expect(processExitsWith: .failure) {
-        let c = RealtimeTodo.columns
-        _ = (c.id.eq(1) || c.id.eq(2)).realtimeFilter
-      }
+  @Test
+  func throwsAnInvalidRequestForAFilterRealtimeCannotRun() async throws {
+    let client = try RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!)
+    )
+    let channel = await client.channel("todos")
+
+    await #expect {
+      _ = try await channel.postgresChanges(
+        of: RealtimeTodo.self, where: { $0.id.eq(1) || $0.id.eq(2) })
+    } throws: { error in
+      let error = error as? RealtimeError
+      return error?.kind == .invalidRequest && error?.underlyingError is UnsupportedRealtimeFilter
     }
-  #endif
+  }
 
   @Test
   func streamsTypedChangesForTheRelationTableAndFilter() async throws {
@@ -134,7 +141,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
     )
     let channel = await client.channel("todos")
 
-    let changes = await channel.postgresChanges(
+    let changes = try await channel.postgresChanges(
       of: RealtimeTodo.self, event: .insert, where: { $0.priority.gt(3) && $0.title.eq("milk") }
     )
 
@@ -213,7 +220,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
     )
     let channel = await client.channel("secrets")
 
-    let changes = await channel.postgresChanges(of: Secret.self)
+    let changes = try await channel.postgresChanges(of: Secret.self)
     withExtendedLifetime(changes) {}
 
     let configs = await client.bindings(of: channel)

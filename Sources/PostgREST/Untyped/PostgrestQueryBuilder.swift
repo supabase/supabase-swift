@@ -96,7 +96,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
   ///   Filters are not available: PostgREST ignores them on an insert.
-  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func insert(
     _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
@@ -104,7 +105,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestTransformBuilder {
-    let body = try (encoder ?? configuration.encoder).encode(values)
+    let body = try (encoder ?? configuration.encoder).encodeRequestBody(values)
 
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
@@ -125,7 +126,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     if !prefersHeaders.isEmpty {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
-    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+    if let body = copy.request.body, let columns = columnsQueryItem(forBody: body) {
       copy.request.query.appendOrUpdate(columns)
     }
 
@@ -169,7 +170,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
   ///   Filters are not available: PostgREST ignores them on an upsert.
-  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func upsert(
     _ values: some Encodable,
     onConflict: String? = nil,
@@ -179,7 +181,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestTransformBuilder {
-    let body = try (encoder ?? configuration.encoder).encode(values)
+    let body = try (encoder ?? configuration.encoder).encodeRequestBody(values)
 
     var copy = PostgrestTransformBuilder(carryingFrom: self)
     copy.request.method = .post
@@ -206,7 +208,7 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
       copy.request.headerFields[.prefer] = prefersHeaders.joined(separator: ",")
     }
 
-    if let body = copy.request.body, let columns = try columnsQueryItem(forBody: body) {
+    if let body = copy.request.body, let columns = columnsQueryItem(forBody: body) {
       copy.request.query.appendOrUpdate(columns)
     }
 
@@ -237,14 +239,15 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
   /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are affected.
-  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func update(
     _ values: some Encodable,
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil,
     encoder: JSONEncoder? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try (encoder ?? configuration.encoder).encode(values)
+    let body = try (encoder ?? configuration.encoder).encodeRequestBody(values)
 
     var copy = PostgrestFilterBuilder(carryingFrom: self)
     copy.request.method = .patch
@@ -325,9 +328,8 @@ extension PostgrestRequestBuilder where Phase == PostgrestQueryPhase {
 ///   that contributes no keys at all. An empty union would spell `columns=`, which names one
 ///   column called `""` and makes PostgREST reject the request — so an empty batch sends no
 ///   parameter and writes nothing, rather than failing.
-/// - Throws: An error if `body` is not valid JSON.
-private func columnsQueryItem(forBody body: Data) throws -> URLQueryItem? {
-  guard let rows = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] else {
+func columnsQueryItem(forBody body: Data) -> URLQueryItem? {
+  guard let rows = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]] else {
     return nil
   }
   let uniqueKeys = Set(rows.flatMap(\.keys)).sorted()

@@ -226,8 +226,9 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///   - event: The broadcast event name.
   ///   - payload: The value to send. It must encode as a JSON object.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
-  /// - Throws: An `EncodingError` when `payload` does not encode as a JSON object.
-  ///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
+  ///   when `payload` does not encode as a JSON object, and nothing is sent;
+  ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the
   ///   channel is not subscribed, ``RealtimeError/Kind-swift.struct/timeout`` when no reply
   ///   arrived within the client's configured timeout, the server's reason as
   ///   ``RealtimeError/Kind-swift.struct/payloadTooLarge`` or
@@ -238,7 +239,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   public func broadcast(
     event: String, payload: some Encodable, encoder: JSONEncoder? = nil
   ) async throws {
-    let message = try JSONObject(payload, encoder: encoder)
+    let message = try Self.jsonObject(payload, encoder: encoder)
     try await broadcast(event: event, payload: .json(message))
   }
 
@@ -247,7 +248,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the payload.
-  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``, except the encoding error.
+  /// - Throws: The errors of ``broadcast(event:payload:encoder:)``, except
+  ///   ``RealtimeError/Kind-swift.struct/invalidRequest``.
   public func broadcast(event: String, data: Data) async throws {
     try await broadcast(event: event, payload: .binary(data))
   }
@@ -281,14 +283,15 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Parameters:
   ///   - payload: The value to share. It must encode as a JSON object.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
-  /// - Throws: An error if `payload` does not encode as a JSON object,
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
+  ///   when `payload` does not encode as a JSON object, and nothing is sent;
   ///   ``RealtimeError/Kind-swift.struct/notSubscribed`` when the channel is not subscribed,
   ///   ``RealtimeError/Kind-swift.struct/timeout`` when the server does not reply in time, the
   ///   server's error when it rejects the call, ``RealtimeError/Kind-swift.struct/channelRemoved``
   ///   when the channel was removed, ``RealtimeError/Kind-swift.struct/notConnected`` when the
   ///   client was released, and `CancellationError` when the awaiting task is cancelled.
   public func track(_ payload: some Encodable, encoder: JSONEncoder? = nil) async throws {
-    let payload = try JSONObject(payload, encoder: encoder)
+    let payload = try Self.jsonObject(payload, encoder: encoder)
     try await pushPresence([
       "type": "presence",
       "event": "track",
@@ -298,12 +301,25 @@ public final class RealtimeChannel: Sendable, Hashable {
 
   /// Removes this client's payload from the channel's presence.
   ///
-  /// - Throws: The errors of ``track(_:encoder:)``, except the encoding error.
+  /// - Throws: The errors of ``track(_:encoder:)``, except
+  ///   ``RealtimeError/Kind-swift.struct/invalidRequest``.
   public func untrack() async throws {
     try await pushPresence([
       "type": "presence",
       "event": "untrack",
     ])
+  }
+
+  /// Encodes a broadcast or presence payload, which must be a JSON object.
+  private static func jsonObject(_ payload: some Encodable, encoder: JSONEncoder?) throws
+    -> JSONObject
+  {
+    do {
+      return try JSONObject(payload, encoder: encoder)
+    } catch {
+      throw RealtimeError.invalidRequest(
+        "The payload does not encode as a JSON object.", underlyingError: error)
+    }
   }
 
   private func pushPresence(_ payload: JSONObject) async throws {

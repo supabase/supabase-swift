@@ -60,7 +60,7 @@ import Testing
       let client = makeClient(port: port, transport: URLSessionWebSocketTransport(isWatchOS: true))
 
       let connectError = await #expect(throws: RealtimeError.self) { try await client.connect() }
-      #expect(connectError?.kind == .transport)
+      #expect(connectError?.kind == .invalidRequest)
       #expect(connectError?.isRetryable == false)
       #expect(connectError?.message.contains("TN3135") == true)
       #expect(await client.status == .disconnected)
@@ -69,7 +69,7 @@ import Testing
       let subscribeError = await #expect(throws: RealtimeError.self) {
         try await channel.subscribe()
       }
-      #expect(subscribeError?.kind == .transport)
+      #expect(subscribeError?.kind == .invalidRequest)
       #expect(subscribeError?.message.contains("TN3135") == true)
       #expect(joins.value == 0)
     }

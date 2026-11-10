@@ -187,6 +187,7 @@ supporting_symbols:
   - FunctionsError.Kind.decoding
   - FunctionsError.Kind.invalidConfiguration
   - FunctionsError.Kind.~=
+  - FunctionsError.Kind.invalidRequest
   - FunctionsError.init
   - FunctionsError.kind
   - FunctionsError.message
@@ -299,6 +300,7 @@ supporting_symbols:
   - AuthError.Kind.transport
   - AuthError.Kind.decoding
   - AuthError.Kind.invalidConfiguration
+  - AuthError.Kind.invalidRequest
   - AuthError.Kind.sessionInvalidated
   - AuthError.Kind.idTokenMismatch
   - AuthError.Kind.storageUnavailable
@@ -464,6 +466,7 @@ supporting_symbols:
   - RealtimeError.Kind.transport
   - RealtimeError.Kind.decoding
   - RealtimeError.Kind.invalidConfiguration
+  - RealtimeError.Kind.invalidRequest
   - RealtimeError.init
   - RealtimeError.kind
   - RealtimeError.message

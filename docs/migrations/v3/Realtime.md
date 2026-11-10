@@ -11,6 +11,11 @@ Changes that still compile but behave differently. Check each one by hand.
   throw a public `RealtimeError` with a `kind`. Code that compared `localizedDescription` or
   checked an `NSError` domain stops matching. Search for those checks and match on `kind`
   instead (see [`RealtimeError` is a struct](#realtimeerror-is-a-struct)).
+- **A payload that does not encode throws `RealtimeError`.** `broadcast(event:payload:)`,
+  `track(_:)` and `httpSend(event:payload:)` throw a `RealtimeError` of kind `.invalidRequest`
+  when the payload does not encode as JSON (or, for `broadcast` and `track`, as a JSON object).
+  The cause is in `underlyingError`, and nothing is sent. Search for `as EncodingError` and
+  `as DecodingError` near those calls.
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
 - **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
@@ -486,8 +491,8 @@ let configuration = RealtimeClient.Configuration(
 ## watchOS connections need an opt-in
 
 watchOS blocks `URLSessionWebSocketTask` for most apps (Apple's TN3135), and the connection waits
-forever. In v3, `connect()` on watchOS throws a non-retryable `.transport` error that cites
-TN3135. If the app runs in a context that TN3135 allows, such as audio streaming, opt in:
+forever. In v3, `connect()` on watchOS throws a non-retryable `.invalidRequest` error that
+cites TN3135. If the app runs in a context that TN3135 allows, such as audio streaming, opt in:
 
 ```swift
 let configuration = RealtimeClient.Configuration(
@@ -512,11 +517,12 @@ let configuration = RealtimeClient.Configuration(
 ## `RealtimeError` is a struct
 
 Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.server` with
-`response` set. A network or WebSocket failure is `.transport`; `underlyingError` holds the
-cause when there is one. When the server's error reason starts with a code, such as
-`Unauthorized`, `code` holds it as a `RealtimeError.Code`. A `catch` clause can name a kind or a
-code directly, as in `catch RealtimeError.Kind.unauthorized` or
-`catch RealtimeError.Code.privateOnly`.
+`response` set. A refused WebSocket upgrade has `response` set too: its kind is `.unauthorized`
+for 401 and 403, `.rateLimited` for 429, and `.server` otherwise. A network or WebSocket failure
+is `.transport`; `underlyingError` holds the cause when there is one. When the server's error
+reason starts with a code, such as `Unauthorized`, `code` holds it as a `RealtimeError.Code`. A
+`catch` clause can name a kind or a code directly, as in `catch RealtimeError.Kind.unauthorized`
+or `catch RealtimeError.Code.privateOnly`.
 
 `WebSocketCloseCode` accepts an integer literal, as in `let code: WebSocketCloseCode = 4001`.
 

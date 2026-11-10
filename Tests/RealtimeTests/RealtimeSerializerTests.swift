@@ -390,12 +390,12 @@ struct RealtimeSerializerTests {
   }
 
   @Test(arguments: HeaderField.allCases)
-  func encodeBroadcastPushRejectsHeaderFieldsOver255BytesWithEncodingKind(_ field: HeaderField) {
+  func encodeBroadcastPushRejectsHeaderFieldsOver255BytesAsAnInvalidRequest(_ field: HeaderField) {
     do {
       _ = try encodePush(field, value: String(repeating: "a", count: 256))
       Issue.record("Expected failure")
     } catch let error as RealtimeError {
-      #expect(error.kind == .encoding)
+      #expect(error.kind == .invalidRequest)
     } catch {
       Issue.record("Unexpected error \(error)")
     }

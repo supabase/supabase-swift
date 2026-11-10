@@ -780,7 +780,7 @@
         let matchedKey = UUID().uuidString
         let skippedKey = UUID().uuidString
 
-        let changes = await channel.postgresChanges(
+        let changes = try await channel.postgresChanges(
           of: KeyValueStorage.self,
           event: .insert,
           where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }

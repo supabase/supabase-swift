@@ -470,7 +470,7 @@ struct SupabaseClientStreamTests {
   func bindsTheFilteredRowsAndEveryDelete() async throws {
     let supabase = try makeClient { _ in "[]" }
 
-    let source = await supabase.liveQuerySource(
+    let source = try await supabase.liveQuerySource(
       for: LiveItem.self, filter: LiveItem.columns.listId.eq(7))
     withExtendedLifetime(source) {}
 
@@ -492,7 +492,7 @@ struct SupabaseClientStreamTests {
   func bindsEveryChangeWithoutAFilter() async throws {
     let supabase = try makeClient { _ in "[]" }
 
-    let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
+    let source = try await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     withExtendedLifetime(source) {}
 
     let bindings = await supabase.realtime.bindings(of: supabase.realtime.channels.first)
@@ -504,8 +504,8 @@ struct SupabaseClientStreamTests {
   func usesADedicatedChannelPerStream() async throws {
     let supabase = try makeClient { _ in "[]" }
 
-    let first = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
-    let second = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
+    let first = try await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
+    let second = try await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
 
     #expect(await supabase.realtime.channels.count == 2)
     await first.finish()
@@ -513,10 +513,22 @@ struct SupabaseClientStreamTests {
   }
 
   @Test
+  func streamThrowsAnInvalidRequestForAFilterRealtimeCannotRun() async throws {
+    let supabase = try makeClient { _ in "[]" }
+
+    let rows = supabase.stream(of: LiveItem.self, where: { $0.listId.eq(1) || $0.listId.eq(2) })
+    await #expect {
+      for try await _ in rows {}
+    } throws: { ($0 as? RealtimeError)?.kind == .invalidRequest }
+
+    #expect(await supabase.realtime.channels.isEmpty)
+  }
+
+  @Test
   func throwsWhenAFetchedRowLacksItsPrimaryKey() async throws {
     let supabase = try makeClient { _ in #"[{"title":"a","list_id":7}]"# }
 
-    let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
+    let source = try await supabase.liveQuerySource(for: LiveItem.self, filter: nil)
     let error = await #expect(throws: PostgrestError.self) { try await source.fetch() }
     await source.finish()
 
@@ -557,7 +569,7 @@ struct SupabaseClientStreamTests {
       return #"[{"id":1,"title":"a","list_id":7},{"id":2,"title":"b","list_id":7}]"#
     }
 
-    let source = await supabase.liveQuerySource(
+    let source = try await supabase.liveQuerySource(
       for: LiveItem.self, filter: LiveItem.columns.listId.eq(7))
     let rows = try await source.fetch()
     await source.finish()
@@ -589,7 +601,7 @@ struct SupabaseClientStreamTests {
       }
     }
 
-    let source = await supabase.liveQuerySource(for: LiveItem.self, filter: nil, pageSize: 2)
+    let source = try await supabase.liveQuerySource(for: LiveItem.self, filter: nil, pageSize: 2)
     let rows = try await source.fetch()
     await source.finish()
 
@@ -605,7 +617,7 @@ struct SupabaseClientStreamTests {
       return #"[{"team_id":1,"user_id":"a,b"}]"#
     }
 
-    let source = await supabase.liveQuerySource(for: Membership.self, filter: nil)
+    let source = try await supabase.liveQuerySource(for: Membership.self, filter: nil)
     let rows = try await source.fetch()
     await source.finish()
 

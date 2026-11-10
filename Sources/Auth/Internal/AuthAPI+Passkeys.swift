@@ -35,7 +35,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<PasskeyListItem> {
     try request(
       .post, "passkeys/registration/verify", authorization: bearer(accessToken),
-      body: encoder.encode(VerifyBody(challengeID: challengeID, credential: credential)),
+      body: encodeBody(VerifyBody(challengeID: challengeID, credential: credential)),
       decode: decoding(PasskeyListItem.self))
   }
 
@@ -51,7 +51,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "passkeys/authentication/verify",
-      body: encoder.encode(VerifyBody(challengeID: challengeID, credential: credential)),
+      body: encodeBody(VerifyBody(challengeID: challengeID, credential: credential)),
       decode: decodingSession())
   }
 
@@ -68,7 +68,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<PasskeyListItem> {
     try request(
       .patch, "passkeys/\(id)", authorization: bearer(accessToken),
-      body: encoder.encode(["friendly_name": friendlyName]), decode: decoding(PasskeyListItem.self))
+      body: encodeBody(["friendly_name": friendlyName]), decode: decoding(PasskeyListItem.self))
   }
 
   func deletePasskey(id: UUID, accessToken: String) -> AuthRequest<Void> {

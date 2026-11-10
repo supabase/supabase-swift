@@ -132,13 +132,14 @@ extension PostgrestClient {
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
   ///
-  /// - Throws: The encoding error if `function` cannot be encoded.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
+  ///   Nothing is sent.
   @_spi(Experimental)
   public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {
     let client = scoped(toDeclaredSchema: F.Schema.name)
     var request = client.makeRequest("rpc/\(F.functionName)", method: .post)
-    request.body = try PostgrestClient.Configuration.jsonEncoder.encode(function)
+    request.body = try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(function)
     return _PostgrestFunctionQuery(client: client, request: request)
   }
 

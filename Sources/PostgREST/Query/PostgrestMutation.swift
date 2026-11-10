@@ -242,7 +242,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///   ``_PostgrestWritableRelation/Draft`` shape. Primary keys and defaulted columns are optional
   ///   there, so either can be left out and filled in by the database.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func insert(_ values: R.Draft) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
     try insertion(values)
   }
@@ -269,7 +270,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   /// - Parameter values: The rows to insert, in the relation's
   ///   ``_PostgrestWritableRelation/Draft`` shape.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func insert(_ values: some Collection<R.Draft>) throws -> _PostgrestMutation<
     R, _PostgrestInsertPhase
   > {
@@ -303,7 +305,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func upsert<
     FirstValue,
     FirstNullability: _PostgrestNullability,
@@ -344,7 +347,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func upsert<
     FirstValue,
     FirstNullability: _PostgrestNullability,
@@ -385,7 +389,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///
   /// - Parameter build: A closure that assigns to the columns to change.
   /// - Returns: A ``_PostgrestMutation`` to scope, then execute.
-  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when an assigned value does not
+  ///   encode. Nothing is sent.
   public func update(
     _ build: (inout _PostgrestUpdate<R>) -> Void
   ) throws -> _PostgrestMutation<R, _PostgrestUnscopedPhase> {
@@ -402,11 +407,12 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///
   /// - Parameter values: The columns to change.
   /// - Returns: A ``_PostgrestMutation`` to scope, then execute.
-  /// - Throws: An encoding error if the assigned values cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when an assigned value does not
+  ///   encode. Nothing is sent.
   public func update(
     _ values: _PostgrestUpdate<R>
   ) throws -> _PostgrestMutation<R, _PostgrestUnscopedPhase> {
-    mutation(.patch, body: try PostgrestClient.Configuration.jsonEncoder.encode(values))
+    mutation(.patch, body: try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(values))
   }
 
   /// Deletes the rows matched by the filters applied to the returned value.
@@ -462,7 +468,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func upsert(
     _ values: R.Draft,
     resolution: _PostgrestConflictResolution = .mergeDuplicates
@@ -492,7 +499,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
-  /// - Throws: An encoding error if `values` cannot be serialized.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
+  ///   is sent.
   public func upsert(
     _ values: some Collection<R.Draft>,
     resolution: _PostgrestConflictResolution = .mergeDuplicates
@@ -522,29 +530,15 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
     onConflict: String? = nil,
     resolution: _PostgrestConflictResolution? = nil
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
-    let body = try PostgrestClient.Configuration.jsonEncoder.encode(values)
+    let body = try PostgrestClient.Configuration.jsonEncoder.encodeRequestBody(values)
     var mutation: _PostgrestMutation<R, _PostgrestInsertPhase> = mutation(
       .post, body: body, preferences: resolution.map { ["resolution=\($0.rawValue)"] } ?? [])
     if let onConflict {
       mutation.request.query.append(URLQueryItem(name: "on_conflict", value: onConflict))
     }
-    if let columns = try columnsQueryItem(forBody: body) {
+    if let columns = columnsQueryItem(forBody: body) {
       mutation.request.query.append(columns)
     }
     return mutation
   }
-}
-
-/// Names the union of the columns across every row of a bulk write.
-///
-/// Without it PostgREST requires every row to carry an identical key set and rejects the whole
-/// request (`PGRST102`, 400) rather than silently dropping any columns. A single object, or an
-/// empty batch, needs no list.
-private func columnsQueryItem(forBody body: Data) throws -> URLQueryItem? {
-  guard let rows = try JSONSerialization.jsonObject(with: body) as? [[String: Any]] else {
-    return nil
-  }
-  let columns = Set(rows.flatMap(\.keys)).sorted()
-  guard !columns.isEmpty else { return nil }
-  return URLQueryItem(name: "columns", value: columns.map { "\"\($0)\"" }.joined(separator: ","))
 }

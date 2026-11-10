@@ -786,7 +786,7 @@ struct RealtimeChannelSubscriptionTests {
     let channel = await h.client.channel("room")
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-    #expect(error?.kind == .transport)
+    #expect(error?.kind == .unauthorized)
     #expect(error?.isRetryable == false)
     #expect(h.connects.value == 1)
     #expect(await channel.status == .failed)

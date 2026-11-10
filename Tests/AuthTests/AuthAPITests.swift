@@ -31,6 +31,18 @@ struct AuthAPITests {
   let pkce = PKCEChallenge(codeChallenge: "challenge", codeChallengeMethod: "s256")
   let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
 
+  @Test
+  func aBodyThatCannotBeEncodedIsAnInvalidRequest() {
+    #expect {
+      try api.signUp(
+        email: "a@b.c", password: "p", userMetadata: ["x": .double(.nan)], redirectTo: nil,
+        captchaToken: nil, pkce: nil)
+    } throws: { error in
+      let error = error as? AuthError
+      return error?.kind == .invalidRequest && error?.underlyingError is EncodingError
+    }
+  }
+
   /// The head of every request the SDK sends.
   func everyRequest() throws -> [HTTPTypes.HTTPRequest] {
     let token = "access-token"

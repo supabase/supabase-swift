@@ -73,6 +73,41 @@ final class RealtimeChannelBroadcastTests: Sendable {
     serverTask.setValue(task)
   }
 
+  static func isInvalidRequest(_ error: any Error) -> Bool {
+    (error as? RealtimeError)?.kind == .invalidRequest
+      && (error as? RealtimeError)?.underlyingError != nil
+  }
+
+  @Test
+  func broadcastOfAPayloadThatIsNotAnObjectIsAnInvalidRequest() async {
+    let channel = await sut.channel("test")
+
+    await #expect {
+      try await channel.broadcast(event: "my_event", payload: 42)
+    } throws: { Self.isInvalidRequest($0) }
+  }
+
+  @Test
+  func trackOfAPayloadThatIsNotAnObjectIsAnInvalidRequest() async {
+    let channel = await sut.channel("test")
+
+    await #expect {
+      try await channel.track(42)
+    } throws: { Self.isInvalidRequest($0) }
+  }
+
+  @Test
+  func httpSendOfAPayloadThatCannotBeEncodedIsAnInvalidRequest() async {
+    let channel = await sut.channel("test")
+
+    await #expect {
+      try await channel.httpSend(event: "my_event", payload: ["value": Double.nan])
+    } throws: { error in
+      Self.isInvalidRequest(error) && (error as? RealtimeError)?.underlyingError is EncodingError
+    }
+    #expect(http.requests.isEmpty)
+  }
+
   @Test
   func broadcast_sendsJsonViaBinaryFrame() async throws {
     setupServerAutoResponder()

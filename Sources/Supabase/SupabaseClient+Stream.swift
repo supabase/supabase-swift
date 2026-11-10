@@ -35,7 +35,8 @@ extension SupabaseClient {
   /// The filter applies to the fetch and to the changes, so it takes only what Realtime can run:
   /// `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`,
   /// `isDistinct` and the `IS` checks, on stored columns, with `!` on one condition and `&&`.
-  /// Any other filter is a programmer error and traps.
+  /// Any other filter ends the stream with a ``RealtimeError`` of kind
+  /// ``RealtimeError/Kind-swift.struct/invalidRequest`` before it opens a channel.
   ///
   /// > Note: Realtime checks the filter against the new row only. An update that moves a row out
   /// > of the filter does not reach the stream, so the row stays until the next fetch. Realtime
@@ -85,7 +86,7 @@ extension SupabaseClient {
     filter: _PostgrestFilter<R>?
   ) -> AsyncThrowingStream<LiveQueryUpdate<R>, any Error> {
     makeLiveQueryUpdates { [self] in
-      await liveQuerySource(for: R.self, filter: filter)
+      try await liveQuerySource(for: R.self, filter: filter)
     }
   }
 
@@ -97,8 +98,8 @@ extension SupabaseClient {
     for _: R.Type,
     filter: _PostgrestFilter<R>?,
     pageSize: Int = 1000
-  ) async -> LiveQuerySource<R> {
-    let realtimeFilter = filter?.realtimeFilter
+  ) async throws -> LiveQuerySource<R> {
+    let realtimeFilter = try filter?.realtimeFilter
     var bindings = [
       PostgresJoinConfig(
         event: .all, schema: R.schema, table: R.relationName, filter: realtimeFilter)

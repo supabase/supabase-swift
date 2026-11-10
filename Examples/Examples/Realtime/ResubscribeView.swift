@@ -93,10 +93,10 @@ struct ResubscribeView: View {
 
   func observeTodos() async {
     let channel = await supabaseClient.channel(channelName)
-    let changes = await channel.postgresChanges(of: Todo.self)
     let events = await channel.events()
 
     do {
+      let changes = try await channel.postgresChanges(of: Todo.self)
       error = nil
       try await channel.subscribe()
       await reload()

@@ -195,11 +195,17 @@ struct LiveQuerySource<R: Sendable>: Sendable {
 /// Runs a live query: subscribes, fetches, then applies changes until the iteration ends or the
 /// query fails. The channel is removed either way.
 func makeLiveQueryUpdates<R: Sendable>(
-  _ makeSource: @escaping @Sendable () async -> LiveQuerySource<R>
+  _ makeSource: @escaping @Sendable () async throws -> LiveQuerySource<R>
 ) -> AsyncThrowingStream<LiveQueryUpdate<R>, any Error> {
   let (updates, output) = AsyncThrowingStream<LiveQueryUpdate<R>, any Error>.makeStream()
   let task = Task {
-    let source = await makeSource()
+    let source: LiveQuerySource<R>
+    do {
+      source = try await makeSource()
+    } catch {
+      output.finish(throwing: error)
+      return
+    }
     do {
       try await runLiveQuery(source, output: output)
       output.finish()

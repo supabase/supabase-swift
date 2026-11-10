@@ -109,6 +109,19 @@ extension AuthAPI {
     return AuthRequest(head: head, body: body, decodeBody: decode)
   }
 
+  /// Encodes a request body as JSON.
+  ///
+  /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/invalidRequest`` when
+  ///   `value` does not encode.
+  func encodeBody(_ value: some Encodable) throws -> Data {
+    do {
+      return try encoder.encode(value)
+    } catch {
+      throw AuthError.invalidRequest(
+        "The request body cannot be encoded as JSON.", underlyingError: error)
+    }
+  }
+
   func decodingSession() -> @Sendable (HTTPResponse, Data) throws -> Session {
     decoding(Session.self) { [now] in $0.received(at: now()) }
   }
@@ -164,7 +177,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
           email: email,
           password: password,
@@ -187,7 +200,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup",
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
           password: password,
           phone: phone,
@@ -208,7 +221,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "signup",
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
           data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
@@ -226,7 +239,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "password",
-      body: encoder.encode(
+      body: encodeBody(
         UserCredentials(
           email: email,
           password: password,
@@ -247,7 +260,7 @@ extension AuthAPI {
     try token(
       grantType: "id_token",
       authorization: accessToken.map(bearer),
-      body: encoder.encode(
+      body: encodeBody(
         IDTokenBody(
           provider: credentials.provider.rawValue,
           idToken: credentials.idToken,
@@ -264,7 +277,7 @@ extension AuthAPI {
   func signInWithWeb3(credentials: Web3Credentials) throws -> AuthRequest<Session> {
     try token(
       grantType: "web3",
-      body: encoder.encode(
+      body: encodeBody(
         Web3Body(
           chain: credentials.chain,
           message: credentials.message,
@@ -282,7 +295,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "pkce",
-      body: encoder.encode(["auth_code": authCode, "code_verifier": codeVerifier]),
+      body: encodeBody(["auth_code": authCode, "code_verifier": codeVerifier]),
       decode: decodingSession()
     )
   }
@@ -290,7 +303,7 @@ extension AuthAPI {
   func refreshSession(refreshToken: String) throws -> AuthRequest<Session> {
     try token(
       grantType: "refresh_token",
-      body: encoder.encode(UserCredentials(refreshToken: refreshToken)),
+      body: encodeBody(UserCredentials(refreshToken: refreshToken)),
       decode: decodingSession()
     )
   }
@@ -312,7 +325,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Void> {
     try request(
       .post, "otp", query: redirectQuery(options.redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         OTPParams(
           email: email,
           createUser: options.shouldCreateUser,
@@ -329,7 +342,7 @@ extension AuthAPI {
   func signInWithOTP(phone: String, options: PhoneOTPOptions) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "otp",
-      body: encoder.encode(
+      body: encodeBody(
         OTPParams(
           phone: phone,
           createUser: options.shouldCreateUser,
@@ -350,7 +363,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
-      body: encoder.encode(
+      body: encodeBody(
         VerifyOTPParams.email(VerifyEmailOTPParams(email: email, token: token, type: type))
       ),
       decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
@@ -364,7 +377,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "verify",
-      body: encoder.encode(
+      body: encodeBody(
         VerifyOTPParams.phone(VerifyPhoneOTPParams(phone: phone, token: token, type: type))
       ),
       decode: decodingSession()
@@ -374,7 +387,7 @@ extension AuthAPI {
   func verifyOTP(tokenHash: String, type: EmailOTPType) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
-      body: encoder.encode(
+      body: encodeBody(
         VerifyOTPParams.tokenHash(VerifyTokenHashParams(tokenHash: tokenHash, type: type))
       ),
       decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
@@ -390,7 +403,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Void> {
     try request(
       .post, "resend", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         ResendEmailParams(
           type: type,
           email: email,
@@ -410,7 +423,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "resend",
-      body: encoder.encode(
+      body: encodeBody(
         ResendPhoneParams(
           type: type,
           phone: phone,
@@ -429,7 +442,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Void> {
     try request(
       .post, "recover", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         RecoverParams(
           email: email,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -464,7 +477,7 @@ extension AuthAPI {
       }
     return try request(
       .post, "sso",
-      body: encoder.encode(
+      body: encodeBody(
         SignInWithSSORequest(
           providerID: providerID,
           domain: domain,
@@ -523,7 +536,8 @@ extension AuthAPI {
     skipHTTPRedirect: Bool
   ) throws -> URL {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      throw URLError(.badURL)
+      throw AuthError.invalidRequest(
+        "The sign-in URL cannot be built from \(url).", underlyingError: URLError(.badURL))
     }
 
     var queryItems = [URLQueryItem(name: "provider", value: provider.rawValue)]
@@ -551,7 +565,8 @@ extension AuthAPI {
     components.queryItems = queryItems
 
     guard let url = components.url else {
-      throw URLError(.badURL)
+      throw AuthError.invalidRequest(
+        "The sign-in URL cannot be built from \(components).", underlyingError: URLError(.badURL))
     }
 
     return url
@@ -580,7 +595,7 @@ extension AuthAPI {
 
     return try request(
       .put, "user", query: redirectQuery(redirectTo), authorization: bearer(accessToken),
-      body: encoder.encode(user), decode: decoding(User.self))
+      body: encodeBody(user), decode: decoding(User.self))
   }
 
   func unlinkIdentity(_ identity: UserIdentity, accessToken: String) -> AuthRequest<Void> {
@@ -621,7 +636,7 @@ extension AuthAPI {
         .appendingPathComponent(authorizationID)
         .appendingPathComponent("consent"),
       authorization: bearer(accessToken),
-      body: encoder.encode(["action": action]), decode: decoding(OAuthRedirect.self))
+      body: encodeBody(["action": action]), decode: decoding(OAuthRedirect.self))
   }
 
   func oauthGrants(accessToken: String) -> AuthRequest<[OAuthGrant]> {
