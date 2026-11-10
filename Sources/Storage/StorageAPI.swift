@@ -68,7 +68,6 @@ struct StorageAPI: Sendable {
   ///   if the configuration's URL has no scheme, no host, or cannot be split into components.
   init(configuration: StorageClient.Configuration) throws {
     var configuration = configuration
-    configuration.headers = Self.defaultHeaders.merging(with: configuration.headers)
     configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "storage"
 
@@ -122,7 +121,9 @@ struct StorageAPI: Sendable {
     )
 
     var head = request.head
-    head.headerFields = configuration.headers.merging(with: head.headerFields)
+    head.headerFields = Self.defaultHeaders
+      .merging(with: configuration.headers)
+      .merging(with: head.headerFields)
 
     let response: HTTPResponse
     let body: HTTPBody?

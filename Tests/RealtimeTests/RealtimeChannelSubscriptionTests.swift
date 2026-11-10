@@ -538,7 +538,7 @@ struct RealtimeChannelSubscriptionTests {
   func waitForSubscriptionSendsOptionsAndSubscribesOnTheReply() async throws {
     let h = Harness(timeout: .seconds(10))
     let channel = await h.client.channel("room") {
-      $0.postgresChanges.waitForSubscription = true
+      $0.postgresChanges.waitsForSubscription = true
       $0.postgresChanges.subscriptionTimeout = .seconds(15)
     }
     let changes = await channel.postgresChanges(table: "t")
@@ -562,7 +562,7 @@ struct RealtimeChannelSubscriptionTests {
   func serverSideSubscribeTimeoutFailsWithoutRetry() async throws {
     let h = Harness(timeout: Self.noJoinTimeout)
     let channel = await h.client.channel("room") {
-      $0.postgresChanges.waitForSubscription = true
+      $0.postgresChanges.waitsForSubscription = true
     }
     let changes = await channel.postgresChanges(table: "t")
 
@@ -795,7 +795,7 @@ struct RealtimeChannelSubscriptionTests {
 
   @Test(.timeLimit(.minutes(1)))
   func subscribeWithoutAConnectionThrowsAtOnceWhenConnectOnSubscribeIsOff() async throws {
-    let h = Harness(connectOnSubscribe: false)
+    let h = Harness(connectsOnSubscribe: false)
     let channel = await h.client.channel("room")
 
     let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
@@ -886,12 +886,12 @@ struct RealtimeChannelSubscriptionTests {
     #expect(h.connects.value == 1)
   }
 
-  /// With `connectOnSubscribe` off, a socket that drops while the join retries is the client's to
+  /// With `connectsOnSubscribe` off, a socket that drops while the join retries is the client's to
   /// restore: the subscribe keeps retrying instead of failing.
   @Test(.timeLimit(.minutes(1)))
   func aDropWhileRetryingKeepsTheSubscribeGoingWhenConnectOnSubscribeIsOff() async throws {
     let h = Harness(
-      connectOnSubscribe: false,
+      connectsOnSubscribe: false,
       onConnect: { attempt in
         if attempt > 1 { await TestHelpers.Gate().pass() }
       }
@@ -1304,7 +1304,7 @@ struct RealtimeChannelSubscriptionTests {
       timeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout,
       failedConnects: Int = 0,
       connectError: any Error = URLError(.notConnectedToInternet),
-      connectOnSubscribe: Bool = true,
+      connectsOnSubscribe: Bool = true,
       onConnect: @escaping @Sendable (_ attempt: Int) async -> Void = { _ in },
       onAccessToken: @escaping @Sendable (_ call: Int) async -> Void = { _ in }
     ) {
@@ -1321,7 +1321,7 @@ struct RealtimeChannelSubscriptionTests {
           url: URL(string: "http://localhost:54321/realtime/v1")!,
           heartbeatInterval: .seconds(3600),
           requestTimeout: timeout,
-          connectOnSubscribe: connectOnSubscribe,
+          connectsOnSubscribe: connectsOnSubscribe,
           observesAppLifecycle: false,
           accessToken: {
             let call = accessTokenCalls.withValue {

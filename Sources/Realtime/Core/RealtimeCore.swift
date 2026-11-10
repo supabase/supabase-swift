@@ -18,7 +18,7 @@ struct RealtimeCore {
     /// How long a join, a leave, or a push waits for the server's reply.
     var timeout: Duration
     var heartbeatInterval: Duration
-    var connectOnSubscribe: Bool
+    var connectsOnSubscribe: Bool
     var disconnectOnEmptyChannelsAfter: Duration
     /// Whether the app set an `accessToken` callback.
     var hasAccessTokenProvider: Bool

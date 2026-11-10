@@ -33,7 +33,7 @@ extension RealtimeClient {
   /// - ``requestTimeout``
   /// - ``disconnectOnEmptyChannelsAfter``
   /// ### Behavior
-  /// - ``connectOnSubscribe``
+  /// - ``connectsOnSubscribe``
   /// - ``observesAppLifecycle``
   /// - ``monitorsNetworkPath``
   /// ### Logging
@@ -44,12 +44,12 @@ extension RealtimeClient {
   /// ### Default Values
   /// - ``defaultHeartbeatInterval``
   /// - ``defaultRequestTimeout``
-  /// - ``defaultConnectOnSubscribe``
+  /// - ``defaultConnectsOnSubscribe``
   /// - ``defaultDisconnectOnEmptyChannelsAfter``
   /// - ``defaultObservesAppLifecycle``
   /// - ``defaultMonitorsNetworkPath``
   /// ### Initialization
-  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
+  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectsOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
   public struct Configuration: Sendable {
     /// The Realtime server URL, such as `https://<project>.supabase.co/realtime/v1`.
     public var url: URL
@@ -82,7 +82,7 @@ extension RealtimeClient {
 
     /// Whether ``RealtimeChannel/subscribe()`` calls ``RealtimeClient/connect()`` when the client
     /// is not connected.
-    public var connectOnSubscribe: Bool
+    public var connectsOnSubscribe: Bool
 
     /// How long the client keeps the socket open after the last channel is removed.
     ///
@@ -183,7 +183,7 @@ extension RealtimeClient {
     public static let defaultRequestTimeout: Duration = .seconds(10)
 
     /// Default for whether to automatically connect the socket when subscribing to a channel.
-    public static let defaultConnectOnSubscribe: Bool = true
+    public static let defaultConnectsOnSubscribe: Bool = true
 
     /// Defers the WebSocket disconnect after the last channel is removed, giving a window to reuse
     /// the existing connection when switching channels without a reconnect penalty. Defaults to
@@ -221,7 +221,7 @@ extension RealtimeClient {
     ///   - headers: Additional HTTP headers sent with each WebSocket upgrade request.
     ///   - heartbeatInterval: Interval between heartbeat messages. Defaults to ``defaultHeartbeatInterval``.
     ///   - requestTimeout: How long to wait for the server to answer a request. Defaults to ``defaultRequestTimeout``.
-    ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
+    ///   - connectsOnSubscribe: Whether to automatically call ``RealtimeClient/connect()`` when subscribing to a channel. Defaults to ``defaultConnectsOnSubscribe``.
     ///   - disconnectOnEmptyChannelsAfter: How long to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
     ///   - observesAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultObservesAppLifecycle``.
     ///   - monitorsNetworkPath: Whether to reconnect as soon as the network path is satisfied again. Defaults to ``defaultMonitorsNetworkPath``.
@@ -238,7 +238,7 @@ extension RealtimeClient {
       headers: HTTPFields = [:],
       heartbeatInterval: Duration = Self.defaultHeartbeatInterval,
       requestTimeout: Duration = Self.defaultRequestTimeout,
-      connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+      connectsOnSubscribe: Bool = Self.defaultConnectsOnSubscribe,
       disconnectOnEmptyChannelsAfter: Duration = Self.defaultDisconnectOnEmptyChannelsAfter,
       observesAppLifecycle: Bool = Self.defaultObservesAppLifecycle,
       monitorsNetworkPath: Bool = Self.defaultMonitorsNetworkPath,
@@ -253,7 +253,7 @@ extension RealtimeClient {
       self.headers = headers
       self.heartbeatInterval = heartbeatInterval
       self.requestTimeout = requestTimeout
-      self.connectOnSubscribe = connectOnSubscribe
+      self.connectsOnSubscribe = connectsOnSubscribe
       self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
       self.observesAppLifecycle = observesAppLifecycle
       self.monitorsNetworkPath = monitorsNetworkPath

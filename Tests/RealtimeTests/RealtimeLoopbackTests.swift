@@ -32,7 +32,7 @@ import Testing
       #expect(await client.status == .connected)
 
       let channel = await client.channel("room") {
-        $0.broadcast.receiveOwnMessages = true
+        $0.broadcast.receivesOwnMessages = true
       }
       let pings = await channel.broadcasts(event: "ping")
       try await channel.subscribe()

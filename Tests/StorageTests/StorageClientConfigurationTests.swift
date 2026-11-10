@@ -174,6 +174,21 @@ struct StorageClientConfigurationTests {
   }
 
   @Test
+  func configurationKeepsTheHeadersItWasCreatedWith() async throws {
+    let requests = LockIsolated<[HTTPRequest]>([])
+    let storage = try makeSUT(headers: [:], requests: requests)
+
+    #expect(storage.configuration.headers.isEmpty)
+
+    _ = try await storage.listBuckets()
+
+    #expect(
+      requests.value.first?.headerFields[.xClientInfo]
+        == "storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
+    )
+  }
+
+  @Test
   func xClientInfoIsMatchedCaseInsensitively() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let storage = try makeSUT(headers: [.init("x-client-info")!: "my-app/1.0"], requests: requests)

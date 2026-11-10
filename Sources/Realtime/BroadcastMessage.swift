@@ -34,6 +34,19 @@ public struct BroadcastMessage: Sendable, Hashable {
   /// Whether the server replayed this message from history when the channel joined.
   public var isReplayed: Bool
 
+  /// Creates a ``BroadcastMessage``.
+  public init(
+    event: String,
+    payload: BroadcastPayload,
+    id: UUID? = nil,
+    isReplayed: Bool = false
+  ) {
+    self.event = event
+    self.payload = payload
+    self.id = id
+    self.isReplayed = isReplayed
+  }
+
   /// Decodes the payload as `T`. A ``BroadcastPayload/binary(_:)`` payload is read as JSON.
   ///
   /// - Parameters:

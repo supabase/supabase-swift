@@ -16,7 +16,7 @@ public import Foundation
 /// ```swift
 /// let channel = await client.channel("room:lobby") { config in
 ///   config.isPrivate = true
-///   config.broadcast.receiveOwnMessages = true
+///   config.broadcast.receivesOwnMessages = true
 /// }
 /// ```
 ///
@@ -56,14 +56,14 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
   /// Broadcast options of a channel.
   public struct Broadcast: Sendable, Hashable {
     /// Whether the server sends this client's own broadcasts back to it. Defaults to `false`.
-    public var receiveOwnMessages = false
+    public var receivesOwnMessages = false
 
     /// Whether ``RealtimeChannel/broadcast(event:payload:encoder:)`` waits for the server to
     /// acknowledge each message. Defaults to `false`.
     ///
     /// On a private channel the server does not reply when row level security denies the write,
     /// so a denied broadcast fails with a timeout.
-    public var acknowledge = false
+    public var acknowledgesMessages = false
 
     /// The messages the server replays from history when the channel joins. Private channels
     /// only. Defaults to `nil`, which replays nothing.
@@ -74,7 +74,7 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// Listen for it with ``RealtimeChannel/events()``: it emits
     /// ``RealtimeChannelEvent/replicationReady``, or ``RealtimeChannelEvent/replicationFailed(_:)``
     /// when the connection is not ready in time. Defaults to `false`.
-    public var waitForReplication = false
+    public var waitsForReplication = false
 
     /// Creates broadcast options with every option off.
     public init() {}
@@ -128,12 +128,12 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// `true`, the server waits before it replies to the join, and the join timeout grows by
     /// ``subscriptionTimeout``. When `false`, the server replies at once and the SDK then waits
     /// for the server's "Subscribed to PostgreSQL" message.
-    public var waitForSubscription = false
+    public var waitsForSubscription = false
 
     /// How long ``RealtimeChannel/subscribe()`` waits for the Postgres changes bindings to be set
     /// up, after the join itself. Defaults to 15 seconds.
     ///
-    /// When ``waitForSubscription`` is on, the server caps this value.
+    /// When ``waitsForSubscription`` is on, the server caps this value.
     public var subscriptionTimeout: Duration = .seconds(15)
 
     /// Creates Postgres changes options with the defaults.

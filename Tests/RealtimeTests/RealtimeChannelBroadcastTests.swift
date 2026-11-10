@@ -395,7 +395,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     }
 
     let channel = await sut.channel("test") { config in
-      config.broadcast.acknowledge = true
+      config.broadcast.acknowledgesMessages = true
     }
 
     let error = await #expect(throws: RealtimeError.self) {

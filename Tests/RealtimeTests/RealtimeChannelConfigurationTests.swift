@@ -15,12 +15,12 @@ struct RealtimeChannelConfigurationTests {
     let configuration = RealtimeChannelConfiguration()
 
     #expect(!configuration.isPrivate)
-    #expect(!configuration.broadcast.receiveOwnMessages)
-    #expect(!configuration.broadcast.acknowledge)
+    #expect(!configuration.broadcast.receivesOwnMessages)
+    #expect(!configuration.broadcast.acknowledgesMessages)
     #expect(configuration.broadcast.replay == nil)
-    #expect(!configuration.broadcast.waitForReplication)
+    #expect(!configuration.broadcast.waitsForReplication)
     #expect(configuration.presence.key == nil)
-    #expect(!configuration.postgresChanges.waitForSubscription)
+    #expect(!configuration.postgresChanges.waitsForSubscription)
     #expect(configuration.postgresChanges.subscriptionTimeout == .seconds(15))
   }
 
@@ -49,8 +49,8 @@ struct RealtimeChannelConfigurationTests {
 
   @Test
   func sameConfigurationReportsNoIssue() async {
-    let first = await client.channel("room") { $0.broadcast.acknowledge = true }
-    let second = await client.channel("room") { $0.broadcast.acknowledge = true }
+    let first = await client.channel("room") { $0.broadcast.acknowledgesMessages = true }
+    let second = await client.channel("room") { $0.broadcast.acknowledgesMessages = true }
 
     #expect(first === second)
   }

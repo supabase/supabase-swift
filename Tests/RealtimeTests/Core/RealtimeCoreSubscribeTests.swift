@@ -96,7 +96,7 @@ struct RealtimeCoreSubscribeTests {
   func joinTimeoutIncludesTheServerPostgresWait() throws {
     var harness = CoreHarness.connected()
     var configuration = RealtimeChannelConfiguration()
-    configuration.postgresChanges.waitForSubscription = true
+    configuration.postgresChanges.waitsForSubscription = true
     configuration.postgresChanges.subscriptionTimeout = .seconds(15)
     let snapshot = JoinSnapshot(
       bindings: [PostgresJoinConfig(event: .all, schema: "public")], presenceEnabled: false)
@@ -339,7 +339,7 @@ struct RealtimeCoreSubscribeTests {
   @Test
   func subscribeWhileDisconnectedWithoutConnectOnSubscribeFails() {
     var options = RealtimeCore.Options.test
-    options.connectOnSubscribe = false
+    options.connectsOnSubscribe = false
     var harness = CoreHarness(options: options)
     let w = harness.waiter()
 

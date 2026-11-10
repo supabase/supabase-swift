@@ -70,8 +70,10 @@ Changes that still compile but behave differently. Check each one by hand.
 - **`X-Client-Info` names the platform in every module.** A standalone client now sends
   `<module>-swift/<version>; platform=…; platform-version=…; runtime=swift; runtime-version=…`, as
   `SupabaseClient` already did. A standalone `RealtimeClient` also sends this value as the `version`
-  of each channel join. An `X-Client-Info` header that you set still wins. Search for code that
-  parses this header, for example in a middleware or on your server.
+  of each channel join. An `X-Client-Info` header that you set still wins. On Linux and Android,
+  `platform-version` is now the kernel release (for example `6.8.0-45-generic`), not the whole
+  `/proc/version` line. Parameter values are trimmed, a value that is empty after trimming is left
+  out, and `;`, `%` and characters outside printable ASCII are percent-encoded. Search for code that parses this header, for example in a middleware or on your server.
 
 ### Renames and type changes
 

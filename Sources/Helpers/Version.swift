@@ -45,15 +45,20 @@ private let _platformVersion: String? = {
     let patchVersion = ProcessInfo.processInfo.operatingSystemVersion.patchVersion
     return "\(majorVersion).\(minorVersion).\(patchVersion)"
   #elseif os(Linux) || os(Android)
-    if let version = try? String(contentsOfFile: "/proc/version") {
-      return version.trimmingCharacters(in: .whitespacesAndNewlines)
-    } else {
-      return nil
-    }
+    guard let procVersion = try? String(contentsOfFile: "/proc/version") else { return nil }
+    return kernelRelease(procVersion: procVersion)
   #else
     nil
   #endif
 }()
+
+/// The kernel release in a `/proc/version` line, such as `6.8.0-45-generic` in
+/// `Linux version 6.8.0-45-generic (builder@host) ...`. `nil` when the line has another shape.
+package func kernelRelease(procVersion: String) -> String? {
+  let fields = procVersion.split(whereSeparator: \.isWhitespace)
+  guard fields.count >= 3, fields[0] == "Linux", fields[1] == "version" else { return nil }
+  return String(fields[2])
+}
 
 #if DEBUG
   package let platform = isTesting ? "macOS" : _platform

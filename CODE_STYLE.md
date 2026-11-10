@@ -51,7 +51,7 @@ These rules add to the Swift API Design Guidelines. They make the same idea read
 
 ## Models
 
-- A public response or model struct has `public var` stored properties and a public memberwise init, so apps can build fixtures and previews. Do not mix `let` and `var` in one type.
+- A public response or model struct has `public var` stored properties and a public memberwise init, so apps can build fixtures and previews. Do not mix `let` and `var` in one type. Two cases are exempt because a public memberwise init would break an invariant: `Nonce` (`hashed` is the SHA-256 of `raw`) and `TypedPostgresChange` (it holds the decoder that the SDK sets).
 - A response wrapper uses `status: HTTPResponse.Status`, `headers: HTTPFields`, `body` (`Data` or `HTTPBody`), and `requestID: String?`.
 - A per-call `encoder:` or `decoder:` parameter is `JSONEncoder?` or `JSONDecoder?` with a default of `nil`. `nil` means the client's configured coder. Do not expose shared static coder instances.
 

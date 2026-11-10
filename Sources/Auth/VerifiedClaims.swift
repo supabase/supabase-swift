@@ -6,62 +6,106 @@ import Helpers
 ///
 /// Registered and Supabase claims have typed properties. Every other claim, such as one that a
 /// custom access token hook adds, is in ``additionalClaims``.
+///
+/// - Note: The public initializer is for fixtures and previews. A value you build yourself did not
+///   go through verification, so never treat it as proof that a token is valid.
 public struct VerifiedClaims: Sendable, Hashable {
   /// The subject (`sub` claim), which is the user's ID.
-  public let subject: String
+  public var subject: String
 
   /// The issuer (`iss` claim), which is the URL of the Auth server that issued the token.
-  public let issuer: String?
+  public var issuer: String?
 
   /// The audience (`aud` claim). A single string audience becomes a one-element array, and an
   /// absent claim becomes an empty array.
-  public let audience: [String]
+  public var audience: [String]
 
   /// The expiration time (`exp` claim).
-  public let expiresAt: Date
+  public var expiresAt: Date
 
   /// The time the token was issued (`iat` claim).
-  public let issuedAt: Date?
+  public var issuedAt: Date?
 
   /// The time before which the token is not valid (`nbf` claim).
-  public let notBefore: Date?
+  public var notBefore: Date?
 
   /// The Postgres role of the token (`role` claim), for example `"authenticated"`.
-  public let role: String?
+  public var role: String?
 
   /// The user's email address (`email` claim).
-  public let email: String?
+  public var email: String?
 
   /// The user's phone number (`phone` claim).
-  public let phone: String?
+  public var phone: String?
 
   /// The Authenticator Assurance Level of the session (`aal` claim).
-  public let assuranceLevel: AuthenticatorAssuranceLevel?
+  public var assuranceLevel: AuthenticatorAssuranceLevel?
 
   /// The authentication methods of the session (`amr` claim). A bare method string has no time
   /// of its own, so its entry takes the token's `iat`.
-  public let amr: [AMREntry]
+  public var amr: [AMREntry]
 
   /// The ID of the session that the token belongs to (`session_id` claim).
-  public let sessionID: String?
+  public var sessionID: String?
 
   /// Whether the user signed in anonymously (`is_anonymous` claim).
-  public let isAnonymous: Bool?
+  public var isAnonymous: Bool?
 
   /// The user's app metadata (`app_metadata` claim). It is empty when the claim is absent.
-  public let appMetadata: JSONObject
+  public var appMetadata: JSONObject
 
   /// The user's metadata (`user_metadata` claim). It is empty when the claim is absent.
-  public let userMetadata: JSONObject
+  public var userMetadata: JSONObject
 
   /// Every claim that has no typed property in this type, keyed by its name in the token.
-  public let additionalClaims: JSONObject
+  public var additionalClaims: JSONObject
 
   /// The decoded header of the token.
-  public let header: JWTHeader
+  public var header: JWTHeader
 
   /// The raw signature bytes of the token.
-  public let signature: Data
+  public var signature: Data
+
+  /// Creates a ``VerifiedClaims``.
+  public init(
+    subject: String,
+    issuer: String? = nil,
+    audience: [String],
+    expiresAt: Date,
+    issuedAt: Date? = nil,
+    notBefore: Date? = nil,
+    role: String? = nil,
+    email: String? = nil,
+    phone: String? = nil,
+    assuranceLevel: AuthenticatorAssuranceLevel? = nil,
+    amr: [AMREntry],
+    sessionID: String? = nil,
+    isAnonymous: Bool? = nil,
+    appMetadata: JSONObject,
+    userMetadata: JSONObject,
+    additionalClaims: JSONObject,
+    header: JWTHeader,
+    signature: Data
+  ) {
+    self.subject = subject
+    self.issuer = issuer
+    self.audience = audience
+    self.expiresAt = expiresAt
+    self.issuedAt = issuedAt
+    self.notBefore = notBefore
+    self.role = role
+    self.email = email
+    self.phone = phone
+    self.assuranceLevel = assuranceLevel
+    self.amr = amr
+    self.sessionID = sessionID
+    self.isAnonymous = isAnonymous
+    self.appMetadata = appMetadata
+    self.userMetadata = userMetadata
+    self.additionalClaims = additionalClaims
+    self.header = header
+    self.signature = signature
+  }
 }
 
 extension VerifiedClaims {

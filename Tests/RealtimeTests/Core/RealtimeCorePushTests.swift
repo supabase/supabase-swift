@@ -284,7 +284,7 @@ struct RealtimeCorePushTests {
 
   static var acknowledged: RealtimeChannelConfiguration {
     var configuration = RealtimeChannelConfiguration()
-    configuration.broadcast.acknowledge = true
+    configuration.broadcast.acknowledgesMessages = true
     return configuration
   }
 

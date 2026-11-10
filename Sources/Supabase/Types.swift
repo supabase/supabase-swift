@@ -126,6 +126,10 @@ extension SupabaseClient {
       /// ``AuthClient/Configuration/observesAppLifecycle``.
       public var observesAppLifecycle: Bool
 
+      /// Whether to automatically retry transient Auth errors on `GET` requests. Defaults to
+      /// `true`. See ``AuthClient/Configuration/retryEnabled``.
+      public var retryEnabled: Bool
+
       /// Overrides ``SupabaseClient/Configuration/Global/http`` for Auth, field by field: a `nil`
       /// transport or timeout falls back to the global one, and its middlewares run after the
       /// global ones. `nil` uses the global configuration as is.
@@ -160,6 +164,7 @@ extension SupabaseClient {
       ///   - http: Overrides the global HTTP settings for Auth requests, field by field. `nil`
       ///     uses the global value.
       ///   - logger: Overrides the global logger for Auth. `nil` uses the global value.
+      ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
       ///   - clock: Overrides the global clock for Auth. `nil` uses the global value.
       ///   - accessToken: A third-party token source. When set, ``SupabaseClient/auth`` cannot be
       ///     used.
@@ -171,6 +176,7 @@ extension SupabaseClient {
         observesAppLifecycle: Bool = true,
         http: HTTPClientConfiguration? = nil,
         logger: Logging.Logger? = nil,
+        retryEnabled: Bool = true,
         clock: (any Clock<Duration>)? = nil,
         accessToken: (@Sendable () async throws -> String?)? = nil
       ) {
@@ -179,6 +185,7 @@ extension SupabaseClient {
         self.storageKey = storageKey
         self.autoRefresh = autoRefresh
         self.observesAppLifecycle = observesAppLifecycle
+        self.retryEnabled = retryEnabled
         self.http = http
         self.logger = logger
         self.clock = clock
@@ -349,8 +356,8 @@ extension SupabaseClient {
       public var requestTimeout: Duration
 
       /// Whether subscribing to a channel connects the client. See
-      /// ``RealtimeClient/Configuration/connectOnSubscribe``.
-      public var connectOnSubscribe: Bool
+      /// ``RealtimeClient/Configuration/connectsOnSubscribe``.
+      public var connectsOnSubscribe: Bool
 
       /// How long the client keeps the socket open after the last channel is removed. See
       /// ``RealtimeClient/Configuration/disconnectOnEmptyChannelsAfter``.
@@ -390,7 +397,7 @@ extension SupabaseClient {
       ///     over the global headers.
       ///   - heartbeatInterval: How often the client sends a heartbeat.
       ///   - requestTimeout: How long a push waits for the server reply.
-      ///   - connectOnSubscribe: Whether subscribing to a channel connects the socket.
+      ///   - connectsOnSubscribe: Whether subscribing to a channel connects the socket.
       ///   - disconnectOnEmptyChannelsAfter: How long the socket stays open with no channels.
       ///   - observesAppLifecycle: Whether the client follows the app lifecycle.
       ///   - monitorsNetworkPath: Whether the client reconnects when the network comes back.
@@ -404,7 +411,7 @@ extension SupabaseClient {
         headers: HTTPFields = [:],
         heartbeatInterval: Duration = RealtimeClient.Configuration.defaultHeartbeatInterval,
         requestTimeout: Duration = RealtimeClient.Configuration.defaultRequestTimeout,
-        connectOnSubscribe: Bool = RealtimeClient.Configuration.defaultConnectOnSubscribe,
+        connectsOnSubscribe: Bool = RealtimeClient.Configuration.defaultConnectsOnSubscribe,
         disconnectOnEmptyChannelsAfter: Duration = RealtimeClient.Configuration
           .defaultDisconnectOnEmptyChannelsAfter,
         observesAppLifecycle: Bool = RealtimeClient.Configuration.defaultObservesAppLifecycle,
@@ -418,7 +425,7 @@ extension SupabaseClient {
         self.headers = headers
         self.heartbeatInterval = heartbeatInterval
         self.requestTimeout = requestTimeout
-        self.connectOnSubscribe = connectOnSubscribe
+        self.connectsOnSubscribe = connectsOnSubscribe
         self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
         self.observesAppLifecycle = observesAppLifecycle
         self.monitorsNetworkPath = monitorsNetworkPath

@@ -526,8 +526,8 @@ supporting_symbols:
   - RealtimeClient.Configuration.headers
   - RealtimeClient.Configuration.http
   - RealtimeClient.Configuration.defaultRequestTimeout
-  - RealtimeClient.Configuration.connectOnSubscribe
-  - RealtimeClient.Configuration.defaultConnectOnSubscribe
+  - RealtimeClient.Configuration.connectsOnSubscribe
+  - RealtimeClient.Configuration.defaultConnectsOnSubscribe
   # The configuration type itself, its url, and the client's copy of it.
   - RealtimeClient.Configuration
   - RealtimeClient.Configuration.url
@@ -559,6 +559,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Auth
   - SupabaseClient.Configuration.Auth.redirectTo
   - SupabaseClient.Configuration.Auth.storageKey
+  - SupabaseClient.Configuration.Auth.retryEnabled
   - SupabaseClient.Configuration.Auth.init
   - SupabaseClient.Configuration.Global
   - SupabaseClient.Configuration.Global.logger
@@ -573,7 +574,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.headers
   - SupabaseClient.Configuration.Realtime.heartbeatInterval
   - SupabaseClient.Configuration.Realtime.requestTimeout
-  - SupabaseClient.Configuration.Realtime.connectOnSubscribe
+  - SupabaseClient.Configuration.Realtime.connectsOnSubscribe
   - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
   - SupabaseClient.Configuration.Realtime.observesAppLifecycle
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
@@ -820,6 +821,7 @@ features:
       - ClaimsOptions.init
       - ClaimsOptions.jwks
       - VerifiedClaims
+      - VerifiedClaims.init
       - VerifiedClaims.additionalClaims
       - VerifiedClaims.amr
       - VerifiedClaims.appMetadata
@@ -1003,6 +1005,7 @@ features:
       - AuthMFA.factors
     supporting_symbols:
       - MFAFactors
+      - MFAFactors.init
       - MFAFactors.verified
       - MFAFactors.unverified
       - MFAFactors.all
@@ -1024,6 +1027,7 @@ features:
       - AuthMFA.assuranceLevel
     supporting_symbols:
       - AssuranceLevelInfo
+      - AssuranceLevelInfo.init
       - AssuranceLevelInfo.currentLevel
       - AssuranceLevelInfo.nextLevel
       - AssuranceLevelInfo.currentAuthenticationMethods
@@ -1033,6 +1037,7 @@ features:
       - AuthenticatorAssuranceLevel.aal1
       - AuthenticatorAssuranceLevel.aal2
       - AMREntry
+      - AMREntry.init
       - AMREntry.method
       - AMREntry.timestamp
       - AuthenticationMethod
@@ -1135,6 +1140,7 @@ features:
       - AuthAdminClient.users
     supporting_symbols:
       - UserPage
+      - UserPage.init
       - UserPage.users
       - UserPage.audience
       - UserPage.nextPage
@@ -2040,7 +2046,7 @@ features:
       - RealtimeChannelStatus.failed
       - RealtimeChannelEvent
       - RealtimeChannelEvent.resubscribed
-      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.waitsForSubscription
       - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
     status: implemented
@@ -2058,10 +2064,11 @@ features:
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.waitForReplication
+      - RealtimeChannelConfiguration.Broadcast.waitsForReplication
       - RealtimeChannel.broadcasts
     supporting_symbols:
       - BroadcastMessage
+      - BroadcastMessage.init
       - BroadcastMessage.event
       - BroadcastMessage.payload
       - BroadcastMessage.id
@@ -2085,6 +2092,7 @@ features:
       - PostgresChangeEvent.delete
       - PostgresChangeEvent.all
       - PostgresChange
+      - PostgresChange.init
       - PostgresChange.kind
       - PostgresChange.schema
       - PostgresChange.table
@@ -2100,9 +2108,11 @@ features:
       - PostgresChange.Kind.update
       - PostgresChange.Kind.delete
       - PostgresColumn
+      - PostgresColumn.init
       - PostgresColumn.name
       - PostgresColumn.type
       - PostgresRow
+      - PostgresRow.init
       - PostgresRow.values
       - PostgresRow.subscript
       - PostgresRow.decode
@@ -2165,11 +2175,11 @@ features:
   realtime.subscriptions.broadcast_self:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
+      - RealtimeChannelConfiguration.Broadcast.receivesOwnMessages
   realtime.subscriptions.broadcast_ack:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.acknowledge
+      - RealtimeChannelConfiguration.Broadcast.acknowledgesMessages
   realtime.subscriptions.broadcast_replay:
     status: implemented
     symbols:
@@ -2572,6 +2582,7 @@ features:
     symbols:
       - StorageBucket.createSignedUploadURL
       - SignedUploadURL
+      - SignedUploadURL.init
       - SignedUploadURL.path
       - SignedUploadURL.signedURL
       - SignedUploadURL.token

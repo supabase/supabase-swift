@@ -1592,22 +1592,39 @@ public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
 /// An MFA Factor.
 public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// ID of the factor.
-  public let id: UUID
+  public var id: UUID
 
   /// Friendly name of the factor, useful to disambiguate between multiple factors.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// Type of factor.
-  public let factorType: FactorType
+  public var factorType: FactorType
 
   /// Factor's status.
-  public let status: FactorStatus
+  public var status: FactorStatus
 
   /// Timestamp when the factor was created.
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// Timestamp when the factor was last updated.
-  public let updatedAt: Date
+  public var updatedAt: Date
+
+  /// Creates a ``Factor``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    factorType: FactorType,
+    status: FactorStatus,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.factorType = factorType
+    self.status = status
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -1653,21 +1670,36 @@ struct MFAEnrollParams: Encodable, Sendable {
 /// ``AuthMFA/challengeAndVerify(factorID:code:)``.
 public struct TOTPEnrollment: Identifiable, Hashable, Sendable {
   /// ID of the new factor.
-  public let id: UUID
+  public var id: UUID
 
   /// Friendly name of the factor, useful to tell several factors apart.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// A QR code that encodes ``uri``, as an SVG document. Display it by prefixing
   /// `data:image/svg+xml;utf-8,`. Avoid logging this value.
-  public let qrCode: String
+  public var qrCode: String
 
   /// The TOTP secret, also encoded in the QR code. Show it in a password-style field for users who
   /// cannot scan the QR code. Avoid logging this value.
-  public let secret: String
+  public var secret: String
 
   /// The `otpauth://` URI encoded in the QR code. Avoid logging this value.
-  public let uri: String
+  public var uri: String
+
+  /// Creates a ``TOTPEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    qrCode: String,
+    secret: String,
+    uri: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.qrCode = qrCode
+    self.secret = secret
+    self.uri = uri
+  }
 }
 
 extension TOTPEnrollment: Decodable {
@@ -1708,13 +1740,24 @@ extension TOTPEnrollment: Decodable {
 /// ``AuthMFA/challenge(factorID:channel:)`` in ``AuthMFA/verify(factorID:challengeID:code:)``.
 public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
   /// ID of the new factor.
-  public let id: UUID
+  public var id: UUID
 
   /// Friendly name of the factor, useful to tell several factors apart.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// The phone number of the factor, in E.164 format.
-  public let phone: String
+  public var phone: String
+
+  /// Creates a ``PhoneEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    phone: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.phone = phone
+  }
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -1726,16 +1769,40 @@ public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
 /// A challenge created by ``AuthMFA/challenge(factorID:channel:)``.
 public struct MFAChallenge: Identifiable, Hashable, Sendable {
   /// ID of the challenge. Pass it to ``AuthMFA/verify(factorID:challengeID:code:)``.
-  public let id: UUID
+  public var id: UUID
 
   /// The type of the factor that was challenged.
-  public let factorType: FactorType
+  public var factorType: FactorType
 
   /// The time after which the challenge can no longer be verified.
-  public let expiresAt: Date
+  public var expiresAt: Date
 
   /// WebAuthn credential options. Present only when ``factorType`` is ``FactorType/webAuthn``.
   @_spi(Experimental) public var webauthn: WebAuthnChallengeResponseData? = nil
+
+  /// Creates a ``MFAChallenge``.
+  public init(
+    id: UUID,
+    factorType: FactorType,
+    expiresAt: Date
+  ) {
+    self.id = id
+    self.factorType = factorType
+    self.expiresAt = expiresAt
+  }
+
+  /// Creates a ``MFAChallenge`` with the WebAuthn credential options of a `webauthn` factor.
+  @_spi(Experimental) public init(
+    id: UUID,
+    factorType: FactorType,
+    expiresAt: Date,
+    webauthn: WebAuthnChallengeResponseData?
+  ) {
+    self.id = id
+    self.factorType = factorType
+    self.expiresAt = expiresAt
+    self.webauthn = webauthn
+  }
 }
 
 extension MFAChallenge: Decodable {
@@ -1761,37 +1828,68 @@ extension MFAChallenge: Decodable {
 /// The response returned after successfully unenrolling an MFA factor.
 public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
   /// ID of the factor that was successfully unenrolled.
-  public let id: UUID
+  public var id: UUID
+
+  /// Creates an ``AuthMFAUnenrollResponse``.
+  public init(
+    id: UUID
+  ) {
+    self.id = id
+  }
 }
 
 /// The response returned by ``AuthMFARecoveryCodes/status()``.
 public struct AuthMFARecoveryCodesStatusResponse: Decodable, Hashable, Sendable {
   /// ID of the recovery codes factor, as it appears in ``User/factors``.
-  public let id: UUID
+  public var id: UUID
 
   /// Number of codes in the current set.
-  public let total: Int
+  public var total: Int
 
   /// Number of codes in the current set that have not been used yet. Zero when every code has been
   /// consumed.
-  public let remaining: Int
+  public var remaining: Int
+
+  /// Creates an ``AuthMFARecoveryCodesStatusResponse``.
+  public init(
+    id: UUID,
+    total: Int,
+    remaining: Int
+  ) {
+    self.id = id
+    self.total = total
+    self.remaining = remaining
+  }
 }
 
 /// The response returned by ``AuthMFARecoveryCodes/generate(friendlyName:)`` and
 /// ``AuthMFARecoveryCodes/regenerate()``.
 public struct AuthMFARecoveryCodesGenerateResponse: Decodable, Hashable, Sendable {
   /// ID of the recovery codes factor.
-  public let id: UUID
+  public var id: UUID
 
   /// Friendly name of the recovery codes factor.
   public var friendlyName: String?
 
   /// Number of codes in the new set.
-  public let total: Int
+  public var total: Int
 
   /// The codes themselves. Returned only here, so show them to the user and ask them to store
   /// the codes safely.
-  public let codes: [String]
+  public var codes: [String]
+
+  /// Creates an ``AuthMFARecoveryCodesGenerateResponse``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    total: Int,
+    codes: [String]
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.total = total
+    self.codes = codes
+  }
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -1807,10 +1905,19 @@ public struct MFAFactors: Hashable, Sendable {
   ///
   /// It includes the user's ``FactorType/recoveryCode`` factor, which cannot be challenged. Filter
   /// on ``Factor/factorType`` to pick a factor to verify.
-  public let verified: [Factor]
+  public var verified: [Factor]
 
   /// Factors the user has enrolled but not verified yet.
-  public let unverified: [Factor]
+  public var unverified: [Factor]
+
+  /// Creates a ``MFAFactors``.
+  public init(
+    verified: [Factor],
+    unverified: [Factor]
+  ) {
+    self.verified = verified
+    self.unverified = unverified
+  }
 
   /// Every factor: ``verified`` first, then ``unverified``.
   public var all: [Factor] { verified + unverified }
@@ -1909,10 +2016,19 @@ public struct AuthenticationMethod: RawRepresentable, Hashable, Sendable,
 /// with, and when.
 public struct AMREntry: Hashable, Sendable {
   /// The method the user verified their identity with.
-  public let method: AuthenticationMethod
+  public var method: AuthenticationMethod
 
   /// When the user verified their identity with ``method``.
-  public let timestamp: Date
+  public var timestamp: Date
+
+  /// Creates an ``AMREntry``.
+  public init(
+    method: AuthenticationMethod,
+    timestamp: Date
+  ) {
+    self.method = method
+    self.timestamp = timestamp
+  }
 }
 
 extension AMREntry {
@@ -1945,15 +2061,26 @@ extension AMREntry {
 /// The assurance level of the current session, returned by ``AuthMFA/assuranceLevel()``.
 public struct AssuranceLevelInfo: Hashable, Sendable {
   /// The assurance level of the current access token. `nil` when the token has no `aal` claim.
-  public let currentLevel: AuthenticatorAssuranceLevel?
+  public var currentLevel: AuthenticatorAssuranceLevel?
 
   /// The highest level the user can reach. When it is above ``currentLevel``, ask the user to
   /// verify a factor.
-  public let nextLevel: AuthenticatorAssuranceLevel?
+  public var nextLevel: AuthenticatorAssuranceLevel?
 
   /// The methods attached to the session, most recent first. Use them to find when the user last
   /// verified a factor, for example in a step-up flow.
-  public let currentAuthenticationMethods: [AMREntry]
+  public var currentAuthenticationMethods: [AMREntry]
+
+  /// Creates an ``AssuranceLevelInfo``.
+  public init(
+    currentLevel: AuthenticatorAssuranceLevel? = nil,
+    nextLevel: AuthenticatorAssuranceLevel? = nil,
+    currentAuthenticationMethods: [AMREntry]
+  ) {
+    self.currentLevel = currentLevel
+    self.nextLevel = nextLevel
+    self.currentAuthenticationMethods = currentAuthenticationMethods
+  }
 }
 
 /// Which sessions ``AuthClient/signOut(scope:)`` ends.
@@ -2045,7 +2172,14 @@ struct ResendPhoneParams: Encodable {
 /// Information about why a password is considered weak.
 public struct WeakPassword: Codable, Hashable, Sendable {
   /// List of reasons the password is too weak, could be any of `length`, `characters`, or `pwned`.
-  public let reasons: [String]
+  public var reasons: [String]
+
+  /// Creates a ``WeakPassword``.
+  public init(
+    reasons: [String]
+  ) {
+    self.reasons = reasons
+  }
 }
 
 struct DeleteUserRequest: Encodable {
@@ -2231,10 +2365,10 @@ extension OAuthOptions {
 /// ``AuthClient/exchangeCodeForSession(_:flowID:)``.
 public struct OAuthFlow: Sendable, Hashable, Identifiable {
   /// The ID of the PKCE flow. The client stores the flow under this ID.
-  public let id: UUID
+  public var id: UUID
 
   /// The URL that starts the flow at the provider.
-  public let url: URL
+  public var url: URL
 
   /// Creates an OAuth flow.
   ///
@@ -2264,19 +2398,34 @@ public enum RedirectResult: Sendable, Hashable {
 /// One page of users, returned by ``AuthAdminClient/listUsers(page:pageSize:)``.
 public struct UserPage: Hashable, Sendable {
   /// The users on this page.
-  public let users: [User]
+  public var users: [User]
 
   /// The audience the users belong to.
-  public let audience: String
+  public var audience: String
 
   /// The number of the next page, or `nil` on the last page.
-  public let nextPage: Int?
+  public var nextPage: Int?
 
   /// The number of the last page.
-  public let lastPage: Int
+  public var lastPage: Int
 
   /// The total number of users.
-  public let total: Int
+  public var total: Int
+
+  /// Creates a ``UserPage``.
+  public init(
+    users: [User],
+    audience: String,
+    nextPage: Int? = nil,
+    lastPage: Int,
+    total: Int
+  ) {
+    self.users = users
+    self.audience = audience
+    self.nextPage = nextPage
+    self.lastPage = lastPage
+    self.total = total
+  }
 }
 
 /// The link to generate with ``AuthAdminClient/generateLink(_:)``.
@@ -2399,9 +2548,18 @@ public struct GenerateLink: Sendable {
 /// The response from ``AuthAdminClient/generateLink(_:)``.
 public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
   /// The properties related to the email link generated.
-  public let properties: GenerateLinkProperties
+  public var properties: GenerateLinkProperties
   /// The user that the email link is associated to.
-  public let user: User
+  public var user: User
+
+  /// Creates a ``GenerateLinkResponse``.
+  public init(
+    properties: GenerateLinkProperties,
+    user: User
+  ) {
+    self.properties = properties
+    self.user = user
+  }
 
   public init(from decoder: any Decoder) throws {
     self.properties = try GenerateLinkProperties(from: decoder)
@@ -2413,16 +2571,31 @@ public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
 public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
   /// The email link to send to the users.
   /// The action link follows the following format: auth/v1/verify?type={verification_type}&token={hashed_token}&redirect_to={redirect_to}
-  public let actionLink: URL
+  public var actionLink: URL
   /// The raw email OTP.
   /// You should send this in the email if you want your users to verify using an OTP instead of the action link.
-  public let emailOTP: String
+  public var emailOTP: String
   /// The hashed token appended to the action link.
-  public let hashedToken: String
+  public var hashedToken: String
   /// The URL appended to the action link, or `nil` when the server sent none.
-  public let redirectTo: URL?
+  public var redirectTo: URL?
   /// The verification type that the emaillink is associated to.
-  public let verificationType: GenerateLinkType
+  public var verificationType: GenerateLinkType
+
+  /// Creates a ``GenerateLinkProperties``.
+  public init(
+    actionLink: URL,
+    emailOTP: String,
+    hashedToken: String,
+    redirectTo: URL? = nil,
+    verificationType: GenerateLinkType
+  ) {
+    self.actionLink = actionLink
+    self.emailOTP = emailOTP
+    self.hashedToken = hashedToken
+    self.redirectTo = redirectTo
+    self.verificationType = verificationType
+  }
 
   private enum CodingKeys: String, CodingKey {
     case actionLink = "action_link"
@@ -2557,46 +2730,79 @@ public struct OAuthClientRegistrationType: RawRepresentable, Decodable, Hashable
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
-  public let clientID: UUID
+  public var clientID: UUID
 
   /// Human-readable name of the OAuth client
-  public let clientName: String?
+  public var clientName: String?
 
   /// Client secret (only returned on registration and regeneration)
-  public let clientSecret: String?
+  public var clientSecret: String?
 
   /// Type of OAuth client
-  public let clientType: OAuthClientType
+  public var clientType: OAuthClientType
 
   /// Token endpoint authentication method
-  public let tokenEndpointAuthMethod: String
+  public var tokenEndpointAuthMethod: String
 
   /// Registration type of the client
-  public let registrationType: OAuthClientRegistrationType
+  public var registrationType: OAuthClientRegistrationType
 
   /// URI of the OAuth client
-  public let clientURI: URL?
+  public var clientURI: URL?
 
   /// URL of the client application's logo
-  public let logoURI: URL?
+  public var logoURI: URL?
 
   /// Array of allowed redirect URIs
-  public let redirectURIs: [URL]?
+  public var redirectURIs: [URL]?
 
   /// Array of allowed grant types
-  public let grantTypes: [OAuthClientGrantType]?
+  public var grantTypes: [OAuthClientGrantType]?
 
   /// Array of allowed response types
-  public let responseTypes: [OAuthClientResponseType]?
+  public var responseTypes: [OAuthClientResponseType]?
 
   /// Scope of the OAuth client
-  public let scope: String?
+  public var scope: String?
 
   /// Timestamp when the client was created
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// Timestamp when the client was last updated
-  public let updatedAt: Date
+  public var updatedAt: Date
+
+  /// Creates an ``OAuthClient``.
+  public init(
+    clientID: UUID,
+    clientName: String? = nil,
+    clientSecret: String? = nil,
+    clientType: OAuthClientType,
+    tokenEndpointAuthMethod: String,
+    registrationType: OAuthClientRegistrationType,
+    clientURI: URL? = nil,
+    logoURI: URL? = nil,
+    redirectURIs: [URL]? = nil,
+    grantTypes: [OAuthClientGrantType]? = nil,
+    responseTypes: [OAuthClientResponseType]? = nil,
+    scope: String? = nil,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.clientID = clientID
+    self.clientName = clientName
+    self.clientSecret = clientSecret
+    self.clientType = clientType
+    self.tokenEndpointAuthMethod = tokenEndpointAuthMethod
+    self.registrationType = registrationType
+    self.clientURI = clientURI
+    self.logoURI = logoURI
+    self.redirectURIs = redirectURIs
+    self.grantTypes = grantTypes
+    self.responseTypes = responseTypes
+    self.scope = scope
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case clientID = "client_id"
@@ -2620,22 +2826,22 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct CreateOAuthClient: Encodable, Hashable, Sendable {
   /// Human-readable name of the OAuth client
-  public let clientName: String
+  public var clientName: String
 
   /// URI of the OAuth client
-  public let clientURI: URL?
+  public var clientURI: URL?
 
   /// Array of allowed redirect URIs
-  public let redirectURIs: [URL]
+  public var redirectURIs: [URL]
 
   /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
-  public let grantTypes: [OAuthClientGrantType]?
+  public var grantTypes: [OAuthClientGrantType]?
 
   /// Array of allowed response types (optional, defaults to code)
-  public let responseTypes: [OAuthClientResponseType]?
+  public var responseTypes: [OAuthClientResponseType]?
 
   /// Scope of the OAuth client
-  public let scope: String?
+  public var scope: String?
 
   private enum CodingKeys: String, CodingKey {
     case clientName = "client_name"
@@ -2676,19 +2882,19 @@ public struct CreateOAuthClient: Encodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct UpdateOAuthClient: Encodable, Hashable, Sendable {
   /// Human-readable name of the client application
-  public let clientName: String?
+  public var clientName: String?
 
   /// URL of the client application's homepage
-  public let clientURI: URL?
+  public var clientURI: URL?
 
   /// URL of the client application's logo
-  public let logoURI: URL?
+  public var logoURI: URL?
 
   /// Array of redirect URIs used by the client
-  public let redirectURIs: [URL]?
+  public var redirectURIs: [URL]?
 
   /// OAuth grant types the client is authorized to use
-  public let grantTypes: [OAuthClientGrantType]?
+  public var grantTypes: [OAuthClientGrantType]?
 
   private enum CodingKeys: String, CodingKey {
     case clientName = "client_name"
@@ -2725,16 +2931,29 @@ public struct UpdateOAuthClient: Encodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
   /// Unique identifier for the OAuth client.
-  public let id: UUID
+  public var id: UUID
 
   /// Human-readable name of the OAuth client.
-  public let name: String?
+  public var name: String?
 
   /// URI of the OAuth client's homepage.
-  public let uri: URL?
+  public var uri: URL?
 
   /// URL of the OAuth client's logo.
-  public let logoURI: URL?
+  public var logoURI: URL?
+
+  /// Creates an ``OAuthAuthorizationClient``.
+  public init(
+    id: UUID,
+    name: String? = nil,
+    uri: URL? = nil,
+    logoURI: URL? = nil
+  ) {
+    self.id = id
+    self.name = name
+    self.uri = uri
+    self.logoURI = logoURI
+  }
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -2748,10 +2967,19 @@ public struct OAuthAuthorizationClient: Decodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
   /// Unique identifier for the user.
-  public let id: UUID
+  public var id: UUID
 
   /// The user's email address.
-  public let email: String?
+  public var email: String?
+
+  /// Creates an ``OAuthAuthorizationUser``.
+  public init(
+    id: UUID,
+    email: String? = nil
+  ) {
+    self.id = id
+    self.email = email
+  }
 }
 
 /// Details about a pending OAuth authorization request, returned by
@@ -2760,19 +2988,34 @@ public struct OAuthAuthorizationUser: Decodable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationDetails: Decodable, Hashable, Sendable {
   /// Opaque identifier for this authorization request.
-  public let authorizationID: String
+  public var authorizationID: String
 
   /// The redirect URI the client registered for this request.
-  public let redirectURI: URL
+  public var redirectURI: URL
 
   /// The OAuth client requesting authorization.
-  public let client: OAuthAuthorizationClient
+  public var client: OAuthAuthorizationClient
 
   /// The user considering the request.
-  public let user: OAuthAuthorizationUser
+  public var user: OAuthAuthorizationUser
 
   /// The requested scope.
-  public let scope: String?
+  public var scope: String?
+
+  /// Creates an ``OAuthAuthorizationDetails``.
+  public init(
+    authorizationID: String,
+    redirectURI: URL,
+    client: OAuthAuthorizationClient,
+    user: OAuthAuthorizationUser,
+    scope: String? = nil
+  ) {
+    self.authorizationID = authorizationID
+    self.redirectURI = redirectURI
+    self.client = client
+    self.user = user
+    self.scope = scope
+  }
 
   private enum CodingKeys: String, CodingKey {
     case authorizationID = "authorization_id"
@@ -2791,7 +3034,14 @@ public struct OAuthRedirect: Decodable, Hashable, Sendable {
   /// The URL the client app should be redirected to. On denial, this URL's
   /// query string carries an `error=access_denied` parameter (RFC 6749) —
   /// denial is a successful API call, not a thrown error.
-  public let redirectURL: URL
+  public var redirectURL: URL
+
+  /// Creates an ``OAuthRedirect``.
+  public init(
+    redirectURL: URL
+  ) {
+    self.redirectURL = redirectURL
+  }
 
   private enum CodingKeys: String, CodingKey {
     case redirectURL = "redirect_url"
@@ -2832,13 +3082,24 @@ extension OAuthAuthorizationDetailsResult: Decodable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthGrant: Decodable, Hashable, Sendable {
   /// The OAuth client the grant was given to.
-  public let client: OAuthAuthorizationClient
+  public var client: OAuthAuthorizationClient
 
   /// The scopes granted to the client.
-  public let scopes: [String]
+  public var scopes: [String]
 
   /// When the grant was given.
-  public let grantedAt: Date
+  public var grantedAt: Date
+
+  /// Creates an ``OAuthGrant``.
+  public init(
+    client: OAuthAuthorizationClient,
+    scopes: [String],
+    grantedAt: Date
+  ) {
+    self.client = client
+    self.scopes = scopes
+    self.grantedAt = grantedAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case client
@@ -2850,34 +3111,59 @@ public struct OAuthGrant: Decodable, Hashable, Sendable {
 /// JSON Web Key (JWK) representation.
 public struct JWK: Decodable, Hashable, Sendable {
   /// Key type (e.g., `"RSA"`, `"EC"`, `"oct"`).
-  public let kty: String
+  public var kty: String
 
   /// Key operations (e.g., `["sign", "verify"]`).
-  public let keyOps: [String]?
+  public var keyOps: [String]?
 
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
-  public let alg: String?
+  public var alg: String?
 
   /// Key ID.
-  public let kid: String?
+  public var kid: String?
 
   /// RSA modulus (base64url-encoded).
-  public let n: String?
+  public var n: String?
 
   /// RSA exponent (base64url-encoded).
-  public let e: String?
+  public var e: String?
 
   /// EC curve name (e.g., `"P-256"`).
-  public let crv: String?
+  public var crv: String?
 
   /// EC x coordinate (base64url-encoded).
-  public let x: String?
+  public var x: String?
 
   /// EC y coordinate (base64url-encoded).
-  public let y: String?
+  public var y: String?
 
   /// Symmetric key value (base64url-encoded).
-  public let k: String?
+  public var k: String?
+
+  /// Creates a ``JWK``.
+  public init(
+    kty: String,
+    keyOps: [String]? = nil,
+    alg: String? = nil,
+    kid: String? = nil,
+    n: String? = nil,
+    e: String? = nil,
+    crv: String? = nil,
+    x: String? = nil,
+    y: String? = nil,
+    k: String? = nil
+  ) {
+    self.kty = kty
+    self.keyOps = keyOps
+    self.alg = alg
+    self.kid = kid
+    self.n = n
+    self.e = e
+    self.crv = crv
+    self.x = x
+    self.y = y
+    self.k = k
+  }
 
   /// The wire names of RFC 7517.
   enum CodingKeys: String, CodingKey {
@@ -2897,17 +3183,35 @@ public struct JWK: Decodable, Hashable, Sendable {
 /// A JSON Web Key Set (JWKS) containing one or more JWKs.
 public struct JWKS: Decodable, Hashable, Sendable {
   /// The set of JSON Web Keys.
-  public let keys: [JWK]
+  public var keys: [JWK]
+
+  /// Creates a ``JWKS``.
+  public init(
+    keys: [JWK]
+  ) {
+    self.keys = keys
+  }
 }
 
 /// The header portion of a decoded JSON Web Token.
 public struct JWTHeader: Decodable, Hashable, Sendable {
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
-  public let alg: String
+  public var alg: String
 
   /// Key ID used to select the signing key.
-  public let kid: String?
+  public var kid: String?
 
   /// Token type (typically `"JWT"`).
-  public let typ: String?
+  public var typ: String?
+
+  /// Creates a ``JWTHeader``.
+  public init(
+    alg: String,
+    kid: String? = nil,
+    typ: String? = nil
+  ) {
+    self.alg = alg
+    self.kid = kid
+    self.typ = typ
+  }
 }
