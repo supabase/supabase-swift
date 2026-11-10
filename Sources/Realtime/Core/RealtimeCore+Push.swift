@@ -45,7 +45,7 @@ extension RealtimeCore {
     let send = Effect.sendBroadcast(
       joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
       payload: payload)
-    guard record.configuration.broadcast.acknowledge else {
+    guard record.configuration.broadcast.acknowledgesMessages else {
       return [send, .resume(waiter, .success)]
     }
     return [send] + awaitReply(channel, ref: ref, waiter: waiter)

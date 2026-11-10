@@ -86,7 +86,7 @@ The server works out the channel's permissions when the channel joins, from the 
 token and the topic, and checks each broadcast and presence call against them. To make sure a
 changed policy applies, remove the channel and join again.
 
-With ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` on, a broadcast that a
+With ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledgesMessages`` on, a broadcast that a
 policy denies fails with ``RealtimeError/Kind-swift.struct/timeout``, because the server does not
 reply to it.
 

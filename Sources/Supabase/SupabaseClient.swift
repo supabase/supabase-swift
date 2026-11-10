@@ -399,7 +399,7 @@ public final class SupabaseClient: Sendable {
   /// `configure` runs on the caller's actor before the call reaches the Realtime client.
   ///
   /// ```swift
-  /// let channel = await supabase.channel("room:lobby") { $0.broadcast.receiveOwnMessages = true }
+  /// let channel = await supabase.channel("room:lobby") { $0.broadcast.receivesOwnMessages = true }
   /// try await channel.subscribe()
   /// ```
   ///
@@ -610,7 +610,7 @@ public final class SupabaseClient: Sendable {
         headers: headers.merging(with: realtime.headers),
         heartbeatInterval: realtime.heartbeatInterval,
         requestTimeout: realtime.requestTimeout,
-        connectOnSubscribe: realtime.connectOnSubscribe,
+        connectsOnSubscribe: realtime.connectsOnSubscribe,
         disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
         observesAppLifecycle: realtime.observesAppLifecycle,
         monitorsNetworkPath: realtime.monitorsNetworkPath,

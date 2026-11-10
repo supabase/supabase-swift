@@ -323,7 +323,7 @@ public actor RealtimeClient {
     let coreOptions = RealtimeCore.Options(
       timeout: configuration.requestTimeout,
       heartbeatInterval: configuration.heartbeatInterval,
-      connectOnSubscribe: configuration.connectOnSubscribe,
+      connectsOnSubscribe: configuration.connectsOnSubscribe,
       disconnectOnEmptyChannelsAfter: configuration.disconnectOnEmptyChannelsAfter,
       hasAccessTokenProvider: configuration.accessToken != nil,
       accessTokenRefreshInterval: Self.accessTokenRefreshInterval,
@@ -427,7 +427,7 @@ public actor RealtimeClient {
   /// attempt is in progress waits for that attempt. While an automatic reconnect is waiting
   /// out its backoff, this tries at once instead; if that attempt fails, this throws and the
   /// automatic reconnect carries on. If
-  /// ``Configuration/connectOnSubscribe`` is `true` (the default), this is called
+  /// ``Configuration/connectsOnSubscribe`` is `true` (the default), this is called
   /// automatically when a channel is subscribed to.
   ///
   /// ```swift
@@ -520,7 +520,7 @@ public actor RealtimeClient {
   ///
   /// ```swift
   /// let channel = await client.channel("room:lobby") { config in
-  ///   config.broadcast.receiveOwnMessages = true
+  ///   config.broadcast.receivesOwnMessages = true
   /// }
   /// ```
   ///

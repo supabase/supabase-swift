@@ -17,7 +17,7 @@ import Helpers
 ///
 /// ```swift
 /// let channel = await client.channel("room:lobby") { config in
-///   config.broadcast.receiveOwnMessages = true
+///   config.broadcast.receivesOwnMessages = true
 /// }
 ///
 /// let messages = await channel.broadcasts(event: "message")
@@ -182,7 +182,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// - Throws: ``RealtimeError`` when a retry cannot help: the server refused the join for good
   ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/Code-swift.struct/unauthorized``
   ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
-  ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off,
+  ///   WebSocket upgrade, the client is disconnected and `connectsOnSubscribe` is off,
   ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, the server
   ///   could not set up the channel's Postgres changes in time, or the client was released
   ///   (``RealtimeError/Kind-swift.struct/notConnected``).
@@ -213,13 +213,13 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// a subscription, use ``httpSend(event:payload:encoder:timeout:)``.
   ///
   /// Returns as soon as the frame is queued for the socket, unless
-  /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledge`` is on: then it waits for
+  /// ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledgesMessages`` is on: then it waits for
   /// the server's reply. Wrap the call in a `Task` to send without waiting; cancelling that task
   /// stops the wait, not the frame. ``RealtimeClient/disconnect(code:reason:)`` still writes the
   /// frames queued before it, up to the client's request timeout; a lost connection drops them.
   ///
   /// > Important: On a private channel the server sends no reply when row level security denies
-  /// > the write or the database fails. With `acknowledge` on, such a broadcast fails with
+  /// > the write or the database fails. With `acknowledgesMessages` on, such a broadcast fails with
   /// > ``RealtimeError/Kind-swift.struct/timeout``.
   ///
   /// - Parameters:

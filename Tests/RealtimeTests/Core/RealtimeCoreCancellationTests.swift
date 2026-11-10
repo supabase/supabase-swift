@@ -231,7 +231,7 @@ struct RealtimeCoreCancellationTests {
   @Test
   func cancelledAckPushDropsLateReply() {
     var configuration = RealtimeChannelConfiguration()
-    configuration.broadcast.acknowledge = true
+    configuration.broadcast.acknowledgesMessages = true
     var harness = Self.subscribed(configuration: configuration)
     let w = harness.waiter()
     _ = harness.send(

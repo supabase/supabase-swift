@@ -47,7 +47,7 @@ public struct RealtimeError: SupabaseError {
     /// The socket went away while a reply was pending: the client reconnects on its own, so retry
     /// the call once the status is back to connected. Also thrown, with
     /// ``RealtimeError/isRetryable`` `false`, when `subscribe()` found the client disconnected and
-    /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
+    /// `connectsOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
     /// `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
     /// The `accessToken` closure threw when `httpSend` asked it for a token. No request was sent.
@@ -437,11 +437,11 @@ extension RealtimeError {
   static let clientReleased = RealtimeError(
     kind: .notConnected, message: "The realtime client was released.", isRetryable: false)
 
-  /// `subscribe()` found no connection and `connectOnSubscribe` is off.
+  /// `subscribe()` found no connection and `connectsOnSubscribe` is off.
   static let notConnectedToSubscribe = RealtimeError(
     kind: .notConnected,
     message:
-      "The realtime client is not connected and `connectOnSubscribe` is off. Call `connect()` first.",
+      "The realtime client is not connected and `connectsOnSubscribe` is off. Call `connect()` first.",
     isRetryable: false
   )
 
