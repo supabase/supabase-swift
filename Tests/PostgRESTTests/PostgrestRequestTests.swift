@@ -151,6 +151,8 @@ struct PostgrestRequestTests {
       try JSONDecoder().decode(Int?.self, from: $0)
     }
     #expect(response.value == nil)
+    #expect(response.status == .ok)
+    #expect(String(decoding: response.body, as: UTF8.self) == "null")
   }
 
   @Test

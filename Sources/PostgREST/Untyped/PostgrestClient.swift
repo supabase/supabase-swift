@@ -274,15 +274,14 @@ public struct PostgrestClient: Sendable {
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard case .object(let json) = try? JSONValue.decoder.decode(JSONValue.self, from: bodyData)
-      else {
+      guard let arguments = PostgrestArgument.queryItems(forJSONObject: bodyData) else {
         throw PostgrestError(
           kind: .invalidRequest,
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
       }
 
-      request.leadingQuery.append(contentsOf: queryItems(for: json))
+      request.leadingQuery.append(contentsOf: arguments)
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -337,51 +336,6 @@ public struct PostgrestClient: Sendable {
     var configuration = configuration
     configuration.schema = schema
     return PostgrestClient(checkedConfiguration: configuration)
-  }
-
-  /// One query item per argument, in key order, for a `GET` call's arguments.
-  func queryItems(for arguments: JSONObject) -> [URLQueryItem] {
-    arguments.sorted { $0.key < $1.key }.map { key, value in
-      URLQueryItem(name: key, value: queryValue(for: value))
-    }
-  }
-
-  private func queryValue(for value: JSONValue) -> String {
-    switch value {
-    case .null:
-      return "null"
-    case .bool(let bool):
-      return bool ? "true" : "false"
-    case .integer(let integer):
-      return String(integer)
-    case .double(let double):
-      return String(double)
-    case .string(let string):
-      return string
-    case .array(let array):
-      return "{\(array.map(arrayElementValue(for:)).joined(separator: ","))}"
-    case .object:
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-      if let data = try? encoder.encode(value),
-        let json = String(data: data, encoding: .utf8)
-      {
-        return json
-      }
-      return ""
-    }
-  }
-
-  /// One element of a Postgres array literal. An element that is empty, spells NULL, or holds
-  /// `,` `{` `}` `"` `\` is double-quoted, as for the `cs`/`cd` filters, so it stays one element
-  /// with its own text. A nested array stays a bare sub-literal, and a JSON null a bare `null`.
-  private func arrayElementValue(for value: JSONValue) -> String {
-    switch value {
-    case .null, .array:
-      return queryValue(for: value)
-    case .bool, .integer, .double, .string, .object:
-      return escapePostgRESTArrayLiteralElement(queryValue(for: value))
-    }
   }
 }
 

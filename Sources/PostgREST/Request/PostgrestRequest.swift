@@ -118,9 +118,9 @@ public struct _PostgrestRequest: Sendable {
       )
     }
 
-    func decoded(_ payload: Data) throws -> PostgrestResponse<T> {
+    func decoded(_ response: HTTPTypes.HTTPResponse, body: Data) throws -> PostgrestResponse<T> {
       do {
-        return PostgrestResponse(response, body: data, value: try decode(payload))
+        return PostgrestResponse(response, body: body, value: try decode(body))
       } catch let error as PostgrestError {
         throw error
       } catch {
@@ -135,12 +135,18 @@ public struct _PostgrestRequest: Sendable {
     }
 
     if 200..<300 ~= response.status.code {
-      return try decoded(data)
+      return try decoded(response, body: data)
     }
 
     let error = PostgrestError.server(response, body: data)
     if nullOnNoRows, error.code == "PGRST116", error.serverError?.matchedZeroRows == true {
-      return try decoded(Data("null".utf8))
+      // No row is a success for `maybeSingle()`, so the response reads as `200 OK` with the
+      // `null` body the value comes from, not as the 406 PostgREST answered.
+      var success = response
+      success.status = .ok
+      success.headerFields[.contentLength] = nil
+      success.headerFields[.proxyStatus] = nil
+      return try decoded(success, body: Data("null".utf8))
     }
     throw error
   }
@@ -191,4 +197,5 @@ extension PostgrestClient {
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
+  static let proxyStatus = Self("Proxy-Status")!
 }
