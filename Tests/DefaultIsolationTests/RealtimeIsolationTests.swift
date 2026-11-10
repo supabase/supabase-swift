@@ -32,7 +32,7 @@ struct RealtimeIsolationTests {
   /// consumer under default isolation opts the type out with `nonisolated`, as intended.
   nonisolated struct RefusingTransport: WebSocketTransport {
     func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
-      throw RealtimeError(kind: .transport, message: "refused", isRetryable: false)
+      throw RealtimeError(kind: .invalidRequest, message: "refused")
     }
   }
 

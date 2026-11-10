@@ -183,9 +183,9 @@ Use standard file headers with copyright:
 - **Server codes.** A machine-readable code from the server is `public var code: <Module>Error.Code?`.
   `Code` is a nested open set (see "Enum-like Values"). It is `nil` when the server sent no code;
   never use a placeholder such as `.unknown`. Store the code once.
-- **Retry classification.** `isRetryable` is a computed requirement of `SupabaseError`. One shared table
-  derives it from `kind` and `response?.statusCode`. It is never stored and never an init
-  parameter.
+- **Retry classification.** Retry decisions belong to the SDK, so no public error exposes
+  `isRetryable`, and `SupabaseError` does not require it. A module that retries on its own keeps
+  the flag at `package` access and derives it from `kind` by default, as `RealtimeError` does.
 - **Wrapping.** A client-side refusal (a value that cannot be encoded, a URL that cannot be built)
   is `.invalidRequest`, with the cause in `underlyingError`. A `DecodingError` from a 2xx body is
   `.decoding`. A `URLError` is `.transport`; an HTTP timeout is `.transport` with

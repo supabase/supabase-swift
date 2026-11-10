@@ -87,7 +87,7 @@ Changes that still compile but behave differently. Check each one by hand.
   same topic.
 - **Channel actions need a live client.** A channel holds its client weakly. After the
   `RealtimeClient` is released, `subscribe()`, `broadcast`, `track`, `untrack` and `httpSend`
-  throw `RealtimeError` with `kind == .notConnected` and `isRetryable == false`, and
+  throw `RealtimeError` with `kind == .notConnected`, and
   `unsubscribe()` returns at once. `await channel.status` reads `.unsubscribed`,
   `await channel.presenceState` is empty, and a new stream ends at once. This check comes first:
   a removed channel whose client was released throws `.notConnected`, not `.channelRemoved`.
@@ -541,8 +541,8 @@ or `catch RealtimeError.Code.privateOnly`.
 `WebSocketCloseCode` accepts an integer literal, as in `let code: WebSocketCloseCode = 4001`.
 
 `subscribe()` no longer gives up after a number of attempts, so there is no
-`maxRetryAttemptsReached`. It throws only when a retry cannot help: `isRetryable` is `false`, or
-`kind` is `.unauthorized` after the one rejoin with a fresh token.
+`maxRetryAttemptsReached`. It throws only when a retry cannot help, for example when the server
+refused the join for good, or `kind` is `.unauthorized` after the one rejoin with a fresh token.
 
 `.channelRemoved` is new. Every action on a channel that `removeChannel(_:)` removed, or that
 the server closed with `phx_close`, throws it. Get a new channel from `channel(_:configure:)`.

@@ -96,7 +96,7 @@ extension _PostgrestFilter {
         return try realtimeConditions().joined(separator: ",")
       } catch {
         throw RealtimeError(
-          kind: .invalidRequest, message: error.reason, isRetryable: false,
+          kind: .invalidRequest, message: error.reason,
           underlyingError: error)
       }
     }

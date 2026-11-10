@@ -330,10 +330,28 @@ struct RealtimeErrorTests {
     #expect(error.closeCode == nil)
   }
 
+  @Test(arguments: Array(RealtimeError.Kind.nonRetryable))
+  func initStopsRetryingForKindsTheCallerMustFix(kind: RealtimeError.Kind) {
+    #expect(!RealtimeError(kind: kind, message: "m").isRetryable)
+  }
+
+  @Test(arguments: [RealtimeError.Kind.transport, .server, .rateLimited])
+  func initRetriesEveryOtherKind(kind: RealtimeError.Kind) {
+    #expect(RealtimeError(kind: kind, message: "m").isRetryable)
+  }
+
+  @Test
+  func retryFollowsAKindChangedAfterInit() {
+    var error = RealtimeError(kind: .transport, message: "m")
+    error.kind = .invalidRequest
+
+    #expect(!error.isRetryable)
+  }
+
   @Test
   func catchMatchesKindAndCode() {
     let error: any Error = RealtimeError(
-      kind: .unauthorized, message: "denied", code: .unauthorized, isRetryable: false)
+      kind: .unauthorized, message: "denied", code: .unauthorized)
 
     #expect(RealtimeError.Kind.unauthorized ~= error)
     #expect(!(RealtimeError.Kind.timeout ~= error))

@@ -180,8 +180,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// waits for the join, the channel leaves the topic.
   ///
   /// - Throws: ``RealtimeError`` when a retry cannot help: the server refused the join for good
-  ///   (``RealtimeError/isRetryable`` is `false`, for example ``RealtimeError/Code-swift.struct/unauthorized``
-  ///   from an RLS policy), the token was still expired after the rejoin, the server refused the
+  ///   (for example ``RealtimeError/Code-swift.struct/unauthorized`` from an RLS policy), the
+  ///   token was still expired after the rejoin, the server refused the
   ///   WebSocket upgrade, the client is disconnected and `connectOnSubscribe` is off,
   ///   ``RealtimeClient/disconnect(code:reason:)`` was called during the join, the server
   ///   could not set up the channel's Postgres changes in time, or the client was released

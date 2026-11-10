@@ -11,8 +11,7 @@ public import Helpers
 /// An error thrown by the Realtime client and channels.
 ///
 /// Check ``kind`` to learn what failed. ``code`` carries the code the server put in
-/// front of a join or channel error reason. ``isRetryable`` says whether the same call can
-/// succeed later without the caller changing anything. ``response`` is set when the server
+/// front of a join or channel error reason. ``response`` is set when the server
 /// answered over HTTP: the REST broadcast endpoint that `httpSend` uses, or a refused WebSocket
 /// upgrade. WebSocket failures carry the transport error in ``underlyingError`` when there is one.
 ///
@@ -45,10 +44,9 @@ public struct RealtimeError: SupabaseError {
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
     /// The socket went away while a reply was pending: the client reconnects on its own, so retry
-    /// the call once the status is back to connected. Also thrown, with
-    /// ``RealtimeError/isRetryable`` `false`, when `subscribe()` found the client disconnected and
-    /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
-    /// `connect()` before you subscribe again.
+    /// the call once the status is back to connected. Also thrown when `subscribe()` found the
+    /// client disconnected and `connectOnSubscribe` is off, or when `disconnect()` stopped a
+    /// subscribe in flight. Call `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
     /// The `accessToken` closure threw when `httpSend` asked it for a token. No request was sent.
     /// ``RealtimeError/underlyingError`` is the closure's error.
@@ -97,6 +95,11 @@ public struct RealtimeError: SupabaseError {
     /// the URL on this platform. Nothing was sent. ``RealtimeError/underlyingError`` is the cause,
     /// such as the `EncodingError`.
     public static let invalidRequest: Kind = "invalidRequest"
+
+    /// Kinds that no retry can fix: the caller must change something first.
+    static let nonRetryable: Set<Kind> = [
+      .unauthorized, .invalidRequest, .invalidConfiguration, .decoding,
+    ]
   }
 
   /// The code the server prefixes to a join or channel error reason, as in
@@ -214,11 +217,15 @@ public struct RealtimeError: SupabaseError {
   public var code: Code?
   /// The close status, when a WebSocket close caused this error.
   package var closeCode: WebSocketCloseCode?
-  /// Whether the same operation can succeed later without the caller changing anything.
+  /// Whether the client and its channels try again after this error.
   ///
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
-  /// upgrade with 401/403/404. The client stops reconnecting when it meets one.
-  public var isRetryable: Bool
+  /// upgrade with 401/403/404. The client stops reconnecting when it meets one. Follows ``kind``
+  /// unless the SDK set it for this error.
+  package var isRetryable: Bool {
+    retryOverride ?? !Kind.nonRetryable.contains(kind)
+  }
+  private var retryOverride: Bool?
   /// The HTTP error response, for an error from the REST broadcast endpoint that `httpSend` uses
   /// or from a refused WebSocket upgrade.
   public var response: HTTPErrorResponse?
@@ -227,27 +234,42 @@ public struct RealtimeError: SupabaseError {
 
   /// Creates an error.
   ///
+  /// The kind decides whether the client tries again: ``Kind-swift.struct/unauthorized``,
+  /// ``Kind-swift.struct/invalidRequest``, ``Kind-swift.struct/invalidConfiguration`` and
+  /// ``Kind-swift.struct/decoding`` stop it; every other kind lets it retry.
+  ///
   /// - Parameters:
   ///   - kind: What failed.
   ///   - message: A description of the failure.
   ///   - code: The code from the server's error reason, if any.
-  ///   - isRetryable: Whether the same call can succeed later without a change.
   ///   - response: The HTTP error response, if any.
   ///   - underlyingError: The error that caused this one, if any.
   public init(
     kind: Kind,
     message: String,
     code: Code? = nil,
-    isRetryable: Bool = true,
     response: HTTPErrorResponse? = nil,
     underlyingError: (any Error)? = nil
   ) {
     self.kind = kind
     self.message = message
     self.code = code
-    self.isRetryable = isRetryable
     self.response = response
     self.underlyingError = underlyingError
+  }
+
+  package init(
+    kind: Kind,
+    message: String,
+    code: Code? = nil,
+    isRetryable: Bool,
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.init(
+      kind: kind, message: message, code: code, response: response,
+      underlyingError: underlyingError)
+    retryOverride = isRetryable
   }
 
   /// The kind and the message, plus the HTTP status and the code when there are any, for logs.
@@ -276,14 +298,14 @@ extension RealtimeError {
   static let heartbeatTimeout = RealtimeError(kind: .timeout, message: "heartbeat timeout")
 
   static func decoding(_ message: String) -> RealtimeError {
-    RealtimeError(kind: .decoding, message: message, isRetryable: false)
+    RealtimeError(kind: .decoding, message: message)
   }
 
   static func invalidRequest(_ message: String, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
     RealtimeError(
-      kind: .invalidRequest, message: message, isRetryable: false,
+      kind: .invalidRequest, message: message,
       underlyingError: underlyingError)
   }
 
@@ -342,7 +364,7 @@ extension RealtimeError {
   func isSameFailure(as other: RealtimeError?) -> Bool {
     guard let other else { return false }
     return kind == other.kind && message == other.message && code == other.code
-      && closeCode == other.closeCode && isRetryable == other.isRetryable
+      && closeCode == other.closeCode
   }
 
   /// The error for an HTTP upgrade the server refused.

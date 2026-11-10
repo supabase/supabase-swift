@@ -51,8 +51,8 @@ Follow the contract in each requirement's documentation. In short:
   another status lets it try again. The error's kind follows the status, and its `response`
   carries it.
 - When the transport cannot open the URL at all, such as an unsupported scheme, throw a
-  ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/invalidRequest`` with
-  ``RealtimeError/isRetryable`` set to `false`.
+  ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/invalidRequest``. This kind stops
+  the client.
 - For any other failure, such as a lost network, throw a ``RealtimeError`` of kind
   ``RealtimeError/Kind-swift.struct/transport``.
 - Throw `CancellationError` when the task is cancelled during the handshake.

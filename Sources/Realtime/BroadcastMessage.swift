@@ -53,7 +53,7 @@ public struct BroadcastMessage: Sendable, Hashable {
     } catch {
       throw RealtimeError(
         kind: .decoding, message: "Broadcast \"\(event)\" did not decode as \(T.self).",
-        isRetryable: false, underlyingError: error)
+        underlyingError: error)
     }
   }
 

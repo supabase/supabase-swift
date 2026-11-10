@@ -19,8 +19,8 @@ public import HTTPTypes
 ///   ``RealtimeError/upgradeFailed(status:underlyingError:)``. A 401, 403 or 404 stops the
 ///   client; during an automatic reconnect, any other status lets it try again.
 /// - When the transport cannot open the URL at all, such as an unsupported scheme, throw a
-///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest`` and
-///   ``RealtimeError/isRetryable`` set to `false`.
+///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``. This kind
+///   stops the client.
 /// - For any other failure, such as a lost network, throw a ``RealtimeError`` with kind
 ///   ``RealtimeError/Kind/transport``. During an automatic reconnect, the client tries again.
 ///
