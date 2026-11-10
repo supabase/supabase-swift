@@ -33,6 +33,9 @@ package struct DecodedBroadcast: Sendable {
 package struct RealtimeSerializer: Sendable {
   package init() {}
 
+  /// The most UTF-8 bytes a binary frame header field holds: its length prefix is one byte.
+  package static let maxHeaderFieldBytes = 255
+
   package enum BinaryKind: UInt8 {
     /// Client -> server broadcast push.
     case userBroadcastPush = 3
@@ -148,14 +151,15 @@ package struct RealtimeSerializer: Sendable {
     let eventBytes = Data(event.utf8)
     let metaBytes = Data()
 
-    guard joinRefBytes.count <= 255,
-      refBytes.count <= 255,
-      topicBytes.count <= 255,
-      eventBytes.count <= 255,
-      metaBytes.count <= 255
+    let limit = Self.maxHeaderFieldBytes
+    guard joinRefBytes.count <= limit,
+      refBytes.count <= limit,
+      topicBytes.count <= limit,
+      eventBytes.count <= limit,
+      metaBytes.count <= limit
     else {
       throw RealtimeError.invalidRequest(
-        "Binary frame header fields must not exceed 255 bytes each."
+        "Binary frame header fields must not exceed \(limit) bytes each."
       )
     }
 
