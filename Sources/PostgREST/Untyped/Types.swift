@@ -37,7 +37,7 @@ import Helpers
 public struct PostgrestResponse<T> {
   /// The HTTP status PostgREST answered with.
   ///
-  /// A ``PostgrestTransformBuilder/maybeSingle()`` request that matches no row reads as `200 OK`
+  /// A ``PostgrestRequestBuilder/maybeSingle()`` request that matches no row reads as `200 OK`
   /// with a `null` ``body``, although PostgREST answers it with `406 Not Acceptable`.
   public var status: HTTPResponse.Status
 
