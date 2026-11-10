@@ -24,7 +24,9 @@ extension RealtimeChannel {
   /// can deliver the broadcast twice.
   ///
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
-  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
+  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets. On a
+  /// > private channel, use 2.147.0 or later: older servers also read `private` from the JSON
+  /// > body, so a payload with a top-level `private` key can skip the channel's RLS check.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
@@ -67,7 +69,8 @@ extension RealtimeChannel {
   ///
   /// Headers and retry follow ``httpSend(event:payload:encoder:timeout:)``.
   ///
-  /// > Important: Requires a Realtime server version >= 2.97.0.
+  /// > Important: Requires a Realtime server version >= 2.97.0, and 2.147.0 or later on a
+  /// > private channel.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
