@@ -35,7 +35,7 @@ struct SupabaseClientAuthOptionsTests {
     )
 
     #expect(client.auth.configuration.clock as AnyObject === authClock)
-    #expect(client.clock as AnyObject === globalClock)
+    #expect(client.realtime.configuration.clock as AnyObject === globalClock)
   }
 
   @Test
@@ -149,25 +149,5 @@ struct SupabaseClientAuthOptionsTests {
     )
 
     #expect(client.auth.configuration.http.timeout == .seconds(7))
-  }
-}
-
-private struct HeaderMiddleware: ClientMiddleware {
-  let name: String
-  let value: String
-
-  func intercept(
-    _ request: HTTPTypes.HTTPRequest,
-    body: HTTPBody?,
-    next:
-      @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-        HTTPTypes.HTTPResponse, HTTPBody?
-      )
-  ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-    var request = request
-    let field = HTTPField.Name(name)!
-    request.headerFields[field] = [request.headerFields[field], value].compactMap { $0 }
-      .joined(separator: ",")
-    return try await next(request, body)
   }
 }

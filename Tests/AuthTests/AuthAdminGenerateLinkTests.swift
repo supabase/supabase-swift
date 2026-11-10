@@ -58,6 +58,7 @@ struct AuthAdminGenerateLinkTests {
     expectNoDifference(link.properties.hashedToken, "hashed_token")
     expectNoDifference(link.properties.redirectTo, URL(string: "https://example.com")!)
     expectNoDifference(link.user.email, "guilherme@grds.dev")
+    expectNoDifference(link.user.actionLink, link.properties.actionLink)
   }
 
   @Test

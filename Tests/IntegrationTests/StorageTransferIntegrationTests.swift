@@ -192,7 +192,7 @@ final class StorageTransferIntegrationTests {
     #endif
     #expect(response.contentType == "application/octet-stream")
     #expect(response.contentLength == Int64(payload.count))
-    #expect(response.cacheControl?.contains("no-cache") == true)
+    #expect(response.cacheControl?.rawValue.contains("no-cache") == true)
     #expect(response.eTag != nil)
     #expect(response.lastModified != nil)
   }

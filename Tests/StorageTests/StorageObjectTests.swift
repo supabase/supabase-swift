@@ -41,12 +41,12 @@ struct StorageObjectTests {
     let object = try JSONDecoder.storage.decode(StorageObject.self, from: json)
 
     #expect(object.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
-    #expect(object.version == "v2")
+    #expect(object.versionID == "v2")
     #expect(!object.isFolder)
     #expect(object.metadata?.eTag == "\"abc\"")
     #expect(object.metadata?.size == 28834)
     #expect(object.metadata?.mimeType == "image/jpeg")
-    #expect(object.metadata?.cacheControl == "max-age=3600")
+    #expect(object.metadata?.cacheControl == CacheControl.maxAge(.seconds(3600)))
     #expect(object.metadata?.lastModified == object.updatedAt)
     #expect(object.metadata?.contentLength == 28834)
     #expect(object.metadata?.additional == ["httpStatusCode": 200])
@@ -67,7 +67,7 @@ struct StorageObjectTests {
 
     #expect(object.isFolder)
     #expect(object.metadata == nil)
-    #expect(object.version == nil)
+    #expect(object.versionID == nil)
   }
 
   @Test

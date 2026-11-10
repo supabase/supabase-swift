@@ -167,7 +167,7 @@ extension RealtimeClient {
 
     case .closeSocket(let conn, let code, let reason):
       // A `nil` code is a normal closure.
-      let close = { conn.close(code: WebSocketCloseCode(rawValue: code ?? 1000), reason: reason) }
+      let close = { conn.close(code: code ?? .normalClosure, reason: reason) }
       if stoppedByDisconnect != nil {
         stoppedByDisconnect?.close = close
       } else {

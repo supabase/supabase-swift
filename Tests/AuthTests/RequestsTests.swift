@@ -1010,7 +1010,7 @@ struct RequestsTests {
     await assert {
       try await sut.oauth.createClient(
         CreateOAuthClient(
-          clientName: "Example", redirectURIs: ["https://example.com/callback"])
+          clientName: "Example", redirectURIs: [URL(string: "https://example.com/callback")!])
       )
     }
   }

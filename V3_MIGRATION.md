@@ -102,6 +102,9 @@ Naming rules applied across all modules (the module tables list each symbol):
   property from a column: `channel_id` becomes `channelID`, so regenerate your models and rename
   their uses.
 - A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
+- A concept has one type and one name, in requests and in responses. Links are `URL`, a typed
+  value the SDK accepts is also the type it returns (`CacheControl`, `WebSocketCloseCode`), and
+  metadata is `JSONObject`: `User.actionLink` is a `URL?`, `ObjectInfo.version` is `versionID`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
   Each one has `rawValue`, `init(rawValue:)` and a literal initializer, and no other
   initializer: `ErrorCode("x")` is `AuthError.Code(rawValue: "x")` or the literal `"x"`.

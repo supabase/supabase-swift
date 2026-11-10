@@ -29,7 +29,7 @@ struct VersioningTests {
 
     let info = try await bucket.info(path: "a.png", versionID: "v1")
 
-    #expect(info.version == "v1")
+    #expect(info.versionID == "v1")
     #expect(sent.value.map(\.request.path) == ["/storage/v1/object/info/bucket/a.png?versionId=v1"])
   }
 

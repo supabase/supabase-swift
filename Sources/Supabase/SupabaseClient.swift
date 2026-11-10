@@ -89,7 +89,6 @@ public final class SupabaseClient: Sendable {
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
-  var clock: any Clock<Duration> { configuration.global.clock }
 
   let _auth: AuthClient
 
@@ -121,12 +120,16 @@ public final class SupabaseClient: Sendable {
         url: databaseURL,
         schema: configuration.database.schema,
         headers: dataHeaders,
-        http: authenticatedHTTP(staleTokenRejection: .postgrest),
-        logger: configuration.global.logger,
+        http: Self.resolveHTTP(
+          global: configuration.global.http,
+          override: configuration.database.http,
+          sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .postgrest)]
+        ),
+        logger: configuration.database.logger ?? configuration.global.logger,
         encoder: configuration.database.encoder,
         decoder: configuration.database.decoder,
         retryEnabled: configuration.database.retryEnabled,
-        clock: clock
+        clock: configuration.database.clock ?? configuration.global.clock
       )
     )
   }
@@ -137,10 +140,14 @@ public final class SupabaseClient: Sendable {
       url: storageURL,
       headers: dataHeaders,
       usesNewHostname: configuration.storage.usesNewHostname,
-      http: authenticatedHTTP(staleTokenRejection: .storage),
-      logger: configuration.global.logger,
+      http: Self.resolveHTTP(
+        global: configuration.global.http,
+        override: configuration.storage.http,
+        sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .storage)]
+      ),
+      logger: configuration.storage.logger ?? configuration.global.logger,
       retryEnabled: configuration.storage.retryEnabled,
-      clock: clock
+      clock: configuration.storage.clock ?? configuration.global.clock
     )
     storageConfiguration.resumable = configuration.storage.resumable
     // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
@@ -248,8 +255,7 @@ public final class SupabaseClient: Sendable {
       observesAppLifecycle: configuration.auth.observesAppLifecycle,
       http: Self.resolveHTTP(
         global: configuration.global.http,
-        override: configuration.auth.http,
-        sdkMiddlewares: [TraceContextMiddleware()]
+        override: configuration.auth.http
       ),
       logger: configuration.auth.logger ?? configuration.global.logger,
       clock: configuration.auth.clock ?? configuration.global.clock
@@ -454,46 +460,28 @@ public final class SupabaseClient: Sendable {
   ///
   /// A `nil` transport or timeout in `override` falls back to the global one, and the transport
   /// to ``URLSessionTransport`` when neither sets one. The middlewares run in this order: the
-  /// global ones, the module's own, then the SDK's.
+  /// global ones, the module's own, ``TraceContextMiddleware``, then `sdkMiddlewares`.
   private static func resolveHTTP(
     global: HTTPClientConfiguration,
     override: HTTPClientConfiguration?,
-    sdkMiddlewares: [any ClientMiddleware]
+    sdkMiddlewares: [any ClientMiddleware] = []
   ) -> HTTPClientConfiguration {
     HTTPClientConfiguration(
       transport: override?.transport ?? global.transport ?? URLSessionTransport(),
-      middlewares: global.middlewares + (override?.middlewares ?? []) + sdkMiddlewares,
+      middlewares: global.middlewares + (override?.middlewares ?? []) + [TraceContextMiddleware()]
+        + sdkMiddlewares,
       timeout: override?.timeout ?? global.timeout
     )
   }
 
-  /// The resolved transport shared by every sub-client.
-  private var transport: any ClientTransport {
-    configuration.global.http.transport ?? URLSessionTransport()
-  }
-
-  /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
-  /// Storage. The bearer is the session token, else the key.
+  /// The SDK middleware that sets the bearer: the session token, else the key.
   ///
-  /// The bearer middleware captures only the dependencies it needs, never `self`, because each
-  /// sub-client stores its middlewares for its whole lifetime: the cached ``realtime`` and
-  /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
-  /// caller may hold any sub-client for that long too. Capturing `self` here would form a
-  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
-  /// running.
-  private func authenticatedHTTP(
-    staleTokenRejection: StaleTokenRejection
-  ) -> HTTPClientConfiguration {
-    HTTPClientConfiguration(
-      transport: transport,
-      middlewares: configuration.global.http.middlewares + [
-        TraceContextMiddleware(),
-        bearerMiddleware(staleTokenRejection: staleTokenRejection),
-      ],
-      timeout: configuration.global.http.timeout
-    )
-  }
-
+  /// It captures only the dependencies it needs, never `self`, because each sub-client stores its
+  /// middlewares for its whole lifetime: the cached ``realtime`` and ``functions`` sub-clients are
+  /// held in ``mutableState`` for the lifetime of the client, and a caller may hold any sub-client
+  /// for that long too. Capturing `self` here would form a `self -> sub-client -> middleware ->
+  /// self` retain cycle that keeps ``deinit`` from ever running.
+  ///
   /// - Parameter bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the
   ///   key and a third-party provider's token, not a session token.
   private func bearerMiddleware(
@@ -600,10 +588,9 @@ public final class SupabaseClient: Sendable {
           global: configuration.global.http,
           override: configuration.functions.http,
           sdkMiddlewares: [
-            TraceContextMiddleware(),
             bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
               APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
-            },
+            }
           ]
         ),
         logger: configuration.functions.logger ?? configuration.global.logger,
@@ -614,23 +601,13 @@ public final class SupabaseClient: Sendable {
 
   private func _initRealtimeClient() -> RealtimeClient {
     let realtime = configuration.realtime
-    var http = realtime.http
-    if http.transport == nil {
-      http = HTTPClientConfiguration(
-        transport: transport,
-        middlewares: configuration.global.http.middlewares + realtime.http.middlewares
-          + [TraceContextMiddleware()],
-        timeout: realtime.http.timeout ?? configuration.global.http.timeout
-      )
-    }
 
     // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
     // swift-format-ignore: NeverUseForceTry
     return try! RealtimeClient(
       configuration: .init(
         url: supabaseURL.appendingPathComponent("/realtime/v1"),
-        // The global headers win.
-        headers: realtime.headers.merging(with: headers),
+        headers: headers.merging(with: realtime.headers),
         heartbeatInterval: realtime.heartbeatInterval,
         requestTimeout: realtime.requestTimeout,
         connectOnSubscribe: realtime.connectOnSubscribe,
@@ -640,9 +617,12 @@ public final class SupabaseClient: Sendable {
         serverLogLevel: realtime.serverLogLevel,
         accessToken: { [weak self] in try await self?._getAccessToken() },
         webSocketTransport: realtime.webSocketTransport,
-        http: http,
+        http: Self.resolveHTTP(
+          global: configuration.global.http,
+          override: realtime.http
+        ),
         logger: realtime.logger ?? configuration.global.logger,
-        clock: clock
+        clock: realtime.clock ?? configuration.global.clock
       )
     )
   }
