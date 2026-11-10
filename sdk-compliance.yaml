@@ -322,7 +322,6 @@ supporting_symbols:
   - AuthError.code
   - AuthError.weakPasswordReasons
   - AuthError.oauthError
-  - AuthError.isRetryable
   - AuthError.response
   - AuthError.underlyingError
   - AuthError.description
@@ -488,7 +487,6 @@ supporting_symbols:
   - RealtimeError.Kind.payloadTooLarge
   - RealtimeError.Kind.~=
   - RealtimeError.code
-  - RealtimeError.isRetryable
   # The code the server prefixes to a join or channel error reason (SDK-2098).
   - RealtimeError.Code
   - RealtimeError.Code.init

@@ -747,7 +747,7 @@ let session = try await supabase.auth.exchangeCodeForSession(code, flowID: flow.
 `AuthError` is a struct with `kind`, `message`, `code`, `weakPasswordReasons`, `oauthError`,
 `response` and `underlyingError`. Match on `kind` and `code` instead of enum cases:
 `catch AuthError.Code.invalidCredentials` and `catch AuthError.Kind.sessionMissing` compile.
-`isRetryable` says whether to send the request again. `AuthError` is no longer `Equatable`.
+`AuthError` is no longer `Equatable`.
 
 The top-level `ErrorCode` is now `AuthError.Code`, and `errorCode` is now `code`. `code` is
 optional: it is `nil` when the server sent no code, such as for an OAuth-style response, a body

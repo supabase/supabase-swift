@@ -219,7 +219,6 @@ extension AuthError.Code {
 /// - ``message``
 /// - ``weakPasswordReasons``
 /// - ``oauthError``
-/// - ``isRetryable``
 /// - ``response``
 /// - ``underlyingError``
 ///
@@ -370,19 +369,6 @@ public struct AuthError: SupabaseError {
 
   public var description: String {
     formattedDescription(kind: kind.rawValue, code: code?.rawValue)
-  }
-
-  /// Whether the same request can succeed if sent again later.
-  ///
-  /// `true` for ``Kind-swift.struct/transport`` errors and for HTTP 408, 409, 429 and 5xx
-  /// responses. This is advice for the app's own retry, not the SDK's: the SDK never replays a
-  /// 429 that has no `Retry-After`, and GoTrue sends none, so back off with jitter before
-  /// retrying.
-  public var isRetryable: Bool {
-    if kind == .transport { return true }
-    guard let status = response?.status else { return false }
-    return [.requestTimeout, .conflict, .tooManyRequests].contains(status)
-      || status.kind == .serverError
   }
 
   /// Thrown when a session is required to proceed but none is stored locally.

@@ -498,6 +498,32 @@ struct RealtimeClientConnectionTests {
     #expect(h.connects.value.count == 2)
   }
 
+  @Test
+  func transportThatCannotOpenTheURLStopsReconnecting() async throws {
+    // A custom transport has only the public init and the kind to say "do not retry".
+    let cannotOpen = RealtimeError(kind: .invalidRequest, message: "unsupported scheme")
+    let h = Harness(
+      reconnectDelay: .seconds(1),
+      beforeConnect: { attempt in
+        if attempt == 2 { throw cannotOpen }
+      }
+    )
+    try await h.client.connect()
+    var statuses = await h.client.statusChanges().makeAsyncIterator()
+
+    h.servers.value[0].close(code: 1001, reason: "going away")
+
+    #expect(await statuses.next() == .connected)
+    #expect(await statuses.next() == .reconnecting)
+    await h.clock.advance(by: .seconds(1))
+    #expect(await statuses.next() == .connecting)
+    let stopped = await statuses.next()
+    #expect(stopped == .disconnected)
+    #expect(stopped?.error?.kind == .invalidRequest)
+    await h.clock.advance(by: .seconds(60))
+    #expect(h.connects.value.count == 2)
+  }
+
   @Test(arguments: [401, 403, 404])
   func connectThrowsAndStopsWhenTheTransportReportsAFatalUpgrade(status: Int) async throws {
     let h = Harness(

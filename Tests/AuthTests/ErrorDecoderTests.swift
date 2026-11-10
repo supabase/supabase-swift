@@ -279,19 +279,17 @@ struct ErrorDecoderTests {
     let body: String
     let request: HTTPTypes.HTTPRequest
     let kind: AuthError.Kind
-    let isRetryable: Bool
     let invalidatesSession: Bool
 
     init(
       _ status: Int, _ body: String,
       on request: HTTPTypes.HTTPRequest = ErrorDecoderTests.signInRequest,
-      kind: AuthError.Kind, isRetryable: Bool = false, invalidatesSession: Bool = false
+      kind: AuthError.Kind, invalidatesSession: Bool = false
     ) {
       self.status = status
       self.body = body
       self.request = request
       self.kind = kind
-      self.isRetryable = isRetryable
       self.invalidatesSession = invalidatesSession
     }
 
@@ -317,17 +315,16 @@ struct ErrorDecoderTests {
     Row(
       400, #"{"error":"invalid_grant","error_description":"m"}"#, on: refreshRequest,
       kind: .sessionInvalidated, invalidatesSession: true),
-    Row(409, #"{"code":"conflict","message":"m"}"#, kind: .server, isRetryable: true),
+    Row(409, #"{"code":"conflict","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_request_rate_limit","message":"m"}"#, kind: .server, isRetryable: true),
+      429, #"{"code":"over_request_rate_limit","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_email_send_rate_limit","message":"m"}"#, kind: .server,
-      isRetryable: true),
+      429, #"{"code":"over_email_send_rate_limit","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_sms_send_rate_limit","message":"m"}"#, kind: .server, isRetryable: true),
-    Row(500, #"{"code":"unexpected_failure","message":"m"}"#, kind: .server, isRetryable: true),
-    Row(520, "", kind: .server, isRetryable: true),
-    Row(408, #"{"code":"request_timeout","message":"m"}"#, kind: .server, isRetryable: true),
+      429, #"{"code":"over_sms_send_rate_limit","message":"m"}"#, kind: .server),
+    Row(500, #"{"code":"unexpected_failure","message":"m"}"#, kind: .server),
+    Row(520, "", kind: .server),
+    Row(408, #"{"code":"request_timeout","message":"m"}"#, kind: .server),
     Row(403, #"{"code":"bad_jwt","message":"m"}"#, kind: .server),
     Row(422, #"{"code":"weak_password","message":"m"}"#, kind: .server),
     Row(400, #"{"code":"invalid_credentials","message":"m"}"#, kind: .server),
@@ -348,26 +345,11 @@ struct ErrorDecoderTests {
     let error = try Self.decode(status: row.status, body: row.body, request: row.request)
 
     #expect(error.kind == row.kind)
-    #expect(error.isRetryable == row.isRetryable)
     #expect(error.invalidatesSession == row.invalidatesSession)
   }
 
-  @Test
-  func transportErrorIsRetryableAndKeepsTheSession() {
-    let error = AuthError(
-      kind: .transport, message: "offline", underlyingError: URLError(.notConnectedToInternet))
-
-    #expect(error.isRetryable)
-    #expect(!error.invalidatesSession)
-  }
-
-  @Test
-  func decodingErrorIsNotRetryable() {
-    let error = AuthError(
-      kind: .decoding, message: "bad body",
-      response: HTTPErrorResponse(status: 200, headers: [:], body: Data()))
-
-    #expect(!error.isRetryable)
-    #expect(!error.invalidatesSession)
+  @Test(arguments: [AuthError.Kind.transport, .decoding])
+  func clientSideFailureKeepsTheSession(kind: AuthError.Kind) {
+    #expect(!AuthError(kind: kind, message: "m").invalidatesSession)
   }
 }
