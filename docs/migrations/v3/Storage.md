@@ -34,6 +34,10 @@ Changes that still compile but behave differently. Check each one by hand.
   upload takes upsert from its token.
 - **A discarded download reads nothing.** `_ = try await bucket.download(path:)` returns after the
   response headers and does not read the body.
+- **`configuration.headers` holds only the headers you passed.** `StorageClient.configuration`
+  no longer contains the SDK's default `X-Client-Info`. The client still sends it on every
+  request unless you set that header. Search for code that reads
+  `configuration.headers[.xClientInfo]`.
 
 ## Renames and type changes
 

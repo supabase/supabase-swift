@@ -182,6 +182,27 @@ struct SupabaseClientTests {
   }
 
   @Test
+  func authRetryOptionForwardsToAuthClient() throws {
+    let defaultClient = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
+      )
+    )
+    #expect(defaultClient.auth.configuration.retryEnabled == true)
+
+    let noRetryClient = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage(), retryEnabled: false)
+      )
+    )
+    #expect(noRetryClient.auth.configuration.retryEnabled == false)
+  }
+
+  @Test
   func dbRetryOptionForwardsToPostgrestClient() throws {
     let defaultClient = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,

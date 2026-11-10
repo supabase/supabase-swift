@@ -258,6 +258,7 @@ public final class SupabaseClient: Sendable {
         override: configuration.auth.http
       ),
       logger: configuration.auth.logger ?? configuration.global.logger,
+      retryEnabled: configuration.auth.retryEnabled,
       clock: configuration.auth.clock ?? configuration.global.clock
     )
     _auth = try AuthClient(configuration: authConfiguration)

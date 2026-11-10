@@ -265,9 +265,25 @@ struct BuildURLRequestTests {
   }
 
   @Test
-  func sessionConfiguration() throws {
+  func configurationKeepsTheHeadersItWasCreatedWith() throws {
     let client = try PostgrestClient(configuration: .init(url: url, schema: nil))
-    let clientInfoHeader = client.configuration.headers[.xClientInfo]
-    #expect(clientInfoHeader != nil)
+    #expect(client.configuration.headers.isEmpty)
+  }
+
+  @Test
+  func configuredClientInfoIsMatchedCaseInsensitively() async throws {
+    let capture = try QueryCapture(headers: [HTTPField.Name("x-client-info")!: "my-app/1.0"])
+    _ = try? await capture.client.from("users").select().execute()
+    #expect(capture.header("X-Client-Info") == "my-app/1.0")
+  }
+
+  @Test
+  func requestsCarryTheDefaultClientInfo() async throws {
+    let capture = try QueryCapture(headers: [:])
+    _ = try? await capture.client.from("users").select().execute()
+    #expect(
+      capture.header("X-Client-Info")
+        == "postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
+    )
   }
 }
