@@ -295,11 +295,11 @@ struct RealtimeChannelTests {
 
   }
 
-  @Test
-  func httpSendThrowsWhenAccessTokenIsMissing() async {
+  @Test(arguments: [false, true])
+  func httpSendWithoutAnAccessTokenSendsOnlyTheAPIKey(binary: Bool) async throws {
     let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
@@ -308,16 +308,39 @@ struct RealtimeChannelTests {
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-
     let channel = await socket.channel("test-topic")
 
-    do {
+    if binary {
+      try await channel.httpSend(event: "test", data: Data([0x01]))
+    } else {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
-      Issue.record("Expected httpSend to throw an error when access token is missing")
-    } catch {
-      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
-      #expect(error.localizedDescription == "Access token is required for httpSend()")
     }
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.apikey] == "test-key")
+    #expect(headers[.authorization] == nil)
+  }
+
+  @Test
+  func httpSendWithAnAccessTokenCallbackThatReturnsNilSendsOnlyTheAPIKey() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { nil }),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.authorization] == nil)
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -581,31 +604,6 @@ struct RealtimeChannelTests {
     )
     #expect(request.head.headerFields[.contentType] == "application/octet-stream")
     #expect(request.body == payload)
-  }
-
-  @Test
-  func httpSendWithBinaryDataThrowsWhenAccessTokenIsMissing() async {
-    let httpClient = RecordingTransport()
-    let (client, _) = FakeWebSocket.fakes()
-
-    let socket = RealtimeClient(
-      configuration: RealtimeClient.Configuration(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"]),
-      wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
-      clock: ContinuousClock()
-    )
-
-    let channel = await socket.channel("test-topic")
-
-    do {
-      try await channel.httpSend(event: "test", data: Data([0x01]))
-      Issue.record("Expected httpSend to throw an error when access token is missing")
-    } catch {
-      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
-      #expect(error.localizedDescription == "Access token is required for httpSend()")
-    }
   }
 
   @Test

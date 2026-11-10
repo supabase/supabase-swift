@@ -461,7 +461,6 @@ supporting_symbols:
   - RealtimeError.Kind.init
   - RealtimeError.Kind.rawValue
   - RealtimeError.Kind.timeout
-  - RealtimeError.Kind.accessTokenMissing
   - RealtimeError.Kind.accessToken
   - RealtimeError.Kind.channelClosedByServer
   - RealtimeError.Kind.channelError

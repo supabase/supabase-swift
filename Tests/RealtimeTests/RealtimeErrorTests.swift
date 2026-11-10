@@ -24,7 +24,6 @@ struct RealtimeErrorTests {
   @Test
   func statics() {
     #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
-    #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
     #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
   }
 

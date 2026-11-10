@@ -16,9 +16,12 @@ extension RealtimeChannel {
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
   /// a broadcast before subscribing to the channel.
   ///
-  /// The request carries the client's configured headers, including `X-Client-Info`, with
-  /// `Content-Type` and `Authorization: Bearer <access token>` set on top. It is sent once and
-  /// never retried, because a replay can deliver the broadcast twice.
+  /// The request carries the client's configured headers, including `X-Client-Info` and
+  /// `apikey`, with `Content-Type` and, when the client has an access token,
+  /// `Authorization: Bearer <access token>` set on top. Without a token only `apikey`
+  /// authenticates the request, which is enough for a public channel; a private channel needs a
+  /// token its RLS policies accept. The request is sent once and never retried, because a replay
+  /// can deliver the broadcast twice.
   ///
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
   /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
@@ -31,9 +34,9 @@ extension RealtimeChannel {
   ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
   ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, and
-  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws;
-  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout` runs out,
-  ///   `.channelRemoved`, or `.notConnected` when the client was released.
+  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws; `.server`,
+  ///   `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or `.notConnected`
+  ///   when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
@@ -73,8 +76,8 @@ extension RealtimeChannel {
   ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
   ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessToken` when the `accessToken` closure throws;
-  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout` runs out,
-  ///   `.channelRemoved`, or `.notConnected` when the client was released.
+  ///   `.server`, `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or
+  ///   `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     data: Data,
@@ -104,7 +107,9 @@ extension RealtimeChannel {
         timeout ?? client.configuration.requestTimeout, clock: client.clock
       ) { [headers] in
         var headers = headers
-        headers[.authorization] = "Bearer \(try await client.httpSendAccessToken())"
+        if let accessToken = try await client.httpSendAccessToken() {
+          headers[.authorization] = "Bearer \(accessToken)"
+        }
         let request = HTTPRequest(method: .post, url: url, headerFields: headers)
         return try await client.http.send(request, body: body)
       }

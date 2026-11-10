@@ -1364,6 +1364,31 @@
       await client.realtime.removeAllChannels()
     }
 
+    /// Without an access token, `httpSend` sends only `apikey`, and a subscriber on the public
+    /// channel receives the broadcast.
+    @Test
+    func httpSendWithoutAnAccessTokenReachesAPublicChannel() async throws {
+      let client = client
+      let sender = try makeRealtimeClient(accessToken: { nil })
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+        let receiver = await client.realtime.channel("http-send-no-token")
+        let messages = await receiver.broadcasts(event: "rest")
+        try await receiver.subscribe()
+
+        let channel = await sender.channel("http-send-no-token")
+        try await channel.httpSend(event: "rest", payload: ["n": 1])
+
+        let message = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+        #expect(try message?.decode(as: [String: Int].self) == ["n": 1])
+
+        await receiver.unsubscribe()
+        await sender.removeAllChannels()
+      }
+    }
+
     private struct HeaderRecorder: ClientMiddleware {
       let headers = LockIsolated<[HTTPFields]>([])
 
