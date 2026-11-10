@@ -126,6 +126,10 @@ extension SupabaseClient {
       /// ``AuthClient/Configuration/observesAppLifecycle``.
       public var observesAppLifecycle: Bool
 
+      /// Whether to automatically retry transient Auth errors on `GET` requests. Defaults to
+      /// `true`. See ``AuthClient/Configuration/retryEnabled``.
+      public var retryEnabled: Bool
+
       /// Overrides ``SupabaseClient/Configuration/Global/http`` for Auth, field by field: a `nil`
       /// transport or timeout falls back to the global one, and its middlewares run after the
       /// global ones. `nil` uses the global configuration as is.
@@ -160,6 +164,7 @@ extension SupabaseClient {
       ///   - http: Overrides the global HTTP settings for Auth requests, field by field. `nil`
       ///     uses the global value.
       ///   - logger: Overrides the global logger for Auth. `nil` uses the global value.
+      ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
       ///   - clock: Overrides the global clock for Auth. `nil` uses the global value.
       ///   - accessToken: A third-party token source. When set, ``SupabaseClient/auth`` cannot be
       ///     used.
@@ -171,6 +176,7 @@ extension SupabaseClient {
         observesAppLifecycle: Bool = true,
         http: HTTPClientConfiguration? = nil,
         logger: Logging.Logger? = nil,
+        retryEnabled: Bool = true,
         clock: (any Clock<Duration>)? = nil,
         accessToken: (@Sendable () async throws -> String?)? = nil
       ) {
@@ -179,6 +185,7 @@ extension SupabaseClient {
         self.storageKey = storageKey
         self.autoRefresh = autoRefresh
         self.observesAppLifecycle = observesAppLifecycle
+        self.retryEnabled = retryEnabled
         self.http = http
         self.logger = logger
         self.clock = clock

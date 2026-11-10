@@ -36,6 +36,10 @@ Changes that still compile but behave differently. Check each one by hand.
   as a `PostgrestError` of kind `.invalidRequest`. The message is now always
   "`` `.csv()` cannot be combined with `.stripNulls()` ``", whatever the call order. Search for
   code that matches the v2 message "`` `.stripNulls()` cannot be combined with `.csv()` ``".
+- **`configuration.headers` holds only the headers you passed.** `PostgrestClient.configuration`
+  no longer contains the SDK's default `X-Client-Info`. The client still sends it on every
+  request unless you set that header. Search for code that reads
+  `configuration.headers[.xClientInfo]`.
 
 ## Renames and type changes
 

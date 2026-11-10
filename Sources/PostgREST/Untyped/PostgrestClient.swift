@@ -225,7 +225,6 @@ public struct PostgrestClient: Sendable {
   /// Creates a client from a configuration whose URL ``init(configuration:)`` already accepted.
   private init(checkedConfiguration configuration: Configuration) {
     var configuration = configuration
-    configuration.headers = Configuration.defaultHeaders.merging(with: configuration.headers)
     configuration.logger = configuration.logger.redactingSecrets()
     configuration.logger[metadataKey: "system"] = "postgrest"
     self.configuration = configuration

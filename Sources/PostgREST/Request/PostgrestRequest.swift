@@ -182,7 +182,9 @@ extension PostgrestClient {
     method: HTTPTypes.HTTPRequest.Method = .get
   ) -> _PostgrestRequest {
     _PostgrestRequest(
-      method: method, relation: relation, headerFields: configuration.headers)
+      method: method, relation: relation,
+      headerFields: PostgrestClient.Configuration.defaultHeaders.merging(
+        with: configuration.headers))
   }
 }
 
