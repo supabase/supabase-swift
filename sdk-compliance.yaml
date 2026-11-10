@@ -40,12 +40,16 @@ supporting_symbols:
   - JSONDecoder.supabase
   - JSONEncoder.supabase
 
-  # The injected clock is a testability seam shared across Auth's token auto-refresh and
-  # request-retry backoff and Realtime's heartbeat timer and reconnect backoff, rather than a
-  # capability any one feature implements. `SupabaseClient` forwards `Configuration.Global.clock` to the
-  # per-sub-client properties, so all three spell the same knob at a different layer.
+  # The injected clock is a testability seam shared across Auth's token auto-refresh, the
+  # request-retry backoff of Auth, PostgREST and Storage, and Realtime's heartbeat timer and
+  # reconnect backoff, rather than a capability any one feature implements. `SupabaseClient`
+  # forwards `Configuration.Global.clock`, or a module's own `clock` when set, to each sub-client,
+  # so these symbols spell the same knob at different layers.
   - SupabaseClient.Configuration.Global.clock
   - SupabaseClient.Configuration.Auth.clock
+  - SupabaseClient.Configuration.Database.clock
+  - SupabaseClient.Configuration.Storage.clock
+  - SupabaseClient.Configuration.Realtime.clock
   - AuthClient.Configuration.clock
   - AuthClient.Configuration.now
   - RealtimeClient.Configuration.clock
@@ -59,6 +63,8 @@ supporting_symbols:
   # knob, not a capability.
   - SupabaseClient.Configuration.Functions.logger
   - SupabaseClient.Configuration.Auth.logger
+  - SupabaseClient.Configuration.Database.logger
+  - SupabaseClient.Configuration.Storage.logger
 
   # A handful of PostgrestRequestBuilder members are used across many
   # database.* capabilities simultaneously (executing every query/mutate/rpc,
@@ -1387,6 +1393,8 @@ features:
       - StorageClient.Configuration.http
       - SupabaseClient.Configuration.Functions.http
       - SupabaseClient.Configuration.Auth.http
+      - SupabaseClient.Configuration.Database.http
+      - SupabaseClient.Configuration.Storage.http
     supporting_symbols:
       - HTTPClientConfiguration
       - HTTPClientConfiguration.init
