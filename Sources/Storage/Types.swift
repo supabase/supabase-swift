@@ -632,7 +632,7 @@ public struct ObjectVersion: Hashable, Sendable {
   /// The object path, e.g. `"folder/image.png"`.
   public var path: String
 
-  /// The version to address, from ``StorageObject/version`` or ``ObjectInfo/version``.
+  /// The version to address, from ``StorageObject/versionID`` or ``ObjectInfo/versionID``.
   public var versionID: String
 
   /// Creates an ``ObjectVersion``.
