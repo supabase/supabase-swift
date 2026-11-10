@@ -462,9 +462,10 @@ public actor RealtimeClient {
   /// is cancelled, the frames left are dropped.
   ///
   /// - Parameters:
-  ///   - code: An optional numeric close code to send to the server.
+  ///   - code: The close code to send to the server. `nil` sends
+  ///     ``WebSocketCloseCode/normalClosure``.
   ///   - reason: An optional reason string to send to the server.
-  public func disconnect(code: Int? = nil, reason: String? = nil) async {
+  public func disconnect(code: WebSocketCloseCode? = nil, reason: String? = nil) async {
     logger.debug("Closing WebSocket connection")
     // A local, because the existential in `self.clock` is not opened when passed directly.
     let clock = clock

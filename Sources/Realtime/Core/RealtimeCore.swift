@@ -46,7 +46,7 @@ struct RealtimeCore {
     /// The transport failed to open a socket.
     case socketOpenFailed(RealtimeError)
     /// `disconnect(code:reason:)` was called.
-    case disconnectRequested(code: Int?, reason: String?)
+    case disconnectRequested(code: WebSocketCloseCode?, reason: String?)
     /// The remote closed the current socket.
     case socketClosed(code: Int?, reason: String?)
     /// The current socket failed, for example a heartbeat that was never acknowledged.
@@ -90,7 +90,7 @@ struct RealtimeCore {
     /// the channels again.
     case installSocket(any WebSocketConnection)
     /// Close a socket, either the current one or one that opened too late.
-    case closeSocket(any WebSocketConnection, code: Int?, reason: String)
+    case closeSocket(any WebSocketConnection, code: WebSocketCloseCode?, reason: String)
     /// Stop reading the socket that just went away.
     case stopSocketLoops
     /// Cancel every task the client owns, including a connect attempt in flight.

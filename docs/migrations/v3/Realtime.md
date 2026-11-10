@@ -220,6 +220,9 @@ to move from v1 to the v2 API first, then apply this guide.
 
 `RealtimeClient` is now an actor that owns the state of the connection and of every channel.
 `disconnect(code:reason:)` is `async`, and `connect()` throws when the socket cannot be opened.
+Its `code` is a `WebSocketCloseCode?`, the type a custom `WebSocketConnection` closes with. An integer
+literal still compiles (`disconnect(code: 4000)`); an `Int` variable needs
+`WebSocketCloseCode(rawValue:)`.
 Every read and every stream method is `async` too:
 
 - On the client and on `SupabaseClient`: `channel(_:configure:)`, `channels`, and on the client
