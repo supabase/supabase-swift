@@ -1,15 +1,6 @@
 {
-  "originHash" : "ec8930d6eba249a8b64f2160af8c790599229f3ccef6fd90112a30734a2d6c14",
+  "originHash" : "449373ef94d9ad3fe2c3f74148eea3e13e1c8d1d03785c1001ff19c154939736",
   "pins" : [
-    {
-      "identity" : "mocker",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/WeTransfer/Mocker",
-      "state" : {
-        "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
-        "version" : "3.0.2"
-      }
-    },
     {
       "identity" : "swift-asn1",
       "kind" : "remoteSourceControl",

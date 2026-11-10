@@ -1,59 +1,36 @@
-import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import TestHelpers
 import Testing
 
 @testable import Supabase
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-private final class FunctionsAuthCapturingProtocol: URLProtocol {
-  private static let storage = LockIsolated<URLRequest?>(nil)
-  static var capturedRequest: URLRequest? {
-    get { storage.value }
-    set { storage.setValue(newValue) }
-  }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    Self.capturedRequest = request
-    let response = HTTPURLResponse(
-      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
-    )!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Data("[]".utf8))
-    client?.urlProtocolDidFinishLoading(self)
-  }
-
-  override func stopLoading() {}
-}
-
-private func makeFunctionsAuthCapturingSession() -> URLSession {
-  let config = URLSessionConfiguration.ephemeral
-  config.protocolClasses = [FunctionsAuthCapturingProtocol.self]
-  return URLSession(configuration: config)
-}
-
-@Suite(.serialized)
+@Suite
 struct SupabaseClientFunctionsAuthTests {
+  private let transport = RecordingTransport { _, _ in
+    (HTTPResponse(status: .ok), Data("[]".utf8))
+  }
+
+  private func makeClient(
+    supabaseKey: String = "PUBLISHABLE_KEY",
+    auth: SupabaseClient.Configuration.Auth
+  ) throws -> SupabaseClient {
+    try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: supabaseKey,
+      configuration: SupabaseClient.Configuration(
+        auth: auth,
+        global: SupabaseClient.Configuration.Global(http: .init(transport: transport))
+      )
+    )
+  }
+
   @Test
   func functionsInvokePerCallHeaderOverrideIsNotClobberedByLiveAccessToken() async throws {
-    FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { "live-session-token" }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "live-session-token" }
       )
     )
 
@@ -62,71 +39,49 @@ struct SupabaseClientFunctionsAuthTests {
       options: FunctionInvokeOptions(headers: [.authorization: "Bearer per-call-override"])
     )
 
-    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer per-call-override")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer per-call-override")
   }
 
   @Test
   func functionsInvokeWithoutSessionDoesNotThrow() async throws {
-    FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          autoRefresh: .manual
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        autoRefresh: .manual
       )
     )
 
     try await client.functions.invoke("hello-world")
 
-    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
 
   @Test
   func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
-    FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+    let client = try makeClient(
       supabaseKey: "sb_publishable_abc123",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          autoRefresh: .manual
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        autoRefresh: .manual
       )
     )
 
     try await client.functions.invoke("hello-world")
 
-    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
-    #expect(request.value(forHTTPHeaderField: "apikey") == "sb_publishable_abc123")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == nil)
+    #expect(request.head.headerFields[HTTPField.Name("apikey")!] == "sb_publishable_abc123")
   }
 
   @Test
   func functionsInvokeThrowsTheProviderErrorUnwrapped() async throws {
     struct TokenError: Error {}
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { throw TokenError() }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { throw TokenError() }
       )
     )
 
@@ -137,47 +92,32 @@ struct SupabaseClientFunctionsAuthTests {
 
   @Test
   func functionsInvokeUsesLiveAccessTokenWhenNoOverrideIsGiven() async throws {
-    FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { "live-session-token" }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+    let client = try makeClient(
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "live-session-token" }
       )
     )
 
     try await client.functions.invoke("hello-world")
 
-    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer live-session-token")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer live-session-token")
   }
 
   @Test
   func functionsInvokeSendsNoBearerWhenTheProviderReturnsTheNewFormatKey() async throws {
-    FunctionsAuthCapturingProtocol.capturedRequest = nil
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+    let client = try makeClient(
       supabaseKey: "sb_publishable_abc123",
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          accessToken: { "sb_publishable_abc123" }
-        ),
-        global: SupabaseClient.Configuration.Global(
-          http: .init(transport: URLSessionTransport(session: makeFunctionsAuthCapturingSession()))
-        )
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        accessToken: { "sb_publishable_abc123" }
       )
     )
 
     try await client.functions.invoke("hello-world")
 
-    let request = try #require(FunctionsAuthCapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == nil)
   }
 }

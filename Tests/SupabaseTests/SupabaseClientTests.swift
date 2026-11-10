@@ -19,36 +19,6 @@ import Testing
   import FoundationNetworking
 #endif
 
-final class RequestCapturingProtocol: URLProtocol {
-  private static let storage = LockIsolated<[URLRequest]>([])
-
-  static var capturedRequests: [URLRequest] {
-    get { storage.value }
-    set { storage.setValue(newValue) }
-  }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    Self.capturedRequests.append(request)
-    let response = HTTPURLResponse(
-      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
-    )!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Data("[]".utf8))
-    client?.urlProtocolDidFinishLoading(self)
-  }
-
-  override func stopLoading() {}
-}
-
-func makeMockSession() -> URLSession {
-  let config = URLSessionConfiguration.ephemeral
-  config.protocolClasses = [RequestCapturingProtocol.self]
-  return URLSession(configuration: config)
-}
-
 @Suite
 struct SupabaseClientTests {
   @Test
@@ -401,19 +371,7 @@ struct SupabaseClientTests {
   func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async throws {
     struct TokenProviderError: Error, Equatable {}
 
-    final class UnreachableProtocol: URLProtocol {
-      override static func canInit(with request: URLRequest) -> Bool { true }
-      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-      override func startLoading() {
-        client?.urlProtocol(self, didFailWithError: URLError(.unknown))
-      }
-
-      override func stopLoading() {}
-    }
-
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [UnreachableProtocol.self]
+    let transport = ClosureTransport { _, _ in throw URLError(.unknown) }
 
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
@@ -423,9 +381,7 @@ struct SupabaseClientTests {
           storage: InMemoryAuthStorage(),
           accessToken: { throw TokenProviderError() }
         ),
-        global: .init(
-          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
-        )
+        global: .init(http: .init(transport: transport))
       )
     )
 
@@ -496,47 +452,23 @@ struct SupabaseClientTests {
 
   @Test
   func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
-    final class CapturingProtocol: URLProtocol {
-      private static let storage = LockIsolated<URLRequest?>(nil)
-      static var capturedRequest: URLRequest? {
-        get { storage.value }
-        set { storage.setValue(newValue) }
-      }
-
-      override static func canInit(with request: URLRequest) -> Bool { true }
-      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-      override func startLoading() {
-        Self.capturedRequest = request
-        let response = HTTPURLResponse(
-          url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("[]".utf8))
-        client?.urlProtocolDidFinishLoading(self)
-      }
-
-      override func stopLoading() {}
+    let transport = RecordingTransport { _, _ in
+      (HTTPTypes.HTTPResponse(status: .ok), Data("[]".utf8))
     }
-
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [CapturingProtocol.self]
 
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: .init(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
-        global: .init(
-          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
-        )
+        global: .init(http: .init(transport: transport))
       )
     )
 
     try await client.rpc("some_fn").execute()
 
-    let request = try #require(CapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
 
   @Test

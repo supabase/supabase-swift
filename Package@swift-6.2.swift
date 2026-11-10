@@ -46,7 +46,6 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.13.0"),
-    .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
   ],
   targets: [
@@ -68,7 +67,6 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
-        "Mocker",
         "TestHelpers",
       ]
     ),
@@ -118,7 +116,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Functions",
-        "Mocker",
         "TestHelpers",
       ]
     ),
@@ -160,7 +157,6 @@ let package = Package(
       dependencies: [
         .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         "Helpers",
-        "Mocker",
         "PostgREST",
         "TestHelpers",
       ],
@@ -190,6 +186,7 @@ let package = Package(
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         "PostgrestMacros",
         "PostgrestMacrosPlugin",
+        "TestHelpers",
       ]
     ),
     .testTarget(
@@ -251,7 +248,6 @@ let package = Package(
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
-        "Mocker",
         "TestHelpers",
         "Storage",
       ],
@@ -312,7 +308,6 @@ let package = Package(
         .product(name: "Logging", package: "swift-log"),
         "Auth",
         "Helpers",
-        "Mocker",
         "Realtime",
       ]
     ),

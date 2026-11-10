@@ -111,6 +111,7 @@ extension AuthClientTests {
       payload: #"{"sub":"1234567890","exp":9999999999}"#
     )
     try transport.stubJWKS(signer.jwk)
+    try transport.stubJWKS(signer.jwk, baseURL: otherURL)
 
     let first = makeSUT(storageKey: storageKey)
     let second = makeSUT(url: otherURL, storageKey: storageKey)

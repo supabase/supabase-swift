@@ -5,69 +5,44 @@
 //  Created by Guilherme Souza on 21/08/26.
 //
 
-import ConcurrencyExtras
 import Foundation
 import HTTPTypesFoundation
 import PostgrestMacros
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-private struct ClosureTransport: ClientTransport {
-  let handler:
-    @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-      HTTPTypes.HTTPResponse, HTTPBody?
-    )
-
-  func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
-    HTTPTypes.HTTPResponse, HTTPBody?
-  ) {
-    try await handler(request, body)
-  }
-}
+import TestHelpers
 
 struct RequestCapture {
   let client: PostgrestClient
-  private let captured = LockIsolated(HTTPTypes.HTTPRequest?.none)
-  private let capturedBody = LockIsolated(Data?.none)
+  private let transport: RecordingTransport
 
   init(body: String = "[]") throws {
-    let captured = self.captured
-    let capturedBody = self.capturedBody
+    let transport = RecordingTransport { _, _ in
+      (
+        HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+        Data(body.utf8)
+      )
+    }
+    self.transport = transport
     client = try PostgrestClient(
       configuration: .init(
         url: URL(string: "https://example.supabase.co")!,
         headers: [.xClientInfo: "postgrest-swift/test"],
-        http: .init(
-          transport: ClosureTransport { request, requestBody in
-            captured.setValue(request)
-            let data: Data? =
-              if let requestBody {
-                try await Data(collecting: requestBody, upTo: .max)
-              } else {
-                nil
-              }
-            capturedBody.setValue(data)
-            return (
-              HTTPTypes.HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
-              HTTPBody(Data(body.utf8))
-            )
-          })
+        http: .init(transport: transport)
       )
     )
   }
 
+  private var captured: HTTPTypes.HTTPRequest? { transport.requests.last?.head }
+
   var query: String? {
-    guard let query = captured.value?.url?.query else { return nil }
+    guard let query = captured?.url?.query else { return nil }
     return query.removingPercentEncoding ?? query
   }
 
-  var path: String? { captured.value?.url?.path }
+  var path: String? { captured?.url?.path }
 
-  var prefer: String? { captured.value?.headerFields[HTTPField.Name("Prefer")!] }
+  var prefer: String? { captured?.headerFields[HTTPField.Name("Prefer")!] }
 
   var bodyString: String? {
-    capturedBody.value.map { String(decoding: $0, as: UTF8.self) }
+    transport.requests.last?.body.map { String(decoding: $0, as: UTF8.self) }
   }
 }
