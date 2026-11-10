@@ -145,7 +145,7 @@ struct FileSearchView: View {
         Section("File Details") {
           DetailRow(label: "Name", value: selectedFile.name)
           DetailRow(label: "ID", value: selectedFile.id.uuidString)
-          DetailRow(label: "Version", value: selectedFile.version)
+          DetailRow(label: "Version", value: selectedFile.versionID)
 
           if let contentType = selectedFile.contentType {
             DetailRow(label: "Content Type", value: contentType)
@@ -159,7 +159,7 @@ struct FileSearchView: View {
           }
 
           if let cacheControl = selectedFile.cacheControl {
-            DetailRow(label: "Cache Control", value: cacheControl)
+            DetailRow(label: "Cache Control", value: cacheControl.rawValue)
           }
 
           if let createdAt = selectedFile.createdAt {

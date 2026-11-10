@@ -73,8 +73,8 @@ public struct DownloadResponse: Sendable {
   }
 
   /// The `Cache-Control` the object was uploaded with.
-  public var cacheControl: String? {
-    headers[.cacheControl]
+  public var cacheControl: CacheControl? {
+    headers[.cacheControl].map(CacheControl.init(rawValue:))
   }
 
   /// Reads the whole body into memory.

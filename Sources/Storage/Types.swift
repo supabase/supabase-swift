@@ -200,7 +200,7 @@ public struct UploadOptions: Sendable {
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// Extra HTTP headers to include with the upload request. A header set here wins over the one
   /// the SDK would send for the same name.
@@ -218,7 +218,7 @@ public struct UploadOptions: Sendable {
     contentType: String? = nil,
     cacheControl: CacheControl = .maxAge(.seconds(3600)),
     upsert: Bool = false,
-    metadata: [String: JSONValue]? = nil,
+    metadata: JSONObject? = nil,
     headers: HTTPFields = [:]
   ) {
     self.contentType = contentType
@@ -407,7 +407,9 @@ public struct PublicURLOptions: Sendable {
 /// - ``maxAge(_:)``
 /// - ``noCache``
 /// - ``noStore``
-public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct CacheControl: RawRepresentable, Decodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
   /// The header value as sent, e.g. `"max-age=3600"`.
   public let rawValue: String
 
@@ -590,7 +592,7 @@ public struct CopyOptions: Sendable {
   public var copyMetadata: Bool
 
   /// User metadata for the copy, in place of the source's.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// The MIME type of the copy, in place of the source's.
   public var contentType: String?
@@ -609,7 +611,7 @@ public struct CopyOptions: Sendable {
   public init(
     upsert: Bool = false,
     copyMetadata: Bool = true,
-    metadata: [String: JSONValue]? = nil,
+    metadata: JSONObject? = nil,
     contentType: String? = nil,
     cacheControl: CacheControl? = nil
   ) {
@@ -655,7 +657,7 @@ public struct ObjectVersion: Hashable, Sendable {
 ///
 /// - ``name``
 /// - ``id``
-/// - ``version``
+/// - ``versionID``
 /// - ``isFolder``
 ///
 /// ### Timestamps
@@ -683,7 +685,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public var id: UUID?
 
   /// The version identifier of this object. `nil` for a folder row and on older servers.
-  public var version: String?
+  public var versionID: String?
 
   /// The date and time the object was created.
   public var createdAt: Date?
@@ -698,7 +700,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public var metadata: ObjectMetadata?
 
   /// The metadata the uploader attached through ``UploadOptions/metadata``.
-  public var userMetadata: [String: JSONValue]?
+  public var userMetadata: JSONObject?
 
   /// Whether this object was created while the bucket had versioning enabled.
   public var isVersioned: Bool?
@@ -717,19 +719,19 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public init(
     name: String,
     id: UUID? = nil,
-    version: String? = nil,
+    versionID: String? = nil,
     createdAt: Date? = nil,
     updatedAt: Date? = nil,
     lastAccessedAt: Date? = nil,
     metadata: ObjectMetadata? = nil,
-    userMetadata: [String: JSONValue]? = nil,
+    userMetadata: JSONObject? = nil,
     isVersioned: Bool? = nil,
     isDeleteMarker: Bool? = nil,
     archivedAt: Date? = nil
   ) {
     self.name = name
     self.id = id
-    self.version = version
+    self.versionID = versionID
     self.createdAt = createdAt
     self.updatedAt = updatedAt
     self.lastAccessedAt = lastAccessedAt
@@ -743,7 +745,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   enum CodingKeys: String, CodingKey {
     case name
     case id
-    case version
+    case versionID = "version"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case lastAccessedAt = "last_accessed_at"
@@ -781,7 +783,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   public var mimeType: String?
 
   /// The `Cache-Control` header stored with the object.
-  public var cacheControl: String?
+  public var cacheControl: CacheControl?
 
   /// When the bytes were last written.
   public var lastModified: Date?
@@ -790,17 +792,17 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   public var contentLength: Int64?
 
   /// Every other key Storage sent, by its wire name.
-  public var additional: [String: JSONValue]
+  public var additional: JSONObject
 
   /// Creates an ``ObjectMetadata``.
   public init(
     eTag: String? = nil,
     size: Int64? = nil,
     mimeType: String? = nil,
-    cacheControl: String? = nil,
+    cacheControl: CacheControl? = nil,
     lastModified: Date? = nil,
     contentLength: Int64? = nil,
-    additional: [String: JSONValue] = [:]
+    additional: JSONObject = [:]
   ) {
     self.eTag = eTag
     self.size = size
@@ -826,12 +828,12 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
     eTag = try container.decodeIfPresent(String.self, forKey: .eTag)
     size = try container.decodeIfPresent(Int64.self, forKey: .size)
     mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
-    cacheControl = try container.decodeIfPresent(String.self, forKey: .cacheControl)
+    cacheControl = try container.decodeIfPresent(CacheControl.self, forKey: .cacheControl)
     lastModified = try container.decodeIfPresent(String.self, forKey: .lastModified)?.date
     contentLength = try container.decodeIfPresent(Int64.self, forKey: .contentLength)
 
     let known = Set(CodingKeys.allCases.map(\.rawValue))
-    let all = try decoder.singleValueContainer().decode([String: JSONValue].self)
+    let all = try decoder.singleValueContainer().decode(JSONObject.self)
     additional = all.filter { !known.contains($0.key) }
   }
 }
@@ -843,7 +845,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
 /// ### Identifying the object
 ///
 /// - ``id``
-/// - ``version``
+/// - ``versionID``
 /// - ``name``
 /// - ``bucketID``
 ///
@@ -872,7 +874,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var id: UUID
 
   /// The version identifier of this object.
-  public var version: String
+  public var versionID: String
 
   /// The full key of the object within its bucket.
   public var name: String
@@ -887,7 +889,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var contentType: String?
 
   /// The `Cache-Control` header stored with the object.
-  public var cacheControl: String?
+  public var cacheControl: CacheControl?
 
   /// The entity tag of the stored bytes.
   public var eTag: String?
@@ -905,7 +907,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var lastAccessedAt: Date?
 
   /// The metadata the uploader attached through ``UploadOptions/metadata``.
-  public var userMetadata: [String: JSONValue]?
+  public var userMetadata: JSONObject?
 
   /// Whether this object was created while the bucket had versioning enabled.
   public var isVersioned: Bool?
@@ -919,24 +921,24 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   /// Creates an ``ObjectInfo``.
   public init(
     id: UUID,
-    version: String,
+    versionID: String,
     name: String,
     bucketID: String? = nil,
     size: Int64? = nil,
     contentType: String? = nil,
-    cacheControl: String? = nil,
+    cacheControl: CacheControl? = nil,
     eTag: String? = nil,
     lastModified: Date? = nil,
     createdAt: Date? = nil,
     updatedAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    userMetadata: [String: JSONValue]? = nil,
+    userMetadata: JSONObject? = nil,
     isVersioned: Bool? = nil,
     isDeleteMarker: Bool? = nil,
     archivedAt: Date? = nil
   ) {
     self.id = id
-    self.version = version
+    self.versionID = versionID
     self.name = name
     self.bucketID = bucketID
     self.size = size
@@ -955,7 +957,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case id
-    case version
+    case versionID = "version"
     case name
     case bucketID = "bucket_id"
     case size

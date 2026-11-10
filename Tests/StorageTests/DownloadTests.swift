@@ -151,7 +151,7 @@ struct DownloadTests {
     #expect(response.contentRange == "bytes 0-19/100")
     #expect(response.eTag == "\"abc\"")
     #expect(response.lastModified == Date(timeIntervalSince1970: 1_791_903_600))
-    #expect(response.cacheControl == "max-age=3600")
+    #expect(response.cacheControl == CacheControl.maxAge(.seconds(3600)))
 
     let data = try await response.data()
     #expect(data.count == 20)

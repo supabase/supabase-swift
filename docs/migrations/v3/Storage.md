@@ -269,6 +269,32 @@ Storage names spell `ID` in capitals, like the rest of the SDK. The wire format 
 | `Bucket.ownerId` | `Bucket.ownerID` |
 | `StorageError.Code.invalidUploadId`, `.invalidAccessKeyId` | `.invalidUploadID`, `.invalidAccessKeyID` |
 
+## One type and one name per field
+
+A field has the same name and type when you send it and when you read it back. The wire format
+does not change.
+
+| v2 and v3 pre-release | v3 |
+| --- | --- |
+| `StorageObject.version`, `ObjectInfo.version` | `versionID`, the name the options and `ObjectVersion` use |
+| `ObjectInfo.cacheControl`, `ObjectMetadata.cacheControl`, `DownloadResponse.cacheControl: String?` | `CacheControl?`, the type `UploadOptions` and `CopyOptions` take; read the header string with `.rawValue` |
+| `[String: JSONValue]` metadata fields | `JSONObject`, the same type; no code change |
+
+`CacheControl` is `ExpressibleByStringLiteral`, so a comparison such as
+`info.cacheControl == "no-cache"` still compiles. Code that passes the value on as a `String`
+needs `.rawValue`:
+
+```swift
+// v3 pre-release
+let header: String? = try await bucket.info(path: "a.png").cacheControl
+
+// v3
+let header: String? = try await bucket.info(path: "a.png").cacheControl?.rawValue
+```
+
+`Bucket.ownerID` stays a `String`: Storage stores the JWT `sub`, which is not a UUID under
+third-party auth.
+
 ## Experimental APIs
 
 Resumable uploads (`StorageBucket.resumableUpload(path:fileURL:options:)`, `ResumableUpload`,
