@@ -1,3 +1,4 @@
+import Clocks
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
@@ -281,6 +282,44 @@ struct AuthMiddlewareTests {
     #expect(error.serverError?.message == "not an admin")
     #expect(dataAuthorizations("/rest/v1/rpc/promote") == ["Bearer token-1"])
     #expect(refreshCount == 0)
+  }
+
+  @Test
+  func aRetriedRequestIsSignedWithTheSessionCurrentAtThatAttempt() async throws {
+    let http = RecordingTransport()
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryTestStorage(),
+          storageKey: "sb-test-\(UUID().uuidString)-auth-token",
+          autoRefresh: .manual
+        ),
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: http), clock: ImmediateClock())
+      )
+    )
+    http.respond(when: { $0.path == "/auth/v1/token?grant_type=password" }) { _, _ in
+      (HTTPResponse(status: .ok), sessionJSON(accessToken: "token-1", refreshToken: "refresh-1"))
+    }
+    http.respond(when: { $0.path == "/auth/v1/token?grant_type=refresh_token" }) { _, _ in
+      (HTTPResponse(status: .ok), sessionJSON(accessToken: "token-2", refreshToken: "refresh-2"))
+    }
+    http.respond(when: { $0.path?.hasPrefix("/rest/v1/todos") == true }) { [client] request, _ in
+      guard request.headerFields[.authorization] == "Bearer token-1" else {
+        return (HTTPResponse(status: .ok), Data("[]".utf8))
+      }
+      try await client.auth.refreshSession()
+      return (HTTPResponse(status: .serviceUnavailable), Data())
+    }
+    _ = try await client.auth.signIn(email: "a@b.c", password: "x")
+
+    try await client.from("todos").select().execute()
+
+    let authorizations = http.requests.filter { $0.head.path?.hasPrefix("/rest/v1/todos") == true }
+      .map { $0.head.headerFields[.authorization] }
+    #expect(authorizations == ["Bearer token-1", "Bearer token-2"])
   }
 
   @Test

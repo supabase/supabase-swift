@@ -123,6 +123,10 @@ extension SupabaseClient {
       /// When set, the `auth` namespace of the Supabase client cannot be used.
       /// When set, the client also never refreshes a stored session on its own, whatever ``autoRefresh`` says.
       /// Create another client if you wish to use Supabase Auth and third-party authentications concurrently in the same application.
+      ///
+      /// If it throws, a database, Storage, or Functions call, or a Realtime `httpSend`, throws
+      /// that module's error with kind `accessToken`, and this function's error as
+      /// `underlyingError`. A failure to read the Auth session gives the same kind.
       public var accessToken: (@Sendable () async throws -> String?)?
 
       /// Creates the Auth settings.

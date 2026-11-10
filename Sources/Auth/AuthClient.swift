@@ -222,6 +222,11 @@ public final class AuthClient: Sendable {
         message: "AuthClient configured with a URL that has no scheme or host: \(configuration.url)"
       )
     }
+    if configuration.http.containsAccessTokenMiddleware {
+      reportIssue(
+        "`AuthClient.Configuration.http` holds an `AccessTokenMiddleware`. Auth sends its own "
+          + "tokens; remove the middleware.")
+    }
     self.init(configuration: configuration, pkce: .live, platform: .live)
   }
 

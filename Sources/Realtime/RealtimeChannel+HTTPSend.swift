@@ -27,12 +27,13 @@ extension RealtimeChannel {
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
-  ///   - timeout: How long the request may take, like every other Realtime timeout. `nil` uses
-  ///     ``RealtimeClient/Configuration/requestTimeout``. The access token fetch before it has
-  ///     its own bound. ``RealtimeClient/Configuration/http`` explains the idle timeout.
+  ///   - timeout: How long the call may take, including the access token fetch, like every
+  ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
+  ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, and
-  ///   nothing is sent; `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout`
-  ///   runs out, `.channelRemoved`, or `.notConnected` when the client was released.
+  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws;
+  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout` runs out,
+  ///   `.channelRemoved`, or `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
@@ -68,12 +69,12 @@ extension RealtimeChannel {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: How long the request may take, like every other Realtime timeout. `nil` uses
-  ///     ``RealtimeClient/Configuration/requestTimeout``. The access token fetch before it has
-  ///     its own bound. ``RealtimeClient/Configuration/http`` explains the idle timeout.
-  /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport`,
-  ///   `.timeout` when `timeout` runs out, `.channelRemoved`, or `.notConnected` when the client
-  ///   was released.
+  ///   - timeout: How long the call may take, including the access token fetch, like every
+  ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
+  ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
+  /// - Throws: ``RealtimeError`` with kind `.accessToken` when the `accessToken` closure throws;
+  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout` runs out,
+  ///   `.channelRemoved`, or `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     data: Data,
@@ -91,33 +92,27 @@ extension RealtimeChannel {
   ) async throws {
     let client = try clientForAction()
     try await client.checkUsable(self)
-    guard let accessToken = await client.currentAccessToken() else {
-      throw RealtimeError.accessTokenMissing
-    }
-
     var headers = client.headers
     headers[.contentType] = contentType
-    headers[.authorization] = "Bearer \(accessToken)"
-
-    let request = HTTPRequest(
-      method: .post,
-      url: client.broadcastURL(topic: topic, event: event, isPrivate: configuration.isPrivate),
-      headerFields: headers
-    )
+    let url = client.broadcastURL(topic: topic, event: event, isPrivate: configuration.isPrivate)
 
     let response: HTTPResponse
     let data: Data
     do {
+      // The token fetch is inside the timeout, so a callback that hangs fails the send as `.timeout`.
       (response, data) = try await withTimeout(
         timeout ?? client.configuration.requestTimeout, clock: client.clock
-      ) {
-        try await client.http.send(request, body: body)
+      ) { [headers] in
+        var headers = headers
+        headers[.authorization] = "Bearer \(try await client.httpSendAccessToken())"
+        let request = HTTPRequest(method: .post, url: url, headerFields: headers)
+        return try await client.http.send(request, body: body)
       }
     } catch is TimeoutError {
       throw RealtimeError(kind: .timeout, message: "httpSend() timed out.")
     } catch {
       // Only the network layer's own failures are relabelled. `CancellationError` and errors
-      // thrown by a custom `ClientTransport` or the `accessToken` closure propagate as themselves.
+      // thrown by a custom `ClientTransport` propagate as themselves.
       guard let urlError = error as? URLError else { throw error }
       throw RealtimeError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)

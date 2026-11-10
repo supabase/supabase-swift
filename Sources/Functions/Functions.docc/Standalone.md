@@ -14,7 +14,7 @@ let functions = try FunctionsClient(
     url: URL(string: "https://<ref>.supabase.co/functions/v1")!,
     headers: [.apikey: "sb_publishable_…"],
     region: .usEast1,
-    accessToken: { await tokenStore.current }
+    http: .init(middlewares: [AccessTokenMiddleware { await tokenStore.current }])
   )
 )
 ```
@@ -24,14 +24,13 @@ is a programmer error and is reported where it was introduced.
 
 ### Authorization
 
-``FunctionsClient/Configuration/accessToken`` is called for every request. A non-`nil` result is
-sent as `Authorization: Bearer <token>` unless the request already carries `Authorization`; a
-per-call ``FunctionInvokeOptions/headers`` entry therefore wins. Whatever the closure throws
-propagates as itself.
-
-``FunctionsClient/Configuration/headers`` must not carry `Authorization`. A static bearer would
-win over every token the closure returns, so debug builds report an issue when it does. Send
-`apikey` there; send the user's JWT through the closure.
+An `AccessTokenMiddleware` in ``FunctionsClient/Configuration/http`` is the one way to send a
+user's token. It calls its closure for every request. A non-`nil` result is sent as
+`Authorization: Bearer <token>` unless the request already carries `Authorization`; a static
+``FunctionsClient/Configuration/headers`` entry or a per-call ``FunctionInvokeOptions/headers``
+entry therefore wins. If the closure throws, the call throws ``FunctionsError`` with kind
+``FunctionsError/Kind-swift.struct/accessToken``, and the closure's error in
+``FunctionsError/underlyingError``.
 
 A new-format `sb_publishable_` or `sb_secret_` key is an `apikey`, never a bearer. With
 `verify_jwt` on, the gateway accepts a request that carries only `apikey`.
@@ -40,8 +39,8 @@ A new-format `sb_publishable_` or `sb_secret_` key is an `apikey`, never a beare
 
 ``FunctionsClient/Configuration/http`` is the `HTTPClientConfiguration` every module shares: a
 `ClientTransport` performs the exchange and an ordered `ClientMiddleware` chain runs in front of
-it. Your middlewares run first, then the SDK adds the bearer and logs the request on the wire.
-A middleware of yours therefore never sees the token.
+it. Your middlewares run in order, then the SDK logs the request on the wire. A middleware after
+the `AccessTokenMiddleware` sees the token; one before it does not.
 
 ```swift
 let functions = try FunctionsClient(

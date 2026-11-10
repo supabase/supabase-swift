@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 06/10/26.
 //
 
+import Foundation
 import HTTPTypes
 import Testing
 
@@ -45,9 +46,54 @@ struct AccessTokenMiddlewareTests {
   }
 
   @Test
-  func propagatesTheProviderErrorUnwrapped() async {
-    await #expect(throws: TokenError.self) {
+  func wrapsTheProviderErrorSoTheModuleCanMapIt() async {
+    let failure = await #expect(throws: AccessTokenFailure.self) {
       try await send(request) { throw TokenError() }
     }
+    #expect(failure?.underlyingError is TokenError)
+  }
+
+  @Test
+  func failureDescribesItselfWithTheProviderError() {
+    struct DescribedError: LocalizedError, CustomStringConvertible {
+      var description: String { "described" }
+      var errorDescription: String? { "localized" }
+    }
+    let failure = AccessTokenFailure(underlyingError: DescribedError())
+
+    #expect(failure.description == "described")
+    #expect(failure.localizedDescription == "localized")
+  }
+
+  @Test
+  func passesCancellationThroughUnwrapped() async {
+    await #expect(throws: CancellationError.self) {
+      try await send(request) { throw CancellationError() }
+    }
+  }
+
+  @Test
+  func mapsTheURLErrorOfACancelledTaskToCancellationError() async {
+    await #expect(throws: CancellationError.self) {
+      try await send(request) {
+        withUnsafeCurrentTask { $0?.cancel() }
+        throw URLError(.cancelled)
+      }
+    }
+  }
+
+  @Test
+  func wrapsACancelledURLErrorWithoutTaskCancellation() async {
+    let failure = await #expect(throws: AccessTokenFailure.self) {
+      try await send(request) { throw URLError(.cancelled) }
+    }
+    #expect((failure?.underlyingError as? URLError)?.code == .cancelled)
+  }
+
+  @Test
+  func doesNotCallTheProviderWhenTheRequestCarriesAuthorization() async throws {
+    var request = request
+    request.headerFields[.authorization] = "Bearer static"
+    #expect(try await send(request) { throw TokenError() } == "Bearer static")
   }
 }

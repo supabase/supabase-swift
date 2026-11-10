@@ -18,27 +18,41 @@ import Testing
 
 @Suite
 struct PostgrestClientAccessTokenTests {
+  struct TokenError: Error, Equatable {}
+
   let url = URL(string: "http://localhost:54321/rest/v1")!
 
   private func okResponse() -> (HTTPTypes.HTTPResponse, HTTPBody?) {
     (HTTPTypes.HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
   }
 
-  @Test
-  func accessTokenSetsAuthorizationHeader() async throws {
-    let capturedHeaders = LockIsolated(HTTPFields())
-
-    let sut = try PostgrestClient(
+  private func makeSUT(
+    headers: HTTPFields = [:],
+    accessToken: @escaping @Sendable () async throws -> String?,
+    transport:
+      @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
+        HTTPTypes.HTTPResponse, HTTPBody?
+      )
+  ) throws -> PostgrestClient {
+    try PostgrestClient(
       configuration: .init(
         url: url,
+        headers: headers,
         http: .init(
-          transport: ClosureTransport { request, _ in
-            capturedHeaders.setValue(request.headerFields)
-            return self.okResponse()
-          }),
-        accessToken: { "access.token" }
+          transport: ClosureTransport(handler: transport),
+          middlewares: [AccessTokenMiddleware(getAccessToken: accessToken)]),
+        clock: ImmediateRetryTestClock()
       )
     )
+  }
+
+  @Test
+  func accessTokenMiddlewareSetsAuthorizationHeader() async throws {
+    let capturedHeaders = LockIsolated(HTTPFields())
+    let sut = try makeSUT(accessToken: { "access.token" }) { request, _ in
+      capturedHeaders.setValue(request.headerFields)
+      return self.okResponse()
+    }
 
     try await sut.from("todos").select().execute()
 
@@ -48,85 +62,46 @@ struct PostgrestClientAccessTokenTests {
   @Test
   func accessTokenIsResolvedPerRequest() async throws {
     let token = LockIsolated("first.token")
-    let capturedAuthorizationHeaders = LockIsolated([String]())
-
-    let sut = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { request, _ in
-            capturedAuthorizationHeaders.withValue {
-              $0.append(request.headerFields[.authorization] ?? "")
-            }
-            return self.okResponse()
-          }),
-        accessToken: { token.value }
-      )
-    )
+    let captured = LockIsolated([String]())
+    let sut = try makeSUT(accessToken: { token.value }) { request, _ in
+      captured.withValue { $0.append(request.headerFields[.authorization] ?? "") }
+      return self.okResponse()
+    }
 
     try await sut.from("todos").select().execute()
-    token.withValue { $0 = "second.token" }
-    try await sut.from("todos").select().execute()
-
-    #expect(capturedAuthorizationHeaders.value == ["Bearer first.token", "Bearer second.token"])
-  }
-
-  @Test
-  func inFlightRequestKeepsItsResolvedTokenAcrossALaterTokenMutation() async throws {
-    let token = LockIsolated("first.token")
-    let capturedAuthorizationHeaders = LockIsolated([String]())
-    let firstRequestIsInFlight = LockIsolated(false)
-    let firstRequestMayFinish = LockIsolated(false)
-
-    let sut = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { request, _ in
-            capturedAuthorizationHeaders.withValue {
-              $0.append(request.headerFields[.authorization] ?? "")
-            }
-            if !firstRequestIsInFlight.value {
-              firstRequestIsInFlight.setValue(true)
-              await waitUntil { firstRequestMayFinish.value }
-            }
-            return self.okResponse()
-          }),
-        accessToken: { token.value }
-      )
-    )
-
-    async let first: Void = {
-      _ = try await sut.from("todos").select().execute()
-    }()
-
-    await waitUntil { firstRequestIsInFlight.value }
     token.setValue("second.token")
+    try await sut.from("todos").select().execute()
 
-    _ = try await sut.from("todos").select().execute()
-    firstRequestMayFinish.setValue(true)
-    try await first
-
-    #expect(
-      capturedAuthorizationHeaders.value == ["Bearer first.token", "Bearer second.token"]
-    )
+    #expect(captured.value == ["Bearer first.token", "Bearer second.token"])
   }
 
   @Test
-  func explicitAuthorizationHeaderOverridesAccessToken() async throws {
-    let capturedHeaders = LockIsolated(HTTPFields())
+  func retriedRequestGetsAFreshToken() async throws {
+    let calls = LockIsolated(0)
+    let captured = LockIsolated([String]())
+    let sut = try makeSUT(
+      accessToken: {
+        calls.withValue { $0 += 1 }
+        return "token-\(calls.value)"
+      }
+    ) { request, _ in
+      captured.withValue { $0.append(request.headerFields[.authorization] ?? "") }
+      return captured.value.count == 1
+        ? (HTTPTypes.HTTPResponse(status: .serviceUnavailable), nil) : self.okResponse()
+    }
 
-    let sut = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { request, _ in
-            capturedHeaders.setValue(request.headerFields)
-            return self.okResponse()
-          }),
-        accessToken: { "access.token" }
-      )
-    )
+    try await sut.from("todos").select().execute()
+
+    #expect(captured.value == ["Bearer token-1", "Bearer token-2"])
+  }
+
+  @Test
+  func perCallAuthorizationHeaderWins() async throws {
+    let capturedHeaders = LockIsolated(HTTPFields())
+    let sut = try makeSUT(accessToken: { throw TokenError() }) { request, _ in
+      capturedHeaders.setValue(request.headerFields)
+      return self.okResponse()
+    }
 
     try await sut.from("todos")
       .select()
@@ -137,20 +112,26 @@ struct PostgrestClientAccessTokenTests {
   }
 
   @Test
-  func accessTokenErrorFailsTheRequestAsAPostgrestError() async throws {
-    struct TokenError: Error, Equatable {}
+  func staticAuthorizationHeaderWins() async throws {
+    let capturedHeaders = LockIsolated(HTTPFields())
+    let sut = try makeSUT(
+      headers: [.authorization: "Bearer static"], accessToken: { throw TokenError() }
+    ) { request, _ in
+      capturedHeaders.setValue(request.headerFields)
+      return self.okResponse()
+    }
 
-    let sut = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { _, _ in
-            Issue.record("transport should not be called when the access token provider throws")
-            return self.okResponse()
-          }),
-        accessToken: { throw TokenError() }
-      )
-    )
+    try await sut.from("todos").select().execute()
+
+    #expect(capturedHeaders.value[.authorization] == "Bearer static")
+  }
+
+  @Test
+  func accessTokenErrorFailsTheRequestAsAPostgrestError() async throws {
+    let sut = try makeSUT(accessToken: { throw TokenError() }) { _, _ in
+      Issue.record("transport should not be called when the access token provider throws")
+      return self.okResponse()
+    }
 
     let error = await #expect(throws: PostgrestError.self) {
       try await sut.from("todos").select().execute()
@@ -161,7 +142,6 @@ struct PostgrestClientAccessTokenTests {
 
   @Test
   func accessTokenErrorFailsTheTypedQueryTheSameWay() async throws {
-    struct TokenError: Error, Equatable {}
     struct Todo: _PostgrestRelation {
       static let relationName = "todos"
       static let selectString = "*"
@@ -172,17 +152,10 @@ struct PostgrestClientAccessTokenTests {
       static let columns = Columns()
     }
 
-    let sut = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        http: .init(
-          transport: ClosureTransport { _, _ in
-            Issue.record("transport should not be called when the access token provider throws")
-            return self.okResponse()
-          }),
-        accessToken: { throw TokenError() }
-      )
-    )
+    let sut = try makeSUT(accessToken: { throw TokenError() }) { _, _ in
+      Issue.record("transport should not be called when the access token provider throws")
+      return self.okResponse()
+    }
 
     let error = await #expect(throws: PostgrestError.self) {
       try await sut.from(Todo.self).select().execute()
@@ -192,9 +165,8 @@ struct PostgrestClientAccessTokenTests {
   }
 
   @Test
-  func noAccessTokenSendsNoAuthorizationHeader() async throws {
+  func noMiddlewareSendsNoAuthorizationHeader() async throws {
     let capturedHeaders = LockIsolated(HTTPFields())
-
     let sut = try PostgrestClient(
       configuration: .init(
         url: url,

@@ -115,8 +115,9 @@ Changes that still compile but behave differently. Check each one by hand.
   `webSocketTransport:`](#session-is-replaced-by-websockettransport)).
 - **The `accessToken` callback is called less often, and before the token expires.** The client
   calls it at most once every 10 seconds; `setAuth()` inside that window keeps the current
-  token. Channel joins and `httpSend` no longer call it every time. While connected, it also calls it one
-  minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
+  token. Channel joins no longer call it every time. `httpSend` still calls it for every request;
+  if it throws, `httpSend` throws a `RealtimeError` of kind `.accessToken`. While connected, it
+  also calls it one minute before a JWT's `exp`. A `nil` result keeps the current token instead of sending a
   `null` token to channels, and `setAuth()` without a callback no longer clears the stored
   token. The callback runs in a task of its own with the client's `requestTimeout`, so cancelling a
   `subscribe()` no longer cancels it. Search for `setAuth()` calls that expect the callback to
@@ -523,7 +524,9 @@ let configuration = RealtimeClient.Configuration(
 Catch `RealtimeError` and match on `kind`. A non-202 `httpSend` reply is `.server` with
 `response` set. A refused WebSocket upgrade has `response` set too: its kind is `.unauthorized`
 for 401 and 403, `.rateLimited` for 429, and `.server` otherwise. A network or WebSocket failure
-is `.transport`; `underlyingError` holds the cause when there is one. When the server's error
+is `.transport`; `underlyingError` holds the cause when there is one. An `accessToken` callback
+that throws during `httpSend` is `.accessToken`. Realtime takes its token only from that
+callback: do not add an `AccessTokenMiddleware` to `Configuration.http`. When the server's error
 reason starts with a code, such as `Unauthorized`, `code` holds it as a `RealtimeError.Code`. A
 `catch` clause can name a kind or a code directly, as in `catch RealtimeError.Kind.unauthorized`
 or `catch RealtimeError.Code.privateOnly`.

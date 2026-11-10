@@ -1,7 +1,6 @@
 public import Foundation
 public import HTTPTypes
 public import Helpers
-import IssueReporting
 public import Logging
 
 #if canImport(FoundationNetworking)
@@ -52,14 +51,18 @@ public struct FunctionsClient: Sendable {
 
     /// Headers sent with every request.
     ///
-    /// Must not carry `Authorization`: a static bearer would win over every token. Pass the
-    /// token through ``accessToken`` instead.
+    /// An `Authorization` header here wins over an `AccessTokenMiddleware` in ``http``.
     public var headers: HTTPFields
 
     /// The region to invoke functions in. `nil` lets the platform choose.
     public var region: FunctionRegion?
 
     /// The transport and middleware chain every request goes through.
+    ///
+    /// To send a user's access token, add an `AccessTokenMiddleware` to its middlewares. A
+    /// provider failure throws ``FunctionsError`` with kind
+    /// ``FunctionsError/Kind-swift.struct/accessToken``. An `Authorization` header in ``headers``
+    /// or in ``FunctionInvokeOptions/headers`` wins over the middleware.
     public var http: HTTPClientConfiguration
 
     /// A logger for request and response diagnostics.
@@ -75,29 +78,22 @@ public struct FunctionsClient: Sendable {
     /// TypeScript function's `JSON.stringify` writes) into `Date`.
     public var decoder: JSONDecoder
 
-    /// Resolved for every request and sent as `Authorization: Bearer <token>` unless the request
-    /// already carries `Authorization`. `nil` (the default) sends no bearer token.
-    public var accessToken: (@Sendable () async throws -> String?)?
-
     /// Creates a configuration.
     ///
     /// - Parameters:
     ///   - url: The Functions base URL.
-    ///   - headers: Headers sent with every request. Must not carry `Authorization`.
+    ///   - headers: Headers sent with every request.
     ///   - region: The region to invoke functions in. `nil` lets the platform choose.
     ///   - http: The transport and middleware chain every request goes through.
     ///   - logger: A logger for request and response diagnostics.
     ///   - decoder: The decoder used when a call does not pass its own.
-    ///   - accessToken: Resolved for every request and sent as a bearer token when the request
-    ///     does not already carry `Authorization`.
     public init(
       url: URL,
       headers: HTTPFields = [:],
       region: FunctionRegion? = nil,
       http: HTTPClientConfiguration = .init(),
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.functions"),
-      decoder: JSONDecoder = .supabase(),
-      accessToken: (@Sendable () async throws -> String?)? = nil
+      decoder: JSONDecoder = .supabase()
     ) {
       self.url = url
       self.headers = headers
@@ -105,7 +101,6 @@ public struct FunctionsClient: Sendable {
       self.http = http
       self.logger = logger
       self.decoder = decoder
-      self.accessToken = accessToken
     }
   }
 
@@ -131,19 +126,13 @@ public struct FunctionsClient: Sendable {
         message:
           "FunctionsClient configured with a URL that has no scheme or host: \(configuration.url)")
     }
-    if configuration.headers[.authorization] != nil {
-      reportIssue(
-        "`FunctionsClient.Configuration.headers` carries `Authorization`. A static bearer wins "
-          + "over every token; pass it through `Configuration.accessToken` instead.")
-    }
     self.configuration = configuration
 
     var logger = configuration.logger.redactingSecrets()
     logger[metadataKey: "system"] = "functions"
-    let accessToken = configuration.accessToken.map { AccessTokenMiddleware(getAccessToken: $0) }
     http = HTTPClient(
       configuration: configuration.http,
-      appending: (accessToken.map { [$0] } ?? []) + [LoggerInterceptor(logger: logger)],
+      appending: [LoggerInterceptor(logger: logger)],
       defaultTimeout: Self.requestIdleTimeout
     )
   }
@@ -160,9 +149,9 @@ public struct FunctionsClient: Sendable {
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
   /// - Returns: The status, headers and body the function answered with.
-  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status or a transport failure;
-  ///   `CancellationError` if the task is cancelled; whatever a custom transport, middleware or
-  ///   ``Configuration/accessToken`` closure throws.
+  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status, a transport failure or an
+  ///   access token provider failure; `CancellationError` if the task is cancelled; whatever a
+  ///   custom transport or middleware throws.
   @discardableResult
   public func invoke(
     _ name: String,
@@ -232,9 +221,9 @@ public struct FunctionsClient: Sendable {
   ///   - body: What to send. `nil` sends no body.
   ///   - options: Method, headers, query, region and timeout for this call.
   /// - Returns: The status and headers, and the body still to be read.
-  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status or a transport failure
-  ///   before the head arrives; `CancellationError` if the task is cancelled; whatever a custom
-  ///   transport, middleware or ``Configuration/accessToken`` closure throws.
+  /// - Throws: ``FunctionsError`` for a relay failure, a non-2xx status, a transport failure or an
+  ///   access token provider failure before the head arrives; `CancellationError` if the task is
+  ///   cancelled; whatever a custom transport or middleware throws.
   public func stream(
     _ name: String,
     body: FunctionBody? = nil,

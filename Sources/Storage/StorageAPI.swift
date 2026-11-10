@@ -140,10 +140,16 @@ struct StorageAPI: Sendable {
     return (response, body?.mapError(Self.transportError))
   }
 
-  /// Relabels the network layer's own failures. `CancellationError`, and anything thrown by user
-  /// code that runs inside the exchange (a custom `ClientTransport` or middleware), pass through
-  /// as themselves.
+  /// Relabels the network layer's own failures as `.transport` and a token provider's failure as
+  /// `.accessToken`. `CancellationError`, and anything else thrown by user code that runs inside
+  /// the exchange (a custom `ClientTransport` or middleware), pass through as themselves.
   private static func transportError(_ error: any Error) -> any Error {
+    if let failure = error as? AccessTokenFailure {
+      return StorageError(
+        kind: .accessToken,
+        message: AccessTokenFailure.message,
+        underlyingError: failure.underlyingError)
+    }
     guard let urlError = error as? URLError else { return error }
     return StorageError(
       kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)

@@ -58,7 +58,7 @@ Changes that still compile but behave differently. Check each one by hand.
   through one shared policy with jittered backoff, and they honor `Retry-After`. Each retry runs
   your `ClientMiddleware` and `ClientTransport` again. Storage reads now retry (pass
   `retryEnabled: false` to stop it). PostgREST no longer retries an error that your own transport,
-  middleware or `accessToken` closure throws.
+  middleware or token provider throws.
 - **Timeouts come from the SDK.** The SDK sets the request timeout itself: 60 seconds, or
   150 seconds for Functions. `URLSessionConfiguration.timeoutIntervalForRequest` has no effect on
   SDK requests. Set `HTTPClientConfiguration(timeout:)` instead.
@@ -300,7 +300,9 @@ do {
 }
 ```
 
-Errors that your own transport, middleware or `accessToken` closure throws are not wrapped.
+Errors that your own transport or middleware throws are not wrapped. A token provider that throws
+(an `AccessTokenMiddleware`, or the session through `SupabaseClient`) gives the module's error with
+kind `.accessToken`, and your error in `underlyingError`.
 
 ### Client initializers throw
 
@@ -362,9 +364,11 @@ Changes that still compile but behave differently. Check each one by hand.
   `FunctionInvokeOptions.headers`. A middleware in `Configuration.Global.http.middlewares` no longer
   sees `Authorization` on these requests; read it in a `ClientTransport`.
 - **Access-token errors fail the request.** If the session refresh or your
-  `Configuration.Auth.accessToken` closure throws, the request now fails with that error. In v2 the
-  request went out with the API key. Only a missing session still falls back to the key. A
-  refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
+  `Configuration.Auth.accessToken` closure throws, the request now fails with a `PostgrestError`,
+  `StorageError` or `FunctionsError` of kind `.accessToken`, and that error in `underlyingError`.
+  In v2 the request went out with the API key. Only a missing session still falls back to the key.
+  A refresh the server rejects gives an `AuthError` of kind `.sessionInvalidated` in
+  `underlyingError`.
 - **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
   you set in `SupabaseClient.Configuration.Realtime`. With `nil`, the default, it uses
   `Configuration.Global.logger`.

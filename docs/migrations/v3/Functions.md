@@ -45,9 +45,10 @@ Changes that still compile but behave differently. Check each one by hand.
 ## `FunctionsClient` takes a `Configuration`
 
 The flat initializers and `setAuth(token:)` are gone. Pass a `FunctionsClient.Configuration`.
-Give the token through `accessToken`, which runs before each request. Do not put
-`Authorization` in `headers`. `fetch:` is replaced by `http:`; see the overview for transports.
-`logger:` takes a swift-log `Logger`.
+Give the token through an `AccessTokenMiddleware` in `http`, which runs before each request. A
+provider that throws fails the call with a `FunctionsError` of kind `.accessToken`. A static
+`Authorization` in `headers` wins over the middleware. `fetch:` is replaced by `http:`; see the
+overview for transports. `logger:` takes a swift-log `Logger`.
 
 ```swift
 // v2
@@ -60,7 +61,7 @@ let functions = try FunctionsClient(
     url: url,
     headers: [.apikey: apiKey],
     region: .usEast1,
-    accessToken: { await tokenStore.currentAccessToken }
+    http: .init(middlewares: [AccessTokenMiddleware { await tokenStore.currentAccessToken }])
   )
 )
 ```

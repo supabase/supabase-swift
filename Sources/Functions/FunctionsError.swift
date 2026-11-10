@@ -61,6 +61,11 @@ public struct FunctionsError: SupabaseError {
     /// ``FunctionsClient/init(configuration:)`` refused the configuration: its URL has no scheme
     /// or no host. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
+    /// The access token provider threw, so the request could not be authenticated and was not
+    /// sent. The provider is an `AccessTokenMiddleware` in
+    /// ``FunctionsClient/Configuration/http``, or `SupabaseClient`'s Auth session.
+    /// ``FunctionsError/underlyingError`` is the provider's error.
+    public static let accessToken: Kind = "accessToken"
   }
 
   /// A platform error code from the `sb-error-code` response header.

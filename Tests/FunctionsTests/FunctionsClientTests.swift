@@ -49,12 +49,17 @@ struct FunctionsClientTests {
     region: FunctionRegion? = nil,
     http: HTTPClientConfiguration,
     decoder: JSONDecoder = .supabase(),
+    headers extraHeaders: HTTPFields = [:],
     accessToken: (@Sendable () async throws -> String?)? = nil
   ) throws -> FunctionsClient {
-    try FunctionsClient(
+    var http = http
+    if let accessToken {
+      http.middlewares.append(AccessTokenMiddleware(getAccessToken: accessToken))
+    }
+    return try FunctionsClient(
       configuration: .init(
-        url: url, headers: headers, region: region, http: http, decoder: decoder,
-        accessToken: accessToken))
+        url: url, headers: headers.merging(with: extraHeaders), region: region, http: http,
+        decoder: decoder))
   }
 
   @Test
@@ -660,43 +665,26 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func callerMiddlewareDoesNotSeeTheAccessToken() async throws {
-    struct Capture: ClientMiddleware {
-      let box: CapturedRequestBox
-      func intercept(
-        _ request: HTTPTypes.HTTPRequest, body: HTTPBody?,
-        next:
-          @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-            HTTPTypes.HTTPResponse, HTTPBody?
-          )
-      ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-        await box.set(request, timeout: nil)
-        return try await next(request, body)
-      }
-    }
-
-    let seenByMiddleware = CapturedRequestBox()
-    let seenByTransport = CapturedRequestBox()
+  func staticAuthorizationHeaderWinsOverTheAccessTokenMiddleware() async throws {
+    let box = CapturedRequestBox()
     let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
-          await seenByTransport.set(request, timeout: nil)
+          await box.set(request, timeout: nil)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
-        },
-        middlewares: [Capture(box: seenByMiddleware)]),
-      accessToken: { "access.token" }
+        }),
+      headers: [.authorization: "Bearer static"],
+      accessToken: { "provider.token" }
     )
 
     try await sut.invoke("hello-world")
 
-    let middlewareRequest = await seenByMiddleware.request
-    #expect(middlewareRequest?.headerFields[.authorization] == nil)
-    let transportRequest = await seenByTransport.request
-    #expect(transportRequest?.headerFields[.authorization] == "Bearer access.token")
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer static")
   }
 
   @Test
-  func accessTokenProviderErrorPropagatesToInvoke() async throws {
+  func accessTokenProviderErrorFailsInvokeAsAFunctionsError() async throws {
     struct TokenError: Error {}
 
     let sut = try makeClient(
@@ -708,9 +696,11 @@ struct FunctionsClientTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: FunctionsError.self) {
       try await sut.invoke("hello-world")
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test
@@ -796,7 +786,7 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func streamDoesNotWrapAccessTokenError() async throws {
+  func accessTokenProviderErrorFailsStreamAsAFunctionsError() async throws {
     struct TokenError: Error {}
     let sut = try makeClient(
       http: .init(
@@ -807,9 +797,11 @@ struct FunctionsClientTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: FunctionsError.self) {
       try await sut.stream("stream")
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test

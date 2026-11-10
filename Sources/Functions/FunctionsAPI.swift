@@ -106,11 +106,18 @@ enum FunctionsAPI {
     )
   }
 
-  /// Relabels the network layer's own failures as `.transport`. `CancellationError`, a
-  /// `FunctionsError` and anything thrown by user code that runs inside the exchange (a custom
-  /// `ClientTransport` or middleware, the `accessToken` closure) propagate as themselves, unless
-  /// it is a `URLError`: the chain cannot tell one of those from the transport's own.
+  /// Relabels the network layer's own failures as `.transport` and a token provider's failure as
+  /// `.accessToken`. `CancellationError`, a `FunctionsError` and anything else thrown by user code
+  /// that runs inside the exchange (a custom `ClientTransport` or middleware) propagate as
+  /// themselves, unless it is a `URLError`: the chain cannot tell one of those from the
+  /// transport's own.
   static func mapTransportError(_ error: any Error) -> any Error {
+    if let failure = error as? AccessTokenFailure {
+      return FunctionsError(
+        kind: .accessToken,
+        message: AccessTokenFailure.message,
+        underlyingError: failure.underlyingError)
+    }
     guard let urlError = error as? URLError else { return error }
     return FunctionsError(
       kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)

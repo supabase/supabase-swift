@@ -412,3 +412,12 @@ extension RealtimeClient {
     body(self)
   }
 }
+
+extension RealtimeClient {
+  /// The stored token after a refresh from the `accessToken` callback, which waits for a call
+  /// in flight. Drives the socket path's refresh from a test.
+  func currentAccessToken() async -> String? {
+    await refreshAccessToken()
+    return accessToken
+  }
+}
