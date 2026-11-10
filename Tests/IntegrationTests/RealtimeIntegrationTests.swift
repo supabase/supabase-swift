@@ -1333,6 +1333,53 @@
       }
     }
 
+    /// `httpSend` sends the global headers and `X-Client-Info`, and the server accepts it.
+    @Test
+    func httpSendSendsTheConfiguredHeaders() async throws {
+      let recorder = HeaderRecorder()
+      let client = try SupabaseClient(
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
+        configuration: SupabaseClient.Configuration(
+          auth: .init(storage: InMemoryTestStorage()),
+          global: .init(
+            headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
+            http: .init(middlewares: [recorder]),
+            clock: testClock
+          )
+        )
+      )
+
+      let channel = await client.realtime.channel("http-send-headers")
+      try await channel.httpSend(event: "rest", payload: ["n": 1])
+
+      let headers = try #require(recorder.headers.value.last)
+      #expect(headers[HTTPField.Name("X-Integration-Test")!] == "httpSend")
+      #expect(headers[.xClientInfo]?.hasPrefix("supabase-swift/") == true)
+      #expect(headers[.apikey] == DotEnv.supabasePublishableKey)
+      #expect(headers[.authorization] == "Bearer \(DotEnv.supabasePublishableKey)")
+      #expect(headers[.contentType] == "application/json")
+      #expect(recorder.headers.value.count == 1)
+
+      await client.realtime.removeAllChannels()
+    }
+
+    private struct HeaderRecorder: ClientMiddleware {
+      let headers = LockIsolated<[HTTPFields]>([])
+
+      func intercept(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        next:
+          nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (
+            HTTPResponse, HTTPBody?
+          )
+      ) async throws -> (HTTPResponse, HTTPBody?) {
+        headers.withValue { $0.append(request.headerFields) }
+        return try await next(request, body)
+      }
+    }
+
     private struct KeyValueEntry: Decodable {
       let key: String
     }

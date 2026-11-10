@@ -622,59 +622,142 @@ struct RealtimeChannelTests {
   }
 
   @Test
-  func httpSendRespectsCustomTimeout() async throws {
+  func httpSendKeepsTheHTTPClientIdleTimeoutForTheRequest() async throws {
+    let seen = LockIsolated<[Duration?]>([])
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
-      (HTTPResponse(status: .init(code: 202)), Data())
+      seen.withValue { $0.append(RequestTimeout.current) }
+      return (HTTPResponse(status: .init(code: 202)), Data())
     }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
         headers: [.apikey: "test-key"],
-        requestTimeout: .seconds(5),
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
+      http: HTTPClient(transport: httpClient, timeout: .seconds(42)),
       clock: ContinuousClock()
     )
-
     let channel = await socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: .seconds(3))
 
-    let requests = httpClient.requests
-    #expect(requests.count == 1)
+    #expect(seen.value == [.seconds(42)])
   }
 
-  @Test
-  func httpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
+  @Test(arguments: [
+    (requestTimeout: Duration.milliseconds(50), callTimeout: Duration?.none),
+    (requestTimeout: Duration.seconds(30), callTimeout: Duration?.some(.milliseconds(50))),
+  ])
+  func httpSendThatRunsPastItsDeadlineTimesOut(
+    requestTimeout: Duration, callTimeout: Duration?
+  ) async {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
-      (HTTPResponse(status: .init(code: 202)), Data())
+      try await Task.sleep(for: .seconds(30))
+      return (HTTPResponse(status: .init(code: 202)), Data())
     }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
       configuration: RealtimeClient.Configuration(
         url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"],
-        requestTimeout: .seconds(5),
+        // A static token: a token callback would also be bounded by `requestTimeout`.
+        headers: [.apikey: "test-key", .authorization: "Bearer test-token"],
+        requestTimeout: requestTimeout
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: callTimeout)
+    }
+    #expect(error?.kind == .timeout)
+  }
+
+  @Test
+  func httpSendStartsFromTheClientHeaders() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [
+          .apikey: "test-key",
+          HTTPField.Name("X-Custom")!: "custom",
+          .authorization: "Bearer static-key",
+          .contentType: "text/plain",
+        ],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
+    let channel = await socket.channel("test-topic")
 
+    try await channel.httpSend(event: "test", data: Data([0x01]))
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.xClientInfo] == RealtimeClient.defaultHeaders[.xClientInfo])
+    #expect(headers[.xClientInfo]?.hasPrefix("realtime-swift/") == true)
+    #expect(headers[HTTPField.Name("X-Custom")!] == "custom")
+    #expect(headers[.apikey] == "test-key")
+    #expect(headers[.authorization] == "Bearer test-token")
+    #expect(headers[.contentType] == "application/octet-stream")
+    #expect(headers[values: .authorization].count == 1)
+    #expect(headers[values: .contentType].count == 1)
+  }
+
+  @Test
+  func httpSendKeepsAnXClientInfoTheAppSets() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key", .xClientInfo: "supabase-swift/9.9.9"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
     let channel = await socket.channel("test-topic")
 
     try await channel.httpSend(event: "test", payload: ["data": "test"])
 
-    let requests = httpClient.requests
-    #expect(requests.count == 1)
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[values: .xClientInfo] == ["supabase-swift/9.9.9"])
+  }
+
+  @Test
+  func httpSendDoesNotRetry() async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 503)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
+    }
+    #expect(httpClient.requests.count == 1)
   }
 
   @Test

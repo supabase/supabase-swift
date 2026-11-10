@@ -54,7 +54,8 @@ extension RealtimeClient {
     /// The Realtime server URL, such as `https://<project>.supabase.co/realtime/v1`.
     public var url: URL
 
-    /// Headers sent with the WebSocket upgrade request.
+    /// Headers sent with the WebSocket upgrade request and with every `RealtimeChannel.httpSend`
+    /// request.
     ///
     /// Header names compare without regard to case. `SupabaseClient` adds its own headers, such
     /// as `apikey`, and those win over a header set here. The client adds an `X-Client-Info`
@@ -127,6 +128,13 @@ extension RealtimeClient {
     public var serverLogLevel: RealtimeServerLogLevel?
 
     /// The transport and middleware chain that `RealtimeChannel.httpSend` calls go through.
+    ///
+    /// An `httpSend` request has two timeouts:
+    /// - Its own `timeout`, or ``requestTimeout``, bounds the request. When it runs out, the call
+    ///   throws ``RealtimeError`` with kind `.timeout`.
+    /// - The ``HTTPClientConfiguration/timeout`` set here is the idle timeout. When no data moves
+    ///   for that long, the call throws ``RealtimeError`` with kind `.transport` and
+    ///   `URLError(.timedOut)` in `underlyingError`.
     ///
     /// The WebSocket does not use it; see ``webSocketTransport``.
     public var http: HTTPClientConfiguration

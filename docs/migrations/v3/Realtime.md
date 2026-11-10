@@ -18,6 +18,10 @@ Changes that still compile but behave differently. Check each one by hand.
   `as DecodingError` near those calls.
 - **Cancellation throws `CancellationError`.** A cancelled `httpSend` used to throw
   `URLError(.cancelled)`. Search for `URLError` near `httpSend` and catch `CancellationError`.
+- **`httpSend` sends the configured headers.** It sends `Configuration.headers` (and, under
+  `SupabaseClient`, the global headers), including `X-Client-Info`, with `Content-Type` and
+  `Authorization` set on top. v2 sent only `Content-Type`, `apikey` and `Authorization`. A proxy or server rule that keys on those
+  headers now sees them on REST broadcasts too.
 - **Reconnect waits are shorter and spread out.** The n-th reconnect now waits a random duration
   in `0...min(30 s, 1 s · 2^(n-1))`, and you cannot change it. v2 started from 7 s and waited in
   the upper half of that range. Code that relied on a minimum wait before a reconnect must not.

@@ -16,6 +16,10 @@ extension RealtimeChannel {
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
   /// a broadcast before subscribing to the channel.
   ///
+  /// The request carries the client's configured headers, including `X-Client-Info`, with
+  /// `Content-Type` and `Authorization: Bearer <access token>` set on top. It is sent once and
+  /// never retried, because a replay can deliver the broadcast twice.
+  ///
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
   /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
   ///
@@ -23,10 +27,12 @@ extension RealtimeChannel {
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
+  ///   - timeout: How long the request may take, like every other Realtime timeout. `nil` uses
+  ///     ``RealtimeClient/Configuration/requestTimeout``. The access token fetch before it has
+  ///     its own bound. ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, and
-  ///   nothing is sent; `.accessTokenMissing`, `.server`, `.transport`, `.timeout`,
-  ///   `.channelRemoved`, or `.notConnected` when the client was released.
+  ///   nothing is sent; `.accessTokenMissing`, `.server`, `.transport`, `.timeout` when `timeout`
+  ///   runs out, `.channelRemoved`, or `.notConnected` when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
@@ -55,14 +61,19 @@ extension RealtimeChannel {
   /// content type — use this for raw binary payloads (e.g. images, custom binary formats)
   /// that shouldn't be JSON-encoded.
   ///
+  /// Headers and retry follow ``httpSend(event:payload:encoder:timeout:)``.
+  ///
   /// > Important: Requires a Realtime server version >= 2.97.0.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
+  ///   - timeout: How long the request may take, like every other Realtime timeout. `nil` uses
+  ///     ``RealtimeClient/Configuration/requestTimeout``. The access token fetch before it has
+  ///     its own bound. ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessTokenMissing`, `.server`, `.transport`,
-  ///   `.timeout`, `.channelRemoved`, or `.notConnected` when the client was released.
+  ///   `.timeout` when `timeout` runs out, `.channelRemoved`, or `.notConnected` when the client
+  ///   was released.
   public func httpSend(
     event: String,
     data: Data,
@@ -84,10 +95,8 @@ extension RealtimeChannel {
       throw RealtimeError.accessTokenMissing
     }
 
-    var headers: HTTPFields = [.contentType: contentType]
-    if let apikey = client.headers[.apikey] {
-      headers[.apikey] = apikey
-    }
+    var headers = client.headers
+    headers[.contentType] = contentType
     headers[.authorization] = "Bearer \(accessToken)"
 
     let request = HTTPRequest(
