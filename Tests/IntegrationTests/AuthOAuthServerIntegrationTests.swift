@@ -72,9 +72,10 @@ struct AuthOAuthServerIntegrationTests {
     let oauthClient = try await admin.oauth.createClient(
       params: CreateOAuthClientParams(
         clientName: "Integration Test Client",
-        redirectURIs: [redirectURI]
+        redirectURIs: [URL(string: redirectURI)!]
       )
     )
+    #expect(oauthClient.redirectURIs == [URL(string: redirectURI)!])
 
     let session = try await authClient.session()
     let authorizationID = try await createPendingAuthorization(
@@ -121,9 +122,10 @@ struct AuthOAuthServerIntegrationTests {
     let oauthClient = try await admin.oauth.createClient(
       params: CreateOAuthClientParams(
         clientName: "Integration Test Client (deny)",
-        redirectURIs: [redirectURI]
+        redirectURIs: [URL(string: redirectURI)!]
       )
     )
+    #expect(oauthClient.redirectURIs == [URL(string: redirectURI)!])
 
     let session = try await authClient.session()
     let authorizationID = try await createPendingAuthorization(

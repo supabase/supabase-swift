@@ -79,7 +79,7 @@ struct SignUpRequest: Encodable, Hashable, Sendable {
   var password: String?
   var phone: String?
   var channel: MessagingChannel?
-  var data: [String: JSONValue]?
+  var data: JSONObject?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -342,10 +342,10 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var id: UUID
 
   /// Application-specific metadata stored by the administrator in `auth.users.app_metadata`.
-  public var appMetadata: [String: JSONValue]
+  public var appMetadata: JSONObject
 
   /// User-supplied metadata stored in `auth.users.raw_user_meta_data`.
-  public var userMetadata: [String: JSONValue]
+  public var userMetadata: JSONObject
 
   /// The audience claim (`aud`) of the user's JWT.
   public var audience: String
@@ -366,7 +366,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var invitedAt: Date?
 
   /// A one-time action link, if one was generated for this user.
-  public var actionLink: String?
+  public var actionLink: URL?
 
   /// The user's email address.
   public var email: String?
@@ -431,15 +431,15 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   ///   - factors: Registered MFA factors.
   public init(
     id: UUID,
-    appMetadata: [String: JSONValue],
-    userMetadata: [String: JSONValue],
+    appMetadata: JSONObject,
+    userMetadata: JSONObject,
     audience: String,
     confirmationSentAt: Date? = nil,
     recoverySentAt: Date? = nil,
     emailChangeSentAt: Date? = nil,
     newEmail: String? = nil,
     invitedAt: Date? = nil,
-    actionLink: String? = nil,
+    actionLink: URL? = nil,
     email: String? = nil,
     phone: String? = nil,
     createdAt: Date,
@@ -506,16 +506,16 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     appMetadata =
-      try container.decodeIfPresent([String: JSONValue].self, forKey: .appMetadata) ?? [:]
+      try container.decodeIfPresent(JSONObject.self, forKey: .appMetadata) ?? [:]
     userMetadata =
-      try container.decodeIfPresent([String: JSONValue].self, forKey: .userMetadata) ?? [:]
+      try container.decodeIfPresent(JSONObject.self, forKey: .userMetadata) ?? [:]
     audience = try container.decode(String.self, forKey: .audience)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
     emailChangeSentAt = try container.decodeIfPresent(Date.self, forKey: .emailChangeSentAt)
     newEmail = try container.decodeIfPresent(String.self, forKey: .newEmail)
     invitedAt = try container.decodeIfPresent(Date.self, forKey: .invitedAt)
-    actionLink = try container.decodeIfPresent(String.self, forKey: .actionLink)
+    actionLink = try container.decodeIfPresent(URL.self, forKey: .actionLink)
     // GoTrue sends `""`, never `null`, for a user without an email or phone.
     email = try container.decodeIfPresent(String.self, forKey: .email).flatMap {
       $0.isEmpty ? nil : $0
@@ -948,7 +948,7 @@ struct OTPParams: Encodable, Hashable, Sendable {
   var phone: String?
   var createUser: Bool
   var channel: MessagingChannel?
-  var data: [String: JSONValue]?
+  var data: JSONObject?
   var gotrueMetaSecurity: AuthMetaSecurity?
   var codeChallenge: String?
   var codeChallengeMethod: String?
@@ -1295,7 +1295,7 @@ public struct UserAttributes: Encodable, Hashable, Sendable {
 public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
-  public var appMetadata: [String: JSONValue]?
+  public var appMetadata: JSONObject?
 
   /// How long to ban the user, counted from the time of the request.
   ///
@@ -1330,7 +1330,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   public var role: String?
 
   /// A custom data object to store the user's metadata. This maps to the `auth.users.raw_user_meta_data` column.
-  public var userMetadata: [String: JSONValue]?
+  public var userMetadata: JSONObject?
 
   private enum CodingKeys: String, CodingKey {
     case appMetadata = "app_metadata"
@@ -1363,7 +1363,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
   ///   - role: The JWT role claim.
   ///   - userMetadata: User-supplied metadata.
   public init(
-    appMetadata: [String: JSONValue]? = nil,
+    appMetadata: JSONObject? = nil,
     banDuration: Duration? = nil,
     email: String? = nil,
     confirmsEmail: Bool? = nil,
@@ -1374,7 +1374,7 @@ public struct AdminUserAttributes: Encodable, Hashable, Sendable {
     phone: String? = nil,
     confirmsPhone: Bool? = nil,
     role: String? = nil,
-    userMetadata: [String: JSONValue]? = nil
+    userMetadata: JSONObject? = nil
   ) {
     self.appMetadata = appMetadata
     self.banDuration = banDuration
@@ -2215,7 +2215,7 @@ public struct GenerateLinkParams: Sendable {
     var email: String
     var password: String?
     var newEmail: String?
-    var data: [String: JSONValue]?
+    var data: JSONObject?
 
     private enum CodingKeys: String, CodingKey {
       case type
@@ -2232,7 +2232,7 @@ public struct GenerateLinkParams: Sendable {
   public static func signUp(
     email: String,
     password: String,
-    data: [String: JSONValue]? = nil,
+    data: JSONObject? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -2249,7 +2249,7 @@ public struct GenerateLinkParams: Sendable {
   /// Generates an invite link.
   public static func invite(
     email: String,
-    data: [String: JSONValue]? = nil,
+    data: JSONObject? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -2265,7 +2265,7 @@ public struct GenerateLinkParams: Sendable {
   /// Generates a magic link.
   public static func magicLink(
     email: String,
-    data: [String: JSONValue]? = nil,
+    data: JSONObject? = nil,
     redirectTo: URL? = nil
   ) -> GenerateLinkParams {
     GenerateLinkParams(
@@ -2504,13 +2504,13 @@ public struct OAuthClient: Decodable, Hashable, Sendable {
   public let registrationType: OAuthClientRegistrationType
 
   /// URI of the OAuth client
-  public let clientURI: String?
+  public let clientURI: URL?
 
   /// URL of the client application's logo
-  public let logoURI: String?
+  public let logoURI: URL?
 
   /// Array of allowed redirect URIs
-  public let redirectURIs: [String]?
+  public let redirectURIs: [URL]?
 
   /// Array of allowed grant types
   public let grantTypes: [OAuthClientGrantType]?
@@ -2552,10 +2552,10 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   public let clientName: String
 
   /// URI of the OAuth client
-  public let clientURI: String?
+  public let clientURI: URL?
 
   /// Array of allowed redirect URIs
-  public let redirectURIs: [String]
+  public let redirectURIs: [URL]
 
   /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
   public let grantTypes: [OAuthClientGrantType]?
@@ -2586,8 +2586,8 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   ///   - scope: Requested scope.
   public init(
     clientName: String,
-    clientURI: String? = nil,
-    redirectURIs: [String],
+    clientURI: URL? = nil,
+    redirectURIs: [URL],
     grantTypes: [OAuthClientGrantType]? = nil,
     responseTypes: [OAuthClientResponseType]? = nil,
     scope: String? = nil
@@ -2608,13 +2608,13 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   public let clientName: String?
 
   /// URL of the client application's homepage
-  public let clientURI: String?
+  public let clientURI: URL?
 
   /// URL of the client application's logo
-  public let logoURI: String?
+  public let logoURI: URL?
 
   /// Array of redirect URIs used by the client
-  public let redirectURIs: [String]?
+  public let redirectURIs: [URL]?
 
   /// OAuth grant types the client is authorized to use
   public let grantTypes: [OAuthClientGrantType]?
@@ -2637,9 +2637,9 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   ///   - grantTypes: Replacement list of grant types.
   public init(
     clientName: String? = nil,
-    clientURI: String? = nil,
-    logoURI: String? = nil,
-    redirectURIs: [String]? = nil,
+    clientURI: URL? = nil,
+    logoURI: URL? = nil,
+    redirectURIs: [URL]? = nil,
     grantTypes: [OAuthClientGrantType]? = nil
   ) {
     self.clientName = clientName

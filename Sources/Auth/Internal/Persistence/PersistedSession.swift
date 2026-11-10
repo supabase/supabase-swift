@@ -46,8 +46,8 @@ struct PersistedUser: Codable, Sendable {
   var phone: String?
   var newEmail: String?
   var actionLink: String?
-  var appMetadata: [String: JSONValue]
-  var userMetadata: [String: JSONValue]
+  var appMetadata: JSONObject
+  var userMetadata: JSONObject
   var isAnonymous: Bool
   var createdAt: Date
   var updatedAt: Date
@@ -92,7 +92,7 @@ struct PersistedIdentity: Codable, Sendable {
   var id: String
   var identityID: UUID
   var userID: UUID
-  var identityData: [String: JSONValue]?
+  var identityData: JSONObject?
   var provider: String
   var email: String?
   var createdAt: Date?
@@ -177,7 +177,7 @@ extension PersistedUser {
       email: user.email,
       phone: user.phone,
       newEmail: user.newEmail,
-      actionLink: user.actionLink,
+      actionLink: user.actionLink?.absoluteString,
       appMetadata: user.appMetadata,
       userMetadata: user.userMetadata,
       isAnonymous: user.isAnonymous,
@@ -207,7 +207,7 @@ extension PersistedUser {
       emailChangeSentAt: emailChangeSentAt,
       newEmail: newEmail,
       invitedAt: invitedAt,
-      actionLink: actionLink,
+      actionLink: actionLink.flatMap(URL.init(string:)),
       email: email,
       phone: phone,
       createdAt: createdAt,

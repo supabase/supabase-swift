@@ -292,7 +292,7 @@ private struct QueryVectorsBody: Encodable {
   var indexName: String
   var queryVector: VectorData
   var topK: Int
-  var filter: [String: JSONValue]?
+  var filter: JSONObject?
   var returnDistance: Bool
   var returnMetadata: Bool
 }
@@ -336,7 +336,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   public var data: VectorData
 
   /// Arbitrary metadata to store alongside the vector.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// Creates a ``VectorEntry``.
   ///
@@ -344,7 +344,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   ///   - key: A unique identifier for the vector within its index.
   ///   - data: The vector's embedding data.
   ///   - metadata: Arbitrary metadata to store alongside the vector.
-  public init(key: String, data: VectorData, metadata: [String: JSONValue]? = nil) {
+  public init(key: String, data: VectorData, metadata: JSONObject? = nil) {
     self.key = key
     self.data = data
     self.metadata = metadata
@@ -365,7 +365,7 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
   public var data: VectorData?
 
   /// The vector's metadata, present when the request set `returnMetadata: true`.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// The similarity distance from the query vector, present when the request set
   /// `returnDistance: true`. Only populated by
@@ -382,7 +382,7 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
   public init(
     key: String,
     data: VectorData? = nil,
-    metadata: [String: JSONValue]? = nil,
+    metadata: JSONObject? = nil,
     distance: Double? = nil
   ) {
     self.key = key
@@ -486,7 +486,7 @@ public struct QueryVectorsOptions: Sendable, Hashable {
   /// `$lte`, `$in`, `$nin`, `$exists`) and logical operators (`$and`, `$or`) with arbitrary
   /// nesting, e.g. `["category": "technical"]` or `["price": ["$gte": 10]]`. `nil` matches all
   /// vectors.
-  public var filter: [String: JSONValue]?
+  public var filter: JSONObject?
 
   /// Whether the response includes the similarity distance for each match. Defaults to `false`.
   public var returnDistance: Bool
@@ -501,7 +501,7 @@ public struct QueryVectorsOptions: Sendable, Hashable {
   ///   - returnDistance: Whether the response includes the similarity distance for each match.
   ///   - returnMetadata: Whether the response includes the metadata.
   public init(
-    filter: [String: JSONValue]? = nil,
+    filter: JSONObject? = nil,
     returnDistance: Bool = false,
     returnMetadata: Bool = false
   ) {

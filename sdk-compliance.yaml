@@ -2399,7 +2399,7 @@ features:
       - StorageObject.init
       - StorageObject.name
       - StorageObject.id
-      - StorageObject.version
+      - StorageObject.versionID
       - StorageObject.createdAt
       - StorageObject.updatedAt
       - StorageObject.lastAccessedAt
@@ -2546,7 +2546,7 @@ features:
       - ObjectInfo
       - ObjectInfo.init
       - ObjectInfo.id
-      - ObjectInfo.version
+      - ObjectInfo.versionID
       - ObjectInfo.name
       - ObjectInfo.bucketID
       - ObjectInfo.size

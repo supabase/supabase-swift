@@ -46,6 +46,7 @@ struct PersistedSessionCodecTests {
     ]
     session.user.identities?[0].identityData = [:]
     session.user.identities?[0].email = "jane@example.com"
+    session.user.actionLink = URL(string: "https://example.com/auth/v1/verify?token=t&type=signup")
     let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(session))
 
     #expect(decoded.isCurrentSchema)

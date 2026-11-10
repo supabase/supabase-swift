@@ -21,10 +21,10 @@ struct VersioningIntegrationTests {
     defer { StorageIntegration.dropBucket(name) }
     let bucket = StorageIntegration.admin.from(name)
     try await bucket.upload(path: "a.txt", data: Data("a".utf8))
-    let version = try await bucket.info(path: "a.txt").version
+    let version = try await bucket.info(path: "a.txt").versionID
 
     let info = try await bucket.info(path: "a.txt", versionID: version)
-    #expect(info.version == version)
+    #expect(info.versionID == version)
 
     let missing = await StorageIntegration.storageError {
       _ = try await bucket.info(path: "a.txt", versionID: UUID().uuidString)
@@ -49,10 +49,10 @@ struct VersioningIntegrationTests {
     defer { StorageIntegration.dropBucket(name) }
     let bucket = StorageIntegration.admin.from(name)
     try await bucket.upload(path: "a.txt", data: Data("a".utf8))
-    let version = try await bucket.info(path: "a.txt").version
+    let version = try await bucket.info(path: "a.txt").versionID
 
     try await bucket.copy(from: "a.txt", to: "b.txt", sourceVersionID: version)
-    let copyVersion = try await bucket.info(path: "b.txt").version
+    let copyVersion = try await bucket.info(path: "b.txt").versionID
     try await bucket.move(from: "b.txt", to: "c.txt", sourceVersionID: copyVersion)
     #expect(try await bucket.exists(path: "c.txt"))
     #expect(try await bucket.exists(path: "b.txt") == false)
