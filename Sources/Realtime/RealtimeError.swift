@@ -50,10 +50,6 @@ public struct RealtimeError: SupabaseError {
     /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
     /// `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
-    /// `httpSend` needs an access token and none was available: the `accessToken` closure is
-    /// unset or returned `nil`, and no token was set with ``RealtimeClient/setAuth(_:)``. Sign
-    /// in, or pass an `accessToken` closure, before sending. No request was sent.
-    public static let accessTokenMissing: Kind = "accessTokenMissing"
     /// The `accessToken` closure threw when `httpSend` asked it for a token. No request was sent.
     /// ``RealtimeError/underlyingError`` is the closure's error.
     public static let accessToken: Kind = "accessToken"
@@ -275,10 +271,6 @@ extension RealtimeError {
   static let channelRemoved = RealtimeError(
     kind: .channelRemoved,
     message: "The channel was removed from the client or closed by the server.",
-    isRetryable: false)
-
-  static let accessTokenMissing = RealtimeError(
-    kind: .accessTokenMissing, message: "Access token is required for httpSend()",
     isRetryable: false)
 
   static let heartbeatTimeout = RealtimeError(kind: .timeout, message: "heartbeat timeout")

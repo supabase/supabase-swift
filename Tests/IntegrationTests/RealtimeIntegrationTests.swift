@@ -1333,6 +1333,78 @@
       }
     }
 
+    /// `httpSend` sends the global headers and `X-Client-Info`, and the server accepts it.
+    @Test
+    func httpSendSendsTheConfiguredHeaders() async throws {
+      let recorder = HeaderRecorder()
+      let client = try SupabaseClient(
+        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseKey: DotEnv.supabasePublishableKey,
+        configuration: SupabaseClient.Configuration(
+          auth: .init(storage: InMemoryTestStorage()),
+          global: .init(
+            headers: [HTTPField.Name("X-Integration-Test")!: "httpSend"],
+            http: .init(middlewares: [recorder]),
+            clock: testClock
+          )
+        )
+      )
+
+      let channel = await client.realtime.channel("http-send-headers")
+      try await channel.httpSend(event: "rest", payload: ["n": 1])
+
+      let headers = try #require(recorder.headers.value.last)
+      #expect(headers[HTTPField.Name("X-Integration-Test")!] == "httpSend")
+      #expect(headers[.xClientInfo]?.hasPrefix("supabase-swift/") == true)
+      #expect(headers[.apikey] == DotEnv.supabasePublishableKey)
+      #expect(headers[.authorization] == "Bearer \(DotEnv.supabasePublishableKey)")
+      #expect(headers[.contentType] == "application/json")
+      #expect(recorder.headers.value.count == 1)
+
+      await client.realtime.removeAllChannels()
+    }
+
+    /// Without an access token, `httpSend` sends only `apikey`, and a subscriber on the public
+    /// channel receives the broadcast.
+    @Test
+    func httpSendWithoutAnAccessTokenReachesAPublicChannel() async throws {
+      let client = client
+      let sender = try makeRealtimeClient(accessToken: { nil })
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+        let receiver = await client.realtime.channel("http-send-no-token")
+        let messages = await receiver.broadcasts(event: "rest")
+        try await receiver.subscribe()
+
+        let channel = await sender.channel("http-send-no-token")
+        try await channel.httpSend(event: "rest", payload: ["n": 1])
+
+        let message = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+        #expect(try message?.decode(as: [String: Int].self) == ["n": 1])
+
+        await receiver.unsubscribe()
+        await sender.removeAllChannels()
+      }
+    }
+
+    private struct HeaderRecorder: ClientMiddleware {
+      let headers = LockIsolated<[HTTPFields]>([])
+
+      func intercept(
+        _ request: HTTPRequest,
+        body: HTTPBody?,
+        next:
+          nonisolated(nonsending) @Sendable (HTTPRequest, HTTPBody?) async throws -> (
+            HTTPResponse, HTTPBody?
+          )
+      ) async throws -> (HTTPResponse, HTTPBody?) {
+        headers.withValue { $0.append(request.headerFields) }
+        return try await next(request, body)
+      }
+    }
+
     private struct KeyValueEntry: Decodable {
       let key: String
     }

@@ -16,6 +16,13 @@ extension RealtimeChannel {
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
   /// a broadcast before subscribing to the channel.
   ///
+  /// The request carries the client's configured headers, including `X-Client-Info` and
+  /// `apikey`, with `Content-Type` and, when the client has an access token,
+  /// `Authorization: Bearer <access token>` set on top. Without a token only `apikey`
+  /// authenticates the request, which is enough for a public channel; a private channel needs a
+  /// token its RLS policies accept. The request is sent once and never retried, because a replay
+  /// can deliver the broadcast twice.
+  ///
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
   /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
   ///
@@ -23,11 +30,13 @@ extension RealtimeChannel {
   ///   - event: The broadcast event name.
   ///   - payload: The value to send as the JSON request body.
   ///   - encoder: The encoder for `payload`. `nil` uses `JSONEncoder.supabase()`.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
+  ///   - timeout: How long the call may take, including the access token fetch, like every
+  ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
+  ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode, and
-  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws;
-  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, `.channelRemoved`, or
-  ///   `.notConnected` when the client was released.
+  ///   nothing is sent; `.accessToken` when the `accessToken` closure throws; `.server`,
+  ///   `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or `.notConnected`
+  ///   when the client was released.
   public func httpSend(
     event: String,
     payload: some Encodable,
@@ -56,14 +65,18 @@ extension RealtimeChannel {
   /// content type — use this for raw binary payloads (e.g. images, custom binary formats)
   /// that shouldn't be JSON-encoded.
   ///
+  /// Headers and retry follow ``httpSend(event:payload:encoder:timeout:)``.
+  ///
   /// > Important: Requires a Realtime server version >= 2.97.0.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
-  ///   - timeout: An optional timeout. Defaults to ``RealtimeClient/Configuration/requestTimeout``.
+  ///   - timeout: How long the call may take, including the access token fetch, like every
+  ///     other Realtime timeout. `nil` uses ``RealtimeClient/Configuration/requestTimeout``.
+  ///     ``RealtimeClient/Configuration/http`` explains the idle timeout.
   /// - Throws: ``RealtimeError`` with kind `.accessToken` when the `accessToken` closure throws;
-  ///   `.accessTokenMissing`, `.server`, `.transport`, `.timeout`, `.channelRemoved`, or
+  ///   `.server`, `.transport`, `.timeout` when `timeout` runs out, `.channelRemoved`, or
   ///   `.notConnected` when the client was released.
   public func httpSend(
     event: String,
@@ -82,10 +95,8 @@ extension RealtimeChannel {
   ) async throws {
     let client = try clientForAction()
     try await client.checkUsable(self)
-    var headers: HTTPFields = [.contentType: contentType]
-    if let apikey = client.headers[.apikey] {
-      headers[.apikey] = apikey
-    }
+    var headers = client.headers
+    headers[.contentType] = contentType
     let url = client.broadcastURL(topic: topic, event: event, isPrivate: configuration.isPrivate)
 
     let response: HTTPResponse
@@ -96,7 +107,9 @@ extension RealtimeChannel {
         timeout ?? client.configuration.requestTimeout, clock: client.clock
       ) { [headers] in
         var headers = headers
-        headers[.authorization] = "Bearer \(try await client.httpSendAccessToken())"
+        if let accessToken = try await client.httpSendAccessToken() {
+          headers[.authorization] = "Bearer \(accessToken)"
+        }
         let request = HTTPRequest(method: .post, url: url, headerFields: headers)
         return try await client.http.send(request, body: body)
       }

@@ -617,14 +617,13 @@ public actor RealtimeClient {
   /// The token channels join with.
   var accessToken: String? { core.tokens.token }
 
-  /// The token an `httpSend` request sends. The `accessToken` callback runs for every request,
-  /// with no refresh interval, so its failure reaches the caller. A `nil` result, or no
-  /// callback, sends the stored token: one set with ``setAuth(_:)``, or the key from the
-  /// `Authorization` header.
+  /// The token an `httpSend` request sends, or `nil` to send only `apikey`. The `accessToken`
+  /// callback runs for every request, with no refresh interval, so its failure reaches the
+  /// caller. A `nil` result, or no callback, sends the stored token: one set with
+  /// ``setAuth(_:)``, or the key from the `Authorization` header.
   ///
-  /// - Throws: ``RealtimeError`` with kind `.accessToken` when the callback throws, or
-  ///   `.accessTokenMissing` when there is no token at all.
-  func httpSendAccessToken() async throws -> String {
+  /// - Throws: ``RealtimeError`` with kind `.accessToken` when the callback throws.
+  func httpSendAccessToken() async throws -> String? {
     if let provider = configuration.accessToken {
       // An unstructured task, so a callback that ignores cancellation cannot hold `httpSend`
       // past its timeout: the wait ends on cancellation and the callback finishes on its own.
@@ -642,8 +641,7 @@ public actor RealtimeClient {
           underlyingError: failure.underlyingError)
       }
     }
-    guard let token = core.tokens.token else { throw RealtimeError.accessTokenMissing }
-    return token
+    return core.tokens.token
   }
 
   /// Updates the JWT access token used for channel authorization and Realtime RLS.

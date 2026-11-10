@@ -652,7 +652,11 @@ final class RealtimeTests: Sendable {
       try await channel.httpSend(event: "test", payload: ["value": 42] as JSONObject)
 
       let request = try #require(http.requests.last)
+      #expect(
+        request.head.headerFields[.xClientInfo] == RealtimeClient.defaultHeaders[.xClientInfo])
       var urlRequest = try #require(URLRequest(httpRequest: request.head))
+      // The value carries the SDK and OS versions, so it stays out of the snapshot.
+      urlRequest.setValue(nil, forHTTPHeaderField: "X-Client-Info")
       urlRequest.httpBody = request.body
       assertInlineSnapshot(of: urlRequest, as: .curl) {
         #"""
