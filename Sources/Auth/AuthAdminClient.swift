@@ -24,7 +24,7 @@ import IssueReporting
 ///   )
 /// )
 /// let user = try await admin.createUser(
-///   AdminUserAttributes(email: "user@example.com", confirmsEmail: true)
+///   AdminCreateUser(email: "user@example.com", confirmsEmail: true)
 /// )
 /// ```
 ///
@@ -41,7 +41,7 @@ import IssueReporting
 /// ### User management
 /// - ``user(id:)``
 /// - ``createUser(_:)``
-/// - ``updateUser(id:attributes:)``
+/// - ``updateUser(id:_:)``
 /// - ``deleteUser(id:softDelete:)``
 /// - ``inviteUser(email:userMetadata:redirectTo:)``
 /// - ``listUsers(page:pageSize:)``
@@ -177,24 +177,24 @@ public struct AuthAdminClient: Sendable {
 
   /// Creates a user.
   ///
-  /// The server sends no confirmation email. Set ``AdminUserAttributes/confirmsEmail`` or
-  /// ``AdminUserAttributes/confirmsPhone`` to `true` to mark the address as confirmed. To email
+  /// The server sends no confirmation email. Set ``AdminCreateUser/confirmsEmail`` or
+  /// ``AdminCreateUser/confirmsPhone`` to `true` to mark the address as confirmed. To email
   /// the user an invite instead, use ``inviteUser(email:userMetadata:redirectTo:)``.
   ///
-  /// - Parameter attributes: The attributes of the new user.
+  /// - Parameter user: The new user.
   @discardableResult
-  public func createUser(_ attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(authAPI.adminCreateUser(attributes: attributes))
+  public func createUser(_ user: AdminCreateUser) async throws -> User {
+    try await api.execute(authAPI.adminCreateUser(user))
   }
 
-  /// Updates a user. The server changes only the attributes you set.
+  /// Updates a user. The server changes only the fields you set.
   ///
   /// - Parameters:
   ///   - id: The user's unique identifier.
-  ///   - attributes: The attributes to change.
+  ///   - changes: The fields to change.
   @discardableResult
-  public func updateUser(id: UUID, attributes: AdminUserAttributes) async throws -> User {
-    try await api.execute(authAPI.adminUpdateUser(id: id, attributes: attributes))
+  public func updateUser(id: UUID, _ changes: AdminUpdateUser) async throws -> User {
+    try await api.execute(authAPI.adminUpdateUser(id: id, changes))
   }
 
   /// Deletes a user.
@@ -239,9 +239,9 @@ public struct AuthAdminClient: Sendable {
 
   /// Generates an email link and OTP for you to send through your own email provider.
   ///
-  /// - Parameter params: The kind of link and its options.
-  public func generateLink(_ params: GenerateLinkParams) async throws -> GenerateLinkResponse {
-    try await api.execute(authAPI.adminGenerateLink(params: params))
+  /// - Parameter link: The kind of link and its options.
+  public func generateLink(_ link: GenerateLink) async throws -> GenerateLinkResponse {
+    try await api.execute(authAPI.adminGenerateLink(link))
   }
 
   /// Signs out the session that owns an access token.

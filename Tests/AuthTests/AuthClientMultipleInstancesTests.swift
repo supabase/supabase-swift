@@ -124,7 +124,7 @@ struct AuthClientMultipleInstancesTests {
     let (oauthServer, transport) = try releasedClientSubClient(\.oauthServer)
     try await oauthServer.client.seedSession(.valid)
 
-    try await oauthServer.revokeGrant(id: UUID())
+    try await oauthServer.revokeGrant(clientID: UUID())
 
     #expect(transport.requests.count == 1)
   }

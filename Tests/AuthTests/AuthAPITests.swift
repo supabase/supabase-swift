@@ -80,7 +80,7 @@ struct AuthAPITests {
         accessToken: token
       ).head,
       api.user(accessToken: token).head,
-      api.updateUser(UserAttributes(), redirectTo: nil, pkce: nil, accessToken: token).head,
+      api.updateUser(UpdateUser(), redirectTo: nil, pkce: nil, accessToken: token).head,
       api.unlinkIdentity(
         UserIdentity(id: id, providerUserID: "1", userID: id, provider: .email),
         accessToken: token
@@ -109,32 +109,32 @@ struct AuthAPITests {
       api.renamePasskey(id: id, friendlyName: "n", accessToken: token).head,
       api.deletePasskey(id: id, accessToken: token).head,
       api.adminUser(id: id).head,
-      api.adminUpdateUser(id: id, attributes: AdminUserAttributes()).head,
-      api.adminCreateUser(attributes: AdminUserAttributes()).head,
+      api.adminUpdateUser(id: id, AdminUpdateUser()).head,
+      api.adminCreateUser(AdminCreateUser()).head,
       api.adminInviteUser(email: "a@b.c", userMetadata: [:], redirectTo: nil).head,
       api.adminDeleteUser(id: id, softDelete: false).head,
       api.adminListUsers(page: nil, pageSize: nil).head,
-      api.adminGenerateLink(params: .magicLink(email: "a@b.c")).head,
+      api.adminGenerateLink(.magicLink(email: "a@b.c")).head,
       api.adminListFactors(userID: id).head,
       api.adminDeleteFactor(id: id, userID: id).head,
       api.adminListPasskeys(userID: id).head,
       api.adminDeletePasskey(id: id, userID: id).head,
-      api.adminListOAuthClients(params: nil).head,
+      api.adminListOAuthClients().head,
       api.adminCreateOAuthClient(
-        params: CreateOAuthClientParams(clientName: "n", redirectURIs: [])
+        CreateOAuthClient(clientName: "n", redirectURIs: [])
       ).head,
       api.adminOAuthClient(id: id).head,
-      api.adminUpdateOAuthClient(id: id, params: UpdateOAuthClientParams()).head,
+      api.adminUpdateOAuthClient(id: id, UpdateOAuthClient()).head,
       api.adminDeleteOAuthClient(id: id).head,
       api.adminRegenerateOAuthClientSecret(id: id).head,
       api.adminListCustomProviders(type: nil).head,
       api.adminCreateCustomProvider(
-        params: CreateCustomProviderParams(
+        CreateCustomProvider(
           providerType: .oidc, identifier: "custom:a", name: "n", clientID: "c",
           clientSecret: "s")
       ).head,
       api.adminCustomProvider(identifier: "custom:a").head,
-      api.adminUpdateCustomProvider(identifier: "custom:a", params: UpdateCustomProviderParams())
+      api.adminUpdateCustomProvider(identifier: "custom:a", UpdateCustomProvider())
         .head,
       api.adminDeleteCustomProvider(identifier: "custom:a").head,
     ]
@@ -274,10 +274,10 @@ struct AuthAPITests {
       ])
 
     let update = try api.updateUser(
-      UserAttributes(userMetadata: metadata), redirectTo: nil, pkce: nil, accessToken: "t")
+      UpdateUser(userMetadata: metadata), redirectTo: nil, pkce: nil, accessToken: "t")
     #expect(try body(update) == ["data": ["name": "Jane"]])
     let emptyUpdate = try api.updateUser(
-      UserAttributes(email: "a@b.c", userMetadata: [:]), redirectTo: nil, pkce: nil,
+      UpdateUser(email: "a@b.c", userMetadata: [:]), redirectTo: nil, pkce: nil,
       accessToken: "t")
     #expect(try body(emptyUpdate) == ["email": "a@b.c"])
   }

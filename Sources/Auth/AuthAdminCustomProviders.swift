@@ -17,7 +17,7 @@ public import Foundation
 /// - ``list(type:)``
 /// - ``create(_:)``
 /// - ``provider(identifier:)``
-/// - ``update(identifier:params:)``
+/// - ``update(identifier:_:)``
 /// - ``delete(identifier:)``
 public struct AuthAdminCustomProviders: Sendable {
   let admin: AuthAdminClient
@@ -35,10 +35,10 @@ public struct AuthAdminCustomProviders: Sendable {
   /// fails with a `validation_failed` error when the document is unreachable or invalid, or when
   /// its issuer does not match.
   ///
-  /// - Parameter params: The settings for the provider.
+  /// - Parameter provider: The settings for the provider.
   @discardableResult
-  public func create(_ params: CreateCustomProviderParams) async throws -> CustomProvider {
-    try await admin.api.execute(admin.authAPI.adminCreateCustomProvider(params: params))
+  public func create(_ provider: CreateCustomProvider) async throws -> CustomProvider {
+    try await admin.api.execute(admin.authAPI.adminCreateCustomProvider(provider))
   }
 
   /// Gets a custom provider.
@@ -56,14 +56,14 @@ public struct AuthAdminCustomProviders: Sendable {
   ///
   /// - Parameters:
   ///   - identifier: The provider's ``CustomProvider/identifier``.
-  ///   - params: The fields to change.
+  ///   - changes: The fields to change.
   @discardableResult
   public func update(
     identifier: String,
-    params: UpdateCustomProviderParams
+    _ changes: UpdateCustomProvider
   ) async throws -> CustomProvider {
     try await admin.api.execute(
-      admin.authAPI.adminUpdateCustomProvider(identifier: identifier, params: params))
+      admin.authAPI.adminUpdateCustomProvider(identifier: identifier, changes))
   }
 
   /// Deletes a custom provider.

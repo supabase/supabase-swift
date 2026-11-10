@@ -42,7 +42,7 @@ struct UpdatePasswordView: View {
   private func updatePassword() async {
     actionState = .inFlight
     do {
-      try await supabase.auth.updateUser(UserAttributes(password: password))
+      try await supabase.auth.updateUser(UpdateUser(password: password))
       dismiss()
     } catch {
       actionState = .result(.failure(error))

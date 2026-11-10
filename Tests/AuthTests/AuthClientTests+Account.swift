@@ -39,7 +39,7 @@ extension AuthClientTests {
     try await sut.seedSession(.valid)
 
     try await sut.updateUser(
-      UserAttributes(
+      UpdateUser(
         email: "example@mail.com",
         phone: "+1 202-918-2132",
         password: "another.pass",
@@ -127,7 +127,7 @@ extension AuthClientTests {
     try await sut.seedSession(.valid)
     let flows = sut.dependencies.flowStore
 
-    try await sut.updateUser(UserAttributes(email: "new@example.com"))
+    try await sut.updateUser(UpdateUser(email: "new@example.com"))
     #expect(try await flows.pendingFlows().first?.purpose == .emailChange)
 
     try await sut.resend(email: "example@mail.com", type: .signup)
@@ -424,7 +424,7 @@ extension AuthClientTests {
     #expect(await events.next()?.event == .signedIn)
 
     let update = Task {
-      try await client.updateUser(UserAttributes(userMetadata: ["nickname": "updated"]))
+      try await client.updateUser(UpdateUser(userMetadata: ["nickname": "updated"]))
     }
     await gate.arrivals(1)
     try await client.refreshSession()

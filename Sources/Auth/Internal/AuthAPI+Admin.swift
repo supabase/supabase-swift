@@ -22,15 +22,15 @@ extension AuthAPI {
 
   func adminUpdateUser(
     id: UUID,
-    attributes: AdminUserAttributes
+    _ changes: AdminUpdateUser
   ) throws -> AuthRequest<User> {
     try request(
-      .put, "admin/users/\(id)", body: encodeBody(attributes), decode: decoding(User.self))
+      .put, "admin/users/\(id)", body: encodeBody(changes), decode: decoding(User.self))
   }
 
-  func adminCreateUser(attributes: AdminUserAttributes) throws -> AuthRequest<User> {
+  func adminCreateUser(_ user: AdminCreateUser) throws -> AuthRequest<User> {
     try request(
-      .post, "admin/users", body: encodeBody(attributes), decode: decoding(User.self))
+      .post, "admin/users", body: encodeBody(user), decode: decoding(User.self))
   }
 
   func adminInviteUser(
@@ -75,10 +75,10 @@ extension AuthAPI {
     )
   }
 
-  func adminGenerateLink(params: GenerateLinkParams) throws -> AuthRequest<GenerateLinkResponse> {
+  func adminGenerateLink(_ link: GenerateLink) throws -> AuthRequest<GenerateLinkResponse> {
     try request(
-      .post, "admin/generate_link", query: redirectQuery(params.redirectTo),
-      body: encodeBody(params.body), decode: decoding(GenerateLinkResponse.self))
+      .post, "admin/generate_link", query: redirectQuery(link.redirectTo),
+      body: encodeBody(link.body), decode: decoding(GenerateLinkResponse.self))
   }
 
   private func pageQuery(page: Int?, pageSize: Int?) -> [URLQueryItem] {
@@ -122,36 +122,21 @@ extension AuthAPI {
 // MARK: - OAuth clients
 
 extension AuthAPI {
-  func adminListOAuthClients(
-    params: PageParams?
-  ) -> AuthRequest<ListOAuthClientsPaginatedResponse> {
+  func adminListOAuthClients() -> AuthRequest<[OAuthClient]> {
     struct Response: Decodable {
-      let clients: [OAuthClient]
-      let aud: String
+      // The server leaves the key out when the list is empty.
+      let clients: [OAuthClient]?
     }
 
     return request(
-      .get, "admin/oauth/clients", query: pageQuery(page: params?.page, pageSize: params?.perPage),
-      decode: { [decoder] httpResponse, data in
-        let response = try data.decoded(as: Response.self, decoder: decoder)
-        let pages = Self.pages(httpResponse)
-
-        return ListOAuthClientsPaginatedResponse(
-          clients: response.clients,
-          audience: response.aud,
-          nextPage: pages.next,
-          lastPage: pages.last ?? 0,
-          total: pages.total
-        )
-      }
-    )
+      .get, "admin/oauth/clients", decode: decoding(Response.self) { $0.clients ?? [] })
   }
 
   func adminCreateOAuthClient(
-    params: CreateOAuthClientParams
+    _ client: CreateOAuthClient
   ) throws -> AuthRequest<OAuthClient> {
     try request(
-      .post, "admin/oauth/clients", body: encodeBody(params),
+      .post, "admin/oauth/clients", body: encodeBody(client),
       decode: decoding(OAuthClient.self))
   }
 
@@ -161,10 +146,10 @@ extension AuthAPI {
 
   func adminUpdateOAuthClient(
     id: UUID,
-    params: UpdateOAuthClientParams
+    _ changes: UpdateOAuthClient
   ) throws -> AuthRequest<OAuthClient> {
     try request(
-      .put, "admin/oauth/clients/\(id)", body: encodeBody(params),
+      .put, "admin/oauth/clients/\(id)", body: encodeBody(changes),
       decode: decoding(OAuthClient.self))
   }
 
@@ -196,10 +181,10 @@ extension AuthAPI {
   }
 
   func adminCreateCustomProvider(
-    params: CreateCustomProviderParams
+    _ provider: CreateCustomProvider
   ) throws -> AuthRequest<CustomProvider> {
     try request(
-      .post, "admin/custom-providers", body: encodeBody(params),
+      .post, "admin/custom-providers", body: encodeBody(provider),
       decode: decoding(CustomProvider.self))
   }
 
@@ -210,10 +195,10 @@ extension AuthAPI {
 
   func adminUpdateCustomProvider(
     identifier: String,
-    params: UpdateCustomProviderParams
+    _ changes: UpdateCustomProvider
   ) throws -> AuthRequest<CustomProvider> {
     try request(
-      .put, "admin/custom-providers/\(identifier)", body: encodeBody(params),
+      .put, "admin/custom-providers/\(identifier)", body: encodeBody(changes),
       decode: decoding(CustomProvider.self))
   }
 

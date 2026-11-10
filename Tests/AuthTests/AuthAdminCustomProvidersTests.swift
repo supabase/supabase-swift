@@ -133,7 +133,7 @@ struct AuthAdminCustomProvidersTests {
   @Test
   func updateSendsOnlyTheFieldsSet() throws {
     let body = try AuthClient.Configuration.jsonEncoder.encode(
-      UpdateCustomProviderParams(
+      UpdateCustomProvider(
         clientID: "new-client", customClaimsAllowlist: [], jwksURI: URL(string: "https://j.example")
       ))
     let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
@@ -144,7 +144,7 @@ struct AuthAdminCustomProvidersTests {
 
   @Test
   func createOIDCSendsTheIssuer() throws {
-    var params = CreateCustomProviderParams.oidc(
+    var params = CreateCustomProvider.oidc(
       identifier: "custom:corp", name: "Corp", clientID: "c", clientSecret: "s",
       issuer: "https://corp.example.com")
     params.skipNonceCheck = true
@@ -170,7 +170,7 @@ struct AuthAdminCustomProvidersTests {
     let sut = AuthAdminClient.testing(http: transport)
 
     let updated = try await sut.customProviders.update(
-      identifier: "custom:acme", params: UpdateCustomProviderParams(name: "Renamed"))
+      identifier: "custom:acme", UpdateCustomProvider(name: "Renamed"))
     try await sut.customProviders.delete(identifier: "custom:acme")
 
     #expect(updated.name == "Renamed")

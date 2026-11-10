@@ -411,7 +411,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
     )
 
     try await authClient.signInWithOTP(
@@ -512,7 +512,7 @@ struct AuthClientIntegrationTests {
       try await authClient.signInAnonymously()
 
       let email = mockEmail()
-      let user = try await authClient.updateUser(UserAttributes(email: email))
+      let user = try await authClient.updateUser(UpdateUser(email: email))
 
       #expect(user.email == email)
     }
@@ -675,7 +675,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
     )
 
     try await authClient.resetPassword(
@@ -718,8 +718,8 @@ struct AuthClientIntegrationTests {
     let redirectTo = URL(string: "http://localhost:3000")!
     for address in [email, otherEmail] {
       try await admin.createUser(
-        AdminUserAttributes(
-          email: address, confirmsEmail: true, password: mockPassword())
+        AdminCreateUser(
+          email: address, password: mockPassword(), confirmsEmail: true)
       )
     }
 
@@ -751,7 +751,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
     )
 
     let link = try await admin.generateLink(.magicLink(email: email))
@@ -779,7 +779,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
     )
 
     let link = try await admin.generateLink(.magicLink(email: email))
@@ -797,7 +797,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword())
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true)
     )
     try await authClient.resetPassword(
       email: email,
@@ -832,7 +832,7 @@ struct AuthClientIntegrationTests {
       .signUp(
         email: email,
         password: password,
-        data: ["full_name": "John Doe"]
+        userMetadata: ["full_name": "John Doe"]
       )
     )
 
@@ -848,7 +848,7 @@ struct AuthClientIntegrationTests {
     let password = mockPassword()
 
     try await admin.createUser(
-      AdminUserAttributes(email: email, password: password)
+      AdminCreateUser(email: email, password: password)
     )
 
     let link = try await admin.generateLink(.magicLink(email: email))
@@ -875,7 +875,7 @@ struct AuthClientIntegrationTests {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
     _ = try await admin.createUser(
-      AdminUserAttributes(email: email, confirmsEmail: true, password: mockPassword()))
+      AdminCreateUser(email: email, password: mockPassword(), confirmsEmail: true))
     let link = try await admin.generateLink(.recovery(email: email))
 
     try await expectAuthEvents([.initialSession, .passwordRecovery]) {
@@ -1065,7 +1065,7 @@ struct AuthClientIntegrationTests {
     let email = mockEmail()
     try await authClient.signUp(email: email, password: "pass-1")
 
-    try await authClient.updateUser(UserAttributes(password: "pass-2", currentPassword: "pass-1"))
+    try await authClient.updateUser(UpdateUser(password: "pass-2", currentPassword: "pass-1"))
     try await authClient.signOut()
 
     let session = try await authClient.signIn(email: email, password: "pass-2")
