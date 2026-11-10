@@ -341,7 +341,7 @@ public struct PostgrestClient: Sendable {
   }
 
   /// One query item per argument, in key order, for a `GET` call's arguments.
-  func queryItems(for arguments: [String: JSONValue]) -> [URLQueryItem] {
+  func queryItems(for arguments: JSONObject) -> [URLQueryItem] {
     arguments.sorted { $0.key < $1.key }.map { key, value in
       URLQueryItem(name: key, value: queryValue(for: value))
     }
