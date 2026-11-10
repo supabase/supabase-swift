@@ -405,7 +405,7 @@
         let name = "limit-" + String(repeating: "t", count: 240)
         let event = String(repeating: "e", count: 255)
         let channel = await client.realtime.channel(name) {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
         let messages = await channel.broadcasts(event: event)
         try await channel.subscribe()
