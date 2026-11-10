@@ -68,7 +68,7 @@ struct ClientInfoTests {
   @Test
   func kernelReleaseIsTheThirdFieldOfProcVersion() {
     let procVersion = """
-      Linux version 6.8.0-45-generic (buildd@lcy02-amd64-075) \
+      Linux version 6.8.0-45-generic (builder@lcy02-amd64-075) \
       (x86_64-linux-gnu-gcc-13 (Ubuntu 13.2.0-23ubuntu4) 13.2.0) #45-Ubuntu SMP PREEMPT_DYNAMIC
 
       """

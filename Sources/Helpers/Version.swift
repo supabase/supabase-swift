@@ -53,7 +53,7 @@ private let _platformVersion: String? = {
 }()
 
 /// The kernel release in a `/proc/version` line, such as `6.8.0-45-generic` in
-/// `Linux version 6.8.0-45-generic (buildd@...) ...`. `nil` when the line has another shape.
+/// `Linux version 6.8.0-45-generic (builder@host) ...`. `nil` when the line has another shape.
 package func kernelRelease(procVersion: String) -> String? {
   let fields = procVersion.split(whereSeparator: \.isWhitespace)
   guard fields.count >= 3, fields[0] == "Linux", fields[1] == "version" else { return nil }
