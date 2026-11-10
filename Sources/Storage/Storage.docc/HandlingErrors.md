@@ -93,5 +93,6 @@ do {
 }
 ```
 
-Errors from your own code inside the exchange, such as a custom transport, a middleware or the
-access token provider, reach you as themselves.
+Errors from your own code inside the exchange, such as a custom transport or a middleware, reach
+you as themselves. An error from the access token provider is a ``StorageError`` with kind
+``StorageError/Kind-swift.struct/accessToken``.
