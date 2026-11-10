@@ -739,17 +739,19 @@ struct RealtimeChannelTests {
     #expect(seen.value == [.seconds(42)])
   }
 
-  @Test(arguments: [
-    (requestTimeout: Duration.milliseconds(50), callTimeout: Duration?.none),
-    (requestTimeout: Duration.seconds(30), callTimeout: Duration?.some(.milliseconds(50))),
-  ])
+  @Test(
+    .timeLimit(.minutes(1)),
+    arguments: [
+      (requestTimeout: Duration.milliseconds(50), callTimeout: Duration?.none),
+      (requestTimeout: Duration.seconds(30), callTimeout: Duration?.some(.milliseconds(50))),
+    ])
   func httpSendThatRunsPastItsDeadlineTimesOut(
     requestTimeout: Duration, callTimeout: Duration?
   ) async {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
-      try await Task.sleep(for: .seconds(30))
-      return (HTTPResponse(status: .init(code: 202)), Data())
+      await Gate().pass()
+      throw CancellationError()
     }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
