@@ -39,7 +39,7 @@ Changes that still compile but behave differently. Check each one by hand.
   example `Unauthorized` from an RLS policy) or a refused upgrade (HTTP 401, 403 or 404) throws at
   once instead of after about a minute. To bound the wait, cancel the task. Search for
   `maxRetryAttempts` and `maxRetryAttemptsReached`.
-- **`subscribe()` without a connection throws when `connectOnSubscribe` is off.** It throws
+- **`subscribe()` without a connection throws when `connectsOnSubscribe` is off.** It throws
   `RealtimeError` with `kind == .notConnected` at once instead of retrying. Call `connect()` first.
   While the client is connecting or reconnecting after a drop, `subscribe()` still waits for it.
 - **`disconnect()` stops a `subscribe()` in flight.** The call throws `RealtimeError` with
@@ -183,10 +183,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | `PresenceAction.rawMessage` | removed; the change holds the decoded entries only |
 | `onSystem(callback:)`, `system()` | `await events()`, which emits `RealtimeChannelEvent` |
 | `channel(_:options:)` (`RealtimeClientV2`, `SupabaseClient`), `RealtimeChannelConfig` | `await channel(_:configure:)`, `RealtimeChannelConfiguration` (see below) |
-| `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledge`, `.receiveOwnMessages`, `.waitForReplication` |
+| `broadcast.acknowledgeBroadcasts`, `.receiveOwnBroadcasts`, `.replicationReady` | `broadcast.acknowledgesMessages`, `.receivesOwnMessages`, `.waitsForReplication` |
 | `ReplayOption(since: Int, limit:)` (milliseconds) | `RealtimeChannelConfiguration.Broadcast.Replay(since: Date, limit:)` |
 | `presence.key` (`""` for none) | `presence.key: String?` (`nil` for none) |
-| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:encoder:) async throws`; waits for the server reply when `broadcast.acknowledge` is on |
+| `broadcast(event:message:)` (`async`) | `broadcast(event:payload:encoder:) async throws`; waits for the server reply when `broadcast.acknowledgesMessages` is on |
 | `broadcast(event:data:)` (`async`) | `async throws` |
 | `httpSend(event:message:timeout:)` | `httpSend(event:payload:encoder:timeout:)` |
 | `RealtimePostgresFilterValue.rawValue` | `realtimeFilterValue` |
@@ -258,7 +258,7 @@ if channel.status == .subscribed { showOnline() }
 try await channel.broadcast(event: "message", message: ["text": "hi"])
 supabase.realtimeV2.disconnect()
 // v3
-let channel = await supabase.channel("room:lobby") { $0.broadcast.receiveOwnMessages = true }
+let channel = await supabase.channel("room:lobby") { $0.broadcast.receivesOwnMessages = true }
 let messages = await channel.broadcasts(event: "message")
 try await channel.subscribe()
 if await channel.status.isSubscribed { showOnline() }
@@ -289,7 +289,7 @@ struct RoomView: View {
 ## Channel options are `RealtimeChannelConfiguration`
 
 Set the options in the `configure:` closure. The broadcast flags drop the `Broadcasts` suffix,
-a replay window takes a `Date`, and `postgresChanges` holds the new `waitForSubscription` and
+a replay window takes a `Date`, and `postgresChanges` holds the new `waitsForSubscription` and
 `subscriptionTimeout` options. `channel.configuration` reads the options back.
 
 ```swift
@@ -302,7 +302,7 @@ let channel = supabase.channel("room") {
 // v3
 let channel = await supabase.channel("room") {
   $0.isPrivate = true
-  $0.broadcast.receiveOwnMessages = true
+  $0.broadcast.receivesOwnMessages = true
   $0.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1_700_000_000), limit: 10)
 }
 ```
@@ -336,7 +336,7 @@ for await event in await channel.events() where event == .postgresChangesReady {
 
 `events()` also emits `.resubscribed` when a channel joins again after a reconnect or to add a
 Postgres changes binding. Events sent while it was away are missed, so reload any state built
-from them. With `broadcast.waitForReplication` on, it emits `.replicationReady` or
+from them. With `broadcast.waitsForReplication` on, it emits `.replicationReady` or
 `.replicationFailed(_:)` in place of the `system` message with `"extension": "system"`.
 
 ## Streams replace callbacks
@@ -407,7 +407,7 @@ for await change in await channel.postgresChanges(of: Todo.self, table: "todos")
 `broadcast(event:payload:encoder:)`, `broadcast(event:data:)`, `track(_:encoder:)` and `untrack()` are
 `async throws`. The broadcasts return once the frame is queued for the socket; `disconnect()`
 still writes the frames queued before it, up to the client's `requestTimeout`. When
-`broadcast.acknowledge` is on, the broadcasts wait for the server reply first. `track` and
+`broadcast.acknowledgesMessages` is on, the broadcasts wait for the server reply first. `track` and
 `untrack` always wait for the reply. The reply becomes the result of the call:
 
 - The server acknowledged the push: the call returns.

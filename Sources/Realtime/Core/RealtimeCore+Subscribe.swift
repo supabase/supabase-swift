@@ -105,16 +105,16 @@ extension RealtimeCore {
   }
 
   /// Parks join attempt `attempt` until the socket opens. Connects first when
-  /// `connectOnSubscribe` allows it.
+  /// `connectsOnSubscribe` allows it.
   private mutating func waitForSocket(_ channel: ChannelID, attempt: Int) -> [Effect] {
     // The next join on the new socket replaces the join that timed out.
     channels.update(channel) { $0.timedOutJoinRef = nil }
     switch connection {
-    case .disconnected where !options.connectOnSubscribe:
+    case .disconnected where !options.connectsOnSubscribe:
       return failSubscribe(channel, with: .notConnectedToSubscribe)
     case .disconnected, .reconnecting:
       let effects = setPhase(.waitingForSocket(attempt: attempt), for: channel)
-      guard options.connectOnSubscribe else { return effects }
+      guard options.connectsOnSubscribe else { return effects }
       return effects + transitionConnection(.connect(waiter: nil))
     case .connecting, .connected:
       return setPhase(.waitingForSocket(attempt: attempt), for: channel)

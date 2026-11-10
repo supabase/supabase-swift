@@ -75,7 +75,7 @@ struct BinaryBroadcastView: View {
 
   func observeFrames() async {
     let channel = await supabaseClient.channel("binary-broadcast-example") {
-      $0.broadcast.receiveOwnMessages = true
+      $0.broadcast.receivesOwnMessages = true
     }
 
     let messages = await channel.broadcasts(event: "binary_message")

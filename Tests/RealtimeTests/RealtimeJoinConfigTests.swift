@@ -316,10 +316,10 @@ struct RealtimeJoinConfigTests {
   func joinConfigMapsConfiguration() throws {
     var configuration = RealtimeChannelConfiguration()
     configuration.isPrivate = true
-    configuration.broadcast.receiveOwnMessages = true
-    configuration.broadcast.acknowledge = true
+    configuration.broadcast.receivesOwnMessages = true
+    configuration.broadcast.acknowledgesMessages = true
     configuration.broadcast.replay = .init(since: Date(timeIntervalSince1970: 1.5), limit: 10)
-    configuration.broadcast.waitForReplication = true
+    configuration.broadcast.waitsForReplication = true
     configuration.presence.key = "u1"
 
     let encoded = try JSONObject(
@@ -347,7 +347,7 @@ struct RealtimeJoinConfigTests {
   @Test
   func waitForSubscriptionEncodesOptions() throws {
     var configuration = RealtimeChannelConfiguration()
-    configuration.postgresChanges.waitForSubscription = true
+    configuration.postgresChanges.waitsForSubscription = true
     configuration.postgresChanges.subscriptionTimeout = .seconds(20)
     let binding = PostgresJoinConfig(event: .all, schema: "public", table: "t")
 

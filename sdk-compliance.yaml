@@ -526,8 +526,8 @@ supporting_symbols:
   - RealtimeClient.Configuration.headers
   - RealtimeClient.Configuration.http
   - RealtimeClient.Configuration.defaultRequestTimeout
-  - RealtimeClient.Configuration.connectOnSubscribe
-  - RealtimeClient.Configuration.defaultConnectOnSubscribe
+  - RealtimeClient.Configuration.connectsOnSubscribe
+  - RealtimeClient.Configuration.defaultConnectsOnSubscribe
   # The configuration type itself, its url, and the client's copy of it.
   - RealtimeClient.Configuration
   - RealtimeClient.Configuration.url
@@ -573,7 +573,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.headers
   - SupabaseClient.Configuration.Realtime.heartbeatInterval
   - SupabaseClient.Configuration.Realtime.requestTimeout
-  - SupabaseClient.Configuration.Realtime.connectOnSubscribe
+  - SupabaseClient.Configuration.Realtime.connectsOnSubscribe
   - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
   - SupabaseClient.Configuration.Realtime.observesAppLifecycle
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
@@ -2045,7 +2045,7 @@ features:
       - RealtimeChannelStatus.failed
       - RealtimeChannelEvent
       - RealtimeChannelEvent.resubscribed
-      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.waitsForSubscription
       - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
     status: implemented
@@ -2063,7 +2063,7 @@ features:
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.waitForReplication
+      - RealtimeChannelConfiguration.Broadcast.waitsForReplication
       - RealtimeChannel.broadcasts
     supporting_symbols:
       - BroadcastMessage
@@ -2174,11 +2174,11 @@ features:
   realtime.subscriptions.broadcast_self:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
+      - RealtimeChannelConfiguration.Broadcast.receivesOwnMessages
   realtime.subscriptions.broadcast_ack:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.acknowledge
+      - RealtimeChannelConfiguration.Broadcast.acknowledgesMessages
   realtime.subscriptions.broadcast_replay:
     status: implemented
     symbols:

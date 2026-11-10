@@ -51,19 +51,19 @@ package struct RealtimeJoinConfig: Encodable, Hashable {
     let postgresChanges = configuration.postgresChanges
     self.init(
       broadcast: BroadcastJoinConfig(
-        acknowledgeBroadcasts: configuration.broadcast.acknowledge,
-        receiveOwnBroadcasts: configuration.broadcast.receiveOwnMessages,
+        acknowledgeBroadcasts: configuration.broadcast.acknowledgesMessages,
+        receiveOwnBroadcasts: configuration.broadcast.receivesOwnMessages,
         replay: configuration.broadcast.replay.map {
           ReplayOption(
             since: Int(($0.since.timeIntervalSince1970 * 1000).rounded()), limit: $0.limit)
         },
-        replicationReady: configuration.broadcast.waitForReplication
+        replicationReady: configuration.broadcast.waitsForReplication
       ),
       presence: PresenceJoinConfig(
         key: configuration.presence.key ?? "",
         enabled: presenceEnabled),
       postgresChanges: bindings,
-      postgresChangesOptions: postgresChanges.waitForSubscription
+      postgresChangesOptions: postgresChanges.waitsForSubscription
         ? PostgresChangesOptions(wait: true, timeout: postgresChanges.subscriptionTimeout) : nil,
       isPrivate: configuration.isPrivate
     )

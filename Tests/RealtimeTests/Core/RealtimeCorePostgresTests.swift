@@ -386,7 +386,7 @@ struct RealtimeCorePostgresTests {
   /// The server holds the join reply until the Postgres changes are set up.
   static var serverWaits: RealtimeChannelConfiguration {
     var configuration = RealtimeChannelConfiguration()
-    configuration.postgresChanges.waitForSubscription = true
+    configuration.postgresChanges.waitsForSubscription = true
     return configuration
   }
 

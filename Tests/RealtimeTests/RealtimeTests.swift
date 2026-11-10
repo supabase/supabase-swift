@@ -637,7 +637,7 @@ final class RealtimeTests: Sendable {
       }
 
       let channel = await sut.channel("public:messages") {
-        $0.broadcast.acknowledge = true
+        $0.broadcast.acknowledgesMessages = true
       }
 
       // `broadcast` on a channel that is not subscribed no longer falls back to the REST
