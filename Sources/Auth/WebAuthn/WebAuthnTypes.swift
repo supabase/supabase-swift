@@ -15,10 +15,10 @@ import Helpers
 @_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
-  public let rpID: String?
+  public var rpID: String?
 
   /// Allowed relying party origins (e.g. `https://example.com`).
-  public let rpOrigins: [String]?
+  public var rpOrigins: [String]?
 
   private enum CodingKeys: String, CodingKey {
     case rpID = "rp_id"
@@ -63,12 +63,21 @@ public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Send
 @_spi(Experimental)
 public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   /// Whether the authenticator should create a new credential or assert an existing one.
-  public let type: WebAuthnChallengeType
+  public var type: WebAuthnChallengeType
 
   /// The W3C credential options (creation or request), wrapped as `{"publicKey": {…}}` like the
   /// argument of `navigator.credentials.create()`. Passkey endpoints send the inner object bare.
   /// Field names follow the W3C spec verbatim (camelCase) and are not transformed.
-  public let credentialOptions: JSONValue
+  public var credentialOptions: JSONValue
+
+  /// Creates a ``WebAuthnChallengeResponseData``.
+  public init(
+    type: WebAuthnChallengeType,
+    credentialOptions: JSONValue
+  ) {
+    self.type = type
+    self.credentialOptions = credentialOptions
+  }
 
   private enum CodingKeys: String, CodingKey {
     case type
@@ -82,16 +91,16 @@ public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
 @_spi(Experimental)
 public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
-  public let id: UUID
+  public var id: UUID
 
   /// Human readable name assigned to the passkey.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// When the passkey was registered.
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// When the passkey was last used to authenticate, if ever.
-  public let lastUsedAt: Date?
+  public var lastUsedAt: Date?
 
   private enum CodingKeys: String, CodingKey {
     case id
@@ -114,13 +123,24 @@ public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
 @_spi(Experimental)
 public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeID: UUID
+  public var challengeID: UUID
 
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
-  public let options: JSONValue
+  public var options: JSONValue
 
   /// When the challenge expires.
-  public let expiresAt: Date
+  public var expiresAt: Date
+
+  /// Creates a ``PasskeyRegistrationOptions``.
+  public init(
+    challengeID: UUID,
+    options: JSONValue,
+    expiresAt: Date
+  ) {
+    self.challengeID = challengeID
+    self.options = options
+    self.expiresAt = expiresAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case challengeID = "challenge_id"
@@ -142,13 +162,24 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
 @_spi(Experimental)
 public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeID: UUID
+  public var challengeID: UUID
 
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
-  public let options: JSONValue
+  public var options: JSONValue
 
   /// When the challenge expires.
-  public let expiresAt: Date
+  public var expiresAt: Date
+
+  /// Creates a ``PasskeyAuthenticationOptions``.
+  public init(
+    challengeID: UUID,
+    options: JSONValue,
+    expiresAt: Date
+  ) {
+    self.challengeID = challengeID
+    self.options = options
+    self.expiresAt = expiresAt
+  }
 
   private enum CodingKeys: String, CodingKey {
     case challengeID = "challenge_id"

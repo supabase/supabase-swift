@@ -820,6 +820,7 @@ features:
       - ClaimsOptions.init
       - ClaimsOptions.jwks
       - VerifiedClaims
+      - VerifiedClaims.init
       - VerifiedClaims.additionalClaims
       - VerifiedClaims.amr
       - VerifiedClaims.appMetadata
@@ -1003,6 +1004,7 @@ features:
       - AuthMFA.factors
     supporting_symbols:
       - MFAFactors
+      - MFAFactors.init
       - MFAFactors.verified
       - MFAFactors.unverified
       - MFAFactors.all
@@ -1024,6 +1026,7 @@ features:
       - AuthMFA.assuranceLevel
     supporting_symbols:
       - AssuranceLevelInfo
+      - AssuranceLevelInfo.init
       - AssuranceLevelInfo.currentLevel
       - AssuranceLevelInfo.nextLevel
       - AssuranceLevelInfo.currentAuthenticationMethods
@@ -1033,6 +1036,7 @@ features:
       - AuthenticatorAssuranceLevel.aal1
       - AuthenticatorAssuranceLevel.aal2
       - AMREntry
+      - AMREntry.init
       - AMREntry.method
       - AMREntry.timestamp
       - AuthenticationMethod
@@ -1135,6 +1139,7 @@ features:
       - AuthAdminClient.users
     supporting_symbols:
       - UserPage
+      - UserPage.init
       - UserPage.users
       - UserPage.audience
       - UserPage.nextPage
@@ -2062,6 +2067,7 @@ features:
       - RealtimeChannel.broadcasts
     supporting_symbols:
       - BroadcastMessage
+      - BroadcastMessage.init
       - BroadcastMessage.event
       - BroadcastMessage.payload
       - BroadcastMessage.id
@@ -2085,6 +2091,7 @@ features:
       - PostgresChangeEvent.delete
       - PostgresChangeEvent.all
       - PostgresChange
+      - PostgresChange.init
       - PostgresChange.kind
       - PostgresChange.schema
       - PostgresChange.table
@@ -2100,9 +2107,11 @@ features:
       - PostgresChange.Kind.update
       - PostgresChange.Kind.delete
       - PostgresColumn
+      - PostgresColumn.init
       - PostgresColumn.name
       - PostgresColumn.type
       - PostgresRow
+      - PostgresRow.init
       - PostgresRow.values
       - PostgresRow.subscript
       - PostgresRow.decode
@@ -2572,6 +2581,7 @@ features:
     symbols:
       - StorageBucket.createSignedUploadURL
       - SignedUploadURL
+      - SignedUploadURL.init
       - SignedUploadURL.path
       - SignedUploadURL.signedURL
       - SignedUploadURL.token
