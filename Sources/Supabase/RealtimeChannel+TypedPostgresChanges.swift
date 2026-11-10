@@ -20,7 +20,7 @@ extension RealtimeChannel {
   /// The stream shapes the join request. Open it before you call ``RealtimeChannel/subscribe()``.
   ///
   /// ```swift
-  /// let changes = await channel.postgresChanges(of: Todo.self, where: { $0.listID.eq(listID) })
+  /// let changes = try await channel.postgresChanges(of: Todo.self, where: { $0.listID.eq(listID) })
   /// try await channel.subscribe()
   /// for await change in changes {
   ///   switch change.kind {
@@ -35,9 +35,8 @@ extension RealtimeChannel {
   /// Realtime understands fewer filters than PostgREST. The filter can use `eq`, `neq`, `gt`,
   /// `gte`, `lt`, `lte`, `in`, `like`, `ilike`, `regexMatch`, `regexIMatch`, `isDistinct`, and the
   /// `IS` checks, on stored columns. It can negate one condition with `!` and join conditions with
-  /// `&&`. Any other filter is a programmer error and traps: `||`, `!` over a group, the array,
-  /// range, JSON and full-text operators, JSON paths, and casts. A `raw` filter must follow the
-  /// same rules.
+  /// `&&`. Any other filter throws: `||`, `!` over a group, the array, range, JSON and full-text
+  /// operators, JSON paths, and casts. A `raw` filter must follow the same rules.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
@@ -50,14 +49,16 @@ extension RealtimeChannel {
   ///     typed query API, a `JSONDecoder.supabase()`, so a row decodes the same from a query and
   ///     from a change.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
+  ///   when Realtime cannot run the filter. The message names the part it cannot run.
   @_spi(Experimental)
   nonisolated public func postgresChanges<R: _PostgrestRelation>(
     of relation: R.Type,
     event: PostgresChangeEvent = .all,
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil,
     decoder: JSONDecoder? = nil
-  ) async -> AsyncStream<TypedPostgresChange<R>> {
-    let rawFilter = filter.map { $0(R.columns).realtimeFilter }
+  ) async throws -> AsyncStream<TypedPostgresChange<R>> {
+    let rawFilter = try filter.map { try $0(R.columns).realtimeFilter }
     return await postgresChanges(
       of: R.self, event: event, schema: R.schema, table: R.relationName, rawFilter: rawFilter,
       select: nil, decoder: decoder ?? PostgrestClient.Configuration.jsonDecoder
@@ -78,7 +79,7 @@ extension RealtimeChannel {
     where filter: ((R.Columns) -> _PostgrestFilter<R>)? = nil,
     decoder: JSONDecoder? = nil,
     _: Void = ()
-  ) async -> AsyncStream<TypedPostgresChange<R>> {
+  ) async throws -> AsyncStream<TypedPostgresChange<R>> {
     fatalError()
   }
 }
@@ -87,12 +88,17 @@ extension _PostgrestFilter {
   /// The filter in the grammar of a `postgres_changes` binding: `column=operator.value`
   /// conditions joined by commas, which the server ANDs.
   ///
-  /// A filter Realtime cannot run is a programmer error, so this traps with the reason.
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
+  ///   naming the first part Realtime cannot run.
   var realtimeFilter: String {
-    do {
-      return try realtimeConditions().joined(separator: ",")
-    } catch {
-      preconditionFailure(error.reason)
+    get throws {
+      do {
+        return try realtimeConditions().joined(separator: ",")
+      } catch {
+        throw RealtimeError(
+          kind: .invalidRequest, message: error.reason, isRetryable: false,
+          underlyingError: error)
+      }
     }
   }
 

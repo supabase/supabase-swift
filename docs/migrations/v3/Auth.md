@@ -48,10 +48,11 @@ Changes that still compile but behave differently. Check each one by hand.
   another device no longer carries the session, and the user signs in again there. macOS keeps the
   file-based Keychain, which has no accessibility class. To keep the v2 behavior, pass
   `storage: KeychainStorage(accessibility: .afterFirstUnlock, useDataProtectionKeychain: false)`.
-- **Network and decoding errors are wrapped.** `URLError` and `DecodingError` arrive as
-  `AuthError` with kind `.transport` or `.decoding`; the original is in `underlyingError`. A
-  cancelled task throws `CancellationError`. Search for `as URLError` and `as DecodingError` near
-  Auth calls.
+- **Network, decoding and encoding errors are wrapped.** `URLError` and `DecodingError` arrive
+  as `AuthError` with kind `.transport` or `.decoding`; the original is in `underlyingError`. A
+  request body that does not encode, or a sign-in URL that cannot be built, is `.invalidRequest`,
+  and nothing is sent. A cancelled task throws `CancellationError`. Search for `as URLError`,
+  `as DecodingError` and `as EncodingError` near Auth calls.
 - **Retries.** Auth makes up to 3 attempts instead of 2, with a random (jittered) wait, and
   honors `Retry-After`. A `ClientMiddleware` runs once per attempt.
 - **`init(rawValue:)` cannot fail.** On the types that became structs (see the table), it always

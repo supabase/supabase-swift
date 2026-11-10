@@ -1746,7 +1746,7 @@ public final class AuthClient: Sendable {
 
   private static func mayHaveReachedServer(_ error: any Error) -> Bool {
     if error is CancellationError || error is URLError { return true }
-    guard let error = error as? AuthError else { return false }
+    guard let error = error as? AuthError, error.kind != .invalidRequest else { return false }
     return error.kind == .transport || error.kind == .decoding
       || error.underlyingError is URLError
   }

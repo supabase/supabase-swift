@@ -47,7 +47,7 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
   ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
   ///   - allowsWatchOSConnections: Set to `true` only when the watchOS app runs in a context
   ///     where the system allows WebSockets, such as audio streaming. On watchOS, `connect` throws
-  ///     a non-retryable ``RealtimeError/Kind-swift.struct/transport`` error when this is
+  ///     a non-retryable ``RealtimeError/Kind-swift.struct/invalidRequest`` error when this is
   ///     `false`. It has no effect on other platforms. Defaults to `false`.
   public init(
     configuration: URLSessionConfiguration = .default,
@@ -96,22 +96,18 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
     -> any WebSocketConnection
   {
     if isWatchOS && !allowsWatchOSConnections {
-      throw RealtimeError(
-        kind: .transport,
-        message: """
-          watchOS blocks WebSocket connections for most apps (Apple TN3135), so the connection \
-          would wait forever. If the app streams audio or runs in another context TN3135 \
-          allows, set allowsWatchOSConnections to true on URLSessionWebSocketTransport.
-          """,
-        isRetryable: false
+      throw RealtimeError.invalidRequest(
+        """
+        watchOS blocks WebSocket connections for most apps (Apple TN3135), so the connection \
+        would wait forever. If the app streams audio or runs in another context TN3135 \
+        allows, set allowsWatchOSConnections to true on URLSessionWebSocketTransport.
+        """
       )
     }
 
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      throw RealtimeError(
-        kind: .transport,
-        message: "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
-        isRetryable: false,
+      throw RealtimeError.invalidRequest(
+        "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
         underlyingError: URLError(.unsupportedURL)
       )
     }
@@ -214,7 +210,7 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
   /// Maps a failed handshake to the error `connect` throws.
   static func connectError(task: URLSessionTask, error: (any Error)?) -> any Error {
     if let response = task.response as? HTTPURLResponse, response.statusCode != 101 {
-      return RealtimeError.upgradeFailed(status: response.statusCode, underlyingError: error)
+      return RealtimeError.upgradeFailed(response: response, underlyingError: error)
     }
     return RealtimeError(
       kind: .transport,
@@ -396,5 +392,19 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     continuation.finish()
     session.finishTasksAndInvalidate()
     receiveTask.value?.cancel()
+  }
+}
+
+extension RealtimeError {
+  /// The error for an HTTP upgrade the server refused with `response`, keeping its headers, such
+  /// as `Retry-After` and the request ID.
+  static func upgradeFailed(response: HTTPURLResponse, underlyingError: (any Error)?)
+    -> RealtimeError
+  {
+    var error = upgradeFailed(status: response.statusCode, underlyingError: underlyingError)
+    if let head = response.httpResponse {
+      error.response = HTTPErrorResponse(head, body: Data())
+    }
+    return error
   }
 }

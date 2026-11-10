@@ -12,9 +12,9 @@ public import Helpers
 ///
 /// Check ``kind`` to learn what failed. ``code`` carries the code the server put in
 /// front of a join or channel error reason. ``isRetryable`` says whether the same call can
-/// succeed later without the caller changing anything. ``response`` is set only for
-/// ``Kind-swift.struct/server`` errors from the REST broadcast endpoint used by `httpSend`.
-/// WebSocket failures carry the transport error in ``underlyingError`` when there is one.
+/// succeed later without the caller changing anything. ``response`` is set when the server
+/// answered over HTTP: the REST broadcast endpoint that `httpSend` uses, or a refused WebSocket
+/// upgrade. WebSocket failures carry the transport error in ``underlyingError`` when there is one.
 ///
 /// ```swift
 /// do {
@@ -53,11 +53,14 @@ public struct RealtimeError: SupabaseError {
     /// `httpSend` needs an access token and none was available. Sign in, or pass an
     /// `accessToken` closure, before sending. No request was sent.
     public static let accessTokenMissing: Kind = "accessTokenMissing"
-    /// The server rejected the token or the topic's RLS policy denied access. Retrying as-is
-    /// will not help; ``RealtimeError/code`` says which check failed.
+    /// The server rejected the token or the topic's RLS policy denied access, or refused the
+    /// WebSocket upgrade with 401 or 403. Retrying as-is will not help;
+    /// ``RealtimeError/code`` says which check failed, and ``RealtimeError/response`` has
+    /// the status of a refused upgrade.
     public static let unauthorized: Kind = "unauthorized"
     /// The server applied a rate limit. ``RealtimeError/code`` names which one. A channel
-    /// waits 30 s before it joins again.
+    /// waits 30 s before it joins again. A WebSocket upgrade refused with 429 has this kind too,
+    /// with ``RealtimeError/response`` set; the client then reconnects with its usual backoff.
     public static let rateLimited: Kind = "rateLimited"
     /// The server closed the channel (`phx_close`) with a `system` error. The message carries
     /// the server's reason.
@@ -74,12 +77,13 @@ public struct RealtimeError: SupabaseError {
     /// server closed (`phx_close`), or the removal ended a subscribe in flight. Get a new channel
     /// from ``RealtimeClient/channel(_:configure:)``.
     public static let channelRemoved: Kind = "channelRemoved"
-    /// The server answered a join or REST broadcast with an error this SDK has no narrower kind
-    /// for. Read ``RealtimeError/code`` and ``RealtimeError/message``, or
-    /// ``RealtimeError/response`` on the REST path.
+    /// The server answered a join, a REST broadcast or the WebSocket upgrade with an error this
+    /// SDK has no narrower kind for. Read ``RealtimeError/code`` and
+    /// ``RealtimeError/message``, or ``RealtimeError/response`` on the REST path and for a refused
+    /// upgrade.
     public static let server: Kind = "server"
-    /// The network path failed: a REST broadcast never completed, the WebSocket upgrade was
-    /// refused, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
+    /// The network path failed: a REST broadcast never completed, the WebSocket handshake did
+    /// not finish, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
     /// there was one; `closeCode` the close status when the socket closed.
     public static let transport: Kind = "transport"
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
@@ -89,8 +93,10 @@ public struct RealtimeError: SupabaseError {
     /// or no host. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
 
-    /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
-    static let encoding: Kind = "encoding"
+    /// The SDK refused to send: a payload did not encode as JSON, or the transport cannot open
+    /// the URL on this platform. Nothing was sent. ``RealtimeError/underlyingError`` is the cause,
+    /// such as the `EncodingError`.
+    public static let invalidRequest: Kind = "invalidRequest"
   }
 
   /// The code the server prefixes to a join or channel error reason, as in
@@ -213,8 +219,8 @@ public struct RealtimeError: SupabaseError {
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
   /// upgrade with 401/403/404. The client stops reconnecting when it meets one.
   public var isRetryable: Bool
-  /// The HTTP error response, for a ``Kind-swift.struct/server`` error from the REST broadcast
-  /// endpoint that `httpSend` uses.
+  /// The HTTP error response, for an error from the REST broadcast endpoint that `httpSend` uses
+  /// or from a refused WebSocket upgrade.
   public var response: HTTPErrorResponse?
   /// The error that caused this one, such as a `URLError` or a `DecodingError`.
   public var underlyingError: (any Error)?
@@ -277,8 +283,12 @@ extension RealtimeError {
     RealtimeError(kind: .decoding, message: message, isRetryable: false)
   }
 
-  static func encoding(_ message: String) -> RealtimeError {
-    RealtimeError(kind: .encoding, message: message, isRetryable: false)
+  static func invalidRequest(_ message: String, underlyingError: (any Error)? = nil)
+    -> RealtimeError
+  {
+    RealtimeError(
+      kind: .invalidRequest, message: message, isRetryable: false,
+      underlyingError: underlyingError)
   }
 
   static func transport(_ message: String, underlyingError: (any Error)? = nil) -> RealtimeError {
@@ -345,16 +355,30 @@ extension RealtimeError {
   /// other status (429 and 5xx in practice) is transient. A custom ``WebSocketTransport`` throws
   /// this error so the client knows whether to retry.
   ///
+  /// The kind follows the status: 401 and 403 are ``Kind-swift.struct/unauthorized``, 429 is
+  /// ``Kind-swift.struct/rateLimited``, and every other status is ``Kind-swift.struct/server``.
+  /// ``response`` carries the status, or is `nil` when `status` is outside `0...999`.
+  ///
   /// - Parameters:
   ///   - status: The HTTP status the server answered the upgrade with.
   ///   - underlyingError: The transport's own error, if any.
   public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
-    RealtimeError(
-      kind: .transport,
+    let kind: Kind =
+      switch status {
+      case 401, 403: .unauthorized
+      case 429: .rateLimited
+      default: .server
+      }
+    return RealtimeError(
+      kind: kind,
       message: "WebSocket upgrade failed with HTTP status \(status).",
       isRetryable: ![401, 403, 404].contains(status),
+      // `HTTPResponse.Status` traps outside 0...999, and a custom transport passes any `Int`.
+      response: (0...999).contains(status)
+        ? HTTPErrorResponse(status: HTTPResponse.Status(code: status), headers: [:], body: Data())
+        : nil,
       underlyingError: underlyingError
     )
   }

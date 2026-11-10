@@ -154,7 +154,7 @@ package struct RealtimeSerializer: Sendable {
       eventBytes.count <= 255,
       metaBytes.count <= 255
     else {
-      throw RealtimeError.encoding(
+      throw RealtimeError.invalidRequest(
         "Binary frame header fields must not exceed 255 bytes each."
       )
     }

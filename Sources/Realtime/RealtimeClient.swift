@@ -429,7 +429,9 @@ public actor RealtimeClient {
   /// try await client.connect()
   /// ```
   ///
-  /// - Throws: ``RealtimeError`` with kind `.transport` when the socket could not be opened, or
+  /// - Throws: ``RealtimeError`` with kind `.transport` when the socket could not be opened;
+  ///   `.unauthorized`, `.rateLimited` or `.server`, with `response` set, when the server refused
+  ///   the upgrade; `.invalidRequest` when the transport cannot open the URL; or
   ///   `CancellationError` when the calling task is cancelled or ``disconnect(code:reason:)``
   ///   interrupts the attempt.
   public func connect() async throws {

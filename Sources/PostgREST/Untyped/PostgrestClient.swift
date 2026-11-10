@@ -262,7 +262,8 @@ public struct PostgrestClient: Sendable {
   ///   - get: When `true`, parameters are sent as query string items and the function runs in read-only mode.
   ///   - count: The row-count algorithm to use for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html), or `nil` to skip counting.
   /// - Returns: A ``PostgrestFilterBuilder`` that you can further filter or execute.
-  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if `params` cannot be serialized to a key-value JSON object when using `head` or `get`.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `params` does not encode, or
+  ///   does not encode as a key-value JSON object when `head` or `get` is `true`. Nothing is sent.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -270,11 +271,11 @@ public struct PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let bodyData = try configuration.encoder.encode(params)
+    let bodyData = try configuration.encoder.encodeRequestBody(params)
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
+      guard case .object(let json) = try? JSONValue.decoder.decode(JSONValue.self, from: bodyData)
       else {
         throw PostgrestError(
           kind: .invalidRequest,

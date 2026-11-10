@@ -8,6 +8,10 @@ module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **A value that does not encode throws `PostgrestError`.** `insert`, `upsert`, `update` and
+  `rpc` throw a `PostgrestError` of kind `.invalidRequest` instead of the raw `EncodingError`,
+  which moves to `underlyingError`. Nothing is sent. Search for `as EncodingError` near
+  PostgREST calls.
 - **`update`, `upsert` and `delete` no longer return rows by default.** `returning` now defaults
   to `nil`, so no `Prefer: return=representation` is sent. Find each `update`, `upsert` or
   `delete` that reads `.value` and add `.select()` to the chain.

@@ -52,9 +52,9 @@ struct TodoRealtimeView: View {
 
   func observeTodos() async {
     let channel = await supabaseClient.channel("live-todos")
-    let changes = await channel.postgresChanges(of: Todo.self)
 
     do {
+      let changes = try await channel.postgresChanges(of: Todo.self)
       error = nil
       try await channel.subscribe()
       // Fetch after the join, so a change made in between reaches the stream.

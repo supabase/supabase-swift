@@ -25,12 +25,12 @@ extension AuthAPI {
     attributes: AdminUserAttributes
   ) throws -> AuthRequest<User> {
     try request(
-      .put, "admin/users/\(id)", body: encoder.encode(attributes), decode: decoding(User.self))
+      .put, "admin/users/\(id)", body: encodeBody(attributes), decode: decoding(User.self))
   }
 
   func adminCreateUser(attributes: AdminUserAttributes) throws -> AuthRequest<User> {
     try request(
-      .post, "admin/users", body: encoder.encode(attributes), decode: decoding(User.self))
+      .post, "admin/users", body: encodeBody(attributes), decode: decoding(User.self))
   }
 
   func adminInviteUser(
@@ -40,7 +40,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<User> {
     try request(
       .post, "invite", query: redirectQuery(redirectTo),
-      body: encoder.encode(["email": .string(email), "data": .object(userMetadata)] as JSONObject),
+      body: encodeBody(["email": .string(email), "data": .object(userMetadata)] as JSONObject),
       decode: decoding(User.self)
     )
   }
@@ -48,7 +48,7 @@ extension AuthAPI {
   func adminDeleteUser(id: UUID, softDelete: Bool) throws -> AuthRequest<Void> {
     try request(
       .delete, "admin/users/\(id)",
-      body: encoder.encode(DeleteUserRequest(shouldSoftDelete: softDelete)),
+      body: encodeBody(DeleteUserRequest(shouldSoftDelete: softDelete)),
       decode: ignoringBody)
   }
 
@@ -78,7 +78,7 @@ extension AuthAPI {
   func adminGenerateLink(params: GenerateLinkParams) throws -> AuthRequest<GenerateLinkResponse> {
     try request(
       .post, "admin/generate_link", query: redirectQuery(params.redirectTo),
-      body: encoder.encode(params.body), decode: decoding(GenerateLinkResponse.self))
+      body: encodeBody(params.body), decode: decoding(GenerateLinkResponse.self))
   }
 
   private func pageQuery(page: Int?, pageSize: Int?) -> [URLQueryItem] {
@@ -151,7 +151,7 @@ extension AuthAPI {
     params: CreateOAuthClientParams
   ) throws -> AuthRequest<OAuthClient> {
     try request(
-      .post, "admin/oauth/clients", body: encoder.encode(params),
+      .post, "admin/oauth/clients", body: encodeBody(params),
       decode: decoding(OAuthClient.self))
   }
 
@@ -164,7 +164,7 @@ extension AuthAPI {
     params: UpdateOAuthClientParams
   ) throws -> AuthRequest<OAuthClient> {
     try request(
-      .put, "admin/oauth/clients/\(id)", body: encoder.encode(params),
+      .put, "admin/oauth/clients/\(id)", body: encodeBody(params),
       decode: decoding(OAuthClient.self))
   }
 
@@ -199,7 +199,7 @@ extension AuthAPI {
     params: CreateCustomProviderParams
   ) throws -> AuthRequest<CustomProvider> {
     try request(
-      .post, "admin/custom-providers", body: encoder.encode(params),
+      .post, "admin/custom-providers", body: encodeBody(params),
       decode: decoding(CustomProvider.self))
   }
 
@@ -213,7 +213,7 @@ extension AuthAPI {
     params: UpdateCustomProviderParams
   ) throws -> AuthRequest<CustomProvider> {
     try request(
-      .put, "admin/custom-providers/\(identifier)", body: encoder.encode(params),
+      .put, "admin/custom-providers/\(identifier)", body: encodeBody(params),
       decode: decoding(CustomProvider.self))
   }
 

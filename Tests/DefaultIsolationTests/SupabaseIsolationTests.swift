@@ -40,10 +40,10 @@ enum SupabaseIsolationTests {
   }
 
   static func typedPostgresChanges(_ channel: RealtimeChannel) async throws {
-    for await change in await channel.postgresChanges(of: IsolationRoom.self) {
+    for await change in try await channel.postgresChanges(of: IsolationRoom.self) {
       _ = try change.row()
     }
-    for await change in await channel.postgresChanges(
+    for await change in try await channel.postgresChanges(
       of: IsolationRoom.self, event: .insert, where: { $0.id.eq(1) })
     {
       _ = try change.row()

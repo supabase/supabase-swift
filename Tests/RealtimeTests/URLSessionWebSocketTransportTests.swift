@@ -39,11 +39,11 @@ struct URLSessionWebSocketTransportTests {
   }
 
   @Test
-  func rejectsANonWebSocketSchemeWithANonRetryableTransportError() async {
+  func rejectsANonWebSocketSchemeAsANonRetryableInvalidRequest() async {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await transport.connect(to: URL(string: "https://example.com")!, headerFields: [:])
     }
-    #expect(error?.kind == .transport)
+    #expect(error?.kind == .invalidRequest)
     #expect(error?.isRetryable == false)
   }
 
@@ -54,7 +54,7 @@ struct URLSessionWebSocketTransportTests {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
     }
-    #expect(error?.kind == .transport)
+    #expect(error?.kind == .invalidRequest)
     #expect(error?.isRetryable == false)
     #expect(error?.message.contains("TN3135") == true)
     #expect(error?.message.contains("allowsWatchOSConnections") == true)
@@ -159,7 +159,24 @@ struct URLSessionWebSocketTransportTests {
     }
 
     @Test
-    func refusedUpgradeThrowsANonRetryableTransportErrorWithTheStatus() async throws {
+    func refusedUpgradeKeepsTheResponseHeaders() async throws {
+      let (server, _) = try LoopbackTCPServer.refusing(
+        status: 429, reason: "Too Many Requests",
+        headers: ["Retry-After": "30", "sb-request-id": "req-1"])
+      let port = try server.start()
+      defer { server.stop() }
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await connect(port: port)
+      }
+      #expect(error?.kind == .rateLimited)
+      #expect(error?.response?.headers[HTTPField.Name("Retry-After")!] == "30")
+      #expect(error?.response?.requestID == "req-1")
+      #expect(error?.isRetryable == true)
+    }
+
+    @Test
+    func refusedUpgradeThrowsANonRetryableUnauthorizedErrorWithTheStatus() async throws {
       let (server, _) = try LoopbackTCPServer.refusing(status: 401, reason: "Unauthorized")
       let port = try server.start()
       defer { server.stop() }
@@ -167,7 +184,8 @@ struct URLSessionWebSocketTransportTests {
       let error = await #expect(throws: RealtimeError.self) {
         _ = try await connect(port: port)
       }
-      #expect(error?.kind == .transport)
+      #expect(error?.kind == .unauthorized)
+      #expect(error?.response?.status.code == 401)
       #expect(error?.isRetryable == false)
       #expect(error?.message.contains("401") == true)
     }

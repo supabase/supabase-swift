@@ -296,6 +296,10 @@ public struct AuthError: SupabaseError {
     /// ``AuthClient/init(configuration:)`` refused the configuration: its URL has no scheme or no
     /// host. Fix the configuration. No client was created.
     public static let invalidConfiguration: Kind = "invalidConfiguration"
+    /// The SDK refused to send the request: a body did not encode as JSON, or a URL could not be
+    /// built. Nothing was sent. ``AuthError/underlyingError`` is the cause, such as the
+    /// `EncodingError`.
+    public static let invalidRequest: Kind = "invalidRequest"
     /// A token refresh finished after the session it started from was signed out or replaced, so
     /// its rotated tokens were dropped rather than applied to whichever session is stored now.
     /// Ignore the result; the stored session is unchanged. Distinct from ``sessionMissing``: a
@@ -465,5 +469,9 @@ extension AuthError {
 
   static func decoding(_ message: String) -> AuthError {
     AuthError(kind: .decoding, message: message)
+  }
+
+  static func invalidRequest(_ message: String, underlyingError: (any Error)? = nil) -> AuthError {
+    AuthError(kind: .invalidRequest, message: message, underlyingError: underlyingError)
   }
 }

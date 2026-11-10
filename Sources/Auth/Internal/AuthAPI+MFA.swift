@@ -17,7 +17,7 @@ extension AuthAPI {
     accessToken: String
   ) throws -> AuthRequest<Enrollment> {
     try request(
-      .post, "factors", authorization: bearer(accessToken), body: encoder.encode(params),
+      .post, "factors", authorization: bearer(accessToken), body: encodeBody(params),
       decode: decoding(Enrollment.self))
   }
 
@@ -36,7 +36,7 @@ extension AuthAPI {
 
     return try request(
       .post, "factors/\(factorID)/challenge", authorization: bearer(accessToken),
-      body: encoder.encode(Body(channel: channel, webauthn: webAuthn)),
+      body: encodeBody(Body(channel: channel, webauthn: webAuthn)),
       decode: decoding(MFAChallenge.self))
   }
 
@@ -60,7 +60,7 @@ extension AuthAPI {
 
     return try request(
       .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(Params(factorID: factorID, challengeID: challengeID, code: code)),
+      body: encodeBody(Params(factorID: factorID, challengeID: challengeID, code: code)),
       decode: decodingSession())
   }
 
@@ -96,7 +96,7 @@ extension AuthAPI {
 
     return try request(
       .post, "factors/\(factorID)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(
+      body: encodeBody(
         Params(
           factorID: factorID, challengeID: challengeID,
           webauthn: WebAuthn(type: type.rawValue, credentialResponse: credentialResponse))),
@@ -140,7 +140,7 @@ extension AuthAPI {
 
     return try request(
       .post, Self.recoveryCodes, authorization: bearer(accessToken),
-      body: friendlyName.map { try encoder.encode(Params(friendlyName: $0)) },
+      body: friendlyName.map { try encodeBody(Params(friendlyName: $0)) },
       decode: decoding(AuthMFARecoveryCodesGenerateResponse.self))
   }
 
@@ -154,7 +154,7 @@ extension AuthAPI {
 
     return try request(
       .post, "\(Self.recoveryCodes)/verify", authorization: bearer(accessToken),
-      body: encoder.encode(Params(code: code)), decode: decodingSession())
+      body: encodeBody(Params(code: code)), decode: decodingSession())
   }
 
   func regenerateRecoveryCodes(

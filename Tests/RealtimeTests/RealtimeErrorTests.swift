@@ -287,7 +287,6 @@ struct RealtimeErrorTests {
   func upgradeFailedIsFatalForAuthAndNotFoundStatuses(status: Int) {
     let error = RealtimeError.upgradeFailed(status: status)
 
-    #expect(error.kind == .transport)
     #expect(!error.isRetryable)
     #expect(error.message.contains("\(status)"))
   }
@@ -296,8 +295,31 @@ struct RealtimeErrorTests {
   func upgradeFailedIsRetryableForRateLimitAndServerStatuses(status: Int) {
     let error = RealtimeError.upgradeFailed(status: status)
 
-    #expect(error.kind == .transport)
     #expect(error.isRetryable)
+  }
+
+  @Test
+  func upgradeFailedWithAStatusOutsideTheHTTPRangeHasNoResponse() {
+    for status in [-1, 1000] {
+      let error = RealtimeError.upgradeFailed(status: status)
+
+      #expect(error.kind == .server)
+      #expect(error.response == nil)
+      #expect(error.message.contains("\(status)"))
+    }
+  }
+
+  @Test(arguments: [
+    (401, RealtimeError.Kind.unauthorized), (403, .unauthorized), (404, .server),
+    (429, .rateLimited), (500, .server), (503, .server),
+  ])
+  func upgradeFailedPicksTheKindFromTheStatusAndKeepsTheResponse(
+    status: Int, kind: RealtimeError.Kind
+  ) {
+    let error = RealtimeError.upgradeFailed(status: status)
+
+    #expect(error.kind == kind)
+    #expect(error.response?.status.code == status)
   }
 
   @Test
