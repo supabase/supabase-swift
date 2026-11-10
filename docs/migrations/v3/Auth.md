@@ -404,6 +404,28 @@ wire keys do not change.
 | `CustomProvider` URL and ID fields (`clientId`, `discoveryUrl`, `authorizationUrl`, `tokenUrl`, `userinfoUrl`, `jwksUri`, `acceptableClientIds`) | `clientID`, `discoveryURL`, `authorizationURL`, `tokenURL`, `userinfoURL`, `jwksURI`, `acceptableClientIDs` |
 | `OAuthRedirect.redirectURL` and `OAuthAuthorizationDetails.redirectUri` | `redirectURL` and `redirectURI` stay two names: the first is a full URL the app opens, the second is the client's registered URI |
 
+## Links are `URL`
+
+A link has the same type when you send it and when you read it back. The wire format does not
+change. Build each value with `URL(string:)`.
+
+| v2 and v3 pre-release | v3 |
+| --- | --- |
+| `User.actionLink: String?` | `URL?`, like `GenerateLinkProperties.actionLink` |
+| `OAuthClient.clientURI`, `.logoURI: String?` | `URL?` |
+| `OAuthClient.redirectURIs: [String]?` | `[URL]?` |
+| `CreateOAuthClientParams.clientURI: String?`, `.redirectURIs: [String]` | `URL?`, `[URL]` |
+| `UpdateOAuthClientParams.clientURI`, `.logoURI: String?`, `.redirectURIs: [String]?` | `URL?`, `[URL]?` |
+| `User.appMetadata`, `User.userMetadata` and other `[String: JSONValue]` fields | `JSONObject`, the same type; no code change |
+
+```swift
+// v3 pre-release
+CreateOAuthClientParams(clientName: "App", redirectURIs: ["myapp://callback"])
+
+// v3
+CreateOAuthClientParams(clientName: "App", redirectURIs: [URL(string: "myapp://callback")!])
+```
+
 ## `admin` is a separate `AuthAdminClient`
 
 `AuthClient.admin` is removed. Create an `AuthAdminClient` with the secret key on your server. It

@@ -123,7 +123,7 @@ struct AuthAdminOAuthTests {
       id: clientID,
       params: UpdateOAuthClientParams(
         clientName: "Update Client name",
-        redirectURIs: ["https://example.com/callback"],
+        redirectURIs: [URL(string: "https://example.com/callback")!],
         grantTypes: [.authorizationCode, .refreshToken]
       )
     )
@@ -170,7 +170,7 @@ struct AuthAdminOAuthTests {
 
     let params = CreateOAuthClientParams(
       clientName: "New Client",
-      redirectURIs: ["https://example.com/callback"]
+      redirectURIs: [URL(string: "https://example.com/callback")!]
     )
 
     let client = try await sut.oauth.createClient(params: params)
@@ -189,6 +189,8 @@ struct AuthAdminOAuthTests {
         "client_type": "confidential",
         "token_endpoint_auth_method": "client_secret_post",
         "registration_type": "manual",
+        "client_uri": "https://example.com",
+        "logo_uri": "https://example.com/logo.png",
         "redirect_uris": ["https://example.com/callback"],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
@@ -214,7 +216,9 @@ struct AuthAdminOAuthTests {
 
     #expect(client.clientID == clientID)
     #expect(client.clientName == "Test Client")
-    #expect(client.redirectURIs == ["https://example.com/callback"])
+    #expect(client.clientURI == URL(string: "https://example.com"))
+    #expect(client.logoURI == URL(string: "https://example.com/logo.png"))
+    #expect(client.redirectURIs == [URL(string: "https://example.com/callback")!])
     #expect(client.grantTypes == [.authorizationCode, .refreshToken])
     #expect(client.responseTypes == [.code])
   }
