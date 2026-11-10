@@ -394,3 +394,17 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     receiveTask.value?.cancel()
   }
 }
+
+extension RealtimeError {
+  /// The error for an HTTP upgrade the server refused with `response`, keeping its headers, such
+  /// as `Retry-After` and the request ID.
+  static func upgradeFailed(response: HTTPURLResponse, underlyingError: (any Error)?)
+    -> RealtimeError
+  {
+    var error = upgradeFailed(status: response.statusCode, underlyingError: underlyingError)
+    if let head = response.httpResponse {
+      error.response = HTTPErrorResponse(head, body: Data())
+    }
+    return error
+  }
+}
