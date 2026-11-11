@@ -75,11 +75,19 @@ Changes that still compile but behave differently. Check each one by hand.
   `/proc/version` line. Parameter values are trimmed, a value that is empty after trimming is left
   out, and `;`, `%` and characters outside printable ASCII are percent-encoded. Search for code that parses this header, for example in a middleware or on your server.
 
+- **`JSONValue` numbers keep their exact digits.** A JSON number is now `.number(JSONNumber)`.
+  Two numbers with the same value are equal, so `JSONValue(1) == JSONValue(1.0)`. `doubleValue`
+  returns a value for every number, also an integer. `value` returns a `Decimal` for a number that
+  neither `Int` nor `Double` holds exactly. A number with a fraction, such as
+  `12345678901234567.89`, no longer decodes as a cut-off integer. See
+  [JSONValue numbers](#jsonvalue-numbers-keep-their-exact-digits).
+
 ### Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
 | `AnyJSON` | `JSONValue` |
+| `AnyJSON.integer(Int)`, `AnyJSON.double(Double)` | `JSONValue.number(JSONNumber)`; see [JSONValue numbers](#jsonvalue-numbers-keep-their-exact-digits) |
 | `AnyJSON.encoder`, `AnyJSON.decoder` | removed; see [Default coders](#default-coders) |
 | `SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, `OSLogSupabaseLogger` | `Logging.Logger` from swift-log |
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
@@ -133,6 +141,33 @@ let decoder = JSONDecoder.supabase()
 decoder.keyDecodingStrategy = .convertFromSnakeCase
 let user = try payload.decode(as: User.self, decoder: decoder)
 ```
+
+### `JSONValue` numbers keep their exact digits
+
+`.integer` and `.double` are one case, `.number(JSONNumber)`. `JSONNumber` keeps every digit, so a
+`numeric` value or a `UInt64` above `Int.max` reaches your `Decimal` or `UInt64` field unchanged.
+Read it with `intValue` or `decimalValue` (exact, or `nil`) or `doubleValue` (the nearest `Double`).
+A literal still works: `["count": 1, "ratio": 0.5]`.
+
+```swift
+// v2
+let count = AnyJSON.integer(n)
+switch value {
+case .integer(let int): print(int)
+case .double(let double): print(double)
+default: break
+}
+
+// v3
+let count = JSONValue.number(JSONNumber(n))
+switch value {
+case .number(let number): print(number.intValue.map(String.init) ?? number.description)
+default: break
+}
+```
+
+A `Double` that is NaN or infinite has no JSON form, so `JSONNumber(_: Double)` returns `nil` for
+it. A number decoded from JSON keeps at most 38 significant digits.
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
 

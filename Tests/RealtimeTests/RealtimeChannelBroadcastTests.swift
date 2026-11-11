@@ -218,7 +218,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let broadcast = DecodedBroadcast(
       topic: "realtime:test",
       event: "my_event",
-      payload: .json(["count": .integer(99)])
+      payload: .json(["count": .number(99)])
     )
     await sut.installSubscribedRecord("test")
     await sut.apply(.binaryBroadcast(broadcast))
@@ -447,7 +447,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
     try await channel.subscribe()
 
-    let jsonPayload: JSONObject = ["count": .integer(99)]
+    let jsonPayload: JSONObject = ["count": .number(99)]
     let payloadData = try JSONEncoder().encode(jsonPayload)
     let topic = "realtime:test"
     let event = "my_event"

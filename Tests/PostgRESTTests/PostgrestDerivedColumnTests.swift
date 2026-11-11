@@ -98,9 +98,9 @@ struct PostgrestDerivedColumnTests {
 
   @Test(
     arguments: [
-      { (c: Item.Columns) in c.data.jsonObject("a").eq(.double(.nan)) },
-      { (c: Item.Columns) in c.data.jsonObject("a").in([1, .double(.infinity)]) },
-      { (c: Item.Columns) in c.cost.eq(2) || c.data.eq(["n": .double(.nan)]) },
+      { (c: Item.Columns) in c.data.jsonObject("a").eq(.number(JSONNumber("1e-400")!)) },
+      { (c: Item.Columns) in c.data.jsonObject("a").in([1, .number(JSONNumber("1e-400")!)]) },
+      { (c: Item.Columns) in c.cost.eq(2) || c.data.eq(["n": .number(JSONNumber("1e-400")!)]) },
     ] as [@Sendable (Item.Columns) -> _PostgrestFilter<Item>]
   )
   func aComparisonWithNoJSONFormFailsTheRequestBeforeItIsSent(

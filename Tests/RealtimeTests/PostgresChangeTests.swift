@@ -59,7 +59,9 @@ struct PostgresChangeTests {
         ],
         record: PostgresRow(
           values: [
-            "id": .integer(1),
+            "id": .number(
+              JSONNumber("1")
+            ),
             "title": .string("a")
           ]
         ),
@@ -93,13 +95,17 @@ struct PostgresChangeTests {
         ],
         record: PostgresRow(
           values: [
-            "id": .integer(1),
+            "id": .number(
+              JSONNumber("1")
+            ),
             "title": .string("b")
           ]
         ),
         oldRecord: PostgresRow(
           values: [
-            "id": .integer(1),
+            "id": .number(
+              JSONNumber("1")
+            ),
             "title": .string("a")
           ]
         ),
@@ -132,7 +138,9 @@ struct PostgresChangeTests {
         record: nil,
         oldRecord: PostgresRow(
           values: [
-            "id": .integer(1)
+            "id": .number(
+              JSONNumber("1")
+            )
           ]
         ),
         errors: []

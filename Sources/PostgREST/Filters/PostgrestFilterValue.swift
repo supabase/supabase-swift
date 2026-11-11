@@ -124,8 +124,7 @@ extension JSONValue: PostgrestFilterValue {
     case .array(let array): array.rawValue
     case .object(let object): object.rawValue
     case .string(let string): string.rawValue
-    case .double(let double): double.rawValue
-    case .integer(let integer): integer.rawValue
+    case .number(let number): number.description
     case .bool(let bool): bool.rawValue
     case .null: "NULL"
     }
@@ -136,7 +135,7 @@ extension JSONValue: PostgrestFilterValue {
   /// it is encoded as JSON here, where ``rawValue`` is the filter form the untyped builder sends —
   /// a `.string` bare, an `.array` as the Postgres literal `{20}`, `.null` as `NULL`.
   ///
-  /// Only a non-finite `.double` fails to encode, and then this is `nil`. No operand stands in for
+  /// Only a `.number` that no Swift number type holds exactly fails to encode, and then this is `nil`. No operand stands in for
   /// it: `null` is a valid operand that matches JSON-null rows, so a `delete` would remove them.
   public var _typedOperand: String? {
     let encoder = JSONEncoder()
@@ -150,7 +149,7 @@ extension JSONValue: PostgrestFilterValue {
     switch self {
     case .array(let array): array.postgrestArrayElement
     case .null: "NULL"
-    case .object, .string, .double, .integer, .bool:
+    case .object, .string, .number, .bool:
       escapePostgRESTArrayLiteralElement(rawValue)
     }
   }

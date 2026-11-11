@@ -370,3 +370,4 @@ Fanouts
 # OAuth 2.0 / OIDC userinfo endpoint, used by the custom provider admin API.
 userinfo
 unkeyed
+significand

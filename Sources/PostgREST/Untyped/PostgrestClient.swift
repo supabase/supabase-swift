@@ -352,10 +352,8 @@ public struct PostgrestClient: Sendable {
       return "null"
     case .bool(let bool):
       return bool ? "true" : "false"
-    case .integer(let integer):
-      return String(integer)
-    case .double(let double):
-      return String(double)
+    case .number(let number):
+      return number.description
     case .string(let string):
       return string
     case .array(let array):
@@ -379,7 +377,7 @@ public struct PostgrestClient: Sendable {
     switch value {
     case .null, .array:
       return queryValue(for: value)
-    case .bool, .integer, .double, .string, .object:
+    case .bool, .number, .string, .object:
       return escapePostgRESTArrayLiteralElement(queryValue(for: value))
     }
   }

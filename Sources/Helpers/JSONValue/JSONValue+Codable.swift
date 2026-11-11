@@ -29,9 +29,9 @@ extension JSONValue {
     } else if let bool = value as? Bool {
       self = .bool(bool)
     } else if let int = value as? Int {
-      self = .integer(int)
-    } else if let double = value as? Double {
-      self = .double(double)
+      self = .number(JSONNumber(int))
+    } else if let double = value as? Double, let number = JSONNumber(double) {
+      self = .number(number)
     } else {
       let data = try (encoder ?? JSONValue.encoder).encode(value)
       self = try JSONValue.decoder.decode(JSONValue.self, from: data)
