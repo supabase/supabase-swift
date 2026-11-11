@@ -3,6 +3,7 @@
 # lines. The stack picks its own ports, so the tests cannot assume the defaults.
 #
 #   scripts/stack-env.sh Tests/IntegrationTests                  # print
+#   scripts/stack-env.sh Tests/IntegrationTests test             # a project started with --stack test
 #   export $(scripts/stack-env.sh Tests/IntegrationTests)        # use in the current shell
 #   scripts/stack-env.sh Tests/IntegrationTests >> "$GITHUB_ENV" # use in later CI steps
 #
@@ -10,10 +11,14 @@
 # (Linux) keeps the default ports, which the tests already use, so skip this script there.
 set -euo pipefail
 
-project="${1:?usage: stack-env.sh <supabase project directory>}"
+project="${1:?usage: stack-env.sh <supabase project directory> [stack name]}"
+stack_args=()
+if [[ -n "${2:-}" ]]; then
+  stack_args=(--stack "$2")
+fi
 export SUPABASE_EXPERIMENTAL_STACK=1
 
-status="$(cd "$project" && supabase status --env --output-format text)"
+status="$(cd "$project" && supabase status ${stack_args[@]+"${stack_args[@]}"} --env --output-format text)"
 api_url="$(sed -n "s/^API_URL='\(.*\)'$/\1/p" <<<"$status")"
 mailpit_url="$(sed -n "s/^MAILPIT_URL='\(.*\)'$/\1/p" <<<"$status")"
 

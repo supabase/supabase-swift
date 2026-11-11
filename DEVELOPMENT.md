@@ -202,7 +202,10 @@ It needs Supabase CLI v2.119.0 or later (v2.121.0 or later to change ports on a 
   ```
 
   `./scripts/test-integration.sh` and CI do this for you. Run it again for
-  `supabase-secure-email-change`, which is a different project with different ports.
+  `supabase-secure-email-change`, which is a different project with different ports. For a
+  project started with `--stack <name>`, pass the name as a second argument:
+  `scripts/stack-env.sh Tests/IntegrationTests <name>`. The script is for the experimental stack
+  only; skip it on the Docker stack.
 - **Manage projects.** `supabase stack list` shows every local project on the machine.
   `supabase stack logs` prints the logs of the current one. `supabase stop` keeps the data.
   `supabase stack stop --all` stops every project. `supabase stack destroy` deletes one project
@@ -221,8 +224,10 @@ It needs Supabase CLI v2.119.0 or later (v2.121.0 or later to change ports on a 
 
 Integration tests require a local Supabase instance (see "Running a Local Supabase Stack"). The
 `swift test` commands below use the [macOS test flags](#macos-test-flags), as CI's macOS job
-does. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
-experimental-stack variable and every flag, but keep `INTEGRATION_TESTS`:
+does. `--eager` starts every service before `start` returns, as CI does. On Linux, or with the
+Docker stack on macOS, drop the experimental-stack variable, every flag, and the
+`scripts/stack-env.sh` line (the Docker stack keeps the default ports), and make sure
+`SUPABASE_URL` and `MAILPIT_URL` are unset. Keep `INTEGRATION_TESTS`:
 
 ```bash
 export INTEGRATION_TESTS=1  # the suites skip themselves without it
