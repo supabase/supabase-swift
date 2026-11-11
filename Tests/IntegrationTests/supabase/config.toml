@@ -6,8 +6,6 @@ project_id = "IntegrationTests"
 
 [api]
 enabled = true
-# Port to use for the API URL.
-port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
 schemas = ["public", "graphql_public"]
@@ -22,10 +20,6 @@ max_rows = 1000
 enabled = false
 
 [db]
-# Port to use for the local database URL.
-port = 54322
-# Port used by db diff command to initialize the shadow database.
-shadow_port = 54320
 # Configures Postgres storage engine to use OrioleDB (S3)
 orioledb_version = ""
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
@@ -34,8 +28,6 @@ major_version = 15
 
 [db.pooler]
 enabled = false
-# Port to use for the local connection pooler.
-port = 54329
 # Specifies when a server connection can be reused by other clients.
 # Configure one of the supported pooler modes: `transaction`, `session`.
 pool_mode = "transaction"
@@ -68,8 +60,6 @@ enabled = true
 
 [studio]
 enabled = true
-# Port to use for Supabase Studio.
-port = 54323
 # External URL of the API server that frontend connects to.
 api_url = "http://127.0.0.1"
 # OpenAI API Key to use for Supabase AI in the Supabase Studio.
@@ -79,11 +69,6 @@ openai_api_key = "env(OPENAI_API_KEY)"
 # are monitored, and you can view the emails that would have been sent from the web interface.
 [local_smtp]
 enabled = true
-# Port to use for the email testing server web interface.
-port = 54324
-# Uncomment to expose additional ports for testing user applications that send emails.
-# smtp_port = 54325
-# pop3_port = 54326
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
@@ -305,15 +290,12 @@ enabled = true
 # Configure one of the supported request policies: `oneshot`, `per_worker`.
 # Use `oneshot` for hot reload, or `per_worker` for load testing.
 policy = "oneshot"
-# Port to attach the Chrome inspector for debugging edge functions.
-inspector_port = 8083
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]
 enabled = true
-port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
 
