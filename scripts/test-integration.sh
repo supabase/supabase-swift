@@ -17,7 +17,10 @@ run_suite() {
   (cd "$project" && supabase start ${START_FLAGS[@]+"${START_FLAGS[@]}"})
   if [[ "$(uname)" == "Darwin" ]]; then
     # The native stack picks its own ports; point the tests at them.
-    export $(./scripts/stack-env.sh "$project")
+    # Capture first: `export $(...)` would hide a failure of the script.
+    stack_env="$(./scripts/stack-env.sh "$project")"
+    unset MAILPIT_URL # a project with no Mailpit must not inherit the previous one's
+    export $stack_env
   fi
   if [[ "$(uname)" != "Darwin" && "$project" == Tests/IntegrationTests ]]; then
     ./scripts/enable-storage-test-features.sh
