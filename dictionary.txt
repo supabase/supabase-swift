@@ -125,6 +125,7 @@ Lukas
 magiclink
 magnifyingglass
 Mailpit
+mailpit
 matview
 metamask
 metas
@@ -277,6 +278,8 @@ corelibs
 fileprivate
 parallelizable
 Testables
+worktree
+worktrees
 xcscheme
 xcschemes
 xcshareddata
