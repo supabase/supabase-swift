@@ -91,6 +91,24 @@ struct JSONNumberTests {
     #expect(JSONNumber(text) == nil)
   }
 
+  @Test(arguments: [
+    "1e99999999999999999999", "1e2147483648", "1e-2147483648", "10e2147483647",
+  ])
+  func stringInitRejectsAPowerOfTenOutsideInt32(text: String) {
+    #expect(JSONNumber(text) == nil)
+  }
+
+  @Test func decodingANonNumberThrows() {
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(JSONNumber.self, from: Data(#""1""#.utf8))
+    }
+  }
+
+  @Test func valueFallsBackToTheNearestDouble() {
+    let value = JSONValue.number(JSONNumber("123456789012345678901234567890123456789012.5")!)
+    #expect((value.value as? Double) == 123456789012345678901234567890123456789012.5)
+  }
+
   @Test func numbersWithTheSameValueAreEqual() {
     let one: JSONValue = 1
     let onePointZero: JSONValue = 1.0
