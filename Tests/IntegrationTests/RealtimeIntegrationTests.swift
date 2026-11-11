@@ -33,7 +33,7 @@
     let client2: SupabaseClient
     init() async throws {
       client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
@@ -46,7 +46,7 @@
         )
       )
       client2 = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
@@ -1363,7 +1363,7 @@
     func httpSendSendsTheConfiguredHeaders() async throws {
       let recorder = HeaderRecorder()
       let client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),

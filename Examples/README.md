@@ -201,6 +201,11 @@ The native stack starts much faster than Docker, and CI uses it too. On Linux, r
 older Docker stack still holds the ports. Stop it with the experimental variable unset:
 `env -u SUPABASE_EXPERIMENTAL_STACK supabase stop`.
 
+To run this project next to other local Supabase projects (for example, in another git worktree),
+see "Running several local projects" in [DEVELOPMENT.md](../DEVELOPMENT.md#running-several-local-projects-worktrees-agents).
+The ports below are the defaults. If you removed the fixed ports, run `supabase status` for the
+real URLs and update `Supabase.swift` to match.
+
 This will start the local Supabase services:
 - **API**: http://127.0.0.1:54321
 - **Studio**: http://127.0.0.1:54323

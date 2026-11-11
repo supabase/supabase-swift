@@ -168,6 +168,55 @@ supabase start --runtime native
   ```
 - Linux has no native stack. There, run plain `supabase start`, which uses Docker.
 
+### Running several local projects (worktrees, agents)
+
+The experimental stack can run one local project for each git worktree, branch, or `--stack` name
+on one machine. See the CLI guide
+[Running multiple local projects](https://supabase.com/docs/guides/local-development/running-multiple-local-projects).
+It needs Supabase CLI v2.119.0 or later (v2.121.0 or later to change ports on a stopped project).
+
+- **Isolation.** A local project is identified by its project root (the directory with
+  `supabase/config.toml`), the git branch, and an optional `--stack` name. Two worktrees of this
+  repository are two local projects, with separate ports and data. Two agents in one checkout on
+  one branch share one project. Give each agent its own worktree, or its own `--stack` name:
+
+  ```bash
+  supabase start --stack test
+  supabase stop --stack test
+  ```
+- **Dynamic ports.** The CLI uses a port in `config.toml` exactly as written, so this
+  repository's integration projects (`Tests/IntegrationTests/supabase` and
+  `supabase-secure-email-change`) set none. The native stack picks stable ports from 20000–32767
+  for each project, so worktrees do not conflict. Do not add a `port` key back. The `Examples`
+  apps still have fixed ports (their `Supabase.swift` files use `54321`), so run one of them at a
+  time.
+- **Find the endpoints.** Run `supabase status` in the project directory (add `--stack <name>`
+  for a named project). `supabase status --env --output-format text` prints `API_URL`, `DB_URL`,
+  `MAILPIT_URL`, and the other values as variables.
+- **Point the tests at the project.** The integration tests read `SUPABASE_URL` and `MAILPIT_URL`
+  from the environment (`Tests/IntegrationTests/DotEnv.swift`) and fall back to the Docker
+  stack's ports. After `supabase start`, run:
+
+  ```bash
+  export $(scripts/stack-env.sh Tests/IntegrationTests)
+  ```
+
+  `./scripts/test-integration.sh` and CI do this for you. Run it again for
+  `supabase-secure-email-change`, which is a different project with different ports.
+- **Manage projects.** `supabase stack list` shows every local project on the machine.
+  `supabase stack logs` prints the logs of the current one. `supabase stop` keeps the data.
+  `supabase stack stop --all` stops every project. `supabase stack destroy` deletes one project
+  and its data; add `--stack <name>` to pick a named project.
+- **Runtime.** With no `--runtime` flag, the CLI picks Docker, then Podman, then native. The
+  native runtime shares the host's process table and file locks, so for many projects at once the
+  CLI guide recommends Docker. This repository still uses `--runtime native` on macOS for speed.
+- **`stack = true` instead of the variable.** You may set `stack = true` under `[experimental]`
+  in `supabase/config.toml` in place of `SUPABASE_EXPERIMENTAL_STACK=1`. The variable wins when
+  both are set. `SUPABASE_EXPERIMENTAL_STACK=0` turns the stack off for one session.
+- **Database commands.** `supabase db`, `migration`, and similar commands do not accept
+  `--stack`. They use the default project for the current branch. To reach a named project,
+  pass its `DB_URL` as `--remote=<postgres-url>`.
+
 ## Working with Integration Tests
 
 Integration tests require a local Supabase instance (see "Running a Local Supabase Stack"). The
@@ -182,12 +231,15 @@ SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswift
 cd Tests/IntegrationTests
 supabase start --runtime native --eager
 cd ../..
+export $(scripts/stack-env.sh Tests/IntegrationTests)
 swift test "${SWIFT_FLAGS[@]}" --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests
 supabase stop
 ```
 
-`./scripts/test-integration.sh` runs these steps for you.
+`./scripts/test-integration.sh` runs these steps for you. On macOS, run
+`export $(scripts/stack-env.sh Tests/IntegrationTests)` after each `supabase start` (see "Running
+several local projects"), because the native stack picks its own ports.
 
 The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
 or a CDN purge endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
@@ -207,6 +259,7 @@ second, minimal project instead of forking that setting for the whole suite:
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase start --runtime native --eager
 cd ../../..
+export $(scripts/stack-env.sh Tests/IntegrationTests/supabase-secure-email-change)
 swift test "${SWIFT_FLAGS[@]}" --filter verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
