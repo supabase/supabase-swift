@@ -51,6 +51,7 @@
 Add `supabase-swift` as a Swift Package Manager dependency:
 
 <!-- x-release-please-start-version -->
+<!-- snippet: no-compile -->
 ```swift
 let package = Package(
     ...
@@ -99,7 +100,7 @@ let client = try SupabaseClient(
             storage: MyCustomAuthStorage()
         ),
         global: .init(
-            headers: ["x-my-custom-header": "my-app-name"],
+            headers: [HTTPField.Name("x-my-custom-header")!: "my-app-name"],
             http: .init(transport: URLSessionTransport(session: URLSession.myCustomSession))
         )
     )
@@ -121,6 +122,7 @@ for await change in client.auth.events() {
 In SwiftUI, `AuthModel` (iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1 or later) is an
 `@Observable` view of the session. Gate your root view on its `status`:
 
+<!-- snippet: no-compile -->
 ```swift
 @State private var auth = AuthModel(client: client.auth)
 
@@ -137,6 +139,7 @@ Send every auth link that opens your app to `handleRedirect`. It handles OAuth c
 magic links, and password-reset links, and it is safe to call twice with the same URL. A
 password-reset link signs the user in, so check the result to show an "update password" screen:
 
+<!-- snippet: no-compile -->
 ```swift
 .onOpenURL { url in
     Task {
@@ -150,6 +153,52 @@ password-reset link signs the user in, so check the result to show an "update pa
 On Apple platforms the session is stored in the Keychain. On iOS, tvOS, watchOS and visionOS it
 stays on the device. On Linux, Android and Windows the default storage keeps the session in
 memory, so pass your own `AuthStorage` to keep it across launches.
+
+### Query the database
+
+```swift
+struct Todo: Codable {
+    let id: Int
+    let task: String
+}
+
+// Read rows. The result decodes as the type you ask for.
+let todos: [Todo] = try await client.from("todos")
+    .select()
+    .eq("is_done", value: false)
+    .order("id")
+    .execute()
+    .value
+
+// Insert a row, and get it back.
+let created: Todo = try await client.from("todos")
+    .insert(["task": "Write the docs"])
+    .select()
+    .single()
+    .execute()
+    .value
+```
+
+### Upload a file
+
+```swift
+let avatars = client.storage.from("avatars")
+
+try await avatars.upload(path: "user123.png", data: Data("hello".utf8))
+let data = try await avatars.download(path: "user123.png").data()
+```
+
+### Listen for Realtime messages
+
+```swift
+let channel = await client.channel("room:42")
+let messages = await channel.broadcasts(event: "message")
+
+try await channel.subscribe()
+for await message in messages {
+    print(message)
+}
+```
 
 ### Invoke an Edge Function
 
@@ -203,6 +252,17 @@ does not set the quarantine flag. To clear it from a browser download, run
 `xattr -d com.apple.quarantine ~/.local/bin/supabase-typegen`.
 
 Additional examples are available in the [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples) directory.
+
+## Documentation
+
+- [API documentation](https://swiftpackageindex.com/supabase/supabase-swift/documentation/supabase)
+  on the Swift Package Index. It has a guide for each library: getting started, error handling,
+  standalone use, and testing with a stub transport.
+- [V3 migration guide](V3_MIGRATION.md), to move an app from v2.
+- [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples).
+
+CI compiles the Swift snippets in this file, except the `Package.swift` and SwiftUI fragments. See
+[DEVELOPMENT.md](DEVELOPMENT.md#documentation).
 
 ## Support Policy
 
