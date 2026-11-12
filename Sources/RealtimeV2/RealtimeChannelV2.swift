@@ -353,7 +353,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     timeout: TimeInterval? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
-      throw RealtimeError("Access token is required for httpSend()")
+      throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
 
     let isPrivate = await config.isPrivate
@@ -402,7 +402,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     timeout: TimeInterval? = nil
   ) async throws {
     guard let accessToken = await socket._getAccessToken() else {
-      throw RealtimeError("Access token is required for httpSend()")
+      throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
 
     let isPrivate = await config.isPrivate
@@ -635,7 +635,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           let ref = message.ref,
           let status = message.payload["status"]?.stringValue
         else {
-          throw RealtimeError("Received a reply with unexpected payload: \(message)")
+          throw RealtimeError.decoding("Received a reply with unexpected payload: \(message)")
         }
 
         await didReceiveReply(ref: ref, status: status)
@@ -695,7 +695,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           )
 
         default:
-          throw RealtimeError("Unknown event type: \(postgresActions.type)")
+          throw RealtimeError.decoding("Unknown event type: \(postgresActions.type)")
         }
 
         callbackManager.triggerPostgresChanges(ids: ids, data: action)
@@ -704,7 +704,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         let payload = message.payload
 
         guard let event = payload["event"]?.stringValue else {
-          throw RealtimeError("Expected 'event' key in 'payload' for broadcast event.")
+          throw RealtimeError.decoding("Expected 'event' key in 'payload' for broadcast event.")
         }
 
         callbackManager.triggerBroadcast(event: event, json: payload)
