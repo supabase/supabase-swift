@@ -161,6 +161,7 @@
     ///   - session: The `webAuthenticationSession` value from the SwiftUI environment.
     ///   - prefersEphemeralWebBrowserSession: Set to `true` to ask the browser for a private
     ///     session.
+    /// - Returns: The presenter.
     public static func webAuthenticationSession(
       _ session: WebAuthenticationSession,
       prefersEphemeralWebBrowserSession: Bool = false

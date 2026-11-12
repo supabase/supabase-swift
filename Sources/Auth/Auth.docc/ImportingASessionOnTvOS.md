@@ -1,4 +1,4 @@
-# Importing a session on tvOS
+# Importing a Session on tvOS
 
 Sign in a device that has no keyboard by moving a session from another device.
 

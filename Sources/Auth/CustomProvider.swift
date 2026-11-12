@@ -12,12 +12,15 @@ public import Helpers
 public struct CustomProviderType: RawRepresentable, Codable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The protocol name as the server sends it, such as `"oidc"`.
   public let rawValue: String
 
+  /// Creates a ``CustomProviderType`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates a ``CustomProviderType`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
@@ -181,6 +184,8 @@ public struct CustomProvider: Decodable, Hashable, Sendable, Identifiable {
     case updatedAt = "updated_at"
   }
 
+  /// Decodes a provider. A list, a map, or a flag that the server sends as `null` or omits
+  /// becomes empty or `false`.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)

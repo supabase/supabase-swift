@@ -92,8 +92,14 @@ extension SupabaseClient {
 
   /// Opens a dedicated channel for a live query and returns what the query runs against.
   ///
-  /// - Parameter pageSize: The rows the fetch asks for per request. It defaults to PostgREST's
-  ///   default `max_rows`. A server with a lower limit still gets every row, only in more pages.
+  /// - Parameters:
+  ///   - _: The relation to query.
+  ///   - filter: The filter that narrows the rows, or `nil` for every row.
+  ///   - pageSize: The rows the fetch asks for per request. It defaults to 1000, the default
+  ///     `max_rows` of a Supabase project. A server with a lower limit still gets every row, only in more pages.
+  /// - Returns: The source the live query runs against.
+  /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
+  ///   when Realtime cannot run the filter.
   func liveQuerySource<R: _PostgrestKeyedRelation>(
     for _: R.Type,
     filter: _PostgrestFilter<R>?,

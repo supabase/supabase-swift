@@ -297,11 +297,13 @@ actor SessionStore {
   /// unless storage holds a session with another refresh token: the store adopts that one.
   ///
   /// - Parameters:
+  ///   - refreshToken: The refresh token to redeem.
   ///   - request: Sends the refresh request. Called only when no refresh of `refreshToken` runs.
   ///   - signOutReason: Why a rejection signs out, or `nil` to keep the session. Every caller of
   ///     one refresh gives a reason. The rejection signs out with ``SignOutReason/userInitiated``
   ///     when any of them gives it, and otherwise with the reason of the first caller that signs
   ///     out.
+  /// - Returns: The refreshed session.
   /// - Throws: The error of the last failed refresh, without a new request, when that refresh
   ///   redeemed `refreshToken` less than 60 seconds ago and no commit other than a
   ///   ``Transition/invalidated(_:refreshToken:)`` followed it.
@@ -342,9 +344,15 @@ actor SessionStore {
   /// a rotated token. The store then returns the held session without a request while it is
   /// valid, and refreshes the held token when it is not.
   ///
-  /// - Parameter requiringSameSession: Whether the held session must be the one the caller read,
-  ///   or a refresh of it. A caller that acts on that one session, such as a sign-out, sets it, so
-  ///   a sign-in that landed since never hands it another session.
+  /// - Parameters:
+  ///   - refreshToken: The refresh token of the held session when the caller read it.
+  ///   - requiringSameSession: Whether the held session must be the one the caller read, or a
+  ///     refresh of it. A caller that acts on that one session, such as a sign-out, sets it, so a
+  ///     sign-in that landed since never hands it another session.
+  ///   - request: Sends the refresh request, as in ``refresh(_:using:signOutReason:)``.
+  ///   - signOutReason: Why a rejection signs out, as in ``refresh(_:using:signOutReason:)``.
+  /// - Returns: The held session while it is valid and replaced `refreshToken`. Else the
+  ///   refreshed session.
   /// - Throws: ``AuthError/sessionMissing`` when the store holds no session, or another session
   ///   than the one the caller read while `requiringSameSession` is `true`.
   func refreshHeldSession(

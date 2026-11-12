@@ -11,27 +11,54 @@ Read the current state with ``AuthClient/status``. Follow every change with
 ``AuthClient/events()``. In SwiftUI, let an ``AuthModel`` do that for you (see
 <doc:ObservingAuthStateInSwiftUI>).
 
+Every failure is an ``AuthError`` or a `CancellationError`, except an error that your own code
+throws. See <doc:HandlingErrors>.
+
 ## Topics
 
 ### Essentials
 
 - <doc:AuthAndSwiftConcurrency>
 - <doc:ObservingAuthStateInSwiftUI>
-
-### Guides
-
 - <doc:HandlingRedirectsAndDeepLinks>
 - <doc:SharingASessionWithAnAppExtension>
 - <doc:ImportingASessionOnTvOS>
+- <doc:HandlingErrors>
+- <doc:Standalone>
 
 ### Client
 
 - ``AuthClient``
+- ``AuthClient/Configuration``
+- ``AuthAdminClient``
 
-### Auth state
+### Auth State
 
 - ``AuthStatus``
 - ``AuthChange``
 - ``AuthEvent``
 - ``SignOutReason``
 - ``AuthModel``
+
+### Sessions and Users
+
+- ``Session``
+- ``User``
+- ``UserIdentity``
+- ``VerifiedClaims``
+
+### Session Storage
+
+- ``AuthStorage``
+- ``KeychainStorage``
+- ``InMemoryAuthStorage``
+
+### Multi-Factor Authentication
+
+- ``AuthMFA``
+- ``Factor``
+- ``AuthenticatorAssuranceLevel``
+
+### Errors
+
+- ``AuthError``

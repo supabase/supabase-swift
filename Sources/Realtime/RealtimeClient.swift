@@ -451,7 +451,7 @@ public actor RealtimeClient {
   /// Closes the WebSocket connection.
   ///
   /// Cancels pending tasks, fails every push still waiting for a reply with
-  /// ``RealtimeError/Kind/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
+  /// ``RealtimeError/Kind-swift.struct/notConnected``, and emits ``RealtimeClientStatus/disconnected(_:)``.
   /// Subscribed channels become ``RealtimeChannelStatus/unsubscribed`` and stay registered; the
   /// next ``connect()`` does not join them again, so call ``RealtimeChannel/subscribe()`` on each.
   ///

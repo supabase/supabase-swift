@@ -152,9 +152,10 @@ public struct PostgresRow: Sendable, Hashable {
   /// Decodes the row as `T`.
   ///
   /// - Parameters:
-  ///   - type: The type to decode. Can be inferred from context.
+  ///   - _: The type to decode. Can be inferred from context.
   ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
-  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when the row does not
+  /// - Returns: The decoded row.
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/decoding`` when the row does not
   ///   decode as `T`. The underlying `DecodingError` is in ``RealtimeError/underlyingError``.
   public func decode<T: Decodable>(
     as _: T.Type = T.self, decoder: JSONDecoder? = nil
@@ -200,7 +201,7 @@ public struct TypedPostgresChange<Row>: Sendable {
 extension TypedPostgresChange where Row: Decodable {
   /// Decodes the record as `Row`.
   ///
-  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` for a change with no
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/decoding`` for a change with no
   ///   record, such as a delete, or when the record does not decode as `Row`.
   public func row() throws -> Row {
     guard let record = raw.record else {

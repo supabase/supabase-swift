@@ -30,7 +30,7 @@ await supabase.removeChannel(channel)
 Streams never throw. A lost socket is a status, on ``RealtimeClient/statusChanges()``, and the
 client reconnects and joins its channels again on its own. A channel that the server closes does
 not join again; see <doc:ConnectionBehavior#When-the-server-closes-a-channel>. Calls with one
-result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``.
+result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``. See <doc:HandlingErrors>.
 
 ## Topics
 
@@ -45,6 +45,8 @@ result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``.
 - <doc:HighRateFeeds>
 - <doc:PlatformNotes>
 - <doc:CustomTransports>
+- <doc:HandlingErrors>
+- <doc:Standalone>
 
 ### Client
 
@@ -80,7 +82,7 @@ result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``.
 - ``RealtimePostgresIsValue``
 - ``RealtimePostgresFilterValue``
 
-### Presence Tracking
+### Presence State
 
 - ``PresenceState``
 - ``PresenceEntry``

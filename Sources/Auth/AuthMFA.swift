@@ -54,6 +54,8 @@ public struct AuthMFA: Sendable {
   ///   - issuer: The domain the user enrolls with, shown in the authenticator app.
   ///   - friendlyName: A name that tells the factor apart from the user's other factors.
   /// - Returns: The new factor and the data the authenticator app needs.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func enrollTOTP(
     issuer: String? = nil,
     friendlyName: String? = nil
@@ -74,6 +76,8 @@ public struct AuthMFA: Sendable {
   ///   - phone: The phone number, in E.164 format.
   ///   - friendlyName: A name that tells the factor apart from the user's other factors.
   /// - Returns: The new factor.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func enrollPhone(
     _ phone: String,
     friendlyName: String? = nil
@@ -93,6 +97,8 @@ public struct AuthMFA: Sendable {
   /// - Parameter friendlyName: A name that tells the factor apart from the user's other factors.
   /// - Returns: The ID of the new factor. Pass it to ``challenge(factorID:channel:)``, then send
   ///   the authenticator's credential to ``verify(factorID:challengeID:type:credentialResponse:)``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   @_spi(Experimental)
   public func enrollWebAuthnFactor(friendlyName: String? = nil) async throws -> UUID {
     struct Enrollment: Decodable {
@@ -113,6 +119,8 @@ public struct AuthMFA: Sendable {
   ///     ``MessagingChannel/sms``. Ignored for other factor types.
   /// - Returns: The challenge. Pass its ``MFAChallenge/id`` to
   ///   ``verify(factorID:challengeID:code:)`` before ``MFAChallenge/expiresAt``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func challenge(
     factorID: UUID,
     channel: MessagingChannel? = nil
@@ -129,6 +137,8 @@ public struct AuthMFA: Sendable {
   ///   - factorID: The ID of the WebAuthn factor to challenge.
   ///   - webAuthn: The relying-party identifier and origins to challenge with.
   /// - Returns: The challenge, with the credential options in ``MFAChallenge/webauthn``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   @_spi(Experimental)
   public func challenge(
     factorID: UUID,
@@ -172,6 +182,9 @@ public struct AuthMFA: Sendable {
   ///   - credentialResponse: The W3C credential the authenticator produced. It is sent verbatim,
   ///     with its W3C field names.
   /// - Returns: The upgraded session.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request, or the storage error when the client cannot save the session.
+  ///   `CancellationError` when the task is cancelled.
   @_spi(Experimental)
   @discardableResult
   public func verify(
@@ -204,6 +217,10 @@ public struct AuthMFA: Sendable {
   ///   - factorID: The ID of the factor to verify.
   ///   - code: The code from the authenticator app.
   /// - Returns: The upgraded session. See ``verify(factorID:challengeID:code:)``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. An error with code
+  ///   ``AuthError/Code-swift.struct/mfaVerificationFailed`` when the code is wrong. Else the
+  ///   error of the refresh or of a request, or the storage error when the client cannot save
+  ///   the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func challengeAndVerify(factorID: UUID, code: String) async throws -> Session {
     let challenge = try await challenge(factorID: factorID)
@@ -231,6 +248,7 @@ public struct AuthMFA: Sendable {
   /// other devices. The stored session is not changed.
   ///
   /// - Returns: The user's factors, split by status.
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func factors() async throws -> MFAFactors {
     let user = try await api.authorizedExecute { authAPI.user(accessToken: $0) }
     return MFAFactors(user.factors ?? [])

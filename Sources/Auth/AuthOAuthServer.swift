@@ -55,6 +55,8 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: Either the details to present for consent, or a redirect if already approved.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func authorizationDetails(
     id: String
   ) async throws -> OAuthAuthorizationDetailsResult {
@@ -70,6 +72,8 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, completing the third-party app's OAuth flow.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func approveAuthorization(id: String) async throws -> OAuthRedirect {
     try await consent(authorizationID: id, action: "approve")
   }
@@ -88,6 +92,8 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter id: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, carrying the OAuth error.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func denyAuthorization(id: String) async throws -> OAuthRedirect {
     try await consent(authorizationID: id, action: "deny")
   }
@@ -101,6 +107,7 @@ public struct AuthOAuthServer: Sendable {
   /// Lists the OAuth grants the user has given to third-party client apps.
   ///
   /// - Returns: The active grants.
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func listGrants() async throws -> [OAuthGrant] {
     try await api.authorizedExecute { authAPI.oauthGrants(accessToken: $0) }
   }
@@ -111,6 +118,8 @@ public struct AuthOAuthServer: Sendable {
   /// OAuth client, and invalidates its associated refresh tokens.
   ///
   /// - Parameter clientID: The ID of the OAuth client to revoke access for.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request. `CancellationError` when the task is cancelled.
   public func revokeGrant(clientID: UUID) async throws {
     try await api.authorizedExecute {
       authAPI.revokeOAuthGrant(clientID: clientID, accessToken: $0)

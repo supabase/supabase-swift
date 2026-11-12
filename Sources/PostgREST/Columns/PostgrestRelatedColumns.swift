@@ -92,6 +92,7 @@ public struct _PostgrestToOneColumn<
   Target: _PostgrestRelation,
   Value
 >: _PostgrestColumnExpression, _PostgrestOrderableExpression {
+  /// `select` and `order`, but not the left of a filter operator.
   public typealias Position = _PostgrestSelectAndOrder
 
   let embed: String
@@ -108,6 +109,9 @@ public struct _PostgrestToOneColumn<
     self.inner = inner
   }
 
+  /// Applies `derivation` to the inner column, so that it stays inside the embed's parentheses.
+  ///
+  /// Implementation detail of the typed query API. Do not call it directly.
   public func _deriving<V, P: _PostgrestPosition>(
     _ derivation: String
   ) -> _PostgrestDerivedExpression<Root, V, P> {
@@ -124,6 +128,7 @@ public struct _PostgrestToManyColumn<
   Target: _PostgrestRelation,
   Value
 >: _PostgrestColumnExpression {
+  /// `select` only.
   public typealias Position = _PostgrestSelectOnly
 
   let embed: String
@@ -140,6 +145,9 @@ public struct _PostgrestToManyColumn<
     self.inner = inner
   }
 
+  /// Applies `derivation` to the inner column, so that it stays inside the embed's parentheses.
+  ///
+  /// Implementation detail of the typed query API. Do not call it directly.
   public func _deriving<V, P: _PostgrestPosition>(
     _ derivation: String
   ) -> _PostgrestDerivedExpression<Root, V, P> {

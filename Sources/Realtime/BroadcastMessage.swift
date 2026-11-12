@@ -50,9 +50,10 @@ public struct BroadcastMessage: Sendable, Hashable {
   /// Decodes the payload as `T`. A ``BroadcastPayload/binary(_:)`` payload is read as JSON.
   ///
   /// - Parameters:
-  ///   - type: The type to decode. Can be inferred from context.
+  ///   - _: The type to decode. Can be inferred from context.
   ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
-  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind/decoding`` when the payload does not
+  /// - Returns: The decoded payload.
+  /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/decoding`` when the payload does not
   ///   decode as `T`. The underlying `DecodingError` is in ``RealtimeError/underlyingError``.
   public func decode<T: Decodable>(
     as _: T.Type = T.self, decoder: JSONDecoder? = nil

@@ -1,4 +1,4 @@
-# Handling redirects and deep links
+# Handling Redirects and Deep Links
 
 Finish a sign-in that leaves your app for a browser or an email, and route each URL once.
 

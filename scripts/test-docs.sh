@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+./scripts/check-docc-curation.sh
+
 warnings=$(xcodebuild clean docbuild \
   -scheme Supabase \
   -destination 'platform=macOS' \

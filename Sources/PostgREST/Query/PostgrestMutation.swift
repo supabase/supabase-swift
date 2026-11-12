@@ -16,6 +16,7 @@ import HTTPTypes
 public struct _PostgrestConflictResolution: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The value sent in the `resolution` preference, such as `"merge-duplicates"`.
   public let rawValue: String
 
   /// Creates a ``_PostgrestConflictResolution`` from a raw string value.
@@ -104,6 +105,7 @@ public struct _PostgrestMutation<R: _PostgrestWritableRelation, Phase: _Postgres
 }
 
 extension _PostgrestMutation: _PostgrestFilterableRequest where Phase == _PostgrestScopedPhase {
+  /// The relation whose columns this mutation accepts in a filter.
   public typealias Relation = R
 }
 
@@ -155,6 +157,8 @@ extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
   }
 
   /// Sends the request, discarding the response body.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
     try await request.execute(on: client) { _ in () }
@@ -176,6 +180,9 @@ extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
   ///   trade-off.
   /// - Returns: A ``PostgrestResponse`` whose ``PostgrestResponse/count`` is the number of rows
   ///   affected.
+  /// - Throws: ``PostgrestError`` with kind `.server` if PostgREST returns a non-2xx status,
+  ///   `.transport` if the request never completes, or another kind if the request cannot be
+  ///   sent. `CancellationError` if the task is cancelled.
   @discardableResult
   public func execute(count: CountOption) async throws -> PostgrestResponse<Void> {
     var request = request

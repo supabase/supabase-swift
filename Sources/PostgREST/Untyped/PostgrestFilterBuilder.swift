@@ -15,6 +15,7 @@ import Helpers
 /// > `PostgrestQueryBuilder.Operator`, `PostgrestFilterBuilder.Operator`, and
 /// > `PostgrestTransformBuilder.Operator` three unrelated types instead of one shared type.
 public struct PostgrestOperator: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The operator token PostgREST expects, such as `"eq"`.
   public let rawValue: String
 
   /// Creates a ``PostgrestOperator`` from a raw string value.

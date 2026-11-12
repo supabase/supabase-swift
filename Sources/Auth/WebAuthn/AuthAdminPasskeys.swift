@@ -30,6 +30,8 @@ public struct AuthAdminPasskeys: Sendable {
   /// Lists the passkeys registered for a user.
   ///
   /// - Parameter userID: The user's unique identifier.
+  /// - Returns: The user's passkeys.
+  /// - Throws: The error of the request.
   public func list(forUser userID: UUID) async throws -> [PasskeyListItem] {
     try await admin.api.execute(admin.authAPI.adminListPasskeys(userID: userID))
   }
@@ -39,6 +41,7 @@ public struct AuthAdminPasskeys: Sendable {
   /// - Parameters:
   ///   - id: ``PasskeyListItem/id``.
   ///   - userID: The user's unique identifier.
+  /// - Throws: The error of the request.
   public func delete(id: UUID, forUser userID: UUID) async throws {
     try await admin.api.execute(admin.authAPI.adminDeletePasskey(id: id, userID: userID))
   }

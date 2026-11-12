@@ -380,6 +380,7 @@ extension RealtimeError {
   /// - Parameters:
   ///   - status: The HTTP status the server answered the upgrade with.
   ///   - underlyingError: The transport's own error, if any.
+  /// - Returns: The error for a transport to throw.
   public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {

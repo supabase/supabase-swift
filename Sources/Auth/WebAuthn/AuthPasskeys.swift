@@ -55,6 +55,8 @@ public struct AuthPasskeys: Sendable {
   ///
   /// Requires a session. Forward ``PasskeyRegistrationOptions/options`` to the authenticator,
   /// then submit its result with ``verifyRegistration(challengeID:credential:)``.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func registrationOptions() async throws -> PasskeyRegistrationOptions {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.passkeyRegistrationOptions(accessToken: $0)
@@ -70,6 +72,8 @@ public struct AuthPasskeys: Sendable {
   ///   - challengeID: ``PasskeyRegistrationOptions/challengeID``.
   ///   - credential: The W3C `PublicKeyCredential` JSON the authenticator produced.
   /// - Returns: The stored passkey.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   @discardableResult
   public func verifyRegistration(
     challengeID: UUID,
@@ -85,6 +89,8 @@ public struct AuthPasskeys: Sendable {
   ///
   /// Needs no session. Forward ``PasskeyAuthenticationOptions/options`` to the authenticator,
   /// then submit its result with ``verifyAuthentication(challengeID:credential:)``.
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
   public func authenticationOptions() async throws -> PasskeyAuthenticationOptions {
     try await dependencies.sessionAPI.execute(dependencies.authAPI.passkeyAuthenticationOptions())
   }
@@ -95,6 +101,8 @@ public struct AuthPasskeys: Sendable {
   ///   - challengeID: ``PasskeyAuthenticationOptions/challengeID``.
   ///   - credential: The W3C `PublicKeyCredential` JSON the authenticator produced.
   /// - Returns: The new session, at `aal1`.
+  /// - Throws: The error of the request, for example when the server rejects `credential`. Else
+  ///   the error of session storage when it cannot save the new session.
   @discardableResult
   public func verifyAuthentication(
     challengeID: UUID,
@@ -109,6 +117,8 @@ public struct AuthPasskeys: Sendable {
   }
 
   /// Lists the passkeys registered for the current user.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func list() async throws -> [PasskeyListItem] {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.listPasskeys(accessToken: $0)
@@ -121,6 +131,8 @@ public struct AuthPasskeys: Sendable {
   ///   - id: ``PasskeyListItem/id``.
   ///   - friendlyName: The new name, at most 120 characters.
   /// - Returns: The updated passkey.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   @discardableResult
   public func rename(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
     try await dependencies.sessionAPI.authorizedExecute {
@@ -131,6 +143,8 @@ public struct AuthPasskeys: Sendable {
   /// Deletes a passkey of the current user.
   ///
   /// - Parameter id: ``PasskeyListItem/id``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   public func delete(id: UUID) async throws {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.deletePasskey(id: id, accessToken: $0)

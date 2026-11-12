@@ -19,8 +19,11 @@ extension JSONValue {
 
 extension JSONValue {
   /// Initialize an ``JSONValue`` from an `Encodable` value.
-  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. `nil` uses
-  ///   `JSONEncoder.supabase()`.
+  /// - Parameters:
+  ///   - value: The value to convert.
+  ///   - encoder: The `JSONEncoder` used to serialize `value`. `nil` uses
+  ///     `JSONEncoder.supabase()`.
+  /// - Throws: The `EncodingError` of `encoder` when `value` does not encode as JSON.
   public init(_ value: some Encodable, encoder: JSONEncoder? = nil) throws {
     if let value = value as? JSONValue {
       self = value
@@ -39,8 +42,12 @@ extension JSONValue {
   }
 
   /// Decodes self instance as `Decodable` type.
-  /// - Parameter decoder: The `JSONDecoder` used to decode the value. `nil` uses
-  ///   `JSONDecoder.supabase()`.
+  /// - Parameters:
+  ///   - type: The type to decode. Can be inferred from context.
+  ///   - decoder: The `JSONDecoder` used to decode the value. `nil` uses
+  ///     `JSONDecoder.supabase()`.
+  /// - Returns: The decoded value.
+  /// - Throws: A `DecodingError` when the value does not decode as `T`.
   public func decode<T: Decodable>(
     as type: T.Type = T.self,
     decoder: JSONDecoder? = nil
@@ -52,8 +59,12 @@ extension JSONValue {
 
 extension JSONArray {
   /// Decodes self instance as array of `Decodable` type.
-  /// - Parameter decoder: The `JSONDecoder` used to decode the elements. `nil` uses
-  ///   `JSONDecoder.supabase()`.
+  /// - Parameters:
+  ///   - _: The element type to decode. Can be inferred from context.
+  ///   - decoder: The `JSONDecoder` used to decode the elements. `nil` uses
+  ///     `JSONDecoder.supabase()`.
+  /// - Returns: The decoded elements.
+  /// - Throws: A `DecodingError` when an element does not decode as `T`.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder? = nil
@@ -64,8 +75,12 @@ extension JSONArray {
 
 extension JSONObject {
   /// Decodes self instance as `Decodable` type.
-  /// - Parameter decoder: The `JSONDecoder` used to decode the object. `nil` uses
-  ///   `JSONDecoder.supabase()`.
+  /// - Parameters:
+  ///   - _: The type to decode. Can be inferred from context.
+  ///   - decoder: The `JSONDecoder` used to decode the object. `nil` uses
+  ///     `JSONDecoder.supabase()`.
+  /// - Returns: The decoded value.
+  /// - Throws: A `DecodingError` when the object does not decode as `T`.
   public func decode<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder? = nil
@@ -74,8 +89,12 @@ extension JSONObject {
   }
 
   /// Initialize JSONObject from an `Encodable` type
-  /// - Parameter encoder: The `JSONEncoder` used to serialize `value`. `nil` uses
-  ///   `JSONEncoder.supabase()`.
+  /// - Parameters:
+  ///   - value: The value to convert.
+  ///   - encoder: The `JSONEncoder` used to serialize `value`. `nil` uses
+  ///     `JSONEncoder.supabase()`.
+  /// - Throws: The `EncodingError` of `encoder` when `value` does not encode as JSON, or
+  ///   `DecodingError.typeMismatch` when `value` does not encode as a JSON object.
   public init(_ value: some Encodable, encoder: JSONEncoder? = nil) throws {
     guard let object = try JSONValue(value, encoder: encoder).objectValue else {
       throw DecodingError.typeMismatch(

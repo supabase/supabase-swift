@@ -247,6 +247,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.mp4"`.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: The upload, not yet started.
   /// - Throws: ``StorageError`` if `path` is not a valid object path, and the file system's error
   ///   if `fileURL` cannot be read.
   @_spi(Experimental)
@@ -276,6 +277,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: The upload, not yet started.
   /// - Throws: ``StorageError`` if `path` is not a valid object path.
   @_spi(Experimental)
   public func resumableUpload(

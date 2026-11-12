@@ -287,6 +287,7 @@ public final class SupabaseClient: Sendable {
     rest.from(relation)
   }
 
+  /// Unavailable. Names the SPI import that the typed `from(_:)` needs.
   @available(
     *, unavailable,
     message:
@@ -302,7 +303,8 @@ public final class SupabaseClient: Sendable {
   ///   - params: The parameters to pass to the function.
   ///   - count: The count algorithm to apply to rows returned by set-returning functions.
   /// - Returns: A filter builder for further narrowing the result set.
-  /// - Throws: If encoding `params` fails or the function call returns an error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `params` does not encode.
+  ///   Nothing is sent until you call `execute()`.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -316,7 +318,8 @@ public final class SupabaseClient: Sendable {
   ///   - fn: The name of the function to call.
   ///   - count: The count algorithm to apply to rows returned by set-returning functions.
   /// - Returns: A filter builder for further narrowing the result set.
-  /// - Throws: If the function call returns an error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if the request cannot be built.
+  ///   Nothing is sent until you call `execute()`.
   public func rpc(
     _ fn: String,
     count: CountOption? = nil
@@ -328,6 +331,8 @@ public final class SupabaseClient: Sendable {
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
   @_spi(Experimental)
   public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {
@@ -335,6 +340,7 @@ public final class SupabaseClient: Sendable {
   }
 
   // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+  /// Unavailable. Names the SPI import that the typed `rpc(_:)` needs.
   @available(
     *, unavailable,
     message:
@@ -376,6 +382,7 @@ public final class SupabaseClient: Sendable {
     rest.schema(schema)
   }
 
+  /// Unavailable. Names the SPI import that the typed `schema(_:)` needs.
   @available(
     *, unavailable,
     message:
@@ -448,6 +455,7 @@ public final class SupabaseClient: Sendable {
   ///
   /// - Parameter url: The URL that opened the app.
   /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
+  /// - Throws: The error of ``AuthClient/handleRedirect(_:)``.
   @discardableResult
   public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
     try await auth.handleRedirect(url)
@@ -483,8 +491,12 @@ public final class SupabaseClient: Sendable {
   /// for that long too. Capturing `self` here would form a `self -> sub-client -> middleware ->
   /// self` retain cycle that keeps ``deinit`` from ever running.
   ///
-  /// - Parameter bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the
-  ///   key and a third-party provider's token, not a session token.
+  /// - Parameters:
+  ///   - staleTokenRejection: How the sub-client's service tells that it rejected the access
+  ///     token. Not used with a third-party token provider.
+  ///   - bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the key and
+  ///     a third-party provider's token, not a session token.
+  /// - Returns: The middleware to add to a sub-client's chain.
   private func bearerMiddleware(
     staleTokenRejection: StaleTokenRejection,
     bearerToken: @escaping @Sendable (String) -> String? = { $0 }

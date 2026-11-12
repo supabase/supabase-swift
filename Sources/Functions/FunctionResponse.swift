@@ -71,6 +71,7 @@ public struct FunctionResponse: Sendable, CustomStringConvertible {
   /// - Parameters:
   ///   - type: The type to decode. Inferred from the call site when omitted.
   ///   - decoder: Overrides the client's ``FunctionsClient/Configuration/decoder`` for this call.
+  /// - Returns: The decoded value.
   /// - Throws: ``FunctionsError`` with kind ``FunctionsError/Kind-swift.struct/decoding``
   ///   wrapping the `DecodingError`.
   public func decode<T: Decodable>(as type: T.Type = T.self, decoder: JSONDecoder? = nil) throws

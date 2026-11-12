@@ -44,11 +44,25 @@ public import HTTPTypes
 public struct AccessTokenMiddleware: ClientMiddleware {
   let getAccessToken: @Sendable () async throws -> String?
 
+  /// Creates a middleware that takes the token from a provider.
+  ///
   /// - Parameter getAccessToken: Resolves the token to send, or `nil` to send none.
   public init(getAccessToken: @escaping @Sendable () async throws -> String?) {
     self.getAccessToken = getAccessToken
   }
 
+  /// Sets `Authorization: Bearer` from the provider's token, then continues the chain.
+  ///
+  /// A request that already carries `Authorization` continues unchanged, and the provider does
+  /// not run.
+  ///
+  /// - Parameters:
+  ///   - request: The outgoing request head.
+  ///   - body: The outgoing body, if any.
+  ///   - next: The rest of the chain, ending in the transport.
+  /// - Returns: The response head and body that `next` returns.
+  /// - Throws: `CancellationError` when the provider is cancelled, an internal error that wraps
+  ///   any other error the provider throws, or whatever `next` throws.
   public func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,

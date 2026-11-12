@@ -153,7 +153,14 @@ Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForc
 `NeverUseImplicitlyUnwrappedOptionals` on top of the defaults. Library code must not trap on a
 value a caller supplied — see SDK-1793.
 
-`Tests/.swift-format` turns both back off. Test code has no users to crash: `try!` on a bundled
+The root file also enables `AllPublicDeclarationsHaveDocumentation` and
+`ValidateDocumentationComments`. Every public type, function, initializer and property needs a `///` comment. A comment that has a
+`- Parameters:` section must name each parameter, and must have `- Returns:` and `- Throws:` where
+they apply. The lint step in CI fails on a missing one. The rules do not check enum cases, protocol
+requirements, or the `- Throws:` of a comment with no `- Parameters:` section, so review those by
+hand.
+
+`Tests/.swift-format` turns all four back off. Test code has no users to crash: `try!` on a bundled
 fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot
 be `throws`), and `PostgrestMacrosTests` declares an implicitly unwrapped property on purpose, to
 cover how the `@Table` macro handles that spelling.
@@ -212,7 +219,9 @@ wait on a stream, a status or a frame with a bounded timeout (see `RealtimeTestH
 ./scripts/test-docs.sh
 ```
 
-Ensures DocC documentation builds without warnings.
+Ensures that the DocC documentation builds without broken links, and that each article in a
+`.docc` catalog is linked from the landing page of its catalog
+(`./scripts/check-docc-curation.sh`).
 
 ## Running a Local Supabase Stack
 

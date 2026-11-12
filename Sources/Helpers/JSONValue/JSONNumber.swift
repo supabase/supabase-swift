@@ -119,18 +119,21 @@ extension JSONNumber: LosslessStringConvertible {
 }
 
 extension JSONNumber: CustomReflectable {
+  /// A mirror that shows the number as its ``description``.
   public var customMirror: Mirror {
     Mirror(self, unlabeledChildren: [description], displayStyle: .struct)
   }
 }
 
 extension JSONNumber: ExpressibleByIntegerLiteral {
+  /// Creates a number from an integer literal.
   public init(integerLiteral value: Int) {
     self.init(value)
   }
 }
 
 extension JSONNumber: ExpressibleByFloatLiteral {
+  /// Creates a number from a floating-point literal.
   public init(floatLiteral value: Double) {
     guard let number = JSONNumber(value) else {
       preconditionFailure("A JSON number cannot be \(value).")

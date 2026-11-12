@@ -20,18 +20,22 @@ public struct _PostgresRange<Bound>: RawRepresentable, Hashable, Sendable, Codab
   /// The range literal, for example `[1,10)`.
   public let rawValue: String
 
+  /// Creates a range from its range literal. The text is not checked.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates a range from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
+  /// Decodes a range from a JSON string.
   public init(from decoder: any Decoder) throws {
     self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
   }
 
+  /// Encodes the range literal as a JSON string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -61,18 +65,22 @@ public struct _PostgresInterval: RawRepresentable, Hashable, Sendable, Codable,
   /// The interval text, for example `1 day 02:00:00`.
   public let rawValue: String
 
+  /// Creates an interval from its interval text. The text is not checked.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates an interval from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
+  /// Decodes an interval from a JSON string.
   public init(from decoder: any Decoder) throws {
     self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
   }
 
+  /// Encodes the interval text as a JSON string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -87,18 +95,22 @@ public struct _PostgresTime: RawRepresentable, Hashable, Sendable, Codable,
   /// The time text, for example `13:45:00`.
   public let rawValue: String
 
+  /// Creates a time from its time text. The text is not checked.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
+  /// Creates a time from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
 
+  /// Decodes a time from a JSON string.
   public init(from decoder: any Decoder) throws {
     self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
   }
 
+  /// Encodes the time text as a JSON string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -110,6 +122,9 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
   /// The bytes.
   public var data: Data
 
+  /// Creates a `bytea` value from bytes.
+  ///
+  /// - Parameter data: The bytes.
   public init(_ data: Data) {
     self.data = data
   }
@@ -127,6 +142,10 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
     return String(decoding: bytes, as: UTF8.self)
   }
 
+  /// Decodes the bytes from a JSON string in the `\x…` hex form.
+  ///
+  /// - Parameter decoder: The decoder to read from.
+  /// - Throws: `DecodingError` when the value is not a string, or is not in hex form.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
     let text = try container.decode(String.self)
@@ -137,6 +156,7 @@ public struct _PostgresBytes: Hashable, Sendable, Codable, PostgrestFilterValue 
     self.data = data
   }
 
+  /// Encodes the bytes as a JSON string in the `\x…` hex form.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(rawValue)
@@ -176,14 +196,19 @@ public struct _PostgresUnmapped: Hashable, Sendable, Codable {
   /// The value as PostgREST sends it.
   public var value: JSONValue
 
+  /// Creates an unmapped value from JSON.
+  ///
+  /// - Parameter value: The value as PostgREST sends it.
   public init(_ value: JSONValue) {
     self.value = value
   }
 
+  /// Decodes whatever JSON value the decoder holds.
   public init(from decoder: any Decoder) throws {
     self.value = try JSONValue(from: decoder)
   }
 
+  /// Encodes ``value`` unchanged.
   public func encode(to encoder: any Encoder) throws {
     try value.encode(to: encoder)
   }

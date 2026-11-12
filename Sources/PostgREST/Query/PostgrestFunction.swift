@@ -25,7 +25,7 @@ import IssueReporting
 /// let hits = try await client.rpc(SearchTodos(keyword: "groceries")).execute().value
 /// ```
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public protocol _PostgrestFunction: Encodable, Sendable {
   /// The function's name as PostgREST addresses it, without the `rpc/` prefix.
   static var functionName: String { get }
@@ -45,10 +45,11 @@ public protocol _PostgrestFunction: Encodable, Sendable {
 /// through ``where(_:)``, ``order(_:)`` or ``rows()``, which is where filters, ordering and paging
 /// live; any other result executes directly.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
   let client: PostgrestClient
 
+  /// The request this call sends.
   public var request: _PostgrestRequest
 
   /// Sends the call as a `GET`, with the arguments in the query string rather than the body.
@@ -80,6 +81,8 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
 
 extension _PostgrestFunctionQuery where Result: Decodable {
   /// Sends the call and decodes its result.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Result> {
     try await request.execute(on: client) {
@@ -90,6 +93,8 @@ extension _PostgrestFunctionQuery where Result: Decodable {
 
 extension _PostgrestFunctionQuery where Result == Void {
   /// Sends the call to a function that returns nothing.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
     try await request.execute(on: client) { _ in () }
@@ -144,6 +149,9 @@ extension PostgrestClient {
   }
 
   // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+
+  /// Unavailable. Opt in to the typed query API with `@_spi(Experimental) import Supabase`, then
+  /// use ``rpc(_:)``.
   @available(
     *, unavailable,
     message:
@@ -167,7 +175,7 @@ extension PostgrestClient {
 ///   .execute()
 /// ```
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public struct _PostgrestFunctions: Sendable {
   let client: PostgrestClient
 
@@ -175,6 +183,8 @@ public struct _PostgrestFunctions: Sendable {
   ///
   /// Generated code calls this rather than ``PostgrestClient/rpc(_:)``, so the file it lives in
   /// does not need `@_spi(Experimental) import`.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
   public func call<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {
     try client.rpc(function)

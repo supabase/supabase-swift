@@ -45,6 +45,7 @@ public protocol SupabaseError: Error, Sendable, LocalizedError, CustomStringConv
 }
 
 extension SupabaseError {
+  /// The error's ``message``, so `localizedDescription` returns it.
   public var errorDescription: String? { message }
 }
 

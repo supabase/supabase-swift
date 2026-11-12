@@ -1,4 +1,4 @@
-# Sharing a session with an app extension or widget
+# Sharing a Session with an App Extension or Widget
 
 Let a widget, share extension, or App Clip use the session of your app.
 

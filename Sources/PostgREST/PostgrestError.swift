@@ -27,12 +27,15 @@ import HTTPTypes
 public struct PostgrestError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind as a string, such as `"server"`.
     public let rawValue: String
 
+    /// Creates a kind from a raw string value.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -124,6 +127,12 @@ public struct PostgrestError: SupabaseError {
     /// A hint on how to fix the problem, when PostgREST sends one.
     public var hint: String?
 
+    /// Creates the body of a server error.
+    ///
+    /// - Parameters:
+    ///   - message: The human-readable message.
+    ///   - details: Additional detail. Defaults to `nil`.
+    ///   - hint: A hint on how to fix the problem. Defaults to `nil`.
     public init(message: String, details: String? = nil, hint: String? = nil) {
       self.message = message
       self.details = details
@@ -131,7 +140,9 @@ public struct PostgrestError: SupabaseError {
     }
   }
 
+  /// What failed.
   public var kind: Kind
+  /// A human-readable description of the failure.
   public var message: String
   /// The PostgreSQL or PostgREST error code, such as ``Code-swift.struct/uniqueViolation`` or
   /// `"PGRST116"`. `nil` when the server sent none.
@@ -139,9 +150,22 @@ public struct PostgrestError: SupabaseError {
   /// The decoded error body. Set when ``kind`` is ``Kind-swift.struct/server`` and the body was
   /// a PostgREST error payload; `nil` otherwise.
   public var serverError: ServerError?
+  /// The HTTP response PostgREST returned. Set when ``kind`` is ``Kind-swift.struct/server``;
+  /// `nil` otherwise.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`. `nil` when there
+  /// is none.
   public var underlyingError: (any Error)?
 
+  /// Creates an error.
+  ///
+  /// - Parameters:
+  ///   - kind: What failed.
+  ///   - message: A human-readable description of the failure.
+  ///   - code: The PostgreSQL or PostgREST error code. Defaults to `nil`.
+  ///   - serverError: The decoded error body. Defaults to `nil`.
+  ///   - response: The HTTP response PostgREST returned. Defaults to `nil`.
+  ///   - underlyingError: The error that caused this one. Defaults to `nil`.
   public init(
     kind: Kind,
     message: String,
@@ -158,6 +182,8 @@ public struct PostgrestError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// A one-line text form of the error: its kind and message, then the response status and the
+  /// code when it has them.
   public var description: String {
     formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }

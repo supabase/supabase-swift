@@ -206,7 +206,7 @@ public enum RealtimeChannelEvent: Hashable, Sendable {
 
 /// One step of the heartbeat cycle, emitted by ``RealtimeClient/heartbeats()``.
 ///
-/// The client sends a heartbeat every ``RealtimeClient/Configuration/defaultHeartbeatInterval``. When
+/// The client sends a heartbeat every ``RealtimeClient/Configuration/heartbeatInterval``. When
 /// the next one is due and the server has not acknowledged the previous one, the client
 /// reports ``timedOut`` and reconnects.
 ///

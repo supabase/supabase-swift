@@ -171,6 +171,9 @@ public struct AuthAdminClient: Sendable {
   /// Gets a user.
   ///
   /// - Parameter id: The user's unique identifier.
+  /// - Returns: The user.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func user(id: UUID) async throws -> User {
     try await api.execute(authAPI.adminUser(id: id))
   }
@@ -182,6 +185,9 @@ public struct AuthAdminClient: Sendable {
   /// the user an invite instead, use ``inviteUser(email:userMetadata:redirectTo:)``.
   ///
   /// - Parameter user: The new user.
+  /// - Returns: The user that the server created.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func createUser(_ user: AdminCreateUser) async throws -> User {
     try await api.execute(authAPI.adminCreateUser(user))
@@ -192,6 +198,9 @@ public struct AuthAdminClient: Sendable {
   /// - Parameters:
   ///   - id: The user's unique identifier.
   ///   - changes: The fields to change.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func updateUser(id: UUID, _ changes: AdminUpdateUser) async throws -> User {
     try await api.execute(authAPI.adminUpdateUser(id: id, changes))
@@ -203,6 +212,8 @@ public struct AuthAdminClient: Sendable {
   ///   - id: The user's unique identifier.
   ///   - softDelete: When `true`, the server sets `deleted_at` and disables the account but
   ///     keeps its data. When `false`, the server removes the user.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func deleteUser(id: UUID, softDelete: Bool = false) async throws {
     try await api.execute(authAPI.adminDeleteUser(id: id, softDelete: softDelete))
   }
@@ -216,6 +227,9 @@ public struct AuthAdminClient: Sendable {
   ///   - email: The email address to invite.
   ///   - userMetadata: Metadata to store in the user's `user_metadata`.
   ///   - redirectTo: The URL the invite link sends the user to.
+  /// - Returns: The invited user.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func inviteUser(
     email: String,
@@ -233,6 +247,9 @@ public struct AuthAdminClient: Sendable {
   /// - Parameters:
   ///   - page: The page to get, starting at `1`. `nil` gets the first page.
   ///   - pageSize: Users per page. `nil` leaves the page size to the server.
+  /// - Returns: The page of users.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func listUsers(page: Int? = nil, pageSize: Int? = nil) async throws -> UserPage {
     try await api.execute(authAPI.adminListUsers(page: page, pageSize: pageSize))
   }
@@ -240,6 +257,9 @@ public struct AuthAdminClient: Sendable {
   /// Generates an email link and OTP for you to send through your own email provider.
   ///
   /// - Parameter link: The kind of link and its options.
+  /// - Returns: The link and its OTP.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func generateLink(_ link: GenerateLink) async throws -> GenerateLinkResponse {
     try await api.execute(authAPI.adminGenerateLink(link))
   }
@@ -252,6 +272,8 @@ public struct AuthAdminClient: Sendable {
   /// - Parameters:
   ///   - jwt: The access token of the session to sign out.
   ///   - scope: Which of the user's sessions to sign out.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func signOut(jwt: String, scope: SignOutScope = .global) async throws {
     try await api.execute(authAPI.signOut(accessToken: jwt, scope: scope))
   }

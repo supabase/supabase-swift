@@ -68,6 +68,8 @@ extension RealtimeChannel {
   // Without the SPI import the solver reports "missing argument for parameter 'table'". This
   // visible twin catches the call and names the fix. The extra `Void` parameter only avoids a
   // redeclaration.
+  /// Unavailable. Names the SPI import that the typed `postgresChanges(of:event:where:decoder:)`
+  /// needs.
   @available(
     *, unavailable,
     message:

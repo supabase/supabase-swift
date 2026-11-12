@@ -32,6 +32,7 @@ public struct FunctionBody: Sendable {
   ///   - value: The value to encode.
   ///   - encoder: The encoder to use. `nil` uses `JSONEncoder.supabase()`, which writes `Date` as
   ///     ISO 8601.
+  /// - Returns: A body with the `application/json` content type.
   /// - Throws: ``FunctionsError`` with kind ``FunctionsError/Kind-swift.struct/invalidRequest``
   ///   wrapping the `EncodingError`. Nothing is sent.
   public static func json(

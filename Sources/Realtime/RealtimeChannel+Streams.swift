@@ -98,7 +98,7 @@ extension RealtimeChannel {
   /// ```
   ///
   /// - Parameters:
-  ///   - type: The type to decode each record as.
+  ///   - _: The type to decode each record as.
   ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name.

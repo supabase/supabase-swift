@@ -46,7 +46,7 @@ public struct PresenceEntry: Sendable, Hashable {
   /// Decodes ``payload`` into a `Decodable` model.
   ///
   /// - Parameters:
-  ///   - type: The target type. Can be inferred from context.
+  ///   - _: The target type. Can be inferred from context.
   ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
   /// - Returns: The decoded payload.
   /// - Throws: A `DecodingError` when the payload does not match `T`.
@@ -83,7 +83,7 @@ public struct PresenceState: Sendable, Hashable {
   /// Decodes the payload of every entry into a `Decodable` model.
   ///
   /// - Parameters:
-  ///   - type: The target type. Can be inferred from context.
+  ///   - _: The target type. Can be inferred from context.
   ///   - decoder: The decoder to use. `nil` uses `JSONDecoder.supabase()`.
   ///   - ignoringUndecodable: When `true`, entries that do not decode as `T` are skipped, and
   ///     keys with no decoded entry are left out. Clients that track other payloads, or none,
