@@ -979,7 +979,234 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   }
 }
 
+/// The new user for ``AuthAdmin/createUser(_:)``.
+public struct AdminCreateUser: Encodable, Hashable, Sendable {
+  /// The user's ID. `nil` lets the server pick one.
+  public var id: UUID?
+
+  /// The user's email.
+  public var email: String?
+
+  /// The user's phone.
+  public var phone: String?
+
+  /// The user's password. Leave it `nil` with ``passwordHash`` to import a hashed password.
+  public var password: String?
+
+  /// A password hash to import, in bcrypt or Argon2 format. Do not set it with ``password``.
+  public var passwordHash: String?
+
+  /// Confirms the user's email address if set to `true`.
+  public var confirmsEmail: Bool?
+
+  /// Confirms the user's phone number if set to `true`.
+  public var confirmsPhone: Bool?
+
+  /// The role claim set in the user's access token JWT.
+  public var role: String?
+
+  /// Data for the user's metadata, in the `auth.users.raw_user_meta_data` column. The user can
+  /// change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  /// Data for the user's application metadata, in the `auth.users.raw_app_meta_data` column.
+  public var appMetadata: JSONObject?
+
+  /// How long to ban the user, counted from the time of the request.
+  public var banDuration: Duration?
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case email
+    case phone
+    case password
+    case passwordHash = "password_hash"
+    case confirmsEmail = "email_confirm"
+    case confirmsPhone = "phone_confirm"
+    case role
+    case userMetadata = "user_metadata"
+    case appMetadata = "app_metadata"
+    case banDuration = "ban_duration"
+  }
+
+  /// Creates the new user for ``AuthAdmin/createUser(_:)``.
+  ///
+  /// - Parameters:
+  ///   - id: The user's ID. `nil` lets the server pick one.
+  ///   - email: The user's email address.
+  ///   - phone: The user's phone number.
+  ///   - password: Plain-text password.
+  ///   - passwordHash: Pre-hashed password to import.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
+  ///   - role: The JWT role claim.
+  ///   - userMetadata: User-supplied metadata.
+  ///   - appMetadata: Application-level metadata.
+  ///   - banDuration: How long to ban the user.
+  public init(
+    id: UUID? = nil,
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    passwordHash: String? = nil,
+    confirmsEmail: Bool? = nil,
+    confirmsPhone: Bool? = nil,
+    role: String? = nil,
+    userMetadata: JSONObject? = nil,
+    appMetadata: JSONObject? = nil,
+    banDuration: Duration? = nil
+  ) {
+    self.id = id
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.passwordHash = passwordHash
+    self.confirmsEmail = confirmsEmail
+    self.confirmsPhone = confirmsPhone
+    self.role = role
+    self.userMetadata = userMetadata
+    self.appMetadata = appMetadata
+    self.banDuration = banDuration
+  }
+
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(id, forKey: .id)
+    try container.encodeIfPresent(email, forKey: .email)
+    try container.encodeIfPresent(phone, forKey: .phone)
+    try container.encodeIfPresent(password, forKey: .password)
+    try container.encodeIfPresent(passwordHash, forKey: .passwordHash)
+    try container.encodeIfPresent(confirmsEmail, forKey: .confirmsEmail)
+    try container.encodeIfPresent(confirmsPhone, forKey: .confirmsPhone)
+    try container.encodeIfPresent(role, forKey: .role)
+    try container.encodeIfPresent(userMetadata, forKey: .userMetadata)
+    try container.encodeIfPresent(appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(banDuration?.goBanDurationString, forKey: .banDuration)
+  }
+}
+
+/// The changes for ``AuthAdmin/updateUser(id:_:)``. The server changes only the fields
+/// you set.
+public struct AdminUpdateUser: Encodable, Hashable, Sendable {
+  /// The user's new email.
+  public var email: String?
+
+  /// The user's new phone.
+  public var phone: String?
+
+  /// The user's new password.
+  public var password: String?
+
+  /// Confirms the user's email address if set to `true`.
+  public var confirmsEmail: Bool?
+
+  /// Confirms the user's phone number if set to `true`.
+  public var confirmsPhone: Bool?
+
+  /// The role claim set in the user's access token JWT.
+  public var role: String?
+
+  /// Data to merge into the user's metadata, in the `auth.users.raw_user_meta_data` column. The
+  /// user can change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  /// Data to merge into the user's application metadata, in the `auth.users.raw_app_meta_data`
+  /// column.
+  public var appMetadata: JSONObject?
+
+  /// How long to ban the user, counted from the time of the request.
+  ///
+  /// Pass `.zero` to lift an existing ban. `nil` leaves the ban as it is.
+  public var banDuration: Duration?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case phone
+    case password
+    case confirmsEmail = "email_confirm"
+    case confirmsPhone = "phone_confirm"
+    case role
+    case userMetadata = "user_metadata"
+    case appMetadata = "app_metadata"
+    case banDuration = "ban_duration"
+  }
+
+  /// Creates the changes for ``AuthAdmin/updateUser(id:_:)``.
+  ///
+  /// - Parameters:
+  ///   - email: The user's new email address.
+  ///   - phone: The user's new phone number.
+  ///   - password: The new plain-text password.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
+  ///   - role: The JWT role claim.
+  ///   - userMetadata: User-supplied metadata to merge.
+  ///   - appMetadata: Application-level metadata to merge.
+  ///   - banDuration: How long to ban the user. Pass `.zero` to lift a ban.
+  public init(
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    confirmsEmail: Bool? = nil,
+    confirmsPhone: Bool? = nil,
+    role: String? = nil,
+    userMetadata: JSONObject? = nil,
+    appMetadata: JSONObject? = nil,
+    banDuration: Duration? = nil
+  ) {
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.confirmsEmail = confirmsEmail
+    self.confirmsPhone = confirmsPhone
+    self.role = role
+    self.userMetadata = userMetadata
+    self.appMetadata = appMetadata
+    self.banDuration = banDuration
+  }
+
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(email, forKey: .email)
+    try container.encodeIfPresent(phone, forKey: .phone)
+    try container.encodeIfPresent(password, forKey: .password)
+    try container.encodeIfPresent(confirmsEmail, forKey: .confirmsEmail)
+    try container.encodeIfPresent(confirmsPhone, forKey: .confirmsPhone)
+    try container.encodeIfPresent(role, forKey: .role)
+    try container.encodeIfPresent(userMetadata, forKey: .userMetadata)
+    try container.encodeIfPresent(appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(banDuration?.goBanDurationString, forKey: .banDuration)
+  }
+}
+
+extension Duration {
+  /// The ban duration in the format the server reads: `"none"` lifts a ban, any other value is a
+  /// Go duration.
+  fileprivate var goBanDurationString: String {
+    self == .zero ? "none" : goDurationString
+  }
+}
+
+extension Duration {
+  /// The duration in the format of Go's `time.ParseDuration`.
+  var goDurationString: String {
+    let (seconds, attoseconds) = components
+    let (scaled, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
+    if attoseconds == 0, !overflow { return "\(seconds)s" }
+    let (sum, sumOverflow) = scaled.addingReportingOverflow(attoseconds / 1_000_000_000)
+    // Go's Duration is an Int64 count of nanoseconds, and ParseDuration rejects a larger value,
+    // so a longer duration saturates at about 292 years.
+    var nanoseconds = overflow || sumOverflow ? (self > .zero ? Int64.max : Int64.min) : sum
+    // A non-zero duration under 1 ns must not become 0, which GoTrue reads as "no ban".
+    if nanoseconds == 0 { nanoseconds = self > .zero ? 1 : -1 }
+    return "\(nanoseconds)ns"
+  }
+}
+
 /// Attributes that an administrator can set when creating or updating a user.
+@available(*, deprecated, message: "Use AdminCreateUser or AdminUpdateUser instead.")
 public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
@@ -1783,6 +2010,7 @@ public struct OAuthResponse: Codable, Hashable, Sendable {
 }
 
 /// Pagination parameters for list endpoints.
+@available(*, deprecated, message: "Use AuthAdmin.listUsers(page:pageSize:) instead.")
 public struct PageParams {
   /// The page number.
   public let page: Int?
@@ -1861,6 +2089,8 @@ public struct GenerateLinkParams: Sendable {
   var redirectTo: URL?
 
   /// Generates a signup link.
+  @available(*, deprecated, message: "Use signUp(email:password:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func signUp(
     email: String,
     password: String,
@@ -1879,6 +2109,8 @@ public struct GenerateLinkParams: Sendable {
   }
 
   /// Generates an invite link.
+  @available(*, deprecated, message: "Use invite(email:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func invite(
     email: String,
     data: [String: AnyJSON]? = nil,
@@ -1895,6 +2127,8 @@ public struct GenerateLinkParams: Sendable {
   }
 
   /// Generates a magic link.
+  @available(*, deprecated, message: "Use magicLink(email:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func magicLink(
     email: String,
     data: [String: AnyJSON]? = nil,
@@ -1911,6 +2145,72 @@ public struct GenerateLinkParams: Sendable {
   }
 
   /// Generates a recovery link.
+  /// Generates a signup link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - password: The user's password.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func signUp(
+    email: String,
+    password: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .signup,
+        email: email,
+        password: password,
+        data: userMetadata
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a invite link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func invite(
+    email: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .invite,
+        email: email,
+        data: userMetadata
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a magic link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func magicLink(
+    email: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .magiclink,
+        email: email,
+        data: userMetadata
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
   public static func recovery(
     email: String,
     redirectTo: URL? = nil
@@ -2206,8 +2506,114 @@ public struct OAuthClient: Codable, Hashable, Sendable {
   }
 }
 
+/// A new OAuth client for ``AuthAdminOAuth/createClient(_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct CreateOAuthClient: Encodable, Hashable, Sendable {
+  /// Human-readable name of the OAuth client
+  public var clientName: String
+
+  /// URI of the OAuth client
+  public var clientURI: URL?
+
+  /// Array of allowed redirect URIs
+  public var redirectURIs: [URL]
+
+  /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
+  public var grantTypes: [OAuthClientGrantType]?
+
+  /// Array of allowed response types (optional, defaults to code)
+  public var responseTypes: [OAuthClientResponseType]?
+
+  /// Scope of the OAuth client
+  public var scope: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+    case responseTypes = "response_types"
+    case scope
+  }
+
+  /// Creates a new OAuth client.
+  ///
+  /// - Parameters:
+  ///   - clientName: Human-readable name for the client.
+  ///   - clientURI: URI of the client application's homepage.
+  ///   - redirectURIs: Allowed redirect URIs.
+  ///   - grantTypes: Allowed grant types; defaults to `authorization_code` and `refresh_token`.
+  ///   - responseTypes: Allowed response types; defaults to `code`.
+  ///   - scope: Requested scope.
+  public init(
+    clientName: String,
+    clientURI: URL? = nil,
+    redirectURIs: [URL],
+    grantTypes: [OAuthClientGrantType]? = nil,
+    responseTypes: [OAuthClientResponseType]? = nil,
+    scope: String? = nil
+  ) {
+    self.clientName = clientName
+    self.clientURI = clientURI
+    self.redirectURIs = redirectURIs
+    self.grantTypes = grantTypes
+    self.responseTypes = responseTypes
+    self.scope = scope
+  }
+}
+
+/// The changes to an OAuth client for ``AuthAdminOAuth/updateClient(id:_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct UpdateOAuthClient: Encodable, Hashable, Sendable {
+  /// Human-readable name of the client application
+  public var clientName: String?
+
+  /// URL of the client application's homepage
+  public var clientURI: URL?
+
+  /// URL of the client application's logo
+  public var logoURI: URL?
+
+  /// Array of redirect URIs used by the client
+  public var redirectURIs: [URL]?
+
+  /// OAuth grant types the client is authorized to use
+  public var grantTypes: [OAuthClientGrantType]?
+
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case logoURI = "logo_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+  }
+
+  /// Creates the changes to an OAuth client.
+  ///
+  /// - Parameters:
+  ///   - clientName: New human-readable name.
+  ///   - clientURI: New URI for the client application.
+  ///   - logoURI: New logo URI.
+  ///   - redirectURIs: Replacement list of redirect URIs.
+  ///   - grantTypes: Replacement list of grant types.
+  public init(
+    clientName: String? = nil,
+    clientURI: URL? = nil,
+    logoURI: URL? = nil,
+    redirectURIs: [URL]? = nil,
+    grantTypes: [OAuthClientGrantType]? = nil
+  ) {
+    self.clientName = clientName
+    self.clientURI = clientURI
+    self.logoURI = logoURI
+    self.redirectURIs = redirectURIs
+    self.grantTypes = grantTypes
+  }
+}
+
 /// Parameters for creating a new OAuth client.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(*, deprecated, message: "Use CreateOAuthClient instead.")
 public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Human-readable name of the OAuth client
   public let clientName: String
@@ -2255,6 +2661,7 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
 
 /// Parameters for updating an existing OAuth client.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(*, deprecated, message: "Use UpdateOAuthClient instead.")
 public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Human-readable name of the client application
   public let clientName: String?
@@ -2296,6 +2703,9 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
 
 /// A paginated list of OAuth clients returned by ``AuthAdminOAuth/listClients(params:)``.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(
+  *, deprecated, message: "Use AuthAdminOAuth.listClients() with a [OAuthClient] result instead."
+)
 public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   /// The OAuth clients on the current page.
   public let clients: [OAuthClient]

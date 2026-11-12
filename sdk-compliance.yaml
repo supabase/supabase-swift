@@ -182,10 +182,12 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.updateUserById
+      - AuthAdmin.updateUser
   auth.admin.get_user:
     status: implemented
     symbols:
       - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
@@ -194,6 +196,7 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
+      - AuthAdmin.inviteUser
   auth.admin.sign_out:
     status: implemented
     symbols:
@@ -312,6 +315,7 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
