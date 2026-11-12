@@ -36,13 +36,7 @@ public class StorageBucketApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
   public func listBuckets() async throws -> [Bucket] {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("bucket"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+    try await listBuckets(options: BucketListOptions())
   }
 
   /// Retrieves the Storage buckets within the project.

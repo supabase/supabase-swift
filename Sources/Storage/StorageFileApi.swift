@@ -1145,15 +1145,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   @available(*, deprecated, message: "Use info(path:versionID:) instead. It returns ObjectInfo.")
   public func info(path: String) async throws -> FileObjectV2 {
-    let _path = _getFinalPath(path)
-
-    return try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
-        method: .get
-      )
-    )
-    .decoded(decoder: configuration.decoder)
+    try await _info(path: path, versionID: nil)
   }
 
   /// Retrieves metadata about an existing file without downloading its content.
@@ -1168,11 +1160,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   @_disfavoredOverload
   public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
-    let _path = _getFinalPath(path)
+    try await _info(path: path, versionID: versionID)
+  }
 
-    return try await execute(
+  private func _info<Info: Decodable>(path: String, versionID: String?) async throws -> Info {
+    try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
+        url: configuration.url.appendingPathComponent("object/info/\(_getFinalPath(path))"),
         method: .get,
         query: versionID.map { [URLQueryItem(name: "versionId", value: $0)] } ?? []
       )
