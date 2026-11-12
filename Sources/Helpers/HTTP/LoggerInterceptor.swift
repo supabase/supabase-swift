@@ -73,20 +73,36 @@ package struct LoggerInterceptor: ClientMiddleware {
     return components.string?.removingPercentEncoding ?? ""
   }
 
+  /// Bytes collected from a small declared body before logging gives up on it. Larger than
+  /// ``maxLoggedBodyBytes`` because with transparent gzip `Content-Length` is the compressed size
+  /// while the decoded bytes come out.
+  static let maxCollectedBodyBytes = Int(maxLoggedBodyBytes) * 16
+
   /// Buffers small known-length bodies for logging and re-wraps them; passes everything else
   /// through unconsumed.
   ///
-  /// The declared length only decides *whether* to buffer. Collecting uses a much larger ceiling,
-  /// because a body can deliver more bytes than it claims — with transparent gzip,
-  /// `Content-Length` is the compressed size while the decoded bytes come out. Capping at the
-  /// claim would throw ``HTTPBodyTooLargeError`` out of a logging middleware and fail the request,
-  /// which is unrecoverable once the body has been consumed.
+  /// The declared length only decides *whether* to buffer, since a body can deliver more bytes
+  /// than it claims. One that passes ``maxCollectedBodyBytes`` is handed on whole and logged as
+  /// truncated: logging must never fail a request.
   private static func loggable(_ body: HTTPBody?) async throws -> (HTTPBody?, String) {
     guard let body else { return (nil, "<none>") }
     guard case .known(let count) = body.length, count <= maxLoggedBodyBytes else {
       return (body, "<streamed>")
     }
-    let data = try await Data(collecting: body, upTo: Int(maxLoggedBodyBytes) * 16)
+
+    var data = Data()
+    var iterator = body.makeAsyncIterator()
+    while let chunk = try await iterator.next() {
+      data.append(contentsOf: chunk)
+      if data.count > maxCollectedBodyBytes {
+        // A cut prefix is not valid JSON, so it could not be redacted; log only the marker. The
+        // declared length is now known to be wrong, so the handed-on body drops it.
+        let marker = "<truncated: over \(maxCollectedBodyBytes) bytes>"
+        if body.iterationBehavior == .multiple { return (body, marker) }
+        return (HTTPBody(data, followedBy: iterator), marker)
+      }
+    }
+
     let rewrapped = HTTPBody(data)
     return (body.onUploadProgress.map(rewrapped.reportingProgress) ?? rewrapped, stringify(data))
   }

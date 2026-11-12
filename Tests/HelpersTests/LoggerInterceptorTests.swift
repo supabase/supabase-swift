@@ -542,4 +542,65 @@ struct LoggerInterceptorTests {
 
     #expect(seen.value == Data(repeating: 7, count: 100))
   }
+
+  @Test
+  func aSmallDeclaredBodyThatDecodesPastTheCeilingStillReachesTheCallerWhole() async throws {
+    let (logger, capture) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let chunk = ArraySlice(repeating: UInt8(7), count: 64 * 1024)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        for _ in 0..<32 { $0.yield(chunk) }
+        $0.finish()
+      },
+      length: .known(10), iterationBehavior: .single)
+
+    let (head, returned) = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .get, url: URL(string: "https://example.com")!),
+      body: nil
+    ) { _, _ in (HTTPTypes.HTTPResponse(status: .ok), body) }
+
+    #expect(head.status == .ok)
+    #expect(returned?.length == .unknown)
+    #expect(
+      try await Data(collecting: try #require(returned), upTo: .max)
+        == Data(repeating: 7, count: 2 * 1024 * 1024))
+    #expect(capture.verboseLogs[1].contains("<truncated"))
+  }
+
+  @Test
+  func aRepeatableBodyPastTheCeilingIsHandedOnUnchanged() async throws {
+    let (logger, capture) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let bytes = [UInt8](repeating: 7, count: 2 * 1024 * 1024)
+    let body = HTTPBody(
+      ReplayedChunk(chunk: ArraySlice(bytes)), length: .known(10), iterationBehavior: .multiple)
+
+    let forwarded = LockIsolated<HTTPBody?>(nil)
+    _ = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
+      body: body
+    ) { _, next in
+      forwarded.setValue(next)
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    let handedOn = try #require(forwarded.value)
+    #expect(handedOn === body)
+    #expect(try await Data(collecting: handedOn, upTo: .max) == Data(bytes))
+    #expect(capture.verboseLogs[0].contains("<truncated"))
+  }
+}
+
+/// Yields the same chunk on every iteration, like a re-readable source.
+private struct ReplayedChunk: AsyncSequence, Sendable {
+  let chunk: ArraySlice<UInt8>
+
+  func makeAsyncIterator() -> AsyncStream<ArraySlice<UInt8>>.Iterator {
+    let chunk = chunk
+    return AsyncStream {
+      $0.yield(chunk)
+      $0.finish()
+    }.makeAsyncIterator()
+  }
 }
