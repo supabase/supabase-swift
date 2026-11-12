@@ -383,12 +383,50 @@ public actor AuthClient {
   ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
+  @available(*, deprecated, message: "Use signUp(email:password:options:) instead.")
   public func signUp(
     email: String,
     password: String,
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
+  ) async throws -> AuthResponse {
+    try await _signUp(
+      email: email, password: password, data: data, redirectTo: redirectTo,
+      captchaToken: captchaToken)
+  }
+
+  /// Creates a new user with an email and a password.
+  ///
+  /// When the project needs no email confirmation, the user is signed in and the client stores
+  /// the session. Otherwise the server sends a confirmation email.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``AuthResponse``. Pass `options`, or give the result the type ``SignUpResult``.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, the redirect URL, and the captcha token.
+  /// - Returns: The session, or the user who must confirm first.
+  @_disfavoredOverload
+  public func signUp(
+    email: String,
+    password: String,
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
+    SignUpResult(
+      try await _signUp(
+        email: email, password: password, data: options.userMetadata,
+        redirectTo: options.redirectTo, captchaToken: options.captchaToken))
+  }
+
+  private func _signUp(
+    email: String,
+    password: String,
+    data: [String: AnyJSON]?,
+    redirectTo: URL?,
+    captchaToken: String?
   ) async throws -> AuthResponse {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -426,12 +464,49 @@ public actor AuthClient {
   ///   - data: Custom data object to store additional user metadata.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
+  @available(*, deprecated, message: "Use signUp(phone:password:options:) instead.")
   public func signUp(
     phone: String,
     password: String,
     channel: MessagingChannel = .sms,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
+  ) async throws -> AuthResponse {
+    try await _signUp(
+      phone: phone, password: password, channel: channel, data: data, captchaToken: captchaToken)
+  }
+
+  /// Creates a new user with a phone number and a password.
+  ///
+  /// When the project needs no phone confirmation, the user is signed in and the client stores
+  /// the session. Otherwise the server sends a confirmation code.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``AuthResponse``. Pass `options`, or give the result the type ``SignUpResult``.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - password: The user's password.
+  ///   - options: The user metadata, the channel, and the captcha token.
+  /// - Returns: The session, or the user who must confirm first.
+  @_disfavoredOverload
+  public func signUp(
+    phone: String,
+    password: String,
+    options: SignUpOptions = .init()
+  ) async throws -> SignUpResult {
+    SignUpResult(
+      try await _signUp(
+        phone: phone, password: password, channel: options.channel, data: options.userMetadata,
+        captchaToken: options.captchaToken))
+  }
+
+  private func _signUp(
+    phone: String,
+    password: String,
+    channel: MessagingChannel,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
   ) async throws -> AuthResponse {
     try await _signUp(
       request: .init(
@@ -642,12 +717,41 @@ public actor AuthClient {
   ///   - shouldCreateUser: Creates a new user, defaults to `true`.
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
+  @available(*, deprecated, message: "Use signInWithOTP(email:options:) instead.")
+  @_disfavoredOverload
   public func signInWithOTP(
     email: String,
     redirectTo: URL? = nil,
     shouldCreateUser: Bool = true,
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
+  ) async throws {
+    try await _signInWithOTP(
+      email: email, redirectTo: redirectTo, shouldCreateUser: shouldCreateUser, data: data,
+      captchaToken: captchaToken)
+  }
+
+  /// Sends a one-time code or a magic link to an email address.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - options: Whether to create the user, the user metadata, the redirect URL, and the
+  ///     captcha token.
+  public func signInWithOTP(
+    email: String,
+    options: EmailOTPOptions = .init()
+  ) async throws {
+    try await _signInWithOTP(
+      email: email, redirectTo: options.redirectTo, shouldCreateUser: options.shouldCreateUser,
+      data: options.userMetadata, captchaToken: options.captchaToken)
+  }
+
+  private func _signInWithOTP(
+    email: String,
+    redirectTo: URL?,
+    shouldCreateUser: Bool,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -687,6 +791,7 @@ public actor AuthClient {
   ///   - captchaToken: Captcha verification token.
   ///
   /// - Note: You need to configure a WhatsApp sender on Twilio if you are using phone sign in with the `whatsapp` channel.
+  @available(*, deprecated, message: "Use signInWithOTP(phone:options:) instead.")
   public func signInWithOTP(
     phone: String,
     channel: MessagingChannel = .sms,
@@ -694,7 +799,40 @@ public actor AuthClient {
     data: [String: AnyJSON]? = nil,
     captchaToken: String? = nil
   ) async throws {
-    _ = try await api.execute(
+    _ = try await _signInWithOTP(
+      phone: phone, channel: channel, shouldCreateUser: shouldCreateUser, data: data,
+      captchaToken: captchaToken)
+  }
+
+  /// Sends a one-time code to a phone number.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns nothing. Pass `options`, or give the result the type `MessageID?`.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - options: Whether to create the user, the user metadata, the channel, and the captcha
+  ///     token.
+  /// - Returns: The ID that the SMS provider gave the message, when the server sends one.
+  @_disfavoredOverload
+  @discardableResult
+  public func signInWithOTP(
+    phone: String,
+    options: PhoneOTPOptions = .init()
+  ) async throws -> MessageID? {
+    try await _signInWithOTP(
+      phone: phone, channel: options.channel, shouldCreateUser: options.shouldCreateUser,
+      data: options.userMetadata, captchaToken: options.captchaToken)
+  }
+
+  private func _signInWithOTP(
+    phone: String,
+    channel: MessagingChannel,
+    shouldCreateUser: Bool,
+    data: [String: AnyJSON]?,
+    captchaToken: String?
+  ) async throws -> MessageID? {
+    let response = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
@@ -709,6 +847,9 @@ public actor AuthClient {
         )
       )
     )
+    // The v2 method ignored this body, so a body that does not decode must not fail the call.
+    return (try? response.decoded(as: MessageIDBody.self, decoder: configuration.resolvedDecoder))?
+      .messageId
   }
 
   /// Attempts a single-sign on using an enterprise Identity Provider.
@@ -1183,6 +1324,10 @@ public actor AuthClient {
 
   /// Log in an user given a User supplied OTP received via email.
   @discardableResult
+  @available(
+    *, deprecated,
+    message: "Use verifyOTP(email:token:type:) with a VerifyOTPResult result instead."
+  )
   public func verifyOTP(
     email: String,
     token: String,
@@ -1218,6 +1363,9 @@ public actor AuthClient {
 
   /// Log in an user given a User supplied OTP received via mobile.
   @discardableResult
+  @available(
+    *, deprecated, message: "Use verifyOTP(phone:token:type:) with a Session result instead."
+  )
   public func verifyOTP(
     phone: String,
     token: String,
@@ -1261,6 +1409,94 @@ public actor AuthClient {
     )
   }
 
+  /// Signs in with a one-time code that the user received by email.
+  ///
+  /// The deprecated overload that returns ``AuthResponse`` has the same labels. Give the result
+  /// the type ``VerifyOTPResult`` to select this one:
+  ///
+  /// ```swift
+  /// let result: VerifyOTPResult = try await client.auth.verifyOTP(
+  ///   email: email, token: code, type: .email)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - token: The code from the email.
+  ///   - type: The kind of code.
+  /// - Returns: The session, or the message of the first confirmation of a secure email change.
+  @_disfavoredOverload
+  @discardableResult
+  public func verifyOTP(
+    email: String,
+    token: String,
+    type: EmailOTPType
+  ) async throws -> VerifyOTPResult {
+    let result = try await api.execute(
+      .init(
+        url: configuration.url.appendingPathComponent("verify"),
+        method: .post,
+        query: [
+          configuration.redirectToURL.map {
+            URLQueryItem(name: "redirect_to", value: $0.absoluteString)
+          }
+        ].compactMap { $0 },
+        body: configuration.resolvedEncoder.encode(
+          VerifyOTPParams.email(
+            VerifyEmailOTPParams(email: email, token: token, type: type, gotrueMetaSecurity: nil)
+          )
+        )
+      )
+    )
+    .decoded(as: VerifyOTPBody.self, decoder: configuration.resolvedDecoder)
+    .result
+
+    if case .signedIn(let session) = result {
+      await sessionManager.update(session)
+      eventEmitter.emit(.signedIn, session: session)
+    }
+    return result
+  }
+
+  /// Signs in with a one-time code that the user received by SMS or WhatsApp.
+  ///
+  /// The deprecated overload that returns ``AuthResponse`` has the same labels. Give the result
+  /// the type ``Session`` to select this one:
+  ///
+  /// ```swift
+  /// let session: Session = try await client.auth.verifyOTP(
+  ///   phone: phone, token: code, type: .sms)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - token: The code from the message.
+  ///   - type: The kind of code.
+  /// - Returns: The new session.
+  @_disfavoredOverload
+  @discardableResult
+  public func verifyOTP(
+    phone: String,
+    token: String,
+    type: PhoneOTPType
+  ) async throws -> Session {
+    let session = try await api.execute(
+      .init(
+        url: configuration.url.appendingPathComponent("verify"),
+        method: .post,
+        body: configuration.resolvedEncoder.encode(
+          VerifyOTPParams.mobile(
+            VerifyMobileOTPParams(phone: phone, token: token, type: type, gotrueMetaSecurity: nil)
+          )
+        )
+      )
+    )
+    .decoded(as: Session.self, decoder: configuration.resolvedDecoder)
+
+    await sessionManager.update(session)
+    eventEmitter.emit(.signedIn, session: session)
+    return session
+  }
+
   private func _verifyOTP(request: HTTPRequest) async throws -> AuthResponse {
     let response = try await api.execute(request).decoded(
       as: AuthResponse.self,
@@ -1279,11 +1515,39 @@ public actor AuthClient {
   ///
   /// To obfuscate whether such the email already exists in the system this method succeeds in both
   /// cases.
+  @available(*, deprecated, message: "Use resend(email:type:options:) instead.")
+  @_disfavoredOverload
   public func resend(
     email: String,
     type: ResendEmailType,
     emailRedirectTo: URL? = nil,
     captchaToken: String? = nil
+  ) async throws {
+    try await _resend(
+      email: email, type: type, emailRedirectTo: emailRedirectTo, captchaToken: captchaToken)
+  }
+
+  /// Sends a sign-up confirmation or an email change email again.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email address.
+  ///   - type: The kind of email to send again.
+  ///   - options: The redirect URL and the captcha token.
+  public func resend(
+    email: String,
+    type: ResendEmailType,
+    options: ResendEmailOptions = .init()
+  ) async throws {
+    try await _resend(
+      email: email, type: type, emailRedirectTo: options.redirectTo,
+      captchaToken: options.captchaToken)
+  }
+
+  private func _resend(
+    email: String,
+    type: ResendEmailType,
+    emailRedirectTo: URL?,
+    captchaToken: String?
   ) async throws {
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
@@ -1319,11 +1583,41 @@ public actor AuthClient {
   /// To obfuscate whether such the phone number already exists in the system this method succeeds
   /// in both cases.
   @discardableResult
+  @available(*, deprecated, message: "Use resend(phone:type:options:) instead.")
   public func resend(
     phone: String,
     type: ResendMobileType,
     captchaToken: String? = nil
   ) async throws -> ResendMobileResponse {
+    ResendMobileResponse(
+      messageId: try await _resend(phone: phone, type: type, captchaToken: captchaToken)?.rawValue)
+  }
+
+  /// Sends a phone confirmation code again.
+  ///
+  /// A call with no `options` argument and no result type selects the deprecated overload that
+  /// returns ``ResendMobileResponse``. Pass `options`, or give the result the type `MessageID?`.
+  ///
+  /// - Parameters:
+  ///   - phone: The user's phone number, with the country code.
+  ///   - type: The kind of code to send again.
+  ///   - options: The captcha token.
+  /// - Returns: The ID that the SMS provider gave the message, when the server sends one.
+  @_disfavoredOverload
+  @discardableResult
+  public func resend(
+    phone: String,
+    type: ResendPhoneType,
+    options: ResendPhoneOptions = .init()
+  ) async throws -> MessageID? {
+    try await _resend(phone: phone, type: type, captchaToken: options.captchaToken)
+  }
+
+  private func _resend(
+    phone: String,
+    type: ResendMobileType,
+    captchaToken: String?
+  ) async throws -> MessageID? {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("resend"),
@@ -1337,7 +1631,8 @@ public actor AuthClient {
         )
       )
     )
-    .decoded(decoder: configuration.resolvedDecoder)
+    .decoded(as: MessageIDBody.self, decoder: configuration.resolvedDecoder)
+    .messageId
   }
 
   /// Sends a re-authentication OTP to the user's email or phone number.

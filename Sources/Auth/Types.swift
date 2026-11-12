@@ -1943,7 +1943,269 @@ struct ResendMobileParams: Encodable {
   let gotrueMetaSecurity: AuthMetaSecurity?
 }
 
+/// Options for ``AuthClient/signInWithOTP(email:options:)``.
+public struct EmailOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the email. The default is `true`.
+  /// When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The URL the email link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates email OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - redirectTo: The URL the email link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/signInWithOTP(phone:options:)``.
+public struct PhoneOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the phone number. The default is
+  /// `true`. When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The channel that delivers the code. The default is ``MessagingChannel/sms``.
+  ///
+  /// - Note: The ``MessagingChannel/whatsapp`` channel needs a WhatsApp sender on Twilio.
+  public var channel: MessagingChannel
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates phone OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - channel: The channel that delivers the code.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.channel = channel
+    self.captchaToken = captchaToken
+  }
+}
+
+/// The ID that the SMS provider gave a message. Use it to track delivery problems.
+public struct MessageID: RawRepresentable, Decodable, Hashable, Sendable {
+  /// The ID as the SMS provider wrote it.
+  public let rawValue: String
+
+  /// Creates a ``MessageID`` from the provider's ID.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+}
+
+/// The result of ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+///
+/// Switch on the result to learn whether the user is signed in:
+///
+/// ```swift
+/// switch try await client.auth.signUp(email: email, password: password, options: .init()) {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .confirmationRequired(let user):
+///   showCheckYourInbox(for: user)
+/// }
+/// ```
+public enum SignUpResult: Decodable, Hashable, Sendable {
+  /// The account is active and the user is signed in. The client stored the session and emitted
+  /// ``AuthChangeEvent/signedIn``.
+  case signedIn(Session)
+
+  /// The server sent a confirmation email or SMS. The user is not signed in until they confirm.
+  ///
+  /// When email confirmation is on and the email or phone number already belongs to a confirmed
+  /// account, the server does not say so. It returns a fake user with an empty `identities`
+  /// list instead, and sends no message. A real new user has one identity. The SDK returns
+  /// either user as is.
+  case confirmationRequired(User)
+
+  /// Decodes ``signedIn(_:)`` from a session body, and ``confirmationRequired(_:)`` from a user
+  /// body.
+  public init(from decoder: any Decoder) throws {
+    self.init(try AuthResponse(from: decoder))
+  }
+
+  init(_ response: AuthResponse) {
+    switch response {
+    case .session(let session): self = .signedIn(session)
+    case .user(let user): self = .confirmationRequired(user)
+    }
+  }
+
+  /// The user in either case.
+  public var user: User {
+    switch self {
+    case .signedIn(let session): session.user
+    case .confirmationRequired(let user): user
+    }
+  }
+
+  /// The session, or `nil` when the user must confirm first.
+  public var session: Session? {
+    if case .signedIn(let session) = self { return session }
+    return nil
+  }
+}
+
+/// Options for ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+public struct SignUpOptions: Sendable, Hashable {
+  /// Data to store on the user, in the `auth.users.raw_user_meta_data` column. The user can
+  /// change it later, so do not use it for authorization.
+  public var userMetadata: JSONObject
+
+  /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
+  /// the client uses ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The channel that delivers the confirmation code. Applies to phone sign-up only.
+  public var channel: MessagingChannel
+
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
+
+  /// Creates sign-up options.
+  ///
+  /// - Parameters:
+  ///   - userMetadata: Data to store on the user.
+  ///   - redirectTo: The URL the confirmation link sends the user to. Email sign-up only.
+  ///   - channel: The channel that delivers the confirmation code. Phone sign-up only.
+  ///   - captchaToken: The token the user received for completing a captcha.
+  public init(
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.channel = channel
+    self.captchaToken = captchaToken
+  }
+}
+
+/// The result of ``AuthClient/verifyOTP(email:token:type:)``.
+///
+/// ```swift
+/// let result: VerifyOTPResult = try await client.auth.verifyOTP(
+///   email: email, token: code, type: .email)
+/// switch result {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .emailChangePending(let message):
+///   showMessage(message)
+/// }
+/// ```
+public enum VerifyOTPResult: Sendable, Hashable {
+  /// The code was valid and the user is signed in. The client stored the session and emitted
+  /// ``AuthChangeEvent/signedIn``.
+  case signedIn(Session)
+
+  /// The first of the two confirmations of a secure email change. The other address must confirm
+  /// its link too before the change takes effect. The client stored no session and emitted no
+  /// event. `message` comes from the server and is meant for display.
+  case emailChangePending(message: String)
+}
+
+/// A `/verify` response body: a session, or the `{"msg": …}` body of the first half of a secure
+/// email change.
+struct VerifyOTPBody: Decodable {
+  let result: VerifyOTPResult
+
+  // Camel case names: the client's decoder converts snake case keys before it matches them.
+  private enum CodingKeys: String, CodingKey {
+    case accessToken
+    case refreshToken
+    case expiresIn
+    case message = "msg"
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let isSession =
+      container.contains(.accessToken) && container.contains(.refreshToken)
+      && container.contains(.expiresIn)
+    result =
+      try isSession
+      ? .signedIn(Session(from: decoder))
+      : .emailChangePending(message: container.decode(String.self, forKey: .message))
+  }
+}
+
+/// The `{"message_id": …}` body of a phone `/otp` or `/resend` response.
+struct MessageIDBody: Decodable {
+  let messageId: MessageID?
+}
+
+/// Options for ``AuthClient/resend(email:type:options:)``.
+public struct ResendEmailOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send an email again.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/resend(phone:type:options:)``.
+public struct ResendPhoneOptions: Sendable, Hashable {
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send a phone code again.
+  ///
+  /// - Parameter captchaToken: The captcha verification token.
+  public init(captchaToken: String? = nil) {
+    self.captchaToken = captchaToken
+  }
+}
+
 /// The response returned when resending an SMS OTP.
+@available(*, deprecated, message: "Use MessageID instead.")
 public struct ResendMobileResponse: Decodable, Hashable, Sendable {
   /// Unique ID of the message as reported by the SMS sending provider. Useful for tracking
   /// deliverability problems.
