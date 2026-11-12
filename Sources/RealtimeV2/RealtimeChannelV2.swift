@@ -115,15 +115,13 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``subscribe()``
 /// - ``unsubscribe()``
 /// ### Broadcasting
-/// - ``broadcast(event:message:)-7xyf5``
-/// - ``broadcast(event:message:)-2pvzp``
+/// - ``broadcast(event:payload:encoder:)``
 /// - ``broadcast(event:data:)``
-/// - ``httpSend(event:message:timeout:)-8v03n``
-/// - ``httpSend(event:message:timeout:)-5hhoc``
-/// - ``httpSend(event:data:timeout:)``
+/// - ``httpSend(event:payload:encoder:timeout:)``
+/// - ``httpSend(event:data:timeout:)-(_,_,Duration?)``
 /// ### Presence
+/// - ``track(_:encoder:)``
 /// - ``track(_:)``
-/// - ``track(state:)``
 /// - ``untrack()``
 /// - ``onPresenceChange(_:)``
 /// ### Postgres Changes
@@ -346,7 +344,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
-  /// Sends a broadcast message via the REST API using a `Codable` payload.
+  /// Sends a broadcast message via the REST API.
   ///
   /// This method always targets the REST broadcast endpoint regardless of the current
   /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
@@ -354,67 +352,78 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
   /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name.
+  ///   - payload: The value to send as the JSON request body.
+  ///   - encoder: The encoder for `payload`. `nil` uses `AnyJSON.encoder`.
+  ///   - timeout: How long the request may take. `nil` uses the client's configured timeout.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode or
+  ///   the client has no access token, and nothing is sent; `.server` when the server does not
+  ///   accept the message.
+  ///
+  /// > Note: v3 sends the request without a token when the client has none, counts the token
+  /// > fetch in the timeout, and reports a timeout as a ``RealtimeError``. This version does not.
+  public func httpSend(
+    event: String,
+    payload: some Encodable,
+    encoder: JSONEncoder? = nil,
+    timeout: Duration? = nil
+  ) async throws {
+    let body: Data
+    do {
+      body = try (encoder ?? AnyJSON.encoder).encode(payload)
+    } catch {
+      throw RealtimeError.invalidRequest(
+        "The payload cannot be encoded as JSON.", underlyingError: error)
+    }
+    try await _httpSend(
+      event: event, body: body, contentType: "application/json", timeout: timeout?.timeInterval)
+  }
+
+  /// Sends a broadcast message via the REST API using a `Codable` payload.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
   /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  @available(*, deprecated, message: "Use httpSend(event:payload:encoder:timeout:) instead.")
   public func httpSend(
     event: String,
     message: some Codable,
     timeout: TimeInterval? = nil
   ) async throws {
-    try await httpSend(event: event, message: JSONObject(message), timeout: timeout)
+    try await _httpSend(event: event, message: JSONObject(message), timeout: timeout)
   }
 
   /// Sends a broadcast message via the REST API using a raw `JSONObject` payload.
-  ///
-  /// This method always targets the REST broadcast endpoint regardless of the current
-  /// WebSocket state. Use it when you need guaranteed REST delivery or want to send
-  /// a broadcast before subscribing to the channel.
-  ///
-  /// > Important: Requires a Realtime server version >= 2.97.0. Older servers don't expose
-  /// > the per-event `/api/broadcast/{topic}/events/{event}` endpoint this method targets.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A ``JSONObject`` to send as the message payload.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
   /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  @available(*, deprecated, message: "Use httpSend(event:payload:encoder:timeout:) instead.")
   public func httpSend(
     event: String,
     message: JSONObject,
     timeout: TimeInterval? = nil
   ) async throws {
+    try await _httpSend(event: event, message: message, timeout: timeout)
+  }
+
+  private func _httpSend(event: String, message: JSONObject, timeout: TimeInterval?) async throws {
     guard let accessToken = await socket._getAccessToken() else {
       throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
-
-    let isPrivate = await configuration.isPrivate
-
-    var headers: HTTPFields = [.contentType: "application/json"]
-    if let apiKey = socket.options.apikey {
-      headers[.apiKey] = apiKey
-    }
-    headers[.authorization] = "Bearer \(accessToken)"
-
-    let body = try JSONEncoder.supabase().encode(message)
-
-    let request = HTTPRequest(
-      url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
-      method: .post,
-      headers: headers,
-      body: body
+    try await _httpSend(
+      event: event,
+      body: JSONEncoder.supabase().encode(message),
+      contentType: "application/json",
+      timeout: timeout,
+      accessToken: accessToken
     )
-
-    let response = try await withTimeout(
-      interval: timeout ?? socket.options.timeoutInterval, clock: socket.clock
-    ) {
-      [self] in try await socket.http.send(request)
-    }
-
-    try Self.validateHTTPSendResponse(response)
   }
 
   /// Sends a binary broadcast message via the REST API.
@@ -429,20 +438,57 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - data: Raw binary data to send as the request body.
+  ///   - timeout: How long the request may take. `nil` uses the client's configured timeout.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when the client has no access token,
+  ///   and nothing is sent; `.server` when the server does not accept the message.
+  public func httpSend(
+    event: String,
+    data: Data,
+    timeout: Duration? = nil
+  ) async throws {
+    try await _httpSend(
+      event: event, body: data, contentType: "application/octet-stream",
+      timeout: timeout?.timeInterval)
+  }
+
+  /// Sends a binary broadcast message via the REST API.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name.
+  ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
   /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
+  @available(
+    *, deprecated, message: "Use httpSend(event:data:timeout:) with a Duration instead."
+  )
+  @_disfavoredOverload
   public func httpSend(
     event: String,
     data: Data,
     timeout: TimeInterval? = nil
   ) async throws {
-    guard let accessToken = await socket._getAccessToken() else {
+    try await _httpSend(
+      event: event, body: data, contentType: "application/octet-stream", timeout: timeout)
+  }
+
+  private func _httpSend(
+    event: String,
+    body: Data,
+    contentType: String,
+    timeout: TimeInterval?,
+    accessToken: String? = nil
+  ) async throws {
+    var accessToken = accessToken
+    if accessToken == nil {
+      accessToken = await socket._getAccessToken()
+    }
+    guard let accessToken else {
       throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
 
     let isPrivate = await configuration.isPrivate
 
-    var headers: HTTPFields = [.contentType: "application/octet-stream"]
+    var headers: HTTPFields = [.contentType: contentType]
     if let apiKey = socket.options.apikey {
       headers[.apiKey] = apiKey
     }
@@ -452,7 +498,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: isPrivate),
       method: .post,
       headers: headers,
-      body: data
+      body: body
     )
 
     let response = try await withTimeout(
@@ -475,30 +521,71 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
-  /// Sends a broadcast message with a `Codable` payload over WebSocket (or falls back to REST).
+  /// Sends a broadcast message over the WebSocket.
   ///
-  /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
-  /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
-  /// Prefer ``httpSend(event:message:timeout:)-8v03n`` for an explicit REST call.
+  /// When the channel is subscribed, the message goes over the WebSocket connection. When it is
+  /// not, the call falls back to the REST broadcast endpoint and reports an issue. Prefer
+  /// ``httpSend(event:payload:encoder:timeout:)`` for an explicit REST call.
+  ///
+  /// - Parameters:
+  ///   - event: The broadcast event name.
+  ///   - payload: The value to send. It must encode to a JSON object.
+  ///   - encoder: The encoder for `payload`. `nil` uses `AnyJSON.encoder`.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode to a
+  ///   JSON object. Nothing is sent.
+  ///
+  /// > Note: v3 throws `.notSubscribed` when the channel is not subscribed, takes any JSON value
+  /// > as the payload, and throws when the server rejects an acknowledged message. This version
+  /// > does none of these.
+  public func broadcast(
+    event: String,
+    payload: some Encodable,
+    encoder: JSONEncoder? = nil
+  ) async throws {
+    await _broadcast(event: event, message: try Self.jsonObject(payload, encoder: encoder))
+  }
+
+  /// Sends a broadcast message with a `Codable` payload over WebSocket (or falls back to REST).
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
+  @available(*, deprecated, message: "Use broadcast(event:payload:encoder:) instead.")
   public func broadcast(event: String, message: some Codable) async throws {
-    try await broadcast(event: event, message: JSONObject(message))
+    try await _broadcast(event: event, message: JSONObject(message))
   }
 
   /// Sends a broadcast message with a raw `JSONObject` payload over WebSocket (or falls back to REST).
   ///
-  /// When the channel is subscribed, the message is sent over the existing WebSocket connection.
-  /// If not subscribed, the call falls back to the REST broadcast endpoint with a deprecation notice.
-  /// Prefer ``httpSend(event:message:timeout:)-5hhoc`` for an explicit REST call.
-  ///
   /// - Parameters:
   ///   - event: The broadcast event name.
   ///   - message: A raw ``JSONObject`` payload.
+  @available(*, deprecated, message: "Use broadcast(event:payload:encoder:) instead.")
   @MainActor
   public func broadcast(event: String, message: JSONObject) async {
+    await _broadcast(event: event, message: message)
+  }
+
+  /// Encodes `payload` and reads it back as the JSON object the v2 wire format carries.
+  private static func jsonObject(
+    _ payload: some Encodable, encoder: JSONEncoder?
+  ) throws -> JSONObject {
+    let json: AnyJSON
+    do {
+      let data = try (encoder ?? AnyJSON.encoder).encode(payload)
+      json = try AnyJSON.decoder.decode(AnyJSON.self, from: data)
+    } catch {
+      throw RealtimeError.invalidRequest(
+        "The payload cannot be encoded as JSON.", underlyingError: error)
+    }
+    guard let object = json.objectValue else {
+      throw RealtimeError.invalidRequest("The payload must encode to a JSON object.")
+    }
+    return object
+  }
+
+  @MainActor
+  private func _broadcast(event: String, message: JSONObject) async {
     if status != .subscribed {
       // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
       // because of this I'm disabling issue reporting during tests, so we can use it only for advising developers when running their applications.
@@ -600,6 +687,23 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     )
   }
 
+  /// Tracks this client's presence on the channel.
+  ///
+  /// The payload is shared with all other clients on the same channel. Call this after
+  /// subscribing.
+  ///
+  /// - Parameters:
+  ///   - payload: The value to track. It must encode to a JSON object.
+  ///   - encoder: The encoder for `payload`. `nil` uses `AnyJSON.encoder`.
+  /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when `payload` does not encode to a
+  ///   JSON object. Nothing is sent.
+  ///
+  /// > Note: v3 throws `.notSubscribed` when the channel is not subscribed. This version reports
+  /// > an issue and sends the message.
+  public func track(_ payload: some Encodable, encoder: JSONEncoder? = nil) async throws {
+    await _track(state: try Self.jsonObject(payload, encoder: encoder))
+  }
+
   /// Tracks the current client's presence state using a `Codable` value.
   ///
   /// The state is shared with all other clients on the same channel. Call this after subscribing.
@@ -607,7 +711,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// - Parameter state: A `Codable` value representing the client's presence state.
   /// - Throws: An error if the state cannot be encoded.
   public func track(_ state: some Codable) async throws {
-    try await track(state: JSONObject(state))
+    try await _track(state: JSONObject(state))
   }
 
   /// Tracks the current client's presence state using a raw `JSONObject`.
@@ -615,7 +719,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// The state is shared with all other clients on the same channel. Call this after subscribing.
   ///
   /// - Parameter state: A ``JSONObject`` representing the client's presence state.
+  @available(*, deprecated, message: "Use track(_:encoder:) instead.")
   public func track(state: JSONObject) async {
+    await _track(state: state)
+  }
+
+  private func _track(state: JSONObject) async {
     if status != .subscribed {
       reportIssue(
         "You can only track your presence after subscribing to the channel. Did you forget to call `channel.subscribe()`?"

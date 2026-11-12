@@ -390,3 +390,9 @@ extension RealtimeChannelStatus {
     self == .subscribed
   }
 }
+
+extension Duration {
+  var timeInterval: TimeInterval {
+    TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
+  }
+}
