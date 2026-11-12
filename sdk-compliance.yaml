@@ -141,6 +141,8 @@ features:
     status: implemented
     symbols:
       - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
   auth.mfa.challenge:
     status: implemented
     symbols:
@@ -161,10 +163,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+      - AuthMFA.factors
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
       - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
 
   auth.admin.create_user:
     status: implemented

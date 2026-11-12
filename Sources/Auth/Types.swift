@@ -1125,6 +1125,11 @@ public protocol MFAEnrollParamsType: Encodable, Hashable, Sendable {
 }
 
 /// Parameters for enrolling a TOTP (Time-based One-Time Password) MFA factor.
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 public struct MFATotpEnrollParams: MFAEnrollParamsType {
   /// The factor type, always `"totp"`.
   public let factorType: FactorType = "totp"
@@ -1146,6 +1151,11 @@ public struct MFATotpEnrollParams: MFAEnrollParamsType {
   }
 }
 
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
   /// Creates parameters for enrolling a TOTP factor.
   ///
@@ -1158,6 +1168,11 @@ extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
 }
 
 /// Parameters for enrolling a phone (SMS/WhatsApp) MFA factor.
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
   /// The factor type, always `"phone"`.
   public let factorType: FactorType = "phone"
@@ -1179,6 +1194,11 @@ public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
   }
 }
 
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 extension MFAEnrollParamsType where Self == MFAPhoneEnrollParams {
   /// Creates parameters for enrolling a phone factor.
   ///
@@ -1309,6 +1329,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
 }
 
 /// Parameters for unenrolling an MFA factor.
+@available(*, deprecated, message: "Use AuthMFA.unenroll(factorID:) instead.")
 public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
   /// ID of the factor to unenroll. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
@@ -1322,6 +1343,7 @@ public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
 }
 
 /// Parameters for the combined challenge-and-verify operation.
+@available(*, deprecated, message: "Use AuthMFA.challengeAndVerify(factorID:code:) instead.")
 public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
   /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
@@ -1356,6 +1378,7 @@ public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
 }
 
 /// A type alias that maps an MFA verify response to a ``Session``.
+@available(*, deprecated, message: "Use Session instead.")
 public typealias AuthMFAVerifyResponse = Session
 
 /// The response returned after successfully unenrolling an MFA factor.
@@ -1365,6 +1388,7 @@ public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
 }
 
 /// The response returned by ``AuthMFA/listFactors()``.
+@available(*, deprecated, message: "Use MFAFactors instead.")
 public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
   /// All available factors (verified and unverified).
   public let all: [Factor]
@@ -1377,6 +1401,198 @@ public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
 
   /// Only verified WebAuthn (passkey) factors. (A subset of `all`.)
   @_spi(Experimental) public let webauthn: [Factor]
+}
+
+/// A TOTP factor created by ``AuthMFA/enrollTOTP(issuer:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters a code from their authenticator app in
+/// ``AuthMFA/challengeAndVerify(factorID:code:)``.
+public struct TOTPEnrollment: Identifiable, Hashable, Sendable {
+  /// ID of the new factor.
+  public var id: UUID
+
+  /// Friendly name of the factor, useful to tell several factors apart.
+  public var friendlyName: String?
+
+  /// A QR code that encodes ``uri``, as an SVG document. Display it by prefixing
+  /// `data:image/svg+xml;utf-8,`. Avoid logging this value.
+  public var qrCode: String
+
+  /// The TOTP secret, also encoded in the QR code. Show it in a password-style field for users who
+  /// cannot scan the QR code. Avoid logging this value.
+  public var secret: String
+
+  /// The `otpauth://` URI encoded in the QR code. Avoid logging this value.
+  public var uri: String
+
+  /// Creates a ``TOTPEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    qrCode: String,
+    secret: String,
+    uri: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.qrCode = qrCode
+    self.secret = secret
+    self.uri = uri
+  }
+}
+
+extension TOTPEnrollment: Decodable {
+  // Camel case names: the client's decoder converts snake case keys before it matches them.
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName
+    case totp
+  }
+
+  private struct TOTP: Decodable {
+    let qrCode: String
+    let secret: String
+    let uri: String
+  }
+
+  /// Decodes an enrollment. Reads the QR code, the secret, and the URI from the nested `totp`
+  /// object.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let totp = try container.decode(TOTP.self, forKey: .totp)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      friendlyName: try container.decodeIfPresent(String.self, forKey: .friendlyName),
+      qrCode: totp.qrCode,
+      secret: totp.secret,
+      uri: totp.uri
+    )
+  }
+}
+
+/// A phone factor created by ``AuthMFA/enrollPhone(_:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters the code from
+/// ``AuthMFA/challenge(factorID:channel:)`` in ``AuthMFA/verify(factorID:challengeID:code:)``.
+public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
+  /// ID of the new factor.
+  public var id: UUID
+
+  /// Friendly name of the factor, useful to tell several factors apart.
+  public var friendlyName: String?
+
+  /// The phone number of the factor, in E.164 format.
+  public var phone: String
+
+  /// Creates a ``PhoneEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    phone: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.phone = phone
+  }
+}
+
+/// A challenge created by ``AuthMFA/challenge(factorID:channel:)``.
+public struct MFAChallenge: Identifiable, Hashable, Sendable {
+  /// ID of the challenge. Pass it to ``AuthMFA/verify(factorID:challengeID:code:)``.
+  public var id: UUID
+
+  /// The type of the factor that was challenged.
+  public var factorType: FactorType
+
+  /// The time after which the challenge can no longer be verified.
+  public var expiresAt: Date
+
+  /// Creates a ``MFAChallenge``.
+  public init(
+    id: UUID,
+    factorType: FactorType,
+    expiresAt: Date
+  ) {
+    self.id = id
+    self.factorType = factorType
+    self.expiresAt = expiresAt
+  }
+}
+
+extension MFAChallenge: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case type
+    case expiresAt
+  }
+
+  /// Decodes a challenge. Reads ``factorType`` from `type` and `expires_at` as a Unix timestamp.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      factorType: try container.decode(FactorType.self, forKey: .type),
+      expiresAt: Date(
+        timeIntervalSince1970: try container.decode(TimeInterval.self, forKey: .expiresAt))
+    )
+  }
+}
+
+/// The user's MFA factors, returned by ``AuthMFA/factors()``.
+public struct MFAFactors: Hashable, Sendable {
+  /// Factors the user has verified. Only these count toward reaching `aal2`.
+  public var verified: [Factor]
+
+  /// Factors the user has enrolled but not verified yet.
+  public var unverified: [Factor]
+
+  /// Creates a ``MFAFactors``.
+  public init(
+    verified: [Factor],
+    unverified: [Factor]
+  ) {
+    self.verified = verified
+    self.unverified = unverified
+  }
+
+  /// Every factor: ``verified`` first, then ``unverified``.
+  public var all: [Factor] { verified + unverified }
+}
+
+extension MFAFactors {
+  /// Splits `factors` by status. A status other than ``FactorStatus/verified`` counts as
+  /// unverified, because only a verified factor can raise the assurance level.
+  init(_ factors: [Factor]) {
+    self.init(
+      verified: factors.filter { $0.status == .verified },
+      unverified: factors.filter { $0.status != .verified }
+    )
+  }
+}
+
+/// The assurance level of the current session, returned by ``AuthMFA/assuranceLevel()``.
+public struct AssuranceLevelInfo: Hashable, Sendable {
+  /// The assurance level of the current access token. `nil` when the token has no `aal` claim.
+  public var currentLevel: AuthenticatorAssuranceLevel?
+
+  /// The highest level the user can reach. When it is above ``currentLevel``, ask the user to
+  /// verify a factor.
+  public var nextLevel: AuthenticatorAssuranceLevel?
+
+  /// The methods attached to the session. Use them to find when the user last verified a factor,
+  /// for example in a step-up flow.
+  public var currentAuthenticationMethods: [AMREntry]
+
+  /// Creates an ``AssuranceLevelInfo``.
+  public init(
+    currentLevel: AuthenticatorAssuranceLevel? = nil,
+    nextLevel: AuthenticatorAssuranceLevel? = nil,
+    currentAuthenticationMethods: [AMREntry]
+  ) {
+    self.currentLevel = currentLevel
+    self.nextLevel = nextLevel
+    self.currentAuthenticationMethods = currentAuthenticationMethods
+  }
 }
 
 /// A string representing an Authenticator Assurance Level (`aal1` or `aal2`).
@@ -1435,6 +1651,7 @@ extension AMREntry {
 }
 
 /// The response returned by ``AuthMFA/getAuthenticatorAssuranceLevel()``.
+@available(*, deprecated, message: "Use AssuranceLevelInfo instead.")
 public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
   /// Current AAL level of the session.
   public let currentLevel: String?
