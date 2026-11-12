@@ -223,6 +223,25 @@ Ensures that the DocC documentation builds without broken links, and that each a
 `.docc` catalog is linked from the landing page of its catalog
 (`./scripts/check-docc-curation.sh`).
 
+### Compiled snippets
+
+The Swift snippets of `README.md` are compiled with the tests. `./scripts/check-doc-snippets.sh`
+copies each ` ```swift ` fence into `Tests/DocSnippetsTests/READMESnippets.swift`, one function for
+each snippet, so `swift build --build-tests` fails when a snippet no longer compiles.
+
+```bash
+# After you change a snippet in README.md
+./scripts/check-doc-snippets.sh --update
+```
+
+- CI fails when the generated file does not match `README.md`.
+- A snippet can use `client`, a `SupabaseClient`. Put other names that an app defines itself in
+  `Tests/DocSnippetsTests/Prelude.swift`.
+- Put `<!-- snippet: no-compile -->` on the line before a fence that cannot compile on its own,
+  such as a `Package.swift` fragment or a SwiftUI modifier.
+- To check another Markdown file, add it to `DOCS` in the script.
+- The script fails on a Swift fence that it cannot read, such as an indented one.
+
 ## Running a Local Supabase Stack
 
 On macOS, always start local Supabase with the CLI's experimental native stack. It runs every
