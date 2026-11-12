@@ -18,7 +18,7 @@ public struct FunctionBody: Sendable {
   public let contentType: String
 
   /// The bytes sent as the request body.
-  public let data: Data
+  let data: Data
 
   /// Encodes `value` as JSON with `Content-Type: application/json`.
   /// - Parameters:

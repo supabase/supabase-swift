@@ -38,11 +38,6 @@ public enum FunctionsError: Error, LocalizedError {
   /// A human-readable description of the failure.
   public var message: String { errorDescription ?? "" }
 
-  /// The HTTP status code of a ``Kind-swift.struct/server`` failure, `nil` otherwise.
-  public var statusCode: Int? {
-    if case .httpError(let code, _) = self { code } else { nil }
-  }
-
   /// A localized description of the error.
   public var errorDescription: String? {
     switch self {

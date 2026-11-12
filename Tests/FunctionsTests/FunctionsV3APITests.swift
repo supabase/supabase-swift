@@ -147,17 +147,71 @@ struct FunctionsV3APITests {
   }
 
   @Test
+  func v2CallFormsKeepTheVoidOverload() async throws {
+    let sut = makeSUT()
+    Mock(url: url.appendingPathComponent("fn"), statusCode: 200, data: [.post: Data("ok".utf8)])
+      .register()
+
+    var tasks: Set<Task<Void, any Error>> = []
+    let task = Task { try await sut.invoke("fn") }
+    tasks.insert(task)
+    let _: Void = try await task.value
+
+    func run(_ work: () async throws -> Void) async rethrows { try await work() }
+    let work = { try await sut.invoke("fn") }
+    try await run(work)
+
+    try? await sut.invoke("fn")
+
+    let withOptions = Task { try await sut.invoke("fn", options: FunctionInvokeOptions()) }
+    tasks.insert(withOptions)
+    try await withOptions.value
+
+    #expect(tasks.count == 2)
+  }
+
+  @Test
+  func v3CallFormsSelectTheResponseOverload() async throws {
+    let sut = makeSUT()
+    Mock(url: url.appendingPathComponent("fn"), statusCode: 200, data: [.post: Data("ok".utf8)])
+      .register()
+
+    let annotated: FunctionResponse = try await sut.invoke("fn")
+    #expect(annotated.text == "ok")
+
+    let coerced = try await sut.invoke("fn") as FunctionResponse
+    #expect(coerced.status == .ok)
+
+    let withBody = try await sut.invoke("fn", body: .json(["a": 1]))
+    #expect(withBody.text == "ok")
+
+    let withBodyAndOptions = try await sut.invoke(
+      "fn", body: .json(["a": 1]), options: FunctionInvokeOptions(method: .post))
+    #expect(withBodyAndOptions.text == "ok")
+
+    let withNilBody = try await sut.invoke("fn", body: nil, options: FunctionInvokeOptions())
+    #expect(withNilBody.text == "ok")
+
+    #expect(try await sut.invoke("fn").text == "ok")
+
+    try await sut.invoke("fn", body: .text("discarded result"))
+  }
+
+  @Test
   func invokeThrowsServerKind() async throws {
     let sut = makeSUT()
     Mock(url: url.appendingPathComponent("boom"), statusCode: 500, data: [.post: Data("x".utf8)])
       .register()
 
     do {
-      try await sut.invoke("boom")
+      let _: FunctionResponse = try await sut.invoke("boom")
       Issue.record("should throw")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.statusCode == 500)
+      guard case .httpError(code: 500, _) = error else {
+        Issue.record("unexpected error: \(error)")
+        return
+      }
       #expect(error.message == "Edge Function returned a non-2xx status code: 500")
     }
   }
@@ -171,11 +225,10 @@ struct FunctionsV3APITests {
     ).register()
 
     do {
-      try await sut.invoke("relay")
+      let _: FunctionResponse = try await sut.invoke("relay")
       Issue.record("should throw")
     } catch let error as FunctionsError {
       #expect(error.kind == .relay)
-      #expect(error.statusCode == nil)
       #expect(error.message == "Relay Error invoking the Edge Function")
     }
   }
@@ -216,7 +269,10 @@ struct FunctionsV3APITests {
       Issue.record("should throw")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.statusCode == 502)
+      guard case .httpError(code: 502, _) = error else {
+        Issue.record("unexpected error: \(error)")
+        return
+      }
     }
   }
 

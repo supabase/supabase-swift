@@ -194,6 +194,17 @@ public final class FunctionsClient: Sendable {
   }
 
   /// Invokes a function and returns the buffered response.
+  ///
+  /// A call that has no `body:` argument and no ``FunctionResponse`` result type selects the
+  /// deprecated v2 method that returns `Void`, so that v2 call sites keep their type. To select
+  /// this method, pass `body:` or state the result type:
+  ///
+  /// ```swift
+  /// try await functions.invoke("send-email", body: .json(["to": "user@example.com"]))
+  /// let response: FunctionResponse = try await functions.invoke("ping")
+  /// let text = try await functions.invoke("ping").text
+  /// ```
+  ///
   /// - Parameters:
   ///   - name: The name of the function to invoke.
   ///   - body: The request body, or `nil` to send none.
@@ -201,6 +212,7 @@ public final class FunctionsClient: Sendable {
   /// - Returns: The status, headers and body of the response.
   /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
   @discardableResult
+  @_disfavoredOverload
   public func invoke(
     _ name: String,
     body: FunctionBody? = nil,
@@ -282,8 +294,11 @@ public final class FunctionsClient: Sendable {
   ///   - functionName: The name of the function to invoke.
   ///   - options: Options for the invocation.
   /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error.
-  @available(*, deprecated, message: "Use invoke(_:body:options:) instead.")
-  @_disfavoredOverload
+  @available(
+    *, deprecated,
+    message:
+      "Use invoke(_:body:options:) instead. Pass body: or state the FunctionResponse result type to select it."
+  )
   public func invoke(
     _ functionName: String,
     options: FunctionInvokeOptions = .init()
