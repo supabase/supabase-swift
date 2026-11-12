@@ -20,7 +20,7 @@ let version = Helpers.version
 /// // Invoke with a body and no return value
 /// try await supabase.functions.invoke(
 ///   "send-email",
-///   options: FunctionInvokeOptions(body: ["to": "user@example.com"])
+///   body: .json(["to": "user@example.com"])
 /// )
 /// ```
 ///
@@ -31,6 +31,11 @@ let version = Helpers.version
 /// - ``FetchHandler``
 ///
 /// ### Invoking Functions
+/// - ``invoke(_:body:options:)``
+/// - ``invoke(_:body:options:as:decoder:)``
+/// - ``stream(_:body:options:)``
+///
+/// ### Deprecated
 /// - ``invoke(_:options:decode:)``
 /// - ``invoke(_:options:decoder:)``
 /// - ``invoke(_:options:)``
@@ -49,7 +54,7 @@ public final class FunctionsClient: Sendable {
 
   /// The maximum time an Edge Function may run before the gateway returns a 504 error (150 seconds).
   ///
-  /// Can be overridden per-invocation via ``FunctionInvokeOptions/timeoutInterval``.
+  /// Can be overridden per-invocation via ``FunctionInvokeOptions/timeout``.
   public static let requestIdleTimeout: TimeInterval = 150
 
   /// The base URL for the functions.
@@ -317,7 +322,8 @@ public final class FunctionsClient: Sendable {
   ///   - options: Options for the invocation.
   /// - Returns: The response head and the body as an asynchronous stream of `Data` chunks.
   /// - Throws: ``FunctionsError`` if the function returns a non-2xx status or a relay error, or
-  ///   a `URLError` if the connection fails before the response head arrives.
+  ///   a `URLError` if the connection fails before the response head arrives, or
+  ///   `CancellationError` if the task is cancelled before the response head arrives.
   public func stream(
     _ name: String,
     body: FunctionBody? = nil,
@@ -330,7 +336,12 @@ public final class FunctionsClient: Sendable {
       head = response
       break
     }
-    guard let head else { throw URLError(.badServerResponse) }
+    guard let head else {
+      let error: any Error =
+        Task.isCancelled ? CancellationError() : URLError(.badServerResponse)
+      delegate.continuation.finish(throwing: error)
+      throw error
+    }
 
     return FunctionStreamResponse(
       status: HTTPTypes.HTTPResponse.Status(code: head.statusCode),
@@ -382,15 +393,21 @@ public final class FunctionsClient: Sendable {
     return (stream, delegate)
   }
 
-  private func buildRequest(
+  func buildRequest(
     functionName: String, body: FunctionBody?, options: FunctionInvokeOptions
   ) -> Helpers.HTTPRequest {
     var query = options.query
     var headers = mutableState.headers
+    var optionHeaders = options.headers
     if let body {
       headers[.contentType] = body.contentType
+      if let defaultContentType = options.bodyDefaultContentType,
+        optionHeaders[.contentType] == defaultContentType
+      {
+        optionHeaders[.contentType] = nil
+      }
     }
-    headers.merge(with: options.headers)
+    headers.merge(with: optionHeaders)
 
     var request = Helpers.HTTPRequest(
       url: url.appendingPathComponent(functionName),
@@ -398,7 +415,8 @@ public final class FunctionsClient: Sendable {
       query: query,
       headers: headers,
       body: body?.data ?? options.body,
-      timeoutInterval: options.timeout?.timeInterval ?? FunctionsClient.requestIdleTimeout
+      timeoutInterval: options.legacyTimeoutInterval ?? options.timeout?.timeInterval
+        ?? FunctionsClient.requestIdleTimeout
     )
 
     if let region = options.region?.rawValue ?? region {

@@ -1,5 +1,6 @@
 import Foundation
 import HTTPTypes
+import Helpers
 import Mocker
 import TestHelpers
 import Testing
@@ -79,7 +80,7 @@ struct FunctionsV3APITests {
   @Test
   func invokeSendsBodyHeadersMethodQueryAndRegion() async throws {
     let sut = makeSUT()
-    let captured = LockedBox<URLRequest?>(nil)
+    let captured = CapturedRequest()
 
     var mock = Mock(
       url: url.appendingPathComponent("echo"),
@@ -93,7 +94,7 @@ struct FunctionsV3APITests {
         "Content-Type": "application/json",
       ]
     )
-    mock.onRequestHandler = OnRequestHandler { request in captured.value = request }
+    mock.onRequestHandler = captured.handler
     mock.register()
 
     let response = try await sut.invoke(
@@ -115,7 +116,8 @@ struct FunctionsV3APITests {
     #expect(response.requestID == "req-1")
     #expect(response.text == #"{"ok":true}"#)
 
-    let request = try #require(captured.value)
+    let request = try #require(captured.request)
+    #expect(captured.body == Data(#"{"a":1}"#.utf8))
     #expect(request.httpMethod == "PUT")
     #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
     #expect(request.value(forHTTPHeaderField: "X-Custom") == "v")
@@ -156,6 +158,7 @@ struct FunctionsV3APITests {
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
       #expect(error.statusCode == 500)
+      #expect(error.message == "Edge Function returned a non-2xx status code: 500")
     }
   }
 
@@ -173,20 +176,27 @@ struct FunctionsV3APITests {
     } catch let error as FunctionsError {
       #expect(error.kind == .relay)
       #expect(error.statusCode == nil)
+      #expect(error.message == "Relay Error invoking the Edge Function")
     }
   }
 
   @Test
   func streamReturnsHeadAndBody() async throws {
     let sut = makeSUT()
-    Mock(
+    let captured = CapturedRequest()
+    var mock = Mock(
       url: url.appendingPathComponent("stream"),
       statusCode: 200,
       data: [.post: Data("hello world".utf8)],
       additionalHeaders: ["x-sb-edge-region": "eu-west-1"]
-    ).register()
+    )
+    mock.onRequestHandler = captured.handler
+    mock.register()
 
     let response = try await sut.stream("stream", body: .text("go"))
+    #expect(captured.body == Data("go".utf8))
+    #expect(
+      captured.request?.value(forHTTPHeaderField: "Content-Type") == "text/plain; charset=utf-8")
     #expect(response.status.code == 200)
     #expect(response.region == .euWest1)
 
@@ -227,6 +237,161 @@ struct FunctionsV3APITests {
   }
 
   @Test
+  func streamThrowsTransportErrorBeforeHead() async throws {
+    let sut = makeSUT()
+    Mock(
+      url: url.appendingPathComponent("stream"), statusCode: 200, data: [.post: Data()],
+      requestError: URLError(.notConnectedToInternet)
+    ).register()
+
+    do {
+      _ = try await sut.stream("stream")
+      Issue.record("should throw")
+    } catch let error as URLError {
+      #expect(error.code == .notConnectedToInternet)
+    }
+  }
+
+  @Test
+  func streamThrowsCancellationErrorWhenCancelledBeforeHead() async throws {
+    let sut = makeSUT()
+    var mock = Mock(
+      url: url.appendingPathComponent("slow"), statusCode: 200, data: [.post: Data("late".utf8)])
+    mock.delay = .seconds(2)
+    mock.register()
+
+    let task = Task { try await sut.stream("slow") }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) {
+      _ = try await task.value
+    }
+  }
+
+  @Test
+  func optionsContentTypeOverridesBodyContentType() async throws {
+    let sut = makeSUT()
+    let captured = CapturedRequest()
+    var mock = Mock(
+      url: url.appendingPathComponent("echo"), statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = captured.handler
+    mock.register()
+
+    try await sut.invoke(
+      "echo",
+      body: .json(["a": 1]),
+      options: .init(headers: [.contentType: "application/vnd.custom+json"])
+    )
+
+    #expect(
+      captured.request?.value(forHTTPHeaderField: "Content-Type") == "application/vnd.custom+json")
+    #expect(captured.body == Data(#"{"a":1}"#.utf8))
+  }
+
+  @Test
+  func functionBodyContentTypeWinsOverDeprecatedBodyInitializerDefault() async throws {
+    let sut = makeSUT()
+    let captured = CapturedRequest()
+    var mock = Mock(
+      url: url.appendingPathComponent("echo"), statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = captured.handler
+    mock.register()
+
+    try await sut.invoke(
+      "echo",
+      body: .text("new-body"),
+      options: FunctionInvokeOptions(body: ["old": "body"])
+    )
+
+    #expect(
+      captured.request?.value(forHTTPHeaderField: "Content-Type") == "text/plain; charset=utf-8")
+    #expect(captured.body == Data("new-body".utf8))
+  }
+
+  @Test
+  func callerContentTypeOnDeprecatedBodyInitializerWinsOverFunctionBody() async throws {
+    let sut = makeSUT()
+    let captured = CapturedRequest()
+    var mock = Mock(
+      url: url.appendingPathComponent("echo"), statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = captured.handler
+    mock.register()
+
+    try await sut.invoke(
+      "echo",
+      body: .text("new-body"),
+      options: FunctionInvokeOptions(
+        headers: ["content-type": "application/json"], body: ["old": "body"])
+    )
+
+    #expect(captured.request?.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    #expect(captured.body == Data("new-body".utf8))
+  }
+
+  @Test
+  func deprecatedBodyInitializerStillSendsItsBodyAndContentType() async throws {
+    let sut = makeSUT()
+    let captured = CapturedRequest()
+    var mock = Mock(
+      url: url.appendingPathComponent("echo"), statusCode: 200, data: [.post: Data()])
+    mock.onRequestHandler = captured.handler
+    mock.register()
+
+    try await sut.invoke("echo", options: FunctionInvokeOptions(body: "old-body"))
+
+    #expect(captured.request?.value(forHTTPHeaderField: "Content-Type") == "text/plain")
+    #expect(captured.body == Data("old-body".utf8))
+  }
+
+  @Test(arguments: [TimeInterval.infinity, .greatestFiniteMagnitude, 1e20, -1e20])
+  func deprecatedTimeoutIntervalKeepsValuesDurationCannotHold(timeoutInterval: TimeInterval) {
+    let sut = makeSUT()
+
+    let options = [
+      FunctionInvokeOptions(timeoutInterval: timeoutInterval),
+      FunctionInvokeOptions(region: FunctionRegion.usEast1, timeoutInterval: timeoutInterval),
+      FunctionInvokeOptions(body: "b", timeoutInterval: timeoutInterval),
+      FunctionInvokeOptions(
+        region: FunctionRegion.usEast1, body: "b", timeoutInterval: timeoutInterval),
+    ]
+
+    for options in options {
+      let request = sut.buildRequest(functionName: "fn", body: nil, options: options)
+      #expect(request.timeoutInterval == timeoutInterval)
+    }
+  }
+
+  @Test
+  func deprecatedTimeoutIntervalKeepsNaN() {
+    let sut = makeSUT()
+    let options = FunctionInvokeOptions(timeoutInterval: .nan)
+    let request = sut.buildRequest(functionName: "fn", body: nil, options: options)
+    #expect(request.timeoutInterval.isNaN)
+    #expect(options.timeout == nil)
+  }
+
+  @Test
+  func deprecatedTimeoutIntervalIsReadableAsTimeoutAndReplaceable() {
+    let sut = makeSUT()
+
+    var options = FunctionInvokeOptions(timeoutInterval: 12.5)
+    #expect(options.timeout == .milliseconds(12500))
+    #expect(
+      sut.buildRequest(functionName: "fn", body: nil, options: options).timeoutInterval == 12.5)
+    #expect(options == FunctionInvokeOptions(timeout: .milliseconds(12500)))
+
+    options = FunctionInvokeOptions(timeoutInterval: .infinity)
+    #expect(options.timeout != nil)
+    options.timeout = .seconds(5)
+    #expect(sut.buildRequest(functionName: "fn", body: nil, options: options).timeoutInterval == 5)
+
+    options.timeout = nil
+    #expect(
+      sut.buildRequest(functionName: "fn", body: nil, options: options).timeoutInterval
+        == FunctionsClient.requestIdleTimeout)
+  }
+
+  @Test
   func regionConstants() {
     #expect(FunctionRegion.euCentral2.rawValue == "eu-central-2")
     let literal: FunctionRegion = "custom"
@@ -234,12 +399,34 @@ struct FunctionsV3APITests {
   }
 }
 
-private final class LockedBox<Value: Sendable>: @unchecked Sendable {
+private final class CapturedRequest: @unchecked Sendable {
   private let lock = NSLock()
-  private var _value: Value
-  init(_ value: Value) { _value = value }
-  var value: Value {
-    get { lock.withLock { _value } }
-    set { lock.withLock { _value = newValue } }
+  private var _request: URLRequest?
+  private var _body: Data?
+
+  var request: URLRequest? { lock.withLock { _request } }
+  var body: Data? { lock.withLock { _body } }
+
+  var handler: OnRequestHandler {
+    OnRequestHandler { request in
+      let body = request.httpBody ?? request.httpBodyStream.map(Self.read)
+      self.lock.withLock {
+        self._request = request
+        self._body = body
+      }
+    }
+  }
+
+  private static func read(_ stream: InputStream) -> Data {
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 1024)
+    while stream.hasBytesAvailable {
+      let count = stream.read(&buffer, maxLength: buffer.count)
+      guard count > 0 else { break }
+      data.append(buffer, count: count)
+    }
+    return data
   }
 }

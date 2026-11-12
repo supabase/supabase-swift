@@ -82,10 +82,21 @@ public struct FunctionInvokeOptions: Sendable, Hashable {
 
   /// A per-invocation override for the request timeout. Defaults to
   /// ``FunctionsClient/requestIdleTimeout`` when `nil`.
-  public var timeout: Duration?
+  public var timeout: Duration? {
+    didSet { legacyTimeoutInterval = nil }
+  }
 
   /// Body carried by the deprecated `body:` initializers.
   var body: Data?
+
+  /// The `Content-Type` a deprecated `body:` initializer added to ``headers`` on its own, `nil`
+  /// when the caller set the header.
+  var bodyDefaultContentType: String?
+
+  /// The value a deprecated `timeoutInterval:` initializer received, kept only when ``timeout``
+  /// cannot hold it exactly. `Duration` traps for `.infinity`, `.nan` and very large values, and
+  /// v2 passes them to the request unchanged.
+  var legacyTimeoutInterval: TimeInterval?
 
   /// Creates options for a function invocation.
   /// - Parameters:
@@ -118,10 +129,16 @@ public struct FunctionInvokeOptions: Sendable, Hashable {
   ///     `application/octet-stream`, and all other `Encodable` values as JSON.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
   ///   - timeoutInterval: A per-invocation override for the request timeout.
+  ///
+  /// > Important: ``FunctionBody`` does not encode the same bytes by default.
+  /// > ``FunctionBody/json(_:encoder:)`` encodes every `Encodable` value as JSON, a `String`
+  /// > included, and encodes a `Date` as an ISO 8601 string. Pass `encoder: JSONEncoder()` to keep
+  /// > the JSON of this initializer. Use ``FunctionBody/text(_:)`` for a `String` (it sends
+  /// > `text/plain; charset=utf-8`) and ``FunctionBody/data(_:contentType:)`` for `Data`.
   @available(
     *, deprecated,
     message:
-      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:)."
+      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:). FunctionBody.json(_:encoder:) encodes dates as ISO 8601 strings by default; pass encoder: JSONEncoder() to keep this initializer's JSON. Use FunctionBody.text(_:) for a String and FunctionBody.data(_:contentType:) for Data."
   )
   @_disfavoredOverload
   public init(
@@ -148,14 +165,19 @@ public struct FunctionInvokeOptions: Sendable, Hashable {
       encodedBody = try? encoder.encode(body)
     }
 
+    let callerHeaders = HTTPFields(headers)
+
     self.init(
       method: method?.httpTypesMethod ?? .post,
-      headers: defaultHeaders.merging(with: HTTPFields(headers)),
+      headers: defaultHeaders.merging(with: callerHeaders),
       query: query,
       region: region.map(FunctionRegion.init(rawValue:)),
-      timeout: timeoutInterval.map { .seconds($0) }
+      timeout: timeoutInterval.flatMap(Duration.init(clamping:))
     )
     self.body = encodedBody
+    self.bodyDefaultContentType =
+      callerHeaders[.contentType] == nil ? defaultHeaders[.contentType] : nil
+    self.legacyTimeoutInterval = timeoutInterval == timeout?.timeInterval ? nil : timeoutInterval
   }
 
   /// Creates options for a function invocation with no body.
@@ -181,8 +203,9 @@ public struct FunctionInvokeOptions: Sendable, Hashable {
       headers: HTTPFields(headers),
       query: query,
       region: region.map(FunctionRegion.init(rawValue:)),
-      timeout: timeoutInterval.map { .seconds($0) }
+      timeout: timeoutInterval.flatMap(Duration.init(clamping:))
     )
+    self.legacyTimeoutInterval = timeoutInterval == timeout?.timeInterval ? nil : timeoutInterval
   }
 
   /// The HTTP method to use when invoking a function.
@@ -214,6 +237,20 @@ public struct FunctionInvokeOptions: Sendable, Hashable {
 extension Duration {
   var timeInterval: TimeInterval {
     TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / 1e18
+  }
+
+  /// `Duration.seconds(_:)` traps for a `Double` outside its range, so this clamps to the largest
+  /// whole-second magnitude. Returns `nil` for `.nan`.
+  init?(clamping timeInterval: TimeInterval) {
+    guard !timeInterval.isNaN else { return nil }
+    let limit = TimeInterval(Int64.max)
+    if timeInterval >= limit {
+      self = .seconds(Int64.max)
+    } else if timeInterval <= -limit {
+      self = .seconds(Int64.min)
+    } else {
+      self = .seconds(timeInterval)
+    }
   }
 }
 
@@ -269,10 +306,16 @@ extension FunctionInvokeOptions {
   ///   - body: The body to encode and send.
   ///   - encoder: The JSON encoder used when `body` is encoded as JSON.
   ///   - timeoutInterval: A per-invocation override for the request timeout.
+  ///
+  /// > Important: ``FunctionBody`` does not encode the same bytes by default.
+  /// > ``FunctionBody/json(_:encoder:)`` encodes every `Encodable` value as JSON, a `String`
+  /// > included, and encodes a `Date` as an ISO 8601 string. Pass `encoder: JSONEncoder()` to keep
+  /// > the JSON of this initializer. Use ``FunctionBody/text(_:)`` for a `String` (it sends
+  /// > `text/plain; charset=utf-8`) and ``FunctionBody/data(_:contentType:)`` for `Data`.
   @available(
     *, deprecated,
     message:
-      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:)."
+      "Pass the body as a FunctionBody to invoke(_:body:options:) and use init(method:headers:query:region:timeout:). FunctionBody.json(_:encoder:) encodes dates as ISO 8601 strings by default; pass encoder: JSONEncoder() to keep this initializer's JSON. Use FunctionBody.text(_:) for a String and FunctionBody.data(_:contentType:) for Data."
   )
   @_disfavoredOverload
   public init(
