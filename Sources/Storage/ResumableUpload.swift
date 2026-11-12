@@ -59,7 +59,8 @@ public actor ResumableUpload {
     /// Gave up. A transport failure keeps the record, so ``ResumableUpload/resume()`` can try
     /// again; a server rejection removes it.
     case failed(StorageError)
-    /// Stopped by ``ResumableUpload/cancel()``; the server's copy and the record are gone.
+    /// Stopped by ``ResumableUpload/cancel()``; the server's copy and the record are gone, unless
+    /// another handle for the same upload drives them.
     case cancelled
 
     var isTerminal: Bool {
@@ -96,7 +97,13 @@ public actor ResumableUpload {
   /// Where the upload is now. ``statusChanges()`` reports every change.
   public private(set) var status: Status {
     didSet {
-      statusBroadcaster.yield(status)
+      if oldValue.isTerminal, !status.isTerminal {
+        // resume() revives a failed upload, so new observers follow it again.
+        statusBroadcaster.reopen(with: status)
+        progressBroadcaster.reopen()
+      } else {
+        statusBroadcaster.yield(status)
+      }
       if status.isTerminal {
         statusBroadcaster.finish()
         progressBroadcaster.finish()
@@ -238,7 +245,7 @@ public actor ResumableUpload {
     guard case .pending = status, !startInProgress else { return }
     startInProgress = true
     let key = liveKey
-    claimLive(key)
+    let claimed = claimLive(key)
     defer {
       startInProgress = false
       startWaiters.forEach { $0.resume() }
@@ -248,6 +255,8 @@ public actor ResumableUpload {
       default: releaseStart(key)
       }
     }
+    // Another handle has started on this upload and drives it; a second loop would race it.
+    guard claimed else { return }
     do {
       let record = try await loadOrCreateRecord()
       self.record = record
@@ -267,13 +276,16 @@ public actor ResumableUpload {
   /// Marks this handle as the one driving its record, so ``ResumableUploadRegistry/clear()``
   /// keeps the record and a second handle is never made for it. Takes the entry from another
   /// handle that has not started, such as one ``ResumableUploadRegistry/pending()`` made after
-  /// this one failed.
-  private func claimLive(_ key: String) {
+  /// this one failed. Returns `false` when another handle has started on the record.
+  @discardableResult
+  private func claimLive(_ key: String) -> Bool {
     Self.live.withValue { live in
       let entry = live[key]
-      if entry?.upload == nil || entry?.upload === self || entry?.started != true {
-        live[key] = Live(upload: self, started: true)
+      guard entry?.upload == nil || entry?.upload === self || entry?.started != true else {
+        return false
       }
+      live[key] = Live(upload: self, started: true)
+      return true
     }
   }
 
@@ -292,15 +304,30 @@ public actor ResumableUpload {
     status = .paused
   }
 
-  /// Continues a paused or failed upload from the offset the server reports.
+  /// Continues a paused or failed upload from the offset the server reports. When ``start()``
+  /// failed with a transport error before the upload existed on the server, creates it again.
+  ///
+  /// - Throws: The ``StorageError`` the server refused the upload with when ``start()`` failed
+  ///   that way, or the error the new attempt fails with.
   public func resume() async throws {
     guard canResume else { return }
     await loop?.value
     guard canResume else { return }
-    guard record != nil else { return try await start() }
+    guard record != nil else { return try await startAgain() }
     claimLive(liveKey)
     status = .uploading
     startLoop(from: 0, next: .resync)
+  }
+
+  /// Runs ``start()`` again after it failed before the upload existed on the server. Only a
+  /// transport failure is worth another attempt; the server would refuse the same upload again.
+  private func startAgain() async throws {
+    if case .failed(let error) = status, error.kind != .transport { throw error }
+    // Another handle made the upload since; it drives it, and this handle stays failed.
+    guard claimLive(liveKey) else { return }
+    // .pending, not a terminal status, so cancel() and statusChanges() follow the new attempt.
+    status = .pending
+    try await start()
   }
 
   private var canResume: Bool {
@@ -315,6 +342,10 @@ public actor ResumableUpload {
   /// looking up the upload, waits for that request to end first, so the server's copy it makes
   /// is deleted too. A call made while an earlier one is still cleaning up waits for it.
   /// Cancelling the calling task does not stop the cleanup.
+  ///
+  /// A handle that never loaded the record, such as one ``ResumableUploadRegistry/pending()``
+  /// made, leaves the record and the server's copy alone when another handle for the same
+  /// upload has started; only this handle is cancelled, and the other one goes on.
   public func cancel() async {
     if let cancellation { return await cancellation.value }
     guard !status.isTerminal else { return }
@@ -331,10 +362,16 @@ public actor ResumableUpload {
       await withCheckedContinuation { startWaiters.append($0) }
     }
     await loop?.value
-    if let record = record ?? (try? store.record(fingerprint: fingerprint)) {
+    if let record {
       await discard(record)
-    } else {
-      store.removeFiles(fingerprint: fingerprint)
+    } else if claimLive(liveKey) {
+      // Without a record of its own, this handle deletes the one on disk only when no other
+      // handle has started on it; otherwise the record and the server's copy are that handle's.
+      if let record = try? store.record(fingerprint: fingerprint) {
+        await discard(record)
+      } else {
+        store.removeFiles(fingerprint: fingerprint)
+      }
     }
     dropLive()
   }
@@ -551,6 +588,15 @@ final class StreamBroadcaster<Element: Sendable>: Sendable {
     subscribers.withValue { subscribers in
       subscribers.latest = element
       for continuation in subscribers.continuations.values { continuation.yield(element) }
+    }
+  }
+
+  /// Lets new consumers follow later elements again after ``finish()``. With `element`, it
+  /// becomes the latest in the same step, so no new consumer sees the one before it.
+  func reopen(with element: Element? = nil) {
+    subscribers.withValue { subscribers in
+      subscribers.finished = false
+      if let element { subscribers.latest = element }
     }
   }
 
