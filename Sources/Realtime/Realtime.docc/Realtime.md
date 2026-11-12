@@ -82,7 +82,7 @@ result, such as ``RealtimeChannel/subscribe()``, throw ``RealtimeError``. See <d
 - ``RealtimePostgresIsValue``
 - ``RealtimePostgresFilterValue``
 
-### Presence
+### Presence State
 
 - ``PresenceState``
 - ``PresenceEntry``
