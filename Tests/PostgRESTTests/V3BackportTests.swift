@@ -160,11 +160,25 @@ extension V3BackportTests {
 
   @Test
   func executeWithNilDecoderUsesTheClientDecoder() async throws {
-    let client = respondingClient(with: #"{"id":1,"username":"a"}"#)
+    let clientDecoder = JSONDecoder()
+    clientDecoder.dateDecodingStrategy = .secondsSince1970
+    let client = PostgrestClient(
+      configuration: PostgrestClient.Configuration(
+        url: URL(string: "http://localhost:54321/rest/v1")!,
+        fetch: { request in
+          (
+            Data(#"{"createdAt":10}"#.utf8),
+            HTTPURLResponse(
+              url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          )
+        },
+        decoder: clientDecoder
+      )
+    )
 
-    let user: User = try await client.from("t").select().execute(decoder: nil).value
+    let row: Row = try await client.from("t").select().execute(decoder: nil).value
 
-    #expect(user.id == 1)
+    #expect(row == Row(createdAt: Date(timeIntervalSince1970: 10)))
   }
 
   @Test
@@ -318,7 +332,7 @@ extension V3BackportTests {
   func settingHeaderMutatesTheReceiverAsTheV2BuildersDo() {
     let builder = client.from("t").select()
 
-    builder.settingHeader(name: .prefer, value: "tx=rollback")
+    _ = builder.settingHeader(name: .prefer, value: "tx=rollback")
 
     #expect(builder.mutableState.request.headers[.prefer] == "tx=rollback")
   }
@@ -482,5 +496,47 @@ extension V3BackportTests {
     #expect(configured.configuration.encoder === flat.configuration.encoder)
     #expect(configured.configuration.decoder === flat.configuration.decoder)
     #expect(configured.configuration.retryEnabled == flat.configuration.retryEnabled)
+  }
+}
+
+// MARK: - Result types of the new mutation overloads
+
+extension V3BackportTests {
+  private func staticType<T>(of _: T) -> T.Type { T.self }
+
+  @Test
+  func theNewInsertAndUpsertOverloadsReturnATransformBuilderAsV3Does() throws {
+    let inserted = try client.from("t").insert(["a": 1], defaultToNull: false)
+    let insertedWithEncoder = try client.from("t").insert(["a": 1], encoder: JSONEncoder())
+    let upserted = try client.from("t").upsert(["a": 1], defaultToNull: false)
+    let upsertedWithEncoder = try client.from("t").upsert(["a": 1], encoder: JSONEncoder())
+
+    #expect(staticType(of: inserted) == PostgrestTransformBuilder.self)
+    #expect(staticType(of: insertedWithEncoder) == PostgrestTransformBuilder.self)
+    #expect(staticType(of: upserted) == PostgrestTransformBuilder.self)
+    #expect(staticType(of: upsertedWithEncoder) == PostgrestTransformBuilder.self)
+  }
+
+  @Test
+  func v2InsertAndUpsertCallSitesStillReturnAFilterBuilder() throws {
+    let inserted = try client.from("t").insert(["a": 1])
+    let insertedWithOptions = try client.from("t").insert(
+      ["a": 1], returning: .minimal, count: .exact)
+    let upserted = try client.from("t").upsert(["a": 1])
+    let upsertedWithOptions = try client.from("t")
+      .upsert(["a": 1], onConflict: "a", returning: .minimal, count: .exact, ignoreDuplicates: true)
+    let annotatedInsert: PostgrestTransformBuilder = try client.from("t").insert(["a": 1])
+    let annotatedUpsert: PostgrestTransformBuilder = try client.from("t").upsert(["a": 1])
+    let annotatedBase: PostgrestBuilder = try client.from("t").insert(["a": 1])
+
+    #expect(staticType(of: inserted) == PostgrestFilterBuilder.self)
+    #expect(staticType(of: insertedWithOptions) == PostgrestFilterBuilder.self)
+    #expect(staticType(of: upserted) == PostgrestFilterBuilder.self)
+    #expect(staticType(of: upsertedWithOptions) == PostgrestFilterBuilder.self)
+    #expect(annotatedInsert is PostgrestFilterBuilder)
+    #expect(annotatedUpsert is PostgrestFilterBuilder)
+    #expect(annotatedBase is PostgrestFilterBuilder)
+    _ = try client.from("t").insert(["a": 1]).eq("a", value: 1).select()
+    _ = try client.from("t").upsert(["a": 1]).eq("a", value: 1).select()
   }
 }

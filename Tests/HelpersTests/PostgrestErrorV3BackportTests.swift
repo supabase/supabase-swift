@@ -94,7 +94,7 @@ struct PostgrestErrorV3BackportTests {
     let code: String? = serverError.code
 
     #expect(code == "23505")
-    #expect(code == PostgrestError.Code.uniqueViolation.rawValue)
+    #expect(PostgrestError.Code.uniqueViolation ~= serverError)
   }
 
   @Test
@@ -108,5 +108,54 @@ struct PostgrestErrorV3BackportTests {
       json
         == #"{"code":"23505","details":"Key (id)=(1) already exists.","hint":"Use a different id.","message":"duplicate key value"}"#
     )
+  }
+}
+
+/// A non-SDK error type that a string literal can express, as an app may declare.
+private struct AppErrorCode: RawRepresentable, Hashable, Error, ExpressibleByStringLiteral {
+  let rawValue: String
+
+  init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+}
+
+extension PostgrestErrorV3BackportTests {
+  @Test
+  func codeOperatorDoesNotCaptureStringLiteralPatternsOfOtherErrorTypes() {
+    let code = AppErrorCode(rawValue: "not_found")
+    var matched = false
+
+    switch code {
+    case "not_found": matched = true
+    default: break
+    }
+    if case "other" = code {
+      Issue.record("Matched the wrong literal.")
+    }
+
+    #expect(matched)
+  }
+
+  @Test
+  func stringLiteralStillMatchesAPostgrestErrorByCode() {
+    let error: any Error = PostgrestError(code: "23505", message: "duplicate")
+    var matched = false
+
+    do {
+      throw error
+    } catch PostgrestError.Code.uniqueViolation {
+      matched = true
+    } catch {
+      Issue.record("Did not match the code.")
+    }
+
+    #expect(matched)
+    #expect("23505" ~= error)
+    #expect(PostgrestError.Code.uniqueViolation ~= error)
   }
 }

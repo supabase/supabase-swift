@@ -20,16 +20,31 @@ public import Foundation
 /// }
 /// ```
 public struct PostgrestError: Error, Codable, Sendable {
+  private let storedDetails: String?
+  private let storedHint: String?
+
   /// Additional detail about the error, as returned by PostgREST in the `details` field.
-  public let details: String?
-  public let hint: String?
+  @available(*, deprecated, message: "Use serverError?.details instead.")
+  public var details: String? { storedDetails }
+
+  /// A hint on how to fix the problem, when PostgREST sends one.
+  @available(*, deprecated, message: "Use serverError?.hint instead.")
+  public var hint: String? { storedHint }
+
   /// The PostgreSQL or PostgREST error code, such as `"23505"` or `"PGRST116"`. `nil` when the
   /// server sent none. ``Code-swift.struct`` names the common codes.
   public let code: String?
   public let message: String
 
-  @available(*, deprecated, renamed: "details")
-  public var detail: String? { details }
+  @available(*, deprecated, message: "Use serverError?.details instead.")
+  public var detail: String? { storedDetails }
+
+  private enum CodingKeys: String, CodingKey {
+    case storedDetails = "details"
+    case storedHint = "hint"
+    case code
+    case message
+  }
 
   public init(
     details: String? = nil,
@@ -37,8 +52,8 @@ public struct PostgrestError: Error, Codable, Sendable {
     code: String? = nil,
     message: String
   ) {
-    self.hint = hint
-    self.details = details
+    self.storedHint = hint
+    self.storedDetails = details
     self.code = code
     self.message = message
   }
@@ -79,9 +94,10 @@ extension PostgrestError {
   /// }
   /// ```
   ///
-  /// > Note: In this version ``PostgrestError/code`` is still a `String?`. Compare it with
-  /// > ``rawValue``, for example `error.code == PostgrestError.Code.uniqueViolation.rawValue`,
-  /// > or with a string literal. The next major version changes the property to `Code?`.
+  /// > Note: In this version ``PostgrestError/code`` is still a `String?`, and the next major
+  /// > version changes it to `Code?`. To write code that compiles on both versions, use the
+  /// > `catch` pattern above, `PostgrestError.Code.uniqueViolation ~= error`, or compare with a
+  /// > string literal (`error.code == "23505"`).
   public struct Code: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
     /// The code as PostgREST sends it, such as `"23505"`.
     public let rawValue: String
@@ -154,7 +170,7 @@ extension PostgrestError {
   /// > with only the message set. The next major version returns `nil` for an error that did not
   /// > come from a PostgREST error body.
   public var serverError: ServerError? {
-    ServerError(message: message, details: details, hint: hint)
+    ServerError(message: message, details: storedDetails, hint: storedHint)
   }
 }
 
@@ -169,6 +185,9 @@ extension PostgrestError.Code {
   ///   showDuplicate()
   /// }
   /// ```
+  // Without this, the operator wins every string-literal pattern whose subject is an `Error` that
+  // a string literal can express, and such a pattern on an app's own type stops matching.
+  @_disfavoredOverload
   public static func ~= (code: PostgrestError.Code, error: any Error) -> Bool {
     (error as? PostgrestError)?.code == code.rawValue
   }

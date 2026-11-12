@@ -40,6 +40,11 @@ public import HTTPTypes
 /// - ``string(encoding:)``
 public struct PostgrestResponse<T> {
   /// The raw response body. Empty when PostgREST sent none.
+  ///
+  /// > Note: For a ``PostgrestTransformBuilder/maybeSingle()`` request that matches no row, this
+  /// > version keeps what PostgREST sent: the body is the `PGRST116` error JSON and ``status`` is
+  /// > `406`, while ``value`` is `nil`. The next major version reports `200` with a `null` body
+  /// > for that case, so read ``value`` instead of the body or the status.
   public let body: Data
 
   /// The raw response body as `Data`.

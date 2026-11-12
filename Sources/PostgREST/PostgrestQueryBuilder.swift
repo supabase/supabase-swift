@@ -144,7 +144,9 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    try insert(values, returning: returning, count: count, defaultToNull: true, encoder: nil)
+    try prepareInsert(
+      values, returning: returning, count: count, defaultToNull: true, encoder: nil)
+    return PostgrestFilterBuilder(self)
   }
 
   /// Inserts one or more rows into the table or view, with control over missing columns and the
@@ -169,7 +171,8 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///     `Prefer: missing=default` so the column's `DEFAULT` applies instead.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an insert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func insert(
     _ values: some Encodable,
@@ -177,7 +180,19 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     count: CountOption? = nil,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
+    try prepareInsert(
+      values, returning: returning, count: count, defaultToNull: defaultToNull, encoder: encoder)
+    return PostgrestTransformBuilder(self)
+  }
+
+  private func prepareInsert(
+    _ values: some Encodable,
+    returning: PostgrestReturning?,
+    count: CountOption?,
+    defaultToNull: Bool,
+    encoder: JSONEncoder?
+  ) throws {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
     try mutableState.withValue {
@@ -212,8 +227,6 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         )
       }
     }
-
-    return PostgrestFilterBuilder(self)
   }
 
   /// Inserts rows, updating existing rows on conflict (upsert).
@@ -252,7 +265,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
-    try upsert(
+    try prepareUpsert(
       values,
       onConflict: onConflict,
       returning: returning,
@@ -261,6 +274,7 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       defaultToNull: true,
       encoder: nil
     )
+    return PostgrestFilterBuilder(self)
   }
 
   /// Inserts rows, updating existing rows on conflict (upsert), with control over missing columns
@@ -286,7 +300,8 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
   ///     resolves to the database-generated value, which is what the conflict is detected on.
   ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
   ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
-  /// - Returns: A ``PostgrestFilterBuilder`` for applying additional constraints or executing the request.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an upsert.
   /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
   public func upsert(
     _ values: some Encodable,
@@ -296,7 +311,28 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     ignoreDuplicates: Bool = false,
     defaultToNull: Bool = true,
     encoder: JSONEncoder? = nil
-  ) throws -> PostgrestFilterBuilder {
+  ) throws -> PostgrestTransformBuilder {
+    try prepareUpsert(
+      values,
+      onConflict: onConflict,
+      returning: returning,
+      count: count,
+      ignoreDuplicates: ignoreDuplicates,
+      defaultToNull: defaultToNull,
+      encoder: encoder
+    )
+    return PostgrestTransformBuilder(self)
+  }
+
+  private func prepareUpsert(
+    _ values: some Encodable,
+    onConflict: String?,
+    returning: PostgrestReturning,
+    count: CountOption?,
+    ignoreDuplicates: Bool,
+    defaultToNull: Bool,
+    encoder: JSONEncoder?
+  ) throws {
     let body = try (encoder ?? configuration.encoder).encode(values)
 
     try mutableState.withValue {
@@ -335,7 +371,6 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         )
       }
     }
-    return PostgrestFilterBuilder(self)
   }
 
   /// Performs a partial UPDATE on rows that match subsequent filters.

@@ -130,7 +130,6 @@ public class PostgrestBuilder: @unchecked Sendable {
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: The same builder instance so calls can be chained.
-  @discardableResult
   public func settingHeader(name: HTTPField.Name, value: String) -> Self {
     setHeader(name: name, value: value)
   }
@@ -175,9 +174,15 @@ public class PostgrestBuilder: @unchecked Sendable {
   /// > request once no data has moved for `duration`. A custom fetch handler must honor the
   /// > request's `timeoutInterval` for this method to have an effect.
   ///
+  /// > Important: In this version the builder is a class, so this method changes the receiver
+  /// > and returns it. In the next major version the builder is a value type: this method
+  /// > returns a new builder and leaves the receiver unchanged. Always use the returned builder,
+  /// > and the same code works in both versions. The next major version also does not offer this
+  /// > method on ``PostgrestQueryBuilder``, so call it after `select`, `insert`, `update`,
+  /// > `upsert`, `delete` or `rpc`.
+  ///
   /// - Parameter duration: The idle timeout.
   /// - Returns: The same builder instance so calls can be chained.
-  @discardableResult
   public func timeout(_ duration: Duration) -> Self {
     mutableState.withValue {
       $0.request.timeoutInterval =
@@ -396,7 +401,7 @@ extension PostgrestError {
   /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
   /// so look for that instead of matching a fixed prefix.
   fileprivate var matchedZeroRows: Bool {
-    guard let details else { return false }
+    guard let details = serverError?.details else { return false }
     let words = details.split(separator: " ")
     guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,
       let count = Int(words[rowsIndex - 1])
