@@ -67,6 +67,8 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     }
 
     var attempt = 1
+    // A mutated `while true` is no longer provably infinite: "missing return".
+    // swift-mutation-testing:disable-next-line — every mutant here fails to compile
     while true {
       var current = request
       if attempt > 1 {

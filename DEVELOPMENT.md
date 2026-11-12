@@ -69,7 +69,44 @@ PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
 
 # Generate code coverage
 DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
+
+# Run mutation testing on the critical code (see "Mutation testing")
+./scripts/mutation-test.sh auth
 ```
+
+### Mutation testing
+
+[swift-mutation-testing](https://github.com/ericodx/swift-mutation-testing) makes small changes
+to the code, for example `<` to `<=`, and runs the tests once for each change. A change that no
+test catches "survives". It shows a line that runs in a test, but whose result no test checks.
+
+Install the tool (macOS 15+, Swift 6.2+):
+
+```bash
+brew tap ericodx/homebrew-tools
+brew trust --formula ericodx/tools/swift-mutation-testing
+brew install swift-mutation-testing
+```
+
+Run it with `./scripts/mutation-test.sh [auth|helpers|postgrest|realtime|realtime-core|all]`.
+Each Realtime scope takes about two hours; the others take minutes to an hour. Extra options go
+to the tool, for example `--min-score 80`. The list of files is the `SCOPES` array in the
+script, and the settings are in `scripts/mutation-testing.yml`. Reports go to
+`.mutation-testing/reports/`. A first run builds the package from scratch, so it is slow.
+
+- Why a wrapper: the tool does not run at the repository root. It refuses
+  `Supabase.xcworkspace`, because the workspace refers to the root folder itself, and a plain
+  SwiftPM run cannot build the tests without the [macOS test flags](#macos-test-flags). So the
+  script copies the package into `.mutation-testing/supabase-swift/` and builds it through a
+  workspace that refers to that folder.
+- Why `no-cache`: in version 1.7.1, the tool's coverage map leaves real tests out of a mutant's
+  run, so mutants survive that the suite kills. Without the cache, each mutant runs the whole
+  suite of its scheme.
+- Kill a survivor with a test, never with a change to production code. Read the
+  [skill](https://github.com/ericodx/swift-mutation-testing/blob/main/skills/swift-mutation-testing/SKILL.md)
+  for how to read the report.
+- `// swift-mutation-testing:disable-next-line` skips one line. Use it only for a mutant that
+  cannot compile or cannot change behavior, and write the reason after it.
 
 ## Code Formatting
 
@@ -282,6 +319,9 @@ supabase stop
   `release/*` run everything. Edit the filters in `ci.yml` when you add a path a job depends on.
 - `release.yml`: Automated releases via release-please
 - `conventional-commits.yml`: Validates commit message format
+- `mutation-testing.yml`: Runs `scripts/mutation-test.sh` weekly and on demand, one job per
+  scope. It writes the summary to the job page and uploads the reports as artifacts. A failed
+  weekly run posts to Slack, as `ci.yml` does for a failure on `main`
 
 ### Platform Testing
 
