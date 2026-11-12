@@ -8,6 +8,7 @@ apikey
 Apikey
 AQAB
 Ascii
+attoseconds
 autocapitalization
 Autocapitalization
 autocorrection
@@ -95,6 +96,7 @@ magnifyingglass
 metamask
 metas
 Metas
+MFAV
 mmsdk
 newbucket
 newkey
@@ -110,6 +112,7 @@ nullslast
 oauthserver
 oidc
 OIDC
+otpauth
 posix
 omitempty
 openssl
