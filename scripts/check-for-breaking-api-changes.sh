@@ -13,11 +13,21 @@
 ##
 ##===----------------------------------------------------------------------===##
 
+# Exit status:
+#   0  no breaking API changes
+#   1  breaking API changes found (the "API breakage:" lines go to stdout)
+#   2  the check could not run (bad environment, fetch failure, or a tool failure
+#      that produced no "API breakage:" lines)
 set -euo pipefail
+
+EXIT_BREAKAGE=1
+EXIT_CHECK_FAILED=2
 
 log() { printf -- "** %s\n" "$*" >&2; }
 error() { printf -- "** ERROR: %s\n" "$*" >&2; }
-fatal() { error "$@"; exit 1; }
+fatal() { error "$@"; exit "${EXIT_CHECK_FAILED}"; }
+
+trap 'exit "${EXIT_CHECK_FAILED}"' ERR
 
 CURRENT_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$(git -C "${CURRENT_SCRIPT_DIR}" rev-parse --show-toplevel)"
@@ -36,8 +46,16 @@ SWIFT_OUTPUT=$(swift package --package-path "${REPO_ROOT}" diagnose-api-breaking
 
 echo "$SWIFT_OUTPUT" >&2
 
-if [ "${RC}" -ne 0 ]; then
-  echo "$SWIFT_OUTPUT" | grep "API breakage:" || true
-  fatal "❌ Breaking API changes detected."
+if [ "${RC}" -eq 0 ]; then
+  log "✅ No breaking API changes detected."
+  exit 0
 fi
-log "✅ No breaking API changes detected."
+
+BREAKAGES=$(echo "$SWIFT_OUTPUT" | grep "API breakage:" || true)
+if [ -n "${BREAKAGES}" ]; then
+  echo "${BREAKAGES}"
+  error "❌ Breaking API changes detected."
+  exit "${EXIT_BREAKAGE}"
+fi
+
+fatal "diagnose-api-breaking-changes failed (exit ${RC}) and reported no API breakage. The check could not run; see the log above."
