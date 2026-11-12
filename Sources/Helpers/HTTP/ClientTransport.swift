@@ -44,6 +44,8 @@ public protocol ClientTransport: Sendable {
   ///   - body: The request body, or `nil` for a bodiless request. Check
   ///     ``HTTPBody/length`` to pick `Content-Length` versus chunked framing.
   /// - Returns: The response head and body. Return `nil` for an empty body.
+  /// - Throws: The transport's error when no response head arrives, or `CancellationError` when
+  ///   the task is cancelled.
   func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
     HTTPTypes.HTTPResponse, HTTPBody?
   )
@@ -82,6 +84,8 @@ public protocol ClientMiddleware: Sendable {
   ///   - next: The rest of the chain, ending in the transport.
   ///     It runs on the caller's executor whether or not your module enables
   ///     `NonisolatedNonsendingByDefault`, so spell the type as written here.
+  /// - Returns: The response head and body, from `next` or from the middleware itself.
+  /// - Throws: Whatever `next` throws, or the middleware's own error to fail the request.
   func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,

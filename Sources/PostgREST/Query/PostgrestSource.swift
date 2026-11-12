@@ -32,6 +32,9 @@ extension PostgrestClient {
   // 'Todo.Type' to expected argument type 'String'". This visible twin catches the call and names
   // the fix. The extra `Void` parameter only avoids a redeclaration; with the SPI import, the
   // available overload ranks above it.
+
+  /// Unavailable. Opt in to the typed query API with `@_spi(Experimental) import Supabase`, then
+  /// use ``from(_:)-(R.Type)``.
   @available(
     *, unavailable,
     message:

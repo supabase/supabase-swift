@@ -121,6 +121,7 @@ extension PostgrestResponse: Sendable where T: Sendable {}
 /// | ``planned`` | Approximate | Fast |
 /// | ``estimated`` | Adaptive | Moderate |
 public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The value sent in the `count` preference, such as `"exact"`.
   public let rawValue: String
 
   /// Creates a ``CountOption`` from a raw string value.
@@ -163,6 +164,7 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 public struct PostgrestReturning: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The value sent in the `return` preference, such as `"minimal"`.
   public let rawValue: String
 
   /// Creates a ``PostgrestReturning`` from a raw string value.
@@ -193,6 +195,7 @@ public struct PostgrestReturning: RawRepresentable, Hashable, Sendable,
 /// Pass a ``TextSearchType`` to ``PostgrestRequestBuilder/textSearch(_:query:config:type:)`` to
 /// control how user-supplied text is interpreted by PostgreSQL's full-text search engine.
 public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The prefix PostgREST expects before `fts`, such as `"pl"`.
   public let rawValue: String
 
   /// Creates a ``TextSearchType`` from a raw string value.

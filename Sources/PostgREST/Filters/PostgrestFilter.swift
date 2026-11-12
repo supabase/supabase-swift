@@ -111,6 +111,7 @@ public struct _PostgrestFilter<R: _PostgrestRelation>: Sendable {
   /// - Parameters:
   ///   - column: The query-parameter name, for example `"cost::text"`.
   ///   - operand: Everything after the `=`, for example `"eq.10"`.
+  /// - Returns: A filter to return from a `where` closure.
   public static func raw(_ column: String, _ operand: String) -> Self {
     Self(rawColumn: column, operand: operand)
   }

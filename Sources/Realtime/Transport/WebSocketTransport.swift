@@ -22,7 +22,7 @@ public import HTTPTypes
 ///   ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``. This kind
 ///   stops the client.
 /// - For any other failure, such as a lost network, throw a ``RealtimeError`` with kind
-///   ``RealtimeError/Kind/transport``. During an automatic reconnect, the client tries again.
+///   ``RealtimeError/Kind-swift.struct/transport``. During an automatic reconnect, the client tries again.
 ///
 /// A failure in ``RealtimeClient/connect()`` itself is never retried: `connect()` throws it to
 /// the caller.
@@ -34,6 +34,8 @@ public protocol WebSocketTransport: Sendable {
   ///   - url: The `ws:` or `wss:` URL to open.
   ///   - headerFields: The headers to send with the upgrade request.
   /// - Returns: The open connection.
+  /// - Throws: ``RealtimeError`` when the upgrade fails, as the protocol documentation
+  ///   describes, or `CancellationError` when the task is cancelled during the handshake.
   func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection
 }
 

@@ -19,8 +19,8 @@ let functions = try FunctionsClient(
 )
 ```
 
-The initializer traps when the URL has no host. The URL is fixed at construction, so a bad one
-is a programmer error and is reported where it was introduced.
+The initializer throws a ``FunctionsError`` of kind
+``FunctionsError/Kind-swift.struct/invalidConfiguration`` when the URL has no scheme or no host.
 
 ### Authorization
 

@@ -1,4 +1,4 @@
-# Observing auth state in SwiftUI
+# Observing Auth State in SwiftUI
 
 Show the signed-in or signed-out screen, and update it when the session changes.
 

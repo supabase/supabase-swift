@@ -28,6 +28,9 @@ public struct AuthAdminMFA: Sendable {
   /// Lists the MFA factors enrolled by a user.
   ///
   /// - Parameter userID: The user's unique identifier.
+  /// - Returns: The user's factors.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func listFactors(forUser userID: UUID) async throws -> [Factor] {
     try await api.execute(authAPI.adminListFactors(userID: userID))
@@ -38,6 +41,8 @@ public struct AuthAdminMFA: Sendable {
   /// - Parameters:
   ///   - id: The identifier of the factor to delete, as found on ``Factor/id``.
   ///   - userID: The user's unique identifier.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func deleteFactor(id: UUID, forUser userID: UUID) async throws {
     try await api.execute(authAPI.adminDeleteFactor(id: id, userID: userID))

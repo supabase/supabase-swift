@@ -8,7 +8,14 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
 
+/// Expands `@Function` into a function conformance.
+///
+/// Like ``TableMacro``, everything is emitted from the extension role.
 public struct FunctionMacro: ExtensionMacro {
+  /// Builds the extension that makes the attached struct conform to `_PostgrestFunction`.
+  ///
+  /// Reports a diagnostic and returns no extension when the declaration is not valid for
+  /// `@Function`.
   public static func expansion(
     of node: AttributeSyntax,
     attachedTo declaration: some DeclGroupSyntax,

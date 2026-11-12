@@ -25,6 +25,9 @@ public struct AuthAdminCustomProviders: Sendable {
   /// Lists the custom providers.
   ///
   /// - Parameter type: Lists only the providers of this type. `nil` lists every provider.
+  /// - Returns: The custom providers.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func list(type: CustomProviderType? = nil) async throws -> [CustomProvider] {
     try await admin.api.execute(admin.authAPI.adminListCustomProviders(type: type))
   }
@@ -36,6 +39,9 @@ public struct AuthAdminCustomProviders: Sendable {
   /// its issuer does not match.
   ///
   /// - Parameter provider: The settings for the provider.
+  /// - Returns: The provider that the server created.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func create(_ provider: CreateCustomProvider) async throws -> CustomProvider {
     try await admin.api.execute(admin.authAPI.adminCreateCustomProvider(provider))
@@ -45,6 +51,9 @@ public struct AuthAdminCustomProviders: Sendable {
   ///
   /// - Parameter identifier: The provider's ``CustomProvider/identifier``, such as
   ///   `custom:acme`.
+  /// - Returns: The custom provider.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func provider(identifier: String) async throws -> CustomProvider {
     try await admin.api.execute(admin.authAPI.adminCustomProvider(identifier: identifier))
   }
@@ -57,6 +66,9 @@ public struct AuthAdminCustomProviders: Sendable {
   /// - Parameters:
   ///   - identifier: The provider's ``CustomProvider/identifier``.
   ///   - changes: The fields to change.
+  /// - Returns: The updated provider.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func update(
     identifier: String,
@@ -69,6 +81,8 @@ public struct AuthAdminCustomProviders: Sendable {
   /// Deletes a custom provider.
   ///
   /// - Parameter identifier: The provider's ``CustomProvider/identifier``.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   public func delete(identifier: String) async throws {
     try await admin.api.execute(admin.authAPI.adminDeleteCustomProvider(identifier: identifier))
   }

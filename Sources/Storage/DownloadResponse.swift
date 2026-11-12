@@ -85,8 +85,9 @@ public struct DownloadResponse: Sendable {
   ///
   /// - Parameter maxBytes: Throw `HTTPBodyTooLargeError` once more than this many bytes arrive.
   ///   No limit by default.
+  /// - Returns: The bytes of the body.
   /// - Throws: ``StorageError`` with kind `transport` if the network fails while the body
-  ///   streams.
+  ///   streams. `HTTPBodyTooLargeError` if the body is larger than `maxBytes`.
   public func data(upTo maxBytes: Int = .max) async throws -> Data {
     try await Data(collecting: body, upTo: maxBytes)
   }

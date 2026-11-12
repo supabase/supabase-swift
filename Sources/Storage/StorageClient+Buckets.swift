@@ -161,6 +161,7 @@ extension StorageClient {
   /// Returns the lifecycle policy of a Standard bucket, or `nil` if it has none.
   ///
   /// - Parameter id: The unique identifier of the bucket.
+  /// - Returns: The lifecycle policy, or `nil` if the bucket has none.
   /// - Throws: ``StorageError`` if lifecycle support is off for the project, the bucket is not a
   ///   Standard bucket, or the caller is not authorized.
   public func lifecycle(forBucket id: String) async throws -> LifecycleConfiguration? {

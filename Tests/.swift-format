@@ -4,6 +4,8 @@
   "indentation": { "spaces": 2 },
   "rules": {
     "NeverUseForceTry": false,
-    "NeverUseImplicitlyUnwrappedOptionals": false
+    "NeverUseImplicitlyUnwrappedOptionals": false,
+    "AllPublicDeclarationsHaveDocumentation": false,
+    "ValidateDocumentationComments": false
   }
 }

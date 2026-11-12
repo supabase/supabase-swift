@@ -25,6 +25,7 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
     case rpOrigins = "rp_origins"
   }
 
+  /// Creates a ``WebAuthnChallengeOptions``.
   public init(rpID: String? = nil, rpOrigins: [String]? = nil) {
     self.rpID = rpID
     self.rpOrigins = rpOrigins
@@ -38,6 +39,7 @@ public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
 public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The ceremony name as the server sends it, such as `"create"`.
   public let rawValue: String
 
   /// Creates a ``WebAuthnChallengeType`` from a raw string value.
@@ -109,6 +111,7 @@ public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
     case lastUsedAt = "last_used_at"
   }
 
+  /// Creates a ``PasskeyListItem``.
   public init(id: UUID, friendlyName: String?, createdAt: Date, lastUsedAt: Date?) {
     self.id = id
     self.friendlyName = friendlyName
@@ -148,6 +151,7 @@ public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
     case expiresAt = "expires_at"
   }
 
+  /// Decodes the options. Reads `expires_at` as a Unix timestamp.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     challengeID = try container.decode(UUID.self, forKey: .challengeID)
@@ -187,6 +191,7 @@ public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
     case expiresAt = "expires_at"
   }
 
+  /// Decodes the options. Reads `expires_at` as a Unix timestamp.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     challengeID = try container.decode(UUID.self, forKey: .challengeID)

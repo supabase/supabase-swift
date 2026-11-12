@@ -69,6 +69,8 @@ public struct AuthMFARecoveryCodes: Sendable {
   /// - Parameter friendlyName: The name the factor is listed under in ``AuthMFA/factors()``,
   ///   unique among the user's factors. The server names it `Recovery codes` when omitted.
   /// - Returns: The new set of recovery codes.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   public func generate(
     friendlyName: String? = nil
   ) async throws -> AuthMFARecoveryCodesGenerateResponse {

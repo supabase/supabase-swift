@@ -22,6 +22,10 @@ public struct SelectionOfMacro: ExtensionMacro {
     return base.trimmedDescription
   }
 
+  /// Builds the extension that makes the attached struct conform to `_PostgrestSelection`.
+  ///
+  /// Reports a diagnostic and returns no extension when the declaration is not valid for
+  /// `@SelectionOf`.
   public static func expansion(
     of node: AttributeSyntax,
     attachedTo declaration: some DeclGroupSyntax,

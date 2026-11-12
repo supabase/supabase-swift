@@ -25,5 +25,6 @@ public protocol _PostgrestSchema: Sendable {
 
 /// The schema a relation belongs to when it does not name one, matching PostgREST's own default.
 public enum _PublicSchema: _PostgrestSchema {
+  /// The schema's name, `"public"`.
   public static let name = "public"
 }

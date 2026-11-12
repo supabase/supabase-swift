@@ -70,6 +70,8 @@ public struct AuthPasskeys: Sendable {
   ///   - challengeID: ``PasskeyRegistrationOptions/challengeID``.
   ///   - credential: The W3C `PublicKeyCredential` JSON the authenticator produced.
   /// - Returns: The stored passkey.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   @discardableResult
   public func verifyRegistration(
     challengeID: UUID,
@@ -95,6 +97,8 @@ public struct AuthPasskeys: Sendable {
   ///   - challengeID: ``PasskeyAuthenticationOptions/challengeID``.
   ///   - credential: The W3C `PublicKeyCredential` JSON the authenticator produced.
   /// - Returns: The new session, at `aal1`.
+  /// - Throws: The error of the request, for example when the server rejects `credential`. Else
+  ///   the error of session storage when it cannot save the new session.
   @discardableResult
   public func verifyAuthentication(
     challengeID: UUID,
@@ -121,6 +125,8 @@ public struct AuthPasskeys: Sendable {
   ///   - id: ``PasskeyListItem/id``.
   ///   - friendlyName: The new name, at most 120 characters.
   /// - Returns: The updated passkey.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   @discardableResult
   public func rename(id: UUID, friendlyName: String) async throws -> PasskeyListItem {
     try await dependencies.sessionAPI.authorizedExecute {
@@ -131,6 +137,8 @@ public struct AuthPasskeys: Sendable {
   /// Deletes a passkey of the current user.
   ///
   /// - Parameter id: ``PasskeyListItem/id``.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request.
   public func delete(id: UUID) async throws {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.deletePasskey(id: id, accessToken: $0)

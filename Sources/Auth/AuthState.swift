@@ -28,6 +28,7 @@ public enum AuthStatus: Hashable, Sendable {
 /// New reasons can be added in a minor release, so a `switch` over this value needs a `default:`
 /// case.
 public struct SignOutReason: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The name of the reason, such as `"userInitiated"`.
   public let rawValue: String
 
   /// Creates a ``SignOutReason`` from a raw string value.

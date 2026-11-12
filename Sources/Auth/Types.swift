@@ -6,6 +6,7 @@ import Helpers
 /// New events can be added in a minor release, so a `switch` over this value needs a `default:`
 /// case.
 public struct AuthEvent: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The event name, such as `"INITIAL_SESSION"`.
   public let rawValue: String
 
   /// Creates an ``AuthEvent`` from a raw string value.
@@ -225,6 +226,7 @@ public struct Session: Codable, Hashable, Sendable {
   /// - Parameters:
   ///   - date: The time to judge the session at. Defaults to now.
   ///   - leeway: How long before the expiry the session counts as expired. Defaults to 30 seconds.
+  /// - Returns: `true` when less than `leeway` of the session's lifetime remains at `date`.
   public func isExpired(at date: Date = .now, leeway: Duration = .seconds(30)) -> Bool {
     remainingLifetime(at: date) < leeway
   }
@@ -286,6 +288,8 @@ extension Session {
     case user
   }
 
+  /// Decodes a session. When `received_at` is absent, sets ``receivedAt`` to ``expiresAt`` minus
+  /// ``expiresIn``.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let seconds = try container.decode(Double.self, forKey: .expiresIn)
@@ -313,6 +317,7 @@ extension Session {
     )
   }
 
+  /// Encodes the session with the server's keys. Writes the durations and dates as seconds.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encodeIfPresent(providerToken, forKey: .providerToken)
@@ -502,6 +507,8 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     case factors
   }
 
+  /// Decodes a user. An empty `email` or `phone` string becomes `nil`, and absent metadata or
+  /// `factors` become empty.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
@@ -670,6 +677,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     case updatedAt = "updated_at"
   }
 
+  /// Decodes an identity. Reads ``id`` from `identity_id` and ``providerUserID`` from `id`.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -690,6 +698,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 ///
 /// A provider encodes and decodes as its ``rawValue`` string.
 public struct Provider: RawRepresentable, Codable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The provider name as the Auth server knows it, such as `"github"`.
   public let rawValue: String
 
   /// Creates a ``Provider`` from a raw string value.
@@ -702,24 +711,43 @@ public struct Provider: RawRepresentable, Codable, Hashable, Sendable, Expressib
     self.init(rawValue: value)
   }
 
+  /// The Apple provider.
   public static let apple: Provider = "apple"
+  /// The Microsoft Azure provider.
   public static let azure: Provider = "azure"
+  /// The Bitbucket provider.
   public static let bitbucket: Provider = "bitbucket"
+  /// The Discord provider.
   public static let discord: Provider = "discord"
+  /// The email provider, for an identity that is an email address.
   public static let email: Provider = "email"
+  /// The Facebook provider.
   public static let facebook: Provider = "facebook"
+  /// The Figma provider.
   public static let figma: Provider = "figma"
+  /// The GitHub provider.
   public static let github: Provider = "github"
+  /// The GitLab provider.
   public static let gitlab: Provider = "gitlab"
+  /// The Google provider.
   public static let google: Provider = "google"
+  /// The Kakao provider.
   public static let kakao: Provider = "kakao"
+  /// The Keycloak provider.
   public static let keycloak: Provider = "keycloak"
+  /// The LinkedIn provider, with the raw value `linkedin`.
   public static let linkedin: Provider = "linkedin"
+  /// The LinkedIn OpenID Connect provider, with the raw value `linkedin_oidc`.
   public static let linkedinOIDC: Provider = "linkedin_oidc"
+  /// The Notion provider.
   public static let notion: Provider = "notion"
+  /// The Slack provider, with the raw value `slack`.
   public static let slack: Provider = "slack"
+  /// The Slack OpenID Connect provider, with the raw value `slack_oidc`.
   public static let slackOIDC: Provider = "slack_oidc"
+  /// The Spotify provider.
   public static let spotify: Provider = "spotify"
+  /// The Twitch provider.
   public static let twitch: Provider = "twitch"
 
   /// Uses OAuth 1.0a
@@ -728,8 +756,11 @@ public struct Provider: RawRepresentable, Codable, Hashable, Sendable, Expressib
   /// Uses OAuth 2.0
   public static let x: Provider = "x"
 
+  /// The WorkOS provider.
   public static let workos: Provider = "workos"
+  /// The Zoom provider.
   public static let zoom: Provider = "zoom"
+  /// The Fly.io provider.
   public static let fly: Provider = "fly"
 }
 
@@ -791,6 +822,7 @@ struct AuthMetaSecurity: Encodable, Hashable, Sendable {
 /// A Web3 chain supported by Sign in with Web3.
 public struct Web3Chain: RawRepresentable, Encodable, Hashable, Sendable, ExpressibleByStringLiteral
 {
+  /// The chain name as the server reads it, such as `"ethereum"`.
   public let rawValue: String
 
   /// Creates a ``Web3Chain`` from a raw string value.
@@ -1010,6 +1042,7 @@ struct VerifyPhoneOTPParams: Encodable, Hashable {
 public struct PhoneOTPType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The type as the server reads it, such as `"sms"`.
   public let rawValue: String
 
   /// Creates a ``PhoneOTPType`` from a raw string value.
@@ -1035,6 +1068,7 @@ public struct PhoneOTPType: RawRepresentable, Encodable, Hashable, Sendable,
 public struct EmailOTPType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The type as the server reads it, such as `"signup"`.
   public let rawValue: String
 
   /// Creates an ``EmailOTPType`` from a raw string value.
@@ -1092,6 +1126,8 @@ public enum SignUpResult: Decodable, Hashable, Sendable {
   /// either user as is.
   case confirmationRequired(User)
 
+  /// Decodes ``signedIn(_:)`` from a session body, and ``confirmationRequired(_:)`` from a user
+  /// body.
   public init(from decoder: any Decoder) throws {
     self =
       try decoder.isSessionBody()
@@ -1381,6 +1417,7 @@ public struct AdminCreateUser: Encodable, Hashable, Sendable {
     self.banDuration = banDuration
   }
 
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encodeIfPresent(id, forKey: .id)
@@ -1477,6 +1514,7 @@ public struct AdminUpdateUser: Encodable, Hashable, Sendable {
     self.banDuration = banDuration
   }
 
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encodeIfPresent(email, forKey: .email)
@@ -1541,6 +1579,7 @@ struct RecoverParams: Encodable, Hashable, Sendable {
 public struct FactorType: RawRepresentable, Codable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The factor type as the server sends it, such as `"totp"`.
   public let rawValue: String
 
   /// Creates a ``FactorType`` from a raw string value.
@@ -1570,6 +1609,7 @@ public struct FactorType: RawRepresentable, Codable, Hashable, Sendable,
 public struct FactorStatus: RawRepresentable, Codable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The status as the server sends it, such as `"verified"`.
   public let rawValue: String
 
   /// Creates a ``FactorStatus`` from a raw string value.
@@ -1721,6 +1761,8 @@ extension TOTPEnrollment: Decodable {
     }
   }
 
+  /// Decodes an enrollment. Reads the QR code, the secret, and the URI from the nested `totp`
+  /// object.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let totp = try container.decode(TOTP.self, forKey: .totp)
@@ -1813,6 +1855,7 @@ extension MFAChallenge: Decodable {
     case webauthn
   }
 
+  /// Decodes a challenge. Reads ``factorType`` from `type` and `expires_at` as a Unix timestamp.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     self.init(
@@ -1938,6 +1981,7 @@ extension MFAFactors {
 public struct AuthenticatorAssuranceLevel: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The level as the `aal` claim holds it, such as `"aal1"`.
   public let rawValue: String
 
   /// Creates an ``AuthenticatorAssuranceLevel`` from a raw string value.
@@ -1961,6 +2005,7 @@ public struct AuthenticatorAssuranceLevel: RawRepresentable, Hashable, Sendable,
 public struct AuthenticationMethod: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The method as the `amr` entry holds it, such as `"password"`.
   public let rawValue: String
 
   /// Creates an ``AuthenticationMethod`` from a raw string value.
@@ -2099,6 +2144,7 @@ public enum SignOutScope: String, Sendable {
 public struct ResendEmailType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The type as the server reads it, such as `"signup"`.
   public let rawValue: String
 
   /// Creates a ``ResendEmailType`` from a raw string value.
@@ -2138,6 +2184,7 @@ struct ResendEmailParams: Encodable {
 public struct ResendPhoneType: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The type as the server reads it, such as `"sms"`.
   public let rawValue: String
 
   /// Creates a ``ResendPhoneType`` from a raw string value.
@@ -2194,6 +2241,7 @@ struct DeleteUserRequest: Encodable {
 public struct MessagingChannel: RawRepresentable, Encodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The channel name as the server reads it, such as `"sms"`.
   public let rawValue: String
 
   /// Creates a ``MessagingChannel`` from a raw string value.
@@ -2561,6 +2609,7 @@ public struct GenerateLinkResponse: Hashable, Sendable, Decodable {
     self.user = user
   }
 
+  /// Decodes ``properties`` and ``user`` from the same flat JSON object.
   public init(from decoder: any Decoder) throws {
     self.properties = try GenerateLinkProperties(from: decoder)
     self.user = try User(from: decoder)
@@ -2610,8 +2659,10 @@ public struct GenerateLinkProperties: Decodable, Hashable, Sendable {
 public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The link type as the server sends it, such as `"magiclink"`.
   public let rawValue: String
 
+  /// Creates a link type from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
@@ -2621,11 +2672,17 @@ public struct GenerateLinkType: RawRepresentable, Codable, Hashable, Sendable,
     self.init(rawValue: value)
   }
 
+  /// A link that confirms a sign-up.
   public static let signup: GenerateLinkType = "signup"
+  /// A link that invites a user.
   public static let invite: GenerateLinkType = "invite"
+  /// A magic link that signs the user in.
   public static let magiclink: GenerateLinkType = "magiclink"
+  /// A link that starts a password recovery.
   public static let recovery: GenerateLinkType = "recovery"
+  /// A link that confirms an email change, for the user's current address.
   public static let emailChangeCurrent: GenerateLinkType = "email_change_current"
+  /// A link that confirms an email change, for the user's new address.
   public static let emailChangeNew: GenerateLinkType = "email_change_new"
 }
 

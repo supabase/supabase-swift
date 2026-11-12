@@ -17,6 +17,7 @@ import SwiftSyntaxMacros
 /// expression, so a key path naming no such column is an error at the attribute, before anything
 /// this plugin emits is compiled.
 public struct MarkerMacro: PeerMacro {
+  /// Returns no peers. A marker attribute emits nothing.
   public static func expansion(
     of node: AttributeSyntax,
     providingPeersOf declaration: some DeclSyntaxProtocol,

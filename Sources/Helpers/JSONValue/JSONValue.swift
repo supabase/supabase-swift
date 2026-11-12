@@ -1,6 +1,8 @@
 public import Foundation
 
+/// A JSON object: a dictionary of ``JSONValue`` values by key.
 public typealias JSONObject = [String: JSONValue]
+/// A JSON array: a list of ``JSONValue`` values.
 public typealias JSONArray = [JSONValue]
 
 /// An enumeration that represents JSON-compatible values of various types.
@@ -45,6 +47,7 @@ public enum JSONValue: Sendable, Codable, Hashable {
     }
   }
 
+  /// `true` when the value is `null`.
   public var isNil: Bool {
     if case .null = self {
       return true
@@ -53,6 +56,7 @@ public enum JSONValue: Sendable, Codable, Hashable {
     return false
   }
 
+  /// The boolean, or `nil` when the value is not a boolean.
   public var boolValue: Bool? {
     if case .bool(let val) = self {
       return val
@@ -60,6 +64,7 @@ public enum JSONValue: Sendable, Codable, Hashable {
     return nil
   }
 
+  /// The object, or `nil` when the value is not an object.
   public var objectValue: JSONObject? {
     if case .object(let dictionary) = self {
       return dictionary
@@ -67,6 +72,7 @@ public enum JSONValue: Sendable, Codable, Hashable {
     return nil
   }
 
+  /// The array, or `nil` when the value is not an array.
   public var arrayValue: JSONArray? {
     if case .array(let array) = self {
       return array
@@ -74,6 +80,7 @@ public enum JSONValue: Sendable, Codable, Hashable {
     return nil
   }
 
+  /// The string, or `nil` when the value is not a string.
   public var stringValue: String? {
     if case .string(let string) = self {
       return string
@@ -106,6 +113,10 @@ public enum JSONValue: Sendable, Codable, Hashable {
     numberValue?.decimalValue
   }
 
+  /// Decodes a JSON value of any type.
+  ///
+  /// - Parameter decoder: The decoder to read from.
+  /// - Throws: `DecodingError.dataCorrupted` when the data holds no JSON value.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.singleValueContainer()
 
@@ -128,6 +139,11 @@ public enum JSONValue: Sendable, Codable, Hashable {
     }
   }
 
+  /// Encodes the value as the JSON type of its case.
+  ///
+  /// - Parameter encoder: The encoder to write to.
+  /// - Throws: The error of the encoder. A ``number(_:)`` also throws
+  ///   `EncodingError.invalidValue` when no Swift number type holds it exactly.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
     switch self {
@@ -142,48 +158,56 @@ public enum JSONValue: Sendable, Codable, Hashable {
 }
 
 extension JSONValue: ExpressibleByNilLiteral {
+  /// Creates a ``null`` value from a `nil` literal.
   public init(nilLiteral _: ()) {
     self = .null
   }
 }
 
 extension JSONValue: ExpressibleByStringLiteral {
+  /// Creates a ``string(_:)`` value from a string literal.
   public init(stringLiteral value: String) {
     self = .string(value)
   }
 }
 
 extension JSONValue: ExpressibleByArrayLiteral {
+  /// Creates an ``array(_:)`` value from an array literal.
   public init(arrayLiteral elements: JSONValue...) {
     self = .array(elements)
   }
 }
 
 extension JSONValue: ExpressibleByIntegerLiteral {
+  /// Creates a ``number(_:)`` value from an integer literal.
   public init(integerLiteral value: Int) {
     self = .number(JSONNumber(integerLiteral: value))
   }
 }
 
 extension JSONValue: ExpressibleByFloatLiteral {
+  /// Creates a ``number(_:)`` value from a floating-point literal.
   public init(floatLiteral value: Double) {
     self = .number(JSONNumber(floatLiteral: value))
   }
 }
 
 extension JSONValue: ExpressibleByBooleanLiteral {
+  /// Creates a ``bool(_:)`` value from a boolean literal.
   public init(booleanLiteral value: Bool) {
     self = .bool(value)
   }
 }
 
 extension JSONValue: ExpressibleByDictionaryLiteral {
+  /// Creates an ``object(_:)`` value from a dictionary literal. The keys must be unique.
   public init(dictionaryLiteral elements: (String, JSONValue)...) {
     self = .object(Dictionary(uniqueKeysWithValues: elements))
   }
 }
 
 extension JSONValue: CustomStringConvertible {
+  /// The description of ``value``, the underlying Swift value.
   public var description: String {
     String(describing: value)
   }

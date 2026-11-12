@@ -164,14 +164,19 @@ extension AuthError.Code {
   public static let mfaWebAuthnEnrollDisabled: AuthError.Code = "mfa_webauthn_enroll_not_enabled"
   /// WebAuthn factor verification is not enabled for this project.
   public static let mfaWebAuthnVerifyDisabled: AuthError.Code = "mfa_webauthn_verify_not_enabled"
+  /// The WebAuthn challenge referenced was not found.
   @_spi(Experimental) public static let webAuthnChallengeNotFound: AuthError.Code =
     "webauthn_challenge_not_found"
+  /// The WebAuthn challenge has expired and a new one must be requested.
   @_spi(Experimental) public static let webAuthnChallengeExpired: AuthError.Code =
     "webauthn_challenge_expired"
+  /// The server could not verify the WebAuthn credential.
   @_spi(Experimental) public static let webAuthnVerificationFailed: AuthError.Code =
     "webauthn_verification_failed"
+  /// The WebAuthn credential is already registered.
   @_spi(Experimental) public static let webAuthnCredentialExists: AuthError.Code =
     "webauthn_credential_exists"
+  /// The user has already registered the maximum number of passkeys.
   @_spi(Experimental) public static let tooManyPasskeys: AuthError.Code = "too_many_passkeys"
   /// The user already has a verified MFA factor; unenroll it before enrolling a new one.
   public static let mfaVerifiedFactorExists: AuthError.Code = "mfa_verified_factor_exists"
@@ -229,12 +234,15 @@ extension AuthError.Code {
 public struct AuthError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The name of the kind, such as `"server"`.
     public let rawValue: String
 
+    /// Creates a kind from a raw string value.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -336,7 +344,9 @@ public struct AuthError: SupabaseError {
     }
   }
 
+  /// What failed. Branch on it first.
   public var kind: Kind
+  /// A message that describes the failure.
   public var message: String
   /// The GoTrue error code. `nil` when the server sent none, as for an OAuth-style response, a
   /// body that is not JSON, or a failure that never reached the server.
@@ -346,9 +356,23 @@ public struct AuthError: SupabaseError {
   /// The raw `error` field of an OAuth-style response, such as `invalid_grant` or
   /// `invalid nonce`. These responses carry no ``code``. `nil` for every other response.
   public var oauthError: String?
+  /// The HTTP response of the failed request, with its status, headers, body and request id.
+  /// `nil` when the error has no response.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`. `nil` when
+  /// there is none.
   public var underlyingError: (any Error)?
 
+  /// Creates an error.
+  ///
+  /// - Parameters:
+  ///   - kind: What failed.
+  ///   - message: A message that describes the failure.
+  ///   - code: The GoTrue error code, or `nil` when the server sent none.
+  ///   - weakPasswordReasons: Why the password was rejected.
+  ///   - oauthError: The raw `error` field of an OAuth-style response.
+  ///   - response: The HTTP response of the failed request.
+  ///   - underlyingError: The error that caused this one.
   public init(
     kind: Kind,
     message: String,
@@ -367,6 +391,8 @@ public struct AuthError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// A one-line text for logs, with the kind, the message, and, when present, the response
+  /// status, the request id, and the code.
   public var description: String {
     formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }

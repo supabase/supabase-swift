@@ -60,6 +60,7 @@ public struct SupabaseClientError: SupabaseError {
     self.message = message
   }
 
+  /// The kind and the message.
   public var description: String {
     formattedDescription(kind: kind.rawValue)
   }

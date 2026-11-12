@@ -29,6 +29,7 @@ public import Foundation
 /// second iteration throws ``HTTPBodyAlreadyConsumedError``. Retrying middleware must check
 /// the flag before replaying a request.
 public final class HTTPBody: AsyncSequence, @unchecked Sendable {
+  /// One chunk of the body's bytes.
   public typealias Element = ArraySlice<UInt8>
 
   /// How many bytes the body holds, when known up front.
@@ -157,11 +158,15 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
   public struct Iterator: AsyncIteratorProtocol {
     var base: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Iterator
 
+    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
+    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
     /// Advances to the next chunk. Throws ``HTTPBodyAlreadyConsumedError`` when a `.single`
     /// body is iterated a second time, and `CancellationError` when the iterating task is
     /// cancelled, so a body cut short never looks complete.
-    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
-    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
+    ///
+    /// - Returns: The next chunk, or `nil` when the body has no more bytes.
+    /// - Throws: ``HTTPBodyAlreadyConsumedError``, `CancellationError`, or the error of the
+    ///   chunk source.
     @concurrent public mutating func next() async throws -> ArraySlice<UInt8>? {
       guard let chunk = try await base.next() else {
         // `AsyncThrowingStream` ends cleanly when its consumer is cancelled.
@@ -214,6 +219,8 @@ extension Data {
   /// - Parameters:
   ///   - body: The body to drain.
   ///   - maxBytes: Throw ``HTTPBodyTooLargeError`` once more than this many bytes arrive.
+  /// - Throws: ``HTTPBodyTooLargeError`` when the body holds more than `maxBytes` bytes, or the
+  ///   error the body throws while it is iterated.
   public init(collecting body: HTTPBody, upTo maxBytes: Int) async throws {
     var data = Data()
     if case .known(let count) = body.length, count > 0 {

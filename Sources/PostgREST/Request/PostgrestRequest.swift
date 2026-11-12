@@ -79,6 +79,12 @@ public struct _PostgrestRequest: Sendable {
   ///   - client: Supplies the base URL, headers, schema, access token and transport.
   ///   - decode: Turns a 2xx body into the value. It carries its own decoder, so the core never
   ///     reads ``PostgrestClient/Configuration/decoder``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is the result of `decode`.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if the request cannot be sent,
+  ///   `.server` if PostgREST returns a non-2xx status, `.transport` if the request never
+  ///   completes, `.accessToken` if the access token provider fails, or `.decoding` if `decode`
+  ///   throws an error that is not a ``PostgrestError``. `CancellationError` if the task is
+  ///   cancelled.
   func execute<T>(
     on client: PostgrestClient,
     decode: (Data) throws -> T

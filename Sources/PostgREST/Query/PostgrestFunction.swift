@@ -25,7 +25,7 @@ import IssueReporting
 /// let hits = try await client.rpc(SearchTodos(keyword: "groceries")).execute().value
 /// ```
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public protocol _PostgrestFunction: Encodable, Sendable {
   /// The function's name as PostgREST addresses it, without the `rpc/` prefix.
   static var functionName: String { get }
@@ -45,10 +45,11 @@ public protocol _PostgrestFunction: Encodable, Sendable {
 /// through ``where(_:)``, ``order(_:)`` or ``rows()``, which is where filters, ordering and paging
 /// live; any other result executes directly.
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
   let client: PostgrestClient
 
+  /// The request this call sends.
   public var request: _PostgrestRequest
 
   /// Sends the call as a `GET`, with the arguments in the query string rather than the body.
@@ -144,6 +145,9 @@ extension PostgrestClient {
   }
 
   // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+
+  /// Unavailable. Opt in to the typed query API with `@_spi(Experimental) import Supabase`, then
+  /// use ``rpc(_:)``.
   @available(
     *, unavailable,
     message:
@@ -167,7 +171,7 @@ extension PostgrestClient {
 ///   .execute()
 /// ```
 ///
-/// > Warning: Part of the typed query API, which is alpha. Its shape may change in a minor release.
+/// > Warning: Part of the typed query API, which is experimental. Its shape may change in a minor release.
 public struct _PostgrestFunctions: Sendable {
   let client: PostgrestClient
 

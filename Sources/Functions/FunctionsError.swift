@@ -30,12 +30,15 @@ public import Helpers
 public struct FunctionsError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind's name, e.g. `"server"`.
     public let rawValue: String
 
+    /// Creates a kind from its name.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -75,12 +78,15 @@ public struct FunctionsError: SupabaseError {
   /// ``edgeFunctionError``. An open set: compare against the static members and keep a fallback
   /// branch. The documented list is the Edge Functions error-codes guide.
   public struct Code: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The code as the platform sends it, e.g. `"NOT_FOUND"`.
     public let rawValue: String
 
+    /// Creates a code from the value the platform sends.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a code from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
@@ -123,13 +129,19 @@ public struct FunctionsError: SupabaseError {
     public static let edgeFunctionError: Code = "EDGE_FUNCTION_ERROR"
   }
 
+  /// What failed. Check it first.
   public var kind: Kind
+  /// A human-readable description of the failure.
   public var message: String
   /// The platform error code, when the platform produced the failure or tagged your function's
   /// 5xx. `nil` for a function's own non-5xx answer and for failures that never reached the
   /// server.
   public var code: Code?
+  /// The HTTP status, headers, body and request id of a non-2xx response. `nil` when no
+  /// response arrived.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError`, a `DecodingError` or an
+  /// `EncodingError`.
   public var underlyingError: (any Error)?
 
   /// `true` when ``code`` names a platform failure rather than your function's own response.
@@ -137,6 +149,14 @@ public struct FunctionsError: SupabaseError {
     code != nil && code != .edgeFunctionError
   }
 
+  /// Creates a ``FunctionsError``.
+  ///
+  /// - Parameters:
+  ///   - kind: What failed.
+  ///   - message: A human-readable description of the failure.
+  ///   - code: The platform error code, if any.
+  ///   - response: The HTTP error response, if any.
+  ///   - underlyingError: The error that caused this one, if any.
   public init(
     kind: Kind,
     message: String,
@@ -151,6 +171,8 @@ public struct FunctionsError: SupabaseError {
     self.underlyingError = underlyingError
   }
 
+  /// The kind and the message, plus the HTTP status and request id when a response arrived, and
+  /// the code when the platform sent one.
   public var description: String {
     formattedDescription(kind: kind.rawValue, code: code?.rawValue)
   }

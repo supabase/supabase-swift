@@ -14,7 +14,7 @@ that can.
 
 A value stays an `enum` when the set of cases is fixed by design:
 
-- The cases carry associated values, so a struct cannot express them: `SignUpResult`,
+- The cases carry associated values, so a struct cannot express them: `AuthStatus`, `SignUpResult`,
   `RedirectResult`, `VerifyOTPResult`, `SSOTarget`, `OAuthAuthorizationDetailsResult`, `SignedURLResult`,
   `DownloadBehavior`, `BroadcastPayload`, `RealtimePostgresFilter`, `JSONValue`,
   `RealtimeClientStatus`, `RealtimeChannelStatus`. The two status enums are not `Equatable`,
@@ -24,7 +24,8 @@ A value stays an `enum` when the set of cases is fixed by design:
   add a case: `RealtimeChannelEvent`, `HeartbeatEvent`.
 - The SDK has to implement each case, so a value it has no code for is meaningless:
   `RealtimePostgresIsValue`, `_PostgrestFilterOperator`, `_PostgrestAggregateFunction`,
-  `PostgresChangeEvent` (the SDK sends each event in the join request).
+  `PostgresChangeEvent` (the SDK sends each event in the join request), `SignOutScope`,
+  `AuthClient.AutoRefreshPolicy`, `KeychainStorage.Accessibility`.
 
 Switch over these exhaustively. Adding a case to one of them is a breaking change and only ships
 in a major release, so the compiler tells you exactly where to look when you upgrade.
@@ -41,7 +42,7 @@ case .failure(let error): ...
 A value is a `RawRepresentable` struct when the set can grow without a major release:
 
 - The server defines it, so a new value can appear before the SDK has a name for it: `Provider`,
-  `FactorStatus`, `PushStatus`, `RealtimeServerLogLevel`, `PostgresChange.Kind`,
+  `FactorStatus`, `RealtimeServerLogLevel`, `PostgresChange.Kind`,
   `WebSocketCloseCode`, and the error code of every module: `AuthError.Code`,
   `PostgrestError.Code`, `StorageError.Code`, `FunctionsError.Code`, `RealtimeError.Code`.
 - The SDK expects to add members in minor releases: `AuthEvent`, and the error kind of every

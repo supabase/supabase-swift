@@ -212,8 +212,7 @@ public final class AuthClient: Sendable {
 
   /// Initializes a AuthClient with a specific configuration.
   ///
-  /// - Parameters:
-  ///   - configuration: The client configuration.
+  /// - Parameter configuration: The client configuration.
   /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/invalidConfiguration`` if
   ///   `configuration.url` has no scheme or no host.
   public convenience init(configuration: Configuration) throws {
@@ -370,6 +369,8 @@ public final class AuthClient: Sendable {
   ///     does not apply to email sign-up.
   /// - Returns: ``SignUpResult/signedIn(_:)`` with the new session, or
   ///   ``SignUpResult/confirmationRequired(_:)`` with the user to confirm.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the PKCE flow or the session. `CancellationError` when the task is cancelled.
   public func signUp(
     email: String,
     password: String,
@@ -408,6 +409,8 @@ public final class AuthClient: Sendable {
   ///     does not apply to phone sign-up.
   /// - Returns: ``SignUpResult/signedIn(_:)`` with the new session, or
   ///   ``SignUpResult/confirmationRequired(_:)`` with the user to confirm.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   public func signUp(
     phone: String,
     password: String,
@@ -439,6 +442,9 @@ public final class AuthClient: Sendable {
   ///   - email: User's email address.
   ///   - password: User's password.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func signIn(
     email: String,
@@ -455,6 +461,9 @@ public final class AuthClient: Sendable {
   ///   - phone: User's phone number.
   ///   - password: User's password.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func signIn(
     phone: String,
@@ -482,6 +491,8 @@ public final class AuthClient: Sendable {
   ///
   /// - Parameter credentials: The ID token and the values the server needs to check it.
   /// - Returns: The new session.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func signInWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
     try await _signIn(authAPI.signInWithIDToken(credentials: credentials))
@@ -510,6 +521,9 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - userMetadata: Data to store on the user, in the `auth.users.raw_user_meta_data` column.
   ///   - captchaToken: The token the user received for completing a captcha.
+  /// - Returns: The session of the new user.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func signInAnonymously(
     userMetadata: JSONObject = [:],
@@ -538,6 +552,8 @@ public final class AuthClient: Sendable {
   ///   - email: The user's email address.
   ///   - options: Whether to create the user, its metadata, the redirect URL of the link, and the
   ///     captcha token.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the PKCE flow. `CancellationError` when the task is cancelled.
   public func signInWithOTP(email: String, options: EmailOTPOptions = .init()) async throws {
     try await withFlow(.signIn, redirectTo: options.redirectTo) {
       try await api.execute(
@@ -555,6 +571,8 @@ public final class AuthClient: Sendable {
   ///   - options: Whether to create the user, its metadata, the channel, and the captcha token.
   /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
   ///   none.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func signInWithOTP(
     phone: String,
@@ -573,6 +591,9 @@ public final class AuthClient: Sendable {
   ///   - target: The email domain or the ID of the identity provider.
   ///   - options: The redirect URL and the captcha token.
   /// - Returns: The flow that this call started, with the URL to open.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the PKCE flow. `CancellationError` when the task is cancelled. The client removes the
+  ///   flow when the request fails.
   public func ssoSignInURL(
     _ target: SSOTarget,
     options: SSOOptions = .init()
@@ -660,6 +681,9 @@ public final class AuthClient: Sendable {
   ///   - provider: The third-party provider.
   ///   - options: The scopes, the redirect URL, and extra query items.
   /// - Returns: The flow that this call started: the URL to open, and the flow ID.
+  /// - Throws: The storage error when the client cannot save the PKCE flow, or an error of kind
+  ///   ``AuthError/Kind-swift.struct/invalidRequest`` when the URL cannot be built. This method
+  ///   sends no request.
   public func oauthSignInURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
@@ -1280,6 +1304,8 @@ public final class AuthClient: Sendable {
   ///   - token: The code from the email.
   ///   - type: The kind of email that sent the code.
   /// - Returns: The session, or the pending state of a secure email change.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func verifyOTP(
     email: String,
@@ -1302,6 +1328,8 @@ public final class AuthClient: Sendable {
   ///   - token: The code from the message.
   ///   - type: The kind of message that sent the code.
   /// - Returns: The session.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func verifyOTP(
     phone: String,
@@ -1324,6 +1352,8 @@ public final class AuthClient: Sendable {
   ///   - tokenHash: The token hash from the link.
   ///   - type: The kind of email that sent the link.
   /// - Returns: The session, or the pending state of a secure email change.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session. `CancellationError` when the task is cancelled.
   @discardableResult
   public func verifyOTP(
     tokenHash: String,
@@ -1368,6 +1398,8 @@ public final class AuthClient: Sendable {
   ///   - email: The email address to send to.
   ///   - type: The kind of email to send again.
   ///   - options: The redirect URL and the captcha token.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the PKCE flow. `CancellationError` when the task is cancelled.
   public func resend(
     email: String,
     type: ResendEmailType,
@@ -1400,6 +1432,8 @@ public final class AuthClient: Sendable {
   ///   - options: The captcha token.
   /// - Returns: The ID that the SMS provider gave the message, or `nil` when the provider sent
   ///   none.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   @discardableResult
   public func resend(
     phone: String,
@@ -1533,6 +1567,10 @@ public final class AuthClient: Sendable {
   ///   - provider: The provider to link.
   ///   - options: The scopes, the redirect URL, and extra query items.
   /// - Returns: The flow that this call started: the URL to open, and the flow ID.
+  /// - Throws: ``AuthError/sessionMissing`` when no user is signed in. Else the error of the
+  ///   refresh or of the request, or the storage error when the client cannot save the PKCE
+  ///   flow. `CancellationError` when the task is cancelled. The client removes the flow when
+  ///   the request fails.
   public func linkIdentityURL(
     _ provider: Provider,
     options: OAuthOptions = .init()
@@ -1634,6 +1672,8 @@ public final class AuthClient: Sendable {
   /// - Parameters:
   ///   - email: The user's email address.
   ///   - options: The redirect URL and the captcha token.
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the PKCE flow. `CancellationError` when the task is cancelled.
   public func resetPassword(
     email: String,
     options: ResetPasswordOptions = .init()
@@ -1726,9 +1766,16 @@ public final class AuthClient: Sendable {
   /// code without a flow ID is exchanged with. A transport error or a cancellation keeps it: the
   /// request may have reached the server, and its email may already be out. A decoding error keeps
   /// it too: it follows a 2xx, so the server accepted the request.
-  /// - Parameter sendsEmail: Whether the request sends an email with a link. Only then can a
-  ///   code come back for the flow after the request fails, so only then does a failure that may
-  ///   have reached the server keep the flow.
+  ///
+  /// - Parameters:
+  ///   - purpose: What the flow is for.
+  ///   - redirectTo: The redirect URL of the flow. `nil` uses the configured one.
+  ///   - sendsEmail: Whether the request sends an email with a link. Only then can a code come
+  ///     back for the flow after the request fails, so only then does a failure that may have
+  ///     reached the server keep the flow.
+  ///   - request: Starts the flow on the server with the stored flow and its PKCE challenge.
+  /// - Returns: The value that `request` returns.
+  /// - Throws: The storage error when the flow cannot be saved, or the error of `request`.
   private func withFlow<Result>(
     _ purpose: PendingFlowRecord.Purpose,
     redirectTo: URL?,
