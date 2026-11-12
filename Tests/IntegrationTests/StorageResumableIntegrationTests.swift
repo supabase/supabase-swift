@@ -143,7 +143,8 @@ final class StorageResumableIntegrationTests {
     async let first = Self.cancelThenCountPending(upload, client)
     async let second = Self.cancelThenCountPending(upload, client)
 
-    #expect(try await [first, second] == [0, 0])
+    let pendingAfterEachCancel: [Int] = try await [first, second]
+    #expect(pendingAfterEachCancel == [0, 0])
     #expect(try await bucket(client).exists(path: "cancelled-twice.bin") == false)
   }
 
