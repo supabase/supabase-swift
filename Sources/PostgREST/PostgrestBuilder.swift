@@ -1,5 +1,5 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 
 #if canImport(FoundationNetworking)
@@ -33,6 +33,7 @@ import HTTPTypes
 ///
 /// - ``execute(options:)-96tpd``
 /// - ``execute(options:)-6mk2u``
+/// - ``execute(options:decoder:)``
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
@@ -159,9 +160,38 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    try await execute(options: options) { [configuration] data in
+    try await execute(options: options, decoder: nil)
+  }
+
+  /// Executes the request and decodes the response body into the inferred type with a per-call
+  /// decoder.
+  ///
+  /// ```swift
+  /// let todos: [Todo] = try await client
+  ///   .from("todos")
+  ///   .select()
+  ///   .execute(decoder: decoder)
+  ///   .value
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - options: Options controlling whether to include a row count and whether to
+  ///     use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  ///   - decoder: The `JSONDecoder` used to decode the response body into `T`. Overrides
+  ///     ``PostgrestClient/Configuration/decoder`` when non-`nil`. In this version an error body
+  ///     is still decoded with ``PostgrestClient/Configuration/decoder``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if the
+  ///   response body cannot be decoded as `T`, or any error thrown by the fetch handler.
+  @discardableResult
+  public func execute<T: Decodable>(
+    options: FetchOptions = FetchOptions(),
+    decoder: JSONDecoder?
+  ) async throws -> PostgrestResponse<T> {
+    let decoder = decoder ?? configuration.decoder
+    return try await execute(options: options) { [configuration] data in
       do {
-        return try configuration.decoder.decode(T.self, from: data)
+        return try decoder.decode(T.self, from: data)
       } catch {
         configuration.logger?.error("Failed to decode type '\(T.self) with error: \(error)")
         throw error
