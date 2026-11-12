@@ -466,7 +466,7 @@ public final class SupabaseClient: Sendable {
       if let accessToken {
         try await accessToken()
       } else {
-        try await auth.session.accessToken
+        try await auth.session().accessToken
       }
     }
   }

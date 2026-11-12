@@ -146,9 +146,24 @@ public struct Session: Codable, Hashable, Sendable {
   /// Returns `true` if the access token is expired or will expire within the next 30 seconds.
   ///
   /// The 30-second buffer accounts for network latency.
+  @available(*, deprecated, message: "Use isExpired(at:leeway:) instead.")
   public var isExpired: Bool {
     let expiresAt = Date(timeIntervalSince1970: expiresAt)
     return expiresAt.timeIntervalSinceNow < defaultExpiryMargin
+  }
+
+  /// Whether the access token is expired at `date`, or expires within `leeway` after it.
+  ///
+  /// The leeway accounts for network latency. The expiry is ``expiresAt``.
+  ///
+  /// - Parameters:
+  ///   - date: The time to judge the session at. Defaults to now.
+  ///   - leeway: How long before the expiry the session counts as expired. Defaults to 30 seconds.
+  /// - Returns: `true` when less than `leeway` of the session's lifetime remains at `date`.
+  public func isExpired(at date: Date = .now, leeway: Duration = .seconds(30)) -> Bool {
+    let remaining = Date(timeIntervalSince1970: expiresAt).timeIntervalSince(date)
+    let (seconds, attoseconds) = leeway.components
+    return remaining < TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
   }
 }
 
@@ -497,7 +512,70 @@ public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   public var id: RawValue { rawValue }
 }
 
+/// An ID token from a third-party identity provider, and the values the server needs to check
+/// it, for ``AuthClient/signInWithIDToken(_:)`` and ``AuthClient/linkIdentity(idToken:)``.
+///
+/// When the provider takes a nonce, pass the hashed nonce to the provider and the raw nonce
+/// here. The server hashes `nonce` and compares the result with the token's `nonce` claim.
+public struct IDTokenCredentials: Sendable, Hashable {
+  /// The provider that issued the token, such as ``Provider/apple`` or ``Provider/google``.
+  public var provider: Provider
+
+  /// The ID token the provider issued. Its `iss` claim must match ``provider``.
+  public var idToken: String
+
+  /// The raw nonce used to request the token. Required when the token has a `nonce` claim.
+  public var nonce: String?
+
+  /// The provider's access token. Required when the token has an `at_hash` claim.
+  public var accessToken: String?
+
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
+
+  /// Creates ID token credentials.
+  ///
+  /// - Parameters:
+  ///   - provider: The provider that issued the token.
+  ///   - idToken: The ID token the provider issued.
+  ///   - nonce: The raw nonce used to request the token.
+  ///   - accessToken: The provider's access token.
+  ///   - captchaToken: The token the user received for completing a captcha.
+  public init(
+    provider: Provider,
+    idToken: String,
+    nonce: String? = nil,
+    accessToken: String? = nil,
+    captchaToken: String? = nil
+  ) {
+    self.provider = provider
+    self.idToken = idToken
+    self.nonce = nonce
+    self.accessToken = accessToken
+    self.captchaToken = captchaToken
+  }
+}
+
+struct IDTokenGrantBody: Encodable {
+  var provider: String
+  var idToken: String
+  var accessToken: String?
+  var nonce: String?
+  var gotrueMetaSecurity: AuthMetaSecurity?
+  var linkIdentity: Bool
+
+  init(_ credentials: IDTokenCredentials, linkIdentity: Bool = false) {
+    provider = credentials.provider.rawValue
+    idToken = credentials.idToken
+    accessToken = credentials.accessToken
+    nonce = credentials.nonce
+    gotrueMetaSecurity = credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+    self.linkIdentity = linkIdentity
+  }
+}
+
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
+@available(*, deprecated, message: "Use IDTokenCredentials instead.")
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
   /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
@@ -620,6 +698,13 @@ public struct Web3Credentials: Codable, Hashable, Sendable {
     self.message = message
     self.signature = signature
     self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+  }
+
+  /// The token the user received for completing a captcha. The same value as
+  /// ``gotrueMetaSecurity``.
+  public var captchaToken: String? {
+    get { gotrueMetaSecurity?.captchaToken }
+    set { gotrueMetaSecurity = newValue.map(AuthMetaSecurity.init(captchaToken:)) }
   }
 }
 
@@ -752,7 +837,95 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   }
 }
 
+/// The changes a user can make to their own account, for ``AuthClient/updateUser(_:redirectTo:)``.
+public struct UpdateUser: Encodable, Hashable, Sendable {
+  /// The user's email.
+  public var email: String?
+
+  /// The user's phone.
+  public var phone: String?
+
+  /// The user's password.
+  public var password: String?
+
+  /// The user's current password.
+  ///
+  /// Set it with ``password`` when the project requires the current password to change the
+  /// password.
+  public var currentPassword: String?
+
+  /// The nonce sent for reauthentication if the user's password is to be updated.
+  ///
+  /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
+  public var nonce: String?
+
+  /// Data to merge into the user's metadata, in the `auth.users.raw_user_meta_data` column. The
+  /// user can change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case phone
+    case password
+    case currentPassword = "current_password"
+    case nonce
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+    case userMetadata = "data"
+  }
+
+  /// Creates the changes for ``AuthClient/updateUser(_:redirectTo:)``.
+  ///
+  /// - Parameters:
+  ///   - email: New email address.
+  ///   - phone: New phone number.
+  ///   - password: New password.
+  ///   - currentPassword: Current password, required when the project requires it to change the
+  ///     password.
+  ///   - nonce: Reauthentication nonce, required when updating the password.
+  ///   - userMetadata: Data to merge into the user's metadata.
+  public init(
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    currentPassword: String? = nil,
+    nonce: String? = nil,
+    userMetadata: JSONObject? = nil
+  ) {
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.currentPassword = currentPassword
+    self.nonce = nonce
+    self.userMetadata = userMetadata
+  }
+}
+
+/// Options for ``AuthClient/resetPassword(email:options:)``.
+public struct ResetPasswordOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectToURL``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates password reset options.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
 /// Attributes that a user can update for their own account.
+@available(*, deprecated, message: "Use UpdateUser instead.")
 public struct UserAttributes: Codable, Hashable, Sendable {
   /// The user's email.
   public var email: String?

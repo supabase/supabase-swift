@@ -189,10 +189,19 @@ public actor AuthClient {
   /// Returns the session, refreshing it if necessary.
   ///
   /// If no session can be found, a ``AuthError/sessionMissing`` error is thrown.
+  @available(*, deprecated, message: "Use session() instead.")
   public var session: Session {
     get async throws {
       try await sessionManager.session()
     }
+  }
+
+  /// Returns the session, refreshing it first when it is expired or about to expire.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh.
+  public func session() async throws -> Session {
+    try await sessionManager.session()
   }
 
   /// Returns the current session, if any.
@@ -511,6 +520,7 @@ public actor AuthClient {
 
   /// Allows signing in with an ID token issued by certain supported providers.
   /// The ID token is verified for validity and a new session is established.
+  @available(*, deprecated, message: "Use signInWithIDToken(_:) instead.")
   @discardableResult
   public func signInWithIdToken(credentials: OpenIDConnectCredentials) async throws -> Session {
     try await _signIn(
@@ -523,6 +533,31 @@ public actor AuthClient {
     )
   }
 
+  /// Signs in with an ID token that a third-party identity provider issued, such as Sign in with
+  /// Apple or Google Sign-In.
+  ///
+  /// The server checks the token and creates the user if needed.
+  ///
+  /// ```swift
+  /// try await client.auth.signInWithIDToken(
+  ///   IDTokenCredentials(provider: .apple, idToken: idToken, nonce: rawNonce)
+  /// )
+  /// ```
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The new session.
+  @discardableResult
+  public func signInWithIDToken(_ credentials: IDTokenCredentials) async throws -> Session {
+    try await _signIn(
+      request: .init(
+        url: configuration.url.appendingPathComponent("token"),
+        method: .post,
+        query: [URLQueryItem(name: "grant_type", value: "id_token")],
+        body: configuration.resolvedEncoder.encode(IDTokenGrantBody(credentials))
+      )
+    )
+  }
+
   /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
   ///
   /// The app is responsible for building the message and obtaining the signature from the user's
@@ -530,15 +565,18 @@ public actor AuthClient {
   ///
   /// ```swift
   /// let session = try await client.auth.signInWithWeb3(
-  ///   credentials: Web3Credentials(
+  ///   Web3Credentials(
   ///     chain: .ethereum,
   ///     message: siweMessage,
   ///     signature: signatureHex
   ///   )
   /// )
   /// ```
+  ///
+  /// - Parameter credentials: The chain, the signed message, and its signature.
+  /// - Returns: The new session.
   @discardableResult
-  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+  public func signInWithWeb3(_ credentials: Web3Credentials) async throws -> Session {
     try await _signIn(
       request: .init(
         url: configuration.url.appendingPathComponent("token"),
@@ -547,6 +585,13 @@ public actor AuthClient {
         body: configuration.resolvedEncoder.encode(credentials)
       )
     )
+  }
+
+  /// Signs in a user via a signed Sign in with Ethereum (EIP-4361) or Sign in with Solana message.
+  @available(*, deprecated, message: "Use signInWithWeb3(_:) instead.")
+  @discardableResult
+  public func signInWithWeb3(credentials: Web3Credentials) async throws -> Session {
+    try await signInWithWeb3(credentials)
   }
 
   /// Creates a new anonymous user.
@@ -1056,8 +1101,24 @@ public actor AuthClient {
   ///   - accessToken: The current access token.
   ///   - refreshToken: The current refresh token.
   /// - Returns: A new valid session.
+  @available(*, deprecated, message: "Use importSession(accessToken:refreshToken:) instead.")
   @discardableResult
   public func setSession(accessToken: String, refreshToken: String) async throws -> Session {
+    try await importSession(accessToken: accessToken, refreshToken: refreshToken)
+  }
+
+  /// Signs in with tokens from another place, such as a web page, another device, or a server.
+  ///
+  /// When the access token is expired, or its `exp` claim cannot be read, the client refreshes
+  /// the session with `refreshToken` and emits ``AuthChangeEvent/tokenRefreshed``. Otherwise it
+  /// fetches the user of `accessToken` and emits ``AuthChangeEvent/signedIn``.
+  ///
+  /// - Parameters:
+  ///   - accessToken: The access token of the session.
+  ///   - refreshToken: The refresh token of the session.
+  /// - Returns: The stored session.
+  @discardableResult
+  public func importSession(accessToken: String, refreshToken: String) async throws -> Session {
     let now = date()
     var expiresAt = now
     var hasExpired = true
@@ -1070,7 +1131,7 @@ public actor AuthClient {
     }
 
     if hasExpired {
-      session = try await refreshSession(refreshToken: refreshToken)
+      session = try await sessionManager.refreshSession(refreshToken)
     } else {
       let user = try await user(jwt: accessToken)
       session = Session(
@@ -1294,18 +1355,40 @@ public actor AuthClient {
   /// attempt to get the jwt from the current session.
   ///
   /// Should be used only when you require the most current user data. For faster results, ``currentUser`` is recommended.
+  @available(*, deprecated, message: "Use user() or user(jwt:) instead.")
   public func user(jwt: String? = nil) async throws -> User {
-    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
-
     if let jwt {
-      request.headers[.authorization] = "Bearer \(jwt)"
-      return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+      return try await user(jwt: jwt)
     }
+    return try await user()
+  }
 
+  /// Fetches the user of the current session from the Auth server.
+  ///
+  /// The session is refreshed first when it is expired. For the user stored with the session,
+  /// with no request, read ``currentUser``.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  public func user() async throws -> User {
+    let request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
     return try await api.authorizedExecute(request).decoded(decoder: configuration.resolvedDecoder)
   }
 
+  /// Fetches the user that an access token belongs to from the Auth server.
+  ///
+  /// The stored session is not read and not changed.
+  ///
+  /// - Parameter jwt: The access token to send.
+  /// - Throws: The error of the request, for example when the Auth server rejects `jwt`.
+  public func user(jwt: String) async throws -> User {
+    var request = HTTPRequest(url: configuration.url.appendingPathComponent("user"), method: .get)
+    request.headers[.authorization] = "Bearer \(jwt)"
+    return try await api.execute(request).decoded(decoder: configuration.resolvedDecoder)
+  }
+
   /// Updates user data, if there is a logged in user.
+  @available(*, deprecated, message: "Use updateUser(_:redirectTo:) instead.")
   @discardableResult
   public func update(user: UserAttributes, redirectTo: URL? = nil) async throws -> User {
     var user = user
@@ -1316,6 +1399,35 @@ public actor AuthClient {
       user.codeChallengeMethod = codeChallengeMethod
     }
 
+    return try await _updateUser(body: user, redirectTo: redirectTo)
+  }
+
+  /// Updates the current user.
+  ///
+  /// The stored session gets the updated user, and the client emits
+  /// ``AuthChangeEvent/userUpdated``.
+  ///
+  /// - Parameters:
+  ///   - changes: The changes to make.
+  ///   - redirectTo: The URL the confirmation link of an email change redirects to. When `nil`,
+  ///     the client uses ``Configuration/redirectToURL``.
+  /// - Returns: The updated user.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  @discardableResult
+  public func updateUser(_ changes: UpdateUser, redirectTo: URL? = nil) async throws -> User {
+    var changes = changes
+
+    if changes.email != nil {
+      let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
+      changes.codeChallenge = codeChallenge
+      changes.codeChallengeMethod = codeChallengeMethod
+    }
+
+    return try await _updateUser(body: changes, redirectTo: redirectTo)
+  }
+
+  private func _updateUser(body: some Encodable, redirectTo: URL?) async throws -> User {
     var session = try await sessionManager.session()
     let updatedUser = try await api.authorizedExecute(
       .init(
@@ -1329,7 +1441,7 @@ public actor AuthClient {
             )
           }
         ].compactMap { $0 },
-        body: configuration.resolvedEncoder.encode(user)
+        body: configuration.resolvedEncoder.encode(body)
       )
     ).decoded(as: User.self, decoder: configuration.resolvedDecoder)
     session.user = updatedUser
@@ -1339,25 +1451,51 @@ public actor AuthClient {
   }
 
   /// Gets all the identities linked to a user.
+  @available(*, deprecated, message: "Use identities() instead.")
   public func userIdentities() async throws -> [UserIdentity] {
+    try await identities()
+  }
+
+  /// Fetches the identities linked to the current user from the Auth server.
+  ///
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh or of the request.
+  public func identities() async throws -> [UserIdentity] {
     try await user().identities ?? []
   }
 
   /// Link an identity to the current user using an ID token.
+  @available(*, deprecated, message: "Use linkIdentity(idToken:) instead.")
   @discardableResult
   public func linkIdentityWithIdToken(
     credentials: OpenIDConnectCredentials
   ) async throws -> Session {
     var credentials = credentials
     credentials.linkIdentity = true
+    return try await _linkIdentity(idTokenBody: credentials)
+  }
 
+  /// Links an identity to the current user with an ID token that a third-party identity provider
+  /// issued.
+  ///
+  /// The stored session is replaced, and the client emits ``AuthChangeEvent/userUpdated``.
+  ///
+  /// - Parameter credentials: The ID token and the values the server needs to check it.
+  /// - Returns: The new session.
+  @discardableResult
+  public func linkIdentity(idToken credentials: IDTokenCredentials) async throws -> Session {
+    try await _linkIdentity(idTokenBody: IDTokenGrantBody(credentials, linkIdentity: true))
+  }
+
+  private func _linkIdentity(idTokenBody: some Encodable) async throws -> Session {
+    let accessToken = try await sessionManager.session().accessToken
     let session = try await api.execute(
       .init(
         url: configuration.url.appendingPathComponent("token"),
         method: .post,
         query: [URLQueryItem(name: "grant_type", value: "id_token")],
-        headers: [.authorization: "Bearer \(session.accessToken)"],
-        body: configuration.resolvedEncoder.encode(credentials)
+        headers: [.authorization: "Bearer \(accessToken)"],
+        body: configuration.resolvedEncoder.encode(idTokenBody)
       )
     ).decoded(as: Session.self, decoder: configuration.resolvedDecoder)
 
@@ -1471,11 +1609,29 @@ public actor AuthClient {
   }
 
   /// Sends a reset request to an email address.
+  @available(*, deprecated, message: "Use resetPassword(email:options:) instead.")
   public func resetPasswordForEmail(
     _ email: String,
     redirectTo: URL? = nil,
     captchaToken: String? = nil
   ) async throws {
+    try await resetPassword(
+      email: email,
+      options: ResetPasswordOptions(redirectTo: redirectTo, captchaToken: captchaToken)
+    )
+  }
+
+  /// Sends a password reset email.
+  ///
+  /// - Parameters:
+  ///   - email: The email address of the user.
+  ///   - options: The redirect URL and the captcha token.
+  public func resetPassword(
+    email: String,
+    options: ResetPasswordOptions = .init()
+  ) async throws {
+    let redirectTo = options.redirectTo
+    let captchaToken = options.captchaToken
     let (codeChallenge, codeChallengeMethod) = prepareForPKCE()
 
     _ = try await api.execute(
@@ -1506,9 +1662,27 @@ public actor AuthClient {
   /// - Parameter refreshToken: The optional refresh token to use for refreshing the session. If
   /// none is provided then this method tries to load the refresh token from the current session.
   /// - Returns: A new session.
+  @available(
+    *, deprecated,
+    message: "Use refreshSession() or importSession(accessToken:refreshToken:) instead."
+  )
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {
     guard let refreshToken = refreshToken ?? currentSession?.refreshToken else {
+      throw AuthError.sessionMissing
+    }
+
+    return try await sessionManager.refreshSession(refreshToken)
+  }
+
+  /// Refreshes the stored session and returns the new one, whether or not it is expired.
+  ///
+  /// - Returns: The new session.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
+  ///   refresh.
+  @discardableResult
+  public func refreshSession() async throws -> Session {
+    guard let refreshToken = currentSession?.refreshToken else {
       throw AuthError.sessionMissing
     }
 
@@ -1537,13 +1711,13 @@ public actor AuthClient {
       eventEmitter.emit(.initialSession, session: currentSession, token: token)
 
       Task {
-        if currentSession.isExpired {
+        if currentSession.isExpired() {
           _ = try? await sessionManager.refreshSession(currentSession.refreshToken)
           // No need to emit `tokenRefreshed` nor `signOut` event since the `refreshSession` does it already.
         }
       }
     } else {
-      let session = try? await session
+      let session = try? await sessionManager.session()
       eventEmitter.emit(.initialSession, session: session, token: token)
 
       // Properly expecting issues during tests isn't working as expected, I think because the reportIssue is usually triggered inside an unstructured Task
@@ -1716,7 +1890,7 @@ public actor AuthClient {
     if let jwt {
       token = jwt
     } else {
-      guard let session = try? await session else {
+      guard let session = try? await sessionManager.session() else {
         throw AuthError.sessionMissing
       }
       token = session.accessToken

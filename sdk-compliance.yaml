@@ -32,6 +32,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithIdToken
+      - AuthClient.signInWithIDToken
   auth.sign_in.sign_in_anonymously:
     status: implemented
     symbols:
@@ -66,6 +67,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -97,6 +99,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -105,6 +108,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.update
+      - AuthClient.updateUser
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
@@ -131,6 +135,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.userIdentities
+      - AuthClient.identities
 
   auth.mfa.enroll:
     status: implemented
