@@ -266,3 +266,96 @@ struct StorageV3ErrorTests {
     #expect(decoded.error == "Forbidden")
   }
 }
+
+@Suite
+struct StorageV3ValueTypesTests {
+  private func json(_ value: some Encodable) throws -> String {
+    String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
+  }
+
+  @Test
+  func byteCountIsTheV2TypeWithTheV3Members() throws {
+    let exact = ByteCount(bytes: 5_242_880)
+    #expect(exact.rawValue == "5242880")
+    #expect(exact.bytes == 5_242_880)
+    #expect(try json([exact]) == "[5242880]")
+
+    let size = ByteCount(rawValue: "1.5mb")
+    #expect(size.rawValue == "1.5mb")
+    #expect(size.bytes == nil)
+    #expect(size == .megabytes(1.5))
+    #expect(try json([size]) == #"["1.5mb"]"#)
+
+    #expect(ByteCount(rawValue: "500") == ByteCount(bytes: 500))
+    #expect(ByteCount.kilobytes(500).rawValue == "500kb")
+    #expect(ByteCount.gigabytes(2).rawValue == "2gb")
+
+    let literal: ByteCount = 1024
+    #expect(literal.bytes == 1024)
+    let v2: StorageByteCount = literal
+    #expect(v2.rawValue == "1024")
+  }
+
+  @Test
+  @available(*, deprecated)
+  func byteCountV2MembersKeepTheirValues() throws {
+    #expect(StorageByteCount(5).intValue == 5)
+    #expect(StorageByteCount(5).stringValue == nil)
+    #expect(StorageByteCount(stringValue: "5mb").stringValue == "5mb")
+    #expect(StorageByteCount(stringValue: "5mb").intValue == nil)
+    #expect(try json([StorageByteCount(stringValue: "123")]) == #"["123"]"#)
+    #expect(StorageByteCount.megabytes(1.5).stringValue == "1.5mb")
+    #expect(BucketOptions(fileSizeLimit: 5).fileSizeLimit == "5")
+    #expect(BucketOptions(fileSizeLimit: .megabytes(1.5)).fileSizeLimit == "1.5mb")
+  }
+
+  @Test
+  func cacheControl() throws {
+    #expect(CacheControl.maxAge(.seconds(3600)).rawValue == "max-age=3600")
+    #expect(CacheControl.maxAge(.milliseconds(1500)).rawValue == "max-age=1")
+    #expect(CacheControl.noCache.rawValue == "no-cache")
+    #expect(CacheControl.noStore.rawValue == "no-store")
+
+    let literal: CacheControl = "max-age=60, s-maxage=3600"
+    #expect(literal == CacheControl(rawValue: "max-age=60, s-maxage=3600"))
+
+    let decoded = try JSONDecoder().decode([CacheControl].self, from: Data(#"["no-cache"]"#.utf8))
+    #expect(decoded == [.noCache])
+  }
+
+  @Test
+  func imageTransform() {
+    var transform = ImageTransform(
+      width: 200, height: 100, resize: .cover, quality: 80, format: .webp, gravity: .focalPoint,
+      focalPoint: FocalPoint(x: 0.25, y: 0.75))
+    #expect(transform.gravity == Gravity(rawValue: "fp"))
+    #expect(transform.focalPoint?.x == 0.25)
+    #expect(transform.focalPoint?.y == 0.75)
+    #expect(transform.resize == .cover)
+    #expect(transform.format == .webp)
+
+    transform.gravity = "sm"
+    #expect(transform.gravity == .smart)
+    #expect(transform != ImageTransform())
+
+    let all: [Gravity] = [
+      .north, .south, .east, .west, .northEast, .northWest, .southEast, .southWest, .center,
+      .smart, .focalPoint,
+    ]
+    #expect(
+      all.map(\.rawValue) == [
+        "no", "so", "ea", "we", "noea", "nowe", "soea", "sowe", "ce", "sm", "fp",
+      ])
+  }
+
+  @Test
+  func uploadedObject() {
+    let id = UUID()
+    let object = UploadedObject(id: id, path: "a.png", fullPath: "avatars/a.png")
+    #expect(object.id == id)
+    #expect(object.path == "a.png")
+    #expect(object.fullPath == "avatars/a.png")
+    #expect(UploadedObject(path: "a.png", fullPath: "avatars/a.png").id == nil)
+    #expect(object != UploadedObject(path: "a.png", fullPath: "avatars/a.png"))
+  }
+}

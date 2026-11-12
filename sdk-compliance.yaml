@@ -511,6 +511,8 @@ features:
       - StorageByteCount
       - StorageByteCount.init
       - StorageByteCount.intValue
+      - StorageByteCount.bytes
+      - StorageByteCount.rawValue
       - StorageByteCount.kilobytes
       - StorageByteCount.megabytes
       - StorageByteCount.gigabytes
@@ -567,6 +569,20 @@ features:
       - ImageFormat.webp
       - ImageFormat.avif
       - ImageFormat.encode
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented

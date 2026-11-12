@@ -327,6 +327,39 @@ public struct SignedURLUploadResponse: Sendable {
   public let fullPath: String
 }
 
+/// The object an upload, update, or signed-URL upload created.
+///
+/// ## Topics
+///
+/// ### Properties
+///
+/// - ``id``
+/// - ``path``
+/// - ``fullPath``
+public struct UploadedObject: Hashable, Sendable {
+  /// The unique identifier assigned to the object. `nil` after a signed-URL or resumable
+  /// upload, which Storage answers without one.
+  public var id: UUID?
+
+  /// The normalized file path within the bucket, as provided to the upload call.
+  public var path: String
+
+  /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
+  public var fullPath: String
+
+  /// Creates an ``UploadedObject``.
+  ///
+  /// - Parameters:
+  ///   - id: The object identifier, when Storage returned one.
+  ///   - path: The file path within the bucket.
+  ///   - fullPath: The full storage key including the bucket name.
+  public init(id: UUID? = nil, path: String, fullPath: String) {
+    self.id = id
+    self.path = path
+    self.fullPath = fullPath
+  }
+}
+
 /// Options for creating a signed upload URL.
 ///
 /// Pass this to ``StorageFileApi/createSignedUploadURL(path:options:)`` to control whether an
@@ -655,6 +688,7 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 ///
 /// ``StorageByteCount`` is accepted wherever a file-size limit is required (e.g. ``BucketOptions``).
 /// You can create instances using the static factory methods, integer literals, or string literals.
+/// A whole number of bytes encodes as a JSON number, anything else as a string.
 ///
 /// ```swift
 /// BucketOptions(fileSizeLimit: .megabytes(1.5))
@@ -666,88 +700,132 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
 ///
 /// ### Creating a byte count
 ///
-/// - ``init(_:)``
-/// - ``init(stringValue:)``
+/// - ``init(bytes:)``
+/// - ``init(rawValue:)``
 /// - ``kilobytes(_:)``
 /// - ``megabytes(_:)``
 /// - ``gigabytes(_:)``
 ///
-/// ### Accessing the stored value
+/// ### Reading the value
 ///
-/// - ``intValue``
-/// - ``stringValue``
+/// - ``rawValue``
+/// - ``bytes``
 public struct StorageByteCount: Sendable, Hashable {
+  private let exactBytes: Int64?
+  private let sizeString: String?
+
   /// The exact byte count, or `nil` when a human-readable string value is used.
-  public let intValue: Int64?
+  @available(*, deprecated, message: "Use bytes instead.")
+  public var intValue: Int64? { exactBytes }
 
   /// A human-readable size string (e.g. `"1.5mb"`, `"500kb"`), or `nil` when an integer is used.
-  public let stringValue: String?
+  @available(*, deprecated, message: "Use rawValue instead.")
+  public var stringValue: String? { sizeString }
 
   /// Creates a ``StorageByteCount`` from an exact byte count.
   ///
   /// - Parameter intValue: The number of bytes.
+  @available(*, deprecated, message: "Use init(bytes:) instead.")
   public init(_ intValue: Int64) {
-    self.intValue = intValue
-    self.stringValue = nil
+    self.init(bytes: intValue)
   }
 
   /// Creates a ``StorageByteCount`` from a human-readable size string.
   ///
   /// - Parameter stringValue: A size string such as `"500kb"`, `"1.5mb"`, or `"2gb"`.
+  @available(*, deprecated, message: "Use init(rawValue:) instead.")
   public init(stringValue: String) {
-    self.intValue = nil
-    self.stringValue = stringValue
+    self.init(sizeString: stringValue)
   }
 
-  private static func formatValue(_ value: Double) -> String {
-    value.truncatingRemainder(dividingBy: 1) == 0
+  /// Creates a ``StorageByteCount`` from an exact number of bytes.
+  public init(bytes: Int64) {
+    self.exactBytes = bytes
+    self.sizeString = nil
+  }
+
+  private init(sizeString: String) {
+    self.exactBytes = nil
+    self.sizeString = sizeString
+  }
+
+  /// The exact number of bytes, or `nil` when the value is a size string Storage parses.
+  public var bytes: Int64? {
+    exactBytes ?? sizeString.flatMap { Int64($0) }
+  }
+
+  private static func unit(_ value: Double, _ suffix: String) -> Self {
+    let number =
+      value.truncatingRemainder(dividingBy: 1) == 0
       ? Int64(exactly: value).map(String.init) ?? String(value)
       : String(value)
+    return Self(sizeString: number + suffix)
   }
 
-  /// Creates a ``StorageByteCount`` from a number of kilobytes.
+  /// `value` kilobytes, sent as `"<value>kb"`.
   ///
   /// - Parameter value: Size in kilobytes.
   public static func kilobytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))kb")
+    unit(value, "kb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of megabytes.
+  /// `value` megabytes, sent as `"<value>mb"`.
   ///
   /// - Parameter value: Size in megabytes.
   public static func megabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))mb")
+    unit(value, "mb")
   }
 
-  /// Creates a ``StorageByteCount`` from a number of gigabytes.
+  /// `value` gigabytes, sent as `"<value>gb"`.
   ///
   /// - Parameter value: Size in gigabytes.
   public static func gigabytes(_ value: Double) -> Self {
-    Self(stringValue: "\(formatValue(value))gb")
+    unit(value, "gb")
   }
 }
 
-extension StorageByteCount: ExpressibleByIntegerLiteral {
-  public init(integerLiteral value: Int64) { self.init(value) }
-}
+/// A file size limit for a Storage bucket.
+///
+/// The name ``StorageByteCount`` has in the next major version.
+public typealias ByteCount = StorageByteCount
 
-extension StorageByteCount: ExpressibleByStringLiteral {
-  public init(stringLiteral value: String) {
-    if let n = Int64(value) {
-      self.init(n)
+extension StorageByteCount {
+  /// The value as Storage reads it: a byte count such as `"5242880"`, or a size string such as
+  /// `"1.5mb"`.
+  public var rawValue: String {
+    sizeString ?? String(exactBytes ?? 0)
+  }
+
+  /// Creates a ``StorageByteCount`` from a value Storage reads, such as `"1.5mb"` or `"5242880"`.
+  public init(rawValue: String) {
+    if let bytes = Int64(rawValue) {
+      self.init(bytes: bytes)
     } else {
-      self.init(stringValue: value)
+      self.init(sizeString: rawValue)
     }
   }
 }
 
+extension StorageByteCount: ExpressibleByIntegerLiteral {
+  /// Creates a ``StorageByteCount`` of an exact number of bytes.
+  public init(integerLiteral value: Int64) { self.init(bytes: value) }
+}
+
+extension StorageByteCount: ExpressibleByStringLiteral {
+  /// Creates a ``StorageByteCount`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+}
+
 extension StorageByteCount: Encodable {
+  /// Encodes an exact byte count as a JSON number and a size string as a string.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.singleValueContainer()
-    if let string = stringValue {
-      try container.encode(string)
+    if let sizeString {
+      try container.encode(sizeString)
     } else {
-      try container.encode(intValue ?? 0)
+      try container.encode(exactBytes ?? 0)
     }
   }
 }
@@ -980,7 +1058,7 @@ public struct BucketOptions: Sendable {
     allowedMimeTypes: [String]? = nil
   ) {
     self.isPublic = isPublic
-    self.fileSizeLimit = fileSizeLimit?.stringValue ?? fileSizeLimit?.intValue.map(String.init)
+    self.fileSizeLimit = fileSizeLimit?.rawValue
     self.allowedMimeTypes = allowedMimeTypes
   }
 }
