@@ -1,0 +1,17 @@
+# Signs in and ends on the Home screen.
+# Env: EMAIL, PASSWORD
+appId: com.supabase.Reminders
+---
+- tapOn:
+    id: auth.email
+- inputText: ${EMAIL}
+- tapOn:
+    id: auth.password
+- inputText: ${PASSWORD}
+- tapOn:
+    id: auth.signIn
+- runFlow: dismiss-save-password.yaml
+- extendedWaitUntil:
+    visible:
+      id: home.accountMenu
+    timeout: 15000
