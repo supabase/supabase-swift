@@ -84,6 +84,29 @@ struct ChannelStateTests {
   }
 
   @Test
+  func removeStreamDropsAStreamOfEveryKind() throws {
+    let state = try makeState()
+    let streams = (
+      state.status.subscribe(id(1), onTermination: {}),
+      state.events.subscribe(id(2), onTermination: {}),
+      state.broadcasts.subscribe(id(3), onTermination: {}),
+      state.presenceChanges.subscribe(id(4), onTermination: {}),
+      state.presenceStates.subscribe(id(5), onTermination: {})
+    )
+
+    for rawValue in UInt64(1)...5 {
+      state.removeStream(id(rawValue))
+    }
+
+    #expect(state.status.count == 0)
+    #expect(state.events.count == 0)
+    #expect(state.broadcasts.count == 0)
+    #expect(state.presenceChanges.count == 0)
+    #expect(state.presenceStates.count == 0)
+    withExtendedLifetime(streams) {}
+  }
+
+  @Test
   func postgresChangeGoesOnlyToMatchingBindings() async throws {
     let state = try makeState()
     let changesA = state.addPostgresStream(id(1), tableA, onTermination: {})

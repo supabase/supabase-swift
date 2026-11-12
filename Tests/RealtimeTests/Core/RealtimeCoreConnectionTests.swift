@@ -506,6 +506,22 @@ struct RealtimeCoreConnectionTests {
     #expect(harness.core.connection.status.isConnected)
   }
 
+  /// The probe and its heartbeat pause end with its reply: a later reply cancels no probe and
+  /// does not schedule the heartbeat a second time.
+  @Test
+  func heartbeatReplyAfterTheProbeEndedOnlyAcknowledges() {
+    var harness = CoreHarness.connected()
+    _ = harness.send(.timerFired(.heartbeat))
+    _ = harness.send(.appForeground)
+    _ = harness.send(.frame(Self.heartbeatReply(ref: "1")))
+    _ = harness.send(.timerFired(.heartbeat))
+
+    #expect(
+      harness.send(.frame(Self.heartbeatReply(ref: "2"))) == [
+        .publishHeartbeat(.acknowledged(latency: .zero))
+      ])
+  }
+
   /// No reply within the deadline is a heartbeat timeout, and the reconnect skips the backoff.
   @Test
   func probeWithoutReplyFailsTheSocketAndReconnectsAtOnce() throws {
@@ -639,6 +655,19 @@ struct RealtimeCoreConnectionTests {
 
     harness.advance(by: .milliseconds(500))
     #expect(harness.send(.timerFired(.reconnect)).contains(.openSocket))
+    #expect(harness.core.connection == .connecting(attempt: 2))
+  }
+
+  /// The cooldown here ends 2 s in: a wake at that instant retries at once, with no timer.
+  @Test
+  func wakeAtTheEndOfTheCooldownRetriesAtOnce() {
+    var harness = Self.waitingToRetry(lostAt: .seconds(1))
+    harness.advance(by: .seconds(1))
+
+    let effects = harness.send(.wake)
+
+    #expect(effects.contains(.openSocket))
+    #expect(!effects.contains { if case .schedule(.reconnect, _) = $0 { true } else { false } })
     #expect(harness.core.connection == .connecting(attempt: 2))
   }
 

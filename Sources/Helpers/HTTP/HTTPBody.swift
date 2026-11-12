@@ -350,6 +350,24 @@ extension HTTPBody {
   }
 }
 
+extension HTTPBody {
+  /// A one-pass, unknown-length body that yields `head`, then the chunks still left in `rest`.
+  /// Hands on a body that was partly read through its iterator.
+  package convenience init(_ head: Data, followedBy rest: Iterator) {
+    let rest = Box(rest)
+    let head = Box<Data?>(head.isEmpty ? nil : head)
+    self.init(storage: .stream, length: .unknown, iterationBehavior: .single) {
+      AsyncThrowingStream {
+        if let data = head.value {
+          head.value = nil
+          return ArraySlice(data)
+        }
+        return try await rest.value.next()
+      }
+    }
+  }
+}
+
 /// Mutable state for a pull closure. The consuming `AsyncThrowingStream` serializes pulls, so
 /// the value is never touched from two places at once.
 private final class Box<Value>: @unchecked Sendable {

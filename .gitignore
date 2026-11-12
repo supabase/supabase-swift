@@ -131,3 +131,8 @@ yarn-error.log*
 
 # superpowers scratch docs (design specs/plans, not project documentation)
 /docs/superpowers/
+
+# Mutation testing (scripts/mutation-test.sh)
+/.mutation-testing/
+.swift-mutation-testing-cache/
+mutation-report.json

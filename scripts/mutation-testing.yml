@@ -1,0 +1,24 @@
+# swift-mutation-testing configuration for scripts/mutation-test.sh.
+#
+# Do not run swift-mutation-testing at the repository root. The script copies the package into
+# .mutation-testing/supabase-swift/, writes Mutation.xcworkspace next to it, and copies this file
+# there as .swift-mutation-testing.yml. See "Mutation testing" in DEVELOPMENT.md for the reasons.
+# The scheme and the sources path come from the script, one run per file in its scope.
+
+workspace: Mutation.xcworkspace
+destination: platform=macOS
+testing-framework: swift-testing
+
+# Per-mutant test timeout in seconds. The first, parallel pass allows twice this.
+timeout: 120
+
+# A cold build of the package and its dependencies takes longer than the default 120 s.
+build-timeout: 1800
+
+# The coverage map of swift-mutation-testing 1.7.1 leaves real tests out of a mutant's run (for
+# example, RetryRequestInterceptorTests for RetryRequestInterceptor.swift), so mutants survive
+# that the suite kills. Without the cache, every mutant runs its scheme's whole suite.
+no-cache: true
+
+# Every operator, not only the three of the default tier.
+operator-tier: experimental

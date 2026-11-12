@@ -79,6 +79,14 @@ struct RetryPolicyTests {
   }
 
   @Test
+  func retryAfterZeroDeltaSecondsIsAnImmediateRetry() {
+    #expect(RetryPolicy.retryAfterDelay("0", now: now) == .zero)
+
+    let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
+    #expect(policy.delay(retry: 1, retryAfter: "0", now: now) == .zero)
+  }
+
+  @Test
   func retryAfterHTTPDate() {
     #expect(
       RetryPolicy.retryAfterDelay("Wed, 21 Oct 2015 07:28:10 GMT", now: now) == .seconds(10))
