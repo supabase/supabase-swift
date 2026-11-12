@@ -24,6 +24,17 @@ public struct FunctionStreamResponse: Sendable, CustomStringConvertible {
   /// The response body, as chunks of `Data` in arrival order.
   public var body: AsyncThrowingStream<Data, any Error>
 
+  /// Creates a response, for tests and mocks.
+  public init(
+    status: HTTPResponse.Status,
+    headers: HTTPFields,
+    body: AsyncThrowingStream<Data, any Error>
+  ) {
+    self.status = status
+    self.headers = headers
+    self.body = body
+  }
+
   /// The `Content-Type` header, when present.
   public var contentType: String? { headers[.contentType] }
 

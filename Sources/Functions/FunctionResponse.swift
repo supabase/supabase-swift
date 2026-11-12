@@ -21,7 +21,22 @@ public struct FunctionResponse: Sendable, CustomStringConvertible {
   /// The raw response body. Empty when the function sent none.
   public var body: Data
 
+  /// The decoder ``decode(as:decoder:)`` uses when the call passes none.
   let decoder: JSONDecoder
+
+  /// Creates a response, for tests and mocks. ``decode(as:decoder:)`` uses a default
+  /// `JSONDecoder` unless the call passes one.
+  public init(status: HTTPResponse.Status, headers: HTTPFields, body: Data) {
+    self.init(status: status, headers: headers, body: body, decoder: JSONDecoder())
+  }
+
+  /// Creates a response that decodes with the client's configured decoder.
+  init(status: HTTPResponse.Status, headers: HTTPFields, body: Data, decoder: JSONDecoder) {
+    self.status = status
+    self.headers = headers
+    self.body = body
+    self.decoder = decoder
+  }
 
   /// The `Content-Type` header, when present.
   public var contentType: String? { headers[.contentType] }

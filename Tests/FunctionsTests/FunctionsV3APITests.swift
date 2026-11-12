@@ -44,6 +44,29 @@ struct FunctionsV3APITests {
   }
 
   @Test
+  func responsesCanBeBuiltForTestsAndMocks() async throws {
+    let headers: HTTPFields = [.contentType: "application/json"]
+
+    let response = FunctionResponse(status: .ok, headers: headers, body: Data(#"{"id":1}"#.utf8))
+    #expect(response.status == .ok)
+    #expect(response.contentType == "application/json")
+    #expect(try response.decode(as: [String: Int].self) == ["id": 1])
+
+    let stream = FunctionStreamResponse(
+      status: .ok,
+      headers: headers,
+      body: AsyncThrowingStream { continuation in
+        continuation.yield(Data("chunk".utf8))
+        continuation.finish()
+      }
+    )
+    var chunks: [Data] = []
+    for try await chunk in stream.body { chunks.append(chunk) }
+    #expect(stream.contentType == "application/json")
+    #expect(chunks == [Data("chunk".utf8)])
+  }
+
+  @Test
   func optionsDefaults() {
     let options = FunctionInvokeOptions()
     #expect(options.method == .post)
