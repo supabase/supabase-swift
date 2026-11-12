@@ -492,6 +492,23 @@ struct JSONValueTests {
     #expect(unicodeString.stringValue == "Hello, 世界! 🌍")
     #expect(escapedString.stringValue == "Line 1\nLine 2\tTab")
   }
+
+  @Test
+  func decodingAValueThatIsNotJSONThrows() throws {
+    struct Wrapper<Value: Codable>: Codable {
+      let value: Value
+    }
+    let plist = try PropertyListEncoder().encode(Wrapper(value: Data([0x01, 0x02])))
+
+    let error = #expect(throws: DecodingError.self) {
+      try PropertyListDecoder().decode(Wrapper<JSONValue>.self, from: plist)
+    }
+    guard case .dataCorrupted(let context) = error else {
+      Issue.record("Expected dataCorrupted, got \(String(describing: error))")
+      return
+    }
+    #expect(context.debugDescription == "Invalid JSON value.")
+  }
 }
 
 struct CodableValue: Codable, Equatable {
