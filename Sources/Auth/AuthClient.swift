@@ -78,14 +78,16 @@ private let globalJWKSCache = GlobalJWKSCache()
 /// let session = try await auth.signIn(email: "user@example.com", password: "secret")
 ///
 /// // Listen for state changes
-/// for await (event, session) in auth.authStateChanges {
-///   print(event, session?.user.email ?? "signed out")
+/// for await change in auth.events() {
+///   print(change.event, change.session?.user.email ?? "signed out")
 /// }
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Observing state
+/// - ``events()``
+/// - ``status``
 /// - ``onAuthStateChange(_:)``
 /// - ``authStateChanges``
 /// - ``currentSession``
@@ -335,18 +337,68 @@ public actor AuthClient {
   ///
   /// - Note: The session emitted in the  ``AuthChangeEvent/initialSession`` event may have been expired
   /// since last launch, consider checking for ``Session/isExpired``. If this is the case, then expect a ``AuthChangeEvent/tokenRefreshed`` after.
+  @available(*, deprecated, message: "Use events() instead.")
   @discardableResult
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
   ) async -> some AuthStateChangeListenerRegistration {
+    await _onAuthStateChange(listener)
+  }
+
+  private func _onAuthStateChange(
+    _ listener: @escaping @Sendable (AuthChangeEvent, Session?) -> Void
+  ) async -> ObservationToken {
     let token = eventEmitter.attach(listener)
     await emitInitialSession(forToken: token)
     return token
   }
 
+  /// Whether a user is signed in, read from the session that the client holds in storage.
+  ///
+  /// The session may be expired; check ``Session/isExpired(at:leeway:)``. This version of the
+  /// client never reports ``AuthStatus/loading``, and it does not record a ``SignOutReason``.
+  nonisolated public var status: AuthStatus {
+    currentSession.map(AuthStatus.signedIn) ?? .signedOut(nil)
+  }
+
+  /// The changes of the auth status, starting with ``AuthChangeEvent/initialSession``.
+  ///
+  /// ```swift
+  /// for await change in supabase.auth.events() {
+  ///   switch change.status {
+  ///   case .signedIn(let session): show(session.user)
+  ///   case .signedOut, .loading: showSignIn()
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// Each call returns a new stream. The stream does not finish on its own; cancel the task that
+  /// consumes it. The session of the first change may be expired; check
+  /// ``Session/isExpired(at:leeway:)``. If it is, expect ``AuthChangeEvent/tokenRefreshed`` after.
+  ///
+  /// This version of the client does not record why a session ended, so
+  /// ``AuthChange/signOutReason`` is always `nil`.
+  nonisolated public func events() -> AsyncStream<AuthChange> {
+    let (stream, continuation) = AsyncStream<AuthChange>.makeStream()
+
+    Task {
+      let handle = await _onAuthStateChange { event, session in
+        continuation.yield(
+          AuthChange(event: event, status: session.map(AuthStatus.signedIn) ?? .signedOut(nil)))
+      }
+
+      continuation.onTermination = { _ in
+        handle.cancel()
+      }
+    }
+
+    return stream
+  }
+
   /// Listen for auth state changes.
   ///
   /// An `.initialSession` is always emitted when this method is called.
+  @available(*, deprecated, message: "Use events() instead.")
   nonisolated public var authStateChanges:
     AsyncStream<
       (
@@ -363,12 +415,12 @@ public actor AuthClient {
     >.makeStream()
 
     Task {
-      let handle = await onAuthStateChange { event, session in
+      let handle = await _onAuthStateChange { event, session in
         continuation.yield((event, session))
       }
 
       continuation.onTermination = { _ in
-        handle.remove()
+        handle.cancel()
       }
     }
 
@@ -2298,17 +2350,24 @@ public actor AuthClient {
 
 extension AuthClient {
   /// Notification posted when an auth state event is triggered.
-  public static let didChangeAuthStateNotification = Notification.Name(
-    "AuthClient.didChangeAuthStateNotification"
-  )
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let didChangeAuthStateNotification = _didChangeAuthStateNotification
 
   /// A user info key to retrieve the ``AuthChangeEvent`` value for a
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeEventInfoKey = "AuthClient.authChangeEvent"
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let authChangeEventInfoKey = _authChangeEventInfoKey
 
   /// A user info key to retrieve the ``Session`` value for a
   /// ``AuthClient/didChangeAuthStateNotification`` notification.
-  public static let authChangeSessionInfoKey = "AuthClient.authChangeSession"
+  @available(*, deprecated, message: "Use events() instead.")
+  public static let authChangeSessionInfoKey = _authChangeSessionInfoKey
+
+  static let _didChangeAuthStateNotification = Notification.Name(
+    "AuthClient.didChangeAuthStateNotification"
+  )
+  static let _authChangeEventInfoKey = "AuthClient.authChangeEvent"
+  static let _authChangeSessionInfoKey = "AuthClient.authChangeSession"
 }
 
 #if canImport(AuthenticationServices) && !os(tvOS) && !os(watchOS)

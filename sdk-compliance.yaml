@@ -115,6 +115,7 @@ features:
     symbols:
       - AuthClient.authStateChanges
       - AuthClient.onAuthStateChange
+      - AuthClient.events
   auth.session.auto_refresh:
     status: implemented
     symbols:
