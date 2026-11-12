@@ -183,7 +183,7 @@ struct StorageClientTests {
     try await sut.from(bucketID)
       .upload(
         path: "sadcat.jpg",
-        fileURL: uploadFileURL("sadcat.jpg"),
+        fileURL: try #require(Bundle.module.url(forResource: "sadcat", withExtension: "jpg")),
         options: UploadOptions(
           metadata: ["key": "value"]
         )
@@ -207,12 +207,6 @@ struct StorageClientTests {
           }
           return (head, data.isEmpty ? nil : HTTPBody(data))
         }))
-  }
-
-  private func uploadFileURL(_ fileName: String) -> URL {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .appendingPathComponent(fileName)
   }
 
   @Test
