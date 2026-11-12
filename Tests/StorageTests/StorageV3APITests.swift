@@ -146,3 +146,123 @@ struct StorageV3NamesTests {
     #expect(recorder.header("X-Other") == "two")
   }
 }
+
+@Suite
+struct StorageV3ErrorTests {
+  @Test
+  func serverErrorIsDecodedFromTheBody() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client(
+      status: 400,
+      response:
+        #"{"statusCode":"404","error":"not_found","code":"NoSuchKey","message":"Object not found"}"#
+    )
+
+    do {
+      _ = try await client.from("avatars").remove(paths: ["a.png"])
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .server)
+      #expect(error.message == "Object not found")
+      #expect(error.code == .noSuchKey)
+      #expect(
+        error.serverError
+          == StorageError.ServerError(
+            statusCode: 404, error: "not_found", message: "Object not found"))
+      #expect(error.isNotFound)
+    }
+  }
+
+  @Test
+  func aBodyWithoutCodeStillDecodes() throws {
+    let error = try JSONDecoder().decode(
+      StorageError.self, from: Data(#"{"statusCode":"409","message":"Duplicate"}"#.utf8))
+
+    #expect(error.kind == .server)
+    #expect(error.code == nil)
+    #expect(error.serverError?.statusCode == 409)
+    #expect(error.serverError?.error == nil)
+    #expect(!error.isNotFound)
+  }
+
+  @Test
+  func isNotFoundReadsTheCodeAndTheBodyStatus() {
+    #expect(StorageError(kind: .server, message: "", code: .noSuchBucket).isNotFound)
+    #expect(
+      StorageError(kind: .server, message: "", serverError: .init(statusCode: 404, message: ""))
+        .isNotFound)
+    #expect(!StorageError(kind: .server, message: "", code: .accessDenied).isNotFound)
+    #expect(!StorageError(kind: .invalidRequest, message: "").isNotFound)
+  }
+
+  @Test
+  func kindsAndCodesMatchInCatchClauses() {
+    func thrown(_ error: StorageError) throws { throw error }
+
+    do {
+      try thrown(StorageError(kind: .server, message: "missing", code: .noSuchKey))
+      Issue.record("Expected a StorageError")
+    } catch StorageError.Code.noSuchBucket {
+      Issue.record("Matched the wrong code")
+    } catch StorageError.Code.noSuchKey {
+    } catch {
+      Issue.record("Did not match the code")
+    }
+
+    do {
+      try thrown(StorageError(kind: .invalidRequest, message: "bad"))
+      Issue.record("Expected a StorageError")
+    } catch StorageError.Kind.server {
+      Issue.record("Matched the wrong kind")
+    } catch StorageError.Kind.invalidRequest {
+    } catch {
+      Issue.record("Did not match the kind")
+    }
+
+    #expect(!(StorageError.Kind.server ~= URLError(.badURL)))
+    #expect(!(StorageError.Code.noSuchKey ~= URLError(.badURL)))
+  }
+
+  @Test
+  func kindAndCodeAreOpenSets() {
+    let kind: StorageError.Kind = "futureKind"
+    let code: StorageError.Code = "FutureCode"
+
+    #expect(kind.rawValue == "futureKind")
+    #expect(code == StorageError.Code(rawValue: "FutureCode"))
+    #expect(StorageError.Kind(rawValue: "transport") == .transport)
+    #expect(StorageError.Kind.decoding.rawValue == "decoding")
+    #expect(StorageError.Kind.invalidConfiguration.rawValue == "invalidConfiguration")
+    #expect(StorageError.Kind.accessToken.rawValue == "accessToken")
+    #expect(StorageError.Code.bucketAlreadyExists.rawValue == "BucketAlreadyExists")
+  }
+
+  @Test
+  @available(*, deprecated)
+  func v2FieldsKeepTheirValues() throws {
+    let built = StorageError(statusCode: "404", message: "File not found", error: "NotFound")
+    #expect(built.kind == .server)
+    #expect(built.statusCode == "404")
+    #expect(built.error == "NotFound")
+    #expect(built.serverError?.statusCode == 404)
+    #expect(built.serverError?.error == "NotFound")
+    #expect(built.errorDescription == "File not found")
+
+    var mutated = StorageError(message: "x")
+    #expect(mutated.statusCode == nil)
+    #expect(mutated.error == nil)
+    mutated.statusCode = "teapot"
+    mutated.error = "Odd"
+    #expect(mutated.statusCode == "teapot")
+    #expect(mutated.error == "Odd")
+    #expect(mutated.serverError?.statusCode == nil)
+    mutated.statusCode = "500"
+    #expect(mutated.serverError?.statusCode == 500)
+
+    let decoded = try JSONDecoder().decode(
+      StorageError.self,
+      from: Data(#"{"statusCode":"403","message":"Unauthorized access","error":"Forbidden"}"#.utf8))
+    #expect(decoded.statusCode == "403")
+    #expect(decoded.error == "Forbidden")
+  }
+}

@@ -756,7 +756,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       var statusCode: Int?
 
       if let error = error as? StorageError {
-        statusCode = error.statusCode.flatMap(Int.init)
+        statusCode = error.serverError?.statusCode
       } else if let error = error as? HTTPError {
         statusCode = error.response.statusCode
       }
@@ -908,7 +908,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
 
     guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
-      throw StorageError(statusCode: nil, message: "No token returned by API", error: nil)
+      throw StorageError(kind: .decoding, message: "No token returned by API")
     }
 
     guard let url = components.url else {
