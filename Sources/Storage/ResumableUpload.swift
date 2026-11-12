@@ -243,7 +243,7 @@ public actor ResumableUpload {
       startWaiters.forEach { $0.resume() }
       startWaiters.removeAll()
       switch status {
-      case .uploading: break
+      case .uploading, .cancelled: break
       default: releaseStart(key)
       }
     }
