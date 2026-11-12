@@ -41,7 +41,15 @@ git -C "${REPO_ROOT}" fetch "${BASELINE_REPO_URL}" "${BASELINE_TREEISH}"
 BASELINE_COMMIT=$(git -C "${REPO_ROOT}" rev-parse FETCH_HEAD)
 
 log "Checking for API changes since ${BASELINE_REPO_URL}#${BASELINE_TREEISH} (${BASELINE_COMMIT})..."
-SWIFT_OUTPUT=$(swift package --package-path "${REPO_ROOT}" diagnose-api-breaking-changes \
+# Same flags as "macOS test flags" in DEVELOPMENT.md: without them the baseline
+# build fails to compile swift-snapshot-testing on macOS.
+SWIFT_FLAGS=()
+if [[ "$(uname)" == "Darwin" ]]; then
+  SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswiftc -enable-cross-import-overlays)
+fi
+
+SWIFT_OUTPUT=$(swift package --package-path "${REPO_ROOT}" ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} \
+  diagnose-api-breaking-changes \
   "${BASELINE_COMMIT}" 2>&1) && RC=0 || RC=$?
 
 echo "$SWIFT_OUTPUT" >&2
