@@ -519,6 +519,18 @@ features:
       - StorageByteCount.stringValue
       - StorageByteCount.encode
       - BucketOptions.isPublic
+      - CreateBucketOptions.isPublic
+      - BucketType
+      - BucketType.init
+      - BucketType.rawValue
+      - BucketType.encode
+      - BucketType.standard
+      - BucketType.analytics
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
   storage.file_buckets.get_bucket: implemented
   storage.file_buckets.list_file_buckets: implemented
   storage.file_buckets.update_bucket: implemented

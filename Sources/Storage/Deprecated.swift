@@ -257,6 +257,7 @@ extension Data {
   }
 }
 
+@available(*, deprecated, message: "Use CreateBucketOptions or UpdateBucketOptions instead.")
 extension BucketOptions {
   @available(*, deprecated, renamed: "isPublic")
   public var `public`: Bool {

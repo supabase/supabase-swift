@@ -594,7 +594,7 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 /// A Supabase Storage bucket.
 ///
 /// Buckets are the top-level containers for files. Retrieve bucket details with
-/// ``StorageBucketApi/getBucket(_:)`` or ``StorageBucketApi/listBuckets()``.
+/// ``StorageBucketApi/bucket(_:)`` or ``StorageBucketApi/listBuckets(options:)``.
 ///
 /// ## Topics
 ///
@@ -602,13 +602,18 @@ public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
 ///
 /// - ``id``
 /// - ``name``
-/// - ``owner``
+/// - ``type``
+/// - ``ownerID``
 ///
 /// ### Access and limits
 ///
 /// - ``isPublic``
 /// - ``allowedMimeTypes``
 /// - ``fileSizeLimit``
+///
+/// ### Versioning
+///
+/// - ``versioningStatus``
 ///
 /// ### Timestamps
 ///
@@ -621,8 +626,25 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   /// The human-readable name of the bucket.
   public var name: String
 
+  /// Whether the bucket holds files or analytics tables. `nil` when Storage leaves it out, as
+  /// ``StorageBucketApi/bucket(_:)`` does.
+  public var type: BucketType?
+
+  private var storedOwner: String
+
+  /// The ID of the user who owns the bucket, if any. On this version it is the `owner` field
+  /// Storage sends, and `nil` when that field is empty.
+  public var ownerID: String? {
+    get { storedOwner.isEmpty ? nil : storedOwner }
+    set { storedOwner = newValue ?? "" }
+  }
+
   /// The user ID of the bucket owner.
-  public var owner: String
+  @available(*, deprecated, message: "Use ownerID instead.")
+  public var owner: String {
+    get { storedOwner }
+    set { storedOwner = newValue }
+  }
 
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -639,6 +661,47 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   /// Maximum file size allowed for uploads to this bucket, in bytes.
   public var fileSizeLimit: Int64?
 
+  /// Whether the bucket keeps a new version of an object on each write. `nil` when Storage leaves
+  /// it out, as Storage releases before v1.81.0 do.
+  public var versioningStatus: BucketVersioningStatus?
+
+  /// Creates a ``Bucket``.
+  ///
+  /// - Parameters:
+  ///   - id: Unique bucket identifier.
+  ///   - name: Human-readable bucket name.
+  ///   - type: Whether the bucket holds files or analytics tables.
+  ///   - ownerID: ID of the user who owns the bucket.
+  ///   - isPublic: Whether the bucket is publicly readable.
+  ///   - createdAt: Creation timestamp.
+  ///   - updatedAt: Last-updated timestamp.
+  ///   - allowedMimeTypes: Permitted MIME types for uploads. `nil` allows all types.
+  ///   - fileSizeLimit: Maximum upload size in bytes. `nil` means no limit.
+  ///   - versioningStatus: Whether the bucket keeps a new version of an object on each write.
+  public init(
+    id: String,
+    name: String,
+    type: BucketType? = nil,
+    ownerID: String? = nil,
+    isPublic: Bool,
+    createdAt: Date,
+    updatedAt: Date,
+    allowedMimeTypes: [String]? = nil,
+    fileSizeLimit: Int64? = nil,
+    versioningStatus: BucketVersioningStatus? = nil
+  ) {
+    self.id = id
+    self.name = name
+    self.type = type
+    self.storedOwner = ownerID ?? ""
+    self.isPublic = isPublic
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.allowedMimeTypes = allowedMimeTypes
+    self.fileSizeLimit = fileSizeLimit
+    self.versioningStatus = versioningStatus
+  }
+
   /// Creates a ``Bucket``.
   ///
   /// - Parameters:
@@ -650,6 +713,11 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
   ///   - updatedAt: Last-updated timestamp.
   ///   - allowedMimeTypes: Permitted MIME types for uploads. `nil` allows all types.
   ///   - fileSizeLimit: Maximum upload size in bytes. `nil` means no limit.
+  @available(
+    *, deprecated,
+    message:
+      "Use init(id:name:type:ownerID:isPublic:createdAt:updatedAt:allowedMimeTypes:fileSizeLimit:versioningStatus:) instead."
+  )
   public init(
     id: String,
     name: String,
@@ -660,25 +728,22 @@ public struct Bucket: Identifiable, Hashable, Codable, Sendable {
     allowedMimeTypes: [String]? = nil,
     fileSizeLimit: Int64? = nil
   ) {
-    self.id = id
-    self.name = name
-    self.owner = owner
-    self.isPublic = isPublic
-    self.createdAt = createdAt
-    self.updatedAt = updatedAt
-    self.allowedMimeTypes = allowedMimeTypes
-    self.fileSizeLimit = fileSizeLimit
+    self.init(
+      id: id, name: name, ownerID: owner, isPublic: isPublic, createdAt: createdAt,
+      updatedAt: updatedAt, allowedMimeTypes: allowedMimeTypes, fileSizeLimit: fileSizeLimit)
   }
 
   enum CodingKeys: String, CodingKey {
     case id
     case name
-    case owner
+    case type
+    case storedOwner = "owner"
     case isPublic = "public"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case allowedMimeTypes = "allowed_mime_types"
     case fileSizeLimit = "file_size_limit"
+    case versioningStatus = "versioning_status"
   }
 }
 
@@ -1035,6 +1100,7 @@ public enum DownloadBehavior: Sendable {
 /// - ``isPublic``
 /// - ``fileSizeLimit``
 /// - ``allowedMimeTypes``
+@available(*, deprecated, message: "Use CreateBucketOptions or UpdateBucketOptions instead.")
 public struct BucketOptions: Sendable {
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool

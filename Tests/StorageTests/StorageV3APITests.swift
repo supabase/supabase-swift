@@ -22,6 +22,14 @@ final class RequestRecorder: Sendable {
     last?.value(forHTTPHeaderField: name)
   }
 
+  /// The last request body as JSON. Key order is not compared: other suites change the output
+  /// formatting of the shared default encoder.
+  var lastJSON: [String: AnyJSON]? {
+    last?.httpBody.flatMap { try? JSONDecoder().decode([String: AnyJSON].self, from: $0) }
+  }
+
+  var lastURL: String? { last?.url?.absoluteString }
+
   func client(
     status: Int = 200,
     response: String = "{}",
@@ -357,5 +365,225 @@ struct StorageV3ValueTypesTests {
     #expect(object.fullPath == "avatars/a.png")
     #expect(UploadedObject(path: "a.png", fullPath: "avatars/a.png").id == nil)
     #expect(object != UploadedObject(path: "a.png", fullPath: "avatars/a.png"))
+  }
+}
+
+/// `true` when the overload the compiler chose returns `Void`, as the v2 bucket methods do.
+private func returnsVoid<T>(_ value: T) -> Bool {
+  T.self == Void.self
+}
+
+@Suite
+struct StorageV3BucketTests {
+  let bucketJSON = """
+    {
+      "id": "avatars",
+      "name": "avatars",
+      "owner": "owner123",
+      "public": true,
+      "type": "STANDARD",
+      "versioning_status": "ENABLED",
+      "file_size_limit": 1000,
+      "allowed_mime_types": ["image/png"],
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "updated_at": "2024-01-02T00:00:00.000Z"
+    }
+    """
+
+  @Test
+  func bucketDecodesTheV3Fields() async throws {
+    let recorder = RequestRecorder()
+    let bucket = try await recorder.client(response: bucketJSON).bucket("avatars")
+
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket/avatars")
+    #expect(recorder.last?.httpMethod == "GET")
+    #expect(bucket.id == "avatars")
+    #expect(bucket.ownerID == "owner123")
+    #expect(bucket.type == .standard)
+    #expect(bucket.versioningStatus == .enabled)
+    #expect(bucket.isPublic)
+    #expect(bucket.fileSizeLimit == 1000)
+  }
+
+  @Test
+  func bucketWithoutTheNewFieldsStillDecodes() throws {
+    let json = """
+      {
+        "id": "avatars", "name": "avatars", "owner": "", "public": false,
+        "created_at": "2024-01-01T00:00:00.000Z", "updated_at": "2024-01-01T00:00:00.000Z"
+      }
+      """
+    let bucket = try JSONDecoder.supabase().decode(Bucket.self, from: Data(json.utf8))
+
+    #expect(bucket.type == nil)
+    #expect(bucket.versioningStatus == nil)
+    #expect(bucket.ownerID == nil)
+  }
+
+  @Test
+  func bucketInitializerTakesTheV3Labels() throws {
+    let date = Date(timeIntervalSince1970: 0)
+    var bucket = Bucket(
+      id: "a", name: "a", type: .analytics, ownerID: "me", isPublic: false, createdAt: date,
+      updatedAt: date, versioningStatus: .suspended)
+    #expect(bucket.ownerID == "me")
+    #expect(bucket.type == BucketType(rawValue: "ANALYTICS"))
+    #expect(bucket.versioningStatus == "SUSPENDED")
+
+    bucket.ownerID = nil
+    #expect(bucket.ownerID == nil)
+    #expect(
+      Bucket(id: "a", name: "a", isPublic: false, createdAt: date, updatedAt: date).ownerID == nil)
+
+    let encoded = try JSONDecoder().decode(
+      [String: AnyJSON].self, from: JSONEncoder().encode(bucket))
+    #expect(encoded["owner"] == "")
+    #expect(encoded["type"] == "ANALYTICS")
+    #expect(encoded["versioning_status"] == "SUSPENDED")
+  }
+
+  @Test
+  @available(*, deprecated)
+  func bucketV2MembersKeepTheirValues() throws {
+    let date = Date(timeIntervalSince1970: 0)
+    var bucket = Bucket(
+      id: "a", name: "a", owner: "me", isPublic: false, createdAt: date, updatedAt: date)
+    #expect(bucket.owner == "me")
+    #expect(bucket.ownerID == "me")
+    bucket.owner = "you"
+    #expect(bucket.ownerID == "you")
+
+    let encoded = try JSONDecoder().decode(
+      [String: AnyJSON].self, from: JSONEncoder().encode(bucket))
+    #expect(Set(encoded.keys) == ["id", "name", "owner", "public", "created_at", "updated_at"])
+  }
+
+  @Test
+  @available(*, deprecated)
+  func getBucketKeepsWorking() async throws {
+    let recorder = RequestRecorder()
+    let bucket = try await recorder.client(response: bucketJSON).getBucket("avatars")
+    #expect(bucket.owner == "owner123")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket/avatars")
+  }
+
+  @Test
+  func listBucketsSendsTheOptionsAsQuery() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client(response: "[\(bucketJSON)]")
+
+    let buckets = try await client.listBuckets(
+      options: BucketListOptions(
+        limit: 10, offset: 20, sortBy: .createdAt, order: .descending, search: "ava"))
+    #expect(buckets.map(\.id) == ["avatars"])
+    #expect(
+      recorder.lastURL
+        == "http://localhost:54321/storage/v1/bucket?limit=10&offset=20&sortColumn=created_at&sortOrder=desc&search=ava"
+    )
+
+    _ = try await client.listBuckets(options: BucketListOptions())
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket")
+
+    _ = try await client.listBuckets()
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket")
+
+    let columns: [BucketSortColumn] = [.id, .name, .createdAt, .updatedAt]
+    #expect(columns.map(\.rawValue) == ["id", "name", "created_at", "updated_at"])
+  }
+
+  @Test
+  func createBucketWithCreateBucketOptionsSendsOnlyTheSetFields() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client(response: #"{"name":"stored"}"#)
+
+    let name = try await client.createBucket("avatars", options: CreateBucketOptions())
+    #expect(name == "stored")
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket")
+    #expect(recorder.lastJSON == ["id": "avatars", "name": "avatars"])
+
+    try await client.createBucket(
+      "avatars",
+      options: CreateBucketOptions(
+        isPublic: true, fileSizeLimit: .megabytes(5), allowedMimeTypes: ["image/png"],
+        type: .standard, versioningStatus: .enabled))
+    #expect(
+      recorder.lastJSON == [
+        "id": "avatars", "name": "avatars", "public": true, "file_size_limit": "5mb",
+        "allowed_mime_types": ["image/png"], "type": "STANDARD", "versioning_status": "ENABLED",
+      ])
+
+    let annotated: String = try await client.createBucket("avatars")
+    #expect(annotated == "stored")
+    #expect(recorder.lastJSON == ["id": "avatars", "name": "avatars"])
+  }
+
+  @Test
+  func updateBucketWithUpdateBucketOptionsSendsOnlyTheSetFields() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client()
+
+    try await client.updateBucket(
+      "avatars", options: UpdateBucketOptions(allowedMimeTypes: ["image/png"]))
+    #expect(recorder.last?.httpMethod == "PUT")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/bucket/avatars")
+    #expect(recorder.lastJSON == ["allowed_mime_types": ["image/png"]])
+
+    try await client.updateBucket(
+      "avatars",
+      options: UpdateBucketOptions(
+        isPublic: false, fileSizeLimit: 1024, versioningStatus: .suspended))
+    #expect(
+      recorder.lastJSON == [
+        "public": false, "file_size_limit": 1024, "versioning_status": "SUSPENDED",
+      ])
+  }
+
+  @Test
+  func updateBucketWithNoFieldThrowsBeforeSending() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client()
+
+    do {
+      try await client.updateBucket("avatars", options: UpdateBucketOptions())
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .invalidRequest)
+    }
+    #expect(recorder.requests.value.isEmpty)
+  }
+
+  /// A v2 call site, with the v2 labels and no type annotation, keeps the v2 overload: it
+  /// returns `Void` and always sends `public`.
+  @Test
+  @available(*, deprecated)
+  func v2CallSitesKeepTheV2Overload() async throws {
+    let recorder = RequestRecorder()
+    let client = recorder.client(response: #"{"name":"stored"}"#)
+
+    #expect(returnsVoid(try await client.createBucket("avatars")))
+    #expect(recorder.lastJSON == ["id": "avatars", "name": "avatars", "public": false])
+
+    #expect(returnsVoid(try await client.createBucket("avatars", options: .init(isPublic: true))))
+    #expect(recorder.lastJSON == ["id": "avatars", "name": "avatars", "public": true])
+
+    try await client.createBucket("avatars", options: .init(fileSizeLimit: .megabytes(1)))
+    #expect(
+      recorder.lastJSON == [
+        "id": "avatars", "name": "avatars", "public": false, "file_size_limit": "1mb",
+      ])
+
+    try await client.updateBucket("avatars", options: .init(allowedMimeTypes: ["image/png"]))
+    #expect(
+      recorder.lastJSON == [
+        "id": "avatars", "name": "avatars", "public": false,
+        "allowed_mime_types": ["image/png"],
+      ])
+
+    try await client.updateBucket("avatars", options: .init(isPublic: true))
+    #expect(recorder.lastJSON == ["id": "avatars", "name": "avatars", "public": true])
+
+    let task = Task { try await client.createBucket("avatars") }
+    let _: Void = try await task.value
   }
 }
