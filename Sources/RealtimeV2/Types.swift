@@ -311,9 +311,13 @@ public enum RealtimeChannelEvent: Hashable, Sendable {
   /// ``BroadcastJoinConfig/waitsForReplication``.
   case replicationReady
 
-  /// The Postgres replication connection did not become ready in time. The server sends it only
-  /// when you opt in with ``BroadcastJoinConfig/waitsForReplication``. The value is the server's
-  /// message.
+  /// The server reported a `system` error on the channel. The value is the server's message.
+  ///
+  /// The name is the v3 name, but the server uses this message for more than replication: it
+  /// sends it whenever it shuts the channel down, for example for a rate limit ("Too many
+  /// messages per second"), a token it no longer accepts, or a database error. A replication
+  /// connection that is not ready in time is one of these cases. Read the message to tell them
+  /// apart.
   case replicationFailed(String)
 }
 

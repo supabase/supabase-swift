@@ -37,8 +37,11 @@ public struct RealtimeError: LocalizedError, CustomStringConvertible {
       self.init(rawValue: value)
     }
 
-    /// A subscribe, heartbeat or REST broadcast did not complete in time. A subscribe that used
-    /// all of its retry attempts also has this kind.
+    /// A subscribe did not complete in time, or used all of its retry attempts.
+    ///
+    /// This version of the SDK does not throw it for a REST broadcast that times out: `httpSend`
+    /// throws the SDK's own timeout error, which is not a ``RealtimeError``. A heartbeat that
+    /// times out is not thrown to the caller; read ``RealtimeClientV2/heartbeats()``.
     public static let timeout: Kind = "timeout"
 
     /// A send was attempted on a channel that is not subscribed.
@@ -255,6 +258,35 @@ extension RealtimeError {
       kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
   }
 
+  /// The server answered the WebSocket upgrade with an HTTP status instead of opening the socket.
+  ///
+  /// A custom ``WebSocketTransport`` throws this error from `connect`. The kind follows the
+  /// status: 401 and 403 are ``Kind-swift.struct/unauthorized``, 429 is
+  /// ``Kind-swift.struct/rateLimited``, and every other status is ``Kind-swift.struct/server``.
+  ///
+  /// > Note: In v3 the client stops on 401, 403 and 404 and tries the other statuses again. On
+  /// > this version the client does not read the status: every failed connect follows the same
+  /// > reconnect rules.
+  ///
+  /// - Parameters:
+  ///   - status: The HTTP status the server answered the upgrade with.
+  ///   - underlyingError: The transport's own error, if any.
+  public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
+    -> RealtimeError
+  {
+    let kind: Kind =
+      switch status {
+      case 401, 403: .unauthorized
+      case 429: .rateLimited
+      default: .server
+      }
+    return RealtimeError(
+      kind: kind,
+      message: "WebSocket upgrade failed with HTTP status \(status).",
+      underlyingError: underlyingError
+    )
+  }
+
   static var heartbeatTimeout: Self {
     Self(kind: .timeout, message: "heartbeat timeout")
   }
@@ -279,6 +311,7 @@ extension RealtimeError.Kind {
   ///   retryLater()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (kind: RealtimeError.Kind, error: any Error) -> Bool {
     (error as? RealtimeError)?.kind == kind
   }
@@ -295,6 +328,7 @@ extension RealtimeError.Code {
   ///   usePrivateChannel()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (code: RealtimeError.Code, error: any Error) -> Bool {
     (error as? RealtimeError)?.code == code
   }

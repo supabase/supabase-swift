@@ -121,18 +121,20 @@ struct RealtimeWebSocketTransportV3APITests {
   }
 
   @Test
-  func disconnectClosesTheConnectionWithTheCodeAndReason() async throws {
+  func disconnectClosesTheConnectionWithNormalClosureAndTheReason() async throws {
     let client = makeClient()
     await client.connect()
 
-    client.disconnect(code: 1000, reason: "bye")
+    // The v2 client does not send the code of `disconnect(code:)` to its socket.
+    client.disconnect(code: 4001, reason: "bye")
 
     // The client closes the socket from a task of its own.
     for _ in 0..<200 where transport.connection.closes.value.isEmpty {
       try await Task.sleep(nanoseconds: 10_000_000)
     }
     #expect(
-      transport.connection.closes.value == [StubConnection.Close(code: 1000, reason: "bye")])
+      transport.connection.closes.value
+        == [StubConnection.Close(code: .normalClosure, reason: "bye")])
   }
 
   @Test

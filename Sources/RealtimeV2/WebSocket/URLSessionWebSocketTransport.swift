@@ -61,6 +61,10 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
 
   /// Performs the HTTP upgrade and returns the open connection.
   ///
+  /// The connection sends the close codes 1000 and 3000...4999. For any other code, such as
+  /// ``WebSocketCloseCode/goingAway``, it closes without a status. It cuts a close reason that
+  /// is over 123 bytes.
+  ///
   /// - Throws: ``RealtimeError`` of kind ``RealtimeError/Kind-swift.struct/invalidRequest`` when
   ///   `url` is not a `ws:` or `wss:` URL, or on watchOS without the opt-in. Any other failure
   ///   is the error of the `URLSession` stack.
@@ -87,12 +91,12 @@ public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Senda
   }
 }
 
-/// Shows a ``URLSessionWebSocket`` as a ``WebSocketConnection``.
+/// Shows the SDK's own socket as a ``WebSocketConnection``.
 final class URLSessionWebSocketConnection: WebSocketConnection {
   let events: AsyncStream<WebSocketEvent>
-  private let socket: URLSessionWebSocket
+  private let socket: any WebSocket
 
-  init(_ socket: URLSessionWebSocket) {
+  init(_ socket: any WebSocket) {
     self.socket = socket
     events = AsyncStream(
       socket.events.map { event -> WebSocketEvent in
@@ -113,6 +117,17 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
   }
 
   func close(code: WebSocketCloseCode, reason: String?) {
-    socket.close(code: code.rawValue, reason: reason)
+    // The socket traps on a code or a reason it cannot send.
+    let isSendable = code == .normalClosure || (3000...4999).contains(code.rawValue)
+    socket.close(code: isSendable ? code.rawValue : nil, reason: reason.map(Self.cut))
+  }
+
+  /// The longest prefix of `reason` that fits the 123 bytes a close frame allows.
+  private static func cut(_ reason: String) -> String {
+    var reason = reason
+    while reason.utf8.count > 123 {
+      reason.removeLast()
+    }
+    return reason
   }
 }

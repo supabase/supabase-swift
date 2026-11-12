@@ -162,7 +162,7 @@ extension RealtimeChannelV2 {
   @available(
     *,
     deprecated,
-    message: "Use the new filter syntax instead."
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -209,7 +209,7 @@ extension RealtimeChannelV2 {
   @available(
     *,
     deprecated,
-    message: "Use the new filter syntax instead."
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -256,7 +256,7 @@ extension RealtimeChannelV2 {
   @available(
     *,
     deprecated,
-    message: "Use the new filter syntax instead."
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -302,7 +302,7 @@ extension RealtimeChannelV2 {
   @available(
     *,
     deprecated,
-    message: "Use the new filter syntax instead."
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
   )
   @_disfavoredOverload
   public func postgresChange(
@@ -517,7 +517,11 @@ extension RealtimeChannelV2 {
   /// System events convey channel-level status information from the server.
   ///
   /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
-  @available(*, deprecated, message: "Use events() instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use events() instead. It reports the Postgres changes and replication messages only, as RealtimeChannelEvent values, not the raw message."
+  )
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
 
@@ -535,7 +539,7 @@ extension RealtimeChannelV2 {
   /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
   ///
   /// > Warning: Renamed to ``broadcastStream(event:)``.
-  @available(*, deprecated, renamed: "broadcastStream(event:)")
+  @available(*, deprecated, message: "Use broadcasts(event:) instead.")
   public func broadcast(event: String) -> AsyncStream<JSONObject> {
     broadcastStream(event: event)
   }

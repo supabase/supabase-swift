@@ -11,7 +11,7 @@ public import Foundation
 ///
 /// A presence key groups every client that tracks under it, so one key holds one entry per
 /// device or tab. Set the key with ``PresenceJoinConfig/key``;
-/// when it is `nil`, the server gives each client its own random key.
+/// when it is the empty string, the server gives each client its own random key.
 ///
 /// ## Topics
 /// ### Properties

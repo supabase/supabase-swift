@@ -14,6 +14,8 @@ struct PresenceTracker: Sendable {
   private var hasState = false
   private var pendingDiffs: [JSONObject] = []
 
+  var pendingDiffCount: Int { pendingDiffs.count }
+
   init() {}
 
   /// Starts a new join. The state stays until the join's first `presence_state`, which is

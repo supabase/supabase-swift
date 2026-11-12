@@ -167,6 +167,7 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
 /// ## Topics
 /// ### Properties
 /// - ``key``
+/// - ``isEnabled``
 /// ### Initialization
 /// - ``init(key:)``
 public struct PresenceJoinConfig: Codable, Hashable, Sendable {
@@ -176,7 +177,21 @@ public struct PresenceJoinConfig: Codable, Hashable, Sendable {
   /// and ``PresenceAction/leaves``. Defaults to an empty string, which lets the server
   /// assign a random unique key.
   public var key: String = ""
+
+  /// Whether the channel joins with presence on.
+  ///
+  /// A presence stream that is open when the channel subscribes turns presence on by itself.
+  /// Set this to `true` to turn it on with no stream, for example to read
+  /// ``RealtimeChannelV2/presenceState`` only. Defaults to `false`.
+  public var isEnabled = false
+
+  /// What the join sends: ``isEnabled``, or a presence stream or callback on the channel.
   var enabled: Bool = false
+
+  enum CodingKeys: String, CodingKey {
+    case key
+    case enabled
+  }
 }
 
 extension PresenceJoinConfig {

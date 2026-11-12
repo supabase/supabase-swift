@@ -824,10 +824,6 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// connection is established.
   ///
   /// - Parameter message: The ``RealtimeMessageV2`` to send.
-  @available(
-    *, deprecated,
-    message: "Use RealtimeChannelV2.broadcast(event:payload:encoder:) instead."
-  )
   public func push(_ message: RealtimeMessageV2) {
     _push(message)
   }

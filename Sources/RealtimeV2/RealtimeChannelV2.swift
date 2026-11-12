@@ -180,6 +180,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
   let presenceTracker = LockIsolated(PresenceTracker())
+  /// Whether the app turned presence on for the last join with `isEnabled`.
+  let presenceRequested = LockIsolated(false)
   let eventObservers = LockIsolated(ChannelEventObservers())
 
   /// Lock-protected status + subscribers for ``status``/``statusChanges()``.
@@ -335,6 +337,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     clearPresence()
   }
 
+  /// Whether a presence message has a reader. A public topic gets every `presence_diff` even
+  /// when the join left presence off, and then no `presence_state` ever comes to apply them
+  /// to, so a channel with no reader must not keep them.
+  private var tracksPresence: Bool {
+    presenceRequested.value || callbackManager.callbacks.contains(where: { $0.isPresence })
+  }
+
   /// Forgets the presence state when the subscription ends, and reports every entry as a leave
   /// so the changes an app has applied add up to the empty state.
   private func clearPresence() {
@@ -351,7 +360,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   private func performJoin(ref: String, clientChanges: [PostgresJoinConfig]) async {
     logger?.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
-    configuration.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
+    let isPresenceRequested = configuration.presence.isEnabled
+    configuration.presence.enabled =
+      isPresenceRequested || callbackManager.callbacks.contains(where: { $0.isPresence })
+    presenceRequested.setValue(isPresenceRequested)
     presenceTracker.withValue { $0.waitForNextState() }
 
     let joinConfig = RealtimeJoinConfig(
@@ -489,6 +501,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - timeout: How long the request may take. `nil` uses the client's configured timeout.
   /// - Throws: ``RealtimeError`` with kind `.invalidRequest` when the client has no access token,
   ///   and nothing is sent; `.server` when the server does not accept the message.
+  @_disfavoredOverload
   public func httpSend(
     event: String,
     data: Data,
@@ -506,10 +519,6 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - data: Raw binary data to send as the request body.
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
   /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
-  @available(
-    *, deprecated, message: "Use httpSend(event:data:timeout:) with a Duration instead."
-  )
-  @_disfavoredOverload
   public func httpSend(
     event: String,
     data: Data,
@@ -905,6 +914,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await stateManager.didReceiveClose(joinRef: message.joinRef)
 
       case .presenceDiff:
+        guard tracksPresence else { break }
         let (change, state) = presenceTracker.withValue {
           ($0.applyDiff(message.payload), $0.state)
         }
@@ -919,6 +929,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         )
 
       case .presenceState:
+        guard tracksPresence else { break }
         let (change, state) = presenceTracker.withValue {
           ($0.applyState(message.payload), $0.state)
         }
@@ -1418,7 +1429,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Parameter callback: A `@Sendable` closure receiving the ``RealtimeMessageV2``.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
-  @available(*, deprecated, message: "Use events() instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use events() instead. It reports the Postgres changes and replication messages only, as RealtimeChannelEvent values, not the raw message."
+  )
   public func onSystem(
     callback: @escaping @Sendable (RealtimeMessageV2) -> Void
   ) -> RealtimeSubscription {
@@ -1435,7 +1450,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Parameter callback: A `@Sendable` closure called on each system event.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
-  @available(*, deprecated, message: "Use events() instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use events() instead. It reports the Postgres changes and replication messages only, as RealtimeChannelEvent values, not the raw message."
+  )
   public func onSystem(
     callback: @escaping @Sendable () -> Void
   ) -> RealtimeSubscription {

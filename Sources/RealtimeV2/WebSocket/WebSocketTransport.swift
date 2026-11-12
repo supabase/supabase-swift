@@ -35,11 +35,15 @@ public protocol WebSocketConnection: AnyObject, Sendable {
   var events: AsyncStream<WebSocketEvent> { get }
 
   /// Sends one frame and returns once the transport has accepted it. The client sends frames
-  /// one at a time, in order. When this method throws, the client closes the connection.
+  /// one at a time, in order. When this method throws, the client treats the connection as
+  /// lost and calls ``close(code:reason:)`` with ``WebSocketCloseCode/goingAway``.
   func send(_ frame: WebSocketFrame) async throws
 
   /// Starts a graceful close and returns without waiting for it. The `.closed` event on
   /// ``events`` reports completion.
+  ///
+  /// The client passes ``WebSocketCloseCode/normalClosure`` for a disconnect. This version does
+  /// not pass the code of ``RealtimeClientV2/disconnect(code:reason:)``.
   func close(code: WebSocketCloseCode, reason: String?)
 }
 
@@ -123,7 +127,7 @@ final class WebSocketConnectionAdapter: WebSocket {
           try await connection.send(frame)
         } catch {
           self?.didClose(code: 1006, reason: error.localizedDescription)
-          connection.close(code: .abnormalClosure, reason: nil)
+          connection.close(code: .goingAway, reason: nil)
           return
         }
       }
