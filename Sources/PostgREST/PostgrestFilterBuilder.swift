@@ -877,6 +877,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type:) instead.")
   public func fts(
     _ column: String,
     query: any PostgrestFilterValue,
@@ -954,6 +955,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use eq(_:value:) instead.")
   public func equals(
     _ column: String,
     value: String
@@ -969,6 +971,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use neq(_:value:) instead.")
   public func notEquals(
     _ column: String,
     value: String
@@ -984,6 +987,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use gt(_:value:) instead.")
   public func greaterThan(
     _ column: String,
     value: String
@@ -999,6 +1003,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use gte(_:value:) instead.")
   public func greaterThanOrEquals(
     _ column: String,
     value: String
@@ -1014,6 +1019,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use lt(_:value:) instead.")
   public func lowerThan(
     _ column: String,
     value: String
@@ -1029,6 +1035,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use lte(_:value:) instead.")
   public func lowerThanOrEquals(
     _ column: String,
     value: String
@@ -1044,6 +1051,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeLt(_:range:) instead.")
   public func rangeLowerThan(
     _ column: String,
     range: String
@@ -1059,6 +1067,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeGt(_:range:) instead.")
   public func rangeGreaterThan(
     _ column: String,
     value: String
@@ -1074,6 +1083,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeGte(_:range:) instead.")
   public func rangeGreaterThanOrEquals(
     _ column: String,
     value: String
@@ -1089,6 +1099,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeLte(_:range:) instead.")
   public func rangeLowerThanOrEquals(
     _ column: String,
     value: String
@@ -1105,6 +1116,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type:) instead.")
   public func fullTextSearch(
     _ column: String,
     query: String,
@@ -1122,6 +1134,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .plain instead."
+  )
   public func plainToFullTextSearch(
     _ column: String,
     query: String,
@@ -1139,6 +1154,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .phrase instead."
+  )
   public func phraseToFullTextSearch(
     _ column: String,
     query: String,
@@ -1156,6 +1174,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .websearch instead."
+  )
   public func webFullTextSearch(
     _ column: String,
     query: String,
