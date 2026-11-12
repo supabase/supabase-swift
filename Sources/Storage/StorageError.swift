@@ -403,6 +403,7 @@ extension StorageError.Kind {
   ///   showServerError()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (kind: StorageError.Kind, error: any Error) -> Bool {
     (error as? StorageError)?.kind == kind
   }
@@ -419,6 +420,7 @@ extension StorageError.Code {
   ///   showPlaceholder()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (code: StorageError.Code, error: any Error) -> Bool {
     (error as? StorageError)?.code == code
   }

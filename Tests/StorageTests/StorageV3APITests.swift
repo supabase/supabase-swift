@@ -295,6 +295,28 @@ struct StorageV3ErrorTests {
     #expect(!(StorageError.Code.noSuchKey ~= URLError(.badURL)))
   }
 
+  /// A string-literal pattern over a caller's own error type keeps its meaning while the
+  /// `StorageError` pattern operators are in scope.
+  @Test
+  func stringLiteralPatternsOfOtherErrorTypesStillMatch() {
+    struct AppError: Error, Equatable, ExpressibleByStringLiteral {
+      let name: String
+      init(stringLiteral value: String) { name = value }
+    }
+
+    func describe(_ error: AppError) -> String {
+      switch error {
+      case "offline": "matched offline"
+      case "server": "matched server"
+      default: "default"
+      }
+    }
+
+    #expect(describe("offline") == "matched offline")
+    #expect(describe("server") == "matched server")
+    #expect(describe("other") == "default")
+  }
+
   @Test
   func kindAndCodeAreOpenSets() {
     let kind: StorageError.Kind = "futureKind"
