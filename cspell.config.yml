@@ -16,7 +16,6 @@ ignorePaths:
   - Package.resolved
   - "**/*.xcworkspace/**"
   - "**/*.xcodeproj/**"
-  - "**/__Snapshots__/**"
 
 dictionaryDefinitions:
   - name: local-codebase

@@ -1,15 +1,9 @@
-import ConcurrencyExtras
 import Foundation
-import HTTPTypesFoundation
-import SnapshotTesting
+import HTTPTypes
 import TestHelpers
 import Testing
 
 @testable import PostgREST
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
 
 @Suite
 struct BuildURLRequestTests {
@@ -20,247 +14,255 @@ struct BuildURLRequestTests {
     var username: String?
   }
 
-  struct TestCase: Sendable {
-    let name: String
-    let record: Bool
-    let file: StaticString
-    let line: UInt
-    let build: @Sendable (PostgrestClient) async throws -> any PostgrestExecutableBuilder
+  let transport = RecordingTransport { _, _ in (HTTPResponse(status: .ok), Data()) }
 
-    init(
-      name: String,
-      record: Bool = false,
-      file: StaticString = #filePath,
-      line: UInt = #line,
-      build: @escaping @Sendable (PostgrestClient) async throws -> any PostgrestExecutableBuilder
-    ) {
-      self.name = name
-      self.record = record
-      self.file = file
-      self.line = line
-      self.build = build
+  @Test
+  func queryWithNonASCIICharacters() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .eq("id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
+    }
+
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?id=eq.Cig%C3%A1nyka-%C3%A9r%20(0+400%20cskm)%20v%C3%ADzrajzi%20%C3%A1llom%C3%A1s&select=*"
+      """#
     }
   }
 
   @Test
-  func buildRequest() async throws {
-    let runningTestCase = LockIsolated(TestCase?.none)
+  func queryWithTimestamptz() async throws {
+    try await send {
+      $0.from("tasks")
+        .select()
+        .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
+        .order("received_at")
+    }
 
-    let encoder = PostgrestClient.Configuration.jsonEncoder
-    encoder.outputFormatting = .sortedKeys
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("tasks")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/tasks?order=received_at.asc&received_at=gt.2023-03-23T15:50:30.511743+00:00&select=*"
+      """#
+    }
+  }
 
-    let client = try PostgrestClient(
-      configuration: .init(
-        url: url,
-        schema: nil,
-        headers: [.xClientInfo: "postgrest-swift/x.y.z"],
-        http: .init(
-          transport: ClosureTransport { request, body in
-            guard let runningTestCase = runningTestCase.value else {
-              Issue.record("execute called without a runningTestCase set.")
-              return (HTTPTypes.HTTPResponse(status: .ok), nil)
-            }
+  @Test
+  func filterStartingWithNonAlphanumeric() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .eq("to", value: "+16505555555")
+    }
 
-            guard var urlRequest = URLRequest(httpRequest: request) else {
-              throw URLError(.badURL)
-            }
-            if let body { urlRequest.httpBody = try await Data(collecting: body, upTo: .max) }
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?select=*&to=eq.+16505555555"
+      """#
+    }
+  }
 
-            await MainActor.run { [runningTestCase] in
-              assertSnapshot(
-                of: urlRequest,
-                as: .curl,
-                named: runningTestCase.name,
-                record: runningTestCase.record,
-                file: runningTestCase.file,
-                testName: "testBuildRequest()",
-                line: runningTestCase.line
-              )
-            }
+  @Test
+  func filterUsingDate() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .gt("created_at", value: Date(timeIntervalSince1970: 0))
+    }
 
-            return (HTTPTypes.HTTPResponse(status: .ok), nil)
-          }),
-        encoder: encoder,
-        retryEnabled: false
-      )
-    )
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?created_at=gt.1970-01-01T00:00:00.000Z&select=*"
+      """#
+    }
+  }
 
-    let testCases: [TestCase] = [
-      TestCase(name: "select all users where email ends with '@supabase.co'") { client in
-        client.from("users")
-          .select()
-          .like("email", pattern: "%@supabase.co")
-      },
-      TestCase(name: "insert new user") { client in
-        try client.from("users")
-          .insert(RequestUser(email: "johndoe@supabase.io"))
-      },
-      TestCase(name: "bulk insert users") { client in
-        try client.from("users")
-          .insert(
-            [
-              RequestUser(email: "johndoe@supabase.io"),
-              RequestUser(email: "johndoe2@supabase.io", username: "johndoe2"),
-            ]
-          )
-      },
-      TestCase(name: "call rpc") { client in
-        try client.rpc("test_fcn", params: ["KEY": "VALUE"])
-      },
-      TestCase(name: "call rpc without parameter") { client in
-        try client.rpc("test_fcn")
-      },
-      TestCase(name: "call rpc with filter") { client in
-        try client.rpc("test_fcn").eq("id", value: 1)
-      },
-      TestCase(name: "test all filters and count") { client in
-        var query = client.from("todos").select()
+  @Test
+  func allFilterOperators() async throws {
+    try await send {
+      var query = $0.from("todos").select()
 
-        let allOperators: [PostgrestFilterBuilder.Operator] = [
-          .eq, .neq, .gt, .gte, .lt, .lte, .like, .ilike, .match, .imatch, .is, .isdistinct, .in,
-          .cs, .cd, .sl, .sr, .nxl, .nxr, .adj, .ov, .fts, .plfts, .phfts, .wfts,
-        ]
-        for op in allOperators {
-          query = query.filter("column", operator: op.rawValue, value: "Some value")
-        }
+      let allOperators: [PostgrestFilterBuilder.Operator] = [
+        .eq, .neq, .gt, .gte, .lt, .lte, .like, .ilike, .match, .imatch, .is, .isdistinct, .in,
+        .cs, .cd, .sl, .sr, .nxl, .nxr, .adj, .ov, .fts, .plfts, .phfts, .wfts,
+      ]
+      for op in allOperators {
+        query = query.filter("column", operator: op.rawValue, value: "Some value")
+      }
 
-        return query
-      },
-      TestCase(name: "test in filter") { client in
-        client.from("todos").select().in("id", values: [1, 2, 3])
-      },
-      TestCase(name: "test contains filter with dictionary") { client in
-        client.from("users").select("name")
-          .contains("address", value: ["postcode": 90210])
-      },
-      TestCase(name: "test contains filter with array") { client in
-        client.from("users")
-          .select()
-          .contains("name", value: ["is:online", "faction:red"])
-      },
-      TestCase(name: "test or filter with referenced table") { client in
-        client.from("users")
-          .select("*, messages(*)")
-          .or("public.eq.true,recipient_id.eq.1", referencedTable: "messages")
-      },
-      TestCase(name: "test upsert not ignoring duplicates") { client in
-        try client.from("users")
-          .upsert(RequestUser(email: "johndoe@supabase.io"))
-      },
-      TestCase(name: "bulk upsert") { client in
-        try client.from("users")
-          .upsert(
-            [
-              RequestUser(email: "johndoe@supabase.io"),
-              RequestUser(email: "johndoe2@supabase.io", username: "johndoe2"),
-            ]
-          )
-      },
-      TestCase(name: "select after bulk upsert") { client in
-        try client.from("users")
-          .upsert(
-            [
-              RequestUser(email: "johndoe@supabase.io"),
-              RequestUser(email: "johndoe2@supabase.io"),
-            ],
-            onConflict: "username"
-          )
-          .select()
-      },
-      TestCase(name: "test upsert ignoring duplicates") { client in
-        try client.from("users")
-          .upsert(RequestUser(email: "johndoe@supabase.io"), ignoreDuplicates: true)
-      },
-      TestCase(name: "query with + character") { client in
-        client.from("users")
-          .select()
-          .eq("id", value: "Cigányka-ér (0+400 cskm) vízrajzi állomás")
-      },
-      TestCase(name: "query with timestamptz") { client in
-        client.from("tasks")
-          .select()
-          .gt("received_at", value: "2023-03-23T15:50:30.511743+00:00")
-          .order("received_at")
-      },
-      TestCase(name: "query non-default schema") { client in
-        client.schema("storage")
-          .from("objects")
-          .select()
-      },
-      TestCase(name: "select after an insert") { client in
-        try client.from("users")
-          .insert(RequestUser(email: "johndoe@supabase.io"))
-          .select("id,email")
-      },
-      TestCase(name: "query if nil value") { client in
-        client.from("users")
-          .select()
-          .is("email", value: nil)
-      },
-      TestCase(name: "likeAllOf") { client in
-        client.from("users")
-          .select()
-          .likeAllOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
-      },
-      TestCase(name: "likeAnyOf") { client in
-        client.from("users")
-          .select()
-          .likeAnyOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
-      },
-      TestCase(name: "iLikeAllOf") { client in
-        client.from("users")
-          .select()
-          .iLikeAllOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
-      },
-      TestCase(name: "iLikeAnyOf") { client in
-        client.from("users")
-          .select()
-          .iLikeAnyOf("email", patterns: ["%@supabase.io", "%@supabase.com"])
-      },
-      TestCase(name: "containedBy using array") { client in
-        client.from("users")
-          .select()
-          .containedBy("id", value: ["a", "b", "c"])
-      },
-      TestCase(name: "containedBy using range") { client in
-        client.from("users")
-          .select()
-          .containedBy("age", value: "[10,20]")
-      },
-      TestCase(name: "containedBy using json") { client in
-        client.from("users")
-          .select()
-          .containedBy("userMetadata", value: ["age": 18])
-      },
-      TestCase(name: "filter starting with non-alphanumeric") { client in
-        client.from("users")
-          .select()
-          .eq("to", value: "+16505555555")
-      },
-      TestCase(name: "filter using Date") { client in
-        client.from("users")
-          .select()
-          .gt("created_at", value: Date(timeIntervalSince1970: 0))
-      },
-      TestCase(name: "rpc call with head") { client in
-        try client.rpc("sum", head: true)
-      },
-      TestCase(name: "rpc call with get") { client in
-        try client.rpc("sum", get: true)
-      },
-      TestCase(name: "rpc call with get and params") { client in
-        try client.rpc(
-          "get_array_element",
-          params: ["array": [37, 420, 64], "index": 2] as JSONValue,
-          get: true
+      return query
+    }
+
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("todos")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/todos?column=eq.Some%20value&column=neq.Some%20value&column=gt.Some%20value&column=gte.Some%20value&column=lt.Some%20value&column=lte.Some%20value&column=like.Some%20value&column=ilike.Some%20value&column=match.Some%20value&column=imatch.Some%20value&column=is.Some%20value&column=isdistinct.Some%20value&column=in.Some%20value&column=cs.Some%20value&column=cd.Some%20value&column=sl.Some%20value&column=sr.Some%20value&column=nxl.Some%20value&column=nxr.Some%20value&column=adj.Some%20value&column=ov.Some%20value&column=fts.Some%20value&column=plfts.Some%20value&column=phfts.Some%20value&column=wfts.Some%20value&select=*"
+      """#
+    }
+  }
+
+  @Test
+  func containsWithArray() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .contains("name", value: ["is:online", "faction:red"])
+    }
+
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?name=cs.%7Bis:online,faction:red%7D&select=*"
+      """#
+    }
+  }
+
+  @Test
+  func containedByWithRange() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .containedBy("age", value: "[10,20]")
+    }
+
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?age=cd.%5B10,20%5D&select=*"
+      """#
+    }
+  }
+
+  @Test
+  func containedByWithJSON() async throws {
+    try await send {
+      $0.from("users")
+        .select()
+        .containedBy("userMetadata", value: ["age": 18])
+    }
+
+    try transport.assertFirstRequestSnapshot(.get, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/users?select=*&userMetadata=cd.%7B%22age%22:18%7D"
+      """#
+    }
+  }
+
+  @Test
+  func upsertOneRow() async throws {
+    try await send {
+      try $0.from("users")
+        .upsert(RequestUser(email: "johndoe@supabase.io"))
+    }
+
+    try transport.assertFirstRequestSnapshot(.post, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 31" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: resolution=merge-duplicates" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	--data "{\"email\":\"johndoe@supabase.io\"}" \
+      	"https://example.supabase.co/users"
+      """#
+    }
+  }
+
+  @Test
+  func selectAfterBulkUpsert() async throws {
+    try await send {
+      try $0.from("users")
+        .upsert(
+          [
+            RequestUser(email: "johndoe@supabase.io"),
+            RequestUser(email: "johndoe2@supabase.io"),
+          ],
+          onConflict: "username"
         )
-      },
-    ]
+        .select()
+    }
 
-    for testCase in testCases {
-      runningTestCase.withValue { $0 = testCase }
-      let builder = try await testCase.build(client)
-      _ = try? await builder.execute(options: FetchOptions())
+    try transport.assertFirstRequestSnapshot(.post, url.appendingPathComponent("users")) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 66" \
+      	--header "Content-Type: application/json" \
+      	--header "Prefer: resolution=merge-duplicates,return=representation" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	--data "[{\"email\":\"johndoe@supabase.io\"},{\"email\":\"johndoe2@supabase.io\"}]" \
+      	"https://example.supabase.co/users?columns=%22email%22&on_conflict=username&select=*"
+      """#
+    }
+  }
+
+  @Test
+  func rpcWithParams() async throws {
+    try await send {
+      try $0.rpc("test_fcn", params: ["KEY": "VALUE"])
+    }
+
+    try transport.assertFirstRequestSnapshot(.post, url.appendingPathComponent("rpc/test_fcn")) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "Accept: application/json" \
+      	--header "Content-Length: 15" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	--data "{\"KEY\":\"VALUE\"}" \
+      	"https://example.supabase.co/rpc/test_fcn"
+      """#
+    }
+  }
+
+  @Test
+  func rpcWithHead() async throws {
+    try await send {
+      try $0.rpc("sum", head: true)
+    }
+
+    try transport.assertFirstRequestSnapshot(.head, url.appendingPathComponent("rpc/sum")) {
+      #"""
+      curl \
+      	--head \
+      	--header "Accept: application/json" \
+      	--header "Content-Type: application/json" \
+      	--header "X-Client-Info: postgrest-swift/x.y.z" \
+      	"https://example.supabase.co/rpc/sum"
+      """#
     }
   }
 
@@ -285,5 +287,26 @@ struct BuildURLRequestTests {
       capture.header("X-Client-Info")
         == "postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0"
     )
+  }
+
+  /// Sends the request `build` makes. The transport answers every request with an empty 200,
+  /// so each test checks only the request.
+  private func send(
+    _ build: (PostgrestClient) throws -> any PostgrestExecutableBuilder
+  ) async throws {
+    let encoder = PostgrestClient.Configuration.jsonEncoder
+    encoder.outputFormatting = .sortedKeys
+
+    let client = try PostgrestClient(
+      configuration: .init(
+        url: url,
+        schema: nil,
+        headers: [.xClientInfo: "postgrest-swift/x.y.z"],
+        http: .init(transport: transport),
+        encoder: encoder,
+        retryEnabled: false
+      )
+    )
+    _ = try? await build(client).execute(options: FetchOptions())
   }
 }

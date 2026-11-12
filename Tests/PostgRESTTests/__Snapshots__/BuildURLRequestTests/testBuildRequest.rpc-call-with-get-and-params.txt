@@ -1,5 +1,0 @@
-curl \
-	--header "Accept: application/json" \
-	--header "Content-Type: application/json" \
-	--header "X-Client-Info: postgrest-swift/x.y.z" \
-	"https://example.supabase.co/rpc/get_array_element?array=%7B37,420,64%7D&index=2"

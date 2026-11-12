@@ -1,6 +1,0 @@
-curl \
-	--header "Apikey: dummy.api.key" \
-	--header "Authorization: Bearer accesstoken" \
-	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "X-Supabase-Api-Version: 2024-01-01" \
-	"http://localhost:54321/auth/v1/reauthenticate"

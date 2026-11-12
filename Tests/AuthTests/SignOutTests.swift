@@ -455,7 +455,7 @@ import Testing
 
   private var logoutRequests: [(scope: String?, authorization: String?)] {
     http.requests
-      .filter { $0.head.url?.path.hasSuffix("/logout") == true }
+      .filter { $0.head.method == .post && $0.head.url?.path.hasSuffix("/logout") == true }
       .map { request in
         let query = request.head.url.flatMap {
           URLComponents(url: $0, resolvingAgainstBaseURL: false)

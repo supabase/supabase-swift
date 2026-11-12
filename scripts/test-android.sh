@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# One-time setup — the host toolchain version must match the Swift SDK exactly, so Xcode's own
-# toolchain cannot be used:
-#
-#   swiftly install 6.4.0 --use
-#   swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz \
-#     --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
-#   curl -fSL -o ndk.zip https://dl.google.com/android/repository/android-ndk-r30-$(uname -s).zip && unzip -q ndk.zip
+# Cross-compiles the unit test targets with the Swift SDK for Android and runs them on an attached
+# device or emulator. The one-time setup is in "Running the tests on Android" in DEVELOPMENT.md.
+# BUILD_ONLY=1 builds without a device, so CI can compile before it boots the emulator.
 set -euo pipefail
 
 : "${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME to your Android NDK root}"
@@ -20,9 +16,6 @@ TARGETS="${TARGETS-AuthTests DefaultIsolationTests FunctionsTests HelpersTests P
 FILTER="${FILTER-}"
 
 DEVICE_DIR=/data/local/tmp/supabase-swift-tests
-# swift-snapshot-testing resolves `__Snapshots__` relative to the recorded #filePath, which the
-# Swift SDK for Android maps onto this fixed location on device.
-DEVICE_SNAPSHOT_DIR=/data/local/tmp/android-xctest/__Snapshots__
 
 case "$ARCH" in
   aarch64) ABI=arm64-v8a ;;
@@ -33,23 +26,28 @@ case "$ARCH" in
     ;;
 esac
 
-for tool in swift adb; do
+TOOLS="swift"
+[[ "${BUILD_ONLY-}" == 1 ]] || TOOLS="swift adb"
+for tool in $TOOLS; do
   command -v "$tool" >/dev/null 2>&1 || {
     echo "$tool not found on PATH" >&2
     exit 1
   }
 done
 
-if [[ "$(adb get-state 2>/dev/null)" != "device" ]]; then
-  echo "No Android device or emulator attached. Start one, e.g.:" >&2
-  echo "  emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect" >&2
-  exit 1
-fi
+# The device checks come first, so a run with no device fails before the long build.
+if [[ "${BUILD_ONLY-}" != 1 ]]; then
+  if [[ "$(adb get-state 2>/dev/null)" != "device" ]]; then
+    echo "No Android device or emulator attached. Start one, e.g.:" >&2
+    echo "  emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect" >&2
+    exit 1
+  fi
 
-DEVICE_ABI=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
-if [[ "$DEVICE_ABI" != "$ABI" ]]; then
-  echo "Device ABI is $DEVICE_ABI but ARCH=$ARCH expects $ABI" >&2
-  exit 1
+  DEVICE_ABI=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
+  if [[ "$DEVICE_ABI" != "$ABI" ]]; then
+    echo "Device ABI is $DEVICE_ABI but ARCH=$ARCH expects $ABI" >&2
+    exit 1
+  fi
 fi
 
 echo "==> Building tests for $ARCH-unknown-linux-android$API"
@@ -59,6 +57,8 @@ swift build \
   --triple "$ARCH-unknown-linux-android$API" \
   --configuration "$CONFIG" \
   --scratch-path "$SCRATCH_PATH"
+
+[[ "${BUILD_ONLY-}" == 1 ]] && exit 0
 
 PRODUCTS=$(find "$SCRATCH_PATH" -type d -path "*/Products/*-android-$ARCH" -print -quit)
 [[ -n "$PRODUCTS" ]] || {
@@ -89,7 +89,7 @@ LIBCXX=$(find "$ANDROID_NDK_HOME" -name libc++_shared.so -path "*$ARCH-linux-and
 }
 
 echo "==> Pushing to $DEVICE_DIR"
-adb shell "rm -rf $DEVICE_DIR $DEVICE_SNAPSHOT_DIR && mkdir -p $DEVICE_DIR $DEVICE_SNAPSHOT_DIR"
+adb shell "rm -rf $DEVICE_DIR && mkdir -p $DEVICE_DIR"
 adb push "$SDK_LIBS"/*.so "$DEVICE_DIR/" >/dev/null
 adb push "$LIBCXX" "$DEVICE_DIR/" >/dev/null
 adb push "$PRODUCTS"/*.so "$DEVICE_DIR/" >/dev/null
@@ -98,9 +98,6 @@ for bundle in "$PRODUCTS"/*.bundle; do
 done
 for runner in "$PRODUCTS"/*-test-runner; do
   adb push "$runner" "$DEVICE_DIR/" >/dev/null
-done
-for snapshots in Tests/*/__Snapshots__/*; do
-  adb push "$snapshots" "$DEVICE_SNAPSHOT_DIR/" >/dev/null
 done
 adb shell "chmod +x $DEVICE_DIR/*-test-runner"
 

@@ -1,9 +1,0 @@
-curl \
-	--request POST \
-	--header "Apikey: dummy.api.key" \
-	--header "Authorization: Bearer accesstoken" \
-	--header "Content-Type: application/json" \
-	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "X-Supabase-Api-Version: 2024-01-01" \
-	--data "{\"factor_type\":\"phone\",\"friendly_name\":\"test\",\"phone\":\"+1 202-918-2132\"}" \
-	"http://localhost:54321/auth/v1/factors"
