@@ -1283,17 +1283,65 @@ features:
     symbols:
       - AuthAdminCustomProviders.list
 
-  # AuthPasskeys and AuthAdminPasskeys methods are all
-  # @_spi(Experimental), so the public symbol graph the compliance scanner reads
-  # from never contains them.
-  auth.passkey.register_passkey: implemented
-  auth.passkey.sign_in_with_passkey: implemented
-  auth.passkey.delete_passkey: implemented
-  auth.passkey.list_passkeys: implemented
-  auth.passkey.update_passkey: implemented
+  # AuthPasskeys and AuthAdminPasskeys are @_spi(Experimental). The compliance
+  # scanner reads SPI symbols too, so these lists are checked like public API.
+  auth.passkey.register_passkey:
+    status: implemented
+    symbols:
+      - AuthClient.passkeys
+      - AuthPasskeys.register
+      - AuthPasskeys.registrationOptions
+      - AuthPasskeys.verifyRegistration
+    supporting_symbols:
+      - AuthPasskeys
+      - PasskeyRegistrationOptions
+      - PasskeyRegistrationOptions.init
+      - PasskeyRegistrationOptions.challengeID
+      - PasskeyRegistrationOptions.expiresAt
+      - PasskeyRegistrationOptions.options
+  auth.passkey.sign_in_with_passkey:
+    status: implemented
+    symbols:
+      - AuthPasskeys.signIn
+      - AuthPasskeys.authenticationOptions
+      - AuthPasskeys.verifyAuthentication
+    supporting_symbols:
+      - PasskeyAuthenticationOptions
+      - PasskeyAuthenticationOptions.init
+      - PasskeyAuthenticationOptions.challengeID
+      - PasskeyAuthenticationOptions.expiresAt
+      - PasskeyAuthenticationOptions.options
+  auth.passkey.delete_passkey:
+    status: implemented
+    symbols:
+      - AuthPasskeys.delete
+  auth.passkey.list_passkeys:
+    status: implemented
+    symbols:
+      - AuthPasskeys.list
+    supporting_symbols:
+      - PasskeyListItem
+      - PasskeyListItem.init
+      - PasskeyListItem.id
+      - PasskeyListItem.friendlyName
+      - PasskeyListItem.createdAt
+      - PasskeyListItem.lastUsedAt
+  auth.passkey.update_passkey:
+    status: implemented
+    symbols:
+      - AuthPasskeys.rename
 
-  auth.passkey_admin.list_passkeys: implemented
-  auth.passkey_admin.delete_passkey: implemented
+  auth.passkey_admin.list_passkeys:
+    status: implemented
+    symbols:
+      - AuthAdminClient.passkeys
+      - AuthAdminPasskeys.list
+    supporting_symbols:
+      - AuthAdminPasskeys
+  auth.passkey_admin.delete_passkey:
+    status: implemented
+    symbols:
+      - AuthAdminPasskeys.delete
 
   auth.oauth_server.get_authorization_details:
     status: implemented
@@ -1507,6 +1555,7 @@ features:
 
   client.observability.trace_propagation:
     status: implemented
+    no_public_symbols: true
     note: "W3C traceparent header injection from the active OpenTelemetry span, gated behind the OpenTelemetry SPM trait (opt-in dependency on opentelemetry-swift-core). No public API — enable the trait and it's automatic."
 
   # ── Database ───────────────────────────────────────────────────────────────
@@ -1807,6 +1856,7 @@ features:
   # behavior end to end (SDK-1640).
   database.using_modifiers.request_cancellation:
     status: implemented
+    no_public_symbols: true
     note: "Cancel the Task that awaits execute(). The transport exchange is torn down (URLSessionTransport cancels its URLSessionTask), a cancellation during a retry back-off stops the retry loop instead of starting the next attempt, and the caller gets CancellationError, never a PostgrestError wrapping URLError(.cancelled). Same on the typed and the untyped path, since both send through _PostgrestRequest."
   database.using_modifiers.relationship_embed:
     status: implemented
@@ -2449,9 +2499,47 @@ features:
       - TransferProgress.fractionCompleted
   # ResumableUpload, ResumableUploadRegistry, ResumableUploadConfiguration,
   # StorageBucket.resumableUpload and StorageClient.resumableUploads are all
-  # @_spi(Experimental) until the spec (supabase/sdk#278) settles, so the public
-  # symbol graph the compliance scanner reads never contains them.
-  storage.file_buckets.resumable_upload: implemented
+  # @_spi(Experimental) until the spec (supabase/sdk#278) settles.
+  storage.file_buckets.resumable_upload:
+    status: implemented
+    symbols:
+      - StorageBucket.resumableUpload
+      - StorageClient.resumableUploads
+      - ResumableUpload.start
+      - ResumableUpload.pause
+      - ResumableUpload.resume
+      - ResumableUpload.cancel
+      - ResumableUploadRegistry.pending
+      - ResumableUploadRegistry.resumeAll
+      - ResumableUploadRegistry.clear
+    supporting_symbols:
+      - ResumableUpload
+      - ResumableUpload.ID
+      - ResumableUpload.ID.init
+      - ResumableUpload.ID.rawValue
+      - ResumableUpload.Status
+      - ResumableUpload.Status.pending
+      - ResumableUpload.Status.uploading
+      - ResumableUpload.Status.paused
+      - ResumableUpload.Status.completed
+      - ResumableUpload.Status.failed
+      - ResumableUpload.Status.cancelled
+      - ResumableUpload.id
+      - ResumableUpload.bucketID
+      - ResumableUpload.path
+      - ResumableUpload.totalBytes
+      - ResumableUpload.status
+      - ResumableUpload.statusChanges
+      - ResumableUpload.progress
+      - ResumableUpload.result
+      - ResumableUploadRegistry
+      - ResumableUploadConfiguration
+      - ResumableUploadConfiguration.init
+      - ResumableUploadConfiguration.chunkSize
+      - ResumableUploadConfiguration.directory
+      - ResumableUploadConfiguration.retryTimeout
+      - StorageClient.Configuration.resumable
+      - SupabaseClient.Configuration.Storage.resumable
   storage.file_buckets.download:
     status: implemented
     symbols:
@@ -2679,8 +2767,14 @@ features:
       - ImageFormat.avif
   # Not separate methods: the `toBucket:` parameter of StorageBucket.copy and
   # StorageBucket.move, which their own capabilities already claim.
-  storage.file_buckets.copy_cross_bucket: implemented
-  storage.file_buckets.move_cross_bucket: implemented
+  storage.file_buckets.copy_cross_bucket:
+    status: implemented
+    symbols:
+      - StorageBucket.copy
+  storage.file_buckets.move_cross_bucket:
+    status: implemented
+    symbols:
+      - StorageBucket.move
   storage.file_buckets.upload_with_metadata:
     status: implemented
     note: "Not a separate method: the metadata/cacheControl/contentType fields of the options: UploadOptions parameter on StorageBucket.upload."
@@ -2700,7 +2794,13 @@ features:
   # Not a separate method: a `cacheNonce` field on SignedURLOptions,
   # SignedURLsOptions, DownloadOptions, and PublicURLOptions, which are
   # already claimed by their own capabilities above.
-  storage.file_buckets.url_cache_nonce: implemented
+  storage.file_buckets.url_cache_nonce:
+    status: implemented
+    symbols:
+      - SignedURLOptions.cacheNonce
+      - SignedURLsOptions.cacheNonce
+      - DownloadOptions.cacheNonce
+      - PublicURLOptions.cacheNonce
   storage.file_buckets.download_as_stream:
     status: implemented
     symbols:
@@ -2723,9 +2823,18 @@ features:
       - DownloadOptions.versionID
   # Not separate methods: the `versionID:` parameter of StorageBucket.info and
   # the `sourceVersionID:` parameter of StorageBucket.move and StorageBucket.copy.
-  storage.file_buckets.file_info_specific_version: implemented
-  storage.file_buckets.move_specific_version: implemented
-  storage.file_buckets.copy_specific_version: implemented
+  storage.file_buckets.file_info_specific_version:
+    status: implemented
+    symbols:
+      - StorageBucket.info
+  storage.file_buckets.move_specific_version:
+    status: implemented
+    symbols:
+      - StorageBucket.move
+  storage.file_buckets.copy_specific_version:
+    status: implemented
+    symbols:
+      - StorageBucket.copy
   storage.file_buckets.remove_specific_version:
     status: implemented
     symbols:
@@ -2776,38 +2885,212 @@ features:
     status: implemented
     symbols:
       - StorageBucket.purgeCache
-  storage.file_buckets.request_cancellation: implemented
+  storage.file_buckets.request_cancellation:
+    status: implemented
+    no_public_symbols: true
+    note: "Cancel the Task that awaits the storage call. There is no cancel()-style method; cancellation is plain Swift structured concurrency."
 
   # ── Storage — Vector Buckets ───────────────────────────────────────────────
 
   # StorageVectorsClient, VectorBucketClient and VectorIndexClient are all
-  # @_spi(Experimental) (vector buckets are a public alpha of Supabase Storage),
-  # so the public symbol graph the compliance scanner reads never contains them.
-  # parallel_scan is ListVectorsOptions.segment on listVectors(options:).
-  storage.vector_buckets.create_vector_bucket: implemented
-  storage.vector_buckets.list_vector_buckets: implemented
-  storage.vector_buckets.delete_vector_bucket: implemented
-  storage.vector_buckets.access_vector_index: implemented
-  storage.vector_buckets.create_index: implemented
-  storage.vector_buckets.delete_index: implemented
-  storage.vector_buckets.get_index: implemented
-  storage.vector_buckets.list_indexes: implemented
-  storage.vector_buckets.put_vectors: implemented
-  storage.vector_buckets.get_vectors: implemented
-  storage.vector_buckets.delete_vectors: implemented
-  storage.vector_buckets.list_vectors: implemented
-  storage.vector_buckets.query_vectors: implemented
-  storage.vector_buckets.parallel_scan: implemented
+  # @_spi(Experimental) (vector buckets are a public alpha of Supabase Storage).
+  storage.vector_buckets.create_vector_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.vectors
+      - StorageVectorsClient.createBucket
+    supporting_symbols:
+      - StorageVectorsClient
+  storage.vector_buckets.list_vector_buckets:
+    status: implemented
+    symbols:
+      - StorageVectorsClient.listBuckets
+    supporting_symbols:
+      - ListVectorBucketsOptions
+      - ListVectorBucketsOptions.init
+      - ListVectorBucketsOptions.prefix
+      - ListVectorBucketsOptions.pageSize
+      - VectorBucketPage
+      - VectorBucketPage.init
+      - VectorBucketPage.vectorBuckets
+      - VectorBucketPage.nextToken
+  storage.vector_buckets.get_vector_bucket:
+    status: implemented
+    symbols:
+      - StorageVectorsClient.bucket
+    supporting_symbols:
+      - VectorBucket
+      - VectorBucket.init
+      - VectorBucket.vectorBucketName
+      - VectorBucket.creationTime
+  storage.vector_buckets.delete_vector_bucket:
+    status: implemented
+    symbols:
+      - StorageVectorsClient.deleteBucket
+  storage.vector_buckets.access_vector_index:
+    status: implemented
+    symbols:
+      - StorageVectorsClient.from
+      - VectorBucketClient.from
+    supporting_symbols:
+      - VectorBucketClient
+      - VectorBucketClient.vectorBucketName
+      - VectorIndexClient
+      - VectorIndexClient.vectorBucketName
+      - VectorIndexClient.indexName
+  storage.vector_buckets.create_index:
+    status: implemented
+    symbols:
+      - VectorBucketClient.createIndex
+    supporting_symbols:
+      - VectorDataType
+      - VectorDataType.init
+      - VectorDataType.rawValue
+      - VectorDataType.encode
+      - VectorDataType.float32
+      - VectorDistanceMetric
+      - VectorDistanceMetric.init
+      - VectorDistanceMetric.rawValue
+      - VectorDistanceMetric.encode
+      - VectorDistanceMetric.cosine
+      - VectorDistanceMetric.euclidean
+      - VectorDistanceMetric.dotProduct
+      - VectorIndexMetadataConfiguration
+      - VectorIndexMetadataConfiguration.init
+      - VectorIndexMetadataConfiguration.nonFilterableMetadataKeys
+  storage.vector_buckets.delete_index:
+    status: implemented
+    symbols:
+      - VectorBucketClient.deleteIndex
+  storage.vector_buckets.get_index:
+    status: implemented
+    symbols:
+      - VectorBucketClient.index
+    supporting_symbols:
+      - VectorIndex
+      - VectorIndex.init
+      - VectorIndex.indexName
+      - VectorIndex.vectorBucketName
+      - VectorIndex.dataType
+      - VectorIndex.dimension
+      - VectorIndex.distanceMetric
+      - VectorIndex.metadataConfiguration
+      - VectorIndex.creationTime
+  storage.vector_buckets.list_indexes:
+    status: implemented
+    symbols:
+      - VectorBucketClient.listIndexes
+    supporting_symbols:
+      - ListIndexesOptions
+      - ListIndexesOptions.init
+      - ListIndexesOptions.prefix
+      - ListIndexesOptions.pageSize
+      - VectorIndexPage
+      - VectorIndexPage.init
+      - VectorIndexPage.indexes
+      - VectorIndexPage.nextToken
+      - VectorIndexSummary
+      - VectorIndexSummary.init
+      - VectorIndexSummary.indexName
+      - VectorIndexSummary.vectorBucketName
+      - VectorIndexSummary.creationTime
+  storage.vector_buckets.put_vectors:
+    status: implemented
+    symbols:
+      - VectorIndexClient.putVectors
+    supporting_symbols:
+      - VectorEntry
+      - VectorEntry.init
+      - VectorEntry.key
+      - VectorEntry.data
+      - VectorEntry.metadata
+      - VectorData
+      - VectorData.init
+      - VectorData.float32
+  storage.vector_buckets.get_vectors:
+    status: implemented
+    symbols:
+      - VectorIndexClient.vectors
+    supporting_symbols:
+      - GetVectorsOptions
+      - GetVectorsOptions.init
+      - GetVectorsOptions.returnData
+      - GetVectorsOptions.returnMetadata
+      - VectorMatch
+      - VectorMatch.init
+      - VectorMatch.key
+      - VectorMatch.data
+      - VectorMatch.metadata
+      - VectorMatch.distance
+  storage.vector_buckets.delete_vectors:
+    status: implemented
+    symbols:
+      - VectorIndexClient.deleteVectors
+  storage.vector_buckets.list_vectors:
+    status: implemented
+    symbols:
+      - VectorIndexClient.listVectors
+    supporting_symbols:
+      - ListVectorsOptions
+      - ListVectorsOptions.init
+      - ListVectorsOptions.pageSize
+      - ListVectorsOptions.returnData
+      - ListVectorsOptions.returnMetadata
+      - VectorPage
+      - VectorPage.init
+      - VectorPage.vectors
+      - VectorPage.nextToken
+  storage.vector_buckets.query_vectors:
+    status: implemented
+    symbols:
+      - VectorIndexClient.queryVectors
+    supporting_symbols:
+      - QueryVectorsOptions
+      - QueryVectorsOptions.init
+      - QueryVectorsOptions.filter
+      - QueryVectorsOptions.returnDistance
+      - QueryVectorsOptions.returnMetadata
+      - QueryVectorsResponse
+      - QueryVectorsResponse.init
+      - QueryVectorsResponse.vectors
+      - QueryVectorsResponse.distanceMetric
+  # ListVectorsOptions.segment on listVectors(options:).
+  storage.vector_buckets.parallel_scan:
+    status: implemented
+    symbols:
+      - ListVectorsOptions.segment
+    supporting_symbols:
+      - VectorListSegment
+      - VectorListSegment.init
+      - VectorListSegment.count
+      - VectorListSegment.index
 
   # ── Storage — Analytics Buckets ────────────────────────────────────────────
 
   # StorageAnalyticsClient is @_spi(Experimental) (analytics buckets are a public
-  # alpha of Supabase Storage), so the public symbol graph the compliance scanner
-  # reads never contains it. The Iceberg REST catalog (namespaces, tables) is not
-  # wrapped: there is no Swift Iceberg client to hand it to.
-  storage.analytics.create_analytics_bucket: implemented
-  storage.analytics.list_analytics_buckets: implemented
-  storage.analytics.delete_analytics_bucket: implemented
+  # alpha of Supabase Storage). The Iceberg REST catalog (namespaces, tables) is
+  # not wrapped: there is no Swift Iceberg client to hand it to.
+  storage.analytics.create_analytics_bucket:
+    status: implemented
+    symbols:
+      - StorageClient.analytics
+      - StorageAnalyticsClient.createBucket
+    supporting_symbols:
+      - StorageAnalyticsClient
+      - AnalyticsBucket
+      - AnalyticsBucket.init
+      - AnalyticsBucket.id
+      - AnalyticsBucket.name
+      - AnalyticsBucket.createdAt
+      - AnalyticsBucket.updatedAt
+  storage.analytics.list_analytics_buckets:
+    status: implemented
+    symbols:
+      - StorageAnalyticsClient.listBuckets
+  storage.analytics.delete_analytics_bucket:
+    status: implemented
+    symbols:
+      - StorageAnalyticsClient.deleteBucket
   storage.analytics.create_namespace: not_implemented
   storage.analytics.list_namespaces: not_implemented
   storage.analytics.delete_namespace: not_implemented
