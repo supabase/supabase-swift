@@ -592,8 +592,9 @@ jobs:
             compliance-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-
             compliance-${{ runner.os }}-
       # The baseline was recorded with this Xcode; another SDK can change the symbol graph.
-      - name: Select Xcode 27.0
-        run: sudo xcode-select -s /Applications/Xcode_27.0.app
+      # Not Xcode 27: its Swift 6.4 drops --include-spi-symbols, which the check needs.
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
       - name: Check sdk-compliance.yaml
         run: ./scripts/check-compliance.sh
 
