@@ -479,3 +479,17 @@ struct PresenceV3APITests {
     #expect(PresenceChange() == PresenceChange(joins: [:], leaves: [:]))
   }
 }
+
+@Suite
+struct RealtimeChannelEventV3APITests {
+  @Test
+  func eventsCompareByCaseAndMessage() {
+    let events: Set<RealtimeChannelEvent> = [
+      .resubscribed, .postgresChangesReady, .replicationReady,
+      .postgresChangesFailed("a"), .postgresChangesFailed("b"), .replicationFailed("a"),
+    ]
+
+    #expect(events.count == 6)
+    #expect(RealtimeChannelEvent.postgresChangesFailed("a") == .postgresChangesFailed("a"))
+  }
+}

@@ -914,4 +914,92 @@ import Testing
       subscription.cancel()
     }
   }
+
+  @Suite
+  struct RealtimeChannelEventsV3APITests {
+    let fixture = RealtimeV3Fixture()
+
+    private func systemMessage(extension: String, status: String, message: String)
+      -> RealtimeMessageV2
+    {
+      RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "realtime:test", event: "system",
+        payload: [
+          "extension": .string(`extension`), "status": .string(status),
+          "message": .string(message), "channel": "test",
+        ])
+    }
+
+    @Test
+    func eventsReportsThePostgresChangesAndReplicationMessages() async throws {
+      let channel = fixture.sut.channel("test")
+      var events = await channel.events().makeAsyncIterator()
+
+      await channel.onMessage(
+        systemMessage(
+          extension: "postgres_changes", status: "ok", message: "Subscribed to PostgreSQL"))
+      await channel.onMessage(
+        systemMessage(extension: "postgres_changes", status: "error", message: "bad filter"))
+      await channel.onMessage(
+        systemMessage(
+          extension: "system", status: "ok", message: "Replication connection established"))
+      await channel.onMessage(
+        systemMessage(extension: "system", status: "error", message: "not in time"))
+
+      #expect(await events.next() == .postgresChangesReady)
+      #expect(await events.next() == .postgresChangesFailed("bad filter"))
+      #expect(await events.next() == .replicationReady)
+      #expect(await events.next() == .replicationFailed("not in time"))
+    }
+
+    @Test
+    func eventsReportsARejoinButNotTheFirstJoin() async throws {
+      fixture.startServer()
+      await fixture.sut.connect()
+      let channel = fixture.sut.channel("test")
+      var events = await channel.events().makeAsyncIterator()
+
+      try await channel.subscribeWithError()
+      try await channel.rejoinAfterReconnect()
+      await channel.onMessage(
+        systemMessage(
+          extension: "system", status: "ok", message: "Replication connection established"))
+
+      #expect(await events.next() == .resubscribed)
+      #expect(await events.next() == .replicationReady)
+    }
+
+    @Test
+    func eventsDoesNotReportASubscribeAfterUnsubscribe() async throws {
+      fixture.startServer()
+      await fixture.sut.connect()
+      let channel = fixture.sut.channel("test")
+      var events = await channel.events().makeAsyncIterator()
+
+      try await channel.subscribeWithError()
+      let unsubscribe = Task { await channel.unsubscribe() }
+      fixture.server.send(
+        RealtimeMessageV2(
+          joinRef: nil, ref: nil, topic: "realtime:test", event: "phx_close", payload: [:]))
+      await unsubscribe.value
+      await channel.onMessage(
+        systemMessage(
+          extension: "system", status: "ok", message: "Replication connection established"))
+
+      #expect(await events.next() == .replicationReady)
+    }
+
+    @Test
+    @available(*, deprecated, message: "Tests the deprecated v2 system stream.")
+    func theV2SystemStreamStillReceivesTheMessage() async throws {
+      let channel = fixture.sut.channel("test")
+      var messages = channel.system().makeAsyncIterator()
+      let message = systemMessage(
+        extension: "postgres_changes", status: "ok", message: "Subscribed to PostgreSQL")
+
+      await channel.onMessage(message)
+
+      #expect(await messages.next() == message)
+    }
+  }
 #endif

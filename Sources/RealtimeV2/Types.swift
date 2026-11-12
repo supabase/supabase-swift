@@ -265,7 +265,61 @@ public struct RealtimeClientOptions: Sendable {
 /// }
 /// defer { subscription.cancel() }
 /// ```
+@available(
+  *, deprecated, message: "Read the matching AsyncStream and cancel its task instead."
+)
 public typealias RealtimeSubscription = ObservationToken
+
+/// A server event about a ``RealtimeChannelV2``, emitted by ``RealtimeChannelV2/events()``.
+///
+/// The set of cases is fixed until the next major version, so a `switch` needs no `default`.
+///
+/// ## Topics
+/// ### Events
+/// - ``resubscribed``
+/// - ``postgresChangesReady``
+/// - ``postgresChangesFailed(_:)``
+/// - ``replicationReady``
+/// - ``replicationFailed(_:)``
+public enum RealtimeChannelEvent: Hashable, Sendable {
+  /// The channel joined again after it was subscribed, for example after a reconnect. Events
+  /// sent while it was away were missed; reload any state built from them.
+  case resubscribed
+
+  /// The server set up the channel's Postgres changes subscriptions ("Subscribed to
+  /// PostgreSQL"). Changes from now on are delivered.
+  case postgresChangesReady
+
+  /// The server could not set up the channel's Postgres changes subscriptions. The value is the
+  /// server's message.
+  case postgresChangesFailed(String)
+
+  /// The Postgres replication connection behind the channel is ready ("Replication connection
+  /// established"). The server sends it only when you opt in with
+  /// ``BroadcastJoinConfig/waitsForReplication``.
+  case replicationReady
+
+  /// The Postgres replication connection did not become ready in time. The server sends it only
+  /// when you opt in with ``BroadcastJoinConfig/waitsForReplication``. The value is the server's
+  /// message.
+  case replicationFailed(String)
+}
+
+extension RealtimeChannelEvent {
+  /// Reads a `system` message. `nil` for a message that is not about Postgres changes or
+  /// replication, or that has no `ok` or `error` status.
+  init?(systemMessage message: RealtimeMessageV2) {
+    let `extension` = message.payload["extension"]?.stringValue
+    let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
+    switch (`extension`, message.status) {
+    case (ChannelEvent.postgresChanges, .ok): self = .postgresChangesReady
+    case (ChannelEvent.postgresChanges, .error): self = .postgresChangesFailed(reason)
+    case (ChannelEvent.system, .ok): self = .replicationReady
+    case (ChannelEvent.system, .error): self = .replicationFailed(reason)
+    default: return nil
+    }
+  }
+}
 
 /// Describes the subscription state of a ``RealtimeChannelV2``.
 ///

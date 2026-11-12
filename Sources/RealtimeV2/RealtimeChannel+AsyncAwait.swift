@@ -9,6 +9,33 @@ import ConcurrencyExtras
 public import Foundation
 
 extension RealtimeChannelV2 {
+  /// Returns an async stream of server events about this channel.
+  ///
+  /// The stream emits ``RealtimeChannelEvent/resubscribed`` when the channel joins again after
+  /// a reconnect, and reports whether the server set up the channel's Postgres changes
+  /// subscriptions. The stream is registered before this method returns and emits only the
+  /// events from then on; it never replays an earlier event. Read the channel's state with
+  /// ``status`` and ``statusChanges()``. Cancelling the iterating task ends the stream.
+  ///
+  /// ```swift
+  /// for await event in await channel.events() {
+  ///   if event == .resubscribed {
+  ///     await reloadMessages()
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// - Returns: An `AsyncStream` of ``RealtimeChannelEvent`` values.
+  public func events() async -> AsyncStream<RealtimeChannelEvent> {
+    let (stream, continuation) = AsyncStream<RealtimeChannelEvent>.makeStream()
+    let id = UUID()
+    eventObservers.withValue { $0.continuations[id] = continuation }
+    continuation.onTermination = { [weak self] _ in
+      self?.eventObservers.withValue { $0.continuations[id] = nil }
+    }
+    return stream
+  }
+
   /// The clients present on the channel, as of the last presence sync.
   ///
   /// It is empty until the channel is subscribed with presence on, which needs a presence
@@ -490,6 +517,7 @@ extension RealtimeChannelV2 {
   /// System events convey channel-level status information from the server.
   ///
   /// - Returns: An `AsyncStream<RealtimeMessageV2>`.
+  @available(*, deprecated, message: "Use events() instead.")
   public func system() -> AsyncStream<RealtimeMessageV2> {
     let (stream, continuation) = AsyncStream<RealtimeMessageV2>.makeStream()
 

@@ -120,6 +120,8 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``broadcast(event:data:)``
 /// - ``httpSend(event:payload:encoder:timeout:)``
 /// - ``httpSend(event:data:timeout:)-(_,_,Duration?)``
+/// ### Channel Events
+/// - ``events()``
 /// ### Presence
 /// - ``presenceState``
 /// - ``presenceStates()``
@@ -176,6 +178,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
   let presenceTracker = LockIsolated(PresenceTracker())
+  let eventObservers = LockIsolated(ChannelEventObservers())
 
   /// Lock-protected status + subscribers for ``status``/``statusChanges()``.
   /// See `RealtimeChannel+Status.swift`.
@@ -230,7 +233,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         // storage synchronously. Running this on the actor avoids the
         // async observer-Task delay, so reads of ``status`` right after
         // ``subscribe()`` returns see the latest value.
-        weakSelfRef.value?.yieldStatus(Self.mapState(state))
+        let status = Self.mapState(state)
+        weakSelfRef.value?.yieldStatus(status)
+        if status == .subscribed {
+          weakSelfRef.value?.didSubscribe()
+        }
       }
     )
 
@@ -288,6 +295,25 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")
     await stateManager.unsubscribe()
     clearPresence()
+    eventObservers.withValue { $0.hasBeenSubscribed = false }
+  }
+
+  /// Reports a join that follows an earlier one as ``RealtimeChannelEvent/resubscribed``.
+  private func didSubscribe() {
+    let isRejoin = eventObservers.withValue { observers in
+      defer { observers.hasBeenSubscribed = true }
+      return observers.hasBeenSubscribed
+    }
+    if isRejoin {
+      yieldEvent(.resubscribed)
+    }
+  }
+
+  func yieldEvent(_ event: RealtimeChannelEvent) {
+    let continuations = eventObservers.withValue { Array($0.continuations.values) }
+    for continuation in continuations {
+      continuation.yield(event)
+    }
   }
 
   /// Resets the channel for a rejoin. Returns whether it should rejoin.
@@ -794,6 +820,9 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         }
 
         callbackManager.triggerSystem(message: message)
+        if let event = RealtimeChannelEvent(systemMessage: message) {
+          yieldEvent(event)
+        }
 
       case .reply:
         guard
@@ -1387,6 +1416,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Parameter callback: A `@Sendable` closure receiving the ``RealtimeMessageV2``.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(*, deprecated, message: "Use events() instead.")
   public func onSystem(
     callback: @escaping @Sendable (RealtimeMessageV2) -> Void
   ) -> RealtimeSubscription {
@@ -1403,6 +1433,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Parameter callback: A `@Sendable` closure called on each system event.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(*, deprecated, message: "Use events() instead.")
   public func onSystem(
     callback: @escaping @Sendable () -> Void
   ) -> RealtimeSubscription {
@@ -1455,4 +1486,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 /// ``RealtimeChannelV2.init``, before the reference escapes the initializer.
 private final class WeakChannelRef: @unchecked Sendable {
   weak var value: RealtimeChannelV2?
+}
+
+/// The ``RealtimeChannelV2/events()`` streams of a channel, and whether it has joined before.
+struct ChannelEventObservers: Sendable {
+  var continuations: [UUID: AsyncStream<RealtimeChannelEvent>.Continuation] = [:]
+  var hasBeenSubscribed = false
 }
