@@ -2977,6 +2977,7 @@ public struct JWTHeader: Codable, Hashable, Sendable {
 }
 
 /// The decoded claims from a JSON Web Token.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public struct JWTClaims: Codable, Hashable, Sendable {
   /// Issuer (`iss` claim).
   public let iss: String?
@@ -3093,6 +3094,7 @@ public struct JWTClaims: Codable, Hashable, Sendable {
 }
 
 /// A JWT `aud` (audience) claim that may be either a single string or an array of strings.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public enum AudienceClaim: Codable, Hashable, Sendable {
   /// A single audience string.
   case string(String)
@@ -3144,6 +3146,7 @@ private struct AnyCodingKey: CodingKey {
 }
 
 /// The result returned by ``AuthClient/getClaims(jwt:options:)``.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public struct JWTClaimsResponse: Sendable {
   /// The decoded JWT claims.
   public let claims: JWTClaims
@@ -3156,6 +3159,7 @@ public struct JWTClaimsResponse: Sendable {
 }
 
 /// Options for ``AuthClient/getClaims(jwt:options:)``.
+@available(*, deprecated, message: "Use ClaimsOptions instead.")
 public struct GetClaimsOptions: Sendable {
   /// When `true`, the `exp` claim is not validated against the current time, allowing expired tokens to be decoded.
   public let allowExpired: Bool

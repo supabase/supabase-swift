@@ -91,6 +91,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.getClaims
+      - AuthClient.claims
   auth.session.refresh_session:
     status: implemented
     symbols:

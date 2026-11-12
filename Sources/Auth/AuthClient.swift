@@ -1882,10 +1882,69 @@ public actor AuthClient {
   /// - Returns: A `JWTClaimsResponse` containing the verified claims, header, and signature.
   ///
   /// - Throws: `AuthError.jwtVerificationFailed` if verification fails, or `AuthError.sessionMissing` if no session exists.
+  @available(
+    *, deprecated, message: "Use claims(options:) or claims(jwt:options:) instead."
+  )
   public func getClaims(
     jwt: String? = nil,
     options: GetClaimsOptions = GetClaimsOptions()
   ) async throws -> JWTClaimsResponse {
+    let decodedJWT = try await verifiedJWT(
+      jwt, allowsExpired: options.allowExpired, jwks: options.jwks)
+
+    let claims = try configuration.resolvedDecoder.decode(
+      JWTClaims.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
+    )
+    let header = try configuration.resolvedDecoder.decode(
+      JWTHeader.self,
+      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
+    )
+
+    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+  }
+
+  /// Verifies the access token of the current session and returns its claims.
+  ///
+  /// The client verifies a token signed with an asymmetric key (ECC or RSA) on the device, with
+  /// the key set of the Auth server, which it caches. For any other token it asks the Auth server,
+  /// as ``user(jwt:)`` does.
+  ///
+  /// - Parameter options: Options for the verification.
+  /// - Returns: The verified claims, with the header and the signature of the token.
+  /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or
+  ///   ``AuthError/jwtVerificationFailed(message:)`` when the token is malformed, expired, has a
+  ///   bad signature, or has no `sub` or `exp` claim.
+  public func claims(options: ClaimsOptions = ClaimsOptions()) async throws -> VerifiedClaims {
+    try VerifiedClaims(
+      await verifiedJWT(nil, allowsExpired: options.allowsExpired, jwks: options.jwks))
+  }
+
+  /// Verifies a JSON Web Token and returns its claims.
+  ///
+  /// The client verifies a token signed with an asymmetric key (ECC or RSA) on the device, with
+  /// the key set of the Auth server, which it caches. For any other token it asks the Auth server,
+  /// as ``user(jwt:)`` does.
+  ///
+  /// - Parameters:
+  ///   - jwt: The token to verify.
+  ///   - options: Options for the verification.
+  /// - Returns: The verified claims, with the header and the signature of the token.
+  /// - Throws: ``AuthError/jwtVerificationFailed(message:)`` when the token is malformed, expired,
+  ///   has a bad signature, or has no `sub` or `exp` claim.
+  public func claims(
+    jwt: String,
+    options: ClaimsOptions = ClaimsOptions()
+  ) async throws -> VerifiedClaims {
+    try VerifiedClaims(
+      await verifiedJWT(jwt, allowsExpired: options.allowsExpired, jwks: options.jwks))
+  }
+
+  private func verifiedJWT(
+    _ jwt: String?,
+    allowsExpired: Bool,
+    jwks: JWKS?
+  ) async throws -> DecodedJWT {
     let token: String
     if let jwt {
       token = jwt
@@ -1900,8 +1959,7 @@ public actor AuthClient {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT structure")
     }
 
-    // Validate expiration unless allowExpired is true
-    if !options.allowExpired {
+    if !allowsExpired {
       if let exp = decodedJWT.payload["exp"] as? TimeInterval {
         let now = date().timeIntervalSince1970
         if exp <= now {
@@ -1918,7 +1976,7 @@ public actor AuthClient {
     let signingKey: JWK?
     if let alg, !alg.hasPrefix("HS"), let kid {
       // Only attempt to fetch JWK for asymmetric algorithms with a kid
-      signingKey = try await fetchJWK(kid: kid, jwks: options.jwks)
+      signingKey = try await fetchJWK(kid: kid, jwks: jwks)
     } else {
       signingKey = nil
     }
@@ -1932,34 +1990,14 @@ public actor AuthClient {
     else {
       _ = try await user(jwt: token)
       // getUser succeeds, so claims can be trusted
-      let claims = try configuration.resolvedDecoder.decode(
-        JWTClaims.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-      )
-      let header = try configuration.resolvedDecoder.decode(
-        JWTHeader.self,
-        from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-      )
-      return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+      return decodedJWT
     }
 
-    let isValid = algorithm.verify(jwt: decodedJWT, jwk: signingKey)
-
-    guard isValid else {
+    guard algorithm.verify(jwt: decodedJWT, jwk: signingKey) else {
       throw AuthError.jwtVerificationFailed(message: "Invalid JWT signature")
     }
 
-    // Decode claims and header
-    let claims = try configuration.resolvedDecoder.decode(
-      JWTClaims.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.payload)
-    )
-    let header = try configuration.resolvedDecoder.decode(
-      JWTHeader.self,
-      from: JSONSerialization.data(withJSONObject: decodedJWT.header)
-    )
-
-    return JWTClaimsResponse(claims: claims, header: header, signature: decodedJWT.signature)
+    return decodedJWT
   }
 }
 
