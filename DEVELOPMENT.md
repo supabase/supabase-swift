@@ -320,7 +320,8 @@ supabase stop
 - `release.yml`: Automated releases via release-please
 - `conventional-commits.yml`: Validates commit message format
 - `mutation-testing.yml`: Runs `scripts/mutation-test.sh` weekly and on demand, one job per
-  scope. It writes the summary to the job page and uploads the reports as artifacts
+  scope. It writes the summary to the job page and uploads the reports as artifacts. A failed
+  weekly run posts to Slack, as `ci.yml` does for a failure on `main`
 
 ### Platform Testing
 

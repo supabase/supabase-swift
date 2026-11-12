@@ -56,3 +56,51 @@ jobs:
           name: mutation-reports-${{ matrix.scope }}
           path: .mutation-testing/reports/
           if-no-files-found: ignore
+
+  # The weekly run has nobody watching it, so a failure would go unseen without an alert. A
+  # manual run does not alert: the person who started it watches it.
+  notify-slack-on-failure:
+    name: Notify Slack on mutation testing failure
+    needs: [mutation-testing]
+    if: always() && github.event_name == 'schedule' && needs.mutation-testing.result == 'failure'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Send Slack alert
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          payload=$(cat <<EOF
+          {
+            "text": "❌ Mutation testing failed in ${GITHUB_REPO}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "❌ Mutation testing failed", "emoji": true }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "A scope failed its quality gate or did not finish. The run's summary and artifacts list the surviving mutants." }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": "*Repository*\n${GITHUB_REPO}" },
+                  { "type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}" }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Run" },
+                    "url": "https://github.com/${GITHUB_REPO}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl --proto '=https' -sf -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_CLIENT_LIBS_WEBHOOK }}"
