@@ -122,10 +122,12 @@ for scope in "${SCOPES[@]}"; do
   set -e
 
   summary+=("$(printf '%-40s exit %s' "$file" "$code")")
-  if [[ $code -eq 1 ]]; then
+  # Any exit other than 0 or 2 (an error, a crash, a kill) is a failure, so the run does not
+  # pass with a scope that did not finish.
+  if [[ $code -eq 2 ]]; then
+    [[ $status -eq 0 ]] && status=2
+  elif [[ $code -ne 0 ]]; then
     status=1
-  elif [[ $code -eq 2 && $status -eq 0 ]]; then
-    status=2
   fi
 done
 
