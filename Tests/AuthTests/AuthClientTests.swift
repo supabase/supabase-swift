@@ -627,6 +627,64 @@ extension AuthMockerTests {
     }
 
     @Test
+    func exchangeCodeForSessionFailsWhenNoVerifierIsStored() async throws {
+      let requested = LockIsolated(false)
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "pkce")
+        ]),
+        statusCode: 200,
+        data: [
+          .post: MockData.session
+        ]
+      )
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        requested.setValue(true)
+      })
+      mock.register()
+
+      let sut = makeSUT()
+
+      do {
+        _ = try await sut.exchangeCodeForSession(authCode: "12345")
+        Issue.record("Expected pkceGrantCodeExchange error")
+      } catch let error as AuthError {
+        guard case .pkceGrantCodeExchange = error else {
+          Issue.record("Expected pkceGrantCodeExchange error, got \(error)")
+          return
+        }
+      }
+
+      #expect(requested.value == false)
+    }
+
+    @Test
+    func exchangeCodeForSessionWithImplicitFlowStillSendsTheRequest() async throws {
+      let requested = LockIsolated(false)
+
+      var mock = Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "pkce")
+        ]),
+        statusCode: 200,
+        data: [
+          .post: MockData.session
+        ]
+      )
+      mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in
+        requested.setValue(true)
+      })
+      mock.register()
+
+      let sut = makeSUT(flowType: .implicit)
+
+      _ = try await sut.exchangeCodeForSession(authCode: "12345")
+
+      #expect(requested.value == true)
+    }
+
+    @Test
     func signUpWithEmailAndPassword() async throws {
       Mock(
         url: clientURL.appendingPathComponent("signup"),
@@ -2926,6 +2984,88 @@ extension AuthMockerTests {
       )
 
       #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+    }
+
+    @Test
+    func removeSessionAndSignoutIfUserBannedErrorReturnedOnRefresh() async throws {
+      let sut = makeSUT(emitLocalSessionAsInitialSession: true)
+
+      Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "refresh_token")
+        ]),
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "user_banned",
+              "message": "Invalid Refresh Token: User Banned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      Dependencies[sut.clientID].sessionStorage.store(.expiredSession)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            _ = try await sut.session
+            Issue.record("Expected failure")
+          } catch {
+            #expect(error as? AuthError == .sessionMissing)
+          }
+        },
+        expectedEvents: [.initialSession, .signedOut]
+      )
+
+      #expect(Dependencies[sut.clientID].sessionStorage.get() == nil)
+    }
+
+    @Test
+    func bannedSignInKeepsTheStoredSessionAndSurfacesTheErrorCode() async throws {
+      let sut = makeSUT()
+
+      Mock(
+        url: clientURL.appendingPathComponent("token").appendingQueryItems([
+          URLQueryItem(name: "grant_type", value: "password")
+        ]),
+        statusCode: 400,
+        data: [
+          .post: Data(
+            """
+            {
+              "error_code": "user_banned",
+              "message": "User is banned"
+            }
+            """.utf8
+          )
+        ]
+      )
+      .register()
+
+      Dependencies[sut.clientID].sessionStorage.store(.validSession)
+
+      try await assertAuthStateChanges(
+        sut: sut,
+        action: {
+          do {
+            try await sut.signIn(email: "banned@example.com", password: "the.pass")
+            Issue.record("Expected failure")
+          } catch let AuthError.api(_, errorCode, _, _) {
+            #expect(errorCode == .userBanned)
+          }
+        },
+        expectedEvents: [.initialSession]
+      )
+
+      #expect(
+        Dependencies[sut.clientID].sessionStorage.get()?.refreshToken
+          == Session.validSession.refreshToken)
     }
 
     @Test

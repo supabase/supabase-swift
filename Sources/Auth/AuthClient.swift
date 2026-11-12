@@ -737,9 +737,10 @@ public actor AuthClient {
   public func exchangeCodeForSession(authCode: String) async throws -> Session {
     let codeVerifier = codeVerifierStorage.get()
 
-    if codeVerifier == nil {
-      logger?.error(
-        "code verifier not found, a code verifier should exist when calling this method."
+    if codeVerifier == nil, configuration.flowType == .pkce {
+      throw AuthError.pkceGrantCodeExchange(
+        message:
+          "PKCE code verifier not found. The flow was started on another device, its verifier was evicted or already used, or the storage was cleared."
       )
     }
 
