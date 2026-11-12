@@ -187,8 +187,7 @@ final class CallbackManager: Sendable {
 
   func triggerBroadcastMessage(_ message: BroadcastMessage) {
     let callbacks = mutableState.callbacks.compactMap { callback -> BroadcastMessageCallback? in
-      guard case .broadcastMessage(let callback) = callback,
-        callback.event == "*" || callback.event.lowercased() == message.event.lowercased()
+      guard case .broadcastMessage(let callback) = callback, callback.matches(message.event)
       else { return nil }
       return callback
     }
@@ -198,7 +197,7 @@ final class CallbackManager: Sendable {
   func hasBroadcastMessageCallbacks(for event: String) -> Bool {
     mutableState.callbacks.contains {
       if case .broadcastMessage(let callback) = $0 {
-        return callback.event == "*" || callback.event.lowercased() == event.lowercased()
+        return callback.matches(event)
       }
       return false
     }
@@ -319,6 +318,10 @@ struct BroadcastMessageCallback {
   var id: Int
   var event: String
   var callback: @Sendable (BroadcastMessage) -> Void
+
+  func matches(_ event: String) -> Bool {
+    self.event == "*" || self.event.lowercased() == event.lowercased()
+  }
 }
 
 enum RealtimeCallback {
