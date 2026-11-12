@@ -1106,6 +1106,31 @@ struct StorageV3ObjectTests {
   }
 
   @Test
+  func rowsWithoutTheVersioningFieldsDecode() async throws {
+    let recorder = RequestRecorder()
+
+    let listing = recorder.client(
+      response: #"[{"name":"a.png","id":"\#(objectID)","metadata":{"size":42}}]"#
+    ).from("avatars")
+    let object = try #require(try await listing.list(options: ListOptions()).first)
+    #expect(object.versionID == nil)
+    #expect(object.userMetadata == nil)
+    #expect(object.isVersioned == nil)
+    #expect(object.isDeleteMarker == nil)
+    #expect(object.archivedAt == nil)
+    #expect(object.metadata?.size == 42)
+
+    let describing = recorder.client(response: #"{"id":"\#(objectID)","name":"a.png"}"#)
+      .from("avatars")
+    let info: ObjectInfo = try await describing.info(path: "a.png")
+    #expect(info.versionID == "")
+    #expect(info.userMetadata == nil)
+    #expect(info.isVersioned == nil)
+    #expect(info.isDeleteMarker == nil)
+    #expect(info.archivedAt == nil)
+  }
+
+  @Test
   func moveSendsTheDestinationBucketAndTheSourceVersion() async throws {
     let recorder = RequestRecorder()
     let bucket = recorder.client().from("avatars")

@@ -441,7 +441,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of this object.
   public var id: UUID
 
-  /// The version identifier of this object.
+  /// The version identifier of this object. Empty when Storage sends no version.
   public var versionID: String
 
   /// The full key of the object within its bucket.
@@ -540,5 +540,27 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
     case isVersioned = "is_versioned"
     case isDeleteMarker = "is_delete_marker"
     case archivedAt = "archived_at"
+  }
+
+  /// Decodes an object description. A missing or `null` version decodes as an empty
+  /// ``versionID``.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(UUID.self, forKey: .id)
+    versionID = try container.decodeIfPresent(String.self, forKey: .versionID) ?? ""
+    name = try container.decode(String.self, forKey: .name)
+    bucketID = try container.decodeIfPresent(String.self, forKey: .bucketID)
+    size = try container.decodeIfPresent(Int64.self, forKey: .size)
+    contentType = try container.decodeIfPresent(String.self, forKey: .contentType)
+    cacheControl = try container.decodeIfPresent(CacheControl.self, forKey: .cacheControl)
+    eTag = try container.decodeIfPresent(String.self, forKey: .eTag)
+    lastModified = try container.decodeIfPresent(Date.self, forKey: .lastModified)
+    createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+    updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+    lastAccessedAt = try container.decodeIfPresent(Date.self, forKey: .lastAccessedAt)
+    userMetadata = try container.decodeIfPresent(JSONObject.self, forKey: .userMetadata)
+    isVersioned = try container.decodeIfPresent(Bool.self, forKey: .isVersioned)
+    isDeleteMarker = try container.decodeIfPresent(Bool.self, forKey: .isDeleteMarker)
+    archivedAt = try container.decodeIfPresent(Date.self, forKey: .archivedAt)
   }
 }
