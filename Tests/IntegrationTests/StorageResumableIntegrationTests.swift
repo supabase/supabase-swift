@@ -5,8 +5,11 @@
 //  Created by Guilherme Souza on 15/10/26.
 //
 
+import ConcurrencyExtras
 import Foundation
+import HTTPTypes
 import Helpers
+import TestHelpers
 @_spi(Experimental) import Storage
 import Testing
 
@@ -46,12 +49,39 @@ final class StorageResumableIntegrationTests {
     }
   }
 
-  private func client() throws -> StorageClient {
+  private func client(
+    transport: FailingTransport? = nil, retryTimeout: Duration = .seconds(60)
+  ) throws -> StorageClient {
     var configuration = StorageClient.Configuration(
       url: StorageIntegration.url,
       headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"])
-    configuration.resumable = ResumableUploadConfiguration(directory: directory)
+    if let transport { configuration.http = .init(transport: transport.transport) }
+    configuration.resumable = ResumableUploadConfiguration(
+      retryTimeout: retryTimeout, directory: directory)
     return try StorageClient(configuration: configuration)
+  }
+
+  /// Sends requests to the local stack. Fails each request whose method is in `failing` as a
+  /// dropped connection would, since a live server cannot drop one on cue, and holds each `HEAD`
+  /// while `holdHead` is set.
+  private final class FailingTransport: Sendable {
+    let failing = LockIsolated<Set<HTTPRequest.Method>>([])
+    let sent = LockIsolated<[HTTPRequest.Method]>([])
+    let holdHead = LockIsolated<AsyncStream<Void>?>(nil)
+
+    var transport: ClosureTransport {
+      let base = URLSessionTransport()
+      return ClosureTransport { [failing, sent, holdHead] request, body in
+        sent.withValue { $0.append(request.method) }
+        if failing.value.contains(request.method) { throw URLError(.networkConnectionLost) }
+        if request.method == .head, let gate = holdHead.value {
+          for await _ in gate { break }
+        }
+        return try await base.send(request, body: body)
+      }
+    }
+
+    func count(_ method: HTTPRequest.Method) -> Int { sent.value.filter { $0 == method }.count }
   }
 
   private func bucket(_ client: StorageClient) -> StorageBucket {
@@ -190,5 +220,46 @@ final class StorageResumableIntegrationTests {
 
     try await expectObject(second, path: "corrupt-neighbor.bin")
     #expect(!FileManager.default.fileExists(atPath: corrupt.path))
+  }
+
+  @Test
+  func resumeAfterAFailedStartCreatesTheUpload() async throws {
+    let transport = FailingTransport()
+    let client = try client(transport: transport)
+    let upload = try bucket(client).resumableUpload(path: "failed-start.bin", fileURL: fileURL)
+    transport.failing.setValue([.post])
+    let error = await #expect(throws: StorageError.self) { try await upload.start() }
+    #expect(error?.kind == .transport)
+    transport.failing.setValue([])
+
+    try await upload.resume()
+    _ = try await upload.result
+
+    try await expectObject(client, path: "failed-start.bin")
+    #expect(try await client.resumableUploads.pending().isEmpty)
+  }
+
+  @Test
+  func cancelOnAPendingHandleLeavesTheUploadAnotherHandleResumes() async throws {
+    let transport = FailingTransport()
+    let client = try client(transport: transport, retryTimeout: .zero)
+    let upload = try bucket(client).resumableUpload(path: "shared-record.bin", fileURL: fileURL)
+    transport.failing.setValue([.patch])
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+    transport.failing.setValue([])
+    let other = try #require(try await client.resumableUploads.pending().first)
+    #expect(other !== upload)
+
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    transport.holdHead.setValue(gate)
+    try await upload.resume()
+    await other.cancel()
+    open.finish()
+    _ = try await upload.result
+
+    #expect(transport.count(.delete) == 0, "cancel() left the server upload the resume drives")
+    #expect(transport.count(.post) == 1, "the upload was never created again")
+    try await expectObject(client, path: "shared-record.bin")
   }
 }

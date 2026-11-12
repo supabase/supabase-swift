@@ -66,7 +66,8 @@ await upload.cancel()
 | The record on disk | kept | deleted, with any copy of the file |
 | Afterwards | `resume()` continues from the server's offset | `result` throws `CancellationError` |
 
-`resume()` also continues a failed upload whose record is still on disk.
+`resume()` also continues a failed upload whose record is still on disk. When `start()` failed
+with a network error before the upload existed on the server, `resume()` creates it again.
 
 ### Failures and retries
 
