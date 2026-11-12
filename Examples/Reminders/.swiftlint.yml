@@ -1,0 +1,4 @@
+# swift-format (./scripts/format.sh) adds a trailing comma to multi-line collections.
+# SwiftLint's default rule refuses it. swift-format owns this style.
+disabled_rules:
+  - trailing_comma
