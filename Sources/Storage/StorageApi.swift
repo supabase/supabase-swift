@@ -151,7 +151,7 @@ extension Helpers.HTTPRequest {
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem],
     formData: MultipartFormData,
-    options: FileOptions,
+    cacheControl: String,
     headers: HTTPFields = [:]
   ) throws {
     var headers = headers
@@ -159,7 +159,7 @@ extension Helpers.HTTPRequest {
       headers[.contentType] = formData.contentType
     }
     if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+      headers[.cacheControl] = cacheControl
     }
     try self.init(
       url: url,

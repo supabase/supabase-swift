@@ -587,3 +587,175 @@ struct StorageV3BucketTests {
     let _: Void = try await task.value
   }
 }
+
+@Suite
+struct StorageV3UploadTests {
+  let uploadResponse =
+    #"{"Key":"avatars/folder/a.png","Id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F"}"#
+  let base = "http://localhost:54321/storage/v1"
+
+  private func field(_ name: String, in body: String?) -> String? {
+    guard let body, let start = body.range(of: "name=\"\(name)\"\r\n\r\n") else { return nil }
+    let rest = body[start.upperBound...]
+    return rest.range(of: "\r\n").map { String(rest[..<$0.lowerBound]) }
+  }
+
+  @Test
+  func uploadSendsTheV2MultipartFormAndReturnsAnUploadedObject() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+
+    let object = try await bucket.upload(path: "/folder//a.png", data: Data("hello".utf8))
+
+    #expect(object.id == UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"))
+    #expect(object.path == "folder/a.png")
+    #expect(object.fullPath == "avatars/folder/a.png")
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "\(base)/object/avatars/folder/a.png")
+    #expect(recorder.header("x-upsert") == "false")
+    #expect(recorder.header("Cache-Control") == "max-age=3600")
+    #expect(recorder.header("Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true)
+    #expect(field("cacheControl", in: recorder.lastBody) == "3600")
+    #expect(recorder.lastBody?.contains("name=\"metadata\"") == false)
+    #expect(recorder.lastBody?.contains("filename=\"a.png\"\r\nContent-Type: image/png") == true)
+    #expect(recorder.lastBody?.contains("hello") == true)
+  }
+
+  @Test
+  func uploadSendsEveryOption() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+
+    try await bucket.upload(
+      path: "folder/a.bin", data: Data("hello".utf8),
+      options: UploadOptions(
+        contentType: "image/webp", cacheControl: .maxAge(.seconds(60)), upsert: true,
+        metadata: ["kind": "avatar"], headers: [HTTPField.Name("X-Extra")!: "1"]))
+
+    #expect(recorder.header("x-upsert") == "true")
+    #expect(recorder.header("Cache-Control") == "max-age=60")
+    #expect(recorder.header("X-Extra") == "1")
+    #expect(field("cacheControl", in: recorder.lastBody) == "60")
+    #expect(field("metadata", in: recorder.lastBody) == #"{"kind":"avatar"}"#)
+    #expect(recorder.lastBody?.contains("Content-Type: image/webp") == true)
+  }
+
+  @Test
+  func cacheControlMapsToTheMultipartFieldOnlyWhenTheMappingIsExact() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+    let data = Data("hello".utf8)
+
+    try await bucket.upload(
+      path: "a.png", data: data, options: UploadOptions(cacheControl: .noCache))
+    #expect(recorder.lastBody?.contains("name=\"cacheControl\"") == false)
+    #expect(recorder.header("Cache-Control") == "no-cache")
+
+    try await bucket.upload(
+      path: "a.png", data: data,
+      options: UploadOptions(cacheControl: "max-age=60, s-maxage=3600"))
+    #expect(field("cacheControl", in: recorder.lastBody) == "60, s-maxage=3600")
+    #expect(recorder.header("Cache-Control") == "max-age=60, s-maxage=3600")
+
+    let sent = recorder.requests.value.count
+    for unsupported: CacheControl in [.noStore, "public", "max-age="] {
+      do {
+        try await bucket.upload(
+          path: "a.png", data: data, options: UploadOptions(cacheControl: unsupported))
+        Issue.record("Expected a StorageError for \(unsupported.rawValue)")
+      } catch let error as StorageError {
+        #expect(error.kind == .invalidRequest)
+      }
+    }
+    #expect(recorder.requests.value.count == sent)
+  }
+
+  @Test
+  func updateSendsPutWithoutUpsert() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+
+    let object = try await bucket.update(
+      path: "folder/a.png", data: Data("hello".utf8), options: UploadOptions(upsert: true))
+
+    #expect(object.fullPath == "avatars/folder/a.png")
+    #expect(recorder.last?.httpMethod == "PUT")
+    #expect(recorder.lastURL == "\(base)/object/avatars/folder/a.png")
+    #expect(recorder.header("x-upsert") == nil)
+  }
+
+  @Test
+  func fileURLUploadsTakeTheContentTypeFromTheFile() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+    let fileURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("storage-v3-\(UUID().uuidString).txt")
+    try Data("from disk".utf8).write(to: fileURL)
+    defer { try? FileManager.default.removeItem(at: fileURL) }
+
+    let uploaded = try await bucket.upload(path: "folder/a", fileURL: fileURL)
+    #expect(uploaded.path == "folder/a")
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastBody?.contains("Content-Type: text/plain") == true)
+    #expect(recorder.lastBody?.contains("from disk") == true)
+
+    try await bucket.update(path: "folder/a", fileURL: fileURL)
+    #expect(recorder.last?.httpMethod == "PUT")
+    #expect(recorder.lastBody?.contains("from disk") == true)
+
+    let signed = try await bucket.uploadToSignedURL(
+      path: "folder/a", token: "tok", fileURL: fileURL)
+    #expect(signed.id == nil)
+    #expect(recorder.lastURL == "\(base)/object/upload/sign/avatars/folder/a?token=tok")
+    #expect(recorder.lastBody?.contains("from disk") == true)
+  }
+
+  @Test
+  func uploadToSignedURL() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/a.png"}"#).from("avatars")
+
+    let object = try await bucket.uploadToSignedURL(
+      path: "a.png", token: "tok", data: Data("hello".utf8),
+      options: UploadOptions(cacheControl: .maxAge(.seconds(10))))
+
+    #expect(object == UploadedObject(id: nil, path: "a.png", fullPath: "avatars/a.png"))
+    #expect(recorder.last?.httpMethod == "PUT")
+    #expect(recorder.lastURL == "\(base)/object/upload/sign/avatars/a.png?token=tok")
+    #expect(field("cacheControl", in: recorder.lastBody) == "10")
+  }
+
+  /// A v2 call site keeps the v2 overload, its result type and its request.
+  @Test
+  @available(*, deprecated)
+  func v2CallSitesKeepTheV2Overload() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: uploadResponse).from("avatars")
+    let data = Data("hello".utf8)
+
+    let uploaded = try await bucket.upload("folder/a.png", data: data)
+    #expect(type(of: uploaded) == FileUploadResponse.self)
+    #expect(uploaded.id.count == 36)
+    #expect(field("cacheControl", in: recorder.lastBody) == "3600")
+    #expect(recorder.header("Cache-Control") == "max-age=3600")
+    #expect(recorder.header("x-upsert") == "false")
+
+    let withOptions = try await bucket.upload(
+      "folder/a.png", data: data, options: .init(cacheControl: "60", upsert: true))
+    #expect(type(of: withOptions) == FileUploadResponse.self)
+    #expect(field("cacheControl", in: recorder.lastBody) == "60")
+    #expect(recorder.header("x-upsert") == "true")
+
+    let updated = try await bucket.update("folder/a.png", data: data)
+    #expect(type(of: updated) == FileUploadResponse.self)
+    #expect(recorder.last?.httpMethod == "PUT")
+
+    let signed = try await bucket.uploadToSignedURL("folder/a.png", token: "tok", data: data)
+    #expect(type(of: signed) == SignedURLUploadResponse.self)
+    #expect(recorder.header("x-upsert") == "false")
+    #expect(field("cacheControl", in: recorder.lastBody) == "3600")
+
+    let legacy: FileUploadResponse = try await bucket.upload(path: "folder/a.png", file: data)
+    #expect(legacy.fullPath == "avatars/folder/a.png")
+  }
+}

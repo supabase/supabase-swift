@@ -119,6 +119,7 @@ public struct SortBy: Encodable, Sendable {
 /// - ``duplex``
 /// - ``metadata``
 /// - ``headers``
+@available(*, deprecated, message: "Use UploadOptions instead.")
 public struct FileOptions: Sendable {
   /// The number of seconds the asset is cached in the browser and in the Supabase CDN.
   ///
@@ -300,6 +301,7 @@ public struct SignedUploadURL: Sendable {
 /// - ``id``
 /// - ``path``
 /// - ``fullPath``
+@available(*, deprecated, message: "Use UploadedObject instead.")
 public struct FileUploadResponse: Sendable {
   /// The unique identifier assigned to the uploaded object.
   public let id: String
@@ -319,6 +321,7 @@ public struct FileUploadResponse: Sendable {
 ///
 /// - ``path``
 /// - ``fullPath``
+@available(*, deprecated, message: "Use UploadedObject instead.")
 public struct SignedURLUploadResponse: Sendable {
   /// The relative file path within the bucket, as provided to the upload call.
   public let path: String

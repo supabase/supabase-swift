@@ -14,21 +14,17 @@ let defaultSearchOptions = SearchOptions(
   )
 )
 
-private let defaultFileOptions = FileOptions(
-  cacheControl: "3600",
-  contentType: "text/plain;charset=UTF-8",
-  upsert: false
-)
-
 enum FileUpload {
   case data(Data)
   case url(URL)
 
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
+  func encode(to formData: MultipartFormData, withPath path: String, options: UploadParameters) {
+    if let cacheControl = options.cacheControlField {
+      formData.append(
+        cacheControl.data(using: .utf8)!,
+        withName: "cacheControl"
+      )
+    }
 
     if let metadata = options.metadata {
       formData.append(encodeMetadata(metadata), withName: "metadata")
@@ -68,7 +64,7 @@ enum FileUpload {
 /// let fileApi = storage.from("avatars")
 ///
 /// // Upload a PNG
-/// try await fileApi.upload("user123.png", data: imageData)
+/// try await fileApi.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
@@ -89,16 +85,16 @@ enum FileUpload {
 ///
 /// ### Uploading files
 ///
-/// - ``upload(_:data:options:)``
-/// - ``upload(_:fileURL:options:)``
-/// - ``update(_:data:options:)``
-/// - ``update(_:fileURL:options:)``
+/// - ``upload(path:data:options:)``
+/// - ``upload(path:fileURL:options:)``
+/// - ``update(path:data:options:)``
+/// - ``update(path:fileURL:options:)``
 ///
 /// ### Uploading via signed URLs
 ///
 /// - ``createSignedUploadURL(path:options:)``
-/// - ``uploadToSignedURL(_:token:data:options:)``
-/// - ``uploadToSignedURL(_:token:fileURL:options:)``
+/// - ``uploadToSignedURL(path:token:data:options:)``
+/// - ``uploadToSignedURL(path:token:fileURL:options:)``
 ///
 /// ### Downloading files
 ///
@@ -162,14 +158,19 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let error: String?
   }
 
+  private struct UploadResult {
+    let id: String
+    let path: String
+    let fullPath: String
+  }
+
   private func _uploadOrUpdate(
     method: HTTPTypes.HTTPRequest.Method,
     path: String,
     file: FileUpload,
-    options: FileOptions?
-  ) async throws -> FileUploadResponse {
-    let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    options: UploadParameters
+  ) async throws -> UploadResult {
+    var headers = options.headers
 
     if method == .post {
       headers[.xUpsert] = "\(options.upsert)"
@@ -198,17 +199,117 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         method: method,
         query: [],
         formData: formData,
-        options: options,
+        cacheControl: options.cacheControlHeader,
         headers: headers
       )
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
 
-    return FileUploadResponse(
+    return UploadResult(
       id: response.Id,
       path: cleanPath,
       fullPath: response.Key
     )
+  }
+
+  /// Uploads a file to an existing bucket.
+  ///
+  /// ```swift
+  /// let response = try await storage.from("avatars").upload(path: "user123.png", data: imageData)
+  /// print(response.fullPath) // "avatars/user123.png"
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to upload.
+  ///   - data: The raw bytes to store in the bucket.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @discardableResult
+  public func upload(
+    path: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .post, path: path, file: .data(data), options: options)
+  }
+
+  /// Uploads a file from a local file URL to an existing bucket.
+  ///
+  /// Use this overload when you have a `URL` pointing to a file on disk rather than raw `Data`
+  /// already loaded in memory.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to upload.
+  ///   - fileURL: A `file://` URL pointing to the local file to upload.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @discardableResult
+  public func upload(
+    path: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .post, path: path, file: .url(fileURL), options: options)
+  }
+
+  /// Replaces an existing file at the specified path with new data.
+  ///
+  /// Unlike ``upload(path:data:options:)`` with `upsert: true`, this method always targets an
+  /// existing object and will throw if the path does not exist.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to update.
+  ///   - data: The raw bytes to overwrite the existing file with.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     `update` always replaces the object.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @discardableResult
+  public func update(
+    path: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .put, path: path, file: .data(data), options: options)
+  }
+
+  /// Replaces an existing file at the specified path with a new local file.
+  ///
+  /// Use this overload when the replacement content is available as a `URL` pointing to a file on
+  /// disk rather than raw `Data`.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to update.
+  ///   - fileURL: A `file://` URL pointing to the local file to use as the replacement.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     `update` always replaces the object.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @discardableResult
+  public func update(
+    path: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .put, path: path, file: .url(fileURL), options: options)
+  }
+
+  private func _upload(
+    method: HTTPTypes.HTTPRequest.Method,
+    path: String,
+    file: FileUpload,
+    options: UploadOptions
+  ) async throws -> UploadedObject {
+    let result = try await _uploadOrUpdate(
+      method: method, path: path, file: file, options: UploadParameters(options))
+    return UploadedObject(
+      id: UUID(uuidString: result.id), path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a file to an existing bucket.
@@ -225,18 +326,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use upload(path:data:options:) instead.")
   @discardableResult
   public func upload(
     _ path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .data(data),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a file from a local file URL to an existing bucket.
@@ -252,18 +355,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use upload(path:fileURL:options:) instead.")
   @discardableResult
   public func upload(
     _ path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Replaces an existing file at the specified path with new data.
@@ -278,18 +383,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use update(path:data:options:) instead.")
   @discardableResult
   public func update(
     _ path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .data(data),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Replaces an existing file at the specified path with a new local file.
@@ -304,18 +411,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use update(path:fileURL:options:) instead.")
   @discardableResult
   public func update(
     _ path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Moves an existing file to a new path, optionally within a different bucket.
@@ -934,6 +1043,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @available(*, deprecated, message: "Use uploadToSignedURL(path:token:data:options:) instead.")
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
@@ -941,12 +1051,13 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
+    let result = try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .data(data),
-      options: options
+      options: UploadParameters(options ?? FileOptions())
     )
+    return SignedURLUploadResponse(path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a local file to a pre-signed upload URL.
@@ -963,6 +1074,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @available(*, deprecated, message: "Use uploadToSignedURL(path:token:fileURL:options:) instead.")
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
@@ -970,22 +1082,74 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     fileURL: URL,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
+    let result = try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options ?? FileOptions())
     )
+    return SignedURLUploadResponse(path: result.path, fullPath: result.fullPath)
+  }
+
+  /// Uploads raw data to a pre-signed upload URL.
+  ///
+  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist.
+  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - data: The raw bytes to store in the bucket.
+  ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
+  ///     the token decides whether an existing object is replaced.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    let result = try await _uploadToSignedURL(
+      path: path, token: token, file: .data(data), options: UploadParameters(options))
+    return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
+  }
+
+  /// Uploads a local file to a pre-signed upload URL.
+  ///
+  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist.
+  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - fileURL: A `file://` URL pointing to the local file to upload.
+  ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
+  ///     the token decides whether an existing object is replaced.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    let result = try await _uploadToSignedURL(
+      path: path, token: token, file: .url(fileURL), options: UploadParameters(options))
+    return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
   }
 
   private func _uploadToSignedURL(
     path: String,
     token: String,
     file: FileUpload,
-    options: FileOptions?
-  ) async throws -> SignedURLUploadResponse {
-    let options = options ?? FileOptions()
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    options: UploadParameters
+  ) async throws -> (path: String, fullPath: String) {
+    var headers = options.headers
 
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex
@@ -1010,14 +1174,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         method: .put,
         query: [URLQueryItem(name: "token", value: token)],
         formData: formData,
-        options: options,
+        cacheControl: options.cacheControlHeader,
         headers: headers
       )
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
     .Key
 
-    return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)
+    return (path: cleanPath, fullPath: fullPath)
   }
 
   private func _getFinalPath(_ path: String) -> String {
@@ -1045,3 +1209,18 @@ extension HTTPField.Name {
 ///
 /// The name ``StorageFileApi`` has in the next major version.
 public typealias StorageBucket = StorageFileApi
+
+extension UploadParameters {
+  @available(*, deprecated, message: "Use init(_:) with UploadOptions instead.")
+  init(_ options: FileOptions) {
+    self.init(
+      cacheControlField: options.cacheControl,
+      cacheControlHeader: "max-age=\(options.cacheControl)",
+      contentType: options.contentType,
+      upsert: options.upsert,
+      duplex: options.duplex,
+      metadata: options.metadata,
+      headers: options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    )
+  }
+}
