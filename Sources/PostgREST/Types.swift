@@ -1,10 +1,11 @@
 public import Foundation
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   public import FoundationNetworking
 #endif
 
-/// The response returned by a PostgREST query, containing the raw data, HTTP response, row count, and decoded value.
+/// The response returned by a PostgREST query, containing the raw body, HTTP response, row count, and decoded value.
 ///
 /// ``PostgrestResponse`` wraps the raw network response from PostgREST and provides decoded access
 /// to the returned rows alongside metadata such as the total row count (when requested via
@@ -25,18 +26,25 @@ public import Foundation
 ///
 /// ### Response Data
 ///
-/// - ``data``
 /// - ``value``
 /// - ``count``
 /// - ``status``
+/// - ``headers``
+/// - ``body``
+/// - ``requestID``
 /// - ``response``
+/// - ``data``
 ///
 /// ### Converting the Response
 ///
 /// - ``string(encoding:)``
 public struct PostgrestResponse<T> {
+  /// The raw response body. Empty when PostgREST sent none.
+  public let body: Data
+
   /// The raw response body as `Data`.
-  public let data: Data
+  @available(*, deprecated, message: "Use body instead.")
+  public var data: Data { body }
 
   /// The underlying HTTP URL response.
   public let response: HTTPURLResponse
@@ -54,6 +62,26 @@ public struct PostgrestResponse<T> {
   /// The HTTP status code of the response.
   public var status: Int {
     response.statusCode
+  }
+
+  /// Every response header. Import `HTTPTypes` to spell header names.
+  public var headers: HTTPFields {
+    var fields = HTTPFields()
+    for (name, value) in response.allHeaderFields {
+      guard let name = name as? String, let name = HTTPField.Name(name),
+        let value = value as? String
+      else { continue }
+      fields[name] = value
+    }
+    return fields
+  }
+
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
+  public var requestID: String? {
+    response.value(forHTTPHeaderField: "sb-request-id")
   }
 
   /// Creates a ``PostgrestResponse`` from raw response data.
@@ -75,7 +103,7 @@ public struct PostgrestResponse<T> {
       count = contentRange == "*" ? nil : Int(contentRange)
     }
 
-    self.data = data
+    self.body = data
     self.response = response
     self.count = count
     self.value = value
@@ -84,11 +112,14 @@ public struct PostgrestResponse<T> {
   /// Returns the response body as a string using the specified encoding.
   ///
   /// - Parameter encoding: The string encoding to use. Defaults to `.utf8`.
-  /// - Returns: A `String` decoded from ``data``, or `nil` if the data cannot be decoded with the given encoding.
+  /// - Returns: A `String` decoded from ``body``, or `nil` if the body cannot be decoded with the
+  ///   given encoding.
   public func string(encoding: String.Encoding = .utf8) -> String? {
-    String(data: data, encoding: encoding)
+    String(data: body, encoding: encoding)
   }
 }
+
+extension PostgrestResponse: Sendable where T: Sendable {}
 
 /// The algorithm PostgREST uses to count the total number of rows matching a query.
 ///

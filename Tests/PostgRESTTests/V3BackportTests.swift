@@ -331,3 +331,71 @@ extension V3BackportTests {
     #expect(builder.mutableState.request.headers[HTTPField.Name("X-Custom")!] == "a")
   }
 }
+
+// MARK: - Response accessors
+
+extension V3BackportTests {
+  private func makeResponse(headers: [String: String]) -> PostgrestResponse<String> {
+    PostgrestResponse(
+      data: Data("body".utf8),
+      response: HTTPURLResponse(
+        url: URL(string: "http://localhost:54321/rest/v1/t")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: headers
+      )!,
+      value: "value"
+    )
+  }
+
+  @Test
+  func responseBodyIsTheRawBody() {
+    let response = makeResponse(headers: [:])
+
+    #expect(response.body == Data("body".utf8))
+    #expect(response.string() == "body")
+  }
+
+  @Test
+  @available(*, deprecated, message: "Exercises the deprecated PostgrestResponse.data.")
+  func responseDataStillReturnsTheBody() {
+    let response = makeResponse(headers: [:])
+
+    #expect(response.data == response.body)
+  }
+
+  @Test
+  func responseHeadersHoldEveryResponseHeader() {
+    let response = makeResponse(headers: ["Content-Range": "0-9/200", "X-Custom": "a"])
+
+    #expect(response.headers[.contentRange] == "0-9/200")
+    #expect(response.headers[HTTPField.Name("x-custom")!] == "a")
+    #expect(response.headers.count == 2)
+    #expect(response.count == 200)
+  }
+
+  @Test
+  func responseRequestIDReadsTheGatewayHeader() {
+    #expect(makeResponse(headers: ["sb-request-id": "req-1"]).requestID == "req-1")
+    #expect(makeResponse(headers: [:]).requestID == nil)
+  }
+
+  @Test
+  func responseIsSendableWhenItsValueIs() {
+    func requireSendable(_: some Sendable) {}
+
+    requireSendable(makeResponse(headers: [:]))
+  }
+
+  @Test
+  func executeFillsTheResponseAccessors() async throws {
+    let client = respondingClient(with: #"{"id":1,"username":"a"}"#)
+
+    let response: PostgrestResponse<User> = try await client.from("t").select().execute()
+
+    #expect(response.body == Data(#"{"id":1,"username":"a"}"#.utf8))
+    #expect(response.requestID == "req-1")
+    #expect(response.count == 1)
+    #expect(response.status == 200)
+  }
+}
