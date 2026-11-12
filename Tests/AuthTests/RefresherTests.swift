@@ -285,6 +285,14 @@ struct RefresherTests {
     #expect(delays.allSatisfy { (2.0...4.0).contains($0) })
   }
 
+  /// An access token that expires at this instant is expired: the retry waits for the backoff,
+  /// it does not fire at once.
+  @Test
+  func retryOfAnAccessTokenThatExpiresNowUsesTheBackoff() {
+    let delays = retryDelays(attempt: 2, after: retryable, expiresIn: 0)
+    #expect(delays.allSatisfy { (2.0...4.0).contains($0) })
+  }
+
   private func makeSession(expiresAt: Date) -> Session {
     Session(
       accessToken: "access",
