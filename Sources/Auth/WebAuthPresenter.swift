@@ -4,8 +4,9 @@ public import Foundation
 ///
 /// ``AuthClient/signInWithOAuth(_:options:presenter:)`` and
 /// ``AuthClient/linkIdentity(_:options:presenter:)`` use a presenter to show the provider page.
-/// On Apple platforms, the default presenter is ``ASWebAuthenticationSessionPresenter``. Use
-/// ``ClosurePresenter`` to present the page another way.
+/// On Apple platforms, the default presenter is ``ASWebAuthenticationSessionPresenter``. In a
+/// SwiftUI view, use ``WebAuthenticationSessionPresenter``. Use ``ClosurePresenter`` to present the
+/// page another way.
 public protocol WebAuthPresenter: Sendable {
   /// Opens `url` and returns the callback URL.
   ///
@@ -43,30 +44,18 @@ extension WebAuthPresenter {
 
 /// A presenter that runs a closure.
 ///
-/// Use it to present the page another way. For example, an app that uses SwiftUI can pass the
-/// `webAuthenticationSession` from the environment, which is available on iOS 16.4 and later:
+/// Use it to present the page another way, for example in your own browser view:
 ///
 /// ```swift
-/// struct SignInView: View {
-///   @Environment(\.webAuthenticationSession) private var webAuthenticationSession
-///
-///   var body: some View {
-///     Button("Sign in with GitHub") {
-///       Task {
-///         try await supabase.auth.signInWithOAuth(
-///           .github,
-///           presenter: ClosurePresenter { [webAuthenticationSession] url, callbackScheme in
-///             try await webAuthenticationSession.authenticate(
-///               using: url,
-///               callbackURLScheme: callbackScheme ?? "myapp"
-///             )
-///           }
-///         )
-///       }
-///     }
+/// try await supabase.auth.signInWithOAuth(
+///   .github,
+///   presenter: ClosurePresenter { url, callbackScheme in
+///     try await myBrowser.open(url)
 ///   }
-/// }
+/// )
 /// ```
+///
+/// In a SwiftUI view, use ``WebAuthenticationSessionPresenter`` instead of a closure.
 ///
 /// The closure gets the scheme of the redirect URL. To listen for a universal link, adopt
 /// ``WebAuthPresenter/authenticate(url:redirectURL:)`` in your own presenter instead.

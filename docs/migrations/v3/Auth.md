@@ -542,8 +542,7 @@ try await supabase.auth.signInWithOAuth(
 ```
 
 To show the page with SwiftUI's `webAuthenticationSession` (iOS 16.4 and later), read it from the
-environment and pass it through a `ClosurePresenter`. `callbackScheme` is `nil` when no redirect
-URL is set, so give the system a scheme of your own to fall back on.
+environment and pass it to `.webAuthenticationSession(_:)`.
 
 ```swift
 // v3
@@ -557,12 +556,7 @@ struct SignInView: View {
         try await supabase.auth.signInWithOAuth(
           .github,
           options: OAuthOptions(redirectTo: URL(string: "myapp://login-callback")),
-          presenter: ClosurePresenter { [webAuthenticationSession] url, callbackScheme in
-            try await webAuthenticationSession.authenticate(
-              using: url,
-              callbackURLScheme: callbackScheme ?? "myapp"
-            )
-          }
+          presenter: .webAuthenticationSession(webAuthenticationSession)
         )
       }
     }

@@ -636,6 +636,11 @@ features:
       - ASWebAuthenticationSessionPresenter.init
       - ASWebAuthenticationSessionPresenter.authenticate
       - ASWebAuthenticationSessionPresenter.prefersEphemeralWebBrowserSession
+      - WebAuthenticationSessionPresenter
+      - WebAuthenticationSessionPresenter.init
+      - WebAuthenticationSessionPresenter.authenticate
+      - WebAuthenticationSessionPresenter.prefersEphemeralWebBrowserSession
+      - WebAuthPresenter.webAuthenticationSession
       - OAuthOptions
       - OAuthOptions.init
       - OAuthOptions.scopes
