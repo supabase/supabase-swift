@@ -752,4 +752,166 @@ import Testing
     }
   }
 
+  @Suite
+  struct RealtimePresenceV3APITests {
+    let fixture = RealtimeV3Fixture()
+
+    private func stateMessage(_ payload: JSONObject) -> RealtimeMessageV2 {
+      RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "realtime:test", event: "presence_state", payload: payload)
+    }
+
+    private func diffMessage(joins: JSONObject = [:], leaves: JSONObject = [:])
+      -> RealtimeMessageV2
+    {
+      RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "realtime:test", event: "presence_diff",
+        payload: ["joins": .object(joins), "leaves": .object(leaves)])
+    }
+
+    private func metas(_ metas: JSONObject...) -> AnyJSON {
+      ["metas": .array(metas.map { .object($0) })]
+    }
+
+    @Test
+    func presenceChangesYieldsTheStateThenTheDiffs() async throws {
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.presenceChanges().makeAsyncIterator()
+
+      await channel.onMessage(
+        stateMessage([
+          "ana": metas(["phx_ref": "r1", "name": "Ana"], ["phx_ref": "r2", "name": "Ana 2"])
+        ]))
+      await channel.onMessage(
+        diffMessage(
+          joins: ["ana": metas(["phx_ref": "r3", "phx_ref_prev": "r1", "name": "Ana 3"])],
+          leaves: ["ana": metas(["phx_ref": "r1", "name": "Ana"])]))
+
+      let first = try #require(await changes.next())
+      #expect(
+        first
+          == PresenceChange(joins: [
+            "ana": [
+              PresenceEntry(ref: "r1", payload: ["name": "Ana"]),
+              PresenceEntry(ref: "r2", payload: ["name": "Ana 2"]),
+            ]
+          ]))
+      let second = try #require(await changes.next())
+      #expect(
+        second
+          == PresenceChange(
+            joins: [
+              "ana": [PresenceEntry(ref: "r3", previousRef: "r1", payload: ["name": "Ana 3"])]
+            ],
+            leaves: ["ana": [PresenceEntry(ref: "r1", payload: ["name": "Ana"])]]))
+    }
+
+    @Test
+    func presenceStatesYieldsTheCurrentStateThenEachNewState() async throws {
+      let channel = fixture.sut.channel("test")
+      var states = await channel.presenceStates().makeAsyncIterator()
+
+      #expect(await states.next() == PresenceState())
+
+      await channel.onMessage(stateMessage(["ana": metas(["phx_ref": "r1"])]))
+      await channel.onMessage(diffMessage(joins: ["bia": metas(["phx_ref": "r2"])]))
+
+      let ana = PresenceEntry(ref: "r1", payload: [:])
+      let bia = PresenceEntry(ref: "r2", payload: [:])
+      #expect(await states.next() == PresenceState(entries: ["ana": [ana]]))
+      #expect(await states.next() == PresenceState(entries: ["ana": [ana], "bia": [bia]]))
+      #expect(await channel.presenceState == PresenceState(entries: ["ana": [ana], "bia": [bia]]))
+    }
+
+    @Test
+    func aDiffBeforeTheFirstStateWaitsForIt() async throws {
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.presenceChanges().makeAsyncIterator()
+
+      await channel.onMessage(diffMessage(joins: ["bia": metas(["phx_ref": "r2"])]))
+      #expect(await channel.presenceState == PresenceState())
+      await channel.onMessage(stateMessage(["ana": metas(["phx_ref": "r1"])]))
+
+      let change = try #require(await changes.next())
+      #expect(Set(change.joins.keys) == ["ana", "bia"])
+    }
+
+    @Test
+    func aPresenceStreamEnablesPresenceOnTheJoin() async throws {
+      let joins = LockIsolated<[RealtimeMessageV2]>([])
+      let task = Task { @Sendable [server = fixture.server] in
+        for await event in server.events {
+          guard let message = event.realtimeMessage, message.event == "phx_join" else { continue }
+          joins.withValue { $0.append(message) }
+          server.send(
+            RealtimeMessageV2(
+              joinRef: message.joinRef, ref: message.ref, topic: "realtime:test",
+              event: "phx_reply",
+              payload: ["response": ["postgres_changes": .array([])], "status": "ok"]))
+        }
+      }
+      defer { task.cancel() }
+      await fixture.sut.connect()
+      let channel = fixture.sut.channel("test")
+      let states = await channel.presenceStates()
+
+      try await channel.subscribeWithError()
+
+      let config = joins.value.first?.payload["config"]?.objectValue
+      #expect(config?["presence"]?.objectValue?["enabled"] == true)
+      _ = states
+    }
+
+    @Test
+    func unsubscribeEmptiesTheStateAndReportsTheLeaves() async throws {
+      fixture.startServer()
+      await fixture.sut.connect()
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.presenceChanges().makeAsyncIterator()
+      try await channel.subscribeWithError()
+      await channel.onMessage(stateMessage(["ana": metas(["phx_ref": "r1"])]))
+      _ = await changes.next()
+
+      let unsubscribe = Task { await channel.unsubscribe() }
+      fixture.server.send(
+        RealtimeMessageV2(
+          joinRef: nil, ref: nil, topic: "realtime:test", event: "phx_close", payload: [:]))
+      await unsubscribe.value
+
+      let change = try #require(await changes.next())
+      #expect(change == PresenceChange(leaves: ["ana": [PresenceEntry(ref: "r1", payload: [:])]]))
+      #expect(await channel.presenceState == PresenceState())
+    }
+
+    @Test
+    func presenceStreamsOpenedAfterSubscribeEndAtOnce() async throws {
+      let channel = try await fixture.subscribedChannel()
+
+      var changes = await channel.presenceChanges().makeAsyncIterator()
+      var states = await channel.presenceStates().makeAsyncIterator()
+
+      #expect(await changes.next() == nil)
+      #expect(await states.next() == nil)
+    }
+
+    @Test
+    @available(*, deprecated, message: "Tests the deprecated v2 presence callback.")
+    func theV2CallbackStillReceivesEachMessage() async throws {
+      let channel = fixture.sut.channel("test")
+      let actions = LockIsolated<[[String: PresenceV2]]>([])
+      let subscription = channel.onPresenceChange { action in
+        actions.withValue { $0.append(action.joins) }
+      }
+
+      await channel.onMessage(diffMessage(joins: ["bia": metas(["phx_ref": "r2", "name": "Bia"])]))
+      await channel.onMessage(stateMessage(["ana": metas(["phx_ref": "r1"])]))
+
+      #expect(
+        actions.value == [
+          ["bia": PresenceV2(ref: "r2", state: ["name": "Bia"])],
+          ["ana": PresenceV2(ref: "r1", state: [:])],
+        ])
+      subscription.cancel()
+    }
+  }
 #endif

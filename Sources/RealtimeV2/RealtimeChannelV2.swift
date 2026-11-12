@@ -121,6 +121,9 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``httpSend(event:payload:encoder:timeout:)``
 /// - ``httpSend(event:data:timeout:)-(_,_,Duration?)``
 /// ### Presence
+/// - ``presenceState``
+/// - ``presenceStates()``
+/// - ``presenceChanges()``
 /// - ``track(_:encoder:)``
 /// - ``track(_:)``
 /// - ``untrack()``
@@ -172,6 +175,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// can append without a fire-and-forget `Task` — which would race with
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
+  let presenceTracker = LockIsolated(PresenceTracker())
 
   /// Lock-protected status + subscribers for ``status``/``statusChanges()``.
   /// See `RealtimeChannel+Status.swift`.
@@ -283,6 +287,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   public func unsubscribe() async {
     logger?.debug("Unsubscribe requested for channel '\(topic)'")
     await stateManager.unsubscribe()
+    clearPresence()
   }
 
   /// Resets the channel for a rejoin. Returns whether it should rejoin.
@@ -299,6 +304,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// Unsubscribes the channel for its removal from the client; it never joins again.
   func unsubscribeForRemoval() async {
     await stateManager.unsubscribeForRemoval()
+    clearPresence()
+  }
+
+  /// Forgets the presence state when the subscription ends, and reports every entry as a leave
+  /// so the changes an app has applied add up to the empty state.
+  private func clearPresence() {
+    let change = presenceTracker.withValue { $0.clear() }
+    guard !change.isEmpty else { return }
+    callbackManager.triggerPresence(
+      PresenceDelivery(wire: nil, change: change, state: PresenceState()))
   }
 
   /// Build the `phx_join` payload from the current config and push it.
@@ -309,6 +324,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     logger?.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
     configuration.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
+    presenceTracker.withValue { $0.waitForNextState() }
 
     let joinConfig = RealtimeJoinConfig(
       broadcast: configuration.broadcast,
@@ -843,6 +859,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         else {
           return
         }
+        clearPresence()
         socket._remove(self)
 
       case .error:
@@ -857,13 +874,31 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         await stateManager.didReceiveClose(joinRef: message.joinRef)
 
       case .presenceDiff:
-        let joins = try message.payload["joins"]?.decode(as: [String: PresenceV2].self) ?? [:]
-        let leaves = try message.payload["leaves"]?.decode(as: [String: PresenceV2].self) ?? [:]
-        callbackManager.triggerPresenceDiffs(joins: joins, leaves: leaves, rawMessage: message)
+        let (change, state) = presenceTracker.withValue {
+          ($0.applyDiff(message.payload), $0.state)
+        }
+        callbackManager.triggerPresence(
+          PresenceDelivery(
+            wire: PresenceDelivery.Wire(
+              joins: message.payload["joins"], leaves: message.payload["leaves"],
+              rawMessage: message),
+            change: change,
+            state: state
+          )
+        )
 
       case .presenceState:
-        let joins = try message.payload.decode(as: [String: PresenceV2].self)
-        callbackManager.triggerPresenceDiffs(joins: joins, leaves: [:], rawMessage: message)
+        let (change, state) = presenceTracker.withValue {
+          ($0.applyState(message.payload), $0.state)
+        }
+        callbackManager.triggerPresence(
+          PresenceDelivery(
+            wire: PresenceDelivery.Wire(
+              joins: .object(message.payload), leaves: nil, rawMessage: message),
+            change: change,
+            state: state
+          )
+        )
       }
     } catch {
       logger?.debug("Failed: \(error)")
@@ -914,9 +949,21 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///
   /// - Parameter callback: A `@Sendable` closure receiving a ``PresenceAction`` value.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(*, deprecated, message: "Use presenceChanges() instead.")
   public func onPresenceChange(
     _ callback: @escaping @Sendable (any PresenceAction) -> Void
   ) -> RealtimeSubscription {
+    observePresence { delivery in
+      guard let action = PresenceActionImpl(delivery) else { return }
+      callback(action)
+    } ?? RealtimeSubscription {}
+  }
+
+  /// Calls `handler` for each presence message, and turns presence on for the next join.
+  /// Returns `nil`, and reports an issue, when the channel has already started to join.
+  func observePresence(
+    _ handler: @escaping @Sendable (PresenceDelivery) -> Void
+  ) -> ObservationToken? {
     guard status != .subscribed && status != .subscribing else {
       // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
       if !isTesting {
@@ -927,12 +974,12 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           """
         )
       }
-      return RealtimeSubscription {}
+      return nil
     }
 
-    let id = callbackManager.addPresenceCallback(callback: callback)
+    let id = callbackManager.addPresenceDeliveryCallback(callback: handler)
 
-    return RealtimeSubscription { [weak callbackManager, logger] in
+    return ObservationToken { [weak callbackManager, logger] in
       logger?.debug("Removing presence callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }

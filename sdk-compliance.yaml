@@ -493,7 +493,7 @@ features:
 
   realtime.presence.track: implemented
   realtime.presence.untrack: implemented
-  realtime.presence.presence_state: not_implemented
+  realtime.presence.presence_state: implemented
   realtime.presence.presence_key: implemented
 
   realtime.configuration.custom_websocket_transport: implemented

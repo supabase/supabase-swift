@@ -9,12 +9,85 @@ import ConcurrencyExtras
 public import Foundation
 
 extension RealtimeChannelV2 {
+  /// The clients present on the channel, as of the last presence sync.
+  ///
+  /// It is empty until the channel is subscribed with presence on, which needs a presence
+  /// stream open when ``subscribeWithError()`` runs. It is empty again after ``unsubscribe()``.
+  /// To observe the state, use ``presenceStates()``.
+  public var presenceState: PresenceState {
+    get async { presenceTracker.value.state }
+  }
+
+  /// Returns an async stream of the entries that join and leave the channel's presence.
+  ///
+  /// Each element holds the joins and leaves of one sync, by presence key. The first sync after
+  /// a join reports the difference from the state the channel held, and ``unsubscribe()`` reports
+  /// every client as a leave, so the changes always add up to ``presenceState``. A sync that
+  /// changes nothing is not emitted.
+  ///
+  /// Having a presence stream open when ``subscribeWithError()`` runs is what enables presence on
+  /// the channel, so open it before subscribing. Opening one after the channel started to
+  /// subscribe reports an issue and returns a stream that ends at once. The stream ends when the
+  /// iterating task is cancelled.
+  ///
+  /// - Returns: An `AsyncStream` of ``PresenceChange`` values.
+  public func presenceChanges() async -> AsyncStream<PresenceChange> {
+    let (stream, continuation) = AsyncStream<PresenceChange>.makeStream()
+
+    let subscription = observePresence { delivery in
+      guard let change = delivery.change, !change.isEmpty else { return }
+      continuation.yield(change)
+    }
+
+    guard let subscription else {
+      continuation.finish()
+      return stream
+    }
+
+    continuation.onTermination = { _ in
+      subscription.cancel()
+    }
+    return stream
+  }
+
+  /// Returns an async stream of the channel's presence state.
+  ///
+  /// The stream emits ``presenceState`` at once, then the new state after every presence sync
+  /// that changes it.
+  ///
+  /// Having a presence stream open when ``subscribeWithError()`` runs is what enables presence on
+  /// the channel, so open it before subscribing. Opening one after the channel started to
+  /// subscribe reports an issue and returns a stream that ends at once. The stream ends when the
+  /// iterating task is cancelled.
+  ///
+  /// - Returns: An `AsyncStream` of ``PresenceState`` values.
+  public func presenceStates() async -> AsyncStream<PresenceState> {
+    let (stream, continuation) = AsyncStream<PresenceState>.makeStream()
+
+    let subscription = observePresence { delivery in
+      guard let change = delivery.change, !change.isEmpty else { return }
+      continuation.yield(delivery.state)
+    }
+
+    guard let subscription else {
+      continuation.finish()
+      return stream
+    }
+
+    continuation.yield(presenceTracker.value.state)
+    continuation.onTermination = { _ in
+      subscription.cancel()
+    }
+    return stream
+  }
+
   /// Returns an async stream that emits a ``PresenceAction`` whenever clients join or leave.
   ///
   /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
   /// Register this stream before calling ``subscribeWithError()``.
   ///
   /// - Returns: An `AsyncStream` of ``PresenceAction`` values.
+  @available(*, deprecated, message: "Use presenceChanges() instead.")
   public func presenceChange() -> AsyncStream<any PresenceAction> {
     let (stream, continuation) = AsyncStream<any PresenceAction>.makeStream()
 

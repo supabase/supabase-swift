@@ -74,8 +74,19 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use addPresenceDeliveryCallback(callback:) instead.")
   @discardableResult
   func addPresenceCallback(callback: @escaping @Sendable (any PresenceAction) -> Void) -> Int {
+    addPresenceDeliveryCallback { delivery in
+      guard let action = PresenceActionImpl(delivery) else { return }
+      callback(action)
+    }
+  }
+
+  @discardableResult
+  func addPresenceDeliveryCallback(
+    callback: @escaping @Sendable (PresenceDelivery) -> Void
+  ) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.presence(PresenceCallback(id: $0.id, callback: callback)))
@@ -236,11 +247,17 @@ final class CallbackManager: Sendable {
     return false
   }
 
+  @available(*, deprecated, message: "Use triggerPresence(_:) instead.")
   func triggerPresenceDiffs(
     joins: [String: PresenceV2],
     leaves: [String: PresenceV2],
     rawMessage: RealtimeMessageV2
   ) {
+    triggerPresence(
+      PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage).delivery)
+  }
+
+  func triggerPresence(_ delivery: PresenceDelivery) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case .presence(let callback) = $0 {
         return callback
@@ -248,13 +265,7 @@ final class CallbackManager: Sendable {
       return nil
     }
     for presenceCallback in presenceCallbacks {
-      presenceCallback.callback(
-        PresenceActionImpl(
-          joins: joins,
-          leaves: leaves,
-          rawMessage: rawMessage
-        )
-      )
+      presenceCallback.callback(delivery)
     }
   }
 
@@ -290,7 +301,7 @@ struct BroadcastCallback {
 
 struct PresenceCallback {
   var id: Int
-  var callback: @Sendable (any PresenceAction) -> Void
+  var callback: @Sendable (PresenceDelivery) -> Void
 }
 
 struct SystemCallback {

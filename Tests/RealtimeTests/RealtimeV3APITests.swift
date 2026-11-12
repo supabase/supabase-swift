@@ -425,3 +425,57 @@ struct PostgresChangeV3APITests {
     }
   }
 }
+
+@Suite
+struct PresenceV3APITests {
+  struct User: Decodable, Equatable {
+    var name: String
+  }
+
+  @Test
+  func presenceEntryStoresItsFieldsAndDecodesThePayload() throws {
+    let entry = PresenceEntry(ref: "r2", previousRef: "r1", payload: ["name": "Ana"])
+
+    #expect(entry.ref == "r2")
+    #expect(entry.previousRef == "r1")
+    #expect(entry.payload == ["name": "Ana"])
+    #expect(try entry.decode(as: User.self) == User(name: "Ana"))
+    #expect(PresenceEntry(ref: "r1", payload: [:]).previousRef == nil)
+  }
+
+  @Test
+  func presenceEntryDecodeThrowsADecodingError() {
+    let entry = PresenceEntry(ref: "r1", payload: ["age": 3])
+
+    #expect(throws: DecodingError.self) {
+      try entry.decode(as: User.self)
+    }
+  }
+
+  @Test
+  func presenceStateDecodesTheEntriesOfEachKey() throws {
+    let state = PresenceState(entries: [
+      "ana": [
+        PresenceEntry(ref: "r1", payload: ["name": "Ana"]),
+        PresenceEntry(ref: "r2", payload: ["age": 3]),
+      ],
+      "bot": [PresenceEntry(ref: "r3", payload: [:])],
+    ])
+
+    #expect(try state.decode(as: User.self) == ["ana": [User(name: "Ana")]])
+    #expect(throws: DecodingError.self) {
+      try state.decode(as: User.self, ignoringUndecodable: false)
+    }
+    #expect(PresenceState().entries.isEmpty)
+  }
+
+  @Test
+  func presenceChangeStoresJoinsAndLeaves() {
+    let entry = PresenceEntry(ref: "r1", payload: [:])
+    let change = PresenceChange(joins: ["ana": [entry]], leaves: ["bia": [entry]])
+
+    #expect(change.joins == ["ana": [entry]])
+    #expect(change.leaves == ["bia": [entry]])
+    #expect(PresenceChange() == PresenceChange(joins: [:], leaves: [:]))
+  }
+}
