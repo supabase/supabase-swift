@@ -50,7 +50,7 @@ public class StorageApi: @unchecked Sendable {
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
-    if configuration.useNewHostname == true {
+    if configuration.usesNewHostname == true {
       guard
         var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
         let host = components.host
@@ -98,10 +98,28 @@ public class StorageApi: @unchecked Sendable {
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
   /// - Returns: `self`, enabling method chaining.
+  @available(
+    *, deprecated,
+    message:
+      "Use settingHeader(name:value:) instead. It returns a new instance and does not change the receiver."
+  )
   @discardableResult
   public func setHeader(_ value: String, forKey key: String) -> Self {
     mutableState.withValue { $0.headers[key.lowercased()] = value }
     return self
+  }
+
+  /// The configuration for a copy of this instance that also sends `name` with `value`. It
+  /// carries the headers this instance sends now, so a header set with `setHeader` is kept.
+  func configuration(settingHeader name: HTTPField.Name, to value: String)
+    -> StorageClientConfiguration
+  {
+    var configuration = configuration
+    configuration.headers = mutableState.headers.filter {
+      $0.key.caseInsensitiveCompare(name.rawName) != .orderedSame
+    }
+    configuration.headers[name.rawName] = value
+    return configuration
   }
 
   @discardableResult

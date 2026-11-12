@@ -1,5 +1,5 @@
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -74,10 +74,18 @@ enum FileUpload {
 /// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
 /// ```
 ///
-/// > Note: This class is `@unchecked Sendable`. The ``bucketId`` property is immutable (`let`), and
+/// > Note: This class is `@unchecked Sendable`. The ``id`` property is immutable, and
 /// > all mutable header state is protected by the lock inherited from ``StorageApi``.
 ///
 /// ## Topics
+///
+/// ### Identifying the bucket
+///
+/// - ``id``
+///
+/// ### Customizing headers
+///
+/// - ``settingHeader(name:value:)``
 ///
 /// ### Uploading files
 ///
@@ -111,12 +119,33 @@ enum FileUpload {
 /// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
 /// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
 public class StorageFileApi: StorageApi, @unchecked Sendable {
-  /// The identifier of the bucket this instance operates on.
   let bucketId: String
+
+  /// The identifier of the bucket this instance operates on.
+  public var id: String { bucketId }
 
   init(bucketId: String, configuration: StorageClientConfiguration) {
     self.bucketId = bucketId
     super.init(configuration: configuration)
+  }
+
+  /// Returns a new instance for the same bucket with an additional HTTP header, included in all
+  /// requests made by the returned instance.
+  ///
+  /// This method does not change the receiver. Always use the result:
+  ///
+  /// ```swift
+  /// let bucket = storage.from("avatars").settingHeader(
+  ///   name: .init("X-Custom-Header")!, value: "x-custom-header")
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new instance with the header merged into the configuration's headers.
+  public func settingHeader(name: HTTPField.Name, value: String) -> StorageFileApi {
+    StorageFileApi(
+      bucketId: bucketId, configuration: configuration(settingHeader: name, to: value))
   }
 
   private struct MoveResponse: Decodable {
@@ -1011,3 +1040,8 @@ extension HTTPField.Name {
   static let duplex = Self("duplex")!
   static let xUpsert = Self("x-upsert")!
 }
+
+/// Supabase Storage File API for file operations within a specific bucket.
+///
+/// The name ``StorageFileApi`` has in the next major version.
+public typealias StorageBucket = StorageFileApi
