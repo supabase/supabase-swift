@@ -119,9 +119,9 @@ struct JSONValueTests {
 
     #expect(JSONValue.string("test").value as? String == "test")
 
-    #expect(JSONValue.integer(42).value as? Int == 42)
+    #expect(JSONValue.number(42).value as? Int == 42)
 
-    #expect(JSONValue.double(3.14).value as? Double == 3.14)
+    #expect(JSONValue.number(3.14).value as? Double == 3.14)
 
     #expect(JSONValue.bool(true).value as? Bool == true)
     #expect(JSONValue.bool(false).value as? Bool == false)
@@ -141,8 +141,8 @@ struct JSONValueTests {
   func isNil() {
     #expect(JSONValue.null.isNil)
     #expect(!JSONValue.string("test").isNil)
-    #expect(!JSONValue.integer(42).isNil)
-    #expect(!JSONValue.double(3.14).isNil)
+    #expect(!JSONValue.number(42).isNil)
+    #expect(!JSONValue.number(3.14).isNil)
     #expect(!JSONValue.bool(true).isNil)
     #expect(!JSONValue.object([:]).isNil)
     #expect(!JSONValue.array([]).isNil)
@@ -153,8 +153,8 @@ struct JSONValueTests {
     #expect(JSONValue.bool(true).boolValue == true)
     #expect(JSONValue.bool(false).boolValue == false)
     #expect(JSONValue.string("test").boolValue == nil)
-    #expect(JSONValue.integer(42).boolValue == nil)
-    #expect(JSONValue.double(3.14).boolValue == nil)
+    #expect(JSONValue.number(42).boolValue == nil)
+    #expect(JSONValue.number(3.14).boolValue == nil)
     #expect(JSONValue.null.boolValue == nil)
     #expect(JSONValue.object([:]).boolValue == nil)
     #expect(JSONValue.array([]).boolValue == nil)
@@ -164,8 +164,8 @@ struct JSONValueTests {
   func stringValue() {
     #expect(JSONValue.string("test").stringValue == "test")
     #expect(JSONValue.bool(true).stringValue == nil)
-    #expect(JSONValue.integer(42).stringValue == nil)
-    #expect(JSONValue.double(3.14).stringValue == nil)
+    #expect(JSONValue.number(42).stringValue == nil)
+    #expect(JSONValue.number(3.14).stringValue == nil)
     #expect(JSONValue.null.stringValue == nil)
     #expect(JSONValue.object([:]).stringValue == nil)
     #expect(JSONValue.array([]).stringValue == nil)
@@ -173,10 +173,10 @@ struct JSONValueTests {
 
   @Test
   func intValue() {
-    #expect(JSONValue.integer(42).intValue == 42)
+    #expect(JSONValue.number(42).intValue == 42)
     #expect(JSONValue.string("test").intValue == nil)
     #expect(JSONValue.bool(true).intValue == nil)
-    #expect(JSONValue.double(3.14).intValue == nil)
+    #expect(JSONValue.number(3.14).intValue == nil)
     #expect(JSONValue.null.intValue == nil)
     #expect(JSONValue.object([:]).intValue == nil)
     #expect(JSONValue.array([]).intValue == nil)
@@ -184,10 +184,10 @@ struct JSONValueTests {
 
   @Test
   func doubleValue() {
-    #expect(JSONValue.double(3.14).doubleValue == 3.14)
+    #expect(JSONValue.number(3.14).doubleValue == 3.14)
     #expect(JSONValue.string("test").doubleValue == nil)
     #expect(JSONValue.bool(true).doubleValue == nil)
-    #expect(JSONValue.integer(42).doubleValue == nil)
+    #expect(JSONValue.number(42).doubleValue == 42)
     #expect(JSONValue.null.doubleValue == nil)
     #expect(JSONValue.object([:]).doubleValue == nil)
     #expect(JSONValue.array([]).doubleValue == nil)
@@ -199,8 +199,8 @@ struct JSONValueTests {
     #expect(JSONValue.object(object).objectValue == object)
     #expect(JSONValue.string("test").objectValue == nil)
     #expect(JSONValue.bool(true).objectValue == nil)
-    #expect(JSONValue.integer(42).objectValue == nil)
-    #expect(JSONValue.double(3.14).objectValue == nil)
+    #expect(JSONValue.number(42).objectValue == nil)
+    #expect(JSONValue.number(3.14).objectValue == nil)
     #expect(JSONValue.null.objectValue == nil)
     #expect(JSONValue.array([]).objectValue == nil)
   }
@@ -211,8 +211,8 @@ struct JSONValueTests {
     #expect(JSONValue.array(array).arrayValue == array)
     #expect(JSONValue.string("test").arrayValue == nil)
     #expect(JSONValue.bool(true).arrayValue == nil)
-    #expect(JSONValue.integer(42).arrayValue == nil)
-    #expect(JSONValue.double(3.14).arrayValue == nil)
+    #expect(JSONValue.number(42).arrayValue == nil)
+    #expect(JSONValue.number(3.14).arrayValue == nil)
     #expect(JSONValue.null.arrayValue == nil)
     #expect(JSONValue.object([:]).arrayValue == nil)
   }
@@ -232,13 +232,13 @@ struct JSONValueTests {
   @Test
   func expressibleByIntegerLiteral() {
     let json: JSONValue = 42
-    #expect(json == .integer(42))
+    #expect(json == .number(42))
   }
 
   @Test
   func expressibleByFloatLiteral() {
     let json: JSONValue = 3.14
-    #expect(json == .double(3.14))
+    #expect(json == .number(3.14))
   }
 
   @Test
@@ -253,7 +253,7 @@ struct JSONValueTests {
   @Test
   func expressibleByArrayLiteral() {
     let json: JSONValue = [1, "test", true, nil]
-    #expect(json == .array([.integer(1), .string("test"), .bool(true), .null]))
+    #expect(json == .array([.number(1), .string("test"), .bool(true), .null]))
   }
 
   @Test
@@ -261,7 +261,7 @@ struct JSONValueTests {
     let json: JSONValue = ["key1": "value1", "key2": 42, "key3": true]
     let expected: JSONValue = .object([
       "key1": .string("value1"),
-      "key2": .integer(42),
+      "key2": .number(42),
       "key3": .bool(true),
     ])
     #expect(json == expected)
@@ -271,8 +271,8 @@ struct JSONValueTests {
   func description() {
     #expect(JSONValue.null.description == "<null>")
     #expect(JSONValue.string("test").description == "test")
-    #expect(JSONValue.integer(42).description == "42")
-    #expect(JSONValue.double(3.14).description == "3.14")
+    #expect(JSONValue.number(42).description == "42")
+    #expect(JSONValue.number(3.14).description == "3.14")
     #expect(JSONValue.bool(true).description == "true")
     #expect(JSONValue.bool(false).description == "false")
 
@@ -290,18 +290,18 @@ struct JSONValueTests {
   func equality() {
     #expect(JSONValue.null == JSONValue.null)
     #expect(JSONValue.string("test") == JSONValue.string("test"))
-    #expect(JSONValue.integer(42) == JSONValue.integer(42))
-    #expect(JSONValue.double(3.14) == JSONValue.double(3.14))
+    #expect(JSONValue.number(42) == JSONValue.number(42))
+    #expect(JSONValue.number(3.14) == JSONValue.number(3.14))
     #expect(JSONValue.bool(true) == JSONValue.bool(true))
     #expect(JSONValue.bool(false) == JSONValue.bool(false))
 
     #expect(JSONValue.string("test") != JSONValue.string("different"))
-    #expect(JSONValue.integer(42) != JSONValue.integer(43))
-    #expect(JSONValue.double(3.14) != JSONValue.double(3.15))
+    #expect(JSONValue.number(42) != JSONValue.number(43))
+    #expect(JSONValue.number(3.14) != JSONValue.number(3.15))
     #expect(JSONValue.bool(true) != JSONValue.bool(false))
 
-    #expect(JSONValue.string("42") != JSONValue.integer(42))
-    #expect(JSONValue.integer(42) != JSONValue.double(42.0))
+    #expect(JSONValue.string("42") != JSONValue.number(42))
+    #expect(JSONValue.number(42) == JSONValue.number(42.0))
     #expect(JSONValue.null != JSONValue.string(""))
 
     let object1: JSONValue = ["key": "value"]
@@ -322,8 +322,8 @@ struct JSONValueTests {
     let set: Set<JSONValue> = [
       .null,
       .string("test"),
-      .integer(42),
-      .double(3.14),
+      .number(42),
+      .number(3.14),
       .bool(true),
       .object(["key": "value"]),
       .array([1, 2, 3]),
@@ -332,8 +332,8 @@ struct JSONValueTests {
     #expect(set.count == 7)
     #expect(set.contains(.null))
     #expect(set.contains(.string("test")))
-    #expect(set.contains(.integer(42)))
-    #expect(set.contains(.double(3.14)))
+    #expect(set.contains(.number(42)))
+    #expect(set.contains(.number(3.14)))
     #expect(set.contains(.bool(true)))
     #expect(set.contains(.object(["key": "value"])))
     #expect(set.contains(.array([1, 2, 3])))
@@ -341,14 +341,14 @@ struct JSONValueTests {
 
   @Test
   func jsonArrayDecode() throws {
-    let jsonArray: JSONArray = [JSONValue.integer(1), JSONValue.integer(2), JSONValue.integer(3)]
+    let jsonArray: JSONArray = [JSONValue.number(1), JSONValue.number(2), JSONValue.number(3)]
     let decoded: [Int] = try jsonArray.map { try $0.decode(as: Int.self) }
     #expect(decoded == [1, 2, 3])
   }
 
   @Test
   func jsonObjectDecode() throws {
-    let jsonObject: JSONObject = ["name": JSONValue.string("John"), "age": JSONValue.integer(30)]
+    let jsonObject: JSONObject = ["name": JSONValue.string("John"), "age": JSONValue.number(30)]
     let decoded: Person = try jsonObject.decode(as: Person.self)
     #expect(decoded.name == "John")
     #expect(decoded.age == 30)
@@ -359,7 +359,7 @@ struct JSONValueTests {
     let person = Person(name: "John", age: 30)
     let jsonObject = try JSONObject(person)
     #expect(jsonObject["name"] == .string("John"))
-    #expect(jsonObject["age"] == .integer(30))
+    #expect(jsonObject["age"] == .number(30))
   }
 
   @Test
@@ -466,7 +466,7 @@ struct JSONValueTests {
   func mixedArrayTypes() {
     let mixedArray: JSONValue = [1, "string", true, nil, ["nested": "value"]]
 
-    #expect(mixedArray.arrayValue?[0] == .integer(1))
+    #expect(mixedArray.arrayValue?[0] == .number(1))
     #expect(mixedArray.arrayValue?[1] == .string("string"))
     #expect(mixedArray.arrayValue?[2] == .bool(true))
     #expect(mixedArray.arrayValue?[3] == .null)

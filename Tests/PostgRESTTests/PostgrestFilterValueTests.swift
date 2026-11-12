@@ -62,7 +62,7 @@ struct PostgrestFilterValueTests {
 
   @Test
   func arrayEncodesJSONValueNullElementsAsRealNull() {
-    #expect(JSONValue.array([.integer(1), .null]).rawValue == "{1,NULL}")
+    #expect(JSONValue.array([.number(1), .null]).rawValue == "{1,NULL}")
   }
 
   @Test
@@ -79,8 +79,8 @@ struct PostgrestFilterValueTests {
       JSONValue.object(["postalcode": 90210]).rawValue == "{\"postalcode\":90210}"
     )
     #expect(JSONValue.string("string").rawValue == "string")
-    #expect(JSONValue.double(3.14).rawValue == "3.14")
-    #expect(JSONValue.integer(3).rawValue == "3")
+    #expect(JSONValue.number(3.14).rawValue == "3.14")
+    #expect(JSONValue.number(3).rawValue == "3")
     #expect(JSONValue.bool(true).rawValue == "true")
     #expect(JSONValue.null.rawValue == "NULL")
   }

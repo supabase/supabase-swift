@@ -274,7 +274,7 @@ public struct PostgrestClient: Sendable {
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard let arguments = PostgrestArgument.queryItems(forJSONObject: bodyData) else {
+      guard let arguments = Self.queryItems(forJSONObject: bodyData) else {
         throw PostgrestError(
           kind: .invalidRequest,
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
@@ -336,6 +336,50 @@ public struct PostgrestClient: Sendable {
     var configuration = configuration
     configuration.schema = schema
     return PostgrestClient(checkedConfiguration: configuration)
+  }
+
+  /// The arguments in `body`, one query item per key in key order, or `nil` when `body` is not a
+  /// JSON object. A number keeps its exact digits.
+  static func queryItems(forJSONObject body: Data) -> [URLQueryItem]? {
+    guard case .object(let arguments)? = try? JSONDecoder().decode(JSONValue.self, from: body)
+    else { return nil }
+    return arguments.sorted { $0.key < $1.key }.map { key, value in
+      URLQueryItem(name: key, value: queryValue(for: value))
+    }
+  }
+
+  /// A Postgres array literal for an array, compact JSON with sorted keys for an object, and the
+  /// plain text of any other value.
+  private static func queryValue(for value: JSONValue) -> String {
+    switch value {
+    case .null:
+      return "null"
+    case .bool(let bool):
+      return bool ? "true" : "false"
+    case .number(let number):
+      return number.description
+    case .string(let string):
+      return string
+    case .array(let array):
+      return "{\(array.map(arrayElementValue(for:)).joined(separator: ","))}"
+    case .object:
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      guard let data = try? encoder.encode(value) else { return "" }
+      return String(decoding: data, as: UTF8.self)
+    }
+  }
+
+  /// One element of a Postgres array literal. An element that is empty, spells NULL, or holds
+  /// `,` `{` `}` `"` `\` is double-quoted, as for the `cs`/`cd` filters, so it stays one element
+  /// with its own text. A nested array stays a bare sub-literal, and a JSON null a bare `null`.
+  private static func arrayElementValue(for value: JSONValue) -> String {
+    switch value {
+    case .null, .array:
+      return queryValue(for: value)
+    case .bool, .number, .string, .object:
+      return escapePostgRESTArrayLiteralElement(queryValue(for: value))
+    }
   }
 }
 

@@ -35,7 +35,9 @@ struct BroadcastMessageTests {
         payload: .json(
           .object(
             [
-              "a": .integer(1)
+              "a": .number(
+                JSONNumber("1")
+              )
             ]
           )
         ),
@@ -83,7 +85,9 @@ struct BroadcastMessageTests {
         payload: .json(
           .object(
             [
-              "a": .integer(1)
+              "a": .number(
+                JSONNumber("1")
+              )
             ]
           )
         ),
@@ -108,7 +112,9 @@ struct BroadcastMessageTests {
         payload: .json(
           .object(
             [
-              "a": .integer(1)
+              "a": .number(
+                JSONNumber("1")
+              )
             ]
           )
         ),

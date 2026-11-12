@@ -12,8 +12,7 @@ supporting_symbols:
   - JSONValue.encode
   - JSONValue.null
   - JSONValue.bool
-  - JSONValue.integer
-  - JSONValue.double
+  - JSONValue.number
   - JSONValue.string
   - JSONValue.object
   - JSONValue.array
@@ -25,8 +24,19 @@ supporting_symbols:
   - JSONValue.stringValue
   - JSONValue.intValue
   - JSONValue.doubleValue
+  - JSONValue.decimalValue
+  - JSONValue.numberValue
   - JSONValue.description
   - JSONValue.rawValue
+  # A JSON number with its exact digits, the payload of JSONValue.number.
+  - JSONNumber
+  - JSONNumber.init
+  - JSONNumber.intValue
+  - JSONNumber.doubleValue
+  - JSONNumber.decimalValue
+  - JSONNumber.description
+  - JSONNumber.customMirror
+  - JSONNumber.encode
   # The object and array shapes of a JSON value, and the helpers that decode them into a Decodable
   # type or build them from an Encodable one.
   - JSONObject

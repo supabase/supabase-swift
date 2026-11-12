@@ -28,7 +28,7 @@ private typealias Machine = LiveQueryMachine<Item>
 private let t0 = Date(timeIntervalSince1970: 1_793_000_000)
 
 private func item(_ id: Int, _ title: String) -> LiveRow<Item> {
-  LiveRow(key: [.integer(id)], row: Item(id: id, title: title))
+  LiveRow(key: [.number(JSONNumber(id))], row: Item(id: id, title: title))
 }
 
 private func change(
@@ -579,7 +579,7 @@ struct SupabaseClientStreamTests {
         "/rest/v1/items?select=%2A&list_id=eq.7&order=id.asc&limit=1000",
         "/rest/v1/items?select=%2A&list_id=eq.7&order=id.asc&limit=1000&id=gt.2",
       ])
-    #expect(rows.map(\.key) == [[.integer(1)], [.integer(2)]])
+    #expect(rows.map(\.key) == [[.number(1)], [.number(2)]])
     #expect(
       rows.map(\.row) == [
         LiveItem(id: 1, title: "a", listId: 7), LiveItem(id: 2, title: "b", listId: 7),
@@ -621,7 +621,7 @@ struct SupabaseClientStreamTests {
     let rows = try await source.fetch()
     await source.finish()
 
-    #expect(rows.map(\.key) == [[.integer(1), .string("a,b")]])
+    #expect(rows.map(\.key) == [[.number(1), .string("a,b")]])
     #expect(paths.value.count == 2)
     #expect(
       paths.value.last??.removingPercentEncoding
