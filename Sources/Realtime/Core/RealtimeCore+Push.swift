@@ -33,6 +33,11 @@ extension RealtimeCore {
 
   /// Sends a broadcast on `channel` as a binary frame. The waiter returns once the
   /// frame is out, or, when the channel acknowledges broadcasts, once the server replies.
+  ///
+  /// Only a subscribed channel sends; otherwise the waiter fails with
+  /// ``RealtimeError/notSubscribed``. The frame gives each header field a one-byte length, so on
+  /// a subscribed channel an `event` or wire topic over ``RealtimeSerializer/maxHeaderFieldBytes``
+  /// fails the waiter with ``RealtimeError/Kind-swift.struct/invalidRequest``, and nothing is sent.
   mutating func broadcast(
     _ channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID
   ) -> [Effect] {
@@ -41,11 +46,19 @@ extension RealtimeCore {
         "Dropping broadcast '\(event)' for channel '\(topic(of: channel))': not subscribed")
       return [.resume(waiter, .failure(.notSubscribed))]
     }
+    let limit = RealtimeSerializer.maxHeaderFieldBytes
+    guard event.utf8.count <= limit, record.wireTopic.utf8.count <= limit else {
+      let message = """
+        A broadcast event and the channel topic with its `realtime:` prefix must each be at \
+        most \(limit) UTF-8 bytes.
+        """
+      return [.resume(waiter, .failure(.invalidRequest(message)))]
+    }
     let ref = makeRef()
     let send = Effect.sendBroadcast(
       joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
       payload: payload)
-    guard record.configuration.broadcast.acknowledge else {
+    guard record.configuration.broadcast.acknowledgesMessages else {
       return [send, .resume(waiter, .success)]
     }
     return [send] + awaitReply(channel, ref: ref, waiter: waiter)

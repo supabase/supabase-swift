@@ -77,7 +77,7 @@ extension RealtimeCore.Options {
     Self(
       timeout: .seconds(10),
       heartbeatInterval: .seconds(25),
-      connectOnSubscribe: true,
+      connectsOnSubscribe: true,
       disconnectOnEmptyChannelsAfter: .seconds(50),
       hasAccessTokenProvider: false,
       accessTokenRefreshInterval: .seconds(10),

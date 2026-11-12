@@ -57,7 +57,7 @@ struct RealtimeCoreInboundTests {
   @Test
   func postgresChangeDeliveredWithMatchedConfigs() throws {
     var configuration = RealtimeChannelConfiguration()
-    configuration.postgresChanges.waitForSubscription = true
+    configuration.postgresChanges.waitsForSubscription = true
     var harness = CoreHarness.connected()
     _ = harness.send(
       .subscribe(

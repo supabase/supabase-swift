@@ -30,7 +30,7 @@ struct MailCatcher {
     return data
   }
 
-  private let baseURL = URL(string: "http://127.0.0.1:54324")!
+  private let baseURL = URL(string: DotEnv.mailpitURL)!
 
   func latestLink(to email: String, timeout: Duration = .seconds(10)) async throws -> URL {
     let deadline = ContinuousClock.now + timeout

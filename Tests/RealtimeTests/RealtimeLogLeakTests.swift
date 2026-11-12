@@ -33,7 +33,7 @@ struct RealtimeLogLeakTests {
     outbox.enqueue(
       RealtimeMessage(
         joinRef: "1", ref: "1", topic: "realtime:room", event: "access_token",
-        payload: ["access_token": "rt-secret-2", "bad": .double(.nan)]))
+        payload: ["access_token": "rt-secret-2", "bad": .number(JSONNumber("1e-400")!)]))
 
     await waitUntil { !recorder.entries.isEmpty }
     #expect(recorder.entries.first?.contains("realtime:room") == true)

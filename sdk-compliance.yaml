@@ -12,8 +12,7 @@ supporting_symbols:
   - JSONValue.encode
   - JSONValue.null
   - JSONValue.bool
-  - JSONValue.integer
-  - JSONValue.double
+  - JSONValue.number
   - JSONValue.string
   - JSONValue.object
   - JSONValue.array
@@ -25,8 +24,19 @@ supporting_symbols:
   - JSONValue.stringValue
   - JSONValue.intValue
   - JSONValue.doubleValue
+  - JSONValue.decimalValue
+  - JSONValue.numberValue
   - JSONValue.description
   - JSONValue.rawValue
+  # A JSON number with its exact digits, the payload of JSONValue.number.
+  - JSONNumber
+  - JSONNumber.init
+  - JSONNumber.intValue
+  - JSONNumber.doubleValue
+  - JSONNumber.decimalValue
+  - JSONNumber.description
+  - JSONNumber.customMirror
+  - JSONNumber.encode
   # The object and array shapes of a JSON value, and the helpers that decode them into a Decodable
   # type or build them from an Encodable one.
   - JSONObject
@@ -526,8 +536,8 @@ supporting_symbols:
   - RealtimeClient.Configuration.headers
   - RealtimeClient.Configuration.http
   - RealtimeClient.Configuration.defaultRequestTimeout
-  - RealtimeClient.Configuration.connectOnSubscribe
-  - RealtimeClient.Configuration.defaultConnectOnSubscribe
+  - RealtimeClient.Configuration.connectsOnSubscribe
+  - RealtimeClient.Configuration.defaultConnectsOnSubscribe
   # The configuration type itself, its url, and the client's copy of it.
   - RealtimeClient.Configuration
   - RealtimeClient.Configuration.url
@@ -559,6 +569,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Auth
   - SupabaseClient.Configuration.Auth.redirectTo
   - SupabaseClient.Configuration.Auth.storageKey
+  - SupabaseClient.Configuration.Auth.retryEnabled
   - SupabaseClient.Configuration.Auth.init
   - SupabaseClient.Configuration.Global
   - SupabaseClient.Configuration.Global.logger
@@ -573,7 +584,7 @@ supporting_symbols:
   - SupabaseClient.Configuration.Realtime.headers
   - SupabaseClient.Configuration.Realtime.heartbeatInterval
   - SupabaseClient.Configuration.Realtime.requestTimeout
-  - SupabaseClient.Configuration.Realtime.connectOnSubscribe
+  - SupabaseClient.Configuration.Realtime.connectsOnSubscribe
   - SupabaseClient.Configuration.Realtime.disconnectOnEmptyChannelsAfter
   - SupabaseClient.Configuration.Realtime.observesAppLifecycle
   - SupabaseClient.Configuration.Realtime.monitorsNetworkPath
@@ -2045,7 +2056,7 @@ features:
       - RealtimeChannelStatus.failed
       - RealtimeChannelEvent
       - RealtimeChannelEvent.resubscribed
-      - RealtimeChannelConfiguration.PostgresChanges.waitForSubscription
+      - RealtimeChannelConfiguration.PostgresChanges.waitsForSubscription
       - RealtimeChannelConfiguration.PostgresChanges.subscriptionTimeout
   realtime.channel.unsubscribe:
     status: implemented
@@ -2063,7 +2074,7 @@ features:
   realtime.subscriptions.broadcast:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.waitForReplication
+      - RealtimeChannelConfiguration.Broadcast.waitsForReplication
       - RealtimeChannel.broadcasts
     supporting_symbols:
       - BroadcastMessage
@@ -2174,11 +2185,11 @@ features:
   realtime.subscriptions.broadcast_self:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.receiveOwnMessages
+      - RealtimeChannelConfiguration.Broadcast.receivesOwnMessages
   realtime.subscriptions.broadcast_ack:
     status: implemented
     symbols:
-      - RealtimeChannelConfiguration.Broadcast.acknowledge
+      - RealtimeChannelConfiguration.Broadcast.acknowledgesMessages
   realtime.subscriptions.broadcast_replay:
     status: implemented
     symbols:

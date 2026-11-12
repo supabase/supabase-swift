@@ -35,7 +35,8 @@ struct AuthAPITests {
   func aBodyThatCannotBeEncodedIsAnInvalidRequest() {
     #expect {
       try api.signUp(
-        email: "a@b.c", password: "p", userMetadata: ["x": .double(.nan)], redirectTo: nil,
+        email: "a@b.c", password: "p", userMetadata: ["x": .number(JSONNumber("1e-400")!)],
+        redirectTo: nil,
         captchaToken: nil, pkce: nil)
     } throws: { error in
       let error = error as? AuthError

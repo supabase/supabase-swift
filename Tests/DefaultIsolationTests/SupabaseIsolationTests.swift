@@ -25,7 +25,7 @@ enum SupabaseIsolationTests {
     let url = URL(string: "myapp://callback")!
 
     let channel = await client.channel("room")
-    _ = await client.channel("room") { $0.broadcast.receiveOwnMessages = true }
+    _ = await client.channel("room") { $0.broadcast.receivesOwnMessages = true }
     _ = await client.channels
     _ = try await client.handleRedirect(url)
     await client.removeChannel(channel)

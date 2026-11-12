@@ -164,7 +164,7 @@ at once.
 
 ### Idle socket
 
-With ``RealtimeClient/Configuration/connectOnSubscribe`` on (the default), a subscribe opens the socket
+With ``RealtimeClient/Configuration/connectsOnSubscribe`` on (the default), a subscribe opens the socket
 when it is closed. When the last channel is removed, the socket stays open for
 ``RealtimeClient/Configuration/disconnectOnEmptyChannelsAfter`` (50 seconds by default) in case a new
 channel comes, then closes. ``RealtimeClient/removeAllChannels()`` closes it at once.

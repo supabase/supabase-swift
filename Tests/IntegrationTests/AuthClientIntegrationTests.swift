@@ -211,7 +211,7 @@ struct AuthClientIntegrationTests {
       let password = mockPassword()
 
       let metadata: [String: JSONValue] = [
-        "test": .integer(42)
+        "test": .number(42)
       ]
 
       let result = try await authClient.signUp(
@@ -371,7 +371,7 @@ struct AuthClientIntegrationTests {
       try await signUpIfNeededOrSignIn(email: mockEmail(), password: mockPassword())
 
       let updatedUser = try await authClient.updateUser(
-        .init(userMetadata: ["test": .integer(42)]))
+        .init(userMetadata: ["test": .number(42)]))
       #expect(updatedUser.userMetadata["test"] == 42)
     }
   }

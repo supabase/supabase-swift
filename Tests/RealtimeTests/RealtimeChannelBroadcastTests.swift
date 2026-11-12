@@ -109,6 +109,64 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
+  func broadcastOfAnEventOver255BytesIsAnInvalidRequestAndSendsNothing() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+    // 128 characters, 256 UTF-8 bytes: the limit counts bytes, not characters.
+    let event = String(repeating: "é", count: 128)
+
+    await #expect {
+      try await channel.broadcast(event: event, payload: ["a": 1] as JSONObject)
+    } throws: { ($0 as? RealtimeError)?.kind == .invalidRequest }
+    await #expect {
+      try await channel.broadcast(event: event, data: Data([0x01]))
+    } throws: { ($0 as? RealtimeError)?.kind == .invalidRequest }
+    #expect(await client.sentBinaryFrames().isEmpty)
+  }
+
+  @Test
+  func broadcastOfAnEventOf255BytesIsSent() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+
+    try await channel.broadcast(event: String(repeating: "e", count: 255), data: Data([0x01]))
+
+    #expect(await client.sentBinaryFrames().count == 1)
+  }
+
+  @Test
+  func broadcastOnATopicOver255BytesIsAnInvalidRequestAndSendsNothing() async throws {
+    // "realtime:" adds 9 bytes, so the wire topic is 256 bytes.
+    let name = String(repeating: "t", count: 247)
+    setupServerAutoResponder(topic: "realtime:\(name)")
+    try await sut.connect()
+    let channel = await sut.channel(name)
+    try await channel.subscribe()
+
+    await #expect {
+      try await channel.broadcast(event: "my_event", data: Data([0x01]))
+    } throws: { ($0 as? RealtimeError)?.kind == .invalidRequest }
+    #expect(await client.sentBinaryFrames().isEmpty)
+  }
+
+  @Test
+  func broadcastOnATopicOf246BytesIsSent() async throws {
+    let name = String(repeating: "t", count: 246)
+    setupServerAutoResponder(topic: "realtime:\(name)")
+    try await sut.connect()
+    let channel = await sut.channel(name)
+    try await channel.subscribe()
+
+    try await channel.broadcast(event: "my_event", data: Data([0x01]))
+
+    #expect(await client.sentBinaryFrames().count == 1)
+  }
+
+  @Test
   func broadcast_sendsJsonViaBinaryFrame() async throws {
     setupServerAutoResponder()
     try await sut.connect()
@@ -160,7 +218,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let broadcast = DecodedBroadcast(
       topic: "realtime:test",
       event: "my_event",
-      payload: .json(["count": .integer(99)])
+      payload: .json(["count": .number(99)])
     )
     await sut.installSubscribedRecord("test")
     await sut.apply(.binaryBroadcast(broadcast))
@@ -337,7 +395,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
     }
 
     let channel = await sut.channel("test") { config in
-      config.broadcast.acknowledge = true
+      config.broadcast.acknowledgesMessages = true
     }
 
     let error = await #expect(throws: RealtimeError.self) {
@@ -389,7 +447,7 @@ final class RealtimeChannelBroadcastTests: Sendable {
 
     try await channel.subscribe()
 
-    let jsonPayload: JSONObject = ["count": .integer(99)]
+    let jsonPayload: JSONObject = ["count": .number(99)]
     let payloadData = try JSONEncoder().encode(jsonPayload)
     let topic = "realtime:test"
     let event = "my_event"

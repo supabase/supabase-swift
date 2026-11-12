@@ -33,7 +33,7 @@
     let client2: SupabaseClient
     init() async throws {
       client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
@@ -46,7 +46,7 @@
         )
       )
       client2 = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),
@@ -265,7 +265,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-test") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
 
         struct Message: Codable, Sendable {
@@ -352,7 +352,7 @@
         try await realtime.connect()
 
         let channel = await realtime.channel("custom-options-\(UUID().uuidString)") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
         let received = await channel.broadcasts(event: "ping")
         try await channel.subscribe()
@@ -378,7 +378,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-binary") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
         let messages = await channel.broadcasts(event: "bytes")
         try await channel.subscribe()
@@ -396,13 +396,38 @@
     }
 
     @Test
+    func broadcastAtTheHeaderLimitsRoundTrips() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        // The wire topic `realtime:<name>` and the event are each 255 bytes, the frame's limit.
+        let name = "limit-" + String(repeating: "t", count: 240)
+        let event = String(repeating: "e", count: 255)
+        let channel = await client.realtime.channel(name) {
+          $0.broadcast.receivesOwnMessages = true
+        }
+        let messages = await channel.broadcasts(event: event)
+        try await channel.subscribe()
+
+        try await channel.broadcast(event: event, payload: ["value": 1] as JSONObject)
+        let received = try await withTimeout(.seconds(5)) {
+          await messages.first(where: { _ in true })
+        }
+
+        #expect(received?.event == event)
+        await channel.unsubscribe()
+      }
+    }
+
+    @Test
     func aNewTokenIsSentToSubscribedChannelsAndTheServerKeepsThem() async throws {
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("access-token-test") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
         let messages = await channel.broadcasts(event: "after-token")
         try await channel.subscribe()
@@ -452,7 +477,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-multi") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
 
         let event1Messages = await channel.broadcasts(event: "event-1")
@@ -487,7 +512,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-no-own") {
-          $0.broadcast.receiveOwnMessages = false
+          $0.broadcast.receivesOwnMessages = false
         }
 
         let receivedCount = LockIsolated<Int>(0)
@@ -945,11 +970,11 @@
         try await client2.realtime.connect()
 
         let channel1 = await client.realtime.channel("app-room") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
 
         let channel2 = await client2.realtime.channel("app-room") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
 
         let user1Id = UUID().uuidString
@@ -1213,16 +1238,16 @@
 
     /// Polls the channel's presence state until `condition` holds, for at most five seconds.
     /// `subscribe()` returns only once the server's Postgres changes are live, so a row
-    /// inserted right after it arrives. With `waitForSubscription`, the server holds the join
+    /// inserted right after it arrives. With `waitsForSubscription`, the server holds the join
     /// reply instead of the SDK waiting for "Subscribed to PostgreSQL".
     @Test(arguments: [false, true])
-    func subscribeReturnsWhenPostgresChangesAreLive(waitForSubscription: Bool) async throws {
+    func subscribeReturnsWhenPostgresChangesAreLive(waitsForSubscription: Bool) async throws {
       let client = client
       try await withMainSerialExecutor {
         try await client.realtime.connect()
 
-        let channel = await client.realtime.channel("postgres-live-\(waitForSubscription)") {
-          $0.postgresChanges.waitForSubscription = waitForSubscription
+        let channel = await client.realtime.channel("postgres-live-\(waitsForSubscription)") {
+          $0.postgresChanges.waitsForSubscription = waitsForSubscription
         }
         let testKey = UUID().uuidString
         let inserts = await channel.postgresChanges(
@@ -1281,7 +1306,7 @@
         try await client.realtime.connect()
 
         let channel = await client.realtime.channel("broadcast-exact") {
-          $0.broadcast.receiveOwnMessages = true
+          $0.broadcast.receivesOwnMessages = true
         }
         let lowercase = await channel.broadcasts(event: "ping")
         let exact = await channel.broadcasts(event: "Ping")
@@ -1338,7 +1363,7 @@
     func httpSendSendsTheConfiguredHeaders() async throws {
       let recorder = HeaderRecorder()
       let client = try SupabaseClient(
-        supabaseURL: URL(string: DotEnv.supabaseURL) ?? URL(string: "http://127.0.0.1:54321")!,
+        supabaseURL: URL(string: DotEnv.supabaseURL)!,
         supabaseKey: DotEnv.supabasePublishableKey,
         configuration: SupabaseClient.Configuration(
           auth: .init(storage: InMemoryTestStorage()),

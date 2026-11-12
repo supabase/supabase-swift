@@ -109,7 +109,7 @@ struct ChannelRecord {
   /// Whether the last join needs "Subscribed to PostgreSQL" after its reply: it has bindings,
   /// and the server does not hold the reply until they are set up.
   var joinWaitsForPostgresChanges: Bool {
-    !joinedBindings.isEmpty && !configuration.postgresChanges.waitForSubscription
+    !joinedBindings.isEmpty && !configuration.postgresChanges.waitsForSubscription
   }
 
   /// What a `phx_join` waits for.

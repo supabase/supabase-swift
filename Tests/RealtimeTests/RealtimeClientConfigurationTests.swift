@@ -50,7 +50,7 @@ struct RealtimeClientConfigurationTests {
     #expect(options.heartbeatInterval == .seconds(25))
     #expect(options.requestTimeout == .seconds(10))
     #expect(RealtimeClient.Configuration.defaultRequestTimeout == .seconds(10))
-    #expect(options.connectOnSubscribe)
+    #expect(options.connectsOnSubscribe)
     #expect(options.disconnectOnEmptyChannelsAfter == .seconds(50))
     #expect(
       options.observesAppLifecycle == RealtimeClient.Configuration.defaultObservesAppLifecycle)
@@ -96,12 +96,12 @@ struct RealtimeClientConfigurationTests {
     var options = RealtimeClient.Configuration(url: url)
     options.heartbeatInterval = .seconds(5)
     options.requestTimeout = .seconds(4)
-    options.connectOnSubscribe = false
+    options.connectsOnSubscribe = false
     options.disconnectOnEmptyChannelsAfter = .zero
 
     #expect(options.heartbeatInterval == .seconds(5))
     #expect(options.requestTimeout == .seconds(4))
-    #expect(!options.connectOnSubscribe)
+    #expect(!options.connectsOnSubscribe)
     #expect(options.disconnectOnEmptyChannelsAfter == .zero)
   }
 
