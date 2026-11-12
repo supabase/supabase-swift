@@ -183,6 +183,7 @@ public struct FileOptions: Sendable {
 /// - ``error``
 /// - ``signedURL``
 /// - ``path``
+@available(*, deprecated, message: "Use SignedURLResult instead.")
 public struct SignedURL: Decodable, Sendable {
   /// An optional error message. Non-nil when the path could not be signed.
   public var error: String?
@@ -269,9 +270,9 @@ public enum SignedURLResult: Sendable {
   }
 }
 
-/// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:options:)``.
+/// A signed upload URL created by ``StorageFileApi/createSignedUploadURL(path:upsert:)``.
 ///
-/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(_:token:data:options:)`` to perform the
+/// Pass ``token`` to ``StorageFileApi/uploadToSignedURL(path:token:data:options:)`` to perform the
 /// authenticated upload.
 ///
 /// ## Topics
@@ -283,13 +284,24 @@ public enum SignedURLResult: Sendable {
 /// - ``token``
 public struct SignedUploadURL: Sendable {
   /// The fully constructed signed upload URL.
-  public let signedURL: URL
+  public var signedURL: URL
 
   /// The destination file path within the bucket.
-  public let path: String
+  public var path: String
 
   /// The upload authentication token extracted from ``signedURL``.
-  public let token: String
+  public var token: String
+
+  /// Creates a ``SignedUploadURL``.
+  public init(
+    signedURL: URL,
+    path: String,
+    token: String
+  ) {
+    self.signedURL = signedURL
+    self.path = path
+    self.token = token
+  }
 }
 
 /// The response returned after a successful file upload or update.
@@ -365,7 +377,7 @@ public struct UploadedObject: Hashable, Sendable {
 
 /// Options for creating a signed upload URL.
 ///
-/// Pass this to ``StorageFileApi/createSignedUploadURL(path:options:)`` to control whether an
+/// Pass this to ``StorageFileApi/createSignedUploadURL(path:upsert:)`` to control whether an
 /// existing file at the destination path should be overwritten.
 ///
 /// ## Topics
@@ -373,6 +385,10 @@ public struct UploadedObject: Hashable, Sendable {
 /// ### Properties
 ///
 /// - ``upsert``
+@available(
+  *, deprecated,
+  message: "Use the upsert parameter of createSignedUploadURL(path:upsert:) instead."
+)
 public struct CreateSignedUploadURLOptions: Sendable {
   /// When `true`, an existing file at the destination path is overwritten by the subsequent upload.
   public var upsert: Bool
@@ -1050,8 +1066,10 @@ extension SortOrder: Codable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").getPublicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .named("annual-2024.pdf")))
 /// ```
 ///
 /// ## Topics

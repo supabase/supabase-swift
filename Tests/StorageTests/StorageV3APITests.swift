@@ -759,3 +759,213 @@ struct StorageV3UploadTests {
     #expect(legacy.fullPath == "avatars/folder/a.png")
   }
 }
+
+@Suite
+struct StorageV3URLTests {
+  let base = "http://localhost:54321/storage/v1"
+  let signResponse = #"{"signedURL":"/object/sign/avatars/a.png?token=abc"}"#
+
+  @Test
+  func createSignedURLTakesADuration() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: signResponse).from("avatars")
+
+    let url = try await bucket.createSignedURL(path: "a.png", expiresIn: .seconds(60))
+
+    #expect(url.absoluteString == "\(base)/object/sign/avatars/a.png?token=abc")
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "\(base)/object/sign/avatars/a.png")
+    #expect(recorder.lastJSON == ["expiresIn": 60])
+
+    _ = try await bucket.createSignedURL(path: "a.png", expiresIn: .milliseconds(90_500))
+    #expect(recorder.lastJSON == ["expiresIn": 90])
+  }
+
+  @Test
+  func createSignedURLSendsTheOptions() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: signResponse).from("avatars")
+
+    let url = try await bucket.createSignedURL(
+      path: "a.png", expiresIn: .seconds(60),
+      options: SignedURLOptions(
+        download: .named("x.png"),
+        transform: ImageTransform(
+          width: 100, resize: .cover, gravity: .focalPoint,
+          focalPoint: FocalPoint(x: 0.25, y: 0.75)),
+        versionID: "v1", cacheNonce: "n1"))
+
+    #expect(
+      url.absoluteString
+        == "\(base)/object/sign/avatars/a.png?token=abc&download=x.png&cacheNonce=n1")
+    #expect(
+      recorder.lastJSON == [
+        "expiresIn": 60,
+        "transform": [
+          "width": 100, "resize": "cover", "gravity": "fp", "x_offset": 0.25, "y_offset": 0.75,
+        ],
+        "versionId": "v1",
+      ])
+
+    _ = try await bucket.createSignedURL(
+      path: "a.png", expiresIn: .seconds(60),
+      options: SignedURLOptions(download: .withOriginalName, transform: ImageTransform()))
+    #expect(recorder.lastJSON == ["expiresIn": 60])
+  }
+
+  @Test
+  func anExpiryUnderOneSecondThrowsBeforeSending() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: signResponse).from("avatars")
+
+    do {
+      _ = try await bucket.createSignedURL(path: "a.png", expiresIn: .milliseconds(999))
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .invalidRequest)
+    }
+    do {
+      _ = try await bucket.createSignedURLs(paths: ["a.png"], expiresIn: .zero)
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .invalidRequest)
+    }
+    #expect(recorder.requests.value.isEmpty)
+  }
+
+  @Test
+  func createSignedURLsTakesADurationAndOptions() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(
+      response: """
+        [
+          {"signedURL":"/object/sign/avatars/a.png?token=abc","path":"a.png","error":null},
+          {"signedURL":null,"path":"missing.png","error":"Either the object does not exist or you do not have access to it"}
+        ]
+        """
+    ).from("avatars")
+
+    let results = try await bucket.createSignedURLs(
+      paths: ["a.png", "missing.png"], expiresIn: .seconds(3600),
+      options: SignedURLsOptions(download: .withOriginalName, cacheNonce: "n1"))
+
+    #expect(recorder.lastURL == "\(base)/object/sign/avatars")
+    #expect(recorder.lastJSON == ["expiresIn": 3600, "paths": ["a.png", "missing.png"]])
+    #expect(results.count == 2)
+    #expect(
+      results[0].signedURL?.absoluteString
+        == "\(base)/object/sign/avatars/a.png?token=abc&download=&cacheNonce=n1")
+    #expect(results[1].path == "missing.png")
+    #expect(results[1].signedURL == nil)
+    #expect(results[1].error != nil)
+
+    let plain = try await bucket.createSignedURLs(paths: ["a.png"], expiresIn: .seconds(1))
+    #expect(recorder.lastJSON == ["expiresIn": 1, "paths": ["a.png"]])
+    #expect(plain.first?.signedURL?.absoluteString == "\(base)/object/sign/avatars/a.png?token=abc")
+  }
+
+  @Test
+  func publicURL() {
+    let bucket = RequestRecorder().client().from("avatars")
+
+    #expect(
+      bucket.publicURL(path: "folder/a.png").absoluteString
+        == "\(base)/object/public/avatars/folder/a.png")
+    #expect(
+      bucket.publicURL(
+        path: "/a.png",
+        options: PublicURLOptions(download: .named("x.png"), versionID: "v1", cacheNonce: "n1")
+      ).absoluteString
+        == "\(base)/object/public/avatars/a.png?download=x.png&cacheNonce=n1&versionId=v1")
+    #expect(
+      bucket.publicURL(
+        path: "a.png",
+        options: PublicURLOptions(
+          transform: ImageTransform(width: 200, format: .webp, gravity: .smart))
+      ).absoluteString
+        == "\(base)/render/image/public/avatars/a.png?width=200&format=webp&gravity=sm")
+    #expect(
+      bucket.publicURL(path: "a.png", options: PublicURLOptions(transform: ImageTransform()))
+        .absoluteString == "\(base)/object/public/avatars/a.png")
+  }
+
+  @Test
+  func createSignedUploadURLTakesUpsert() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(
+      response: #"{"url":"/object/upload/sign/avatars/a.png?token=tok"}"#
+    ).from("avatars")
+
+    let plain = try await bucket.createSignedUploadURL(path: "/a.png")
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "\(base)/object/upload/sign/avatars/a.png")
+    #expect(recorder.header("x-upsert") == nil)
+    #expect(plain.token == "tok")
+    #expect(plain.path == "a.png")
+    #expect(plain.signedURL.absoluteString == "\(base)/object/upload/sign/avatars/a.png?token=tok")
+
+    _ = try await bucket.createSignedUploadURL(path: "a.png", upsert: true)
+    #expect(recorder.header("x-upsert") == "true")
+
+    var built = SignedUploadURL(signedURL: plain.signedURL, path: "a.png", token: "one")
+    built.token = "two"
+    #expect(built.token == "two")
+  }
+
+  @Test
+  func aSignedUploadURLWithoutATokenThrowsADecodingKind() async throws {
+    let bucket = RequestRecorder().client(response: #"{"url":"/object/upload/sign/avatars/a.png"}"#)
+      .from("avatars")
+
+    do {
+      _ = try await bucket.createSignedUploadURL(path: "a.png")
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .decoding)
+      #expect(error.message == "No token returned by API")
+    }
+  }
+
+  /// The v2 spellings keep their overloads, results and requests.
+  @Test
+  @available(*, deprecated)
+  func v2CallSitesKeepTheV2Overload() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: signResponse).from("avatars")
+
+    let url = try await bucket.createSignedURL(path: "a.png", expiresIn: 60)
+    #expect(url.absoluteString == "\(base)/object/sign/avatars/a.png?token=abc")
+    #expect(recorder.lastJSON == ["expiresIn": 60])
+
+    let transformed = try await bucket.createSignedURL(
+      path: "a.png", expiresIn: 60, download: .withOriginalName,
+      transform: TransformOptions(width: 100, resize: .cover), cacheNonce: "n1")
+    #expect(
+      transformed.absoluteString
+        == "\(base)/object/sign/avatars/a.png?token=abc&download=&cacheNonce=n1")
+    #expect(
+      recorder.lastJSON == ["expiresIn": 60, "transform": ["width": 100, "resize": "cover"]])
+
+    _ = try await bucket.createSignedURL(
+      path: "a.png", expiresIn: 60, transform: TransformOptions())
+    #expect(recorder.lastJSON == ["expiresIn": 60, "transform": [:]])
+
+    #expect(
+      try bucket.getPublicURL(path: "a.png", download: .named("x.png"), cacheNonce: "n1")
+        == bucket.publicURL(
+          path: "a.png", options: PublicURLOptions(download: .named("x.png"), cacheNonce: "n1")))
+    #expect(
+      try bucket.getPublicURL(path: "a.png", options: TransformOptions(width: 200)).absoluteString
+        == "\(base)/render/image/public/avatars/a.png?width=200")
+
+    let upload = recorder.client(
+      response: #"{"url":"/object/upload/sign/avatars/a.png?token=tok"}"#
+    ).from("avatars")
+    let signed = try await upload.createSignedUploadURL(
+      path: "a.png", options: CreateSignedUploadURLOptions(upsert: true))
+    #expect(signed.token == "tok")
+    #expect(recorder.header("x-upsert") == "true")
+    _ = try await upload.createSignedUploadURL(path: "a.png", options: nil)
+    #expect(recorder.header("x-upsert") == nil)
+  }
+}

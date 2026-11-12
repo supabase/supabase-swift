@@ -67,7 +67,7 @@ enum FileUpload {
 /// try await fileApi.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
-/// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
+/// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: .seconds(60))
 /// ```
 ///
 /// > Note: This class is `@unchecked Sendable`. The ``id`` property is immutable, and
@@ -92,14 +92,14 @@ enum FileUpload {
 ///
 /// ### Uploading via signed URLs
 ///
-/// - ``createSignedUploadURL(path:options:)``
+/// - ``createSignedUploadURL(path:upsert:)``
 /// - ``uploadToSignedURL(path:token:data:options:)``
 /// - ``uploadToSignedURL(path:token:fileURL:options:)``
 ///
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``getPublicURL(path:download:options:cacheNonce:)``
+/// - ``publicURL(path:options:)``
 ///
 /// ### Managing files
 ///
@@ -112,8 +112,8 @@ enum FileUpload {
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
-/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:options:)``
+/// - ``createSignedURLs(paths:expiresIn:options:)``
 public class StorageFileApi: StorageApi, @unchecked Sendable {
   let bucketId: String
 
@@ -513,6 +513,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURL(path:expiresIn:options:) with a Duration and SignedURLOptions instead."
+  )
   @_disfavoredOverload
   public func createSignedURL(
     path: String,
@@ -521,11 +526,25 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     transform: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
-    struct Body: Encodable {
-      let expiresIn: Int
-      let transform: TransformOptions?
-    }
+    try await _createSignedURL(
+      path: path, expiresIn: expiresIn, transform: transform, versionID: nil, download: download,
+      cacheNonce: cacheNonce)
+  }
 
+  private struct SignBody<Transform: Encodable>: Encodable {
+    let expiresIn: Int
+    let transform: Transform?
+    let versionId: String?
+  }
+
+  private func _createSignedURL(
+    path: String,
+    expiresIn: Int,
+    transform: (some Encodable)?,
+    versionID: String?,
+    download: String?,
+    cacheNonce: String?
+  ) async throws -> URL {
     let encoder = JSONEncoder.unconfiguredEncoder
 
     let response = try await execute(
@@ -533,13 +552,58 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         url: configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
         body: encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
+          SignBody(expiresIn: expiresIn, transform: transform, versionId: versionID)
         )
       )
     )
     .decoded(as: SignedURLAPIResponse.self, decoder: configuration.decoder)
 
     return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
+  }
+
+  /// Creates a signed URL for sharing a private file for a fixed period of time.
+  ///
+  /// ```swift
+  /// // Inline preview URL, valid for 5 minutes
+  /// let url = try await storage.from("docs").createSignedURL(path: "report.pdf", expiresIn: .seconds(300))
+  ///
+  /// // Force download with original file name
+  /// let downloadURL = try await storage.from("docs").createSignedURL(
+  ///   path: "report.pdf",
+  ///   expiresIn: .seconds(60),
+  ///   options: SignedURLOptions(download: .withOriginalName)
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
+  /// - Returns: A signed `URL` ready to share.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  public func createSignedURL(
+    path: String,
+    expiresIn: Duration,
+    options: SignedURLOptions = SignedURLOptions()
+  ) async throws -> URL {
+    try await _createSignedURL(
+      path: path,
+      expiresIn: Self.seconds(expiresIn),
+      transform: options.transform?.isEmpty == false ? options.transform?.body : nil,
+      versionID: options.versionID,
+      download: options.download?.queryValue,
+      cacheNonce: options.cacheNonce)
+  }
+
+  /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
+  /// traps.
+  private static func seconds(_ expiresIn: Duration) throws -> Int {
+    guard expiresIn >= .seconds(1) else {
+      throw StorageError(
+        kind: .invalidRequest, message: "A signed URL must expire at least one second from now.")
+    }
+    return Int(expiresIn.components.seconds)
   }
 
   /// Creates a signed URL for sharing a private file for a fixed period of time.
@@ -567,6 +631,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURL(path:expiresIn:options:) with a Duration and SignedURLOptions instead."
+  )
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -599,12 +668,64 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:options:) with a Duration and SignedURLsOptions instead."
+  )
   @_disfavoredOverload
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
     download: String? = nil,
     cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await _createSignedURLs(
+      paths: paths, expiresIn: expiresIn, download: download, cacheNonce: cacheNonce)
+  }
+
+  /// Creates signed URLs for multiple files in a single request.
+  ///
+  /// Each element in the returned array is a ``SignedURLResult``: either
+  /// `.success(path:signedURL:)` or `.failure(path:error:)`. Exactly one case applies per item.
+  /// Paths that do not exist produce a `.failure` result rather than throwing.
+  ///
+  /// ```swift
+  /// let results = try await storage.from("docs").createSignedURLs(
+  ///   paths: ["a.pdf", "b.pdf", "missing.pdf"],
+  ///   expiresIn: .seconds(3600)
+  /// )
+  /// for result in results {
+  ///   switch result {
+  ///   case .success(let path, let url): print(path, url)
+  ///   case .failure(let path, let error): print(path, "failed:", error)
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - options: The download behavior and cache nonce.
+  /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
+  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
+  ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Duration,
+    options: SignedURLsOptions = SignedURLsOptions()
+  ) async throws -> [SignedURLResult] {
+    try await _createSignedURLs(
+      paths: paths, expiresIn: Self.seconds(expiresIn), download: options.download?.queryValue,
+      cacheNonce: options.cacheNonce)
+  }
+
+  private func _createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: String?,
+    cacheNonce: String?
   ) async throws -> [SignedURLResult] {
     struct Params: Encodable {
       let expiresIn: Int
@@ -664,6 +785,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:options:) with a Duration and SignedURLsOptions instead."
+  )
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -782,7 +908,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` directly.
+  /// ``publicURL(path:options:)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")
@@ -891,6 +1017,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  @available(*, deprecated, message: "Use publicURL(path:options:) instead.")
   @_disfavoredOverload
   public func getPublicURL(
     path: String,
@@ -898,35 +1025,83 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
-    var queryItems: [URLQueryItem] = []
-
-    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    guard
+      let url = _publicURL(
+        path: path, download: download, transform: options?.queryItems ?? [],
+        cacheNonce: cacheNonce, versionID: nil
+      ).built
     else {
       throw URLError(.badURL)
     }
+    return url
+  }
+
+  /// A public URL built from URL components, and the same URL built by appending to the base
+  /// URL, which cannot fail.
+  private func _publicURL(
+    path: String,
+    download: String?,
+    transform: [URLQueryItem],
+    cacheNonce: String?,
+    versionID: String?
+  ) -> (built: URL?, appended: URL) {
+    var queryItems: [URLQueryItem] = []
 
     if let download {
       queryItems.append(URLQueryItem(name: "download", value: download))
     }
 
-    if let optionsQueryItems = options?.queryItems {
-      queryItems.append(contentsOf: optionsQueryItems)
-    }
+    queryItems.append(contentsOf: transform)
 
     if let cacheNonce {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
-
-    components.path += "/\(renderPath)/public/\(_getFinalPath(path))"
-    components.queryItems = !queryItems.isEmpty ? queryItems : nil
-
-    guard let generatedUrl = components.url else {
-      throw URLError(.badURL)
+    if let versionID {
+      queryItems.append(URLQueryItem(name: "versionId", value: versionID))
     }
 
-    return generatedUrl
+    let renderPath = transform.isEmpty ? "object" : "render/image"
+    let route = "\(renderPath)/public/\(_getFinalPath(path))"
+    let appended = configuration.url.appendingPathComponent(route).appendingQueryItems(queryItems)
+
+    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    else {
+      return (nil, appended)
+    }
+
+    components.path += "/\(route)"
+    components.queryItems = !queryItems.isEmpty ? queryItems : nil
+
+    return (components.url, appended)
+  }
+
+  /// Returns the public URL for a file in a public bucket.
+  ///
+  /// ```swift
+  /// // Inline display URL
+  /// let url = storage.from("avatars").publicURL(path: "user123.png")
+  ///
+  /// // Force download with original file name
+  /// let dlURL = storage.from("docs").publicURL(
+  ///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+  /// ```
+  ///
+  /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
+  /// - Returns: The publicly accessible `URL` for the file.
+  public func publicURL(
+    path: String,
+    options: PublicURLOptions = PublicURLOptions()
+  ) -> URL {
+    let url = _publicURL(
+      path: path, download: options.download?.queryValue,
+      transform: options.transform?.queryItems ?? [], cacheNonce: options.cacheNonce,
+      versionID: options.versionID)
+    return url.built ?? url.appended
   }
 
   /// Returns the public URL for a file in a public bucket.
@@ -951,6 +1126,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  @available(*, deprecated, message: "Use publicURL(path:options:) instead.")
   public func getPublicURL(
     path: String,
     download: DownloadBehavior? = nil,
@@ -985,16 +1161,47 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Optional ``CreateSignedUploadURLOptions`` controlling upsert behavior.
   /// - Returns: A ``SignedUploadURL`` containing the signed URL and an upload token.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use createSignedUploadURL(path:upsert:) instead.")
+  @_disfavoredOverload
   public func createSignedUploadURL(
     path: String,
     options: CreateSignedUploadURLOptions? = nil
+  ) async throws -> SignedUploadURL {
+    try await createSignedUploadURL(path: path, upsert: options?.upsert ?? false)
+  }
+
+  /// Creates a signed upload URL that allows uploading a file without further authentication.
+  ///
+  /// Signed upload URLs are valid for 2 hours. Pass the returned ``SignedUploadURL/token`` to
+  /// ``uploadToSignedURL(path:token:data:options:)`` (or the file-URL variant) to perform the
+  /// upload.
+  ///
+  /// ```swift
+  /// let signedUpload = try await storage.from("avatars").createSignedUploadURL(path: "user123.png")
+  /// // Share signedUpload.token with the uploader
+  /// try await storage.from("avatars").uploadToSignedURL(
+  ///   path: "user123.png",
+  ///   token: signedUpload.token,
+  ///   data: imageData
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path including the file name, e.g. `"folder/image.png"`.
+  ///   - upsert: Whether the upload made with the token may replace an existing object at
+  ///     `path`. Defaults to `false`.
+  /// - Returns: A ``SignedUploadURL`` containing the signed URL and an upload token.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  public func createSignedUploadURL(
+    path: String,
+    upsert: Bool = false
   ) async throws -> SignedUploadURL {
     struct Response: Decodable {
       let url: String
     }
 
     var headers = HTTPFields()
-    if let upsert = options?.upsert, upsert {
+    if upsert {
       headers[.xUpsert] = "true"
     }
 
@@ -1033,12 +1240,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads raw data to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
@@ -1062,14 +1269,14 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads a local file to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   /// Use this overload for large files where streaming from disk is preferable to loading all
   /// content into memory.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
@@ -1093,12 +1300,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads raw data to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
   ///     the token decides whether an existing object is replaced.
@@ -1119,12 +1326,12 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads a local file to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
   ///     the token decides whether an existing object is replaced.
