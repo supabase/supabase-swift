@@ -66,3 +66,43 @@ struct V3BackportTests {
         == query(select().textSearch("c", query: "q", type: .websearch)))
   }
 }
+
+// MARK: - v3 type names
+
+extension V3BackportTests {
+  @Test
+  func postgrestReturningIsTheNameOfTheReturningOptions() throws {
+    let returning: PostgrestReturning = .minimal
+    let builder = try client.from("t").insert(["a": 1], returning: returning)
+
+    #expect(builder.mutableState.request.headers[.prefer] == "return=minimal")
+    #expect(PostgrestReturning.representation.rawValue == "representation")
+    #expect(PostgrestReturning(rawValue: "minimal") == .minimal)
+  }
+
+  @Test
+  func postgrestReturningOptionsStillNamesTheSameType() {
+    let old: PostgrestReturningOptions = .representation
+    let new: PostgrestReturning = old
+
+    switch new {
+    case .minimal: Issue.record("Expected representation.")
+    case .representation: break
+    }
+  }
+
+  @Test
+  func postgrestOperatorIsTheTopLevelNameOfTheFilterOperator() {
+    let nested: PostgrestFilterBuilder.Operator = .eq
+    let topLevel: PostgrestOperator = nested
+
+    #expect(topLevel == .eq)
+    #expect(PostgrestOperator.allCases.count == PostgrestFilterBuilder.Operator.allCases.count)
+    #expect(
+      query(client.from("t").select().not("c", operator: PostgrestOperator.is, value: "null"))
+        == [
+          URLQueryItem(name: "select", value: "*"), URLQueryItem(name: "c", value: "not.is.null"),
+        ]
+    )
+  }
+}

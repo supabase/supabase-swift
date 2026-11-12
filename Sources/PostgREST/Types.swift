@@ -144,6 +144,12 @@ public enum PostgrestReturningOptions: String, Sendable {
   case representation
 }
 
+/// Controls which rows PostgREST returns after a write operation.
+///
+/// This is the name that the next major version uses for ``PostgrestReturningOptions``. Both
+/// names refer to the same type, so you can adopt this one now.
+public typealias PostgrestReturning = PostgrestReturningOptions
+
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
 ///
 /// Pass a ``TextSearchType`` to ``PostgrestFilterBuilder/textSearch(_:query:config:type:)`` to

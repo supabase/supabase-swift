@@ -2,6 +2,69 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
+/// The set of PostgREST comparison operators available for use with
+/// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
+/// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
+///
+/// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
+/// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``PostgrestOperator`` directly only when you need
+/// ``PostgrestFilterBuilder/not(_:operator:value:)`` or the raw
+/// ``PostgrestFilterBuilder/filter(_:operator:value:)`` escape hatch.
+///
+/// ``PostgrestFilterBuilder/Operator`` is another name for this type.
+public enum PostgrestOperator: String, CaseIterable, Sendable {
+  /// Equals (`=`).
+  case eq
+  /// Not equals (`!=`).
+  case neq
+  /// Greater than (`>`).
+  case gt
+  /// Greater than or equal (`>=`).
+  case gte
+  /// Less than (`<`).
+  case lt
+  /// Less than or equal (`<=`).
+  case lte
+  /// Case-sensitive LIKE pattern match.
+  case like
+  /// Case-insensitive ILIKE pattern match.
+  case ilike
+  /// Case-sensitive regex match.
+  case match
+  /// Case-insensitive regex match.
+  case imatch
+  /// IS (for NULL / boolean checks).
+  case `is`
+  /// IS DISTINCT FROM.
+  case isdistinct
+  /// IN — value is in a list.
+  case `in`
+  /// Contains (`@>`).
+  case cs
+  /// Contained by (`<@`).
+  case cd
+  /// Range strictly left of (`<<`).
+  case sl
+  /// Range strictly right of (`>>`).
+  case sr
+  /// Range does not extend to the left (`&>`).
+  case nxl
+  /// Range does not extend to the right (`&<`).
+  case nxr
+  /// Range is adjacent (`-|-`).
+  case adj
+  /// Overlaps (`&&`).
+  case ov
+  /// Full-text search using `to_tsquery`.
+  case fts
+  /// Full-text search using `plainto_tsquery`.
+  case plfts
+  /// Full-text search using `phraseto_tsquery`.
+  case phfts
+  /// Full-text search using `websearch_to_tsquery`.
+  case wfts
+}
+
 /// Builder for applying WHERE-clause filters to a PostgREST query.
 ///
 /// Obtain a ``PostgrestFilterBuilder`` from ``PostgrestQueryBuilder/select(_:head:count:)``,
@@ -82,64 +145,8 @@ import Helpers
 ///
 /// - ``Operator``
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
-  /// The set of PostgREST comparison operators available for use with ``not(_:operator:value:)``
-  /// and ``filter(_:operator:value:)``.
-  ///
-  /// Most operators have dedicated convenience methods (e.g., ``eq(_:value:)``, ``gt(_:value:)``).
-  /// Use ``Operator`` directly only when you need ``not(_:operator:value:)`` or the raw
-  /// ``filter(_:operator:value:)`` escape hatch.
-  public enum Operator: String, CaseIterable, Sendable {
-    /// Equals (`=`).
-    case eq
-    /// Not equals (`!=`).
-    case neq
-    /// Greater than (`>`).
-    case gt
-    /// Greater than or equal (`>=`).
-    case gte
-    /// Less than (`<`).
-    case lt
-    /// Less than or equal (`<=`).
-    case lte
-    /// Case-sensitive LIKE pattern match.
-    case like
-    /// Case-insensitive ILIKE pattern match.
-    case ilike
-    /// Case-sensitive regex match.
-    case match
-    /// Case-insensitive regex match.
-    case imatch
-    /// IS (for NULL / boolean checks).
-    case `is`
-    /// IS DISTINCT FROM.
-    case isdistinct
-    /// IN — value is in a list.
-    case `in`
-    /// Contains (`@>`).
-    case cs
-    /// Contained by (`<@`).
-    case cd
-    /// Range strictly left of (`<<`).
-    case sl
-    /// Range strictly right of (`>>`).
-    case sr
-    /// Range does not extend to the left (`&>`).
-    case nxl
-    /// Range does not extend to the right (`&<`).
-    case nxr
-    /// Range is adjacent (`-|-`).
-    case adj
-    /// Overlaps (`&&`).
-    case ov
-    /// Full-text search using `to_tsquery`.
-    case fts
-    /// Full-text search using `plainto_tsquery`.
-    case plfts
-    /// Full-text search using `phraseto_tsquery`.
-    case phfts
-    /// Full-text search using `websearch_to_tsquery`.
-    case wfts
-  }
+  /// The set of PostgREST comparison operators. Another name for ``PostgrestOperator``.
+  public typealias Operator = PostgrestOperator
 
   // MARK: - Filters
 
