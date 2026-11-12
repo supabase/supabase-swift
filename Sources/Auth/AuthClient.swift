@@ -381,16 +381,12 @@ public actor AuthClient {
   nonisolated public func events() -> AsyncStream<AuthChange> {
     let (stream, continuation) = AsyncStream<AuthChange>.makeStream()
 
-    Task {
-      let handle = await _onAuthStateChange { event, session in
-        continuation.yield(
-          AuthChange(event: event, status: session.map(AuthStatus.signedIn) ?? .signedOut(nil)))
-      }
-
-      continuation.onTermination = { _ in
-        handle.cancel()
-      }
+    let token = eventEmitter.attach { event, session in
+      continuation.yield(
+        AuthChange(event: event, status: session.map(AuthStatus.signedIn) ?? .signedOut(nil)))
     }
+    continuation.onTermination = { _ in token.cancel() }
+    Task { await emitInitialSession(forToken: token) }
 
     return stream
   }

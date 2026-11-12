@@ -68,6 +68,21 @@ extension AuthMockerTests {
       #expect(client.sut.status == .signedOut(nil))
     }
 
+    @Test
+    func eventsRemoveTheListenerWhenTheStreamEnds() async {
+      let client = V3TestClient()
+      let emitter = Dependencies[client.sut.clientID].eventEmitter.emitter
+
+      let stream = client.sut.events()
+      #expect(emitter.listenerCount == 1)
+
+      let task = Task { for await _ in stream {} }
+      task.cancel()
+      await Task.megaYield()
+
+      #expect(emitter.listenerCount == 0)
+    }
+
     @available(*, deprecated, message: "Compares with the deprecated v2 stream.")
     @Test
     func eventsMatchTheDeprecatedStream() async {
