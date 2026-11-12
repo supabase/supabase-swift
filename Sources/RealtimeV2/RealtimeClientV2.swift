@@ -15,7 +15,7 @@ import Helpers
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport =
+typealias WebSocketConnector =
   @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
@@ -125,7 +125,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   let url: URL
   let options: RealtimeClientOptions
-  let wsTransport: WebSocketTransport
+  let wsTransport: WebSocketConnector
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
@@ -167,6 +167,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: url,
       options: options,
       wsTransport: { url, headers in
+        if let transport = options.webSocketTransport {
+          return WebSocketConnectionAdapter(
+            try await transport.connect(to: url, headerFields: HTTPFields(headers)))
+        }
         return try await URLSessionWebSocket.connect(
           to: url,
           headers: headers,
@@ -184,7 +188,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   init(
     url: URL,
     options: RealtimeClientOptions,
-    wsTransport: @escaping WebSocketTransport,
+    wsTransport: @escaping WebSocketConnector,
     http: any HTTPClientType,
     clock: any Clock<Duration>
   ) {

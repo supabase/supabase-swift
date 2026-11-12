@@ -116,6 +116,18 @@ public struct RealtimeClientOptions: Sendable {
   /// Defaults to `nil` (equivalent to `.default` configuration with no delegate to forward).
   package var session: URLSession?
 
+  /// Opens the client's WebSocket connections. `nil` uses the SDK's `URLSession` stack, with
+  /// the `session` you passed to the initializer.
+  ///
+  /// Set it to use another WebSocket stack. When it is set, `session` is not used for the
+  /// socket.
+  ///
+  /// ```swift
+  /// var options = RealtimeClientOptions()
+  /// options.webSocketTransport = MyTransport()
+  /// ```
+  public var webSocketTransport: (any WebSocketTransport)?
+
   /// Default interval, in seconds, between heartbeat messages sent to keep the connection alive.
   public static let defaultHeartbeatInterval: TimeInterval = 25
 
