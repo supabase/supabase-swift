@@ -13,9 +13,11 @@ run time. The typed API moves both checks to compile time.
 
 ### Declare a table
 
-The `@Table` macro maps a struct to a table or a view. Declare the struct at file scope.
+The `@Table` macro maps a struct to a table or a view. The macros are in the `PostgrestMacros`
+product of the package, so add that product to your target. Declare the struct at file scope.
 
 ```swift
+import PostgrestMacros
 import Supabase
 
 @Table("todos")
