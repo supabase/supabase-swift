@@ -10,6 +10,7 @@ apikey
 Apikey
 appex
 AQAB
+artifactbundle
 Ascii
 authcode
 autocapitalization
@@ -223,6 +224,7 @@ SUPABASE
 supabaseswiftintegrationtest
 supabot
 swiftlint
+swiftpm
 sysexits
 testpath
 testuser
