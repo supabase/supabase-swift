@@ -41,7 +41,7 @@ import IssueReporting
 /// - ``Presence-swift.typealias``
 /// ### Initialization
 /// - ``init()``
-public struct RealtimeChannelConfiguration: Sendable, Hashable {
+public struct RealtimeChannelConfig: Sendable, Hashable {
   /// Broadcast options of a channel.
   public typealias Broadcast = BroadcastJoinConfig
 
@@ -62,16 +62,18 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
   public var isPrivate: Bool
 }
 
-extension RealtimeChannelConfiguration {
+extension RealtimeChannelConfig {
   /// Creates the default configuration: a public channel, with every option off.
   public init() {
     self.init(broadcast: BroadcastJoinConfig(), presence: PresenceJoinConfig(), isPrivate: false)
   }
 }
 
-/// The v2 name of ``RealtimeChannelConfiguration``.
-@available(*, deprecated, renamed: "RealtimeChannelConfiguration")
-public typealias RealtimeChannelConfig = RealtimeChannelConfiguration
+/// The v3 name of ``RealtimeChannelConfig``. Use it in new code.
+///
+/// The declared name stays `RealtimeChannelConfig` on this version, so that the signatures that
+/// use it do not change. The v2 name goes away in v3.
+public typealias RealtimeChannelConfiguration = RealtimeChannelConfig
 
 protocol RealtimeChannelProtocol: AnyObject, Sendable {
   @MainActor var config: RealtimeChannelConfiguration { get }

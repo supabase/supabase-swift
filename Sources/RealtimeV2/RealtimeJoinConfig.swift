@@ -79,8 +79,8 @@ public struct ReplayOption: Codable, Hashable, Sendable {
 
 /// Configuration for the broadcast feature of a Realtime channel.
 ///
-/// Pass an instance to ``RealtimeChannelConfiguration/broadcast-swift.property`` when creating a
-/// channel. ``RealtimeChannelConfiguration/Broadcast-swift.typealias`` is the v3 name of this
+/// Pass an instance to ``RealtimeChannelConfig/broadcast-swift.property`` when creating a
+/// channel. ``RealtimeChannelConfig/Broadcast-swift.typealias`` is the v3 name of this
 /// type.
 ///
 /// ## Topics
@@ -161,8 +161,8 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
 
 /// Configuration for the presence feature of a Realtime channel.
 ///
-/// Pass an instance to ``RealtimeChannelConfiguration/presence-swift.property`` when creating a
-/// channel. ``RealtimeChannelConfiguration/Presence-swift.typealias`` is the v3 name of this type.
+/// Pass an instance to ``RealtimeChannelConfig/presence-swift.property`` when creating a
+/// channel. ``RealtimeChannelConfig/Presence-swift.typealias`` is the v3 name of this type.
 ///
 /// ## Topics
 /// ### Properties
