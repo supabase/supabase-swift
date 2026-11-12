@@ -100,7 +100,9 @@ public actor ResumableUpload {
       if status.isTerminal {
         statusBroadcaster.finish()
         progressBroadcaster.finish()
-        Self.live.withValue { if $0[liveKey]?.upload === self { $0.removeValue(forKey: liveKey) } }
+        // cancel() drops the entry itself once its cleanup ends, so no second handle takes the
+        // record while it is being deleted.
+        if case .cancelled = status {} else { dropLive() }
       }
     }
   }
@@ -113,6 +115,7 @@ public actor ResumableUpload {
   private var loop: Task<Void, Never>?
   private var pauseRequested = false
   private var startInProgress = false
+  private var startWaiters: [CheckedContinuation<Void, Never>] = []
   private let progressBroadcaster = StreamBroadcaster<TransferProgress>(
     bufferingPolicy: .bufferingNewest(1))
   private let statusBroadcaster: StreamBroadcaster<Status>
@@ -237,6 +240,8 @@ public actor ResumableUpload {
     claimLive(key)
     defer {
       startInProgress = false
+      startWaiters.forEach { $0.resume() }
+      startWaiters.removeAll()
       switch status {
       case .uploading: break
       default: releaseStart(key)
@@ -244,13 +249,14 @@ public actor ResumableUpload {
     }
     do {
       let record = try await loadOrCreateRecord()
-      guard case .pending = status else { return }
       self.record = record
+      guard case .pending = status else { return }
       status = .uploading
       startLoop(from: record.lastKnownOffset, next: .append)
     } catch is CancellationError {
       throw CancellationError()
     } catch {
+      if case .cancelled = status { return }
       let error = storageError(error)
       status = .failed(error)
       throw error
@@ -299,16 +305,34 @@ public actor ResumableUpload {
   }
 
   /// Aborts the upload: the chunk in flight is dropped, the server's copy is deleted (best
-  /// effort), and so are the record and any sandbox copy.
+  /// effort), and so are the record and any sandbox copy. When ``start()`` is still creating or
+  /// looking up the upload, waits for that request to end first, so the server's copy it makes
+  /// is deleted too.
   public func cancel() async {
     guard !status.isTerminal else { return }
     loop?.cancel()
     status = .cancelled
-    await loop?.value
-    if let record {
-      await TusSession(api: api).terminate(record.uploadURL)
-      store.remove(record)
+    if startInProgress {
+      // Waits for the record start() is loading or creating, so the discard below covers it.
+      await withCheckedContinuation { startWaiters.append($0) }
     }
+    await loop?.value
+    if let record = record ?? (try? store.record(fingerprint: fingerprint)) {
+      await discard(record)
+    } else {
+      store.removeFiles(fingerprint: fingerprint)
+    }
+    dropLive()
+  }
+
+  private func dropLive() {
+    Self.live.withValue { if $0[liveKey]?.upload === self { $0.removeValue(forKey: liveKey) } }
+  }
+
+  /// Deletes the server's copy (best effort), the record, and any sandbox copy.
+  private func discard(_ record: ResumableUploadRecord) async {
+    await TusSession(api: api).terminate(record.uploadURL)
+    store.remove(record)
   }
 
   var isRunning: Bool { loop != nil }
