@@ -93,6 +93,70 @@ struct StorageV3NamesTests {
   }
 
   @Test
+  func theV3ShapedConfigurationInitTakesHTTPFields() {
+    let url = URL(string: "https://blah.supabase.co/storage/v1")!
+
+    let plain = StorageClient.Configuration(url: url)
+    #expect(plain.headers.isEmpty)
+    #expect(!plain.usesNewHostname)
+    #expect(plain.logger == nil)
+
+    var fields = HTTPFields()
+    fields[.authorization] = "Bearer token"
+    fields.append(HTTPField(name: .accept, value: "a/b"))
+    fields.append(HTTPField(name: .accept, value: "c/d"))
+    let configured = StorageClient.Configuration(url: url, headers: fields, usesNewHostname: true)
+    #expect(configured.headers == ["Authorization": "Bearer token", "Accept": "a/b, c/d"])
+    #expect(configured.usesNewHostname)
+
+    let literal = StorageClient.Configuration(url: url, headers: [.authorization: "Bearer token"])
+    #expect(literal.headers == ["Authorization": "Bearer token"])
+  }
+
+  /// The v2 spellings of the configuration init keep their overload.
+  @Test
+  @available(*, deprecated)
+  func v2ConfigurationCallSitesKeepTheV2Init() {
+    let url = URL(string: "https://blah.supabase.co/storage/v1")!
+
+    let empty = StorageClientConfiguration(url: url, headers: [:])
+    #expect(empty.headers == [:])
+    let literal = StorageClientConfiguration(url: url, headers: ["apikey": "key"])
+    #expect(literal.headers == ["apikey": "key"])
+    let labelled = StorageClientConfiguration(
+      url: url, headers: ["apikey": "key"], logger: nil, useNewHostname: true)
+    #expect(labelled.useNewHostname)
+    let headers = ["apikey": "key"]
+    #expect(StorageClientConfiguration(url: url, headers: headers).headers == headers)
+  }
+
+  @Test
+  func settingHeaderIsOnTheBaseClasses() async throws {
+    let recorder = RequestRecorder()
+    let buckets: StorageBucketApi = recorder.client(response: "[]")
+    let tagged: StorageBucketApi = buckets.settingHeader(
+      name: HTTPField.Name("X-Tag")!, value: "one")
+
+    _ = try await tagged.listBuckets()
+    #expect(recorder.header("X-Tag") == "one")
+    _ = try await buckets.listBuckets()
+    #expect(recorder.header("X-Tag") == nil)
+
+    let api = StorageApi(
+      configuration: StorageClient.Configuration(url: URL(string: "http://localhost:54321")!))
+    let taggedAPI: StorageApi = api.settingHeader(name: HTTPField.Name("X-Tag")!, value: "two")
+    #expect(taggedAPI.configuration.headers["X-Tag"] == "two")
+    #expect(api.configuration.headers["X-Tag"] == nil)
+
+    let client: StorageClient = recorder.client()
+    let sameClient: StorageClient = client.settingHeader(name: .accept, value: "a/b")
+    let sameBucket: StorageBucket = client.from("avatars").settingHeader(
+      name: .accept, value: "a/b")
+    #expect(sameClient.configuration.headers["Accept"] == "a/b")
+    #expect(sameBucket.id == "avatars")
+  }
+
+  @Test
   func settingHeaderOnClientReturnsANewClientAndReachesItsBuckets() async throws {
     let recorder = RequestRecorder()
     let client = recorder.client(response: "[]")
@@ -1188,6 +1252,38 @@ struct StorageV3ObjectTests {
       recorder.lastJSON == [
         "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
       ])
+  }
+
+  @Test
+  func copyCleansTheDestinationPath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/folder/b.png"}"#).from("avatars")
+
+    let copy = try await bucket.copy(from: "a.png", to: "/folder//b.png/", options: CopyOptions())
+    #expect(copy.path == "folder/b.png")
+    #expect(recorder.lastJSON?["destinationKey"] == "folder/b.png")
+    #expect(recorder.lastJSON?["sourceKey"] == "a.png")
+
+    let sent = recorder.requests.value.count
+    for destination in ["", "//", "folder/../b.png", "./b.png"] {
+      do {
+        _ = try await bucket.copy(from: "a.png", to: destination, options: CopyOptions())
+        Issue.record("Expected a StorageError for '\(destination)'")
+      } catch let error as StorageError {
+        #expect(error.kind == .invalidRequest)
+      }
+    }
+    #expect(recorder.requests.value.count == sent)
+  }
+
+  @Test
+  @available(*, deprecated)
+  func theV2CopySendsTheDestinationAsGiven() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/b.png"}"#).from("avatars")
+
+    _ = try await bucket.copy(from: "a.png", to: "/folder//b.png")
+    #expect(recorder.lastJSON?["destinationKey"] == "/folder//b.png")
   }
 
   /// The v2 spellings keep their overloads, results and requests.

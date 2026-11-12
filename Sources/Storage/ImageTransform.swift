@@ -3,8 +3,8 @@ import Foundation
 /// A server-side image transformation applied before the asset is served.
 ///
 /// Set an ``ImageTransform`` as the `transform` of the options of
-/// ``StorageBucket/publicURL(path:options:)`` or
-/// ``StorageBucket/createSignedURL(path:expiresIn:options:)``
+/// ``StorageFileApi/publicURL(path:options:)`` or
+/// ``StorageFileApi/createSignedURL(path:expiresIn:options:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
 ///
 /// ```swift

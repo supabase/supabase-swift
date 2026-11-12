@@ -2,7 +2,7 @@ public import Foundation
 
 /// Options for searching and paginating files within a bucket.
 ///
-/// Pass a ``SearchOptions`` value to ``StorageFileApi/list(path:options:)`` to control which files
+/// Pass a ``SearchOptions`` value to ``StorageFileApi/list(path:options:)->[FileObject]`` to control which files
 /// are returned and how they are ordered.
 ///
 /// ```swift
@@ -64,7 +64,7 @@ public struct SearchOptions: Encodable, Sendable {
   }
 }
 
-/// A column-and-direction pair used to sort ``StorageFileApi/list(path:options:)`` results.
+/// A column-and-direction pair used to sort ``StorageFileApi/list(path:options:)->[FileObject]`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)
@@ -432,7 +432,7 @@ public struct DestinationOptions: Sendable {
 
 /// Metadata about a file stored in a Supabase Storage bucket.
 ///
-/// ``FileObject`` is returned by ``StorageFileApi/list(path:options:)`` and
+/// ``FileObject`` is returned by ``StorageFileApi/list(path:options:)->[FileObject]`` and
 /// ``StorageFileApi/remove(paths:)``.
 ///
 /// ## Topics
@@ -1025,7 +1025,7 @@ extension ImageFormat: Codable {
 
 // MARK: - SortOrder
 
-/// Sort direction for ``StorageFileApi/list(path:options:)`` results.
+/// Sort direction for ``StorageFileApi/list(path:options:)->[StorageObject]`` results.
 ///
 /// ```swift
 /// SortBy(column: "name", order: .ascending)

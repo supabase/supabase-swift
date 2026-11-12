@@ -1,6 +1,6 @@
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -24,7 +24,7 @@ import HTTPTypes
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(_:forKey:)``
+/// - ``settingHeader(name:value:)``
 public class StorageApi: @unchecked Sendable {
   /// The configuration used to initialize this client instance.
   public let configuration: StorageClientConfiguration
@@ -107,6 +107,20 @@ public class StorageApi: @unchecked Sendable {
   public func setHeader(_ value: String, forKey key: String) -> Self {
     mutableState.withValue { $0.headers[key.lowercased()] = value }
     return self
+  }
+
+  /// Returns a new instance with an additional HTTP header, included in all requests made by the
+  /// returned instance.
+  ///
+  /// This method does not change the receiver. Always use the result. A subclass returns an
+  /// instance of its own type.
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new instance with the header merged into the configuration's headers.
+  public func settingHeader(name: HTTPField.Name, value: String) -> StorageApi {
+    StorageApi(configuration: configuration(settingHeader: name, to: value))
   }
 
   /// The configuration for a copy of this instance that also sends `name` with `value`. It

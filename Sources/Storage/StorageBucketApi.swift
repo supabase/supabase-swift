@@ -1,5 +1,5 @@
 import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -23,14 +23,27 @@ import HTTPTypes
 ///
 /// ### Creating and updating buckets
 ///
-/// - ``createBucket(_:options:)``
-/// - ``updateBucket(_:options:)``
+/// - ``createBucket(_:options:)->String``
+/// - ``updateBucket(_:options:)-(_,UpdateBucketOptions)``
 ///
 /// ### Removing buckets
 ///
 /// - ``emptyBucket(_:)``
 /// - ``deleteBucket(_:)``
 public class StorageBucketApi: StorageApi, @unchecked Sendable {
+  /// Returns a new instance with an additional HTTP header, included in all requests made by the
+  /// returned instance.
+  ///
+  /// This method does not change the receiver. Always use the result.
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new instance with the header merged into the configuration's headers.
+  public override func settingHeader(name: HTTPField.Name, value: String) -> StorageBucketApi {
+    StorageBucketApi(configuration: configuration(settingHeader: name, to: value))
+  }
+
   /// Retrieves the details of all Storage buckets within the project.
   ///
   /// - Returns: An array of ``Bucket`` objects, one for each bucket in the project.

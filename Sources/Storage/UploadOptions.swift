@@ -52,8 +52,13 @@ public struct UploadOptions: Sendable {
   /// filter or search for files.
   public var metadata: JSONObject?
 
-  /// Extra HTTP headers to include with the upload request. A header set here wins over the one
-  /// the SDK would send for the same name.
+  /// Extra HTTP headers to include with the upload request.
+  ///
+  /// On this version an upload is a multipart form. Storage takes the stored `Cache-Control` and
+  /// MIME type from the form, which ``cacheControl`` and ``contentType`` fill, and not from these
+  /// headers. A `Cache-Control` header set here goes on the request but does not change the
+  /// stored value. Do not set `Content-Type` here: it replaces the multipart content type, and
+  /// Storage then stores the form itself as the object.
   public var headers: HTTPFields
 
   /// Creates an ``UploadOptions`` value.

@@ -19,6 +19,7 @@ public import HTTPTypes
 /// ### Creating a configuration
 ///
 /// - ``init(url:headers:encoder:decoder:session:logger:useNewHostname:)``
+/// - ``init(url:headers:usesNewHostname:)``
 ///
 /// ### Configuration properties
 ///
@@ -85,6 +86,29 @@ public struct StorageClientConfiguration: Sendable {
     self.logger = logger
     self.usesNewHostname = useNewHostname
   }
+
+  /// Creates a ``StorageClientConfiguration`` with the parameters this initializer keeps in the
+  /// next major version.
+  ///
+  /// The configuration uses the default JSON coding, the default HTTP session and no logger. A
+  /// header name that occurs more than once becomes one header with the values joined by `", "`.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL of the Storage API endpoint.
+  ///   - headers: HTTP headers sent with every request.
+  ///   - usesNewHostname: When `true`, the storage-specific hostname is used, enabling uploads
+  ///     over 50 GB.
+  @_disfavoredOverload
+  public init(url: URL, headers: HTTPFields = [:], usesNewHostname: Bool = false) {
+    var dictionary: [String: String] = [:]
+    for field in headers {
+      dictionary[field.name.rawName] =
+        dictionary[field.name.rawName].map {
+          "\($0), \(field.value)"
+        } ?? field.value
+    }
+    self.init(url: url, headers: dictionary, logger: nil, useNewHostname: usesNewHostname)
+  }
 }
 
 /// The top-level Supabase Storage client for managing buckets and files.
@@ -120,8 +144,8 @@ public struct StorageClientConfiguration: Sendable {
 ///
 /// - ``StorageBucketApi/listBuckets()``
 /// - ``StorageBucketApi/getBucket(_:)``
-/// - ``StorageBucketApi/createBucket(_:options:)``
-/// - ``StorageBucketApi/updateBucket(_:options:)``
+/// - ``StorageBucketApi/createBucket(_:options:)->String``
+/// - ``StorageBucketApi/updateBucket(_:options:)-(_,UpdateBucketOptions)``
 /// - ``StorageBucketApi/emptyBucket(_:)``
 /// - ``StorageBucketApi/deleteBucket(_:)``
 public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
@@ -150,7 +174,9 @@ public class SupabaseStorageClient: StorageBucketApi, @unchecked Sendable {
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: A new client with the header merged into the configuration's headers.
-  public func settingHeader(name: HTTPField.Name, value: String) -> SupabaseStorageClient {
+  public override func settingHeader(name: HTTPField.Name, value: String)
+    -> SupabaseStorageClient
+  {
     SupabaseStorageClient(configuration: configuration(settingHeader: name, to: value))
   }
 

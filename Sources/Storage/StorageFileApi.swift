@@ -107,7 +107,7 @@ enum FileUpload {
 /// - ``move(from:to:options:)``
 /// - ``copy(from:to:options:)``
 /// - ``remove(paths:)``
-/// - ``list(path:options:)``
+/// - ``list(path:options:)->[StorageObject]``
 /// - ``info(path:)``
 /// - ``exists(path:)``
 ///
@@ -140,7 +140,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: A new instance with the header merged into the configuration's headers.
-  public func settingHeader(name: HTTPField.Name, value: String) -> StorageFileApi {
+  public override func settingHeader(name: HTTPField.Name, value: String) -> StorageFileApi {
     StorageFileApi(
       bucketId: bucketId, configuration: configuration(settingHeader: name, to: value))
   }
@@ -532,6 +532,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
+  ///     Leading, trailing and repeated `/` are removed. An empty path, or a `.` or `..` segment,
+  ///     throws ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest``.
   ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
   ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
   ///   - options: Whether to replace an existing destination, and the metadata of the copy.
@@ -547,6 +549,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
+    let destination = try _cleanObjectPath(destination)
     var body = CopyBody(
       bucketID: bucketId, sourceKey: source, destinationKey: destination,
       destinationBucket: toBucket, sourceVersionID: sourceVersionID)
@@ -1593,6 +1596,19 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .Key
 
     return (path: cleanPath, fullPath: fullPath)
+  }
+
+  private func _cleanObjectPath(_ path: String) throws -> String {
+    let segments = path.split(separator: "/", omittingEmptySubsequences: true)
+    guard !segments.isEmpty else {
+      throw StorageError(kind: .invalidRequest, message: "An object path must not be empty.")
+    }
+    if let dots = segments.first(where: { $0 == "." || $0 == ".." }) {
+      throw StorageError(
+        kind: .invalidRequest,
+        message: "An object path must not contain a '\(dots)' segment: '\(path)'.")
+    }
+    return segments.joined(separator: "/")
   }
 
   private func _getFinalPath(_ path: String) -> String {
