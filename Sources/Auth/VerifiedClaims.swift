@@ -117,14 +117,14 @@ extension VerifiedClaims {
   init(_ jwt: DecodedJWT) throws {
     let payload = try Self.decodeSegment(JSONObject.self, from: jwt.raw.payload)
 
-    guard let expiresAt = payload["exp"].flatMap(Self.timeInterval) else {
+    guard let expiresAt = payload["exp"]?.doubleValue else {
       throw AuthError.jwtVerificationFailed("JWT is missing the exp claim")
     }
     guard let subject = payload["sub"]?.stringValue else {
       throw AuthError.jwtVerificationFailed("JWT is missing the sub claim")
     }
-    let issuedAt = payload["iat"].flatMap(Self.timeInterval)
-    let notBefore = payload["nbf"].flatMap(Self.timeInterval)
+    let issuedAt = payload["iat"]?.doubleValue
+    let notBefore = payload["nbf"]?.doubleValue
 
     self.subject = subject
     self.issuer = payload["iss"]?.stringValue
@@ -157,14 +157,6 @@ extension VerifiedClaims {
       throw AuthError.jwtVerificationFailed("Invalid JWT structure")
     }
     return value
-  }
-
-  private static func timeInterval(_ value: JSONValue) -> TimeInterval? {
-    switch value {
-    case .integer(let seconds): TimeInterval(seconds)
-    case .double(let seconds): seconds
-    default: nil
-    }
   }
 
   private static func audience(from value: JSONValue?) -> [String] {

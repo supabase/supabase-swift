@@ -203,7 +203,7 @@ struct RealtimeSerializerTests {
   func decodeBinary_jsonPayload() throws {
     let topic = "realtime:test"
     let event = "my_event"
-    let jsonPayload: JSONObject = ["count": .integer(42)]
+    let jsonPayload: JSONObject = ["count": .number(42)]
     let payloadData = try JSONEncoder().encode(jsonPayload)
 
     let topicBytes = Data(topic.utf8)

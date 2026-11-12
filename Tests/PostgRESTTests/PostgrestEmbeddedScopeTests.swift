@@ -126,7 +126,9 @@ struct PostgrestEmbeddedScopeTests {
     await #expect(throws: PostgrestError.self) {
       try await capture.client.from(Todo.self)
         .select(TodoWithComments.self)
-        .embedded(\.comments) { $0.where { $0.meta.containsJSON(["n": .double(.nan)]) } }
+        .embedded(\.comments) {
+          $0.where { $0.meta.containsJSON(["n": .number(JSONNumber("1e-400")!)]) }
+        }
         .execute()
     }
     #expect(capture.query == nil)

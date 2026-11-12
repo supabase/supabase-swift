@@ -99,7 +99,7 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (c.tags.contains(["home"]), "do not support the `cs` operator"),
       (c.title.likeAllOf(["a%"]), "do not support the `like(all)` operator"),
       (c.data.jsonText("k").eq("x"), "JSON path"),
-      (c.data.eq(.double(.nan)), "has no wire form"),
+      (c.data.eq(.number(JSONNumber("1e-400")!)), "has no wire form"),
       (c.tags.raw("cs.{home}"), "do not support the `cs` operator"),
       (c.title.raw("eq"), "is not in the `operator.value` form"),
       (!c.title.raw("not.eq.milk"), "cannot negate `title=not.eq.milk` again"),

@@ -62,7 +62,7 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
     var copy = self
     guard
       let body = request.body,
-      let arguments = PostgrestArgument.queryItems(forJSONObject: body)
+      let arguments = PostgrestClient.queryItems(forJSONObject: body)
     else {
       // `@Function` always encodes an object. A hand-written conformance that does not cannot be
       // sent as query items, so the call stays a `POST` rather than losing its arguments.

@@ -83,7 +83,7 @@ struct BucketDetailView: View {
             "updatedAt": .string(bucket.updatedAt.description),
             "allowedMimeTypes": bucket.allowedMimeTypes.map { .array($0.map(JSONValue.string)) }
               ?? .null,
-            "fileSizeLimit": bucket.fileSizeLimit.map { .integer(Int($0)) } ?? .null,
+            "fileSizeLimit": bucket.fileSizeLimit.map { .number(JSONNumber($0)) } ?? .null,
           ])
         )
       }

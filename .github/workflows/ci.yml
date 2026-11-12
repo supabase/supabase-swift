@@ -372,6 +372,10 @@ jobs:
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
         run: supabase start ${{ matrix.start-flags }}
+      # The experimental stack picks its own ports, so export the endpoints the tests read.
+      - name: "Export Supabase endpoints"
+        if: matrix.start-flags
+        run: ./scripts/stack-env.sh Tests/IntegrationTests >> "$GITHUB_ENV"
       - name: "Enable Storage test features"
         if: matrix.storage-features
         run: |
@@ -394,6 +398,9 @@ jobs:
       - name: "Start Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
         run: supabase start ${{ matrix.start-flags }}
+      - name: "Export Supabase endpoints (secure email change)"
+        if: matrix.start-flags
+        run: ./scripts/stack-env.sh Tests/IntegrationTests/supabase-secure-email-change >> "$GITHUB_ENV"
       - name: "Run Secure Email Change Integration Test"
         run: swift test ${{ matrix.swift-flags }} --filter verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase (secure email change)"
