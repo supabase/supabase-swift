@@ -164,7 +164,7 @@ struct RealtimeWebSocketTransportV3APITests {
   }
 
   @Test
-  func theURLSessionTransportRefusesAURLThatIsNotAWebSocketURL() async throws {
+  func theURLSessionTransportRefusesEveryURLThatIsNotAWebSocketURL() async throws {
     let transport = URLSessionWebSocketTransport(configuration: .ephemeral, delegate: nil)
 
     do {

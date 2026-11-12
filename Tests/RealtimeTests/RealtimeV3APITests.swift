@@ -312,7 +312,7 @@ struct BroadcastMessageV3APITests {
   }
 
   @Test
-  func decodeReadsAJSONPayload() throws {
+  func decodeReadsTheJSONPayload() throws {
     let message = BroadcastMessage(event: "cursor", payload: .json(["x": 1]))
     #expect(try message.decode(as: Cursor.self) == Cursor(x: 1))
   }

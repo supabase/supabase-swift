@@ -145,7 +145,7 @@ public struct PresenceChange: Sendable, Hashable {
 
 /// One presence message, as the channel hands it to its callbacks.
 struct PresenceDelivery: Sendable {
-  /// The `joins` and `leaves` of a `presence_diff`, or a `presence_state` as `joins`, undecoded.
+  /// The `joins` and `leaves` of a `presence_diff`, or a `presence_state` as `joins`, not decoded.
   struct Wire: Sendable {
     var joins: AnyJSON?
     var leaves: AnyJSON?

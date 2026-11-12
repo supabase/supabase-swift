@@ -2,7 +2,7 @@
 //  RealtimeV3APIBehaviorTests.swift
 //  Supabase
 //
-//  Behaviour tests for the v3 public API that ships on the v2 line. They drive a client through
+//  Behavior tests for the v3 public API that ships on the v2 line. They drive a client through
 //  the test doubles of this target, so they need `@testable` imports.
 //
 
@@ -231,7 +231,7 @@ import Testing
     }
 
     @Test
-    func broadcastWithPayloadThatIsNotAJSONObjectThrows() async throws {
+    func broadcastWithPayloadThatIsNotOneJSONObjectThrows() async throws {
       let channel = fixture.sut.channel("room")
 
       do {
@@ -270,7 +270,7 @@ import Testing
     }
 
     @Test
-    func trackWithPayloadThatIsNotAJSONObjectThrows() async throws {
+    func trackWithPayloadThatIsNotOneJSONObjectThrows() async throws {
       let channel = try await fixture.subscribedChannel()
 
       do {
