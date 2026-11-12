@@ -66,11 +66,13 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 /// - ``removeAllChannels()``
 /// ### Connection Status
 /// - ``status``
+/// - ``statusChanges()``
 /// - ``statusChange``
 /// - ``onStatusChange(_:)``
 /// - ``connect()``
 /// - ``disconnect(code:reason:)``
 /// ### Heartbeat
+/// - ``heartbeats()``
 /// - ``heartbeat``
 /// - ``onHeartbeat(_:)``
 /// ### Authentication
@@ -112,8 +114,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// would spuriously open a connection.
     var wasConnectedBeforeBackground: Bool = false
 
-    var lastHeartbeatStatus: HeartbeatStatus?
-    var heartbeatStatusContinuations: [(UUID, AsyncStream<HeartbeatStatus>.Continuation)] = []
+    var lastHeartbeatSignal: HeartbeatSignal?
+    var heartbeatObservers: [(UUID, HeartbeatObserver)] = []
+    /// When the pending heartbeat was sent, for the latency of its acknowledgement.
+    var pendingHeartbeatSentAt: ContinuousClock.Instant?
 
     var status: RealtimeClientStatus = .disconnected
     var statusContinuations: [(UUID, AsyncStream<RealtimeClientStatus>.Continuation)] = []
@@ -304,10 +308,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
     connection?.close(code: nil, reason: "Client deallocated")
 
-    let (statusContinuations, heartbeatStatusContinuations) = mutableState.withValue {
+    let (statusContinuations, heartbeatObservers) = mutableState.withValue {
       state -> (
         [AsyncStream<RealtimeClientStatus>.Continuation],
-        [AsyncStream<HeartbeatStatus>.Continuation]
+        [HeartbeatObserver]
       ) in
       state.heartbeatTask?.cancel()
       state.messageTask?.cancel()
@@ -317,15 +321,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       defer {
         state.statusContinuations.removeAll()
-        state.heartbeatStatusContinuations.removeAll()
+        state.heartbeatObservers.removeAll()
       }
-      return (state.statusContinuations.map { $1 }, state.heartbeatStatusContinuations.map { $1 })
+      return (state.statusContinuations.map { $1 }, state.heartbeatObservers.map { $1 })
     }
     for continuation in statusContinuations {
       continuation.finish()
     }
-    for continuation in heartbeatStatusContinuations {
-      continuation.finish()
+    for observer in heartbeatObservers {
+      observer.finish()
     }
   }
 
@@ -623,6 +627,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // No pending heartbeat, we can send a new one
       let ref = makeRef()
       state.pendingHeartbeatRef = ref
+      state.pendingHeartbeatSentAt = ContinuousClock.now
       return ref
     }
 
@@ -636,12 +641,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           payload: [:]
         )
       )
-      yieldHeartbeatStatus(.sent)
+      yieldHeartbeatSignal(.sent)
       await setAuth()
     } else {
       // Timeout: previous heartbeat was never acknowledged
       options.logger?.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      yieldHeartbeatStatus(.timeout)
+      yieldHeartbeatSignal(.timedOut)
 
       // Clear the pending ref before reconnecting
       mutableState.withValue { $0.pendingHeartbeatRef = nil }
@@ -767,7 +772,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func onMessage(_ message: RealtimeMessageV2) async {
     if message.topic == "phoenix", message.event == "phx_reply" {
-      yieldHeartbeatStatus(message.status == .ok ? .ok : .error)
+      if message.status == .ok {
+        let sentAt = mutableState.withValue { $0.pendingHeartbeatSentAt }
+        yieldHeartbeatSignal(
+          .acknowledged(latency: sentAt.map { ContinuousClock.now - $0 } ?? .zero))
+      } else {
+        yieldHeartbeatSignal(.error)
+      }
     }
 
     let channel = mutableState.withValue {

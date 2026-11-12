@@ -279,3 +279,14 @@ struct RealtimeChannelConfigurationV3APITests {
     #expect(client.channels.count == 4)
   }
 }
+
+@Suite
+struct HeartbeatEventV3APITests {
+  @Test
+  func eventsCompareByValue() {
+    #expect(HeartbeatEvent.sent == .sent)
+    #expect(
+      HeartbeatEvent.acknowledged(latency: .milliseconds(20)) != .acknowledged(latency: .zero))
+    #expect(Set<HeartbeatEvent>([.sent, .timedOut, .sent]).count == 2)
+  }
+}

@@ -315,11 +315,32 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
   }
 }
 
+/// One step of the heartbeat cycle, emitted by ``RealtimeClientV2/heartbeats()``.
+///
+/// The client sends a heartbeat at each heartbeat interval. When the next one is due and the
+/// server has not acknowledged the previous one, the client reports ``timedOut`` and reconnects.
+///
+/// ## Topics
+/// ### Events
+/// - ``sent``
+/// - ``acknowledged(latency:)``
+/// - ``timedOut``
+public enum HeartbeatEvent: Hashable, Sendable {
+  /// The client sent a heartbeat.
+  case sent
+
+  /// The server acknowledged the heartbeat `latency` after it was sent.
+  case acknowledged(latency: Duration)
+
+  /// The server did not acknowledge the previous heartbeat in time. The client drops the
+  /// socket and reconnects.
+  case timedOut
+}
+
 /// Describes the result of a heartbeat cycle.
 ///
 /// The Realtime client sends periodic heartbeat messages to keep the WebSocket
-/// connection alive. Use ``RealtimeClientV2/heartbeat`` or ``RealtimeClientV2/onHeartbeat(_:)``
-/// to observe heartbeat status changes.
+/// connection alive.
 ///
 /// ## Topics
 /// ### States
@@ -328,6 +349,7 @@ public enum RealtimeClientStatus: Sendable, CustomStringConvertible {
 /// - ``error``
 /// - ``timeout``
 /// - ``disconnected``
+@available(*, deprecated, message: "Use HeartbeatEvent instead.")
 public enum HeartbeatStatus: Sendable {
   /// Heartbeat was sent.
   case sent

@@ -28,7 +28,7 @@ import Testing
     let sut: RealtimeClientV2
     let serverTask = LockIsolated<Task<Void, Never>?>(nil)
 
-    init(vsn: RealtimeProtocolVersion = .v2) {
+    init(vsn: RealtimeProtocolVersion = .v2, heartbeatInterval: TimeInterval = 25) {
       let (client, server) = FakeWebSocket.fakes()
       self.client = client
       self.server = server
@@ -36,6 +36,7 @@ import Testing
         url: URL(string: "http://localhost:54321/realtime/v1")!,
         options: RealtimeClientOptions(
           headers: ["apikey": "publishable.api.key"],
+          heartbeatInterval: heartbeatInterval,
           vsn: vsn,
           accessToken: { "custom.access.token" }
         ),
@@ -291,6 +292,108 @@ import Testing
         .filter { $0.event == "presence" && $0.payload["event"]?.stringValue == "track" }
         .map { $0.payload["payload"] }
       #expect(tracked == [["name": "Ana"], ["name": "Bia"]])
+    }
+  }
+
+  @Suite
+  struct RealtimeStatusStreamsV3APITests {
+    let fixture = RealtimeV3Fixture()
+
+    @Test
+    func clientStatusChangesStartsWithTheCurrentStatusAndFollowsTheConnection() async {
+      fixture.startServer()
+      var statuses = await fixture.sut.statusChanges().makeAsyncIterator()
+
+      #expect(await statuses.next() == .disconnected)
+
+      await fixture.sut.connect()
+      #expect(await statuses.next() == .connecting)
+      #expect(await statuses.next() == .connected)
+
+      fixture.sut.disconnect()
+      #expect(await statuses.next() == .disconnected)
+    }
+
+    @Test
+    func channelStatusChangesStartsWithTheCurrentStatusAndFollowsTheSubscription() async throws {
+      fixture.startServer()
+      await fixture.sut.connect()
+      let channel = fixture.sut.channel("test")
+      var statuses = await channel.statusChanges().makeAsyncIterator()
+
+      #expect(await statuses.next() == .unsubscribed)
+
+      try await channel.subscribeWithError()
+      #expect(await statuses.next() == .subscribing)
+      #expect(await statuses.next() == .subscribed)
+    }
+
+    @Test
+    func v2StatusMembersKeepWorking() async {
+      let channel = fixture.sut.channel("test")
+      var clientStatuses = fixture.sut.statusChange.makeAsyncIterator()
+      var channelStatuses = channel.statusChange.makeAsyncIterator()
+
+      #expect(await clientStatuses.next() == .disconnected)
+      #expect(await channelStatuses.next() == .unsubscribed)
+
+      let received = LockIsolated<[RealtimeClientStatus]>([])
+      let subscription = fixture.sut.onStatusChange { status in
+        received.withValue { $0.append(status) }
+      }
+      defer { subscription.cancel() }
+      await waitUntil { received.value == [.disconnected] }
+      #expect(received.value == [.disconnected])
+    }
+  }
+
+  @Suite
+  struct RealtimeHeartbeatsV3APITests {
+    @Test
+    func heartbeatsReportsSentAndAcknowledged() async throws {
+      let fixture = RealtimeV3Fixture(heartbeatInterval: 0.05)
+      fixture.startServer()
+      var events = await fixture.sut.heartbeats().makeAsyncIterator()
+
+      await fixture.sut.connect()
+
+      #expect(await events.next() == .sent)
+      guard case .acknowledged(let latency)? = await events.next() else {
+        Issue.record("expected an acknowledged heartbeat")
+        return
+      }
+      #expect(latency >= .zero)
+      #expect(latency < .seconds(5))
+    }
+
+    @Test
+    func heartbeatsReportsTimedOutWhenTheServerDoesNotAnswer() async throws {
+      let fixture = RealtimeV3Fixture(heartbeatInterval: 0.05)
+      var events = await fixture.sut.heartbeats().makeAsyncIterator()
+
+      await fixture.sut.connect()
+
+      #expect(await events.next() == .sent)
+      #expect(await events.next() == .timedOut)
+    }
+
+    @Test
+    func v2HeartbeatMembersKeepWorking() async throws {
+      let fixture = RealtimeV3Fixture(heartbeatInterval: 0.05)
+      fixture.startServer()
+      var statuses = fixture.sut.heartbeat.makeAsyncIterator()
+      let received = LockIsolated<[HeartbeatStatus]>([])
+      let subscription = fixture.sut.onHeartbeat { status in
+        received.withValue { $0.append(status) }
+      }
+      defer { subscription.cancel() }
+
+      await fixture.sut.connect()
+
+      #expect(await statuses.next() == .sent)
+      #expect(await statuses.next() == .ok)
+      await waitUntil { received.value.count >= 2 }
+      #expect(received.value.prefix(2) == [.sent, .ok])
     }
   }
 

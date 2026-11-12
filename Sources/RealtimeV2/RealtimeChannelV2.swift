@@ -108,6 +108,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``config``
 /// ### Status
 /// - ``status``
+/// - ``statusChanges()``
 /// - ``statusChange``
 /// - ``onStatusChange(_:)``
 /// ### Lifecycle
@@ -169,7 +170,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// a subsequent `subscribe()` call and sometimes lose the filter.
   let clientChanges = LockIsolated<[PostgresJoinConfig]>([])
 
-  /// Lock-protected status + subscribers for ``status``/``statusChange``/``onStatusChange(_:)``.
+  /// Lock-protected status + subscribers for ``status``/``statusChanges()``.
   /// See `RealtimeChannel+Status.swift`.
   let statusStorage = LockIsolated(StatusStorage())
 
