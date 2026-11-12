@@ -26,6 +26,9 @@ extension PostgrestClient.Configuration {
     message:
       "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
   )
+  // Without this, `Configuration(url:)` picks this deprecated initializer because it has fewer
+  // defaulted parameters, and `PostgrestClient(configuration:)` call sites get a warning.
+  @_disfavoredOverload
   public init(
     url: URL,
     schema: String? = nil,
@@ -55,12 +58,7 @@ extension PostgrestClient {
   ///   - session: The URLSession to use for requests.
   ///   - encoder: The JSONEncoder to use for encoding.
   ///   - decoder: The JSONDecoder to use for decoding.
-  @available(
-    *,
-    deprecated,
-    message:
-      "Replace usages of this initializer with new init(url:schema:headers:logger:fetch:encoder:decoder:)"
-  )
+  @available(*, deprecated, message: "Use init(configuration:) instead.")
   public convenience init(
     url: URL,
     schema: String? = nil,
@@ -70,13 +68,15 @@ extension PostgrestClient {
     decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder
   ) {
     self.init(
-      url: url,
-      schema: schema,
-      headers: headers,
-      logger: nil,
-      fetch: fetch,
-      encoder: encoder,
-      decoder: decoder
+      configuration: Configuration(
+        url: url,
+        schema: schema,
+        headers: headers,
+        logger: nil,
+        fetch: fetch,
+        encoder: encoder,
+        decoder: decoder
+      )
     )
   }
 }

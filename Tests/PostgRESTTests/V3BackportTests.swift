@@ -442,3 +442,45 @@ extension V3BackportTests {
     }
   }
 }
+
+// MARK: - Client entry point
+
+extension V3BackportTests {
+  @Test
+  @available(*, deprecated, message: "Exercises the deprecated flat initializer.")
+  func theConfigurationInitializerExpressesEverythingTheFlatInitializerDoes() {
+    let url = URL(string: "http://localhost:54321/rest/v1")!
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+
+    let flat = PostgrestClient(
+      url: url,
+      schema: "private",
+      headers: ["apikey": "key"],
+      logger: nil,
+      fetch: { _ in throw CancellationError() },
+      encoder: encoder,
+      decoder: decoder,
+      retryEnabled: false
+    )
+    let configured = PostgrestClient(
+      configuration: PostgrestClient.Configuration(
+        url: url,
+        schema: "private",
+        headers: ["apikey": "key"],
+        logger: nil,
+        fetch: { _ in throw CancellationError() },
+        encoder: encoder,
+        decoder: decoder,
+        retryEnabled: false
+      )
+    )
+
+    #expect(configured.configuration.url == flat.configuration.url)
+    #expect(configured.configuration.schema == flat.configuration.schema)
+    #expect(configured.configuration.headers == flat.configuration.headers)
+    #expect(configured.configuration.encoder === flat.configuration.encoder)
+    #expect(configured.configuration.decoder === flat.configuration.decoder)
+    #expect(configured.configuration.retryEnabled == flat.configuration.retryEnabled)
+  }
+}
