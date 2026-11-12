@@ -36,8 +36,19 @@ the goldens.
 
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
-generated column uses. "Enum-like Values" in [CODE_STYLE.md](../../CODE_STYLE.md) governs the SDK's own types, not this generated code: a
-label added to the Postgres enum fails to decode until the user regenerates.
+generated column uses. The set is closed on purpose. "Enum-like Values" in
+[CODE_STYLE.md](../../CODE_STYLE.md) governs the SDK's own types, whose values the server owns. A
+generated enum mirrors the app's own schema instead, so the app regenerates its types when that
+schema changes, as it does for a new column. Until it does, a label added to the Postgres enum
+fails to decode.
+
+Generated code names PostgREST types that start with an underscore: the `_Postgres…` value types
+below, `_PostgrestComputedField`, `_PostgrestToOneRelation`, `_PostgrestToManyRelation`,
+`_PostgrestFunctions` and `_PostgrestFunctionQuery`. They are public only so that generated code
+and macro expansions in another module can use them. An app reaches them through generated
+properties and methods, such as `row.duration` or `client.rpc.searchBooks(query:)`, and does not
+need to write their names. The underscore keeps them out of code completion and marks them as
+support types whose names can change.
 
 Each Postgres type maps to one Swift type, so the generated `@Table` property's type is the column's
 Postgres type. An app that decodes a column as its own type declares it in `@SelectionOf`. A type
