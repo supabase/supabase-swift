@@ -106,6 +106,8 @@ presenter:
 - ``ASWebAuthenticationSessionPresenter``, the default, closes the sign-in page and throws
   `CancellationError`. On tvOS the system cannot close the page, so the call throws while the page
   stays open until the user dismisses it. A new sign-in fails until then.
+- ``WebAuthenticationSessionPresenter`` cancels as far as SwiftUI's `WebAuthenticationSession`
+  does.
 - ``ClosurePresenter`` only runs your closure. It cancels as far as the closure does.
 - A presenter that you write must watch for cancellation itself.
 

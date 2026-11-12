@@ -20,7 +20,7 @@ struct SignInWithOAuthClosurePresenter: View {
     List {
       Section {
         Text(
-          "The default presenter shows the provider page with ASWebAuthenticationSession. Pass a ClosurePresenter to show it another way, here with SwiftUI's webAuthenticationSession."
+          "The default presenter shows the provider page with ASWebAuthenticationSession. Pass a ClosurePresenter to show it another way, here with SwiftUI's webAuthenticationSession. In your app, prefer presenter: .webAuthenticationSession(webAuthenticationSession), which needs no closure."
         )
         .font(.caption)
         .foregroundColor(.secondary)

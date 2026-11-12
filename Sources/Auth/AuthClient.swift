@@ -62,6 +62,7 @@ typealias AuthClientID = Int
 /// - ``WebAuthPresenter``
 /// - ``ClosurePresenter``
 /// - ``ASWebAuthenticationSessionPresenter``
+/// - ``WebAuthenticationSessionPresenter``
 ///
 /// ### One-time passwords and magic links
 /// - ``signInWithOTP(email:options:)``

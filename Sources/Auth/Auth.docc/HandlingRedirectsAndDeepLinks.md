@@ -94,8 +94,9 @@ it sends no request.
 ### Present the provider page with SwiftUI
 
 On Apple platforms, the default presenter is ``ASWebAuthenticationSessionPresenter``. To use the
-`webAuthenticationSession` value from the SwiftUI environment instead, wrap it in a
-``ClosurePresenter``. The environment value is available on iOS 16.4 and later.
+`webAuthenticationSession` value from the SwiftUI environment instead, pass it to
+``WebAuthPresenter/webAuthenticationSession(_:prefersEphemeralWebBrowserSession:)``. The
+environment value is available on iOS 16.4, macOS 13.3, tvOS 16.4, and watchOS 9.4 and later.
 
 Import both `AuthenticationServices` and `SwiftUI`. The environment value comes from the overlay
 of the two frameworks.
@@ -116,14 +117,9 @@ struct SignInView: View {
           try await supabase.auth.signInWithOAuth(
             .github,
             options: OAuthOptions(redirectTo: URL(string: "com.example.app://callback")),
-            presenter: ClosurePresenter { [webAuthenticationSession] url, callbackScheme in
-              try await webAuthenticationSession.authenticate(
-                using: url,
-                callbackURLScheme: callbackScheme ?? "com.example.app"
-              )
-            }
+            presenter: .webAuthenticationSession(webAuthenticationSession)
           )
-        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+        } catch is CancellationError {
           // The user closed the page. This is a cancel, not a failure.
         } catch {
           showError(error)
@@ -134,10 +130,9 @@ struct SignInView: View {
 }
 ```
 
-``ClosurePresenter`` passes on the error of its closure. When the user closes the page, SwiftUI's
-`webAuthenticationSession` throws `ASWebAuthenticationSessionError` with the code `.canceledLogin`,
-so catch that error. The default ``ASWebAuthenticationSessionPresenter`` turns it into
-`CancellationError` for you.
+``WebAuthenticationSessionPresenter`` works like the default presenter. When the user closes the
+page, the call throws `CancellationError`. It listens for a universal link where the system
+supports it.
 
 ### Use a universal link
 
@@ -145,33 +140,10 @@ An HTTPS redirect URL, such as `https://example.com/auth/callback`, is a univers
 `webcredentials:example.com` associated domain to the app, and host the matching
 `apple-app-site-association` file on that domain.
 
-The default ``ASWebAuthenticationSessionPresenter`` listens for the HTTPS callback on iOS 17.4,
-macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4 and later. Use it for a universal link,
-because it knows the full redirect URL. A ``ClosurePresenter`` gets only the scheme, which is
-`https`, so it cannot tell your link from any other. To use the SwiftUI environment value with a
-universal link, write a presenter that adopts ``WebAuthPresenter/authenticate(url:redirectURL:)``
-and passes `.https(host:path:)` to `authenticate(using:callback:additionalHeaderFields:)`.
-
-```swift
-@available(iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, watchOS 10.4, *)
-struct UniversalLinkPresenter: WebAuthPresenter {
-  let session: WebAuthenticationSession
-
-  @MainActor
-  func authenticate(url: URL, callbackScheme: String?) async throws -> URL {
-    try await authenticate(url: url, redirectURL: nil)
-  }
-
-  @MainActor
-  func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
-    try await session.authenticate(
-      using: url,
-      callback: .https(host: "example.com", path: "/auth/callback"),
-      additionalHeaderFields: [:]
-    )
-  }
-}
-```
+``ASWebAuthenticationSessionPresenter`` and ``WebAuthenticationSessionPresenter`` listen for the
+HTTPS callback on iOS 17.4, macOS 14.4, tvOS 17.4, visionOS 1.1, and watchOS 10.4 and later. Use
+one of them for a universal link, because they know the full redirect URL. A ``ClosurePresenter``
+gets only the scheme, which is `https`, so it cannot tell your link from any other.
 
 ### Route each URL once
 

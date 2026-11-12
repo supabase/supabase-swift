@@ -93,20 +93,9 @@
 
     @MainActor
     private func authenticate(url: URL, callback: WebAuthCallback?) async throws -> URL {
-      guard let callback else {
-        throw AuthError.oauthFlowFailed(
-          """
-          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
-          or globally through `AuthClient.Configuration.redirectTo`.
-          """
-        )
-      }
+      let callback = try WebAuthCallback.required(callback)
       try Task.checkCancellation()
-      guard let lease = activeSession.begin() else {
-        throw AuthError.oauthFlowFailed(
-          "Another sign-in page is already open. Wait for it to close, then try again."
-        )
-      }
+      let lease = try activeSession.beginOrThrow()
 
       let handle = WebAuthSessionHandle()
 
@@ -196,6 +185,19 @@
   enum WebAuthCallback: Equatable, Sendable {
     case scheme(String)
     case https(host: String, path: String)
+
+    /// Returns `callback`, or throws when the flow has no redirect URL with a scheme.
+    static func required(_ callback: WebAuthCallback?) throws -> WebAuthCallback {
+      guard let callback else {
+        throw AuthError.oauthFlowFailed(
+          """
+          Provide a redirect URL with a scheme, either through the `redirectTo` parameter \
+          or globally through `AuthClient.Configuration.redirectTo`.
+          """
+        )
+      }
+      return callback
+    }
   }
 
   /// The part of `ASWebAuthenticationSession` that the presenter uses. A fake stands in for it
@@ -274,6 +276,17 @@
         isActive = true
         return Lease(owner: self)
       }
+    }
+
+    /// Returns the lease, or throws an error of kind ``AuthError/Kind-swift.struct/oauthFlowFailed``
+    /// when a page is already open.
+    func beginOrThrow() throws -> Lease {
+      guard let lease = begin() else {
+        throw AuthError.oauthFlowFailed(
+          "Another sign-in page is already open. Wait for it to close, then try again."
+        )
+      }
+      return lease
     }
 
     /// The right to the slot. Releasing twice is safe, so a late call cannot free the slot of a
