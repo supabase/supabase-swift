@@ -257,7 +257,7 @@ struct ResumableStore: Sendable {
   }
 
   /// Deletes the record file and the sandbox copy, if any, for `fingerprint`.
-  private func removeFiles(fingerprint: Fingerprint) {
+  func removeFiles(fingerprint: Fingerprint) {
     try? FileManager.default.removeItem(at: recordURL(fingerprint: fingerprint))
     try? FileManager.default.removeItem(at: sandboxCopyURL(fingerprint: fingerprint))
   }
