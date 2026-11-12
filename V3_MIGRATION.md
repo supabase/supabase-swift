@@ -100,7 +100,8 @@ Changes that still compile but behave differently. Check each one by hand.
 | `ObservationToken` | removed; cancel the task that reads the stream |
 | `headers: [String: String]` on `PostgrestClient.Configuration`, `RealtimeClientOptions`, `GlobalOptions`, and `SupabaseClient` | `headers: HTTPFields`; write each key as an `HTTPField.Name`, for example `[.apikey: key]` or `[HTTPField.Name("x-app")!: "demo"]` |
 | `HTTPField.Name("apikey")!` | `.apikey` |
-| Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `PostgrestError.code: String?`; Storage `StorageError.statusCode: String?`, `StorageError.error` | `code: <Module>Error.Code?` on every module error; Storage's body status is `serverError?.statusCode` |
+| Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `PostgrestError.code: String?` | `code: <Module>Error.Code?` on every module error |
+| Storage `StorageError.statusCode: String?`, `StorageError.error` | `serverError?.statusCode: Int?`, `serverError?.error`; `code` holds only the body's `code` key |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
