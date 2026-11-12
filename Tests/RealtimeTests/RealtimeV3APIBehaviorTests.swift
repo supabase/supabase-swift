@@ -538,4 +538,218 @@ import Testing
     }
   }
 
+  @Suite
+  struct RealtimePostgresChangesV3APITests {
+    struct Message: Decodable, Equatable {
+      var id: Int
+      var body: String
+    }
+
+    let fixture = RealtimeV3Fixture()
+
+    private func changeMessage(
+      ids: [Int] = [1],
+      type: String,
+      record: JSONObject? = nil,
+      oldRecord: JSONObject? = nil,
+      errors: AnyJSON = .null
+    ) -> RealtimeMessageV2 {
+      var data: JSONObject = [
+        "type": .string(type),
+        "schema": "public",
+        "table": "messages",
+        "commit_timestamp": "2026-11-12T10:00:00Z",
+        "columns": [["name": "id", "type": "int8"], ["name": "body", "type": "text"]],
+        "errors": errors,
+      ]
+      if let record { data["record"] = .object(record) }
+      if let oldRecord { data["old_record"] = .object(oldRecord) }
+      return RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "realtime:test", event: "postgres_changes",
+        payload: ["ids": .array(ids.map { .integer($0) }), "data": .object(data)])
+    }
+
+    private func serverBinding(
+      _ event: PostgresChangeEvent, id: Int = 1
+    ) -> PostgresJoinConfig {
+      PostgresJoinConfig(event: event, schema: "public", table: "messages", id: id)
+    }
+
+    @Test
+    func postgresChangesYieldsTheChangeTheServerSent() async throws {
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.postgresChanges(table: "messages").makeAsyncIterator()
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      await channel.onMessage(
+        changeMessage(
+          type: "UPDATE", record: ["id": 1, "body": "new"], oldRecord: ["id": 1],
+          errors: ["Error 401: Unauthorized"]))
+
+      let change = try #require(await changes.next())
+      #expect(change.kind == .update)
+      #expect(change.schema == "public")
+      #expect(change.table == "messages")
+      #expect(change.commitTimestamp == Date(timeIntervalSince1970: 1_794_477_600))
+      #expect(
+        change.columns == [
+          PostgresColumn(name: "id", type: "int8"), PostgresColumn(name: "body", type: "text"),
+        ])
+      #expect(change.record == PostgresRow(values: ["id": 1, "body": "new"]))
+      #expect(change.oldRecord == PostgresRow(values: ["id": 1]))
+      #expect(change.errors == ["Error 401: Unauthorized"])
+    }
+
+    @Test
+    func postgresChangesLeavesOutTheRowsTheServerDidNotSend() async throws {
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.postgresChanges(table: "messages").makeAsyncIterator()
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      await channel.onMessage(changeMessage(type: "INSERT", record: ["id": 1, "body": "a"]))
+      await channel.onMessage(changeMessage(type: "DELETE", oldRecord: ["id": 1]))
+
+      let insert = try #require(await changes.next())
+      #expect(insert.kind == .insert)
+      #expect(insert.oldRecord == nil)
+      #expect(insert.errors.isEmpty)
+      let delete = try #require(await changes.next())
+      #expect(delete.kind == .delete)
+      #expect(delete.record == nil)
+    }
+
+    @Test
+    func postgresChangesAddsItsBindingToTheJoin() async {
+      let channel = fixture.sut.channel("test")
+
+      _ = await channel.postgresChanges(
+        event: .update, schema: "app", table: "orders", filter: .eq("id", value: 5),
+        select: ["id"])
+      _ = await channel.postgresChanges()
+
+      let bindings = channel.clientChanges.value
+      #expect(bindings.count == 2)
+      #expect(bindings[0].event == .update)
+      #expect(bindings[0].schema == "app")
+      #expect(bindings[0].table == "orders")
+      #expect(bindings[0].filter == "id=eq.5")
+      #expect(bindings[0].select == ["id"])
+      #expect(bindings[1].event == .all)
+      #expect(bindings[1].schema == "public")
+      #expect(bindings[1].table == nil)
+    }
+
+    @Test
+    func postgresChangesForOneEventSkipsOtherKinds() async throws {
+      let channel = fixture.sut.channel("test")
+      var inserts = await channel.postgresChanges(event: .insert, table: "messages")
+        .makeAsyncIterator()
+      _ = await channel.postgresChanges(table: "messages")
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      await channel.onMessage(changeMessage(type: "UPDATE", record: ["id": 1, "body": "b"]))
+      await channel.onMessage(changeMessage(type: "INSERT", record: ["id": 2, "body": "c"]))
+
+      let change = try #require(await inserts.next())
+      #expect(change.kind == .insert)
+      #expect(change.record?["id"] == 2)
+    }
+
+    @Test
+    func typedPostgresChangesDecodesTheRowOnDemand() async throws {
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.postgresChanges(of: Message.self, table: "messages")
+        .makeAsyncIterator()
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      await channel.onMessage(changeMessage(type: "INSERT", record: ["id": 1, "body": "a"]))
+      await channel.onMessage(changeMessage(type: "INSERT", record: ["id": "bad"]))
+      await channel.onMessage(changeMessage(type: "DELETE", oldRecord: ["id": 1]))
+
+      let insert = try #require(await changes.next())
+      #expect(insert.kind == .insert)
+      #expect(insert.raw.table == "messages")
+      #expect(try insert.row() == Message(id: 1, body: "a"))
+
+      let undecodable = try #require(await changes.next())
+      #expect(throws: RealtimeError.self) { try undecodable.row() }
+
+      let delete = try #require(await changes.next())
+      #expect(delete.kind == .delete)
+      #expect(delete.oldRecord == PostgresRow(values: ["id": 1]))
+      do {
+        _ = try delete.row()
+        Issue.record("expected row() to throw for a delete")
+      } catch let error as RealtimeError {
+        #expect(error.kind == .decoding)
+      }
+    }
+
+    @Test
+    func typedPostgresChangesUsesTheGivenDecoder() async throws {
+      struct Row: Decodable, Equatable {
+        var messageBody: String
+      }
+      let decoder = JSONDecoder()
+      decoder.keyDecodingStrategy = .convertFromSnakeCase
+      let channel = fixture.sut.channel("test")
+      var changes = await channel.postgresChanges(
+        of: Row.self, table: "messages", decoder: decoder
+      ).makeAsyncIterator()
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      await channel.onMessage(changeMessage(type: "INSERT", record: ["message_body": "a"]))
+
+      #expect(try await changes.next()?.row() == Row(messageBody: "a"))
+    }
+
+    @Test
+    func postgresChangesOpenedAfterSubscribeEndsAtOnce() async throws {
+      let channel = try await fixture.subscribedChannel()
+
+      var changes = await channel.postgresChanges(table: "messages").makeAsyncIterator()
+
+      #expect(await changes.next() == nil)
+      #expect(channel.clientChanges.value.isEmpty)
+    }
+
+    @Test
+    func v2PostgresChangeStreamsKeepTheirElements() async throws {
+      let channel = fixture.sut.channel("test")
+      var inserts = channel.postgresChange(InsertAction.self, table: "messages")
+        .makeAsyncIterator()
+      var actions = channel.postgresChange(AnyAction.self, table: "messages").makeAsyncIterator()
+      var changes = await channel.postgresChanges(table: "messages").makeAsyncIterator()
+      let received = LockIsolated<[DeleteAction]>([])
+      let subscription = channel.onPostgresChange(DeleteAction.self, table: "messages") {
+        action in received.withValue { $0.append(action) }
+      }
+      defer { subscription.cancel() }
+      channel.callbackManager.setServerChanges(changes: [serverBinding(.all)])
+
+      let insertMessage = changeMessage(type: "INSERT", record: ["id": 1, "body": "a"])
+      await channel.onMessage(insertMessage)
+      await channel.onMessage(changeMessage(type: "DELETE", oldRecord: ["id": 1]))
+
+      let insert = try #require(await inserts.next())
+      #expect(insert.record == ["id": 1, "body": "a"])
+      #expect(insert.columns.map(\.name) == ["id", "body"])
+      #expect(insert.rawMessage == insertMessage)
+      #expect(try insert.decodeRecord(as: Message.self, decoder: JSONDecoder()).body == "a")
+
+      guard case .insert(let wrapped)? = await actions.next() else {
+        Issue.record("expected an insert action")
+        return
+      }
+      #expect(wrapped == insert)
+      guard case .delete(let delete)? = await actions.next() else {
+        Issue.record("expected a delete action")
+        return
+      }
+      #expect(delete.oldRecord == ["id": 1])
+      #expect(received.value == [delete])
+      #expect(await changes.next()?.kind == .insert)
+    }
+  }
+
 #endif

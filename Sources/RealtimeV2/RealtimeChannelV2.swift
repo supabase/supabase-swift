@@ -126,6 +126,8 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``untrack()``
 /// - ``onPresenceChange(_:)``
 /// ### Postgres Changes
+/// - ``postgresChanges(event:schema:table:filter:select:)``
+/// - ``postgresChanges(of:event:schema:table:filter:select:decoder:)``
 /// - ``onPostgresChange(_:schema:table:filter:callback:)-8kn76``
 /// - ``onPostgresChange(_:schema:table:filter:callback:)-1j0l6``
 /// - ``onPostgresChange(_:schema:table:filter:callback:)-9c5h2``
@@ -808,44 +810,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
         let postgresActions = try data.decode(as: PostgresActionData.self)
 
-        let action: AnyAction
-        switch postgresActions.type {
-        case "UPDATE":
-          action = .update(
-            UpdateAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              record: postgresActions.record ?? [:],
-              oldRecord: postgresActions.oldRecord ?? [:],
-              rawMessage: message
-            )
-          )
-
-        case "DELETE":
-          action = .delete(
-            DeleteAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              oldRecord: postgresActions.oldRecord ?? [:],
-              rawMessage: message
-            )
-          )
-
-        case "INSERT":
-          action = .insert(
-            InsertAction(
-              columns: postgresActions.columns,
-              commitTimestamp: postgresActions.commitTimestamp,
-              record: postgresActions.record ?? [:],
-              rawMessage: message
-            )
-          )
-
-        default:
+        guard ["INSERT", "UPDATE", "DELETE"].contains(postgresActions.type) else {
           throw RealtimeError.decoding("Unknown event type: \(postgresActions.type)")
         }
 
-        callbackManager.triggerPostgresChanges(ids: ids, data: action)
+        callbackManager.triggerPostgresChanges(
+          ids: ids,
+          delivery: PostgresChangeDelivery(data: postgresActions, rawMessage: message)
+        )
 
       case .broadcast:
         let payload = message.payload
@@ -991,6 +963,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
   ///   - callback: A `@Sendable` closure receiving an ``AnyAction`` for each change.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func onPostgresChange(
     _: AnyAction.Type,
     schema: String = "public",
@@ -1011,6 +987,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   @_disfavoredOverload
   public func onPostgresChange(
     _: AnyAction.Type,
@@ -1051,6 +1031,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
   ///   - callback: A `@Sendable` closure receiving an ``InsertAction`` for each insert.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func onPostgresChange(
     _: InsertAction.Type,
     schema: String = "public",
@@ -1072,6 +1056,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   @_disfavoredOverload
   public func onPostgresChange(
     _: InsertAction.Type,
@@ -1113,6 +1101,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
   ///   - callback: A `@Sendable` closure receiving an ``UpdateAction`` for each update.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func onPostgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
@@ -1134,6 +1126,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   @_disfavoredOverload
   public func onPostgresChange(
     _: UpdateAction.Type,
@@ -1175,6 +1171,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - select: Restricts the change payload to a subset of columns. Requires an explicit `schema` and `table`.
   ///   - callback: A `@Sendable` closure receiving a ``DeleteAction`` for each deletion.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func onPostgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
@@ -1196,6 +1196,10 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   }
 
   /// Listen for postgres changes in a channel.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   @_disfavoredOverload
   public func onPostgresChange(
     _: DeleteAction.Type,
@@ -1217,6 +1221,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     }
   }
 
+  @available(*, deprecated, message: "Use observePostgresChanges(_:handler:) instead.")
   func _onPostgresChange(
     event: PostgresChangeEvent,
     schema: String,
@@ -1225,6 +1230,25 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     select: [String]? = nil,
     callback: @escaping @Sendable (AnyAction) -> Void
   ) -> RealtimeSubscription {
+    let binding = PostgresJoinConfig(
+      event: event,
+      schema: schema,
+      table: table,
+      filter: filter,
+      select: select
+    )
+    return observePostgresChanges(binding) { delivery in
+      guard let action = AnyAction(delivery) else { return }
+      callback(action)
+    } ?? RealtimeSubscription {}
+  }
+
+  /// Adds `binding` to the next join and calls `handler` for each change the server sends for
+  /// it. Returns `nil`, and reports an issue, when the channel has already started to join.
+  func observePostgresChanges(
+    _ binding: PostgresJoinConfig,
+    handler: @escaping @Sendable (PostgresChangeDelivery) -> Void
+  ) -> ObservationToken? {
     guard status != .subscribed && status != .subscribing else {
       // See the comment on `broadcast(event:message:)` for why this is gated on `isTesting`.
       if !isTesting {
@@ -1235,25 +1259,17 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
           """
         )
       }
-      return RealtimeSubscription {}
+      return nil
     }
-
-    let config = PostgresJoinConfig(
-      event: event,
-      schema: schema,
-      table: table,
-      filter: filter,
-      select: select
-    )
 
     // Synchronous append — the buffer lives on the channel, not the actor,
     // so this write cannot be reordered against a subsequent `subscribe()`
     // call (previously a fire-and-forget `Task` could lose this race,
     // causing `phx_join` to be sent with an empty `postgres_changes` set).
-    clientChanges.withValue { $0.append(config) }
+    clientChanges.withValue { $0.append(binding) }
 
-    let id = callbackManager.addPostgresCallback(filter: config, callback: callback)
-    return RealtimeSubscription { [weak callbackManager, logger] in
+    let id = callbackManager.addPostgresChangeCallback(filter: binding, callback: handler)
+    return ObservationToken { [weak callbackManager, logger] in
       logger?.debug("Removing postgres callback with id: \(id)")
       callbackManager?.removeCallback(id: id)
     }

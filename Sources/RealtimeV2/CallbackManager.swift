@@ -42,10 +42,22 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use addPostgresChangeCallback(filter:callback:) instead.")
   @discardableResult
   func addPostgresCallback(
     filter: PostgresJoinConfig,
     callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> Int {
+    addPostgresChangeCallback(filter: filter) { delivery in
+      guard let action = AnyAction(delivery) else { return }
+      callback(action)
+    }
+  }
+
+  @discardableResult
+  func addPostgresChangeCallback(
+    filter: PostgresJoinConfig,
+    callback: @escaping @Sendable (PostgresChangeDelivery) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
@@ -92,7 +104,12 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use triggerPostgresChanges(ids:delivery:) instead.")
   func triggerPostgresChanges(ids: [Int], data: AnyAction) {
+    triggerPostgresChanges(ids: ids, delivery: data.delivery)
+  }
+
+  func triggerPostgresChanges(ids: [Int], delivery: PostgresChangeDelivery) {
     // Read mutableState at start to acquire lock once.
     let mutableState = mutableState.value
 
@@ -113,7 +130,7 @@ final class CallbackManager: Sendable {
     }
 
     for item in callbacks {
-      item.callback(data)
+      item.callback(delivery)
     }
   }
 
@@ -262,7 +279,7 @@ final class CallbackManager: Sendable {
 struct PostgresCallback {
   var id: Int
   var filter: PostgresJoinConfig
-  var callback: @Sendable (AnyAction) -> Void
+  var callback: @Sendable (PostgresChangeDelivery) -> Void
 }
 
 struct BroadcastCallback {

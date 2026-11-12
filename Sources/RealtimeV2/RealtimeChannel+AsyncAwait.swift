@@ -39,6 +39,10 @@ extension RealtimeChannelV2 {
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
   /// - Returns: An `AsyncStream<InsertAction>`.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func postgresChange(
     _: InsertAction.Type,
     schema: String = "public",
@@ -82,6 +86,10 @@ extension RealtimeChannelV2 {
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
   /// - Returns: An `AsyncStream<UpdateAction>`.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func postgresChange(
     _: UpdateAction.Type,
     schema: String = "public",
@@ -125,6 +133,10 @@ extension RealtimeChannelV2 {
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
   /// - Returns: An `AsyncStream<DeleteAction>`.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func postgresChange(
     _: DeleteAction.Type,
     schema: String = "public",
@@ -168,6 +180,10 @@ extension RealtimeChannelV2 {
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
   /// - Returns: An `AsyncStream<AnyAction>`.
+  @available(
+    *, deprecated,
+    message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   public func postgresChange(
     _: AnyAction.Type,
     schema: String = "public",
@@ -199,6 +215,9 @@ extension RealtimeChannelV2 {
     postgresChange(event: .all, schema: schema, table: table, filter: filter, select: select)
   }
 
+  @available(
+    *, deprecated, message: "Use postgresChanges(event:schema:table:filter:select:) instead."
+  )
   private func postgresChange(
     event: PostgresChangeEvent,
     schema: String,
@@ -220,6 +239,108 @@ extension RealtimeChannelV2 {
       subscription.cancel()
     }
     return stream
+  }
+
+  /// Returns an async stream of the row changes in a table.
+  ///
+  /// The stream shapes the join request. Open it before you call ``subscribeWithError()``.
+  ///
+  /// ```swift
+  /// let changes = await channel.postgresChanges(table: "messages")
+  /// try await channel.subscribeWithError()
+  /// for await change in changes {
+  ///   if change.kind == .delete {
+  ///     print("Deleted", change.oldRecord?["id"] ?? .null)
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name, or `nil` to match all tables.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
+  ///     `schema` and `table`.
+  /// - Returns: An `AsyncStream` of ``PostgresChange`` values.
+  ///
+  /// > Note: v3 makes a joined channel leave and join again when you open a stream on it. On
+  /// > this version a stream opened after the channel started to subscribe reports an issue and
+  /// > ends at once.
+  public func postgresChanges(
+    event: PostgresChangeEvent = .all,
+    schema: String = "public",
+    table: String? = nil,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil
+  ) async -> AsyncStream<PostgresChange> {
+    let (stream, continuation) = AsyncStream<PostgresChange>.makeStream()
+    let binding = PostgresJoinConfig(
+      event: event, schema: schema, table: table, filter: filter?.value, select: select
+    )
+
+    let subscription = observePostgresChanges(binding) { [logger] delivery in
+      // The server tags a change with every binding it matches, and `*` matches a binding of one
+      // event, so a stream for one event can be handed the other statements.
+      guard event == .all || event.rawValue == delivery.data.type else { return }
+      guard let change = PostgresChange(delivery.data) else {
+        logger?.debug("Postgres change without a schema or table: \(delivery.rawMessage)")
+        return
+      }
+      continuation.yield(change)
+    }
+
+    guard let subscription else {
+      continuation.finish()
+      return stream
+    }
+
+    continuation.onTermination = { _ in
+      subscription.cancel()
+    }
+    return stream
+  }
+
+  /// Returns an async stream of the row changes in a table, bound to a row type.
+  ///
+  /// The stream does not decode the rows. Call ``TypedPostgresChange/row()`` on each change to
+  /// decode its record as `Row`. A row that does not decode never drops the change or ends the
+  /// stream; `row()` throws instead.
+  ///
+  /// The stream shapes the join request. Open it before you call ``subscribeWithError()``.
+  ///
+  /// ```swift
+  /// let changes = await channel.postgresChanges(of: Message.self, table: "messages")
+  /// try await channel.subscribeWithError()
+  /// for await change in changes where change.kind == .insert {
+  ///   let message = try change.row()
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - type: The type to decode each record as.
+  ///   - event: The change events to receive. Defaults to ``PostgresChangeEvent/all``.
+  ///   - schema: The database schema. Defaults to `"public"`.
+  ///   - table: The table name.
+  ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
+  ///   - select: Restricts the change payload to a subset of columns.
+  ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses `AnyJSON.decoder`.
+  /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
+  public func postgresChanges<Row: Decodable>(
+    of _: Row.Type,
+    event: PostgresChangeEvent = .all,
+    schema: String = "public",
+    table: String,
+    filter: RealtimePostgresFilter? = nil,
+    select: [String]? = nil,
+    decoder: JSONDecoder? = nil
+  ) async -> AsyncStream<TypedPostgresChange<Row>> {
+    let changes = await postgresChanges(
+      event: event, schema: schema, table: table, filter: filter, select: select
+    )
+    return AsyncStream(
+      TypedPostgresChanges<Row>(
+        base: changes, decoder: UncheckedSendable(decoder ?? AnyJSON.decoder)))
   }
 
   /// Returns an async stream of the broadcast messages for the given event.
@@ -320,8 +441,34 @@ extension RealtimeChannelV2 {
 }
 
 // Helper to work around type ambiguity in macOS 13
+@available(*, deprecated, message: "Use PostgresChange instead.")
 extension AsyncStream<AnyAction> {
   fileprivate func compactErase<T: Sendable>() -> AsyncStream<T> {
     AsyncStream<T>(compactMap { $0.wrappedAction as? T } as AsyncCompactMapSequence<Self, T>)
+  }
+}
+
+/// Wraps each change of `base` as a ``TypedPostgresChange``.
+///
+/// A sequence type instead of `map`: the `map` transform would capture `Row.Type`, which is not
+/// `Sendable` for every `Row`.
+private struct TypedPostgresChanges<Row>: AsyncSequence, Sendable {
+  typealias Element = TypedPostgresChange<Row>
+
+  let base: AsyncStream<PostgresChange>
+  let decoder: UncheckedSendable<JSONDecoder>
+
+  struct AsyncIterator: AsyncIteratorProtocol {
+    var base: AsyncStream<PostgresChange>.Iterator
+    let decoder: UncheckedSendable<JSONDecoder>
+
+    mutating func next() async -> TypedPostgresChange<Row>? {
+      guard let change = await base.next() else { return nil }
+      return TypedPostgresChange(raw: change, decoder: decoder)
+    }
+  }
+
+  func makeAsyncIterator() -> AsyncIterator {
+    AsyncIterator(base: base.makeAsyncIterator(), decoder: decoder)
   }
 }

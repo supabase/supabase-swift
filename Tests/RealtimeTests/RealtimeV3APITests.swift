@@ -351,3 +351,77 @@ struct BroadcastMessageV3APITests {
     }
   }
 }
+
+@Suite
+struct PostgresChangeV3APITests {
+  struct Message: Decodable, Equatable {
+    var id: Int
+    var body: String
+  }
+
+  @Test
+  func initStoresEveryField() {
+    let date = Date(timeIntervalSince1970: 1_700_000_000)
+    let change = PostgresChange(
+      kind: .update,
+      schema: "public",
+      table: "messages",
+      commitTimestamp: date,
+      columns: [PostgresColumn(name: "id", type: "int8")],
+      record: PostgresRow(values: ["id": 1]),
+      oldRecord: PostgresRow(values: ["id": 0]),
+      errors: ["Error 401: Unauthorized"]
+    )
+
+    #expect(change.kind == .update)
+    #expect(change.schema == "public")
+    #expect(change.table == "messages")
+    #expect(change.commitTimestamp == date)
+    #expect(change.columns == [PostgresColumn(name: "id", type: "int8")])
+    #expect(change.record?["id"] == 1)
+    #expect(change.oldRecord?["id"] == 0)
+    #expect(change.errors == ["Error 401: Unauthorized"])
+  }
+
+  @Test
+  func initDefaultsToNoRowsAndNoErrors() {
+    let change = PostgresChange(
+      kind: .delete, schema: "public", table: "messages", commitTimestamp: Date(), columns: [])
+
+    #expect(change.record == nil)
+    #expect(change.oldRecord == nil)
+    #expect(change.errors.isEmpty)
+  }
+
+  @Test
+  func kindIsAnOpenStringValue() {
+    #expect(PostgresChange.Kind.insert.rawValue == "INSERT")
+    #expect(PostgresChange.Kind.update.rawValue == "UPDATE")
+    #expect(PostgresChange.Kind.delete.rawValue == "DELETE")
+    #expect(PostgresChange.Kind(rawValue: "TRUNCATE") == "TRUNCATE")
+  }
+
+  @Test
+  func rowReadsAndDecodesItsValues() throws {
+    let row = PostgresRow(values: ["id": 1, "body": "hello"])
+
+    #expect(row["body"] == "hello")
+    #expect(row["missing"] == nil)
+    #expect(try row.decode(as: Message.self) == Message(id: 1, body: "hello"))
+  }
+
+  @Test
+  func rowDecodeThrowsADecodingRealtimeError() {
+    let row = PostgresRow(values: ["id": "not a number"])
+
+    do {
+      _ = try row.decode(as: Message.self)
+      Issue.record("expected decode to throw")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.underlyingError is DecodingError)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+  }
+}
