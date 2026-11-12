@@ -172,9 +172,9 @@ public struct AuthMFA: Sendable {
       let session = try await sessionManager.session()
       let payload = JWT.decodePayload(session.accessToken)
 
-      var currentLevel: AuthenticatorAssuranceLevels?
+      var currentLevel: String?
 
-      if let aal = payload?["aal"] as? AuthenticatorAssuranceLevels {
+      if let aal = payload?["aal"] as? String {
         currentLevel = aal
       }
 

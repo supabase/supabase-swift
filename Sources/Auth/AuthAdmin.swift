@@ -198,7 +198,7 @@ public struct AuthAdmin: Sendable {
 
     var pagination = ListUsersPaginatedResponse(
       users: response.users,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
       total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
     )

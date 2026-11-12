@@ -49,25 +49,25 @@ extension AuthClient {
   /// - ``defaultHeaders``
   public struct Configuration: Sendable {
     /// The URL of the Auth server.
-    public let url: URL
+    public var url: URL
 
     /// Any additional headers to send to the Auth server.
     public var headers: [String: String]
 
     /// The OAuth / sign-in flow type to use (``AuthFlowType/implicit`` or ``AuthFlowType/pkce``).
-    public let flowType: AuthFlowType
+    public var flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
-    public let redirectToURL: URL?
+    public var redirectToURL: URL?
 
     /// Optional key name used for storing tokens in local storage.
     public var storageKey: String?
 
     /// Provider your own local storage implementation to use instead of the default one.
-    public let localStorage: any AuthLocalStorage
+    public var localStorage: any AuthLocalStorage
 
     /// Custom SupabaseLogger implementation used to inspecting log messages from the Auth library.
-    public let logger: (any SupabaseLogger)?
+    public var logger: (any SupabaseLogger)?
 
     /// The JSON encoder used to serialize request bodies sent to the Auth server.
     let resolvedEncoder: JSONEncoder
@@ -94,10 +94,10 @@ extension AuthClient {
     public var decoder: JSONDecoder { resolvedDecoder }
 
     /// A custom fetch implementation.
-    public let fetch: FetchHandler
+    public var fetch: FetchHandler
 
     /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let autoRefreshToken: Bool
+    public var autoRefreshToken: Bool
 
     /// When `true`, emits the locally stored session immediately as the initial session,
     /// regardless of its validity or expiration. When `false`, emits the initial session
@@ -107,7 +107,7 @@ extension AuthClient {
     ///
     /// - Note: If you rely on the initial session to opt users in, you need to add an additional
     ///   check for `session.isExpired` when this is set to `true`.
-    public let emitLocalSessionAsInitialSession: Bool
+    public var emitLocalSessionAsInitialSession: Bool
 
     /// Initializes a AuthClient Configuration with optional parameters.
     ///
