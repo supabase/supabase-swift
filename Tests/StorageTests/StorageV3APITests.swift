@@ -1264,6 +1264,12 @@ struct StorageV3ObjectTests {
     #expect(recorder.lastJSON?["destinationKey"] == "folder/b.png")
     #expect(recorder.lastJSON?["sourceKey"] == "a.png")
 
+    _ = try await bucket.copy(from: "//x//a.png", to: "b.png", options: CopyOptions())
+    #expect(recorder.lastJSON?["sourceKey"] == "x/a.png")
+    await #expect(throws: StorageError.self) {
+      _ = try await bucket.copy(from: "../a.png", to: "b.png", options: CopyOptions())
+    }
+
     let sent = recorder.requests.value.count
     for destination in ["", "//", "folder/../b.png", "./b.png"] {
       do {
@@ -1282,8 +1288,144 @@ struct StorageV3ObjectTests {
     let recorder = RequestRecorder()
     let bucket = recorder.client(response: #"{"Key":"avatars/b.png"}"#).from("avatars")
 
-    _ = try await bucket.copy(from: "a.png", to: "/folder//b.png")
+    _ = try await bucket.copy(from: "//a.png", to: "/folder//b.png")
     #expect(recorder.lastJSON?["destinationKey"] == "/folder//b.png")
+    #expect(recorder.lastJSON?["sourceKey"] == "//a.png")
+
+    try await bucket.move(from: "//a.png", to: "../b.png", options: nil)
+    #expect(recorder.lastJSON?["sourceKey"] == "//a.png")
+    #expect(recorder.lastJSON?["destinationKey"] == "../b.png")
+
+    let signing = recorder.client(
+      response: #"{"url":"/object/upload/sign/avatars/a.png?token=tok"}"#
+    ).from("avatars")
+    _ = try await signing.createSignedUploadURL(path: "x/../a.png", options: nil)
+    #expect(recorder.lastURL?.contains("avatars/x/../a.png") == true)
+  }
+
+  private func expectInvalidRequest(_ body: () async throws -> Void) async {
+    do {
+      try await body()
+      Issue.record("Expected a StorageError")
+    } catch let error as StorageError {
+      #expect(error.kind == .invalidRequest)
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+  }
+
+  @Test
+  func moveCleansBothPaths() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client().from("avatars")
+
+    try await bucket.move(from: "/x//a.png", to: "y/b.png/")
+    #expect(recorder.lastJSON?["sourceKey"] == "x/a.png")
+    #expect(recorder.lastJSON?["destinationKey"] == "y/b.png")
+
+    await expectInvalidRequest { try await bucket.move(from: "", to: "b.png") }
+    await expectInvalidRequest { try await bucket.move(from: "a.png", to: "x/../b.png") }
+    #expect(recorder.requests.value.count == 1)
+  }
+
+  @Test
+  func uploadAndUpdateCleanThePath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/x/a.png","Id":"\#(objectID)"}"#)
+      .from("avatars")
+
+    let uploaded = try await bucket.upload(path: "/x//a.png", data: Data("a".utf8))
+    #expect(uploaded.path == "x/a.png")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/avatars/x/a.png")
+    let updated = try await bucket.update(path: "x/a.png/", data: Data("a".utf8))
+    #expect(updated.path == "x/a.png")
+
+    await expectInvalidRequest { _ = try await bucket.upload(path: "./a.png", data: Data()) }
+    await expectInvalidRequest { _ = try await bucket.update(path: "/", data: Data()) }
+    #expect(recorder.requests.value.count == 2)
+  }
+
+  @Test
+  func uploadToSignedURLCleansThePath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/x/a.png"}"#).from("avatars")
+
+    let uploaded = try await bucket.uploadToSignedURL(
+      path: "/x//a.png", token: "tok", data: Data("a".utf8))
+    #expect(uploaded.path == "x/a.png")
+    #expect(recorder.lastURL?.contains("/object/upload/sign/avatars/x/a.png?") == true)
+
+    await expectInvalidRequest {
+      _ = try await bucket.uploadToSignedURL(path: "../a.png", token: "tok", data: Data())
+    }
+    #expect(recorder.requests.value.count == 1)
+  }
+
+  @Test
+  func signedURLsCleanThePath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"signedURL":"/object/sign/avatars/x/a.png?token=t"}"#)
+      .from("avatars")
+
+    _ = try await bucket.createSignedURL(path: "/x//a.png", expiresIn: .seconds(60))
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/sign/avatars/x/a.png")
+    await expectInvalidRequest {
+      _ = try await bucket.createSignedURL(path: "x/./a.png", expiresIn: .seconds(60))
+    }
+
+    let many = recorder.client(response: "[]").from("avatars")
+    _ = try await many.createSignedURLs(paths: ["/x//a.png", "b.png/"], expiresIn: .seconds(60))
+    #expect(recorder.lastJSON?["paths"] == ["x/a.png", "b.png"])
+    await expectInvalidRequest {
+      _ = try await many.createSignedURLs(paths: ["a.png", ""], expiresIn: .seconds(60))
+    }
+    #expect(recorder.requests.value.count == 2)
+  }
+
+  @Test
+  func signedUploadURLCleansThePath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(
+      response: #"{"url":"/object/upload/sign/avatars/x/a.png?token=tok"}"#
+    ).from("avatars")
+
+    let signed = try await bucket.createSignedUploadURL(path: "/x//a.png", upsert: true)
+    #expect(signed.path == "x/a.png")
+    #expect(
+      recorder.lastURL == "http://localhost:54321/storage/v1/object/upload/sign/avatars/x/a.png")
+    await expectInvalidRequest {
+      _ = try await bucket.createSignedUploadURL(path: "x/../a.png", upsert: false)
+    }
+    #expect(recorder.requests.value.count == 1)
+  }
+
+  @Test
+  func infoListAndPublicURLCleanThePath() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: infoResponse).from("avatars")
+
+    _ = try await bucket.info(path: "/x//a.png", versionID: "v1")
+    #expect(
+      recorder.lastURL
+        == "http://localhost:54321/storage/v1/object/info/avatars/x/a.png?versionId=v1")
+    await expectInvalidRequest { _ = try await bucket.info(path: "", versionID: "v1") }
+
+    let listing = recorder.client(response: "[]").from("avatars")
+    _ = try await listing.list(path: "/users//2024/", options: ListOptions())
+    #expect(recorder.lastJSON?["prefix"] == "users/2024")
+    _ = try await listing.list(path: "/", options: ListOptions())
+    #expect(recorder.lastJSON?["prefix"] == "")
+    await expectInvalidRequest {
+      _ = try await listing.list(path: "users/..", options: ListOptions())
+    }
+    #expect(recorder.requests.value.count == 3)
+
+    #expect(
+      bucket.publicURL(path: "/x//a.png").absoluteString
+        == "http://localhost:54321/storage/v1/object/public/avatars/x/a.png")
+    #expect(
+      bucket.publicURL(path: "x/../a.png").absoluteString
+        == "http://localhost:54321/storage/v1/object/public/avatars/x/../a.png")
   }
 
   /// The v2 spellings keep their overloads, results and requests.

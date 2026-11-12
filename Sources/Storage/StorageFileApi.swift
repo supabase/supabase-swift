@@ -308,7 +308,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: UploadOptions
   ) async throws -> UploadedObject {
     let result = try await _uploadOrUpdate(
-      method: method, path: path, file: file, options: UploadParameters(options))
+      method: method, path: _cleanObjectPath(path), file: file,
+      options: UploadParameters(options))
     return UploadedObject(
       id: UUID(uuidString: result.id), path: result.path, fullPath: result.fullPath)
   }
@@ -481,6 +482,17 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     toBucket: String? = nil,
     sourceVersionID: String? = nil
   ) async throws {
+    try await _move(
+      from: _cleanObjectPath(source), to: _cleanObjectPath(destination), toBucket: toBucket,
+      sourceVersionID: sourceVersionID)
+  }
+
+  private func _move(
+    from source: String,
+    to destination: String,
+    toBucket: String?,
+    sourceVersionID: String?
+  ) async throws {
     var body: [String: String?] = [
       "bucketId": bucketId,
       "sourceKey": source,
@@ -515,7 +527,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws {
-    try await move(from: source, to: destination, toBucket: options?.destinationBucket)
+    try await _move(
+      from: source, to: destination, toBucket: options?.destinationBucket, sourceVersionID: nil)
   }
 
   /// Copies an existing file to a new path, optionally within a different bucket.
@@ -532,8 +545,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
-  ///     Leading, trailing and repeated `/` are removed. An empty path, or a `.` or `..` segment,
-  ///     throws ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidRequest``.
+  ///     In both paths, leading, trailing and repeated `/` are removed. An empty path, or a `.`
+  ///     or `..` segment, throws ``StorageError`` with kind
+  ///     ``StorageError/Kind-swift.struct/invalidRequest``.
   ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
   ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
   ///   - options: Whether to replace an existing destination, and the metadata of the copy.
@@ -549,6 +563,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
+    let source = try _cleanObjectPath(source)
     let destination = try _cleanObjectPath(destination)
     var body = CopyBody(
       bucketID: bucketId, sourceKey: source, destinationKey: destination,
@@ -712,7 +727,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: SignedURLOptions = SignedURLOptions()
   ) async throws -> URL {
     try await _createSignedURL(
-      path: path,
+      path: _cleanObjectPath(path),
       expiresIn: Self.seconds(expiresIn),
       transform: options.transform?.isEmpty == false ? options.transform?.body : nil,
       versionID: options.versionID,
@@ -841,7 +856,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: SignedURLsOptions = SignedURLsOptions()
   ) async throws -> [SignedURLResult] {
     try await _createSignedURLs(
-      paths: paths, expiresIn: Self.seconds(expiresIn), download: options.download?.queryValue,
+      paths: paths.map { try _cleanObjectPath($0) }, expiresIn: Self.seconds(expiresIn),
+      download: options.download?.queryValue,
       cacheNonce: options.cacheNonce)
   }
 
@@ -1072,7 +1088,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: ListOptions = ListOptions()
   ) async throws -> [StorageObject] {
     let body = ListBody(
-      prefix: path ?? "",
+      prefix: try _cleanObjectPath(path ?? "", allowsEmpty: true),
       limit: options.limit ?? 100,
       offset: options.offset ?? 0,
       sortBy: ListBody.Sort(
@@ -1163,7 +1179,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
   @_disfavoredOverload
   public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
-    try await _info(path: path, versionID: versionID)
+    try await _info(path: _cleanObjectPath(path), versionID: versionID)
   }
 
   private func _info<Info: Decodable>(path: String, versionID: String?) async throws -> Info {
@@ -1305,7 +1321,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: PublicURLOptions = PublicURLOptions()
   ) -> URL {
     let url = _publicURL(
-      path: path, download: options.download?.queryValue,
+      path: path.split(separator: "/", omittingEmptySubsequences: true).joined(separator: "/"),
+      download: options.download?.queryValue,
       transform: options.transform?.queryItems ?? [], cacheNonce: options.cacheNonce,
       versionID: options.versionID)
     return url.built ?? url.appended
@@ -1374,7 +1391,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     path: String,
     options: CreateSignedUploadURLOptions? = nil
   ) async throws -> SignedUploadURL {
-    try await createSignedUploadURL(path: path, upsert: options?.upsert ?? false)
+    try await _createSignedUploadURL(path: path, upsert: options?.upsert ?? false)
   }
 
   /// Creates a signed upload URL that allows uploading a file without further authentication.
@@ -1403,6 +1420,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     path: String,
     upsert: Bool = false
   ) async throws -> SignedUploadURL {
+    try await _createSignedUploadURL(path: _cleanObjectPath(path), upsert: upsert)
+  }
+
+  private func _createSignedUploadURL(path: String, upsert: Bool) async throws -> SignedUploadURL {
     struct Response: Decodable {
       let url: String
     }
@@ -1527,7 +1548,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: UploadOptions = UploadOptions()
   ) async throws -> UploadedObject {
     let result = try await _uploadToSignedURL(
-      path: path, token: token, file: .data(data), options: UploadParameters(options))
+      path: _cleanObjectPath(path), token: token, file: .data(data),
+      options: UploadParameters(options))
     return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
   }
 
@@ -1553,7 +1575,8 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: UploadOptions = UploadOptions()
   ) async throws -> UploadedObject {
     let result = try await _uploadToSignedURL(
-      path: path, token: token, file: .url(fileURL), options: UploadParameters(options))
+      path: _cleanObjectPath(path), token: token, file: .url(fileURL),
+      options: UploadParameters(options))
     return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
   }
 
@@ -1598,9 +1621,9 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return (path: cleanPath, fullPath: fullPath)
   }
 
-  private func _cleanObjectPath(_ path: String) throws -> String {
+  private func _cleanObjectPath(_ path: String, allowsEmpty: Bool = false) throws -> String {
     let segments = path.split(separator: "/", omittingEmptySubsequences: true)
-    guard !segments.isEmpty else {
+    guard allowsEmpty || !segments.isEmpty else {
       throw StorageError(kind: .invalidRequest, message: "An object path must not be empty.")
     }
     if let dots = segments.first(where: { $0 == "." || $0 == ".." }) {
