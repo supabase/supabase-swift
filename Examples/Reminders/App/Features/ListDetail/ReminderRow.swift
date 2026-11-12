@@ -4,6 +4,8 @@ import SwiftUI
 struct ReminderRow: View {
   let reminder: Reminder
   let tint: Color
+  /// The name of the reminder's list. Screens that mix lists pass it.
+  var listName: String?
   let onToggle: () -> Void
   let onInfo: () -> Void
 
@@ -37,6 +39,11 @@ struct ReminderRow: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .lineLimit(2)
+        }
+        if let listName {
+          Text(listName)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
         }
         if let dueAt = reminder.dueAt {
           Text(dueText(dueAt))

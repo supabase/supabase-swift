@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// The reminders of one list.
+/// The reminders of one list, or of a smart list.
 struct ListDetailView: View {
   @Environment(DataStore.self) private var store
   @Environment(\.dismiss) private var dismiss
 
-  let listID: UUID
+  let source: ReminderSource
 
   @State private var newTitle = ""
   @State private var showsCompleted = false
@@ -15,15 +15,59 @@ struct ListDetailView: View {
   @State private var error: (any Error)?
   @FocusState private var isNewReminderFocused: Bool
 
-  var body: some View {
-    let list = store.list(id: listID)
-    let tint = ListStyle.color(named: list?.color ?? ListStyle.defaultColor)
+  /// The list on screen, or `nil` for a smart list.
+  private var list: ReminderList? {
+    if case .list(let id) = source { store.list(id: id) } else { nil }
+  }
 
+  private var title: String {
+    switch source {
+    case .list: list?.name ?? ""
+    case .smart(let smartList): smartList.title
+    }
+  }
+
+  private var tint: Color {
+    switch source {
+    case .list: ListStyle.color(named: list?.color ?? ListStyle.defaultColor)
+    case .smart(let smartList): ListStyle.color(named: smartList.color)
+    }
+  }
+
+  private var reminders: [Reminder] {
+    switch source {
+    case .list(let id):
+      store.reminders(in: id, includeCompleted: showsCompleted)
+    case .smart(.completed):
+      SmartList.completed.filter(store.reminders)
+    case .smart(let smartList):
+      // A reminder that the user completes here stays visible only with Show Completed.
+      smartList.filter(store.reminders)
+        + (showsCompleted ? completedMatches(of: smartList) : [])
+    }
+  }
+
+  /// The list that gets a reminder typed on this screen. A smart list uses the first list.
+  private var targetListID: UUID? {
+    switch source {
+    case .list(let id): id
+    case .smart(.completed): nil
+    case .smart: store.lists.first?.id
+    }
+  }
+
+  /// True when the list of this screen is gone. A smart list is never gone.
+  private var isGone: Bool {
+    if case .list = source { list == nil } else { false }
+  }
+
+  var body: some View {
     List {
-      ForEach(store.reminders(in: listID, includeCompleted: showsCompleted)) { reminder in
+      ForEach(reminders) { reminder in
         ReminderRow(
           reminder: reminder,
           tint: tint,
+          listName: list == nil ? store.list(id: reminder.listID)?.name : nil,
           onToggle: { store.run { try await store.toggleCompleted(id: reminder.id) } },
           onInfo: { editedReminder = reminder }
         )
@@ -40,14 +84,16 @@ struct ListDetailView: View {
         }
       }
 
-      newReminderRow
+      if targetListID != nil {
+        newReminderRow
+      }
     }
     .listStyle(.plain)
-    .navigationTitle(list?.name ?? "")
+    .navigationTitle(title)
     .toolbar {
-      if let list {
+      if source != .smart(.completed), !isGone {
         ToolbarItem(placement: .topBarTrailing) {
-          menu(for: list)
+          menu
         }
       }
     }
@@ -63,15 +109,25 @@ struct ListDetailView: View {
       titleVisibility: .visible
     ) {
       Button("Delete List", role: .destructive) {
-        store.run { try await store.deleteList(id: listID) }
+        if let list { store.run { try await store.deleteList(id: list.id) } }
       }
       .accessibilityIdentifier("listDetail.confirmDelete")
     }
     .errorAlert($error)
     // The list can go away while this screen is open: the user deletes it, the owner
     // deletes it, or the owner removes this user from it.
-    .onChange(of: list == nil) { _, isGone in
+    .onChange(of: isGone) { _, isGone in
       if isGone { dismiss() }
+    }
+  }
+
+  private func completedMatches(of smartList: SmartList) -> [Reminder] {
+    let completed = store.reminders.filter(\.isCompleted)
+    switch smartList {
+    case .today, .scheduled: return completed.filter { $0.dueAt != nil }
+    case .flagged: return completed.filter(\.isFlagged)
+    case .all: return completed
+    case .completed: return []
     }
   }
 
@@ -89,7 +145,7 @@ struct ListDetailView: View {
     }
   }
 
-  private func menu(for list: ReminderList) -> some View {
+  private var menu: some View {
     Menu {
       Button(
         showsCompleted ? "Hide Completed" : "Show Completed",
@@ -97,10 +153,12 @@ struct ListDetailView: View {
       ) {
         showsCompleted.toggle()
       }
-      Button("Edit List", systemImage: "pencil") { isEditingList = true }
-      if store.isOwner(of: list) {
-        Button("Delete List", systemImage: "trash", role: .destructive) {
-          isConfirmingDelete = true
+      if let list {
+        Button("Edit List", systemImage: "pencil") { isEditingList = true }
+        if store.isOwner(of: list) {
+          Button("Delete List", systemImage: "trash", role: .destructive) {
+            isConfirmingDelete = true
+          }
         }
       }
     } label: {
@@ -112,13 +170,22 @@ struct ListDetailView: View {
   /// An insert waits for the server. The text stays in the field until the row exists.
   private func addReminder() {
     let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !title.isEmpty else {
+    guard !title.isEmpty, let targetListID else {
       newTitle = ""
       return
     }
+    // A reminder typed in a smart list gets what that list shows.
+    var dueAt: Date?
+    var isFlagged = false
+    switch source {
+    case .smart(.today), .smart(.scheduled): dueAt = Calendar.current.startOfDay(for: .now)
+    case .smart(.flagged): isFlagged = true
+    default: break
+    }
     Task {
       do {
-        try await store.createReminder(title: title, listID: listID)
+        try await store.createReminder(
+          title: title, listID: targetListID, dueAt: dueAt, isFlagged: isFlagged)
         newTitle = ""
         isNewReminderFocused = true
       } catch {

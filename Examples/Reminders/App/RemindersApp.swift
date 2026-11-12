@@ -7,6 +7,10 @@ struct RemindersApp: App {
   @State private var session: SessionStore
 
   init() {
+    #if DEBUG
+      SmartList.selfTest()
+    #endif
+
     let client = SupabaseClient(
       supabaseURL: Config.supabaseURL,
       supabaseKey: Config.supabaseKey,

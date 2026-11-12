@@ -2,22 +2,19 @@ import SwiftUI
 
 /// The colors and icons that a list can have. The database stores the names.
 enum ListStyle {
-  // swift-format adds a trailing comma here, and SwiftLint refuses it.
-  // swift-format-ignore
   static let colors: [(name: String, color: Color)] = [
     ("red", .red), ("orange", .orange), ("yellow", .yellow), ("green", .green),
     ("mint", .mint), ("teal", .teal), ("cyan", .cyan), ("blue", .blue),
-    ("indigo", .indigo), ("purple", .purple), ("pink", .pink), ("brown", .brown)
+    ("indigo", .indigo), ("purple", .purple), ("pink", .pink), ("brown", .brown),
   ]
 
-  // SF Symbol names.
-  // swift-format-ignore
+  /// SF Symbol names.
   static let icons: [String] = [
     "list.bullet", "bookmark.fill", "mappin", "gift.fill", "birthday.cake.fill",
     "graduationcap.fill", "backpack.fill", "pencil.and.ruler.fill", "doc.fill", "book.fill",
     "creditcard.fill", "dumbbell.fill", "fork.knife", "cart", "house.fill",
     "building.2.fill", "airplane", "car.fill", "pawprint.fill", "leaf.fill",
-    "heart.fill", "star.fill", "music.note", "gamecontroller.fill"
+    "heart.fill", "star.fill", "music.note", "gamecontroller.fill",
   ]
 
   static let defaultColor = "blue"

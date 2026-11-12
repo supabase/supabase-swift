@@ -1,0 +1,148 @@
+appId: com.supabase.Reminders
+env:
+  EMAIL: smart-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Home
+- tapOn:
+    id: home.list.Home
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Milk
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Bread
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Eggs
+
+# Milk is due today. This point is the Date switch on the default simulator.
+- tapOn:
+    id: reminder.Milk.info
+- assertVisible:
+    id: reminderDetail.dateToggle
+- tapOn:
+    point: 88%,38%
+- assertVisible:
+    id: reminderDetail.timeToggle
+- tapOn:
+    id: reminderDetail.done
+- assertVisible:
+    id: reminder.Milk.due
+
+# Bread is flagged.
+- swipe:
+    from:
+      id: reminder.Bread
+    direction: LEFT
+- tapOn: Flag
+- assertVisible:
+    id: reminder.Bread.flag
+
+# Eggs is completed.
+- tapOn:
+    id: reminder.Eggs.toggle
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Eggs
+    timeout: 5000
+- tapOn:
+    id: BackButton
+
+# Counts on the cards. My Lists shows the open reminders of the list.
+- assertVisible:
+    id: home.smart.today.count
+    text: "1"
+- assertVisible:
+    id: home.smart.scheduled.count
+    text: "1"
+- assertVisible:
+    id: home.smart.all.count
+    text: "2"
+- assertVisible:
+    id: home.smart.flagged.count
+    text: "1"
+- assertVisible:
+    id: home.list.Home.count
+    text: "2"
+
+- tapOn:
+    id: home.smart.today
+- assertVisible:
+    id: reminder.Milk
+- assertNotVisible:
+    id: reminder.Bread
+# A reminder added in Today is due today.
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Call
+- assertVisible:
+    id: reminder.Call.due
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: home.smart.today.count
+    text: "2"
+
+- tapOn:
+    id: home.smart.scheduled
+- assertVisible:
+    id: reminder.Milk
+- assertVisible:
+    id: reminder.Call
+- assertNotVisible:
+    id: reminder.Bread
+- tapOn:
+    id: BackButton
+
+- tapOn:
+    id: home.smart.flagged
+- assertVisible:
+    id: reminder.Bread
+- assertNotVisible:
+    id: reminder.Milk
+- tapOn:
+    id: BackButton
+
+- tapOn:
+    id: home.smart.all
+- assertVisible:
+    id: reminder.Milk
+- assertVisible:
+    id: reminder.Bread
+- assertNotVisible:
+    id: reminder.Eggs
+- tapOn:
+    id: BackButton
+
+# Completed has no field for a new reminder. A reminder can be reopened from it.
+- tapOn:
+    id: home.smart.completed
+- assertVisible:
+    id: reminder.Eggs
+- assertNotVisible:
+    id: reminder.Milk
+- assertNotVisible:
+    id: listDetail.newReminder
+- tapOn:
+    id: reminder.Eggs.toggle
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Eggs
+    timeout: 5000
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: home.smart.all.count
+    text: "4"
