@@ -20,21 +20,38 @@ import IssueReporting
 #endif
 
 // cspell:ignore pvzp hhoc cnrp
-/// Configuration for a ``RealtimeChannelV2``.
+/// How a ``RealtimeChannelV2`` joins its topic: privacy, broadcast and presence options.
 ///
-/// Pass a builder closure to ``RealtimeClientV2/channel(_:options:)`` to customize
-/// broadcast, presence, and privacy settings before subscribing.
+/// Set the configuration in the closure you pass to ``RealtimeClientV2/channel(_:configure:)``.
+///
+/// ```swift
+/// let channel = client.channel("room:lobby") { config in
+///   config.isPrivate = true
+///   config.broadcast.receivesOwnMessages = true
+/// }
+/// ```
 ///
 /// ## Topics
-/// ### Configuration Properties
-/// - ``broadcast``
-/// - ``presence``
+/// ### Options
+/// - ``broadcast-swift.property``
+/// - ``presence-swift.property``
 /// - ``isPrivate``
-public struct RealtimeChannelConfig: Sendable {
-  /// Configuration for the broadcast feature of the channel.
+/// ### Option Groups
+/// - ``Broadcast-swift.typealias``
+/// - ``Presence-swift.typealias``
+/// ### Initialization
+/// - ``init()``
+public struct RealtimeChannelConfiguration: Sendable, Hashable {
+  /// Broadcast options of a channel.
+  public typealias Broadcast = BroadcastJoinConfig
+
+  /// Presence options of a channel.
+  public typealias Presence = PresenceJoinConfig
+
+  /// Broadcast options.
   public var broadcast: BroadcastJoinConfig
 
-  /// Configuration for the presence feature of the channel.
+  /// Presence options.
   public var presence: PresenceJoinConfig
 
   /// Whether the channel is private.
@@ -45,8 +62,19 @@ public struct RealtimeChannelConfig: Sendable {
   public var isPrivate: Bool
 }
 
+extension RealtimeChannelConfiguration {
+  /// Creates the default configuration: a public channel, with every option off.
+  public init() {
+    self.init(broadcast: BroadcastJoinConfig(), presence: PresenceJoinConfig(), isPrivate: false)
+  }
+}
+
+/// The v2 name of ``RealtimeChannelConfiguration``.
+@available(*, deprecated, renamed: "RealtimeChannelConfiguration")
+public typealias RealtimeChannelConfig = RealtimeChannelConfiguration
+
 protocol RealtimeChannelProtocol: AnyObject, Sendable {
-  @MainActor var config: RealtimeChannelConfig { get }
+  @MainActor var config: RealtimeChannelConfiguration { get }
   var topic: String { get }
   var logger: (any SupabaseLogger)? { get }
 
@@ -55,14 +83,14 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 
 /// A Realtime channel that joins a topic and dispatches incoming events to registered callbacks.
 ///
-/// Obtain an instance from ``RealtimeClientV2/channel(_:options:)`` and call
+/// Obtain an instance from ``RealtimeClientV2/channel(_:configure:)`` and call
 /// ``subscribeWithError()`` to start receiving events. Register all callbacks
 /// **before** subscribing — adding callbacks after ``subscribe()``/``subscribeWithError()``
 /// returns triggers a runtime warning.
 ///
 /// ```swift
 /// let channel = client.channel("room:lobby") { config in
-///   config.broadcast.receiveOwnBroadcasts = true
+///   config.broadcast.receivesOwnMessages = true
 /// }
 ///
 /// let messages = channel.broadcastStream(event: "message")
@@ -76,6 +104,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// ## Topics
 /// ### Identity
 /// - ``topic``
+/// - ``configuration``
 /// - ``config``
 /// ### Status
 /// - ``status``
@@ -118,10 +147,16 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// broadcast REST endpoint (WebSocket frames use the full ``topic``).
   let subTopic: String
 
-  /// The channel's current configuration.
+  /// The configuration the channel was created with.
   ///
-  /// Reflects the options passed to ``RealtimeClientV2/channel(_:options:)``.
-  @MainActor public private(set) var config: RealtimeChannelConfig
+  /// Reflects the closure passed to ``RealtimeClientV2/channel(_:configure:)``.
+  ///
+  /// > Note: On this version the property is isolated to the main actor. v3 makes it nonisolated.
+  @MainActor public private(set) var configuration: RealtimeChannelConfiguration
+
+  /// The channel's current configuration.
+  @available(*, deprecated, message: "Use configuration instead.")
+  @MainActor public var config: RealtimeChannelConfiguration { configuration }
 
   let logger: (any SupabaseLogger)?
   let socket: any RealtimeClientProtocol
@@ -142,14 +177,14 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
 
   init(
     topic: String,
-    config: RealtimeChannelConfig,
+    config: RealtimeChannelConfiguration,
     socket: any RealtimeClientProtocol,
     logger: (any SupabaseLogger)?
   ) {
     self.topic = topic
     self.subTopic =
       topic.hasPrefix("realtime:") ? String(topic.dropFirst("realtime:".count)) : topic
-    self.config = config
+    self.configuration = config
     self.logger = logger
     self.socket = socket
 
@@ -223,7 +258,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// this method. Calling it more than once on an already-subscribed channel is a no-op.
   ///
   /// A channel removed from its client, or closed by the server, never joins again; get a new one
-  /// from ``RealtimeClientV2/channel(_:options:)``.
+  /// from ``RealtimeClientV2/channel(_:configure:)``.
   ///
   /// - Throws: A ``RealtimeError`` if the subscribe attempt fails or times out;
   ///   `CancellationError` when an ``unsubscribe()`` or a removal stops it, or when the channel
@@ -271,13 +306,13 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   private func performJoin(ref: String, clientChanges: [PostgresJoinConfig]) async {
     logger?.debug("Sending phx_join for channel '\(topic)' (ref: \(ref))")
 
-    config.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
+    configuration.presence.enabled = callbackManager.callbacks.contains(where: { $0.isPresence })
 
     let joinConfig = RealtimeJoinConfig(
-      broadcast: config.broadcast,
-      presence: config.presence,
+      broadcast: configuration.broadcast,
+      presence: configuration.presence,
       postgresChanges: clientChanges,
-      isPrivate: config.isPrivate
+      isPrivate: configuration.isPrivate
     )
 
     let payload = RealtimeJoinPayload(
@@ -356,7 +391,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
 
-    let isPrivate = await config.isPrivate
+    let isPrivate = await configuration.isPrivate
 
     var headers: HTTPFields = [.contentType: "application/json"]
     if let apiKey = socket.options.apikey {
@@ -405,7 +440,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       throw RealtimeError.invalidRequest("Access token is required for httpSend()")
     }
 
-    let isPrivate = await config.isPrivate
+    let isPrivate = await configuration.isPrivate
 
     var headers: HTTPFields = [.contentType: "application/octet-stream"]
     if let apiKey = socket.options.apikey {
@@ -488,7 +523,8 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
       let task = Task { [headers] in
         _ = try? await socket.http.send(
           HTTPRequest(
-            url: socket.broadcastURL(topic: subTopic, event: event, isPrivate: config.isPrivate),
+            url: socket.broadcastURL(
+              topic: subTopic, event: event, isPrivate: configuration.isPrivate),
             method: .post,
             headers: headers,
             body: JSONEncoder.supabase().encode(message)
@@ -496,7 +532,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         )
       }
 
-      if config.broadcast.acknowledgeBroadcasts {
+      if configuration.broadcast.acknowledgesMessages {
         try? await withTimeout(interval: socket.options.timeoutInterval, clock: socket.clock) {
           await task.value
         }

@@ -38,7 +38,7 @@ import IssueReporting
 ///
 /// ### Realtime Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 ///
@@ -339,13 +339,29 @@ public final class SupabaseClient: Sendable {
   /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  ///   - configure: A closure that sets the channel's broadcast, presence, and privacy options.
   /// - Returns: A configured ``RealtimeChannelV2`` ready to subscribe.
+  ///
+  /// > Note: On this version the method is synchronous. In v3 it is `async`.
   public func channel(
     _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
-    realtimeV2.channel(name, options: options)
+    realtimeV2.channel(name, configure: configure)
+  }
+
+  /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
+  /// - Parameters:
+  ///   - name: A unique name for the channel.
+  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  /// - Returns: A configured ``RealtimeChannelV2`` ready to subscribe.
+  @available(*, deprecated, message: "Use channel(_:configure:) instead.")
+  @_disfavoredOverload
+  public func channel(
+    _ name: String,
+    options: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
+  ) -> RealtimeChannelV2 {
+    realtimeV2.channel(name, configure: options)
   }
 
   /// Unsubscribes from and removes a Realtime channel.

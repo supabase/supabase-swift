@@ -60,7 +60,7 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 /// ## Topics
 /// ### Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``addChannel(_:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
@@ -133,7 +133,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// All managed channels indexed by their topics.
   ///
   /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
-  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
+  /// Channels are added by ``channel(_:configure:)`` and removed by ``removeChannel(_:)``
   /// or ``removeAllChannels()``.
   public var channels: [String: RealtimeChannelV2] {
     mutableState.channels
@@ -366,47 +366,65 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// - Parameters:
   ///   - topic: The channel topic name (without the `realtime:` prefix).
-  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
-  ///     broadcast, presence, and privacy settings.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: broadcast,
+  ///     presence, and privacy options.
   /// - Returns: A ``RealtimeChannelV2`` bound to this client.
+  ///
+  /// > Note: On this version the method is synchronous. In v3 it is `async`.
   public func channel(
     _ topic: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
-    mutableState.withValue {
-      // Cancel any pending deferred disconnect — a new channel is being added.
-      $0.pendingDisconnectTask?.cancel()
-      $0.pendingDisconnectTask = nil
+    // The closure runs under the state lock, as `options` always did, and only when the channel
+    // is new. The lock's closure is `@Sendable`; `configure` never leaves this call.
+    withoutActuallyEscaping(configure) { configure in
+      let configure = UncheckedSendable(configure)
+      return mutableState.withValue {
+        // Cancel any pending deferred disconnect — a new channel is being added.
+        $0.pendingDisconnectTask?.cancel()
+        $0.pendingDisconnectTask = nil
 
-      let realtimeTopic = "realtime:\(topic)"
+        let realtimeTopic = "realtime:\(topic)"
 
-      if let channel = $0.channels[realtimeTopic] {
+        if let channel = $0.channels[realtimeTopic] {
+          return channel
+        }
+
+        var config = RealtimeChannelConfiguration()
+        configure.value(&config)
+
+        let channel = RealtimeChannelV2(
+          topic: realtimeTopic,
+          config: config,
+          socket: self,
+          logger: self.options.logger
+        )
+
+        $0.channels[realtimeTopic] = channel
+
         return channel
       }
-
-      var config = RealtimeChannelConfig(
-        broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-        presence: PresenceJoinConfig(key: ""),
-        isPrivate: false
-      )
-      options(&config)
-
-      let channel = RealtimeChannelV2(
-        topic: realtimeTopic,
-        config: config,
-        socket: self,
-        logger: self.options.logger
-      )
-
-      $0.channels[realtimeTopic] = channel
-
-      return channel
     }
+  }
+
+  /// Returns a channel for the given topic, creating it if one does not already exist.
+  ///
+  /// - Parameters:
+  ///   - topic: The channel topic name (without the `realtime:` prefix).
+  ///   - options: A builder closure to configure ``RealtimeChannelConfiguration`` options.
+  /// - Returns: A ``RealtimeChannelV2`` bound to this client.
+  @available(*, deprecated, message: "Use channel(_:configure:) instead.")
+  @_disfavoredOverload
+  public func channel(
+    _ topic: String,
+    options: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
+  ) -> RealtimeChannelV2 {
+    channel(topic, configure: options)
   }
 
   /// Registers an externally-created channel with this client.
   ///
-  /// > Warning: The client now manages channels automatically via ``channel(_:options:)``.
+  /// > Warning: The client now manages channels automatically via ``channel(_:configure:)``.
   /// > This method will be removed in the next major release.
   @available(
     *,
@@ -423,7 +441,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Unsubscribes from and removes a channel.
   ///
   /// The channel is unsubscribed first, which also stops a join still in flight, and it never
-  /// joins again: get a new one from ``channel(_:options:)``. After removal, if no channels
+  /// joins again: get a new one from ``channel(_:configure:)``. After removal, if no channels
   /// remain, the client disconnects (or schedules a deferred disconnect based on
   /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
   ///

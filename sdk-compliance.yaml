@@ -467,6 +467,7 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
+      - BroadcastJoinConfig.waitsForReplication
   realtime.subscriptions.postgres_changes: implemented
   realtime.subscriptions.subscribe_presence: implemented
   realtime.subscriptions.postgres_changes_filter:

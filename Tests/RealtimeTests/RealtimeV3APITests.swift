@@ -170,3 +170,112 @@ struct RealtimeRenamesV3APITests {
     #expect(Slug().realtimeFilterValue == "a-slug")
   }
 }
+
+@Suite
+struct RealtimeChannelConfigurationV3APITests {
+  let client = RealtimeClientV2(
+    url: URL(string: "http://localhost:54321/realtime/v1")!,
+    options: RealtimeClientOptions(headers: ["apikey": "publishable.api.key"])
+  )
+
+  @Test
+  func defaultConfigurationIsAPublicChannelWithEveryOptionOff() {
+    let configuration = RealtimeChannelConfiguration()
+
+    #expect(!configuration.isPrivate)
+    #expect(configuration.broadcast == RealtimeChannelConfiguration.Broadcast())
+    #expect(configuration.presence == RealtimeChannelConfiguration.Presence())
+    #expect(configuration == RealtimeChannelConfiguration())
+    #expect(Set([configuration, RealtimeChannelConfiguration()]).count == 1)
+  }
+
+  @Test
+  func configIsTheSameTypeAsConfiguration() {
+    let config: RealtimeChannelConfig = RealtimeChannelConfiguration()
+    #expect(config == RealtimeChannelConfiguration())
+  }
+
+  @Test
+  func broadcastOptionNamesShareStorageWithTheOldNames() {
+    var broadcast = RealtimeChannelConfiguration.Broadcast()
+    broadcast.receivesOwnMessages = true
+    broadcast.acknowledgesMessages = true
+    broadcast.waitsForReplication = true
+
+    #expect(broadcast.receiveOwnBroadcasts)
+    #expect(broadcast.acknowledgeBroadcasts)
+    #expect(broadcast.replicationReady)
+
+    broadcast.receiveOwnBroadcasts = false
+    broadcast.acknowledgeBroadcasts = false
+    broadcast.replicationReady = false
+
+    #expect(!broadcast.receivesOwnMessages)
+    #expect(!broadcast.acknowledgesMessages)
+    #expect(!broadcast.waitsForReplication)
+  }
+
+  @Test
+  func broadcastOptionsKeepTheirWireKeys() throws {
+    var broadcast = BroadcastJoinConfig()
+    broadcast.receivesOwnMessages = true
+    broadcast.waitsForReplication = true
+
+    let data = try JSONEncoder().encode(broadcast)
+    let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+    #expect(json["self"] as? Bool == true)
+    #expect(json["ack"] as? Bool == false)
+    #expect(json["replication_ready"] as? Bool == true)
+    #expect(try JSONDecoder().decode(BroadcastJoinConfig.self, from: data) == broadcast)
+  }
+
+  @Test
+  func replayTakesADateAndSendsMilliseconds() {
+    let replay = RealtimeChannelConfiguration.Broadcast.Replay(
+      since: Date(timeIntervalSince1970: 1_700_000_000.5), limit: 10)
+
+    #expect(replay.since == 1_700_000_000_500)
+    #expect(replay.limit == 10)
+  }
+
+  @Test
+  func replayWithAnIntegerLiteralStillTakesMilliseconds() {
+    let replay = ReplayOption(since: 1_700_000_000_000)
+    let milliseconds: Int = replay.since
+    #expect(milliseconds == 1_700_000_000_000)
+  }
+
+  @Test
+  @MainActor
+  func channelConfigureAppliesTheClosure() {
+    let channel = client.channel("room") { configuration in
+      configuration.isPrivate = true
+      configuration.broadcast.receivesOwnMessages = true
+      configuration.presence.key = "user-1"
+    }
+
+    #expect(channel.configuration.isPrivate)
+    #expect(channel.configuration.broadcast.receivesOwnMessages)
+    #expect(channel.configuration.presence.key == "user-1")
+    #expect(channel.config == channel.configuration)
+  }
+
+  @Test
+  @MainActor
+  func v2ChannelCallSitesKeepTheirMeaning() {
+    let plain = client.channel("plain")
+    let labelled = client.channel("labelled", options: { $0.isPrivate = true })
+    let trailing = client.channel("trailing") { $0.isPrivate = true }
+    let sendable: @Sendable (inout RealtimeChannelConfig) -> Void = { $0.isPrivate = true }
+    let stored = client.channel("stored", options: sendable)
+
+    #expect(plain.topic == "realtime:plain")
+    #expect(!plain.configuration.isPrivate)
+    #expect(labelled.configuration.isPrivate)
+    #expect(trailing.configuration.isPrivate)
+    #expect(stored.configuration.isPrivate)
+    #expect(plain.status == .unsubscribed)
+    #expect(client.channels.count == 4)
+  }
+}
