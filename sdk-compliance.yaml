@@ -412,7 +412,10 @@ features:
       - PostgrestTransformBuilder.dryRun
 
   database.configuration.auto_retry: implemented
-  database.configuration.request_timeout: not_implemented
+  database.configuration.request_timeout:
+    status: implemented
+    symbols:
+      - PostgrestBuilder.timeout
 
   # ── Functions ──────────────────────────────────────────────────────────────
 

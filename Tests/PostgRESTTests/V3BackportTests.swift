@@ -257,3 +257,77 @@ extension V3BackportTests {
     #expect(prefer(updated) == "return=minimal")
   }
 }
+
+// MARK: - Per-request modifiers
+
+extension V3BackportTests {
+  @Test
+  func timeoutSetsTheRequestTimeout() {
+    let builder = client.from("t").select().timeout(.milliseconds(2500))
+
+    #expect(builder.mutableState.request.timeoutInterval == 2.5)
+    #expect(builder.mutableState.request.urlRequest.timeoutInterval == 2.5)
+  }
+
+  @Test
+  func timeoutKeepsTheBuilderTypeForChaining() {
+    let builder: PostgrestFilterBuilder = client.from("t").select().timeout(.seconds(5))
+      .eq("a", value: 1)
+
+    #expect(builder.mutableState.request.timeoutInterval == 5)
+  }
+
+  @Test
+  func requestTimeoutDefaultsToSixtySeconds() {
+    #expect(client.from("t").select().mutableState.request.timeoutInterval == 60)
+  }
+
+  @Test
+  func timeoutReachesTheFetchHandler() async throws {
+    let seen = LockIsolated<TimeInterval?>(nil)
+    let client = PostgrestClient(
+      configuration: PostgrestClient.Configuration(
+        url: URL(string: "http://localhost:54321/rest/v1")!,
+        fetch: { request in
+          seen.setValue(request.timeoutInterval)
+          return (
+            Data(),
+            HTTPURLResponse(
+              url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+          )
+        }
+      )
+    )
+
+    try await client.from("t").select().timeout(.seconds(7)).execute()
+
+    #expect(seen.value == 7)
+  }
+
+  @Test
+  func settingHeaderAddsOrReplacesTheHeader() {
+    let name = HTTPField.Name("X-Custom")!
+    let builder = client.from("t").select()
+      .settingHeader(name: name, value: "a")
+      .settingHeader(name: HTTPField.Name("x-custom")!, value: "b")
+
+    #expect(builder.mutableState.request.headers[name] == "b")
+  }
+
+  @Test
+  func settingHeaderMutatesTheReceiverAsTheV2BuildersDo() {
+    let builder = client.from("t").select()
+
+    builder.settingHeader(name: .prefer, value: "tx=rollback")
+
+    #expect(builder.mutableState.request.headers[.prefer] == "tx=rollback")
+  }
+
+  @Test
+  @available(*, deprecated, message: "Exercises the deprecated setHeader(name:value:).")
+  func setHeaderStillSetsTheHeader() {
+    let builder = client.from("t").select().setHeader(name: "X-Custom", value: "a")
+
+    #expect(builder.mutableState.request.headers[HTTPField.Name("X-Custom")!] == "a")
+  }
+}
