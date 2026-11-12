@@ -113,6 +113,7 @@ public actor ResumableUpload {
   private let input: Input
   private var record: ResumableUploadRecord?
   private var loop: Task<Void, Never>?
+  private var cancellation: Task<Void, Never>?
   private var pauseRequested = false
   private var startInProgress = false
   private var startWaiters: [CheckedContinuation<Void, Never>] = []
@@ -293,25 +294,38 @@ public actor ResumableUpload {
 
   /// Continues a paused or failed upload from the offset the server reports.
   public func resume() async throws {
-    switch status {
-    case .paused, .failed: break
-    case .pending, .uploading, .completed, .cancelled: return
-    }
+    guard canResume else { return }
     await loop?.value
+    guard canResume else { return }
     guard record != nil else { return try await start() }
     claimLive(liveKey)
     status = .uploading
     startLoop(from: 0, next: .resync)
   }
 
+  private var canResume: Bool {
+    switch status {
+    case .paused, .failed: true
+    case .pending, .uploading, .completed, .cancelled: false
+    }
+  }
+
   /// Aborts the upload: the chunk in flight is dropped, the server's copy is deleted (best
   /// effort), and so are the record and any sandbox copy. When ``start()`` is still creating or
   /// looking up the upload, waits for that request to end first, so the server's copy it makes
-  /// is deleted too.
+  /// is deleted too. A call made while an earlier one is still cleaning up waits for it.
+  /// Cancelling the calling task does not stop the cleanup.
   public func cancel() async {
+    if let cancellation { return await cancellation.value }
     guard !status.isTerminal else { return }
     loop?.cancel()
     status = .cancelled
+    let cleanup = Task { await cleanUpAfterCancel() }
+    cancellation = cleanup
+    await cleanup.value
+  }
+
+  private func cleanUpAfterCancel() async {
     if startInProgress {
       // Waits for the record start() is loading or creating, so the discard below covers it.
       await withCheckedContinuation { startWaiters.append($0) }

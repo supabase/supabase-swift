@@ -134,6 +134,27 @@ final class StorageResumableIntegrationTests {
   }
 
   @Test
+  func everyConcurrentCancelReturnsAfterTheRecordIsGone() async throws {
+    let client = try client()
+    let upload = try bucket(client).resumableUpload(path: "cancelled-twice.bin", fileURL: fileURL)
+    try await upload.start()
+    await waitForFirstChunk(of: upload)
+
+    async let first = Self.cancelThenCountPending(upload, client)
+    async let second = Self.cancelThenCountPending(upload, client)
+
+    #expect(try await [first, second] == [0, 0])
+    #expect(try await bucket(client).exists(path: "cancelled-twice.bin") == false)
+  }
+
+  private static func cancelThenCountPending(_ upload: ResumableUpload, _ client: StorageClient)
+    async throws -> Int
+  {
+    await upload.cancel()
+    return try await client.resumableUploads.pending().count
+  }
+
+  @Test
   func aSecondClientResumesFromTheRecord() async throws {
     let first = try client()
     let upload = try bucket(first).resumableUpload(path: "relaunched.bin", fileURL: fileURL)
