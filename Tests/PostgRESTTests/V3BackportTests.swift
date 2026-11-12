@@ -399,3 +399,46 @@ extension V3BackportTests {
     #expect(response.status == 200)
   }
 }
+
+// MARK: - Error accessors
+
+extension V3BackportTests {
+  @Test
+  func aServerErrorMatchesItsCodeInACatchClause() async {
+    let client = PostgrestClient(
+      configuration: PostgrestClient.Configuration(
+        url: URL(string: "http://localhost:54321/rest/v1")!,
+        fetch: { request in
+          (
+            Data(
+              #"{"code":"23505","details":"Key (id)=(1) already exists.","hint":null,"message":"duplicate key"}"#
+                .utf8),
+            HTTPURLResponse(
+              url: request.url!, statusCode: 409, httpVersion: nil, headerFields: nil)!
+          )
+        }
+      )
+    )
+
+    do {
+      try await client.from("t").insert(["id": 1]).execute()
+      Issue.record("Expected an error.")
+    } catch PostgrestError.Code.uniqueViolation {
+      // Expected.
+    } catch {
+      Issue.record("Expected a unique violation, got \(error).")
+    }
+
+    do {
+      try await client.from("t").insert(["id": 1]).execute()
+      Issue.record("Expected an error.")
+    } catch let error as PostgrestError {
+      #expect(error.code == "23505")
+      #expect(error.serverError?.message == "duplicate key")
+      #expect(error.serverError?.details == "Key (id)=(1) already exists.")
+      #expect(error.serverError?.hint == nil)
+    } catch {
+      Issue.record("Expected a PostgrestError, got \(error).")
+    }
+  }
+}
