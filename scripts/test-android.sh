@@ -69,7 +69,8 @@ PRODUCTS=$(find "$SCRATCH_PATH" -type d -path "*/Products/*-android-$ARCH" -prin
 # The Swift runtime the cross-compiled binaries link against is not on the device, so it ships
 # alongside them. SwiftPM keeps installed SDKs in a platform-dependent location.
 SDK_BUNDLE=""
-for root in "$HOME/Library/org.swift.swiftpm/swift-sdks" "$HOME/.swiftpm/swift-sdks"; do
+for root in "$HOME/Library/org.swift.swiftpm/swift-sdks" "${XDG_CONFIG_HOME:-$HOME/.config}/swiftpm/swift-sdks" \
+  "$HOME/.swiftpm/swift-sdks"; do
   if [[ -d "$root/$SWIFT_SDK.artifactbundle" ]]; then
     SDK_BUNDLE="$root/$SWIFT_SDK.artifactbundle"
     break

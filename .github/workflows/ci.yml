@@ -463,7 +463,10 @@ jobs:
           swift sdk install \
             "https://download.swift.org/swift-${SWIFT_VERSION}-release/android-sdk/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_android.artifactbundle.tar.gz" \
             --checksum "$SWIFT_ANDROID_SDK_SHA256"
-          "$HOME/.swiftpm/swift-sdks/${SWIFT_SDK}.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
+          # SwiftPM picks the SDK folder per platform and setup, so find the bundle instead of guessing.
+          bundle=$(find "$HOME" -maxdepth 5 -type d -name "${SWIFT_SDK}.artifactbundle" -print -quit)
+          [[ -n "$bundle" ]] || { echo "::error::${SWIFT_SDK}.artifactbundle not found under $HOME"; exit 1; }
+          "$bundle/swift-android/scripts/setup-android-sdk.sh"
       - name: Cache Android build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

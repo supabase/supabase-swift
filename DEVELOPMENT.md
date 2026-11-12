@@ -85,7 +85,7 @@ swiftly install 6.4.0 --use
 swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz \
   --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
 # Download Android NDK r30 and point ANDROID_NDK_HOME at it, then link it into the Swift SDK.
-# On Linux the SDK lives under ~/.swiftpm/swift-sdks instead.
+# On Linux the SDK lives under ~/.config/swiftpm/swift-sdks (or ~/.swiftpm/swift-sdks) instead.
 export ANDROID_NDK_HOME=/path/to/android-ndk-r30
 ~/Library/org.swift.swiftpm/swift-sdks/swift-6.4.0-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
 ```
