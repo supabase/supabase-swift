@@ -27,6 +27,7 @@ public import Foundation
 /// - ``offset``
 /// - ``sortBy``
 /// - ``search``
+@available(*, deprecated, message: "Use ListOptions instead.")
 public struct SearchOptions: Encodable, Sendable {
   var prefix: String
 
@@ -76,6 +77,7 @@ public struct SearchOptions: Encodable, Sendable {
 ///
 /// - ``column``
 /// - ``order``
+@available(*, deprecated, message: "Use ListOptions.sortBy and ListOptions.order instead.")
 public struct SortBy: Encodable, Sendable {
   /// The name of the column to sort by, e.g. `"name"` or `"created_at"`.
   public var column: String?
@@ -411,6 +413,11 @@ public struct CreateSignedUploadURLOptions: Sendable {
 /// ### Properties
 ///
 /// - ``destinationBucket``
+@available(
+  *, deprecated,
+  message:
+    "Use the toBucket parameter of move(from:to:toBucket:sourceVersionID:) or copy(from:to:toBucket:sourceVersionID:options:) instead."
+)
 public struct DestinationOptions: Sendable {
   /// The identifier of the destination bucket. When `nil`, the operation stays within the source bucket.
   public var destinationBucket: String?
@@ -553,6 +560,7 @@ public struct FileObject: Identifiable, Hashable, Codable, Sendable {
 /// ### Metadata
 ///
 /// - ``metadata``
+@available(*, deprecated, message: "Use ObjectInfo instead.")
 public struct FileObjectV2: Identifiable, Hashable, Decodable, Sendable {
   /// The unique identifier of this object.
   public let id: String

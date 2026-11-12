@@ -548,6 +548,19 @@ features:
       - SortOrder.ascending
       - SortOrder.descending
       - SortOrder.encode
+      - ObjectSortColumn
+      - ObjectSortColumn.init
+      - ObjectSortColumn.rawValue
+      - ObjectSortColumn.name
+      - ObjectSortColumn.updatedAt
+      - ObjectSortColumn.createdAt
+      - ObjectSortColumn.lastAccessedAt
+      - VersionFilter
+      - VersionFilter.init
+      - VersionFilter.rawValue
+      - VersionFilter.exclude
+      - VersionFilter.include
+      - VersionFilter.only
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
   storage.file_buckets.remove: implemented

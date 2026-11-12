@@ -82,7 +82,7 @@ struct StorageV3NamesTests {
   @Test
   func usesNewHostnameRewritesTheHost() {
     var configuration = StorageClient.Configuration(
-      url: URL(string: "https://blah.supabase.co/storage/v1")!, headers: [:])
+      url: URL(string: "https://blah.supabase.co/storage/v1")!, headers: [:], logger: nil)
     configuration.usesNewHostname = true
 
     let client = StorageClient(configuration: configuration)
@@ -967,5 +967,257 @@ struct StorageV3URLTests {
     #expect(recorder.header("x-upsert") == "true")
     _ = try await upload.createSignedUploadURL(path: "a.png", options: nil)
     #expect(recorder.header("x-upsert") == nil)
+  }
+}
+
+@Suite
+struct StorageV3ObjectTests {
+  let objectID = "E621E1F8-C36C-495A-93FC-0C247A3E6E5F"
+
+  var listResponse: String {
+    """
+    [
+      {"name":"folder","id":null,"updated_at":null,"created_at":null,"last_accessed_at":null,
+       "metadata":null},
+      {"name":"a.png","id":"\(objectID)","version":"v1",
+       "updated_at":"2024-01-02T03:04:05.000Z","created_at":"2024-01-01T00:00:00.000Z",
+       "last_accessed_at":"2024-01-03T00:00:00.000Z",
+       "metadata":{"eTag":"\\"abc\\"","size":42,"mimetype":"image/png",
+                   "cacheControl":"max-age=3600","lastModified":"2024-01-02T03:04:05.000Z",
+                   "contentLength":42,"httpStatusCode":200},
+       "user_metadata":{"owner":"me"},"is_versioned":true,"is_delete_marker":false}
+    ]
+    """
+  }
+
+  var infoResponse: String {
+    """
+    {"id":"\(objectID)","version":"v1","name":"a.png","bucket_id":"avatars","size":42,
+     "content_type":"image/png","cache_control":"no-cache","etag":"\\"abc\\"",
+     "last_modified":"2024-01-02T03:04:05.000Z","created_at":"2024-01-01T00:00:00.000Z",
+     "metadata":{"owner":"me"},"is_versioned":true}
+    """
+  }
+
+  @Test
+  func listWithListOptionsSendsTheDefaultsAndDecodesStorageObjects() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: listResponse).from("avatars")
+
+    let objects = try await bucket.list(path: "users", options: ListOptions())
+
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/list/avatars")
+    #expect(
+      recorder.lastJSON == [
+        "prefix": "users", "limit": 100, "offset": 0,
+        "sortBy": ["column": "name", "order": "asc"],
+      ])
+
+    #expect(objects.count == 2)
+    #expect(objects[0].name == "folder")
+    #expect(objects[0].isFolder)
+    #expect(objects[0].metadata == nil)
+
+    let file = objects[1]
+    #expect(!file.isFolder)
+    #expect(file.id == UUID(uuidString: objectID))
+    #expect(file.versionID == "v1")
+    #expect(file.createdAt != nil)
+    #expect(file.updatedAt != nil)
+    #expect(file.lastAccessedAt != nil)
+    #expect(file.userMetadata == ["owner": "me"])
+    #expect(file.isVersioned == true)
+    #expect(file.isDeleteMarker == false)
+    #expect(file.archivedAt == nil)
+    #expect(file.metadata?.eTag == "\"abc\"")
+    #expect(file.metadata?.size == 42)
+    #expect(file.metadata?.mimeType == "image/png")
+    #expect(file.metadata?.cacheControl == .maxAge(.seconds(3600)))
+    #expect(file.metadata?.lastModified != nil)
+    #expect(file.metadata?.contentLength == 42)
+    #expect(file.metadata?.additional == ["httpStatusCode": 200])
+  }
+
+  @Test
+  func listOptionsReachTheBody() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: "[]").from("avatars")
+
+    let objects: [StorageObject] = try await bucket.list(
+      options: ListOptions(
+        limit: 10, offset: 20, sortBy: .updatedAt, order: .descending, search: "ava",
+        exactMatch: true, versions: .include, deleteMarkers: .only))
+
+    #expect(objects.isEmpty)
+    #expect(
+      recorder.lastJSON == [
+        "prefix": "", "limit": 10, "offset": 20,
+        "sortBy": ["column": "updated_at", "order": "desc"],
+        "search": "ava", "exactMatch": true, "noncurrentVersions": "include",
+        "deleteMarkers": "only",
+      ])
+  }
+
+  @Test
+  func sortColumnsAndVersionFiltersAreOpenSets() {
+    let column: ObjectSortColumn = "size"
+    let filter: VersionFilter = "future"
+
+    #expect(column == ObjectSortColumn(rawValue: "size"))
+    #expect(ObjectSortColumn.name.rawValue == "name")
+    #expect(ObjectSortColumn.createdAt.rawValue == "created_at")
+    #expect(ObjectSortColumn.lastAccessedAt.rawValue == "last_accessed_at")
+    #expect(filter == VersionFilter(rawValue: "future"))
+    #expect(VersionFilter.exclude.rawValue == "exclude")
+  }
+
+  @Test
+  func infoWithVersionIDReturnsObjectInfo() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: infoResponse).from("avatars")
+
+    let info = try await bucket.info(path: "a.png", versionID: "v1")
+
+    #expect(recorder.last?.httpMethod == "GET")
+    #expect(
+      recorder.lastURL == "http://localhost:54321/storage/v1/object/info/avatars/a.png?versionId=v1"
+    )
+    #expect(info.id == UUID(uuidString: objectID))
+    #expect(info.versionID == "v1")
+    #expect(info.name == "a.png")
+    #expect(info.bucketID == "avatars")
+    #expect(info.size == 42)
+    #expect(info.contentType == "image/png")
+    #expect(info.cacheControl == .noCache)
+    #expect(info.eTag == "\"abc\"")
+    #expect(info.lastModified != nil)
+    #expect(info.createdAt != nil)
+    #expect(info.updatedAt == nil)
+    #expect(info.lastAccessedAt == nil)
+    #expect(info.userMetadata == ["owner": "me"])
+    #expect(info.isVersioned == true)
+    #expect(info.isDeleteMarker == nil)
+    #expect(info.archivedAt == nil)
+
+    let current: ObjectInfo = try await bucket.info(path: "a.png")
+    #expect(current.name == "a.png")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/info/avatars/a.png")
+  }
+
+  @Test
+  func moveSendsTheDestinationBucketAndTheSourceVersion() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client().from("avatars")
+
+    try await bucket.move(from: "a.png", to: "b.png", toBucket: "archive", sourceVersionID: "v1")
+
+    #expect(recorder.last?.httpMethod == "POST")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/move")
+    #expect(
+      recorder.lastJSON == [
+        "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
+        "destinationBucket": "archive", "sourceVersionId": "v1",
+      ])
+  }
+
+  @Test
+  func copyWithOptionsReturnsAnUploadedObject() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"archive/b.png","Id":"\#(objectID)"}"#)
+      .from("avatars")
+
+    let copy = try await bucket.copy(
+      from: "a.png", to: "b.png", toBucket: "archive", sourceVersionID: "v1",
+      options: CopyOptions(
+        upsert: true, copyMetadata: false, metadata: ["owner": "me"], contentType: "image/png",
+        cacheControl: .noCache))
+
+    #expect(copy.id == UUID(uuidString: objectID))
+    #expect(copy.path == "b.png")
+    #expect(copy.fullPath == "archive/b.png")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/copy")
+    #expect(recorder.header("x-upsert") == "true")
+    #expect(
+      recorder.header("x-metadata") == Data(#"{"owner":"me"}"#.utf8).base64EncodedString())
+    #expect(
+      recorder.lastJSON == [
+        "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
+        "destinationBucket": "archive", "sourceVersionId": "v1", "copyMetadata": false,
+        "metadata": ["cacheControl": "no-cache", "mimetype": "image/png"],
+      ])
+  }
+
+  @Test
+  func copyWithDefaultOptionsSendsOnlyTheKeys() async throws {
+    let recorder = RequestRecorder()
+    let bucket = recorder.client(response: #"{"Key":"avatars/b.png"}"#).from("avatars")
+
+    let copy: UploadedObject = try await bucket.copy(from: "a.png", to: "b.png")
+
+    #expect(copy.id == nil)
+    #expect(copy.fullPath == "avatars/b.png")
+    #expect(recorder.header("x-upsert") == nil)
+    #expect(recorder.header("x-metadata") == nil)
+    #expect(
+      recorder.lastJSON == [
+        "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
+      ])
+  }
+
+  /// The v2 spellings keep their overloads, results and requests.
+  @Test
+  @available(*, deprecated)
+  func v2CallSitesKeepTheV2Overload() async throws {
+    let recorder = RequestRecorder()
+
+    let listing = recorder.client(
+      response: #"[{"name":"a.png","bucket_id":"avatars","owner":"me"}]"#
+    ).from("avatars")
+    let files = try await listing.list()
+    #expect(files.first?.bucketId == "avatars")
+    #expect(
+      recorder.lastJSON == [
+        "prefix": "", "limit": 100, "offset": 0, "sortBy": ["column": "name", "order": "asc"],
+      ])
+    let found = try await listing.list(
+      path: "users",
+      options: SearchOptions(limit: 5, sortBy: SortBy(column: "created_at"), search: "a"))
+    #expect(found.first?.owner == "me")
+    #expect(
+      recorder.lastJSON == [
+        "prefix": "users", "limit": 5, "offset": 0, "search": "a",
+        "sortBy": ["column": "created_at", "order": "asc"],
+      ])
+
+    let describing = recorder.client(response: infoResponse).from("avatars")
+    let info = try await describing.info(path: "a.png")
+    #expect(info.version == "v1")
+    #expect(info.metadata == ["owner": "me"])
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/info/avatars/a.png")
+
+    let copying = recorder.client(response: #"{"Key":"avatars/b.png"}"#).from("avatars")
+    let key = try await copying.copy(from: "a.png", to: "b.png")
+    #expect(key.hasSuffix("b.png"))
+    #expect(
+      recorder.lastJSON == [
+        "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
+        "destinationBucket": nil,
+      ])
+    let crossKey = try await copying.copy(
+      from: "a.png", to: "b.png", options: DestinationOptions(destinationBucket: "archive"))
+    #expect(crossKey == "avatars/b.png")
+    #expect(recorder.lastJSON?["destinationBucket"] == "archive")
+
+    try await copying.move(from: "a.png", to: "b.png")
+    #expect(recorder.lastURL == "http://localhost:54321/storage/v1/object/move")
+    #expect(
+      recorder.lastJSON == [
+        "bucketId": "avatars", "sourceKey": "a.png", "destinationKey": "b.png",
+        "destinationBucket": nil,
+      ])
+    try await copying.move(
+      from: "a.png", to: "b.png", options: DestinationOptions(destinationBucket: "archive"))
+    #expect(recorder.lastJSON?["destinationBucket"] == "archive")
   }
 }

@@ -5,6 +5,7 @@ public import HTTPTypes
   import FoundationNetworking
 #endif
 
+@available(*, deprecated)
 let defaultSearchOptions = SearchOptions(
   limit: 100,
   offset: 0,
@@ -427,6 +428,41 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
+  private struct CopyBody: Encodable {
+    struct Metadata: Encodable {
+      let cacheControl: String?
+      let mimetype: String?
+    }
+
+    let bucketID: String
+    let sourceKey: String
+    let destinationKey: String
+    let destinationBucket: String?
+    let sourceVersionID: String?
+    var copyMetadata: Bool?
+    var metadata: Metadata?
+
+    enum CodingKeys: String, CodingKey {
+      case bucketID = "bucketId"
+      case sourceKey
+      case destinationKey
+      case destinationBucket
+      case sourceVersionID = "sourceVersionId"
+      case copyMetadata
+      case metadata
+    }
+  }
+
+  private struct CopyResponse: Decodable {
+    let key: String
+    let id: String?
+
+    enum CodingKeys: String, CodingKey {
+      case key = "Key"
+      case id = "Id"
+    }
+  }
+
   /// Moves an existing file to a new path, optionally within a different bucket.
   ///
   /// ```swift
@@ -436,35 +472,115 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
+  ///   - toBucket: The bucket to move the file into. `nil` moves it within this bucket.
+  ///   - sourceVersionID: The version of the source to move. `nil` moves the current version.
+  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  public func move(
+    from source: String,
+    to destination: String,
+    toBucket: String? = nil,
+    sourceVersionID: String? = nil
+  ) async throws {
+    var body: [String: String?] = [
+      "bucketId": bucketId,
+      "sourceKey": source,
+      "destinationKey": destination,
+      "destinationBucket": toBucket,
+    ]
+    if let sourceVersionID {
+      body["sourceVersionId"] = sourceVersionID
+    }
+
+    try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/move"),
+        method: .post,
+        body: configuration.encoder.encode(body)
+      )
+    )
+  }
+
+  /// Moves an existing file to a new path, optionally within a different bucket.
+  ///
+  /// - Parameters:
+  ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
+  ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
   ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
   ///     the file is moved within the same bucket.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use move(from:to:toBucket:sourceVersionID:) instead.")
+  @_disfavoredOverload
   public func move(
     from source: String,
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/move"),
-        method: .post,
-        body: configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
-      )
-    )
+    try await move(from: source, to: destination, toBucket: options?.destinationBucket)
   }
 
   /// Copies an existing file to a new path, optionally within a different bucket.
   ///
   /// ```swift
-  /// let newPath = try await storage.from("docs").copy(from: "original.pdf", to: "backup/original.pdf")
+  /// let copy = try await storage.from("docs").copy(
+  ///   from: "original.pdf", to: "backup/original.pdf", options: CopyOptions(upsert: true))
+  /// print(copy.fullPath)  // "docs/backup/original.pdf"
   /// ```
+  ///
+  /// A call with only `from` and `to` selects the deprecated overload that returns a `String`,
+  /// unless the context asks for an ``UploadedObject``.
+  ///
+  /// - Parameters:
+  ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
+  ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
+  ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
+  ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
+  ///   - options: Whether to replace an existing destination, and the metadata of the copy.
+  /// - Returns: The copy's identifier and path.
+  /// - Throws: ``StorageError`` if the source does not exist, the destination exists and
+  ///   ``CopyOptions/upsert`` is `false`, or the caller is not authorized.
+  @_disfavoredOverload
+  @discardableResult
+  public func copy(
+    from source: String,
+    to destination: String,
+    toBucket: String? = nil,
+    sourceVersionID: String? = nil,
+    options: CopyOptions = CopyOptions()
+  ) async throws -> UploadedObject {
+    var body = CopyBody(
+      bucketID: bucketId, sourceKey: source, destinationKey: destination,
+      destinationBucket: toBucket, sourceVersionID: sourceVersionID)
+    if !options.copyMetadata {
+      body.copyMetadata = false
+    }
+    if options.cacheControl != nil || options.contentType != nil {
+      body.metadata = CopyBody.Metadata(
+        cacheControl: options.cacheControl?.rawValue, mimetype: options.contentType)
+    }
+
+    var headers = HTTPFields()
+    if options.upsert {
+      headers[.xUpsert] = "true"
+    }
+    if let metadata = options.metadata {
+      headers[.xMetadata] = encodeMetadata(metadata).base64EncodedString()
+    }
+
+    let response = try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/copy"),
+        method: .post,
+        headers: headers,
+        body: JSONEncoder.unconfiguredEncoder.encode(body)
+      )
+    )
+    .decoded(as: CopyResponse.self, decoder: configuration.decoder)
+
+    return UploadedObject(
+      id: response.id.flatMap(UUID.init(uuidString:)), path: destination, fullPath: response.key)
+  }
+
+  /// Copies an existing file to a new path, optionally within a different bucket.
   ///
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
@@ -473,6 +589,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     the file is copied within the same bucket.
   /// - Returns: The full storage path of the newly created copy.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use copy(from:to:toBucket:sourceVersionID:options:) instead. The old result is UploadedObject.fullPath."
+  )
   @discardableResult
   public func copy(
     from source: String,
@@ -879,6 +1000,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     first 100 files sorted by name ascending.
   /// - Returns: An array of ``FileObject`` values representing the matching files and folders.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message: "Use list(path:options:) with ListOptions instead. It returns [StorageObject]."
+  )
   public func list(
     path: String? = nil,
     options: SearchOptions? = nil
@@ -900,6 +1025,66 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
         method: .post,
         body: encoder.encode(options)
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
+  private struct ListBody: Encodable {
+    struct Sort: Encodable {
+      let column: String
+      let order: String
+    }
+
+    let prefix: String
+    let limit: Int
+    let offset: Int
+    let sortBy: Sort
+    let search: String?
+    let exactMatch: Bool?
+    let noncurrentVersions: String?
+    let deleteMarkers: String?
+  }
+
+  /// Lists all files within a bucket folder.
+  ///
+  /// ```swift
+  /// let files = try await storage.from("avatars").list(
+  ///   path: "users/", options: ListOptions(sortBy: .updatedAt, order: .descending))
+  /// ```
+  ///
+  /// A call without `options` selects the deprecated overload that returns ``FileObject`` values,
+  /// unless the context asks for ``StorageObject`` values.
+  ///
+  /// - Parameters:
+  ///   - path: The folder prefix to list, e.g. `"users/"`. Pass `nil` to list the bucket root.
+  ///   - options: Paging, sort and filters. Defaults to the first 100 entries sorted by name
+  ///     ascending.
+  /// - Returns: The files and folders one level under `path`, with names relative to it. A
+  ///   folder is an entry whose ``StorageObject/isFolder`` is `true`.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @_disfavoredOverload
+  public func list(
+    path: String? = nil,
+    options: ListOptions = ListOptions()
+  ) async throws -> [StorageObject] {
+    let body = ListBody(
+      prefix: path ?? "",
+      limit: options.limit ?? 100,
+      offset: options.offset ?? 0,
+      sortBy: ListBody.Sort(
+        column: (options.sortBy ?? .name).rawValue,
+        order: (options.order ?? .ascending).rawValue),
+      search: options.search,
+      exactMatch: options.exactMatch,
+      noncurrentVersions: options.versions?.rawValue,
+      deleteMarkers: options.deleteMarkers?.rawValue)
+
+    return try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
+        method: .post,
+        body: JSONEncoder.unconfiguredEncoder.encode(body)
       )
     )
     .decoded(decoder: configuration.decoder)
@@ -958,6 +1143,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
   /// - Returns: A ``FileObjectV2`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use info(path:versionID:) instead. It returns ObjectInfo.")
   public func info(path: String) async throws -> FileObjectV2 {
     let _path = _getFinalPath(path)
 
@@ -965,6 +1151,30 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       HTTPRequest(
         url: configuration.url.appendingPathComponent("object/info/\(_path)"),
         method: .get
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
+  /// Retrieves metadata about an existing file without downloading its content.
+  ///
+  /// A call with only `path` selects the deprecated overload that returns ``FileObjectV2``,
+  /// unless the context asks for an ``ObjectInfo``.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - versionID: The version to describe. `nil` describes the current version.
+  /// - Returns: An ``ObjectInfo`` containing size, content type, ETag, and other metadata.
+  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
+  @_disfavoredOverload
+  public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
+    let _path = _getFinalPath(path)
+
+    return try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
+        method: .get,
+        query: versionID.map { [URLQueryItem(name: "versionId", value: $0)] } ?? []
       )
     )
     .decoded(decoder: configuration.decoder)
@@ -1410,6 +1620,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 extension HTTPField.Name {
   static let duplex = Self("duplex")!
   static let xUpsert = Self("x-upsert")!
+  static let xMetadata = Self("x-metadata")!
 }
 
 /// Supabase Storage File API for file operations within a specific bucket.

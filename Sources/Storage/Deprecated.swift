@@ -301,6 +301,7 @@ extension BucketOptions {
 
 }
 
+@available(*, deprecated)
 extension SortBy {
   @_disfavoredOverload
   @available(*, deprecated, message: "Use `init` with `SortOrder` instead.")
