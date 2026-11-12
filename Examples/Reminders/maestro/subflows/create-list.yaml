@@ -1,0 +1,15 @@
+# Creates a list from the Home screen and ends on Home.
+# Env: NAME
+appId: com.supabase.Reminders
+---
+- tapOn:
+    id: home.addList
+- tapOn:
+    id: listEditor.name
+- inputText: ${NAME}
+- tapOn:
+    id: listEditor.save
+- extendedWaitUntil:
+    visible:
+      id: home.list.${NAME}
+    timeout: 10000
