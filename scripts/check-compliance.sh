@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Usage: check-compliance.sh [--update-baseline]
 #
-# Checks sdk-compliance.yaml against the public symbol graph. It fails when:
+# Checks sdk-compliance.yaml against the public symbol graph, @_spi symbols included. It fails when:
 # - the manifest declares a symbol the public API no longer has (a stale entry), or
 # - the undeclared public symbols differ from scripts/compliance-baseline.txt. A symbol missing
 #   from the baseline is new public API: declare it. A baseline symbol that is no longer
 #   undeclared means the baseline is out of date: run with --update-baseline and commit it.
+#
+# An @_spi symbol counts only for the stale check: declaring one is optional, so the baseline
+# never holds one, but a declared one that disappears fails like any other stale entry.
 #
 # Only symbols declared under Sources/ count as undeclared, minus the files .sdk-parse-ignore
 # matches, so dependency symbols in the graph do not count.
@@ -58,7 +61,7 @@ find .build -name "*.symbols.json" -delete 2>/dev/null || true
 # extract while library targets already landed first (same rationale as
 # supabase/sdk's own extraction step). The module check below catches a
 # library target that did not land.
-if ! swift package ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} dump-symbol-graph --minimum-access-level public --skip-synthesized-members >/dev/null; then
+if ! swift package ${SWIFT_FLAGS[@]+"${SWIFT_FLAGS[@]}"} dump-symbol-graph --minimum-access-level public --skip-synthesized-members --include-spi-symbols >/dev/null; then
   echo "⚠️  dump-symbol-graph exited non-zero; checking that every SDK module emitted a graph." >&2
 fi
 
@@ -70,7 +73,8 @@ find .build -name "*.symbols.json" > "$SGFILES_LIST"
 # file that is not ignored, and each one must have emitted a symbol graph.
 git ls-files -co --exclude-standard -- Sources > "$TMP_DIR/source-files"
 git ls-files -cio --exclude-from=.sdk-parse-ignore -- Sources > "$TMP_DIR/ignored-files"
-MODULES="$(grep -vxF -f "$TMP_DIR/ignored-files" "$TMP_DIR/source-files" | cut -d/ -f2 | sort -u)"
+grep -vxF -f "$TMP_DIR/ignored-files" "$TMP_DIR/source-files" > "$TMP_DIR/counted-files" || true
+MODULES="$(cut -d/ -f2 "$TMP_DIR/counted-files" | sort -u)"
 MISSING="$(
   for module in $MODULES; do
     grep -q "/$module\.symbols\.json$" "$SGFILES_LIST" || echo "  - $module"
@@ -82,8 +86,8 @@ if [ -n "$MISSING" ]; then
   exit 1
 fi
 
-# One line per public symbol: "<path>\t<name>", where <path> is the declaring file relative to the
-# repository root (absolute for a dependency). A symbol the compiler synthesizes, such as a Codable
+# One line per public symbol: "<path>\t<name>\t<spi>", where <spi> is 1 for an @_spi symbol and
+# <path> is the declaring file relative to the repository root (absolute for a dependency). A symbol the compiler synthesizes, such as a Codable
 # init(from:), has no file: its path is "Sources/<module>/", with the module read from its mangled
 # identifier ("s:4Auth…" is Auth).
 #
@@ -107,8 +111,23 @@ xargs jq -r --arg root "$ROOT/" '
      else ([$id | capture("^s:(?<n>[0-9]+)") | .n]
        | if length == 1 then "Sources/" + $id[(2 + (.[0] | length)):(2 + (.[0] | length) + (.[0] | tonumber))] + "/" else "" end)
      end) + "\t"
-    + (($p[:-1] + [($p[-1] | sub("\\(.*"; ""))]) | join("."))
+    + (($p[:-1] + [($p[-1] | sub("\\(.*"; ""))]) | join(".")) + "\t"
+    + (if .spi then "1" else "0" end)
 ' < "$SGFILES_LIST" | sort -u > "$CODE_SYMBOLS"
+
+# Swift 6.4's default build system ignores --include-spi-symbols and gives no warning. Without
+# this guard every declared @_spi symbol would look stale.
+# Only a declaration counts: not an @_spi import, a doc comment, or a DocC article.
+if ! grep -q $'\t1$' "$CODE_SYMBOLS"; then
+  { grep '\.swift$' "$TMP_DIR/counted-files" || true; } | tr '\n' '\0' \
+    | { xargs -0 grep -hE '^[[:space:]]*@_spi\(' || true; } > "$TMP_DIR/spi-attributes"
+  if grep -qv 'import ' "$TMP_DIR/spi-attributes"; then
+    echo "error: Sources/ declares @_spi symbols, but the symbol graph has none." >&2
+    echo "This toolchain drops --include-spi-symbols. Put a Swift 6.3 toolchain (Xcode 26) first" >&2
+    echo "on PATH and run it again." >&2
+    exit 1
+  fi
+fi
 
 # Names swift package dump-symbol-graph can't see at all (currently just
 # leading-underscore members, e.g. FunctionsClient._invokeWithStreamedResponse)
@@ -131,7 +150,7 @@ awk -F'\t' -v modules="${MODULES//$'\n'/ }" '
   BEGIN { n = split(modules, list, " "); for (i = 1; i <= n; i++) counted[list[i]] = 1 }
   FILENAME == ARGV[1] { declared[$0] = 1; next }
   FILENAME == ARGV[2] { ignored[$0] = 1; next }
-  $1 !~ /^Sources\// || ($2 in declared) { next }
+  $1 !~ /^Sources\// || $3 == "1" || ($2 in declared) { next }
   {
     split($1, path, "/")
     if ($1 ~ /\/$/ ? (path[2] in counted) : !($1 in ignored)) print path[2] "\t" $2
