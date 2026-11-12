@@ -21,24 +21,45 @@ final class DataStore {
   var reminders: [Reminder] = []
   private(set) var isLoaded = false
 
+  /// The last error of a write that a view started with `run`. The root view shows it.
+  var error: (any Error)?
+
   /// The number of updates that wait for the server, for each row id.
   /// Realtime uses it to ignore the echo of an older edit.
   @ObservationIgnored var inFlight: [UUID: Int] = [:]
 
   @ObservationIgnored let client: SupabaseClient
   @ObservationIgnored let listsRepository: ListsRepository
+  @ObservationIgnored let remindersRepository: RemindersRepository
 
   init(client: SupabaseClient, userID: UUID) {
     self.client = client
     self.userID = userID
     listsRepository = ListsRepository(client: client)
+    remindersRepository = RemindersRepository(client: client)
   }
 
   /// Reads everything that the user can see. Call it after sign-in and after the
   /// connection returns.
   func load() async throws {
-    lists = try await listsRepository.fetchAll()
+    async let lists = listsRepository.fetchAll()
+    async let reminders = remindersRepository.fetchAll()
+    (self.lists, self.reminders) = try await (lists, reminders)
     isLoaded = true
+  }
+
+  /// Starts a write and shows its error, if any, in the root alert.
+  ///
+  /// Use it for a write that outlives the view that starts it, for example an update
+  /// from a sheet that closes at once.
+  func run(_ operation: @escaping @MainActor () async throws -> Void) {
+    Task {
+      do {
+        try await operation()
+      } catch {
+        self.error = error
+      }
+    }
   }
 
   // MARK: Lists
@@ -71,6 +92,45 @@ final class DataStore {
   func removeList(id: UUID) {
     lists.removeAll { $0.id == id }
     reminders.removeAll { $0.listID == id }
+  }
+
+  // MARK: Reminders
+
+  /// The reminders of a list in the order of creation.
+  func reminders(in listID: UUID, includeCompleted: Bool) -> [Reminder] {
+    reminders.filter { $0.listID == listID && (includeCompleted || !$0.isCompleted) }
+  }
+
+  func createReminder(
+    title: String,
+    listID: UUID,
+    dueAt: Date? = nil,
+    isFlagged: Bool = false
+  ) async throws {
+    let reminder = try await remindersRepository.create(
+      title: title,
+      listID: listID,
+      dueAt: dueAt,
+      isFlagged: isFlagged
+    )
+    upsert(reminder, in: \.reminders)
+  }
+
+  func updateReminder(_ reminder: Reminder) async throws {
+    try await optimisticUpdate(\.reminders, to: reminder) {
+      try await remindersRepository.update(reminder)
+    }
+  }
+
+  func toggleCompleted(id: UUID) async throws {
+    guard var reminder = reminders.first(where: { $0.id == id }) else { return }
+    reminder.completedAt = reminder.isCompleted ? nil : .now
+    try await updateReminder(reminder)
+  }
+
+  func deleteReminder(id: UUID) async throws {
+    try await remindersRepository.delete(id: id)
+    reminders.removeAll { $0.id == id }
   }
 
   // MARK: Shared helpers

@@ -26,18 +26,18 @@ struct RootView: View {
 /// Owns the data of one signed-in user.
 private struct SignedInView: View {
   @State private var store: DataStore
-  @State private var error: (any Error)?
 
   init(client: SupabaseClient, userID: UUID) {
     _store = State(initialValue: DataStore(client: client, userID: userID))
   }
 
   var body: some View {
+    @Bindable var store = store
     HomeView()
       .environment(store)
       .task {
-        do { try await store.load() } catch { self.error = error }
+        do { try await store.load() } catch { store.error = error }
       }
-      .errorAlert($error)
+      .errorAlert($store.error)
   }
 }

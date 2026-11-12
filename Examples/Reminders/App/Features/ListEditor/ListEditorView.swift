@@ -101,20 +101,21 @@ struct ListEditorView: View {
   }
 
   private func save() {
+    if var list {
+      list.name = trimmedName
+      list.color = color
+      list.icon = icon
+      // An update shows at once, so the sheet closes before the server answers.
+      store.run { [store] in try await store.updateList(list) }
+      dismiss()
+      return
+    }
+
     isSaving = true
     Task {
       do {
-        if var list {
-          list.name = trimmedName
-          list.color = color
-          list.icon = icon
-          // The update shows at once, so the sheet can close before the server answers.
-          dismiss()
-          try await store.updateList(list)
-        } else {
-          try await store.createList(name: trimmedName, color: color, icon: icon)
-          dismiss()
-        }
+        try await store.createList(name: trimmedName, color: color, icon: icon)
+        dismiss()
       } catch {
         self.error = error
       }
