@@ -222,12 +222,39 @@ extension RealtimeChannelV2 {
     return stream
   }
 
+  /// Returns an async stream of the broadcast messages for the given event.
+  ///
+  /// The stream gets JSON messages and binary messages. Read a message with
+  /// ``BroadcastMessage/decode(as:decoder:)``, or switch over its ``BroadcastMessage/payload``.
+  /// The stream ends when the iterating task is cancelled.
+  ///
+  /// - Parameter event: The broadcast event name to listen for. Pass `"*"` to receive every
+  ///   event.
+  /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
+  ///
+  /// > Note: On this version the event name matches without regard to case, as
+  /// > ``broadcastStream(event:)`` does. v3 matches it exactly.
+  public func broadcasts(event: String) async -> AsyncStream<BroadcastMessage> {
+    let (stream, continuation) = AsyncStream<BroadcastMessage>.makeStream()
+
+    let id = callbackManager.addBroadcastMessageCallback(event: event) {
+      continuation.yield($0)
+    }
+
+    continuation.onTermination = { [weak callbackManager] _ in
+      callbackManager?.removeCallback(id: id)
+    }
+
+    return stream
+  }
+
   /// Returns an async stream of ``JSONObject`` broadcast payloads for the given event.
   ///
   /// The stream terminates when the caller cancels the enclosing task or the channel is removed.
   ///
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<JSONObject>`.
+  @available(*, deprecated, message: "Use broadcasts(event:) instead.")
   public func broadcastStream(event: String) -> AsyncStream<JSONObject> {
     let (stream, continuation) = AsyncStream<JSONObject>.makeStream()
 
@@ -249,6 +276,7 @@ extension RealtimeChannelV2 {
   ///
   /// - Parameter event: The broadcast event name to listen for.
   /// - Returns: An `AsyncStream<Data>`.
+  @available(*, deprecated, message: "Use broadcasts(event:) instead.")
   public func broadcastDataStream(event: String) -> AsyncStream<Data> {
     let (stream, continuation) = AsyncStream<Data>.makeStream()
 

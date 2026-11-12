@@ -137,6 +137,45 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @discardableResult
+  func addBroadcastMessageCallback(
+    event: String,
+    callback: @escaping @Sendable (BroadcastMessage) -> Void
+  ) -> Int {
+    mutableState.withValue {
+      $0.id += 1
+      $0.callbacks.append(
+        .broadcastMessage(
+          BroadcastMessageCallback(
+            id: $0.id,
+            event: event,
+            callback: callback
+          )
+        )
+      )
+      return $0.id
+    }
+  }
+
+  func triggerBroadcastMessage(_ message: BroadcastMessage) {
+    let callbacks = mutableState.callbacks.compactMap { callback -> BroadcastMessageCallback? in
+      guard case .broadcastMessage(let callback) = callback,
+        callback.event == "*" || callback.event.lowercased() == message.event.lowercased()
+      else { return nil }
+      return callback
+    }
+    callbacks.forEach { $0.callback(message) }
+  }
+
+  func hasBroadcastMessageCallbacks(for event: String) -> Bool {
+    mutableState.callbacks.contains {
+      if case .broadcastMessage(let callback) = $0 {
+        return callback.event == "*" || callback.event.lowercased() == event.lowercased()
+      }
+      return false
+    }
+  }
+
   func triggerBroadcast(event: String, json: JSONObject) {
     let broadcastCallbacks = mutableState.callbacks.compactMap {
       if case .broadcast(let callback) = $0 {
@@ -248,10 +287,17 @@ struct BroadcastDataCallback {
   var callback: @Sendable (Data) -> Void
 }
 
+struct BroadcastMessageCallback {
+  var id: Int
+  var event: String
+  var callback: @Sendable (BroadcastMessage) -> Void
+}
+
 enum RealtimeCallback {
   case postgres(PostgresCallback)
   case broadcast(BroadcastCallback)
   case broadcastData(BroadcastDataCallback)
+  case broadcastMessage(BroadcastMessageCallback)
   case presence(PresenceCallback)
   case system(SystemCallback)
 
@@ -260,6 +306,7 @@ enum RealtimeCallback {
     case .postgres(let callback): callback.id
     case .broadcast(let callback): callback.id
     case .broadcastData(let callback): callback.id
+    case .broadcastMessage(let callback): callback.id
     case .presence(let callback): callback.id
     case .system(let callback): callback.id
     }

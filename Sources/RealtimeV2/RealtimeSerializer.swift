@@ -13,6 +13,8 @@ struct DecodedBroadcast: Sendable {
   /// The user event name extracted from the binary frame.
   let event: String
   let payload: Payload
+  /// The frame's metadata object, such as `id` and `replayed`.
+  var meta: JSONObject? = nil
 
   enum Payload: Sendable {
     case json(JSONObject)
@@ -228,7 +230,7 @@ struct RealtimeSerializer: Sendable {
     let eventData = data[offset..<(offset + eventLen)]
     offset += eventLen
 
-    // Skip metadata for now.
+    let metaData = data[offset..<(offset + metaLen)]
     offset += metaLen
 
     let payloadData = data[offset...]
@@ -249,10 +251,15 @@ struct RealtimeSerializer: Sendable {
       payload = .binary(Data(payloadData))
     }
 
+    // The v2 streams never read the metadata, so metadata that is not a JSON object must not
+    // drop the frame.
+    let meta = metaLen > 0 ? try? JSONDecoder().decode(JSONObject.self, from: Data(metaData)) : nil
+
     return DecodedBroadcast(
       topic: topic,
       event: event,
-      payload: payload
+      payload: payload,
+      meta: meta
     )
   }
 }

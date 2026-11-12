@@ -93,11 +93,11 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 ///   config.broadcast.receivesOwnMessages = true
 /// }
 ///
-/// let messages = channel.broadcastStream(event: "message")
+/// let messages = await channel.broadcasts(event: "message")
 /// try await channel.subscribeWithError()
 ///
-/// for await payload in messages {
-///   print(payload)
+/// for await message in messages {
+///   print(message.payload)
 /// }
 /// ```
 ///
@@ -131,6 +131,7 @@ protocol RealtimeChannelProtocol: AnyObject, Sendable {
 /// - ``onPostgresChange(_:schema:table:filter:callback:)-9c5h2``
 /// - ``onPostgresChange(_:schema:table:filter:callback:)-7srl6``
 /// ### Broadcast Events
+/// - ``broadcasts(event:)``
 /// - ``onBroadcast(event:callback:)``
 /// - ``onBroadcastData(event:callback:)``
 /// ### System Events
@@ -854,6 +855,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
         }
 
         callbackManager.triggerBroadcast(event: event, json: payload)
+        callbackManager.triggerBroadcastMessage(BroadcastMessage(event: event, envelope: payload))
 
       case .close:
         // Phoenix tags `phx_close` with the `join_ref` of the join it closes.
@@ -915,13 +917,15 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
     case .binary(let data):
       if callbackManager.hasBroadcastDataCallbacks(for: event) {
         callbackManager.triggerBroadcastData(event: event, data: data)
-      } else {
+      } else if !callbackManager.hasBroadcastMessageCallbacks(for: event) {
         logger?.warning(
-          "Received binary broadcast for event '\(event)' but no Data callbacks are registered. "
-            + "Register a callback with onBroadcastData(event:callback:) to receive Data."
+          "Received binary broadcast for event '\(event)' but no stream reads it. "
+            + "Read broadcasts(event:) to receive it."
         )
       }
     }
+
+    callbackManager.triggerBroadcastMessage(BroadcastMessage(broadcast))
   }
 
   /// Registers a closure that is called when clients join or leave the channel's presence set.
@@ -1263,12 +1267,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``broadcastStream(event:)`` if you prefer async iteration over closures.
-  ///
   /// - Parameters:
   ///   - event: The broadcast event name to listen for.
   ///   - callback: A `@Sendable` closure receiving the ``JSONObject`` payload.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(*, deprecated, message: "Use broadcasts(event:) instead.")
   public func onBroadcast(
     event: String,
     callback: @escaping @Sendable (JSONObject) -> Void
@@ -1291,12 +1294,11 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   /// }
   /// ```
   ///
-  /// > Note: Use ``broadcastDataStream(event:)`` if you prefer async iteration over closures.
-  ///
   /// - Parameters:
   ///   - event: The broadcast event name to listen for.
   ///   - callback: A `@Sendable` closure receiving the raw `Data` payload.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
+  @available(*, deprecated, message: "Use broadcasts(event:) instead.")
   public func onBroadcastData(
     event: String,
     callback: @escaping @Sendable (Data) -> Void

@@ -397,4 +397,145 @@ import Testing
     }
   }
 
+  @Suite
+  struct RealtimeBroadcastsV3APITests {
+    let fixture = RealtimeV3Fixture()
+
+    private func textBroadcast(
+      event: String, payload: JSONObject, meta: JSONObject? = nil
+    ) -> RealtimeMessageV2 {
+      var body: JSONObject = [
+        "type": "broadcast", "event": .string(event), "payload": .object(payload),
+      ]
+      if let meta { body["meta"] = .object(meta) }
+      return RealtimeMessageV2(
+        joinRef: nil, ref: nil, topic: "realtime:test", event: "broadcast", payload: body)
+    }
+
+    @Test
+    func broadcastsUnwrapsATextMessage() async {
+      let channel = fixture.sut.channel("test")
+      var messages = await channel.broadcasts(event: "cursor").makeAsyncIterator()
+
+      await channel.onMessage(textBroadcast(event: "cursor", payload: ["x": 1]))
+
+      #expect(
+        await messages.next() == BroadcastMessage(event: "cursor", payload: .json(["x": 1])))
+    }
+
+    @Test
+    func broadcastsReadsIdAndReplayedFromMeta() async {
+      let id = UUID()
+      let channel = fixture.sut.channel("test")
+      var messages = await channel.broadcasts(event: "cursor").makeAsyncIterator()
+
+      await channel.onMessage(
+        textBroadcast(
+          event: "cursor", payload: ["x": 1],
+          meta: ["id": .string(id.uuidString), "replayed": true]))
+
+      let message = await messages.next()
+      #expect(message?.id == id)
+      #expect(message?.isReplayed == true)
+    }
+
+    @Test
+    func broadcastsMergesJSONAndBinaryFramesInArrivalOrder() async {
+      let channel = fixture.sut.channel("test")
+      var messages = await channel.broadcasts(event: "frame").makeAsyncIterator()
+
+      await channel.handleBinaryBroadcast(
+        DecodedBroadcast(topic: "realtime:test", event: "frame", payload: .binary(Data([1]))))
+      await channel.onMessage(textBroadcast(event: "frame", payload: ["n": 2]))
+      await channel.handleBinaryBroadcast(
+        DecodedBroadcast(topic: "realtime:test", event: "frame", payload: .json(["n": 3])))
+
+      #expect(await messages.next()?.payload == .binary(Data([1])))
+      #expect(await messages.next()?.payload == .json(["n": 2]))
+      #expect(await messages.next()?.payload == .json(["n": 3]))
+    }
+
+    @Test
+    func broadcastsReadsTheMetadataOfABinaryFrame() async throws {
+      let id = UUID()
+      let meta = Data(#"{"id":"\#(id.uuidString)","replayed":true}"#.utf8)
+      let topic = Data("realtime:test".utf8)
+      let event = Data("frame".utf8)
+      var frame = Data([
+        RealtimeSerializer.BinaryKind.userBroadcast.rawValue,
+        UInt8(topic.count), UInt8(event.count), UInt8(meta.count),
+        RealtimeSerializer.PayloadEncoding.binary.rawValue,
+      ])
+      frame.append(topic)
+      frame.append(event)
+      frame.append(meta)
+      frame.append(Data([9, 9]))
+
+      let channel = fixture.sut.channel("test")
+      var messages = await channel.broadcasts(event: "frame").makeAsyncIterator()
+      await channel.handleBinaryBroadcast(try RealtimeSerializer().decodeBinary(frame))
+
+      #expect(
+        await messages.next()
+          == BroadcastMessage(
+            event: "frame", payload: .binary(Data([9, 9])), id: id, isReplayed: true))
+    }
+
+    @Test
+    func broadcastsMatchesEventsTheWayBroadcastStreamDoes() async {
+      let channel = fixture.sut.channel("test")
+      var exact = await channel.broadcasts(event: "Cursor").makeAsyncIterator()
+      var every = await channel.broadcasts(event: "*").makeAsyncIterator()
+      var other = await channel.broadcasts(event: "other").makeAsyncIterator()
+
+      await channel.onMessage(textBroadcast(event: "cursor", payload: ["x": 1]))
+      await channel.onMessage(textBroadcast(event: "other", payload: ["x": 2]))
+
+      #expect(await exact.next()?.event == "cursor")
+      #expect(await every.next()?.event == "cursor")
+      #expect(await every.next()?.event == "other")
+      #expect(await other.next()?.payload == .json(["x": 2]))
+    }
+
+    @Test
+    func endingABroadcastsStreamRemovesItsCallback() async {
+      let channel = fixture.sut.channel("test")
+      let task = Task {
+        for await _ in await channel.broadcasts(event: "cursor") {}
+      }
+      await waitUntil { channel.callbackManager.callbacks.count == 1 }
+      #expect(channel.callbackManager.callbacks.count == 1)
+
+      task.cancel()
+      await task.value
+      #expect(channel.callbackManager.callbacks.isEmpty)
+    }
+
+    @Test
+    func v2BroadcastStreamsKeepTheirElements() async {
+      let channel = fixture.sut.channel("test")
+      var envelopes = channel.broadcastStream(event: "frame").makeAsyncIterator()
+      var bytes = channel.broadcastDataStream(event: "frame").makeAsyncIterator()
+      let received = LockIsolated<[JSONObject]>([])
+      let subscription = channel.onBroadcast(event: "frame") { envelope in
+        received.withValue { $0.append(envelope) }
+      }
+      defer { subscription.cancel() }
+
+      await channel.onMessage(
+        textBroadcast(event: "frame", payload: ["n": 1], meta: ["replayed": true]))
+      await channel.handleBinaryBroadcast(
+        DecodedBroadcast(topic: "realtime:test", event: "frame", payload: .binary(Data([7]))))
+
+      let envelope: JSONObject? = await envelopes.next()
+      #expect(
+        envelope == [
+          "type": "broadcast", "event": "frame", "payload": ["n": 1], "meta": ["replayed": true],
+        ])
+      #expect(received.value == [envelope])
+      let data: Data? = await bytes.next()
+      #expect(data == Data([7]))
+    }
+  }
+
 #endif

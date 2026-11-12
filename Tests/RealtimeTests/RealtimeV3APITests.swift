@@ -290,3 +290,64 @@ struct HeartbeatEventV3APITests {
     #expect(Set<HeartbeatEvent>([.sent, .timedOut, .sent]).count == 2)
   }
 }
+
+@Suite
+struct BroadcastMessageV3APITests {
+  struct Cursor: Decodable, Equatable {
+    var x: Int
+  }
+
+  @Test
+  func initStoresEveryField() {
+    let id = UUID()
+    let message = BroadcastMessage(
+      event: "cursor", payload: .json(["x": 1]), id: id, isReplayed: true)
+
+    #expect(message.event == "cursor")
+    #expect(message.payload == .json(["x": 1]))
+    #expect(message.id == id)
+    #expect(message.isReplayed)
+    #expect(BroadcastMessage(event: "cursor", payload: .binary(Data())).id == nil)
+    #expect(!BroadcastMessage(event: "cursor", payload: .binary(Data())).isReplayed)
+  }
+
+  @Test
+  func decodeReadsAJSONPayload() throws {
+    let message = BroadcastMessage(event: "cursor", payload: .json(["x": 1]))
+    #expect(try message.decode(as: Cursor.self) == Cursor(x: 1))
+  }
+
+  @Test
+  func decodeReadsABinaryPayloadAsJSON() throws {
+    let message = BroadcastMessage(event: "cursor", payload: .binary(Data(#"{"x":2}"#.utf8)))
+    let cursor: Cursor = try message.decode()
+    #expect(cursor == Cursor(x: 2))
+  }
+
+  @Test
+  func decodeUsesTheGivenDecoder() throws {
+    struct Position: Decodable, Equatable {
+      var positionX: Int
+    }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let message = BroadcastMessage(event: "cursor", payload: .json(["position_x": 3]))
+
+    #expect(try message.decode(as: Position.self, decoder: decoder) == Position(positionX: 3))
+  }
+
+  @Test
+  func decodeThrowsADecodingRealtimeError() {
+    let message = BroadcastMessage(event: "cursor", payload: .json(["y": 1]))
+
+    do {
+      _ = try message.decode(as: Cursor.self)
+      Issue.record("expected decode to throw")
+    } catch let error as RealtimeError {
+      #expect(error.kind == .decoding)
+      #expect(error.underlyingError is DecodingError)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+  }
+}
