@@ -587,6 +587,38 @@ struct ResumableUploadTests {
   }
 
   @Test
+  func resumeAfterAFailedStartLeavesTheUploadAnotherHandleStarted() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.transportFailure, Self.created(offset: 0),
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.appended(offset: 8)(request, data)
+      },
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let storage = try makeStorage(script)
+    let failed = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    await #expect(throws: StorageError.self) { try await failed.start() }
+    let other = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    #expect(other !== failed)
+    try await other.start()
+    while script.log.value.count < 3 { await Task.yield() }
+
+    try await failed.resume()
+
+    #expect(
+      script.log.value.count == 3, "the failed handle sends nothing for an upload it does not own")
+    guard case .failed = await failed.status else {
+      Issue.record("not failed: \(await failed.status)")
+      return
+    }
+    open.yield()
+    _ = try await other.result
+    #expect(script.log.value.filter { $0.hasPrefix("POST") }.count == 2)
+  }
+
+  @Test
   func resumeAfterTheServerRejectsTheCreationThrowsWithoutAnotherRequest() async throws {
     let script = Script([Self.status(413)])
     let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)

@@ -245,7 +245,7 @@ public actor ResumableUpload {
     guard case .pending = status, !startInProgress else { return }
     startInProgress = true
     let key = liveKey
-    claimLive(key)
+    let claimed = claimLive(key)
     defer {
       startInProgress = false
       startWaiters.forEach { $0.resume() }
@@ -255,6 +255,8 @@ public actor ResumableUpload {
       default: releaseStart(key)
       }
     }
+    // Another handle has started on this upload and drives it; a second loop would race it.
+    guard claimed else { return }
     do {
       let record = try await loadOrCreateRecord()
       self.record = record
@@ -321,6 +323,8 @@ public actor ResumableUpload {
   /// transport failure is worth another attempt; the server would refuse the same upload again.
   private func startAgain() async throws {
     if case .failed(let error) = status, error.kind != .transport { throw error }
+    // Another handle made the upload since; it drives it, and this handle stays failed.
+    guard claimLive(liveKey) else { return }
     // .pending, not a terminal status, so cancel() and statusChanges() follow the new attempt.
     status = .pending
     try await start()
