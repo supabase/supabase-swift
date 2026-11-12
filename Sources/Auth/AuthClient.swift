@@ -367,15 +367,26 @@ public actor AuthClient {
   /// ```
   ///
   /// Each call returns a new stream. The stream does not finish on its own; cancel the task that
-  /// consumes it. The session of the first change may be expired; check
-  /// ``Session/isExpired(at:leeway:)``. If it is, expect ``AuthChangeEvent/tokenRefreshed`` after.
+  /// consumes it.
+  ///
+  /// The status of each change agrees with ``status``: a session that is still stored is reported
+  /// as ``AuthStatus/signedIn(_:)``, also when it is expired. Check
+  /// ``Session/isExpired(at:leeway:)``. With ``Configuration/emitLocalSessionAsInitialSession``
+  /// set to `false` (the default), the client tries to refresh an expired session before the
+  /// first change. When that refresh fails and the session stays in storage, for example with no
+  /// network, the first change carries the expired session. With the value `true`, the first
+  /// change carries the stored session at once and ``AuthChangeEvent/tokenRefreshed`` follows a
+  /// successful refresh.
   ///
   /// This version of the client does not record why a session ended, so
   /// ``AuthChange/signOutReason`` is always `nil`.
   nonisolated public func events() -> AsyncStream<AuthChange> {
     let (stream, continuation) = AsyncStream<AuthChange>.makeStream()
 
-    let token = eventEmitter.attach { event, session in
+    let token = eventEmitter.attach { [weak self] event, session in
+      // The v2 emitter sends no session when the refresh at start fails, for example offline.
+      // The session is still stored then, so the change must not report a sign-out.
+      let session = session ?? (event == .signedOut ? nil : self?.currentSession)
       continuation.yield(
         AuthChange(event: event, status: session.map(AuthStatus.signedIn) ?? .signedOut(nil)))
     }
@@ -760,7 +771,6 @@ public actor AuthClient {
   ///   - data: User's metadata.
   ///   - captchaToken: Captcha verification token.
   @available(*, deprecated, message: "Use signInWithOTP(email:options:) instead.")
-  @_disfavoredOverload
   public func signInWithOTP(
     email: String,
     redirectTo: URL? = nil,
@@ -778,7 +788,9 @@ public actor AuthClient {
   /// - Parameters:
   ///   - email: The user's email address.
   ///   - options: Whether to create the user, the user metadata, the redirect URL, and the
-  ///     captcha token.
+  ///     captcha token. Pass it to select this method: a call with only `email:` selects the
+  ///     deprecated method and keeps its request.
+  @_disfavoredOverload
   public func signInWithOTP(
     email: String,
     options: EmailOTPOptions = .init()
@@ -1293,8 +1305,9 @@ public actor AuthClient {
   /// Signs in with tokens from another place, such as a web page, another device, or a server.
   ///
   /// When the access token is expired, or its `exp` claim cannot be read, the client refreshes
-  /// the session with `refreshToken` and emits ``AuthChangeEvent/tokenRefreshed``. Otherwise it
-  /// fetches the user of `accessToken` and emits ``AuthChangeEvent/signedIn``.
+  /// the session with `refreshToken`, which emits ``AuthChangeEvent/tokenRefreshed``. Otherwise
+  /// it fetches the user of `accessToken`. In both cases it then emits
+  /// ``AuthChangeEvent/signedIn``.
   ///
   /// - Parameters:
   ///   - accessToken: The access token of the session.
@@ -2001,7 +2014,8 @@ public actor AuthClient {
   /// - Returns: A new session.
   @available(
     *, deprecated,
-    message: "Use refreshSession() or importSession(accessToken:refreshToken:) instead."
+    message:
+      "Use refreshSession() to refresh the stored session. A refresh token from another place has no exact replacement: importSession(accessToken:refreshToken:) also needs an access token and emits signedIn."
   )
   @discardableResult
   public func refreshSession(refreshToken: String? = nil) async throws -> Session {

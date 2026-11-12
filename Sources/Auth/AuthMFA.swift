@@ -191,7 +191,11 @@ public struct AuthMFA: Sendable {
   /// Returns the Authenticator Assurance Level (AAL) for the active session.
   ///
   /// - Returns: An authentication response with the Authenticator Assurance Level.
-  @available(*, deprecated, message: "Use assuranceLevel() instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use assuranceLevel() instead. It throws AuthError.sessionMissing when no session is stored, where this method returns nil levels."
+  )
   public func getAuthenticatorAssuranceLevel() async throws
     -> AuthMFAGetAuthenticatorAssuranceLevelResponse
   {
@@ -282,11 +286,16 @@ extension AuthMFA {
     factorID: UUID,
     channel: MessagingChannel? = nil
   ) async throws -> MFAChallenge {
-    try await api.authorizedExecute(
+    // The server parses a JSON body for phone and WebAuthn factors, so always send an object.
+    struct Body: Encodable {
+      let channel: MessagingChannel?
+    }
+
+    return try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("factors/\(factorID.wireID)/challenge"),
         method: .post,
-        body: channel == nil ? nil : try encoder.encode(["channel": channel])
+        body: encoder.encode(Body(channel: channel))
       )
     )
     .decoded(decoder: decoder)

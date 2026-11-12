@@ -256,6 +256,7 @@ features:
       - AuthClient.oauthServer
       - AuthOAuthServer
       - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect

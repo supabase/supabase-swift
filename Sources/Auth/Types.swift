@@ -2406,7 +2406,6 @@ public struct GenerateLinkParams: Sendable {
     )
   }
 
-  /// Generates a recovery link.
   /// Generates a signup link.
   ///
   /// - Parameters:
@@ -2473,6 +2472,7 @@ public struct GenerateLinkParams: Sendable {
     )
   }
 
+  /// Generates a recovery link.
   public static func recovery(
     email: String,
     redirectTo: URL? = nil

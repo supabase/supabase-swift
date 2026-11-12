@@ -17,6 +17,20 @@ extension AuthMockerTests {
       Mocker.removeAll()
     }
 
+    @available(*, deprecated, message: "Calls the deprecated v2 method the way v2 code does.")
+    @Test
+    func signInWithOTPWithOnlyAnEmailKeepsTheV2Request() async throws {
+      mock("otp")
+      let client = V3TestClient()
+
+      try await client.sut.signInWithOTP(email: "user@example.com")
+
+      let body = try #require(client.lastBody)
+      #expect(body["email"] as? String == "user@example.com")
+      #expect(body["create_user"] as? Bool == true)
+      #expect(body["data"] == nil)
+    }
+
     // MARK: - signUp
 
     @available(*, deprecated, message: "Compares with the deprecated v2 method.")

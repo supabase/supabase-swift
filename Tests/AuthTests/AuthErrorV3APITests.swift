@@ -122,4 +122,27 @@ struct AuthErrorV3APITests {
     #expect(!(AuthError.Kind.server ~= URLError(.badURL)))
     #expect(!(AuthError.Code.invalidCredentials ~= URLError(.badURL)))
   }
+
+  @Test
+  func stringLiteralPatternsOfOtherErrorTypesStillMatch() {
+    func name(_ error: AppError) -> String {
+      switch error {
+      case "offline": "offline"
+      case "timeout": "timeout"
+      default: "other"
+      }
+    }
+
+    #expect(name("offline") == "offline")
+    #expect(name("timeout") == "timeout")
+    #expect(name("unknown") == "other")
+  }
+}
+
+private struct AppError: Error, Equatable, ExpressibleByStringLiteral {
+  let value: String
+
+  init(stringLiteral value: String) {
+    self.value = value
+  }
 }

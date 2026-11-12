@@ -97,7 +97,8 @@ extension AuthMockerTests {
       #expect(client.lastBody == ["channel": "whatsapp"])
 
       _ = try await client.sut.mfa.challenge(factorID: factorID)
-      #expect(client.lastRequest?.httpBody == nil)
+      #expect(client.lastRequest?.httpBody != nil)
+      #expect(client.lastBody == [:])
     }
 
     @available(*, deprecated, message: "Compares with the deprecated v2 method.")

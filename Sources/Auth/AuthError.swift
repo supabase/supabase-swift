@@ -434,7 +434,11 @@ public enum AuthError: LocalizedError, Equatable {
     }
   }
 
-  @available(*, deprecated, message: "Use code instead.")
+  @available(
+    *, deprecated,
+    message:
+      "Use code instead. code is nil where errorCode returns unknown, sessionNotFound for sessionMissing, or invalidJWT for jwtVerificationFailed."
+  )
   public var errorCode: ErrorCode {
     switch self {
     case .sessionMissing: .sessionNotFound
@@ -587,6 +591,7 @@ extension AuthError.Code {
   ///   showWrongPassword()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (code: AuthError.Code, error: any Error) -> Bool {
     (error as? AuthError)?.code == code
   }
@@ -603,6 +608,7 @@ extension AuthError.Kind {
   ///   showSignIn()
   /// }
   /// ```
+  @_disfavoredOverload
   public static func ~= (kind: AuthError.Kind, error: any Error) -> Bool {
     (error as? AuthError)?.kind == kind
   }

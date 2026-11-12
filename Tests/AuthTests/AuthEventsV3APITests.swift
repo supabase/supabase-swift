@@ -69,6 +69,23 @@ extension AuthMockerTests {
     }
 
     @Test
+    func eventsKeepAStoredSessionWhenTheFirstRefreshFails() async {
+      Mock(
+        url: clientURL.appendingPathComponent("token"), ignoreQuery: true, statusCode: 500,
+        data: [.post: Data()], requestError: URLError(.notConnectedToInternet)
+      ).register()
+      let client = V3TestClient()
+      client.storeSession(.expiredSession)
+
+      var iterator = client.sut.events().makeAsyncIterator()
+      let change = await iterator.next()
+
+      #expect(change?.event == .initialSession)
+      #expect(change?.status == .signedIn(.expiredSession))
+      #expect(change?.status == client.sut.status)
+    }
+
+    @Test
     func eventsRemoveTheListenerWhenTheStreamEnds() async {
       let client = V3TestClient()
       let emitter = Dependencies[client.sut.clientID].eventEmitter.emitter
