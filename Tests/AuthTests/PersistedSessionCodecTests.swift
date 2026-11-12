@@ -21,6 +21,27 @@ struct PersistedSessionCodecTests {
     )
   }
 
+  /// v2 stored metadata keys verbatim: Foundation applies no key strategy to `[String: _]` keys.
+  @Test(arguments: PersistedSessionFixtures.v2Shapes)
+  func keepsV2MetadataKeysVerbatim(fixture: String) throws {
+    let original = String(decoding: try json(named: fixture), as: UTF8.self)
+    let mixedKeys = original.replacingOccurrences(
+      of: #""referrer_id":null"#,
+      with: #""referrer_id":null,"signupSource":"ios","_private_":{"nested_key":1}"#
+    )
+    try #require(mixedKeys != original)
+
+    let decoded = try PersistedSessionCodec.decode(Data(mixedKeys.utf8))
+
+    expectNoDifference(
+      decoded.session.user.userMetadata,
+      [
+        "name": "Jane", "referrer_id": nil, "age": 42, "signupSource": "ios",
+        "_private_": ["nested_key": 1],
+      ]
+    )
+  }
+
   @Test
   func decodesSchema1() throws {
     let decoded = try PersistedSessionCodec.decode(json(named: PersistedSessionFixtures.schema1))
