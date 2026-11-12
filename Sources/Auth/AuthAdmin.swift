@@ -164,7 +164,7 @@ public struct AuthAdmin: Sendable {
   ///   - userMetadata: Data for the user's metadata, in the `auth.users.raw_user_meta_data`
   ///     column.
   ///   - redirectTo: The URL the invite link redirects to. When `nil`, the client uses
-  ///     ``AuthClient/Configuration/redirectToURL``.
+  ///     ``AuthClient/Configuration/redirectTo``.
   /// - Returns: The invited user.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
   @discardableResult
@@ -186,7 +186,7 @@ public struct AuthAdmin: Sendable {
         url: configuration.url.appendingPathComponent("invite"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -340,7 +340,7 @@ public struct AuthAdmin: Sendable {
         url: configuration.url.appendingPathComponent("admin/generate_link"),
         method: .post,
         query: [
-          (params.redirectTo ?? configuration.redirectToURL).map {
+          (params.redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString

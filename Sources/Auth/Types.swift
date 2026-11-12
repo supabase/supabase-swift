@@ -907,7 +907,7 @@ public struct UpdateUser: Encodable, Hashable, Sendable {
 /// Options for ``AuthClient/resetPassword(email:options:)``.
 public struct ResetPasswordOptions: Sendable, Hashable {
   /// The URL the link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -1953,7 +1953,7 @@ public struct EmailOTPOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the email link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.
@@ -2089,7 +2089,7 @@ public struct SignUpOptions: Sendable, Hashable {
   public var userMetadata: JSONObject
 
   /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
-  /// the client uses ``AuthClient/Configuration/redirectToURL``.
+  /// the client uses ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The channel that delivers the confirmation code. Applies to phone sign-up only.
@@ -2174,7 +2174,7 @@ struct MessageIDBody: Decodable {
 /// Options for ``AuthClient/resend(email:type:options:)``.
 public struct ResendEmailOptions: Sendable, Hashable {
   /// The URL the link redirects to. When `nil`, the client uses
-  /// ``AuthClient/Configuration/redirectToURL``.
+  /// ``AuthClient/Configuration/redirectTo``.
   public var redirectTo: URL?
 
   /// The captcha verification token.

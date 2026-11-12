@@ -432,7 +432,7 @@ public actor AuthClient {
   ///   - email: User's email address.
   ///   - password: Password for the user.
   ///   - data: Custom data object to store additional user metadata.
-  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectToURL`` if not provided.
+  ///   - redirectTo: The redirect URL embedded in the email link, defaults to ``Configuration/redirectTo`` if not provided.
   ///   - captchaToken: Optional captcha token for securing this endpoint.
   @discardableResult
   @available(*, deprecated, message: "Use signUp(email:password:options:) instead.")
@@ -487,7 +487,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("signup"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -812,7 +812,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("otp"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -925,7 +925,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: nil,
             domain: domain,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
+            redirectTo: redirectTo ?? configuration.redirectTo,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
@@ -959,7 +959,7 @@ public actor AuthClient {
           SignInWithSSORequest(
             providerId: providerId,
             domain: nil,
-            redirectTo: redirectTo ?? configuration.redirectToURL,
+            redirectTo: redirectTo ?? configuration.redirectTo,
             gotrueMetaSecurity: captchaToken.map { AuthMetaSecurity(captchaToken: $0) },
             codeChallenge: codeChallenge,
             codeChallengeMethod: codeChallengeMethod,
@@ -1051,7 +1051,7 @@ public actor AuthClient {
     let url = try getOAuthSignInURL(
       provider: provider,
       scopes: scopes,
-      redirectTo: redirectTo ?? configuration.redirectToURL,
+      redirectTo: redirectTo ?? configuration.redirectTo,
       queryParams: queryParams
     )
 
@@ -1089,7 +1089,7 @@ public actor AuthClient {
         queryParams: queryParams
       ) { @MainActor url in
         try await withCheckedThrowingContinuation { [configuration] continuation in
-          guard let callbackScheme = (configuration.redirectToURL ?? redirectTo)?.scheme else {
+          guard let callbackScheme = (configuration.redirectTo ?? redirectTo)?.scheme else {
             preconditionFailure(
               "Please, provide a valid redirect URL, either through `redirectTo` param, or globally through `AuthClient.Configuration.redirectToURL`."
             )
@@ -1392,7 +1392,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1488,7 +1488,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("verify"),
         method: .post,
         query: [
-          configuration.redirectToURL.map {
+          configuration.redirectTo.map {
             URLQueryItem(name: "redirect_to", value: $0.absoluteString)
           }
         ].compactMap { $0 },
@@ -1608,7 +1608,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("resend"),
         method: .post,
         query: [
-          (emailRedirectTo ?? configuration.redirectToURL).map {
+          (emailRedirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1757,7 +1757,7 @@ public actor AuthClient {
   /// - Parameters:
   ///   - changes: The changes to make.
   ///   - redirectTo: The URL the confirmation link of an email change redirects to. When `nil`,
-  ///     the client uses ``Configuration/redirectToURL``.
+  ///     the client uses ``Configuration/redirectTo``.
   /// - Returns: The updated user.
   /// - Throws: ``AuthError/sessionMissing`` when no session is stored, or the error of the
   ///   refresh or of the request.
@@ -1781,7 +1781,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("user"),
         method: .put,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -1986,7 +1986,7 @@ public actor AuthClient {
         url: configuration.url.appendingPathComponent("recover"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -2136,7 +2136,7 @@ public actor AuthClient {
       queryItems.append(URLQueryItem(name: "scopes", value: scopes))
     }
 
-    if let redirectTo = redirectTo ?? configuration.redirectToURL {
+    if let redirectTo = redirectTo ?? configuration.redirectTo {
       queryItems.append(URLQueryItem(name: "redirect_to", value: redirectTo.absoluteString))
     }
 

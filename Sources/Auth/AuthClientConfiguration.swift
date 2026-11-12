@@ -26,6 +26,7 @@ extension AuthClient {
   /// - ``url``
   /// - ``headers``
   /// - ``flowType``
+  /// - ``redirectTo``
   /// - ``redirectToURL``
   /// - ``fetch``
   ///
@@ -58,7 +59,14 @@ extension AuthClient {
     public var flowType: AuthFlowType
 
     /// Default URL to be used for redirect on the flows that requires it.
-    public var redirectToURL: URL?
+    public var redirectTo: URL?
+
+    /// Default URL to be used for redirect on the flows that requires it.
+    @available(*, deprecated, message: "Use redirectTo instead.")
+    public var redirectToURL: URL? {
+      get { redirectTo }
+      set { redirectTo = newValue }
+    }
 
     /// Optional key name used for storing tokens in local storage.
     public var storageKey: String?
@@ -174,7 +182,7 @@ extension AuthClient {
       self.url = url ?? defaultAuthURL
       self.headers = headers
       self.flowType = flowType
-      self.redirectToURL = redirectToURL
+      self.redirectTo = redirectToURL
       self.storageKey = storageKey
       self.localStorage = localStorage
       self.logger = logger
@@ -199,6 +207,7 @@ extension AuthClient {
   ///   - fetch: The asynchronous fetch handler for network requests.
   ///   - autoRefreshToken: Set to `true` if you want to automatically refresh the token before expiring.
   ///   - emitLocalSessionAsInitialSession: When `true`, emits the locally stored session immediately as the initial session.
+  @available(*, deprecated, message: "Use init(configuration:) instead.")
   public init(
     url: URL? = nil,
     headers: [String: String] = [:],
