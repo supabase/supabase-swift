@@ -434,6 +434,76 @@ struct ResumableUploadTests {
     #expect(try store.records().isEmpty)
   }
 
+  @Test
+  func aSecondCancelReturnsOnlyAfterTheFirstCancelCleansUp() async throws {
+    let (chunkGate, _) = AsyncStream<Void>.makeStream()
+    let (deleteGate, openDelete) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0),
+      { _, _ in
+        for await _ in chunkGate {}
+        throw CancellationError()
+      },
+      { _, _ in
+        for await _ in deleteGate { break }
+        return (HTTPResponse(status: .noContent), Data())
+      },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    while script.log.value.count < 2 { await Task.yield() }
+    let first = Task { await upload.cancel() }
+    while script.log.value.count < 3 { await Task.yield() }
+
+    let secondReturned = LockIsolated(false)
+    let second = Task {
+      await upload.cancel()
+      secondReturned.setValue(true)
+    }
+    for _ in 0..<100 { await Task.yield() }
+
+    #expect(!secondReturned.value, "the second cancel() waits while the DELETE is in flight")
+    #expect(try store.records().count == 1)
+    openDelete.yield()
+    await first.value
+    await second.value
+    #expect(try store.records().isEmpty)
+    #expect(script.log.value.filter { $0.hasPrefix("DELETE") }.count == 1)
+  }
+
+  @Test
+  func cancelWhileResumeWaitsForThePausedChunkKeepsTheUploadCancelled() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0),
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.appended(offset: 8)(request, data)
+      },
+      { _, _ in (HTTPResponse(status: .noContent), Data()) },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    while script.log.value.count < 2 { await Task.yield() }
+    await upload.pause()
+
+    let resuming = Task { try await upload.resume() }
+    for _ in 0..<100 { await Task.yield() }
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    try await resuming.value
+    await cancelling.value
+
+    guard case .cancelled = await upload.status else {
+      Issue.record("not cancelled: \(await upload.status)")
+      return
+    }
+    #expect(await !upload.isRunning)
+    #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
+    #expect(try store.records().isEmpty)
+  }
+
   @Test(arguments: [false, true])
   func clearKeepsTheRecordOfAFailedUploadThatIsResuming(
     whileAnotherHandleIsPending: Bool
