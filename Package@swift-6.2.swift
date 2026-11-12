@@ -88,14 +88,10 @@ let package = Package(
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
         "Auth",
         "Helpers",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ],
       resources: [.process("Resources")]
     ),
@@ -155,13 +151,10 @@ let package = Package(
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         "Helpers",
         "PostgREST",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .macro(

@@ -8,6 +8,10 @@
 import ConcurrencyExtras
 public import Foundation
 
+#if canImport(Android)
+  import Android
+#endif
+
 /// A streaming HTTP body: an async sequence of byte chunks with a length hint and an
 /// iteration-behavior flag.
 ///

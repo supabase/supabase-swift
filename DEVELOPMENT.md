@@ -74,6 +74,38 @@ DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
 ./scripts/mutation-test.sh auth
 ```
 
+### Running the tests on Android
+
+`scripts/test-android.sh` cross-compiles the unit test targets with the Swift SDK for Android,
+pushes them to an attached device or emulator, and runs them there. It skips IntegrationTests and
+PostgrestMacrosTests. The `android` job in `ci.yml` runs the same script on an x86_64 emulator.
+
+One-time setup. The host toolchain must match the Swift SDK version exactly, so Xcode's own
+toolchain does not work:
+
+```bash
+swiftly install 6.4.0 --use
+swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz \
+  --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
+# Download Android NDK r30 and point ANDROID_NDK_HOME at it, then link it into the Swift SDK.
+# On Linux the SDK lives under ~/.config/swiftpm/swift-sdks (or ~/.swiftpm/swift-sdks) instead.
+export ANDROID_NDK_HOME=/path/to/android-ndk-r30
+~/Library/org.swift.swiftpm/swift-sdks/swift-6.4.0-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+```
+
+Start a device or an emulator that `adb devices` lists, then run:
+
+```bash
+# arm64 device or emulator (default)
+./scripts/test-android.sh
+
+# x86_64 emulator, one target
+ARCH=x86_64 TARGETS=RealtimeTests ./scripts/test-android.sh
+```
+
+`TARGETS`, `FILTER`, `CONFIG`, `API`, and `SCRATCH_PATH` override the defaults at the top of the
+script. `BUILD_ONLY=1` builds the tests and stops, with no device needed.
+
 ### Mutation testing
 
 [swift-mutation-testing](https://github.com/ericodx/swift-mutation-testing) makes small changes
@@ -329,8 +361,9 @@ Tests run on:
 
 - macOS (iOS, macOS, Mac Catalyst, tvOS, watchOS, visionOS simulators)
 - Linux (build and unit tests, including the Auth suite; not fully supported)
-- Android and Windows are best-effort: CI has no runner for either, so the package is not
-  build-checked there
+- Android (unit tests on an x86_64 emulator; best-effort: the job may fail and does not block
+  merges, see [Running the tests on Android](#running-the-tests-on-android))
+- Windows is best-effort: CI has no runner for it, so the package is not build-checked there
 - Multiple Xcode versions (latest and legacy)
 
 ### Code Coverage
