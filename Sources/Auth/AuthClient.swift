@@ -342,12 +342,6 @@ public actor AuthClient {
   public func onAuthStateChange(
     _ listener: @escaping AuthStateChangeListener
   ) async -> some AuthStateChangeListenerRegistration {
-    await _onAuthStateChange(listener)
-  }
-
-  private func _onAuthStateChange(
-    _ listener: @escaping @Sendable (AuthChangeEvent, Session?) -> Void
-  ) async -> ObservationToken {
     let token = eventEmitter.attach(listener)
     await emitInitialSession(forToken: token)
     return token
@@ -411,12 +405,12 @@ public actor AuthClient {
     >.makeStream()
 
     Task {
-      let handle = await _onAuthStateChange { event, session in
+      let handle = await onAuthStateChange { event, session in
         continuation.yield((event, session))
       }
 
       continuation.onTermination = { _ in
-        handle.cancel()
+        handle.remove()
       }
     }
 
