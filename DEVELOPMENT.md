@@ -154,9 +154,11 @@ Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForc
 value a caller supplied — see SDK-1793.
 
 The root file also enables `AllPublicDeclarationsHaveDocumentation` and
-`ValidateDocumentationComments`. Every public declaration needs a `///` comment, and a documented
-function needs matching `- Parameters:`, `- Returns:` and `- Throws:` sections. The lint step in CI
-fails on a missing one, so documentation coverage cannot drop.
+`ValidateDocumentationComments`. Every public type, function, initializer and property needs a `///` comment. A comment that has a
+`- Parameters:` section must name each parameter, and must have `- Returns:` and `- Throws:` where
+they apply. The lint step in CI fails on a missing one. The rules do not check enum cases, protocol
+requirements, or the `- Throws:` of a comment with no `- Parameters:` section, so review those by
+hand.
 
 `Tests/.swift-format` turns all four back off. Test code has no users to crash: `try!` on a bundled
 fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot

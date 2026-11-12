@@ -255,6 +255,8 @@ extension HTTPBody {
   /// The bytes go to a temporary file next to `fileURL`, which then replaces `fileURL` in one
   /// move. So `fileURL` holds either its old contents or the whole body, never a partial one, and
   /// a failed or cancelled write leaves no temporary file behind. The directory must exist.
+  ///
+  /// - Throws: The error from the body's stream, or the file system error when the write fails.
   public func write(to fileURL: URL) async throws {
     let fileManager = FileManager.default
     let temporary = fileURL.deletingLastPathComponent().appendingPathComponent(

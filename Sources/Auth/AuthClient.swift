@@ -175,6 +175,9 @@ public final class AuthClient: Sendable {
   /// available. On watchOS and macOS, only those calls read storage again. A missing Keychain
   /// entitlement throws an error of kind
   /// ``AuthError/Kind-swift.struct/storageMisconfigured``.
+  ///
+  /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/sessionMissing`` when no session is
+  ///   stored, or another ``AuthError`` when storage or the refresh fails.
   public func session() async throws -> Session {
     try await sessionManager.session()
   }
@@ -512,6 +515,9 @@ public final class AuthClient: Sendable {
   ///   )
   /// )
   /// ```
+  ///
+  /// - Throws: ``AuthError`` when the request fails, or the storage error when the client cannot
+  ///   save the session.
   @discardableResult
   public func signInWithWeb3(_ credentials: Web3Credentials) async throws -> Session {
     try await _signIn(authAPI.signInWithWeb3(credentials: credentials))
@@ -1448,6 +1454,8 @@ public final class AuthClient: Sendable {
   ///
   /// Pass the code as ``UpdateUser/nonce`` to ``updateUser(_:redirectTo:)`` when the project
   /// needs a recent sign-in to change the password.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func reauthenticate() async throws {
     try await api.authorizedExecute { authAPI.reauthenticate(accessToken: $0) }
   }
@@ -1651,6 +1659,8 @@ public final class AuthClient: Sendable {
   ///
   /// When the identity belongs to the signed-in user, the client removes it from
   /// ``currentUser`` and emits ``AuthEvent/userUpdated``.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func unlinkIdentity(_ identity: UserIdentity) async throws {
     try await api.authorizedExecute { authAPI.unlinkIdentity(identity, accessToken: $0) }
     // The response carries no user, so the store drops the identity from the held one.
@@ -1723,6 +1733,7 @@ public final class AuthClient: Sendable {
   /// ``Configuration/autoRefresh`` policy.
   ///
   /// - Returns: The session, refreshed when needed, or `nil` when no user is signed in.
+  /// - Throws: ``AuthError`` when storage or the refresh fails.
   @discardableResult
   public func refreshSessionIfNeeded() async throws -> Session? {
     try await sessionManager.refreshSessionIfNeeded()

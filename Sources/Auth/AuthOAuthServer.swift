@@ -107,6 +107,7 @@ public struct AuthOAuthServer: Sendable {
   /// Lists the OAuth grants the user has given to third-party client apps.
   ///
   /// - Returns: The active grants.
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func listGrants() async throws -> [OAuthGrant] {
     try await api.authorizedExecute { authAPI.oauthGrants(accessToken: $0) }
   }

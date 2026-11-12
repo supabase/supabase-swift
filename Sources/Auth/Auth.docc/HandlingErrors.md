@@ -5,7 +5,7 @@ Tell a wrong password from a lost session and from a network failure.
 ## Overview
 
 Every failure from ``AuthClient``, ``AuthMFA`` and ``AuthAdminClient`` is an ``AuthError`` or a
-`CancellationError`. Check ``AuthError/kind`` first. It says which party failed.
+`CancellationError`, except an error that your own code throws. Check ``AuthError/kind`` first. It says which party failed.
 
 | Kind | When | Set |
 | --- | --- | --- |
@@ -96,5 +96,5 @@ do {
 }
 ```
 
-Errors from your own code inside the exchange, such as a custom transport or a middleware, reach
-you as themselves.
+Errors from your own code reach you as themselves: a custom transport, a middleware, or a custom
+``AuthStorage``.

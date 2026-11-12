@@ -36,6 +36,8 @@ extension WebAuthPresenter {
   /// Opens `url` and returns the callback URL, with the scheme of `redirectURL`.
   ///
   /// This implementation calls ``authenticate(url:callbackScheme:)`` with `redirectURL?.scheme`.
+  ///
+  /// - Throws: `CancellationError` when the user cancels, or the error from the presenter.
   @MainActor
   public func authenticate(url: URL, redirectURL: URL?) async throws -> URL {
     try await authenticate(url: url, callbackScheme: redirectURL?.scheme)
@@ -75,6 +77,8 @@ public struct ClosurePresenter: WebAuthPresenter {
   }
 
   /// Runs the closure that this presenter holds.
+  ///
+  /// - Throws: The error that the closure throws.
   @MainActor
   public func authenticate(url: URL, callbackScheme: String?) async throws -> URL {
     try await _authenticate(url, callbackScheme)

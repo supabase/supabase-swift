@@ -79,8 +79,9 @@ try await supabase.from("todos")
   .execute()
 ```
 
-An `update` or a `delete` without a filter changes every row that the row level security
-policies let the user change. Always add a filter.
+An `update` or a `delete` without a filter targets every row that the row level security
+policies let the user change. A hosted Supabase project rejects such a request. Always add a
+filter.
 
 ### Count rows
 
@@ -127,5 +128,5 @@ let rows: [AuditEntry] = try await supabase.schema("audit").from("entries")
 ### Retries and timeouts
 
 The client retries `GET` and `HEAD` requests that fail with a transient error, up to three
-attempts. It never replays a write. ``PostgrestRequestBuilder/retry(enabled:)`` changes this for
+retries (four attempts). It never replays a write. ``PostgrestRequestBuilder/retry(enabled:)`` changes this for
 one request, and ``PostgrestRequestBuilder/timeout(_:)`` sets the timeout for one request.

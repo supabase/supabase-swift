@@ -60,15 +60,17 @@ let todo: Todo? = try await supabase.from("todos")
 
 ### Row level security
 
-A `select` that a policy blocks is not an error. It returns no rows. An `insert` or an `update`
-that a policy blocks throws with the code ``PostgrestError/Code-swift.struct/insufficientPrivilege``.
+A `select` that a policy blocks is not an error. It returns no rows. An `update` or a `delete`
+of rows that the user cannot see is not an error either. It changes no rows. An `insert`, or an
+`update` whose new row fails a policy check, throws with the code
+``PostgrestError/Code-swift.struct/insufficientPrivilege``.
 
 ### Transport failures and retries
 
 A transport failure means no answer arrived, so whether the database applied the request is
 unknown. Reads are safe to retry. Before you retry a write, check that it did not already happen.
 
-The SDK retries `GET` and `HEAD` requests for you, up to three attempts with jittered backoff.
+The SDK retries `GET` and `HEAD` requests for you, up to three retries (four attempts) with jittered backoff.
 It never replays a write. Turn retries off with
 ``PostgrestClient/Configuration/retryEnabled``, or for one request with
 ``PostgrestRequestBuilder/retry(enabled:)``.

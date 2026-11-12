@@ -81,6 +81,8 @@ public struct _PostgrestFunctionQuery<Result: Sendable>: Sendable {
 
 extension _PostgrestFunctionQuery where Result: Decodable {
   /// Sends the call and decodes its result.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Result> {
     try await request.execute(on: client) {
@@ -91,6 +93,8 @@ extension _PostgrestFunctionQuery where Result: Decodable {
 
 extension _PostgrestFunctionQuery where Result == Void {
   /// Sends the call to a function that returns nothing.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
     try await request.execute(on: client) { _ in () }
@@ -179,6 +183,8 @@ public struct _PostgrestFunctions: Sendable {
   ///
   /// Generated code calls this rather than ``PostgrestClient/rpc(_:)``, so the file it lives in
   /// does not need `@_spi(Experimental) import`.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
   public func call<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {
     try client.rpc(function)

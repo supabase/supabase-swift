@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fails when a DocC article is not linked from the landing page of its catalog. An article that
+# Fails when a DocC article is not a Topics list item on the landing page of its catalog. An article that
 # no page links to does not show in the navigation.
 set -euo pipefail
 
@@ -12,16 +12,16 @@ for catalog in Sources/*/*.docc; do
     status=1
     continue
   fi
-  for article in "$catalog"/*.md; do
+  while IFS= read -r article; do
     name=$(basename "$article" .md)
     [[ "$name" == "$module" ]] && continue
     # An extension file documents a symbol, so it needs no link.
     head -n 1 "$article" | grep -q '^# ``' && continue
-    if ! grep -q "<doc:$name>" "$landing"; then
+    if ! grep -Eq "^- <doc:$name>[[:space:]]*$" "$landing"; then
       echo "$article: not linked from $landing (add \"- <doc:$name>\" to a Topics group)"
       status=1
     fi
-  done
+  done < <(find "$catalog" -name '*.md' | sort)
 done
 
 for module in Auth Functions PostgREST Realtime Storage Supabase; do

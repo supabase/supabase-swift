@@ -28,7 +28,8 @@ file for the changes that apply to every module, and one file for each module.
 
 ### The largest changes
 
-- Every client initializer throws. Add `try`.
+- The initializer of `SupabaseClient` and of each module client throws. Add `try`.
+  `AuthAdminClient` is the exception.
 - `SupabaseClientOptions` is ``SupabaseClient/Configuration``, and the initializer label is
   `configuration:`.
 - A `ClientTransport` and a list of `ClientMiddleware` replace the `fetch:` closures and the

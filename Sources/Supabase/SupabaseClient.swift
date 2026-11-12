@@ -331,6 +331,8 @@ public final class SupabaseClient: Sendable {
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
   @_spi(Experimental)
   public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
   {

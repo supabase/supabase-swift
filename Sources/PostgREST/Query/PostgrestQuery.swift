@@ -54,6 +54,7 @@ extension _PostgrestQuery {
   /// Sends the request and decodes the response.
   ///
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output`.
+  /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Output> {
     try await send(request)

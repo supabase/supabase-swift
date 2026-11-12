@@ -248,6 +248,7 @@ public struct AuthMFA: Sendable {
   /// other devices. The stored session is not changed.
   ///
   /// - Returns: The user's factors, split by status.
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func factors() async throws -> MFAFactors {
     let user = try await api.authorizedExecute { authAPI.user(accessToken: $0) }
     return MFAFactors(user.factors ?? [])

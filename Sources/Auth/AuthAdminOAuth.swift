@@ -36,6 +36,8 @@ public struct AuthAdminOAuth: Sendable {
   /// The server returns every client in one response, newest first. It does not page this list.
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
   public func listClients() async throws -> [OAuthClient] {
     try await api.execute(authAPI.adminListOAuthClients())
   }
@@ -44,6 +46,8 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
   @discardableResult
   public func createClient(_ client: CreateOAuthClient) async throws -> OAuthClient {
     try await api.execute(authAPI.adminCreateOAuthClient(client))

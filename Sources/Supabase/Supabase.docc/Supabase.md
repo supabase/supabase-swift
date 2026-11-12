@@ -30,7 +30,8 @@ Each product is one property or one method of the client:
 `import Supabase` brings in the types of every module. Each module also works on its own; see
 the "Standalone Use" article in the documentation of that module.
 
-Every client initializer and every request can throw. Each module has one error type, and all
+The initializer of ``SupabaseClient`` and of each module client can throw, and so can every
+request. Each module has one error type, and all
 of them conform to `SupabaseError`.
 
 ## Topics

@@ -157,6 +157,8 @@ extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
   }
 
   /// Sends the request, discarding the response body.
+  ///
+  /// - Throws: ``PostgrestError`` when the request fails.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Void> {
     try await request.execute(on: client) { _ in () }

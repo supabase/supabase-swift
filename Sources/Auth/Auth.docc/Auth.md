@@ -11,7 +11,8 @@ Read the current state with ``AuthClient/status``. Follow every change with
 ``AuthClient/events()``. In SwiftUI, let an ``AuthModel`` do that for you (see
 <doc:ObservingAuthStateInSwiftUI>).
 
-Every failure is an ``AuthError`` or a `CancellationError`. See <doc:HandlingErrors>.
+Every failure is an ``AuthError`` or a `CancellationError`, except an error that your own code
+throws. See <doc:HandlingErrors>.
 
 ## Topics
 

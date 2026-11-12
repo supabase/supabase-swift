@@ -55,6 +55,8 @@ public struct AuthPasskeys: Sendable {
   ///
   /// Requires a session. Forward ``PasskeyRegistrationOptions/options`` to the authenticator,
   /// then submit its result with ``verifyRegistration(challengeID:credential:)``.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func registrationOptions() async throws -> PasskeyRegistrationOptions {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.passkeyRegistrationOptions(accessToken: $0)
@@ -87,6 +89,8 @@ public struct AuthPasskeys: Sendable {
   ///
   /// Needs no session. Forward ``PasskeyAuthenticationOptions/options`` to the authenticator,
   /// then submit its result with ``verifyAuthentication(challengeID:credential:)``.
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
   public func authenticationOptions() async throws -> PasskeyAuthenticationOptions {
     try await dependencies.sessionAPI.execute(dependencies.authAPI.passkeyAuthenticationOptions())
   }
@@ -113,6 +117,8 @@ public struct AuthPasskeys: Sendable {
   }
 
   /// Lists the passkeys registered for the current user.
+  ///
+  /// - Throws: ``AuthError`` when the request fails or no session is stored.
   public func list() async throws -> [PasskeyListItem] {
     try await dependencies.sessionAPI.authorizedExecute {
       dependencies.authAPI.listPasskeys(accessToken: $0)
