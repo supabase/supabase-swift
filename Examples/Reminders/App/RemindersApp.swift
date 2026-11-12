@@ -22,7 +22,7 @@ struct RemindersApp: App {
 
   var body: some Scene {
     WindowGroup {
-      RootView()
+      RootView(client: client)
         .environment(session)
     }
   }
