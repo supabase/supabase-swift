@@ -7,19 +7,29 @@
 
 public import Foundation
 
-/// Describes a single column returned in a Postgres change event.
+/// A column of the table a Postgres change event changed.
 ///
 /// ## Topics
 /// ### Properties
 /// - ``name``
 /// - ``type``
-public struct Column: Equatable, Codable, Sendable {
-  /// The column name in the database.
-  public let name: String
+public struct PostgresColumn: Hashable, Codable, Sendable {
+  /// The column name.
+  public var name: String
 
-  /// The PostgreSQL type of the column (e.g. `"int4"`, `"text"`, `"timestamptz"`).
-  public let type: String
+  /// The Postgres type name, such as `"int8"` or `"timestamptz"`.
+  public var type: String
+
+  /// Creates a ``PostgresColumn``.
+  public init(name: String, type: String) {
+    self.name = name
+    self.type = type
+  }
 }
+
+/// The v2 name of ``PostgresColumn``.
+@available(*, deprecated, renamed: "PostgresColumn")
+public typealias Column = PostgresColumn
 
 /// A Postgres row change event received from the Realtime server.
 ///
@@ -72,7 +82,7 @@ public struct InsertAction: PostgresAction, HasRecord, HasRawMessage {
   public static let eventType: PostgresChangeEvent = .insert
 
   /// The column definitions for the affected table at the time of the change.
-  public let columns: [Column]
+  public let columns: [PostgresColumn]
 
   /// The timestamp at which this change was committed in the database.
   public let commitTimestamp: Date
@@ -101,7 +111,7 @@ public struct UpdateAction: PostgresAction, HasRecord, HasOldRecord, HasRawMessa
   public static let eventType: PostgresChangeEvent = .update
 
   /// The column definitions for the affected table at the time of the change.
-  public let columns: [Column]
+  public let columns: [PostgresColumn]
 
   /// The timestamp at which this change was committed in the database.
   public let commitTimestamp: Date
@@ -132,7 +142,7 @@ public struct DeleteAction: PostgresAction, HasOldRecord, HasRawMessage {
   public static let eventType: PostgresChangeEvent = .delete
 
   /// The column definitions for the affected table at the time of the change.
-  public let columns: [Column]
+  public let columns: [PostgresColumn]
 
   /// The timestamp at which this change was committed in the database.
   public let commitTimestamp: Date

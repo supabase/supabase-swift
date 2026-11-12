@@ -91,3 +91,82 @@ struct RealtimeErrorV3APITests {
     #expect(error.description == "RealtimeError(decoding): bad frame")
   }
 }
+
+@Suite
+struct RealtimeRenamesV3APITests {
+  @Test
+  func postgresColumnIsAMutableHashableValue() {
+    var column = PostgresColumn(name: "id", type: "int8")
+    column.type = "uuid"
+
+    #expect(column.name == "id")
+    #expect(Set([column, column]).count == 1)
+  }
+
+  @Test
+  func columnIsTheSameTypeAsPostgresColumn() {
+    let column: Column = PostgresColumn(name: "id", type: "int8")
+    #expect(column == PostgresColumn(name: "id", type: "int8"))
+  }
+
+  @Test
+  func serverLogLevelKeepsTheWireValues() {
+    #expect(RealtimeServerLogLevel.warning == .warn)
+    #expect(RealtimeServerLogLevel.warning.rawValue == "warn")
+    #expect(RealtimeServerLogLevel.info.rawValue == "info")
+    #expect(RealtimeServerLogLevel.error.rawValue == "error")
+
+    let level: LogLevel = RealtimeServerLogLevel.info
+    _ = RealtimeClientOptions(logLevel: level)
+  }
+
+  @Test
+  func observesAppLifecycleIsTheSameSettingAsHandleAppLifecycle() {
+    var options = RealtimeClientOptions(handleAppLifecycle: true)
+    #expect(options.observesAppLifecycle)
+
+    options.observesAppLifecycle = false
+    #expect(!options.handleAppLifecycle)
+
+    options.handleAppLifecycle = true
+    #expect(options.observesAppLifecycle)
+
+    #expect(
+      RealtimeClientOptions.defaultObservesAppLifecycle
+        == RealtimeClientOptions.defaultHandleAppLifecycle)
+    #expect(
+      RealtimeClientOptions().observesAppLifecycle
+        == RealtimeClientOptions.defaultObservesAppLifecycle)
+  }
+
+  @Test
+  func defaultConnectsOnSubscribeMatchesTheOldName() {
+    #expect(
+      RealtimeClientOptions.defaultConnectsOnSubscribe
+        == RealtimeClientOptions.defaultConnectOnSubscribe)
+  }
+
+  @Test
+  func statusPredicates() {
+    #expect(RealtimeClientStatus.connected.isConnected)
+    #expect(!RealtimeClientStatus.connecting.isConnected)
+    #expect(!RealtimeClientStatus.disconnected.isConnected)
+
+    #expect(RealtimeChannelStatus.subscribed.isSubscribed)
+    #expect(!RealtimeChannelStatus.subscribing.isSubscribed)
+    #expect(!RealtimeChannelStatus.unsubscribed.isSubscribed)
+    #expect(!RealtimeChannelStatus.unsubscribing.isSubscribed)
+  }
+
+  @Test
+  func realtimeFilterValueReadsRawValue() {
+    struct Slug: RealtimePostgresFilterValue {
+      var rawValue: String { "a-slug" }
+    }
+
+    #expect("text".realtimeFilterValue == "text")
+    #expect(5.realtimeFilterValue == "5")
+    #expect(true.realtimeFilterValue == "true")
+    #expect(Slug().realtimeFilterValue == "a-slug")
+  }
+}

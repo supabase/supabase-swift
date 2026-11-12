@@ -11,7 +11,7 @@ struct PostgresActionData: Codable {
   var type: String
   var record: [String: AnyJSON]?
   var oldRecord: [String: AnyJSON]?
-  var columns: [Column]
+  var columns: [PostgresColumn]
   var commitTimestamp: Date
 
   enum CodingKeys: String, CodingKey {

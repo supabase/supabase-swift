@@ -47,15 +47,18 @@ public enum RealtimeProtocolVersion: String, Sendable {
 /// ## Topics
 /// ### Protocol and Lifecycle
 /// - ``vsn``
+/// - ``observesAppLifecycle``
 /// - ``handleAppLifecycle``
 /// ### Default Values
 /// - ``defaultHeartbeatInterval``
 /// - ``defaultReconnectDelay``
 /// - ``defaultTimeoutInterval``
 /// - ``defaultDisconnectOnSessionLoss``
+/// - ``defaultConnectsOnSubscribe``
 /// - ``defaultConnectOnSubscribe``
 /// - ``defaultMaxRetryAttempts``
 /// - ``defaultDisconnectOnEmptyChannelsAfter``
+/// - ``defaultObservesAppLifecycle``
 /// - ``defaultHandleAppLifecycle``
 /// ### Initialization
 /// - ``init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:session:handleAppLifecycle:)``
@@ -88,10 +91,17 @@ public struct RealtimeClientOptions: Sendable {
   ///
   /// Default: `true` on iOS, macOS, tvOS, and visionOS. `false` on other platforms
   /// (including watchOS and Linux), where lifecycle observation is not supported.
-  public var handleAppLifecycle: Bool
+  public var observesAppLifecycle: Bool
+
+  /// Whether to automatically handle app lifecycle changes (background/foreground).
+  @available(*, deprecated, message: "Use observesAppLifecycle instead.")
+  public var handleAppLifecycle: Bool {
+    get { observesAppLifecycle }
+    set { observesAppLifecycle = newValue }
+  }
 
   /// Sets the log level for Realtime
-  var logLevel: LogLevel?
+  var logLevel: RealtimeServerLogLevel?
   package var fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))?
   package var accessToken: (@Sendable () async throws -> String?)?
   package var logger: (any SupabaseLogger)?
@@ -121,7 +131,11 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnSessionLoss = true
 
   /// Default for whether to automatically connect the socket when subscribing to a channel.
-  public static let defaultConnectOnSubscribe: Bool = true
+  public static let defaultConnectsOnSubscribe: Bool = true
+
+  /// Default for whether to automatically connect the socket when subscribing to a channel.
+  @available(*, deprecated, message: "Use defaultConnectsOnSubscribe instead.")
+  public static let defaultConnectOnSubscribe: Bool = defaultConnectsOnSubscribe
 
   /// Default maximum number of subscribe retry attempts before giving up.
   public static let defaultMaxRetryAttempts: Int = 5
@@ -133,16 +147,20 @@ public struct RealtimeClientOptions: Sendable {
   public static let defaultDisconnectOnEmptyChannelsAfter: TimeInterval =
     2 * defaultHeartbeatInterval
 
-  /// Default value for ``handleAppLifecycle``.
+  /// Default value for ``observesAppLifecycle``.
   ///
   /// Returns `true` on iOS, macOS, tvOS, and visionOS; `false` on all other platforms.
-  public static let defaultHandleAppLifecycle: Bool = {
+  public static let defaultObservesAppLifecycle: Bool = {
     #if os(iOS) || os(macOS) || os(tvOS) || os(visionOS)
       return true
     #else
       return false
     #endif
   }()
+
+  /// Default value for ``handleAppLifecycle``.
+  @available(*, deprecated, message: "Use defaultObservesAppLifecycle instead.")
+  public static let defaultHandleAppLifecycle: Bool = defaultObservesAppLifecycle
 
   /// Creates a new ``RealtimeClientOptions`` with the specified configuration.
   ///
@@ -152,7 +170,7 @@ public struct RealtimeClientOptions: Sendable {
   ///   - reconnectDelay: Base delay in seconds before attempting to reconnect after a disconnection; later automatic attempts back off exponentially from this base until reconnected. Defaults to ``defaultReconnectDelay``.
   ///   - timeoutInterval: Maximum time in seconds to wait for a server reply. Defaults to ``defaultTimeoutInterval``.
   ///   - disconnectOnSessionLoss: Whether to disconnect the channel when the authentication session is lost. Defaults to ``defaultDisconnectOnSessionLoss``.
-  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectOnSubscribe``.
+  ///   - connectOnSubscribe: Whether to automatically call ``RealtimeClientV2/connect()`` when subscribing to a channel. Defaults to ``defaultConnectsOnSubscribe``.
   ///   - maxRetryAttempts: Maximum number of subscribe retry attempts. Defaults to ``defaultMaxRetryAttempts``.
   ///   - disconnectOnEmptyChannelsAfter: Seconds to wait before disconnecting when all channels are removed. Defaults to ``defaultDisconnectOnEmptyChannelsAfter``.
   ///   - vsn: The Phoenix protocol version to use. Defaults to ``RealtimeProtocolVersion/v2``.
@@ -161,23 +179,23 @@ public struct RealtimeClientOptions: Sendable {
   ///   - accessToken: Optional async closure that returns the current access token.
   ///   - logger: Optional logger conforming to `SupabaseLogger`.
   ///   - session: A template `URLSession` to configure the WebSocket connection from. Defaults to `nil`.
-  ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultHandleAppLifecycle``.
+  ///   - handleAppLifecycle: Whether to automatically reconnect on app foreground. Defaults to ``defaultObservesAppLifecycle``.
   public init(
     headers: [String: String] = [:],
     heartbeatInterval: TimeInterval = Self.defaultHeartbeatInterval,
     reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
     timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
-    connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+    connectOnSubscribe: Bool = Self.defaultConnectsOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
     vsn: RealtimeProtocolVersion = .v2,
-    logLevel: LogLevel? = nil,
+    logLevel: RealtimeServerLogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil,
     session: URLSession? = nil,
-    handleAppLifecycle: Bool = Self.defaultHandleAppLifecycle
+    handleAppLifecycle: Bool = Self.defaultObservesAppLifecycle
   ) {
     self.headers = HTTPFields(headers)
     self.heartbeatInterval = heartbeatInterval
@@ -188,7 +206,7 @@ public struct RealtimeClientOptions: Sendable {
     self.maxRetryAttempts = maxRetryAttempts
     self.disconnectOnEmptyChannelsAfter = disconnectOnEmptyChannelsAfter
     self.vsn = vsn
-    self.handleAppLifecycle = handleAppLifecycle
+    self.observesAppLifecycle = handleAppLifecycle
     self.logLevel = logLevel
     self.fetch = fetch
     self.accessToken = accessToken
@@ -205,10 +223,10 @@ public struct RealtimeClientOptions: Sendable {
     reconnectDelay: TimeInterval = Self.defaultReconnectDelay,
     timeoutInterval: TimeInterval = Self.defaultTimeoutInterval,
     disconnectOnSessionLoss: Bool = Self.defaultDisconnectOnSessionLoss,
-    connectOnSubscribe: Bool = Self.defaultConnectOnSubscribe,
+    connectOnSubscribe: Bool = Self.defaultConnectsOnSubscribe,
     maxRetryAttempts: Int = Self.defaultMaxRetryAttempts,
     disconnectOnEmptyChannelsAfter: TimeInterval = Self.defaultDisconnectOnEmptyChannelsAfter,
-    logLevel: LogLevel? = nil,
+    logLevel: RealtimeServerLogLevel? = nil,
     fetch: (@Sendable (_ request: URLRequest) async throws -> (Data, URLResponse))? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil,
     logger: (any SupabaseLogger)? = nil
@@ -331,7 +349,7 @@ extension HTTPField.Name {
   static let apiKey = Self("apiKey")!
 }
 
-/// Verbosity of log output emitted by the Realtime client.
+/// How much the Realtime server logs for one connection.
 ///
 /// Pass a value to ``RealtimeClientOptions/init(headers:heartbeatInterval:reconnectDelay:timeoutInterval:disconnectOnSessionLoss:connectOnSubscribe:maxRetryAttempts:disconnectOnEmptyChannelsAfter:vsn:logLevel:fetch:accessToken:logger:session:handleAppLifecycle:)``
 /// to control how much detail the Realtime server logs.
@@ -341,7 +359,7 @@ extension HTTPField.Name {
 /// - ``info``
 /// - ``warn``
 /// - ``error``
-public enum LogLevel: String, Sendable {
+public enum RealtimeServerLogLevel: String, Sendable {
   /// Informational messages.
   case info
 
@@ -350,4 +368,25 @@ public enum LogLevel: String, Sendable {
 
   /// Error messages only.
   case error
+
+  /// Warnings and errors. The same level as ``warn``, with the name v3 uses.
+  public static var warning: Self { .warn }
+}
+
+/// The v2 name of ``RealtimeServerLogLevel``.
+@available(*, deprecated, renamed: "RealtimeServerLogLevel")
+public typealias LogLevel = RealtimeServerLogLevel
+
+extension RealtimeClientStatus {
+  /// Whether the client is ``connected``.
+  public var isConnected: Bool {
+    self == .connected
+  }
+}
+
+extension RealtimeChannelStatus {
+  /// Whether the channel is ``subscribed``.
+  public var isSubscribed: Bool {
+    self == .subscribed
+  }
 }

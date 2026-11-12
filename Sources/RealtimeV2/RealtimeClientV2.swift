@@ -256,7 +256,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      if options.handleAppLifecycle {
+      if options.observesAppLifecycle {
         let manager = RealtimeLifecycleManager(client: self)
         mutableState.withValue { $0.lifecycleManager = manager }
       }
@@ -946,7 +946,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: RealtimeServerLogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {
