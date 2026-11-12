@@ -109,6 +109,12 @@ struct JSONNumberTests {
     #expect((value.value as? Double) == 123456789012345678901234567890123456789012.5)
   }
 
+  @Test func encodableInitKeepsScalarsWithoutAnEncoder() throws {
+    #expect(try JSONValue(true) == .bool(true))
+    #expect(try JSONValue(0.1) == .number(JSONNumber("0.1")!))
+    #expect(try JSONValue(42) == .number(42))
+  }
+
   @Test func numbersWithTheSameValueAreEqual() {
     let one: JSONValue = 1
     let onePointZero: JSONValue = 1.0
