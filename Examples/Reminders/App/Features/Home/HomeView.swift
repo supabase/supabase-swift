@@ -1,7 +1,9 @@
+import Supabase
 import SwiftUI
 
 struct HomeView: View {
-  @Environment(SessionStore.self) private var session
+  @Environment(AuthModel.self) private var auth
+  @Environment(\.supabase) private var client
   @Environment(DataStore.self) private var store
 
   @State private var path: [ReminderSource] = []
@@ -160,12 +162,12 @@ struct HomeView: View {
 
   private var accountMenu: some View {
     Menu {
-      if let email = session.user?.email {
+      if let email = auth.user?.email {
         Text(email)
       }
       Button("Sign Out", role: .destructive) {
         Task {
-          do { try await session.signOut() } catch { self.error = error }
+          do { try await client.auth.signOut() } catch { self.error = error }
         }
       }
     } label: {

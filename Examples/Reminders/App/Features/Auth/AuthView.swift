@@ -1,7 +1,8 @@
+import Supabase
 import SwiftUI
 
 struct AuthView: View {
-  @Environment(SessionStore.self) private var session
+  @Environment(\.supabase) private var client
 
   @State private var email = ""
   @State private var password = ""
@@ -35,11 +36,13 @@ struct AuthView: View {
 
         Section {
           Button("Sign In") {
-            submit { try await session.signIn(email: email, password: password) }
+            submit { try await client.auth.signIn(email: email, password: password) }
           }
           .accessibilityIdentifier("auth.signIn")
           Button("Create Account") {
-            submit { try await session.signUp(email: email, password: password) }
+            // The local project needs no email confirmation, so a new account is
+            // signed in at once. `AuthModel` reports the new session.
+            submit { _ = try await client.auth.signUp(email: email, password: password) }
           }
           .accessibilityIdentifier("auth.signUp")
         }

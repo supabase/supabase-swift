@@ -23,7 +23,7 @@ struct AttachmentsRepository: Sendable {
   func upload(jpeg: Data, reminderID: UUID) async throws -> Attachment {
     let path = "\(reminderID.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
     try await client.storage.from(Self.bucket)
-      .upload(path, data: jpeg, options: FileOptions(contentType: "image/jpeg"))
+      .upload(path: path, data: jpeg, options: UploadOptions(contentType: "image/jpeg"))
 
     do {
       return try await client.from("reminder_attachments")
@@ -39,7 +39,7 @@ struct AttachmentsRepository: Sendable {
   }
 
   func download(path: String) async throws -> Data {
-    try await client.storage.from(Self.bucket).download(path: path)
+    try await client.storage.from(Self.bucket).download(path: path).data()
   }
 
   /// Removes the file, then the row.

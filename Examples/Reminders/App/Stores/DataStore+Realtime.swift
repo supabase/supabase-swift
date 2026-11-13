@@ -9,21 +9,22 @@ extension DataStore {
   func startRealtime() async {
     await stopRealtime()
 
-    // Each start has its own topic. `client.channel` gives back an open channel that
-    // has the same topic, and a channel cannot get new streams after it joins.
-    let channel = client.channel("reminders-sync-\(UUID().uuidString)")
+    // Each start has its own topic, so two starts that overlap never share one channel.
+    // `client.channel` gives back the open channel when the topic is the same.
+    let channel = await client.channel("reminders-sync-\(UUID().uuidString)")
     realtimeChannel = channel
-    // The streams must exist before `subscribe`: the join message lists them.
-    let lists = channel.postgresChange(AnyAction.self, schema: "public", table: "lists")
-    let reminders = channel.postgresChange(AnyAction.self, schema: "public", table: "reminders")
-    let members = channel.postgresChange(AnyAction.self, schema: "public", table: "list_members")
-    let invitations = channel.postgresChange(
-      AnyAction.self, schema: "public", table: "list_invitations")
-    let attachments = channel.postgresChange(
-      AnyAction.self, schema: "public", table: "reminder_attachments")
+    // Open the streams before `subscribe`, so that the join lists every table.
+    let lists = await channel.postgresChanges(of: ReminderList.self, table: "lists")
+    let reminders = await channel.postgresChanges(of: Reminder.self, table: "reminders")
+    let members = await channel.postgresChanges(table: "list_members")
+    let invitations = await channel.postgresChanges(table: "list_invitations")
+    let attachments = await channel.postgresChanges(
+      of: Attachment.self, table: "reminder_attachments")
+    let events = await channel.events()
 
     do {
-      try await channel.subscribeWithError()
+      // Returns when the server reports that the Postgres changes are live.
+      try await channel.subscribe()
     } catch {
       if realtimeChannel === channel, !Task.isCancelled { self.error = error }
       return
@@ -48,6 +49,9 @@ extension DataStore {
         group.addTask {
           for await change in attachments { await self?.applyAttachmentChange(change) }
         }
+        group.addTask {
+          for await event in events where event == .resubscribed { await self?.rejoined() }
+        }
       }
     }
   }
@@ -61,51 +65,55 @@ extension DataStore {
     realtimeChannel = nil
   }
 
-  private func applyListChange(_ change: AnyAction) {
-    switch change {
-    case .insert(let action):
-      if let list = decode(ReminderList.self, from: action.record) { upsert(list, in: \.lists) }
-    case .update(let action):
-      if let list = decode(ReminderList.self, from: action.record), !hasUpdateInFlight(list.id) {
-        upsert(list, in: \.lists)
-      }
-    case .delete(let action):
-      if let id = rowID(in: action.oldRecord) { removeList(id: id) }
+  private func applyListChange(_ change: TypedPostgresChange<ReminderList>) {
+    switch change.kind {
+    case .insert:
+      if let list = try? change.row() { upsert(list, in: \.lists) }
+    case .update:
+      if let list = try? change.row(), !hasUpdateInFlight(list.id) { upsert(list, in: \.lists) }
+    case .delete:
+      if let id = rowID(in: change.oldRecord) { removeList(id: id) }
+    default:
+      break
     }
   }
 
-  private func applyReminderChange(_ change: AnyAction) {
-    switch change {
-    case .insert(let action):
-      if let reminder = decode(Reminder.self, from: action.record) {
+  private func applyReminderChange(_ change: TypedPostgresChange<Reminder>) {
+    switch change.kind {
+    case .insert:
+      if let reminder = try? change.row() { upsert(reminder, in: \.reminders) }
+    case .update:
+      if let reminder = try? change.row(), !hasUpdateInFlight(reminder.id) {
         upsert(reminder, in: \.reminders)
       }
-    case .update(let action):
-      if let reminder = decode(Reminder.self, from: action.record),
-        !hasUpdateInFlight(reminder.id)
-      {
-        upsert(reminder, in: \.reminders)
-      }
-    case .delete(let action):
-      if let id = rowID(in: action.oldRecord) { removeReminder(id: id) }
+    case .delete:
+      if let id = rowID(in: change.oldRecord) { removeReminder(id: id) }
+    default:
+      break
     }
   }
 
-  private func applyAttachmentChange(_ change: AnyAction) {
-    switch change {
-    case .insert(let action):
-      if let attachment = decode(Attachment.self, from: action.record) {
-        upsert(attachment, in: \.attachments)
-      }
-    case .update(let action):
-      if let attachment = decode(Attachment.self, from: action.record) {
-        upsert(attachment, in: \.attachments)
-      }
-    case .delete(let action):
-      if let id = rowID(in: action.oldRecord), attachments.contains(where: { $0.id == id }) {
+  private func applyAttachmentChange(_ change: TypedPostgresChange<Attachment>) {
+    switch change.kind {
+    case .insert, .update:
+      if let attachment = try? change.row() { upsert(attachment, in: \.attachments) }
+    case .delete:
+      if let id = rowID(in: change.oldRecord), attachments.contains(where: { $0.id == id }) {
         changeCount += 1
         attachments.removeAll { $0.id == id }
       }
+    default:
+      break
+    }
+  }
+
+  /// The channel joined again after the socket dropped and came back. Changes made while
+  /// it was away never arrive, so everything is read again.
+  private func rejoined() async {
+    do {
+      try await load()
+    } catch {
+      self.error = error
     }
   }
 
@@ -114,9 +122,9 @@ extension DataStore {
   ///
   /// Row level security does not apply to delete events: each client gets the delete
   /// events of all users. The app ignores those for lists that it does not show.
-  private func membershipChanged(_ change: AnyAction) async {
-    if case .delete(let action) = change {
-      let listID = action.oldRecord["list_id"]?.stringValue.flatMap(UUID.init(uuidString:))
+  private func membershipChanged(_ change: PostgresChange) async {
+    if change.kind == .delete {
+      let listID = change.oldRecord?["list_id"]?.stringValue.flatMap(UUID.init(uuidString:))
       guard let listID, list(id: listID) != nil else { return }
     }
     do {
@@ -128,9 +136,9 @@ extension DataStore {
 
   /// An invitation row has no list name, so the app reads the invitations again.
   /// As for members, a delete event can be about an invitation of other people.
-  private func invitationsChanged(_ change: AnyAction) async {
-    if case .delete(let action) = change {
-      guard let id = rowID(in: action.oldRecord),
+  private func invitationsChanged(_ change: PostgresChange) async {
+    if change.kind == .delete {
+      guard let id = rowID(in: change.oldRecord),
         sentInvitations.contains(where: { $0.id == id })
           || incomingInvitations.contains(where: { $0.id == id })
       else { return }
@@ -151,12 +159,8 @@ extension DataStore {
     inFlight[id, default: 0] > 0
   }
 
-  private func decode<Row: Decodable>(_ type: Row.Type, from record: [String: AnyJSON]) -> Row? {
-    try? record.decode(as: type, decoder: AnyJSON.decoder)
-  }
-
   /// A delete event has only the primary key of the row.
-  private func rowID(in record: [String: AnyJSON]) -> UUID? {
-    record["id"]?.stringValue.flatMap(UUID.init(uuidString:))
+  private func rowID(in record: PostgresRow?) -> UUID? {
+    record?["id"]?.stringValue.flatMap(UUID.init(uuidString:))
   }
 }

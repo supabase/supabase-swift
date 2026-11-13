@@ -16,7 +16,7 @@ The app works only while the device is online. It has no local cache.
 
 ## Requirements
 
-- Xcode 16.4 or later
+- Xcode 26 or later (supabase-swift v3 needs Swift 6.2)
 - Docker, or a tool that is compatible with Docker
 - Supabase CLI 3.1 or later
 - For the UI tests: [Maestro](https://maestro.dev) 2.12 or later, and `jq`
@@ -115,15 +115,17 @@ before they accept.
 App/
   RemindersApp.swift     Builds the SupabaseClient
   Config.swift           URL and publishable key of the local stack
-  Supabase/              Models and repositories. Every Supabase call is here
-  Stores/                @Observable state: session, data, network, smart lists
+  Supabase/              Models and repositories. Every database and Storage call is here
+  Stores/                @Observable state: data, network, smart lists
   Features/              One folder for each screen
   Shared/                Root view, error alert, list colors and icons
 ```
 
 - **Repositories** (`ListsRepository`, `RemindersRepository`, `SharingRepository`,
   `AttachmentsRepository`) make the PostgREST, RPC and Storage calls.
-- **`SessionStore`** follows `auth.authStateChanges`.
+- **`AuthModel`** (from the SDK) follows the auth state. `RootView` switches on its
+  `status`. The views call `client.auth` to sign in, sign up and sign out. The one
+  `SupabaseClient` reaches the views through the `\.supabase` environment value.
 - **`DataStore`** keeps all rows in memory. It loads them after sign-in and keeps them
   current from one Realtime channel
   ([DataStore+Realtime.swift](App/Stores/DataStore+Realtime.swift)).

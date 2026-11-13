@@ -1,33 +1,34 @@
 import Supabase
 import SwiftUI
 
+/// The one client of the app. Every view and store uses it, so they all share one session.
+///
+/// The URL in `Config` is fixed, so the initializer cannot throw here.
+let supabaseClient = try! SupabaseClient(
+  supabaseURL: Config.supabaseURL,
+  supabaseKey: Config.supabaseKey
+)
+
+extension EnvironmentValues {
+  @Entry var supabase = supabaseClient
+}
+
 @main
 struct RemindersApp: App {
-  private let client: SupabaseClient
-  @State private var session: SessionStore
+  /// Follows the auth state of `supabaseClient`. The stored session comes first, and the
+  /// client refreshes it before it reports it when it is expired.
+  @State private var auth = AuthModel(client: supabaseClient.auth)
 
   init() {
     #if DEBUG
       SmartList.selfTest()
     #endif
-
-    let client = SupabaseClient(
-      supabaseURL: Config.supabaseURL,
-      supabaseKey: Config.supabaseKey,
-      options: SupabaseClientOptions(
-        // Sends the stored session at once on launch, before any network call.
-        // This is the default in the next major version.
-        auth: .init(emitLocalSessionAsInitialSession: true)
-      )
-    )
-    self.client = client
-    _session = State(initialValue: SessionStore(client: client))
   }
 
   var body: some Scene {
     WindowGroup {
-      RootView(client: client)
-        .environment(session)
+      RootView()
+        .environment(auth)
     }
   }
 }

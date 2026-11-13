@@ -41,7 +41,7 @@ final class DataStore {
   @ObservationIgnored private var loadCount = 0
 
   @ObservationIgnored let client: SupabaseClient
-  @ObservationIgnored var realtimeChannel: RealtimeChannelV2?
+  @ObservationIgnored var realtimeChannel: RealtimeChannel?
   @ObservationIgnored var realtimeTask: Task<Void, Never>?
   @ObservationIgnored let listsRepository: ListsRepository
   @ObservationIgnored let remindersRepository: RemindersRepository

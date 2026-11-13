@@ -31,8 +31,8 @@ func errorMessage(for error: any Error) -> String {
   if error.message.contains("invitation_not_found") {
     return "This invitation is no longer available."
   }
-  // 23505 is a unique violation. The only unique rule that a user can break is one
-  // pending invitation for each list and email.
-  if error.code == "23505" { return "This person already has an invitation." }
+  // The only unique rule that a user can break is one pending invitation for each list
+  // and email.
+  if error.code == .uniqueViolation { return "This person already has an invitation." }
   return error.localizedDescription
 }

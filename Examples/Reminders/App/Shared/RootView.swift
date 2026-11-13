@@ -3,21 +3,21 @@ import SwiftUI
 
 /// Chooses between the loading, signed-out and signed-in states.
 struct RootView: View {
-  @Environment(SessionStore.self) private var session
+  @Environment(AuthModel.self) private var auth
+  @Environment(\.supabase) private var client
   @State private var network = NetworkMonitor()
-
-  let client: SupabaseClient
 
   var body: some View {
     ZStack {
       Group {
-        if session.isLoading {
+        switch auth.status {
+        case .loading:
           ProgressView()
-        } else if let user = session.user {
-          SignedInView(client: client, userID: user.id)
+        case .signedIn(let session):
+          SignedInView(client: client, userID: session.user.id)
             // A different user gets a new store. No data moves between accounts.
-            .id(user.id)
-        } else {
+            .id(session.user.id)
+        case .signedOut:
           AuthView()
         }
       }
@@ -28,7 +28,6 @@ struct RootView: View {
         OfflineView()
       }
     }
-    .task { await session.observe() }
     .task { await network.observe() }
   }
 }
