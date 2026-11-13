@@ -67,13 +67,14 @@ final class DataStore {
   /// The result replaces the row arrays, so it must not be older than they are:
   /// - If a newer `load()` started, this one stops. The newer one gives the result.
   /// - If a write or a Realtime event changed a row while the requests ran, the result
-  ///   can be from before that change. The load then reads again.
+  ///   can be from before that change. The load then reads again, with no limit: an old
+  ///   result must never replace the arrays. Changes come from people, so a read soon
+  ///   gets through with no change.
   func load() async throws {
     loadCount += 1
     let thisLoad = loadCount
-    let maxAttempts = 3
 
-    for attempt in 1...maxAttempts {
+    while true {
       let changesAtStart = changeCount
 
       async let lists = listsRepository.fetchAll()
@@ -86,7 +87,7 @@ final class DataStore {
       let result = try await (lists, reminders, members, profiles, sent, incoming, attachments)
 
       guard thisLoad == loadCount else { return }
-      if changeCount != changesAtStart, attempt < maxAttempts { continue }
+      if changeCount != changesAtStart { continue }
 
       (self.lists, self.reminders, self.members, self.profiles) =
         (result.0, result.1, result.2, result.3)

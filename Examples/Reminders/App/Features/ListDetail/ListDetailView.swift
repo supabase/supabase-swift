@@ -8,6 +8,8 @@ struct ListDetailView: View {
   let source: ReminderSource
 
   @State private var newTitle = ""
+  /// True while an insert from the field waits for the server.
+  @State private var isAddingReminder = false
   @State private var showsCompleted = false
   @State private var editedReminder: Reminder?
   @State private var isEditingList = false
@@ -176,7 +178,11 @@ struct ListDetailView: View {
   }
 
   /// An insert waits for the server. The text stays in the field until the row exists.
+  ///
+  /// A second submit while the insert runs does nothing, so the same title is not added
+  /// two times. Text typed while the insert runs stays in the field.
   private func addReminder() {
+    guard !isAddingReminder else { return }
     let title = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !title.isEmpty, let targetListID else {
       newTitle = ""
@@ -190,11 +196,15 @@ struct ListDetailView: View {
     case .smart(.flagged): isFlagged = true
     default: break
     }
+    isAddingReminder = true
     Task {
+      defer { isAddingReminder = false }
       do {
         try await store.createReminder(
           title: title, listID: targetListID, dueAt: dueAt, isFlagged: isFlagged)
-        newTitle = ""
+        if newTitle.trimmingCharacters(in: .whitespacesAndNewlines) == title {
+          newTitle = ""
+        }
         isNewReminderFocused = true
       } catch {
         self.error = error
