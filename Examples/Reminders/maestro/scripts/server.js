@@ -41,6 +41,9 @@ if (ACTION === 'insert_reminder') {
   send('PATCH', '/lists?name=' + eq(LIST), { name: NEW_NAME })
 } else if (ACTION === 'delete_list') {
   send('DELETE', '/lists?name=' + eq(LIST))
+} else if (ACTION === 'remove_member') {
+  var profile = send('GET', '/profiles?email=' + eq(EMAIL))[0]
+  send('DELETE', '/list_members?user_id=' + eq(profile.id))
 } else {
   throw new Error('Unknown ACTION: ' + ACTION)
 }

@@ -19,6 +19,12 @@ final class DataStore {
   // Views must treat them as read-only.
   var lists: [ReminderList] = []
   var reminders: [Reminder] = []
+  var members: [ListMember] = []
+  var profiles: [Profile] = []
+  /// Invitations of the lists that the user owns.
+  var sentInvitations: [Invitation] = []
+  /// Pending invitations for the user.
+  var incomingInvitations: [IncomingInvitation] = []
   private(set) var isLoaded = false
 
   /// The last error of a write that a view started with `run`. The root view shows it.
@@ -33,12 +39,14 @@ final class DataStore {
   @ObservationIgnored var realtimeTask: Task<Void, Never>?
   @ObservationIgnored let listsRepository: ListsRepository
   @ObservationIgnored let remindersRepository: RemindersRepository
+  @ObservationIgnored let sharingRepository: SharingRepository
 
   init(client: SupabaseClient, userID: UUID) {
     self.client = client
     self.userID = userID
     listsRepository = ListsRepository(client: client)
     remindersRepository = RemindersRepository(client: client)
+    sharingRepository = SharingRepository(client: client)
   }
 
   /// Reads everything that the user can see. Call it after sign-in and after the
@@ -46,7 +54,13 @@ final class DataStore {
   func load() async throws {
     async let lists = listsRepository.fetchAll()
     async let reminders = remindersRepository.fetchAll()
+    async let members = sharingRepository.fetchMembers()
+    async let profiles = sharingRepository.fetchProfiles()
+    async let sent = sharingRepository.fetchSentInvitations(ownerID: userID)
+    async let incoming = sharingRepository.fetchIncoming()
     (self.lists, self.reminders) = try await (lists, reminders)
+    (self.members, self.profiles) = try await (members, profiles)
+    (sentInvitations, incomingInvitations) = try await (sent, incoming)
     isLoaded = true
   }
 

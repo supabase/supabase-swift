@@ -1,3 +1,4 @@
+import Supabase
 import SwiftUI
 
 extension View {
@@ -20,6 +21,18 @@ extension View {
 }
 
 /// The text that the app shows for an error.
+///
+/// The database reports sharing rules with an error code or a fixed message. This
+/// function turns them into sentences for the user.
 func errorMessage(for error: any Error) -> String {
-  error.localizedDescription
+  guard let error = error as? PostgrestError else { return error.localizedDescription }
+  if error.message.contains("cannot_invite_self") { return "You cannot invite yourself." }
+  if error.message.contains("already_member") { return "This person is already a member." }
+  if error.message.contains("invitation_not_found") {
+    return "This invitation is no longer available."
+  }
+  // 23505 is a unique violation. The only unique rule that a user can break is one
+  // pending invitation for each list and email.
+  if error.code == "23505" { return "This person already has an invitation." }
+  return error.localizedDescription
 }

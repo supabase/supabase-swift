@@ -13,6 +13,8 @@ extension DataStore {
     let lists = channel.postgresChange(AnyAction.self, schema: "public", table: "lists")
     let reminders = channel.postgresChange(AnyAction.self, schema: "public", table: "reminders")
     let members = channel.postgresChange(AnyAction.self, schema: "public", table: "list_members")
+    let invitations = channel.postgresChange(
+      AnyAction.self, schema: "public", table: "list_invitations")
 
     do {
       try await channel.subscribeWithError()
@@ -32,6 +34,9 @@ extension DataStore {
         }
         group.addTask {
           for await _ in members { await self?.membershipChanged() }
+        }
+        group.addTask {
+          for await _ in invitations { await self?.invitationsChanged() }
         }
       }
     }
@@ -81,6 +86,15 @@ extension DataStore {
   private func membershipChanged() async {
     do {
       try await load()
+    } catch {
+      self.error = error
+    }
+  }
+
+  /// An invitation row has no list name, so the app reads the invitations again.
+  private func invitationsChanged() async {
+    do {
+      try await reloadInvitations()
     } catch {
       self.error = error
     }
