@@ -466,7 +466,7 @@ public final class SupabaseClient: Sendable {
       if let accessToken {
         try await accessToken()
       } else {
-        try await auth.session.accessToken
+        try await auth.session().accessToken
       }
     }
   }
@@ -477,16 +477,16 @@ public final class SupabaseClient: Sendable {
 
   /// Mirrors Auth state onto the Functions and Realtime sub-clients for the client's lifetime.
   ///
-  /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
+  /// The `events()` stream never finishes on its own, so the observing task must not capture `self`
   /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
   /// cancels this task — could never run. The stream is therefore resolved up front (so the task
   /// doesn't need `self` to reach `auth`) and `self` is captured weakly.
   private func listenForAuthEvents() {
-    let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
-      for await (event, session) in authStateChanges {
+    let task = Task { [weak self, changes = _auth.events()] in
+      for await change in changes {
         // `handleTokenChanged` needs a live client; once it's gone there is nothing to update.
         guard let self else { return }
-        await self.handleTokenChanged(event: event, session: session)
+        await self.handleTokenChanged(event: change.event, session: change.session)
       }
     }
     mutableState.withValue {

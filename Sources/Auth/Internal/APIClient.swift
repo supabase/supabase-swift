@@ -40,14 +40,14 @@ struct APIClient: Sendable {
   }
 
   /// Error codes that should clean up local session.
-  private let sessionCleanupErrorCodes: [ErrorCode] = [
+  private let sessionCleanupErrorCodes: [AuthError.Code] = [
     .sessionNotFound,
     .sessionExpired,
     .refreshTokenNotFound,
     .refreshTokenAlreadyUsed,
   ]
 
-  private func invalidatesSession(_ errorCode: ErrorCode, for session: Session?) -> Bool {
+  private func invalidatesSession(_ errorCode: AuthError.Code, for session: Session?) -> Bool {
     sessionCleanupErrorCodes.contains(errorCode) || errorCode == .userBanned && session != nil
   }
 
@@ -111,11 +111,11 @@ struct APIClient: Sendable {
 
     let responseAPIVersion = parseResponseAPIVersion(response)
 
-    let errorCode: ErrorCode? =
+    let errorCode: AuthError.Code? =
       if let responseAPIVersion, responseAPIVersion >= apiVersions[._20240101]!.timestamp,
         let code = error.code
       {
-        ErrorCode(code)
+        AuthError.Code(rawValue: code)
       } else {
         error.errorCode
       }
@@ -146,7 +146,7 @@ struct APIClient: Sendable {
     } else {
       return .api(
         message: error._getErrorMessage(),
-        errorCode: errorCode ?? .unknown,
+        errorCode: errorCode ?? AuthError.Code(rawValue: "unknown"),
         underlyingData: response.data,
         underlyingResponse: response.underlyingResponse
       )
@@ -169,7 +169,7 @@ struct _RawAPIErrorResponse: Decodable {
   let errorDescription: String?
   let error: String?
   let code: String?
-  let errorCode: ErrorCode?
+  let errorCode: AuthError.Code?
   let weakPassword: _WeakPassword?
 
   struct _WeakPassword: Decodable {

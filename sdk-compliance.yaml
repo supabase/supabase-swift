@@ -32,6 +32,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithIdToken
+      - AuthClient.signInWithIDToken
   auth.sign_in.sign_in_anonymously:
     status: implemented
     symbols:
@@ -66,6 +67,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -89,6 +91,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.getClaims
+      - AuthClient.claims
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -97,6 +100,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -105,11 +109,13 @@ features:
     status: implemented
     symbols:
       - AuthClient.update
+      - AuthClient.updateUser
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
       - AuthClient.authStateChanges
       - AuthClient.onAuthStateChange
+      - AuthClient.events
   auth.session.auto_refresh:
     status: implemented
     symbols:
@@ -131,11 +137,14 @@ features:
     status: implemented
     symbols:
       - AuthClient.userIdentities
+      - AuthClient.identities
 
   auth.mfa.enroll:
     status: implemented
     symbols:
       - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
   auth.mfa.challenge:
     status: implemented
     symbols:
@@ -156,10 +165,12 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+      - AuthMFA.factors
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
       - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
 
   auth.admin.create_user:
     status: implemented
@@ -173,10 +184,12 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.updateUserById
+      - AuthAdmin.updateUser
   auth.admin.get_user:
     status: implemented
     symbols:
       - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
@@ -185,6 +198,7 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
+      - AuthAdmin.inviteUser
   auth.admin.sign_out:
     status: implemented
     symbols:
@@ -242,6 +256,7 @@ features:
       - AuthClient.oauthServer
       - AuthOAuthServer
       - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect
@@ -303,6 +318,7 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
