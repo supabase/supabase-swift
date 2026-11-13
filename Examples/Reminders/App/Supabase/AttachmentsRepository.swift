@@ -1,5 +1,5 @@
 import Foundation
-import Supabase
+@_spi(Experimental) import Supabase
 
 /// All calls for reminder images: the `reminder_attachments` table and the private
 /// `attachments` Storage bucket.
@@ -12,9 +12,9 @@ struct AttachmentsRepository: Sendable {
   private static let bucket = "attachments"
 
   func fetchAll() async throws -> [Attachment] {
-    try await client.from("reminder_attachments")
+    try await client.from(Attachment.self)
       .select()
-      .order("created_at")
+      .order { $0.createdAt.asc() }
       .execute()
       .value
   }
@@ -26,9 +26,9 @@ struct AttachmentsRepository: Sendable {
       .upload(path: path, data: jpeg, options: UploadOptions(contentType: "image/jpeg"))
 
     do {
-      return try await client.from("reminder_attachments")
-        .insert(["reminder_id": reminderID.uuidString, "storage_path": path])
-        .select()
+      return try await client.from(Attachment.self)
+        .insert(Attachment.Draft(reminderID: reminderID, storagePath: path))
+        .returning()
         .single()
         .execute()
         .value
@@ -45,9 +45,9 @@ struct AttachmentsRepository: Sendable {
   /// Removes the file, then the row.
   func delete(_ attachment: Attachment) async throws {
     try await deleteObjects(paths: [attachment.storagePath])
-    try await client.from("reminder_attachments")
+    try await client.from(Attachment.self)
       .delete()
-      .eq("id", value: attachment.id)
+      .where { $0.id.eq(attachment.id) }
       .execute()
   }
 

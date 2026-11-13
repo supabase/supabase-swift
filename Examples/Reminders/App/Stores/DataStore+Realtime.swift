@@ -1,5 +1,5 @@
 import Foundation
-import Supabase
+@_spi(Experimental) import Supabase
 
 // Realtime sync. One channel follows every table that the app shows. Row level security
 // applies to these events, so each user gets only the changes they can read.
@@ -13,25 +13,36 @@ extension DataStore {
     // `client.channel` gives back the open channel when the topic is the same.
     let channel = await client.channel("reminders-sync-\(UUID().uuidString)")
     realtimeChannel = channel
-    // Open the streams before `subscribe`, so that the join lists every table.
-    let lists = await channel.postgresChanges(of: ReminderList.self, table: "lists")
-    let reminders = await channel.postgresChanges(of: Reminder.self, table: "reminders")
-    let members = await channel.postgresChanges(table: "list_members")
-    let invitations = await channel.postgresChanges(table: "list_invitations")
-    let attachments = await channel.postgresChanges(
-      of: Attachment.self, table: "reminder_attachments")
-    let events = await channel.events()
-
     do {
+      // Open the streams before `subscribe`, so that the join lists every table. Each
+      // `@Table` type names its table. These calls throw only for a filter that Realtime
+      // cannot run, and they have no filter.
+      let lists = try await channel.postgresChanges(of: ReminderList.self)
+      let reminders = try await channel.postgresChanges(of: Reminder.self)
+      let members = try await channel.postgresChanges(of: ListMember.self)
+      let invitations = try await channel.postgresChanges(of: Invitation.self)
+      let attachments = try await channel.postgresChanges(of: Attachment.self)
+      let events = await channel.events()
+
       // Returns when the server reports that the Postgres changes are live.
       try await channel.subscribe()
+
+      // A newer start, or a stop, took the place of this one while it joined.
+      guard realtimeChannel === channel else { return }
+      follow(lists, reminders, members, invitations, attachments, events)
     } catch {
       if realtimeChannel === channel, !Task.isCancelled { self.error = error }
-      return
     }
+  }
 
-    // A newer start, or a stop, took the place of this one while it joined.
-    guard realtimeChannel === channel else { return }
+  private func follow(
+    _ lists: AsyncStream<TypedPostgresChange<ReminderList>>,
+    _ reminders: AsyncStream<TypedPostgresChange<Reminder>>,
+    _ members: AsyncStream<TypedPostgresChange<ListMember>>,
+    _ invitations: AsyncStream<TypedPostgresChange<Invitation>>,
+    _ attachments: AsyncStream<TypedPostgresChange<Attachment>>,
+    _ events: AsyncStream<RealtimeChannelEvent>
+  ) {
     realtimeTask = Task { [weak self] in
       await withTaskGroup(of: Void.self) { group in
         group.addTask {
@@ -122,7 +133,7 @@ extension DataStore {
   ///
   /// Row level security does not apply to delete events: each client gets the delete
   /// events of all users. The app ignores those for lists that it does not show.
-  private func membershipChanged(_ change: PostgresChange) async {
+  private func membershipChanged(_ change: TypedPostgresChange<ListMember>) async {
     if change.kind == .delete {
       let listID = change.oldRecord?["list_id"]?.stringValue.flatMap(UUID.init(uuidString:))
       guard let listID, list(id: listID) != nil else { return }
@@ -136,7 +147,7 @@ extension DataStore {
 
   /// An invitation row has no list name, so the app reads the invitations again.
   /// As for members, a delete event can be about an invitation of other people.
-  private func invitationsChanged(_ change: PostgresChange) async {
+  private func invitationsChanged(_ change: TypedPostgresChange<Invitation>) async {
     if change.kind == .delete {
       guard let id = rowID(in: change.oldRecord),
         sentInvitations.contains(where: { $0.id == id })

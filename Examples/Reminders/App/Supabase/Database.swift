@@ -1,0 +1,105 @@
+import Foundation
+import PostgrestMacros
+
+enum InvitationStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
+  case pending
+  case accepted
+  case declined
+}
+
+@Table("list_invitations")
+struct ListInvitations {
+  @PrimaryKey @Default var id: UUID
+  var listID: UUID
+  var invitedEmail: String
+  @Default var invitedBy: UUID
+  @Default var status: InvitationStatus
+  @Default var createdAt: Date
+}
+
+@Table("list_members")
+struct ListMembers {
+  @PrimaryKey var listID: UUID
+  @PrimaryKey var userID: UUID
+  @Default var createdAt: Date
+}
+
+@Table("lists")
+struct Lists {
+  @PrimaryKey @Default var id: UUID
+  var name: String
+  @Default var color: String
+  @Default var icon: String
+  @Default var createdAt: Date
+  @Default var updatedAt: Date
+  @Default var ownerID: UUID
+}
+
+@Table("profiles")
+struct Profiles {
+  @PrimaryKey var id: UUID
+  var email: String
+  var displayName: String
+  @Default var createdAt: Date
+}
+
+@Table("reminder_attachments")
+struct ReminderAttachments {
+  @PrimaryKey @Default var id: UUID
+  var reminderID: UUID
+  var storagePath: String
+  @Default var createdAt: Date
+  @Default var createdBy: UUID?
+}
+
+@Table("reminders")
+struct Reminders {
+  @PrimaryKey @Default var id: UUID
+  var listID: UUID
+  var title: String
+  @Default var notes: String
+  var dueAt: Date?
+  @Default var dueHasTime: Bool
+  @Default var priority: Int
+  @Default var isFlagged: Bool
+  var completedAt: Date?
+  @Default var createdAt: Date
+  @Default var updatedAt: Date
+  @Default var createdBy: UUID?
+}
+
+@Table("my_invitations", readOnly: true)
+struct MyInvitationsRow {
+  var id: UUID?
+  var inviterName: String?
+  var listName: String?
+}
+
+@Function("accept_invitation")
+struct AcceptInvitationFunction {
+  var invitationID: UUID
+}
+
+@Function("decline_invitation")
+struct DeclineInvitationFunction {
+  var invitationID: UUID
+}
+
+@Function("my_invitations")
+struct MyInvitationsFunction {
+  typealias Result = [MyInvitationsRow]
+}
+
+extension _PostgrestFunctions {
+  func acceptInvitation(invitationID: UUID) throws -> _PostgrestFunctionQuery<Void> {
+    try call(AcceptInvitationFunction(invitationID: invitationID))
+  }
+
+  func declineInvitation(invitationID: UUID) throws -> _PostgrestFunctionQuery<Void> {
+    try call(DeclineInvitationFunction(invitationID: invitationID))
+  }
+
+  func myInvitations() throws -> _PostgrestFunctionQuery<[MyInvitationsRow]> {
+    try call(MyInvitationsFunction())
+  }
+}

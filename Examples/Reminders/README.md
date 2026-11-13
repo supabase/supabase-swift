@@ -85,6 +85,27 @@ To change the schema:
    supabase test db
    ```
 
+6. Write the Swift types again (see [Swift types](#swift-types)).
+
+### Swift types
+
+[App/Supabase/Database.swift](App/Supabase/Database.swift) is generated. It has one
+`@Table` struct for each table and one `@Function` for each database function. Do not edit
+it. Write it again after each schema change:
+
+```bash
+cd Examples/Reminders
+supabase gen types --lang swift --schema public > App/Supabase/Database.swift
+```
+
+The CLI runs `supabase-typegen`, which must be on `PATH`. Until a v3 release ships the
+binary, build it from this repository:
+
+```bash
+swift build -c release --package-path tools/supabase-typegen
+export PATH="$PWD/tools/supabase-typegen/.build/release:$PATH"
+```
+
 ### Access rules
 
 - Each table has Row Level Security. `anon` has no access.
@@ -115,20 +136,31 @@ before they accept.
 App/
   RemindersApp.swift     Builds the SupabaseClient
   Config.swift           URL and publishable key of the local stack
-  Supabase/              Models and repositories. Every database and Storage call is here
+  Supabase/              Generated types, models and repositories. Every database and
+                         Storage call is here
   Stores/                @Observable state: data, network, smart lists
   Features/              One folder for each screen
   Shared/                Root view, error alert, list colors and icons
 ```
 
+- **Models** are the generated `@Table` structs. `Models.swift` gives them the names that
+  the app uses (`Reminder` for `Reminders`) and adds app logic.
 - **Repositories** (`ListsRepository`, `RemindersRepository`, `SharingRepository`,
-  `AttachmentsRepository`) make the PostgREST, RPC and Storage calls.
+  `AttachmentsRepository`) make the PostgREST, RPC and Storage calls. They use the typed
+  query API: `from(Reminder.self)`, `.where { $0.listID.eq(id) }`, and
+  `client.rpc.acceptInvitation(invitationID:)`. The compiler checks each column name and
+  value type. The typed API is experimental, so these files use
+  `@_spi(Experimental) import Supabase`.
 - **`AuthModel`** (from the SDK) follows the auth state. `RootView` switches on its
   `status`. The views call `client.auth` to sign in, sign up and sign out. The one
   `SupabaseClient` reaches the views through the `\.supabase` environment value.
 - **`DataStore`** keeps all rows in memory. It loads them after sign-in and keeps them
   current from one Realtime channel
-  ([DataStore+Realtime.swift](App/Stores/DataStore+Realtime.swift)).
+  ([DataStore+Realtime.swift](App/Stores/DataStore+Realtime.swift)). The channel takes
+  each table from its `@Table` type: `postgresChanges(of: Reminder.self)`.
+  The SDK also has `LiveQuery`, which keeps the rows of one table in sync by itself. The
+  app does not use it: the store changes rows before the server answers (see Writes), and
+  one channel serves all tables.
 
 ### Writes
 
