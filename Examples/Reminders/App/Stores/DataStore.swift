@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Supabase
+import UIKit
 
 /// All the data of the signed-in user, in memory.
 ///
@@ -21,6 +22,7 @@ final class DataStore {
   var reminders: [Reminder] = []
   var members: [ListMember] = []
   var profiles: [Profile] = []
+  var attachments: [Attachment] = []
   /// Invitations of the lists that the user owns.
   var sentInvitations: [Invitation] = []
   /// Pending invitations for the user.
@@ -40,6 +42,9 @@ final class DataStore {
   @ObservationIgnored let listsRepository: ListsRepository
   @ObservationIgnored let remindersRepository: RemindersRepository
   @ObservationIgnored let sharingRepository: SharingRepository
+  @ObservationIgnored let attachmentsRepository: AttachmentsRepository
+  /// Downloaded images by Storage path. The system empties it when memory is low.
+  @ObservationIgnored let imageCache = NSCache<NSString, UIImage>()
 
   init(client: SupabaseClient, userID: UUID) {
     self.client = client
@@ -47,6 +52,7 @@ final class DataStore {
     listsRepository = ListsRepository(client: client)
     remindersRepository = RemindersRepository(client: client)
     sharingRepository = SharingRepository(client: client)
+    attachmentsRepository = AttachmentsRepository(client: client)
   }
 
   /// Reads everything that the user can see. Call it after sign-in and after the
@@ -58,7 +64,9 @@ final class DataStore {
     async let profiles = sharingRepository.fetchProfiles()
     async let sent = sharingRepository.fetchSentInvitations(ownerID: userID)
     async let incoming = sharingRepository.fetchIncoming()
+    async let attachments = attachmentsRepository.fetchAll()
     (self.lists, self.reminders) = try await (lists, reminders)
+    self.attachments = try await attachments
     (self.members, self.profiles) = try await (members, profiles)
     (sentInvitations, incomingInvitations) = try await (sent, incoming)
     isLoaded = true
@@ -100,14 +108,17 @@ final class DataStore {
   }
 
   func deleteList(id: UUID) async throws {
+    try await deleteFiles(ofReminders: Set(reminders.filter { $0.listID == id }.map(\.id)))
     try await listsRepository.delete(id: id)
     removeList(id: id)
   }
 
   /// Removes a list and the rows that belong to it. The server does the same by cascade.
   func removeList(id: UUID) {
+    let reminderIDs = Set(reminders.filter { $0.listID == id }.map(\.id))
     lists.removeAll { $0.id == id }
     reminders.removeAll { $0.listID == id }
+    attachments.removeAll { reminderIDs.contains($0.reminderID) }
   }
 
   // MARK: Reminders
@@ -145,8 +156,10 @@ final class DataStore {
   }
 
   func deleteReminder(id: UUID) async throws {
+    try await deleteFiles(ofReminders: [id])
     try await remindersRepository.delete(id: id)
     reminders.removeAll { $0.id == id }
+    attachments.removeAll { $0.reminderID == id }
   }
 
   // MARK: Shared helpers

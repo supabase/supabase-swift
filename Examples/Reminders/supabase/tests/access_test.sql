@@ -221,9 +221,20 @@ delete from public.lists where id = '10000000-0000-0000-0000-000000000001';
 
 select tests.logout();
 
-select is_empty($$ select 1 from public.lists $$, 'owner deletes the list');
-select is_empty($$ select 1 from public.reminders $$, 'reminders go with the list');
-select is_empty($$ select 1 from public.reminder_attachments $$, 'attachment rows go with the list');
+-- These checks run as `postgres` and see all rows, so they name the rows of this test.
+select is_empty(
+  $$ select 1 from public.lists where id = '10000000-0000-0000-0000-000000000001' $$,
+  'owner deletes the list'
+);
+select is_empty(
+  $$ select 1 from public.reminders where list_id = '10000000-0000-0000-0000-000000000001' $$,
+  'reminders go with the list'
+);
+select is_empty(
+  $$ select 1 from public.reminder_attachments
+     where reminder_id = '20000000-0000-0000-0000-000000000001' $$,
+  'attachment rows go with the list'
+);
 
 select * from finish();
 

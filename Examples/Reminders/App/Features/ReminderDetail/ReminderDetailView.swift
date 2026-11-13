@@ -62,6 +62,8 @@ struct ReminderDetailView: View {
           }
           .accessibilityIdentifier("reminderDetail.list")
         }
+
+        AttachmentsSection(reminderID: draft.id)
       }
       .navigationTitle("Details")
       .navigationBarTitleDisplayMode(.inline)
