@@ -14,8 +14,6 @@ The app shows how the parts of Supabase work together in one real app:
 
 The app works only while the device is online. It has no local cache.
 
-[FRICTION_LOG.md](FRICTION_LOG.md) lists each problem found while this app was built.
-
 ## Requirements
 
 - Xcode 16.4 or later
