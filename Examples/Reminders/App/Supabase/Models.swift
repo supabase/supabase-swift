@@ -34,8 +34,9 @@ struct Reminder: Codable, Identifiable, Hashable, Sendable {
   var listID: UUID
   var title: String
   var notes: String
+  /// The due date as the server holds it. Views use `localDueDate(calendar:)`.
   var dueAt: Date?
-  /// False for a date with no time. `dueAt` is then the start of that day on the device.
+  /// False for a date with no time. `dueAt` is then 00:00 UTC of that day.
   var dueHasTime: Bool
   /// 0 is none, 1 is low, 2 is medium, 3 is high.
   var priority: Int
@@ -120,4 +121,34 @@ struct Attachment: Codable, Identifiable, Hashable, Sendable {
 /// The error that update calls throw when `Config.failUpdates` is on.
 struct SimulatedFailure: LocalizedError {
   var errorDescription: String? { "Simulated update failure." }
+}
+
+// A date with no time is a calendar day, not a moment. If the app saved it as midnight on
+// the device, a person in a different time zone would see the day before. So the app
+// saves 00:00 UTC of the day, and each device reads the day back in its own time zone.
+extension Reminder {
+  private static var utcCalendar: Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+    return calendar
+  }
+
+  /// The value to save in `dueAt` for a date with no time.
+  ///
+  /// - Parameters:
+  ///   - date: A moment in the day that the user chose.
+  ///   - calendar: The calendar of the user.
+  static func storedDay(for date: Date, calendar: Calendar = .current) -> Date {
+    let day = calendar.dateComponents([.year, .month, .day], from: date)
+    return utcCalendar.date(from: day) ?? date
+  }
+
+  /// The due date in the time zone of `calendar`. For a date with no time, this is the
+  /// start of the day.
+  func localDueDate(calendar: Calendar = .current) -> Date? {
+    guard let dueAt else { return nil }
+    guard !dueHasTime else { return dueAt }
+    let day = Self.utcCalendar.dateComponents([.year, .month, .day], from: dueAt)
+    return calendar.date(from: day) ?? dueAt
+  }
 }

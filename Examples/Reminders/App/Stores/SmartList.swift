@@ -57,8 +57,10 @@ enum SmartList: String, CaseIterable, Identifiable, Sendable {
         return []
       }
       return reminders.filter { reminder in
-        guard !reminder.isCompleted, let dueAt = reminder.dueAt else { return false }
-        return dueAt < startOfTomorrow
+        guard !reminder.isCompleted, let due = reminder.localDueDate(calendar: calendar) else {
+          return false
+        }
+        return due < startOfTomorrow
       }
     case .scheduled:
       return reminders.filter { !$0.isCompleted && $0.dueAt != nil }
@@ -82,14 +84,20 @@ enum ReminderSource: Hashable, Sendable {
   extension SmartList {
     /// Checks the filter rules with fixed dates. A debug build runs it at launch.
     ///
-    /// The case that matters most is a date with no time: it belongs to a day in the
-    /// time zone of the device, not in UTC.
-    static func selfTest() {
+    /// The case that matters most is a date with no time. The server holds it as 00:00
+    /// UTC of its day, and it must be that same day in each time zone.
+    static func selfTest() {  // swiftlint:disable:this function_body_length
       var calendar = Calendar(identifier: .gregorian)
       calendar.timeZone = TimeZone(identifier: "America/Sao_Paulo")!
       func local(_ day: Int, _ hour: Int = 0, _ minute: Int = 0) -> Date {
         calendar.date(
           from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute))!
+      }
+      /// A date with no time, as the server holds it.
+      func day(_ day: Int) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        return utc.date(from: DateComponents(year: 2026, month: 11, day: day))!
       }
       // 23:30 in São Paulo is 02:30 of the next day in UTC.
       let now = local(12, 23, 30)
@@ -108,13 +116,13 @@ enum ReminderSource: Hashable, Sendable {
       }
 
       let all = [
-        reminder("yesterday", due: local(11)),
-        reminder("today", due: local(12)),
+        reminder("yesterday", due: day(11)),
+        reminder("today", due: day(12)),
         reminder("tonight", due: local(12, 23, 59), hasTime: true),
-        reminder("tomorrow", due: local(13)),
+        reminder("tomorrow", due: day(13)),
         reminder("no date"),
         reminder("flagged", flagged: true),
-        reminder("done", due: local(12), flagged: true, completed: true),
+        reminder("done", due: day(12), flagged: true, completed: true),
       ]
 
       func titles(_ list: SmartList) -> [String] {
@@ -130,6 +138,14 @@ enum ReminderSource: Hashable, Sendable {
         "all: \(titles(.all))")
       precondition(titles(.flagged) == ["flagged"], "flagged: \(titles(.flagged))")
       precondition(titles(.completed) == ["done"], "completed: \(titles(.completed))")
+
+      // A person in a different time zone sees the same days.
+      var losAngeles = Calendar(identifier: .gregorian)
+      losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+      let evening = losAngeles.date(
+        from: DateComponents(year: 2026, month: 11, day: 12, hour: 20))!
+      let west = SmartList.today.filter(all, now: evening, calendar: losAngeles).map(\.title)
+      precondition(west == ["yesterday", "today", "tonight"], "today, other zone: \(west)")
 
       let found = searchReminders("  MILK ", in: [reminder("Buy milk"), reminder("Bread")])
       precondition(found.map(\.title) == ["Buy milk"], "search: \(found.map(\.title))")

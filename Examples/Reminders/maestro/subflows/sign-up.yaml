@@ -10,12 +10,4 @@ appId: com.supabase.Reminders
 - inputText: ${PASSWORD}
 - tapOn:
     id: auth.signUp
-# The "Save Password?" prompt can come late and cover the app. Try again if it did.
-- retry:
-    maxRetries: 2
-    commands:
-      - runFlow: dismiss-save-password.yaml
-      - extendedWaitUntil:
-          visible:
-            id: home.accountMenu
-          timeout: 15000
+- runFlow: dismiss-save-password.yaml

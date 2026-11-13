@@ -44,10 +44,13 @@ private struct SignedInView: View {
   }
 
   /// A new value starts the sync again: when the connection returns, and when the app
-  /// comes back to the front. Events that arrived in between are lost, so a full load
-  /// comes first.
+  /// comes back from the background. Events that arrived in between are lost, so the
+  /// app reads everything again.
+  ///
+  /// `.inactive` is not a reason to stop: the app is inactive for a moment each time
+  /// Control Center or a system prompt covers it.
   private var syncTrigger: Bool {
-    network.isConnected && scenePhase == .active
+    network.isConnected && scenePhase != .background
   }
 
   var body: some View {
@@ -56,11 +59,14 @@ private struct SignedInView: View {
       .environment(store)
       .task(id: syncTrigger) {
         guard syncTrigger else { return }
+        // Subscribe first, then load. In the other order, a change between the end of
+        // the load and the start of the subscription would never arrive.
+        await store.startRealtime()
         do {
           try await store.load()
-          await store.startRealtime()
         } catch {
-          store.error = error
+          // A new trigger value cancels this task. That is not an error to show.
+          if !Task.isCancelled { store.error = error }
         }
       }
       .onDisappear {

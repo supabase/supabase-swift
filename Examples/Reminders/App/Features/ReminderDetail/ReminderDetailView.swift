@@ -5,14 +5,17 @@ struct ReminderDetailView: View {
   @Environment(DataStore.self) private var store
   @Environment(\.dismiss) private var dismiss
 
+  /// The reminder as it was when the sheet opened.
+  private let original: Reminder
   @State private var draft: Reminder
   @State private var hasDate: Bool
   @State private var date: Date
 
   init(reminder: Reminder) {
+    original = reminder
     _draft = State(initialValue: reminder)
     _hasDate = State(initialValue: reminder.dueAt != nil)
-    _date = State(initialValue: reminder.dueAt ?? .now)
+    _date = State(initialValue: reminder.localDueDate() ?? .now)
   }
 
   private var trimmedTitle: String {
@@ -82,15 +85,34 @@ struct ReminderDetailView: View {
   }
 
   private func save() {
-    var reminder = draft
-    reminder.title = trimmedTitle
+    var edited = draft
+    edited.title = trimmedTitle
     if hasDate {
-      // A date with no time is the start of that day in the time zone of the device.
-      reminder.dueAt = reminder.dueHasTime ? date : Calendar.current.startOfDay(for: date)
+      edited.dueAt = edited.dueHasTime ? date : Reminder.storedDay(for: date)
     } else {
-      reminder.dueAt = nil
-      reminder.dueHasTime = false
+      edited.dueAt = nil
+      edited.dueHasTime = false
     }
+
+    // Another person can change the reminder while the sheet is open. The store has
+    // their change. Only the fields that this user changed go on top of it, so that
+    // an old value from the sheet does not replace a newer one.
+    guard var reminder = store.reminders.first(where: { $0.id == original.id }) else {
+      dismiss()
+      return
+    }
+    func apply<Value: Equatable>(_ field: WritableKeyPath<Reminder, Value>) {
+      if edited[keyPath: field] != original[keyPath: field] {
+        reminder[keyPath: field] = edited[keyPath: field]
+      }
+    }
+    apply(\.title)
+    apply(\.notes)
+    apply(\.dueAt)
+    apply(\.dueHasTime)
+    apply(\.priority)
+    apply(\.isFlagged)
+    apply(\.listID)
     // The update shows at once, so the sheet closes before the server answers.
     store.run { [store] in try await store.updateReminder(reminder) }
     dismiss()

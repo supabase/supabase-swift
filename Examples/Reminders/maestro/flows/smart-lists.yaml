@@ -31,6 +31,9 @@ env:
     id: reminder.Milk.info
 - assertVisible:
     id: reminderDetail.dateToggle
+# The sheet must be at rest, or the tap at a fixed position misses the switch.
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     point: 88%,38%
 - assertVisible:

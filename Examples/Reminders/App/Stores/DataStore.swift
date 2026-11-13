@@ -35,6 +35,10 @@ final class DataStore {
   /// The number of updates that wait for the server, for each row id.
   /// Realtime uses it to ignore the echo of an older edit.
   @ObservationIgnored var inFlight: [UUID: Int] = [:]
+  /// Goes up each time a server response or a Realtime event changes a row array.
+  /// `load()` uses it to see that its result is older than what is on screen.
+  @ObservationIgnored var changeCount = 0
+  @ObservationIgnored private var loadCount = 0
 
   @ObservationIgnored let client: SupabaseClient
   @ObservationIgnored var realtimeChannel: RealtimeChannelV2?
@@ -57,19 +61,37 @@ final class DataStore {
 
   /// Reads everything that the user can see. Call it after sign-in and after the
   /// connection returns.
+  ///
+  /// The result replaces the row arrays, so it must not be older than they are:
+  /// - If a newer `load()` started, this one stops. The newer one gives the result.
+  /// - If a write or a Realtime event changed a row while the requests ran, the result
+  ///   can be from before that change. The load then reads again.
   func load() async throws {
-    async let lists = listsRepository.fetchAll()
-    async let reminders = remindersRepository.fetchAll()
-    async let members = sharingRepository.fetchMembers()
-    async let profiles = sharingRepository.fetchProfiles()
-    async let sent = sharingRepository.fetchSentInvitations(ownerID: userID)
-    async let incoming = sharingRepository.fetchIncoming()
-    async let attachments = attachmentsRepository.fetchAll()
-    (self.lists, self.reminders) = try await (lists, reminders)
-    self.attachments = try await attachments
-    (self.members, self.profiles) = try await (members, profiles)
-    (sentInvitations, incomingInvitations) = try await (sent, incoming)
-    isLoaded = true
+    loadCount += 1
+    let thisLoad = loadCount
+    let maxAttempts = 3
+
+    for attempt in 1...maxAttempts {
+      let changesAtStart = changeCount
+
+      async let lists = listsRepository.fetchAll()
+      async let reminders = remindersRepository.fetchAll()
+      async let members = sharingRepository.fetchMembers()
+      async let profiles = sharingRepository.fetchProfiles()
+      async let sent = sharingRepository.fetchSentInvitations(ownerID: userID)
+      async let incoming = sharingRepository.fetchIncoming()
+      async let attachments = attachmentsRepository.fetchAll()
+      let result = try await (lists, reminders, members, profiles, sent, incoming, attachments)
+
+      guard thisLoad == loadCount else { return }
+      if changeCount != changesAtStart, attempt < maxAttempts { continue }
+
+      (self.lists, self.reminders, self.members, self.profiles) =
+        (result.0, result.1, result.2, result.3)
+      (sentInvitations, incomingInvitations, self.attachments) = (result.4, result.5, result.6)
+      isLoaded = true
+      return
+    }
   }
 
   /// Starts a write and shows its error, if any, in the root alert.
@@ -116,6 +138,7 @@ final class DataStore {
   /// Removes a list and the rows that belong to it. The server does the same by cascade.
   func removeList(id: UUID) {
     let reminderIDs = Set(reminders.filter { $0.listID == id }.map(\.id))
+    changeCount += 1
     lists.removeAll { $0.id == id }
     reminders.removeAll { $0.listID == id }
     attachments.removeAll { reminderIDs.contains($0.reminderID) }
@@ -158,6 +181,12 @@ final class DataStore {
   func deleteReminder(id: UUID) async throws {
     try await deleteFiles(ofReminders: [id])
     try await remindersRepository.delete(id: id)
+    removeReminder(id: id)
+  }
+
+  /// Removes a reminder and its attachment rows. The server does the same by cascade.
+  func removeReminder(id: UUID) {
+    changeCount += 1
     reminders.removeAll { $0.id == id }
     attachments.removeAll { $0.reminderID == id }
   }
@@ -172,6 +201,7 @@ final class DataStore {
   /// Server responses and Realtime events both use it, so that the same change can
   /// arrive two times with no effect.
   func upsert<Row: Identifiable>(_ row: Row, in keyPath: Rows<Row>) {
+    changeCount += 1
     if let index = self[keyPath: keyPath].firstIndex(where: { $0.id == row.id }) {
       self[keyPath: keyPath][index] = row
     } else {
@@ -180,6 +210,10 @@ final class DataStore {
   }
 
   /// Shows `new` at once, sends it, and goes back to the old row if the server refuses.
+  ///
+  /// If the server finds no row, the user has no access to the row now: a person
+  /// deleted it, or moved it to a list that this user cannot read. Realtime sends no
+  /// event for such a move. The row then leaves the array, and there is no error.
   ///
   /// - Parameters:
   ///   - keyPath: The array that holds the row.
@@ -213,6 +247,10 @@ final class DataStore {
     switch result {
     case .success(let saved):
       if isLatest, rowExists { upsert(saved, in: keyPath) }
+    case .failure(let error as PostgrestError) where error.code == "PGRST116":
+      // `.single()` got 0 rows.
+      changeCount += 1
+      self[keyPath: keyPath].removeAll { $0.id == new.id }
     case .failure(let error):
       if isLatest, rowExists { upsert(old, in: keyPath) }
       throw error

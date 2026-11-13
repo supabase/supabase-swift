@@ -23,6 +23,7 @@ extension DataStore {
   func deleteAttachment(id: UUID) async throws {
     guard let attachment = attachments.first(where: { $0.id == id }) else { return }
     try await attachmentsRepository.delete(attachment)
+    changeCount += 1
     attachments.removeAll { $0.id == id }
   }
 

@@ -6,6 +6,13 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- A before trigger runs before the row level security check of the insert. Without
+  -- this check, the errors below would tell any user who owns a list and who is a
+  -- member of it.
+  if (select auth.uid()) is not null and not private.is_list_owner(new.list_id) then
+    raise exception 'permission denied for table list_invitations' using errcode = '42501';
+  end if;
+
   if exists (
     select 1
     from public.lists l

@@ -63,6 +63,9 @@ env:
 # default simulator (iPhone 18 Pro).
 - assertVisible:
     id: reminderDetail.flag
+# The sheet must be at rest, or the tap at a fixed position misses the switch.
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     point: 88%,49%
 - tapOn:

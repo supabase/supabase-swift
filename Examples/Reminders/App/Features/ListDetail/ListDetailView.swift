@@ -186,7 +186,7 @@ struct ListDetailView: View {
     var dueAt: Date?
     var isFlagged = false
     switch source {
-    case .smart(.today), .smart(.scheduled): dueAt = Calendar.current.startOfDay(for: .now)
+    case .smart(.today), .smart(.scheduled): dueAt = Reminder.storedDay(for: .now)
     case .smart(.flagged): isFlagged = true
     default: break
     }

@@ -137,6 +137,24 @@ App/
   the update, and puts the old row back if the server refuses it.
 - While an update of a row is in flight, the store ignores Realtime updates for that
   row. This stops the echo of an older edit from replacing a newer one.
+- The details sheet sends only the fields that the user changed. A change that another
+  person made while the sheet was open stays.
+
+### Sync
+
+- The app subscribes to Realtime first and loads the rows second. A change that arrives
+  while the load runs makes the load read again, so the screen never goes back to an
+  older state.
+- Realtime sends delete events to all clients, with the primary key only. The app
+  ignores a delete event for a row that it does not show.
+- When a person moves a reminder to a list that the user cannot read, Realtime sends no
+  event. The reminder goes away at the next load, or when the user changes it.
+
+### Dates
+
+A reminder can have a date with no time. That is a calendar day, not a moment. The app
+saves it as 00:00 UTC of the day and reads the day back in the time zone of the device
+(`Reminder.storedDay`, `Reminder.localDueDate`). Each person then sees the same day.
 
 ## Tests
 
