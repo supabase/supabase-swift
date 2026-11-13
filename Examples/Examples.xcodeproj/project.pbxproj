@@ -64,6 +64,7 @@
 		79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC82B0797F600D36347 /* AvatarImage.swift */; };
 		E23A07C8FCD6A470BA41A3F9 /* metamask-ios-sdk in Frameworks */ = {isa = PBXBuildFile; productRef = 82A0B5B97246DF189941A2A7 /* metamask-ios-sdk */; };
 		7A5E1D000000000000000001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E1D000000000000000002 /* Supabase */; };
+		7A5E1D00000000000000000C /* PostgrestMacros in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E1D00000000000000000D /* PostgrestMacros */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -265,6 +266,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A5E1D000000000000000001 /* Supabase in Frameworks */,
+				7A5E1D00000000000000000C /* PostgrestMacros in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +498,7 @@
 			name = Reminders;
 			packageProductDependencies = (
 				7A5E1D000000000000000002 /* Supabase */,
+				7A5E1D00000000000000000D /* PostgrestMacros */,
 			);
 			productName = Reminders;
 			productReference = 7A5E1D000000000000000003 /* Reminders.app */;
@@ -1266,6 +1269,10 @@
 		7A5E1D000000000000000002 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Supabase;
+		};
+		7A5E1D00000000000000000D /* PostgrestMacros */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PostgrestMacros;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

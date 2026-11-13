@@ -17,7 +17,7 @@ extension DataStore {
   }
 
   func pendingInvitations(for listID: UUID) -> [Invitation] {
-    sentInvitations.filter { $0.listID == listID && $0.status == "pending" }
+    sentInvitations.filter { $0.listID == listID && $0.status == .pending }
   }
 
   func invite(email: String, listID: UUID) async throws {

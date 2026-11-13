@@ -112,8 +112,8 @@ enum ReminderSource: Hashable, Sendable {
       ) -> Reminder {
         Reminder(
           id: UUID(), listID: UUID(), title: title, notes: "", dueAt: due, dueHasTime: hasTime,
-          priority: 0, isFlagged: flagged, completedAt: completed ? now : nil, createdBy: nil,
-          createdAt: now, updatedAt: now)
+          priority: 0, isFlagged: flagged, completedAt: completed ? now : nil,
+          createdAt: now, updatedAt: now, createdBy: nil)
       }
 
       let all = [
