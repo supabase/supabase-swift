@@ -138,6 +138,7 @@ extension Reminder {
   /// - Parameters:
   ///   - date: A moment in the day that the user chose.
   ///   - calendar: The calendar of the user.
+  /// - Returns: 00:00 UTC of the chosen day in `calendar`.
   static func storedDay(for date: Date, calendar: Calendar = .current) -> Date {
     let day = calendar.dateComponents([.year, .month, .day], from: date)
     return utcCalendar.date(from: day) ?? date

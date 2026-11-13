@@ -44,6 +44,7 @@ enum SmartList: String, CaseIterable, Identifiable, Sendable {
   ///   - reminders: The reminders of every list.
   ///   - now: The current time. Tests pass a fixed value.
   ///   - calendar: The calendar that decides where a day ends.
+  /// - Returns: The reminders that belong to this smart list.
   func filter(
     _ reminders: [Reminder],
     now: Date = .now,

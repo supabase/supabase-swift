@@ -4,6 +4,7 @@ import SwiftUI
 /// The one client of the app. Every view and store uses it, so they all share one session.
 ///
 /// The URL in `Config` is fixed, so the initializer cannot throw here.
+// swift-format-ignore: NeverUseForceTry
 let supabaseClient = try! SupabaseClient(
   supabaseURL: Config.supabaseURL,
   supabaseKey: Config.supabaseKey

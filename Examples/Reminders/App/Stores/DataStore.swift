@@ -219,6 +219,7 @@ final class DataStore {
   ///   - keyPath: The array that holds the row.
   ///   - new: The row with the user's change.
   ///   - send: The server call. It returns the row as the server saved it.
+  /// - Throws: The error of `send`, after the old row is back in the array.
   func optimisticUpdate<Row: Identifiable>(
     _ keyPath: Rows<Row>,
     to new: Row,

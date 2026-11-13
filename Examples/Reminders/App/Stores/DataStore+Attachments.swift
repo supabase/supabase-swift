@@ -10,7 +10,11 @@ extension DataStore {
 
   /// Makes the image smaller, uploads it, and saves the attachment row.
   ///
-  /// - Parameter imageData: An image in a format that `UIImage` can read.
+  /// - Parameters:
+  ///   - imageData: An image in a format that `UIImage` can read.
+  ///   - reminderID: The reminder that gets the image.
+  /// - Throws: `UnreadableImage` when the data is not an image, or the error of the
+  ///   upload or the insert.
   func addAttachment(imageData: Data, reminderID: UUID) async throws {
     guard let jpeg = Self.jpeg(from: imageData) else { throw UnreadableImage() }
     let attachment = try await attachmentsRepository.upload(jpeg: jpeg, reminderID: reminderID)
