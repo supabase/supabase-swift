@@ -34,6 +34,10 @@ test target cannot depend on another), so the Postgrest integration tests query 
 schema with its generated models. After changing a migration there, refresh the fixtures and record
 the goldens.
 
+The generated file starts with a comment that says not to edit it and names the generator release
+(`version` in `Version.swift`). The goldens hold `VERSION` in its place, so a release bump does not
+change them.
+
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
 generated column uses. The set is closed on purpose. "Enum-like Values" in
