@@ -8,6 +8,7 @@ apikey
 Apikey
 AQAB
 Ascii
+attoseconds
 autocapitalization
 Autocapitalization
 autocorrection
@@ -36,6 +37,7 @@ dedup
 dedupe
 decoratee
 deeplinking
+deno
 discardable
 dollarsign
 dotproduct
