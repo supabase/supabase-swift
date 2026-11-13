@@ -15,7 +15,7 @@ import Helpers
 #endif
 
 /// Factory function for returning a new WebSocket connection.
-typealias WebSocketTransport =
+typealias WebSocketConnector =
   @Sendable (_ url: URL, _ headers: [String: String]) async throws ->
   any WebSocket
 
@@ -60,17 +60,19 @@ protocol RealtimeClientProtocol: AnyObject, Sendable {
 /// ## Topics
 /// ### Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``addChannel(_:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 /// ### Connection Status
 /// - ``status``
+/// - ``statusChanges()``
 /// - ``statusChange``
 /// - ``onStatusChange(_:)``
 /// - ``connect()``
 /// - ``disconnect(code:reason:)``
 /// ### Heartbeat
+/// - ``heartbeats()``
 /// - ``heartbeat``
 /// - ``onHeartbeat(_:)``
 /// ### Authentication
@@ -112,8 +114,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     /// would spuriously open a connection.
     var wasConnectedBeforeBackground: Bool = false
 
-    var lastHeartbeatStatus: HeartbeatStatus?
-    var heartbeatStatusContinuations: [(UUID, AsyncStream<HeartbeatStatus>.Continuation)] = []
+    var lastHeartbeatSignal: HeartbeatSignal?
+    var heartbeatObservers: [(UUID, HeartbeatObserver)] = []
+    /// When the pending heartbeat was sent, for the latency of its acknowledgement.
+    var pendingHeartbeatSentAt: ContinuousClock.Instant?
 
     var status: RealtimeClientStatus = .disconnected
     var statusContinuations: [(UUID, AsyncStream<RealtimeClientStatus>.Continuation)] = []
@@ -121,7 +125,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   let url: URL
   let options: RealtimeClientOptions
-  let wsTransport: WebSocketTransport
+  let wsTransport: WebSocketConnector
   let mutableState = LockIsolated(MutableState())
   let http: any HTTPClientType
   let apikey: String
@@ -133,7 +137,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// All managed channels indexed by their topics.
   ///
   /// The dictionary key is the fully-qualified topic string (e.g. `"realtime:room:lobby"`).
-  /// Channels are added by ``channel(_:options:)`` and removed by ``removeChannel(_:)``
+  /// Channels are added by ``channel(_:configure:)`` and removed by ``removeChannel(_:)``
   /// or ``removeAllChannels()``.
   public var channels: [String: RealtimeChannelV2] {
     mutableState.channels
@@ -163,6 +167,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       url: url,
       options: options,
       wsTransport: { url, headers in
+        if let transport = options.webSocketTransport {
+          return WebSocketConnectionAdapter(
+            try await transport.connect(to: url, headerFields: HTTPFields(headers)))
+        }
         return try await URLSessionWebSocket.connect(
           to: url,
           headers: headers,
@@ -180,7 +188,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   init(
     url: URL,
     options: RealtimeClientOptions,
-    wsTransport: @escaping WebSocketTransport,
+    wsTransport: @escaping WebSocketConnector,
     http: any HTTPClientType,
     clock: any Clock<Duration>
   ) {
@@ -256,7 +264,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
 
     #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
-      if options.handleAppLifecycle {
+      if options.observesAppLifecycle {
         let manager = RealtimeLifecycleManager(client: self)
         mutableState.withValue { $0.lifecycleManager = manager }
       }
@@ -304,10 +312,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
     }
     connection?.close(code: nil, reason: "Client deallocated")
 
-    let (statusContinuations, heartbeatStatusContinuations) = mutableState.withValue {
+    let (statusContinuations, heartbeatObservers) = mutableState.withValue {
       state -> (
         [AsyncStream<RealtimeClientStatus>.Continuation],
-        [AsyncStream<HeartbeatStatus>.Continuation]
+        [HeartbeatObserver]
       ) in
       state.heartbeatTask?.cancel()
       state.messageTask?.cancel()
@@ -317,15 +325,15 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
       defer {
         state.statusContinuations.removeAll()
-        state.heartbeatStatusContinuations.removeAll()
+        state.heartbeatObservers.removeAll()
       }
-      return (state.statusContinuations.map { $1 }, state.heartbeatStatusContinuations.map { $1 })
+      return (state.statusContinuations.map { $1 }, state.heartbeatObservers.map { $1 })
     }
     for continuation in statusContinuations {
       continuation.finish()
     }
-    for continuation in heartbeatStatusContinuations {
-      continuation.finish()
+    for observer in heartbeatObservers {
+      observer.finish()
     }
   }
 
@@ -366,47 +374,65 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// - Parameters:
   ///   - topic: The channel topic name (without the `realtime:` prefix).
-  ///   - options: A builder closure to configure ``RealtimeChannelConfig`` options such as
-  ///     broadcast, presence, and privacy settings.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``: broadcast,
+  ///     presence, and privacy options.
   /// - Returns: A ``RealtimeChannelV2`` bound to this client.
+  ///
+  /// > Note: On this version the method is synchronous. In v3 it is `async`.
   public func channel(
     _ topic: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) -> RealtimeChannelV2 {
-    mutableState.withValue {
-      // Cancel any pending deferred disconnect — a new channel is being added.
-      $0.pendingDisconnectTask?.cancel()
-      $0.pendingDisconnectTask = nil
+    // The closure runs under the state lock, as `options` always did, and only when the channel
+    // is new. The lock's closure is `@Sendable`; `configure` never leaves this call.
+    withoutActuallyEscaping(configure) { configure in
+      let configure = UncheckedSendable(configure)
+      return mutableState.withValue {
+        // Cancel any pending deferred disconnect — a new channel is being added.
+        $0.pendingDisconnectTask?.cancel()
+        $0.pendingDisconnectTask = nil
 
-      let realtimeTopic = "realtime:\(topic)"
+        let realtimeTopic = "realtime:\(topic)"
 
-      if let channel = $0.channels[realtimeTopic] {
+        if let channel = $0.channels[realtimeTopic] {
+          return channel
+        }
+
+        var config = RealtimeChannelConfiguration()
+        configure.value(&config)
+
+        let channel = RealtimeChannelV2(
+          topic: realtimeTopic,
+          config: config,
+          socket: self,
+          logger: self.options.logger
+        )
+
+        $0.channels[realtimeTopic] = channel
+
         return channel
       }
-
-      var config = RealtimeChannelConfig(
-        broadcast: BroadcastJoinConfig(acknowledgeBroadcasts: false, receiveOwnBroadcasts: false),
-        presence: PresenceJoinConfig(key: ""),
-        isPrivate: false
-      )
-      options(&config)
-
-      let channel = RealtimeChannelV2(
-        topic: realtimeTopic,
-        config: config,
-        socket: self,
-        logger: self.options.logger
-      )
-
-      $0.channels[realtimeTopic] = channel
-
-      return channel
     }
+  }
+
+  /// Returns a channel for the given topic, creating it if one does not already exist.
+  ///
+  /// - Parameters:
+  ///   - topic: The channel topic name (without the `realtime:` prefix).
+  ///   - options: A builder closure to configure ``RealtimeChannelConfiguration`` options.
+  /// - Returns: A ``RealtimeChannelV2`` bound to this client.
+  @available(*, deprecated, message: "Use channel(_:configure:) instead.")
+  @_disfavoredOverload
+  public func channel(
+    _ topic: String,
+    options: @Sendable (inout RealtimeChannelConfiguration) -> Void = { _ in }
+  ) -> RealtimeChannelV2 {
+    channel(topic, configure: options)
   }
 
   /// Registers an externally-created channel with this client.
   ///
-  /// > Warning: The client now manages channels automatically via ``channel(_:options:)``.
+  /// > Warning: The client now manages channels automatically via ``channel(_:configure:)``.
   /// > This method will be removed in the next major release.
   @available(
     *,
@@ -423,7 +449,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   /// Unsubscribes from and removes a channel.
   ///
   /// The channel is unsubscribed first, which also stops a join still in flight, and it never
-  /// joins again: get a new one from ``channel(_:options:)``. After removal, if no channels
+  /// joins again: get a new one from ``channel(_:configure:)``. After removal, if no channels
   /// remain, the client disconnects (or schedules a deferred disconnect based on
   /// ``RealtimeClientOptions/defaultDisconnectOnEmptyChannelsAfter``).
   ///
@@ -605,11 +631,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // No pending heartbeat, we can send a new one
       let ref = makeRef()
       state.pendingHeartbeatRef = ref
+      state.pendingHeartbeatSentAt = ContinuousClock.now
       return ref
     }
 
     if let heartbeatRef {
-      push(
+      _push(
         RealtimeMessageV2(
           joinRef: nil,
           ref: heartbeatRef,
@@ -618,12 +645,12 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
           payload: [:]
         )
       )
-      yieldHeartbeatStatus(.sent)
+      yieldHeartbeatSignal(.sent)
       await setAuth()
     } else {
       // Timeout: previous heartbeat was never acknowledged
       options.logger?.debug("Heartbeat timeout - previous heartbeat not acknowledged")
-      yieldHeartbeatStatus(.timeout)
+      yieldHeartbeatSignal(.timedOut)
 
       // Clear the pending ref before reconnecting
       mutableState.withValue { $0.pendingHeartbeatRef = nil }
@@ -632,7 +659,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
       // a timeout that fires after a reconnect has already replaced the
       // socket can't tear down the healthy new connection.
       let conn = mutableState.withValue { $0.connection }
-      await connectionManager.handleError(RealtimeError("heartbeat timeout"), from: conn)
+      await connectionManager.handleError(RealtimeError.heartbeatTimeout, from: conn)
     }
   }
 
@@ -749,7 +776,13 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
 
   private func onMessage(_ message: RealtimeMessageV2) async {
     if message.topic == "phoenix", message.event == "phx_reply" {
-      yieldHeartbeatStatus(message.status == .ok ? .ok : .error)
+      if message.status == .ok {
+        let sentAt = mutableState.withValue { $0.pendingHeartbeatSentAt }
+        yieldHeartbeatSignal(
+          .acknowledged(latency: sentAt.map { ContinuousClock.now - $0 } ?? .zero))
+      } else {
+        yieldHeartbeatSignal(.error)
+      }
     }
 
     let channel = mutableState.withValue {
@@ -792,6 +825,10 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   ///
   /// - Parameter message: The ``RealtimeMessageV2`` to send.
   public func push(_ message: RealtimeMessageV2) {
+    _push(message)
+  }
+
+  func _push(_ message: RealtimeMessageV2) {
     let callback = { @Sendable (_ client: RealtimeClientV2) in
       do {
         let text: String
@@ -946,7 +983,7 @@ public final class RealtimeClientV2: Sendable, RealtimeClientProtocol {
   }
 
   static func realtimeWebSocketURL(
-    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: LogLevel?
+    baseURL: URL, apikey: String?, vsn: RealtimeProtocolVersion, logLevel: RealtimeServerLogLevel?
   ) -> URL {
     guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
     else {

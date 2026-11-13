@@ -13,6 +13,8 @@ struct DecodedBroadcast: Sendable {
   /// The user event name extracted from the binary frame.
   let event: String
   let payload: Payload
+  /// The frame's metadata object, such as `id` and `replayed`.
+  var meta: JSONObject? = nil
 
   enum Payload: Sendable {
     case json(JSONObject)
@@ -54,7 +56,7 @@ struct RealtimeSerializer: Sendable {
 
     let data = try JSONEncoder().encode(array)
     guard let text = String(data: data, encoding: .utf8) else {
-      throw RealtimeError("Failed to encode message as UTF-8 string.")
+      throw RealtimeError.invalidRequest("Failed to encode message as UTF-8 string.")
     }
     return text
   }
@@ -67,7 +69,7 @@ struct RealtimeSerializer: Sendable {
     let array = try JSONDecoder().decode([AnyJSON].self, from: data)
 
     guard array.count >= 5 else {
-      throw RealtimeError(
+      throw RealtimeError.decoding(
         "Expected JSON array with 5 elements, got \(array.count)."
       )
     }
@@ -75,13 +77,13 @@ struct RealtimeSerializer: Sendable {
     let joinRef = array[0].stringValue
     let ref = array[1].stringValue
     guard let topic = array[2].stringValue else {
-      throw RealtimeError("Expected string for topic at index 2.")
+      throw RealtimeError.decoding("Expected string for topic at index 2.")
     }
     guard let event = array[3].stringValue else {
-      throw RealtimeError("Expected string for event at index 3.")
+      throw RealtimeError.decoding("Expected string for event at index 3.")
     }
     guard let payload = array[4].objectValue else {
-      throw RealtimeError("Expected object for payload at index 4.")
+      throw RealtimeError.decoding("Expected object for payload at index 4.")
     }
 
     return RealtimeMessageV2(
@@ -159,7 +161,7 @@ struct RealtimeSerializer: Sendable {
       eventBytes.count <= 255,
       metaBytes.count <= 255
     else {
-      throw RealtimeError(
+      throw RealtimeError.invalidRequest(
         "Binary frame header fields must not exceed 255 bytes each."
       )
     }
@@ -193,12 +195,12 @@ struct RealtimeSerializer: Sendable {
   /// ```
   func decodeBinary(_ data: Data) throws -> DecodedBroadcast {
     guard data.count >= 5 else {
-      throw RealtimeError("Binary frame too short: \(data.count) bytes.")
+      throw RealtimeError.decoding("Binary frame too short: \(data.count) bytes.")
     }
 
     let kind = data[data.startIndex]
     guard kind == BinaryKind.userBroadcast.rawValue else {
-      throw RealtimeError(
+      throw RealtimeError.decoding(
         "Unexpected binary frame kind: \(kind), expected \(BinaryKind.userBroadcast.rawValue)."
       )
     }
@@ -209,13 +211,13 @@ struct RealtimeSerializer: Sendable {
     let encodingByte = data[data.startIndex + 4]
 
     guard let encoding = PayloadEncoding(rawValue: encodingByte) else {
-      throw RealtimeError("Unknown payload encoding: \(encodingByte).")
+      throw RealtimeError.decoding("Unknown payload encoding: \(encodingByte).")
     }
 
     let headerSize = 5
     let expectedMinSize = headerSize + topicLen + eventLen + metaLen
     guard data.count >= expectedMinSize else {
-      throw RealtimeError(
+      throw RealtimeError.decoding(
         "Binary frame too short for declared field lengths."
       )
     }
@@ -228,16 +230,16 @@ struct RealtimeSerializer: Sendable {
     let eventData = data[offset..<(offset + eventLen)]
     offset += eventLen
 
-    // Skip metadata for now.
+    let metaData = data[offset..<(offset + metaLen)]
     offset += metaLen
 
     let payloadData = data[offset...]
 
     guard let topic = String(data: topicData, encoding: .utf8) else {
-      throw RealtimeError("Failed to decode topic as UTF-8.")
+      throw RealtimeError.decoding("Failed to decode topic as UTF-8.")
     }
     guard let event = String(data: eventData, encoding: .utf8) else {
-      throw RealtimeError("Failed to decode event as UTF-8.")
+      throw RealtimeError.decoding("Failed to decode event as UTF-8.")
     }
 
     let payload: DecodedBroadcast.Payload
@@ -249,10 +251,15 @@ struct RealtimeSerializer: Sendable {
       payload = .binary(Data(payloadData))
     }
 
+    // The v2 streams never read the metadata, so metadata that is not a JSON object must not
+    // drop the frame.
+    let meta = metaLen > 0 ? try? JSONDecoder().decode(JSONObject.self, from: Data(metaData)) : nil
+
     return DecodedBroadcast(
       topic: topic,
       event: event,
-      payload: payload
+      payload: payload,
+      meta: meta
     )
   }
 }

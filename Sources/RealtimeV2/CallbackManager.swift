@@ -42,10 +42,22 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use addPostgresChangeCallback(filter:callback:) instead.")
   @discardableResult
   func addPostgresCallback(
     filter: PostgresJoinConfig,
     callback: @escaping @Sendable (AnyAction) -> Void
+  ) -> Int {
+    addPostgresChangeCallback(filter: filter) { delivery in
+      guard let action = AnyAction(delivery) else { return }
+      callback(action)
+    }
+  }
+
+  @discardableResult
+  func addPostgresChangeCallback(
+    filter: PostgresJoinConfig,
+    callback: @escaping @Sendable (PostgresChangeDelivery) -> Void
   ) -> Int {
     mutableState.withValue {
       $0.id += 1
@@ -62,8 +74,19 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use addPresenceDeliveryCallback(callback:) instead.")
   @discardableResult
   func addPresenceCallback(callback: @escaping @Sendable (any PresenceAction) -> Void) -> Int {
+    addPresenceDeliveryCallback { delivery in
+      guard let action = PresenceActionImpl(delivery) else { return }
+      callback(action)
+    }
+  }
+
+  @discardableResult
+  func addPresenceDeliveryCallback(
+    callback: @escaping @Sendable (PresenceDelivery) -> Void
+  ) -> Int {
     mutableState.withValue {
       $0.id += 1
       $0.callbacks.append(.presence(PresenceCallback(id: $0.id, callback: callback)))
@@ -92,7 +115,12 @@ final class CallbackManager: Sendable {
     }
   }
 
+  @available(*, deprecated, message: "Use triggerPostgresChanges(ids:delivery:) instead.")
   func triggerPostgresChanges(ids: [Int], data: AnyAction) {
+    triggerPostgresChanges(ids: ids, delivery: data.delivery)
+  }
+
+  func triggerPostgresChanges(ids: [Int], delivery: PostgresChangeDelivery) {
     // Read mutableState at start to acquire lock once.
     let mutableState = mutableState.value
 
@@ -113,7 +141,7 @@ final class CallbackManager: Sendable {
     }
 
     for item in callbacks {
-      item.callback(data)
+      item.callback(delivery)
     }
   }
 
@@ -134,6 +162,44 @@ final class CallbackManager: Sendable {
         )
       )
       return $0.id
+    }
+  }
+
+  @discardableResult
+  func addBroadcastMessageCallback(
+    event: String,
+    callback: @escaping @Sendable (BroadcastMessage) -> Void
+  ) -> Int {
+    mutableState.withValue {
+      $0.id += 1
+      $0.callbacks.append(
+        .broadcastMessage(
+          BroadcastMessageCallback(
+            id: $0.id,
+            event: event,
+            callback: callback
+          )
+        )
+      )
+      return $0.id
+    }
+  }
+
+  func triggerBroadcastMessage(_ message: BroadcastMessage) {
+    let callbacks = mutableState.callbacks.compactMap { callback -> BroadcastMessageCallback? in
+      guard case .broadcastMessage(let callback) = callback, callback.matches(message.event)
+      else { return nil }
+      return callback
+    }
+    callbacks.forEach { $0.callback(message) }
+  }
+
+  func hasBroadcastMessageCallbacks(for event: String) -> Bool {
+    mutableState.callbacks.contains {
+      if case .broadcastMessage(let callback) = $0 {
+        return callback.matches(event)
+      }
+      return false
     }
   }
 
@@ -180,11 +246,17 @@ final class CallbackManager: Sendable {
     return false
   }
 
+  @available(*, deprecated, message: "Use triggerPresence(_:) instead.")
   func triggerPresenceDiffs(
     joins: [String: PresenceV2],
     leaves: [String: PresenceV2],
     rawMessage: RealtimeMessageV2
   ) {
+    triggerPresence(
+      PresenceActionImpl(joins: joins, leaves: leaves, rawMessage: rawMessage).delivery)
+  }
+
+  func triggerPresence(_ delivery: PresenceDelivery) {
     let presenceCallbacks = mutableState.callbacks.compactMap {
       if case .presence(let callback) = $0 {
         return callback
@@ -192,13 +264,7 @@ final class CallbackManager: Sendable {
       return nil
     }
     for presenceCallback in presenceCallbacks {
-      presenceCallback.callback(
-        PresenceActionImpl(
-          joins: joins,
-          leaves: leaves,
-          rawMessage: rawMessage
-        )
-      )
+      presenceCallback.callback(delivery)
     }
   }
 
@@ -223,7 +289,7 @@ final class CallbackManager: Sendable {
 struct PostgresCallback {
   var id: Int
   var filter: PostgresJoinConfig
-  var callback: @Sendable (AnyAction) -> Void
+  var callback: @Sendable (PostgresChangeDelivery) -> Void
 }
 
 struct BroadcastCallback {
@@ -234,7 +300,7 @@ struct BroadcastCallback {
 
 struct PresenceCallback {
   var id: Int
-  var callback: @Sendable (any PresenceAction) -> Void
+  var callback: @Sendable (PresenceDelivery) -> Void
 }
 
 struct SystemCallback {
@@ -248,10 +314,21 @@ struct BroadcastDataCallback {
   var callback: @Sendable (Data) -> Void
 }
 
+struct BroadcastMessageCallback {
+  var id: Int
+  var event: String
+  var callback: @Sendable (BroadcastMessage) -> Void
+
+  func matches(_ event: String) -> Bool {
+    self.event == "*" || self.event.lowercased() == event.lowercased()
+  }
+}
+
 enum RealtimeCallback {
   case postgres(PostgresCallback)
   case broadcast(BroadcastCallback)
   case broadcastData(BroadcastDataCallback)
+  case broadcastMessage(BroadcastMessageCallback)
   case presence(PresenceCallback)
   case system(SystemCallback)
 
@@ -260,6 +337,7 @@ enum RealtimeCallback {
     case .postgres(let callback): callback.id
     case .broadcast(let callback): callback.id
     case .broadcastData(let callback): callback.id
+    case .broadcastMessage(let callback): callback.id
     case .presence(let callback): callback.id
     case .system(let callback): callback.id
     }
