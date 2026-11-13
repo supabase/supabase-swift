@@ -29,6 +29,8 @@ final class DataStore {
   @ObservationIgnored var inFlight: [UUID: Int] = [:]
 
   @ObservationIgnored let client: SupabaseClient
+  @ObservationIgnored var realtimeChannel: RealtimeChannelV2?
+  @ObservationIgnored var realtimeTask: Task<Void, Never>?
   @ObservationIgnored let listsRepository: ListsRepository
   @ObservationIgnored let remindersRepository: RemindersRepository
 
