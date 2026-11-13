@@ -92,6 +92,7 @@ LinkedIn
 lnbm
 magiclink
 magnifyingglass
+maxage
 metamask
 metas
 Metas
@@ -100,8 +101,10 @@ newbucket
 newkey
 niled
 Nlci
+noea
 nonisolated
 nosec
+nowe
 NSEC
 NSPOSIX
 NSURL
@@ -154,11 +157,13 @@ siwe
 SIWE
 siws
 SIWS
+soea
 solana
 Solana
 Souza
 sourcery
 Sourcery
+sowe
 spotify
 Spotify
 subclassing

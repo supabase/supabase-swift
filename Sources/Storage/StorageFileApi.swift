@@ -1,10 +1,11 @@
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
 #endif
 
+@available(*, deprecated)
 let defaultSearchOptions = SearchOptions(
   limit: 100,
   offset: 0,
@@ -14,21 +15,17 @@ let defaultSearchOptions = SearchOptions(
   )
 )
 
-private let defaultFileOptions = FileOptions(
-  cacheControl: "3600",
-  contentType: "text/plain;charset=UTF-8",
-  upsert: false
-)
-
 enum FileUpload {
   case data(Data)
   case url(URL)
 
-  func encode(to formData: MultipartFormData, withPath path: String, options: FileOptions) {
-    formData.append(
-      options.cacheControl.data(using: .utf8)!,
-      withName: "cacheControl"
-    )
+  func encode(to formData: MultipartFormData, withPath path: String, options: UploadParameters) {
+    if let cacheControl = options.cacheControlField {
+      formData.append(
+        cacheControl.data(using: .utf8)!,
+        withName: "cacheControl"
+      )
+    }
 
     if let metadata = options.metadata {
       formData.append(encodeMetadata(metadata), withName: "metadata")
@@ -68,55 +65,84 @@ enum FileUpload {
 /// let fileApi = storage.from("avatars")
 ///
 /// // Upload a PNG
-/// try await fileApi.upload("user123.png", data: imageData)
+/// try await fileApi.upload(path: "user123.png", data: imageData)
 ///
 /// // Generate a signed URL valid for 60 seconds
-/// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: 60)
+/// let url = try await fileApi.createSignedURL(path: "user123.png", expiresIn: .seconds(60))
 /// ```
 ///
-/// > Note: This class is `@unchecked Sendable`. The ``bucketId`` property is immutable (`let`), and
+/// > Note: This class is `@unchecked Sendable`. The ``id`` property is immutable, and
 /// > all mutable header state is protected by the lock inherited from ``StorageApi``.
 ///
 /// ## Topics
 ///
+/// ### Identifying the bucket
+///
+/// - ``id``
+///
+/// ### Customizing headers
+///
+/// - ``settingHeader(name:value:)``
+///
 /// ### Uploading files
 ///
-/// - ``upload(_:data:options:)``
-/// - ``upload(_:fileURL:options:)``
-/// - ``update(_:data:options:)``
-/// - ``update(_:fileURL:options:)``
+/// - ``upload(path:data:options:)``
+/// - ``upload(path:fileURL:options:)``
+/// - ``update(path:data:options:)``
+/// - ``update(path:fileURL:options:)``
 ///
 /// ### Uploading via signed URLs
 ///
-/// - ``createSignedUploadURL(path:options:)``
-/// - ``uploadToSignedURL(_:token:data:options:)``
-/// - ``uploadToSignedURL(_:token:fileURL:options:)``
+/// - ``createSignedUploadURL(path:upsert:)``
+/// - ``uploadToSignedURL(path:token:data:options:)``
+/// - ``uploadToSignedURL(path:token:fileURL:options:)``
 ///
 /// ### Downloading files
 ///
 /// - ``download(path:options:query:cacheNonce:)``
-/// - ``getPublicURL(path:download:options:cacheNonce:)``
+/// - ``publicURL(path:options:)``
 ///
 /// ### Managing files
 ///
 /// - ``move(from:to:options:)``
 /// - ``copy(from:to:options:)``
 /// - ``remove(paths:)``
-/// - ``list(path:options:)``
+/// - ``list(path:options:)->[StorageObject]``
 /// - ``info(path:)``
 /// - ``exists(path:)``
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:cacheNonce:)``
-/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:options:)``
+/// - ``createSignedURLs(paths:expiresIn:options:)``
 public class StorageFileApi: StorageApi, @unchecked Sendable {
-  /// The identifier of the bucket this instance operates on.
   let bucketId: String
+
+  /// The identifier of the bucket this instance operates on.
+  public var id: String { bucketId }
 
   init(bucketId: String, configuration: StorageClientConfiguration) {
     self.bucketId = bucketId
     super.init(configuration: configuration)
+  }
+
+  /// Returns a new instance for the same bucket with an additional HTTP header, included in all
+  /// requests made by the returned instance.
+  ///
+  /// This method does not change the receiver. Always use the result:
+  ///
+  /// ```swift
+  /// let bucket = storage.from("avatars").settingHeader(
+  ///   name: .init("X-Custom-Header")!, value: "x-custom-header")
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new instance with the header merged into the configuration's headers.
+  public override func settingHeader(name: HTTPField.Name, value: String) -> StorageFileApi {
+    StorageFileApi(
+      bucketId: bucketId, configuration: configuration(settingHeader: name, to: value))
   }
 
   private struct MoveResponse: Decodable {
@@ -133,14 +159,19 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     let error: String?
   }
 
+  private struct UploadResult {
+    let id: String
+    let path: String
+    let fullPath: String
+  }
+
   private func _uploadOrUpdate(
     method: HTTPTypes.HTTPRequest.Method,
     path: String,
     file: FileUpload,
-    options: FileOptions?
-  ) async throws -> FileUploadResponse {
-    let options = options ?? defaultFileOptions
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    options: UploadParameters
+  ) async throws -> UploadResult {
+    var headers = options.headers
 
     if method == .post {
       headers[.xUpsert] = "\(options.upsert)"
@@ -169,17 +200,118 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         method: method,
         query: [],
         formData: formData,
-        options: options,
+        cacheControl: options.cacheControlHeader,
         headers: headers
       )
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
 
-    return FileUploadResponse(
+    return UploadResult(
       id: response.Id,
       path: cleanPath,
       fullPath: response.Key
     )
+  }
+
+  /// Uploads a file to an existing bucket.
+  ///
+  /// ```swift
+  /// let response = try await storage.from("avatars").upload(path: "user123.png", data: imageData)
+  /// print(response.fullPath) // "avatars/user123.png"
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to upload.
+  ///   - data: The raw bytes to store in the bucket.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @discardableResult
+  public func upload(
+    path: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .post, path: path, file: .data(data), options: options)
+  }
+
+  /// Uploads a file from a local file URL to an existing bucket.
+  ///
+  /// Use this overload when you have a `URL` pointing to a file on disk rather than raw `Data`
+  /// already loaded in memory.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to upload.
+  ///   - fileURL: A `file://` URL pointing to the local file to upload.
+  ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: An ``UploadedObject`` containing the stored object's identifier and path.
+  /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @discardableResult
+  public func upload(
+    path: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .post, path: path, file: .url(fileURL), options: options)
+  }
+
+  /// Replaces an existing file at the specified path with new data.
+  ///
+  /// Unlike ``upload(path:data:options:)`` with `upsert: true`, this method always targets an
+  /// existing object and will throw if the path does not exist.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to update.
+  ///   - data: The raw bytes to overwrite the existing file with.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     `update` always replaces the object.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @discardableResult
+  public func update(
+    path: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .put, path: path, file: .data(data), options: options)
+  }
+
+  /// Replaces an existing file at the specified path with a new local file.
+  ///
+  /// Use this overload when the replacement content is available as a `URL` pointing to a file on
+  /// disk rather than raw `Data`.
+  ///
+  /// - Parameters:
+  ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist before attempting to update.
+  ///   - fileURL: A `file://` URL pointing to the local file to use as the replacement.
+  ///   - options: Upload options such as cache control and content type. `upsert` is ignored:
+  ///     `update` always replaces the object.
+  /// - Returns: An ``UploadedObject`` containing the updated object's identifier and path.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @discardableResult
+  public func update(
+    path: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    try await _upload(method: .put, path: path, file: .url(fileURL), options: options)
+  }
+
+  private func _upload(
+    method: HTTPTypes.HTTPRequest.Method,
+    path: String,
+    file: FileUpload,
+    options: UploadOptions
+  ) async throws -> UploadedObject {
+    let result = try await _uploadOrUpdate(
+      method: method, path: _cleanObjectPath(path), file: file,
+      options: UploadParameters(options))
+    return UploadedObject(
+      id: UUID(uuidString: result.id), path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a file to an existing bucket.
@@ -196,18 +328,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use upload(path:data:options:) instead.")
   @discardableResult
   public func upload(
     _ path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .data(data),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a file from a local file URL to an existing bucket.
@@ -223,18 +357,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
   /// - Returns: A ``FileUploadResponse`` containing the stored object's identifier and path.
   /// - Throws: ``StorageError`` if the upload fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use upload(path:fileURL:options:) instead.")
   @discardableResult
   public func upload(
     _ path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .post,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Replaces an existing file at the specified path with new data.
@@ -249,18 +385,20 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use update(path:data:options:) instead.")
   @discardableResult
   public func update(
     _ path: String,
     data: Data,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .data(data),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
   }
 
   /// Replaces an existing file at the specified path with a new local file.
@@ -275,18 +413,55 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Upload options such as cache control and content type.
   /// - Returns: A ``FileUploadResponse`` containing the updated object's identifier and path.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use update(path:fileURL:options:) instead.")
   @discardableResult
   public func update(
     _ path: String,
     fileURL: URL,
     options: FileOptions = FileOptions()
   ) async throws -> FileUploadResponse {
-    try await _uploadOrUpdate(
+    let result = try await _uploadOrUpdate(
       method: .put,
       path: path,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options)
     )
+    return FileUploadResponse(id: result.id, path: result.path, fullPath: result.fullPath)
+  }
+
+  private struct CopyBody: Encodable {
+    struct Metadata: Encodable {
+      let cacheControl: String?
+      let mimetype: String?
+    }
+
+    let bucketID: String
+    let sourceKey: String
+    let destinationKey: String
+    let destinationBucket: String?
+    let sourceVersionID: String?
+    var copyMetadata: Bool?
+    var metadata: Metadata?
+
+    enum CodingKeys: String, CodingKey {
+      case bucketID = "bucketId"
+      case sourceKey
+      case destinationKey
+      case destinationBucket
+      case sourceVersionID = "sourceVersionId"
+      case copyMetadata
+      case metadata
+    }
+  }
+
+  private struct CopyResponse: Decodable {
+    let key: String
+    let id: String?
+
+    enum CodingKeys: String, CodingKey {
+      case key = "Key"
+      case id = "Id"
+    }
   }
 
   /// Moves an existing file to a new path, optionally within a different bucket.
@@ -298,35 +473,132 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
+  ///   - toBucket: The bucket to move the file into. `nil` moves it within this bucket.
+  ///   - sourceVersionID: The version of the source to move. `nil` moves the current version.
+  /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  public func move(
+    from source: String,
+    to destination: String,
+    toBucket: String? = nil,
+    sourceVersionID: String? = nil
+  ) async throws {
+    try await _move(
+      from: _cleanObjectPath(source), to: _cleanObjectPath(destination), toBucket: toBucket,
+      sourceVersionID: sourceVersionID)
+  }
+
+  private func _move(
+    from source: String,
+    to destination: String,
+    toBucket: String?,
+    sourceVersionID: String?
+  ) async throws {
+    var body: [String: String?] = [
+      "bucketId": bucketId,
+      "sourceKey": source,
+      "destinationKey": destination,
+      "destinationBucket": toBucket,
+    ]
+    if let sourceVersionID {
+      body["sourceVersionId"] = sourceVersionID
+    }
+
+    try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/move"),
+        method: .post,
+        body: configuration.encoder.encode(body)
+      )
+    )
+  }
+
+  /// Moves an existing file to a new path, optionally within a different bucket.
+  ///
+  /// - Parameters:
+  ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
+  ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
   ///   - options: Optional ``DestinationOptions`` specifying a destination bucket. When `nil`,
   ///     the file is moved within the same bucket.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use move(from:to:toBucket:sourceVersionID:) instead.")
+  @_disfavoredOverload
   public func move(
     from source: String,
     to destination: String,
     options: DestinationOptions? = nil
   ) async throws {
-    try await execute(
-      HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/move"),
-        method: .post,
-        body: configuration.encoder.encode(
-          [
-            "bucketId": bucketId,
-            "sourceKey": source,
-            "destinationKey": destination,
-            "destinationBucket": options?.destinationBucket,
-          ]
-        )
-      )
-    )
+    try await _move(
+      from: source, to: destination, toBucket: options?.destinationBucket, sourceVersionID: nil)
   }
 
   /// Copies an existing file to a new path, optionally within a different bucket.
   ///
   /// ```swift
-  /// let newPath = try await storage.from("docs").copy(from: "original.pdf", to: "backup/original.pdf")
+  /// let copy = try await storage.from("docs").copy(
+  ///   from: "original.pdf", to: "backup/original.pdf", options: CopyOptions(upsert: true))
+  /// print(copy.fullPath)  // "docs/backup/original.pdf"
   /// ```
+  ///
+  /// A call with only `from` and `to` selects the deprecated overload that returns a `String`,
+  /// unless the context asks for an ``UploadedObject``.
+  ///
+  /// - Parameters:
+  ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
+  ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
+  ///     In both paths, leading, trailing and repeated `/` are removed. An empty path, or a `.`
+  ///     or `..` segment, throws ``StorageError`` with kind
+  ///     ``StorageError/Kind-swift.struct/invalidRequest``.
+  ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
+  ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
+  ///   - options: Whether to replace an existing destination, and the metadata of the copy.
+  /// - Returns: The copy's identifier and path.
+  /// - Throws: ``StorageError`` if the source does not exist, the destination exists and
+  ///   ``CopyOptions/upsert`` is `false`, or the caller is not authorized.
+  @_disfavoredOverload
+  @discardableResult
+  public func copy(
+    from source: String,
+    to destination: String,
+    toBucket: String? = nil,
+    sourceVersionID: String? = nil,
+    options: CopyOptions = CopyOptions()
+  ) async throws -> UploadedObject {
+    let source = try _cleanObjectPath(source)
+    let destination = try _cleanObjectPath(destination)
+    var body = CopyBody(
+      bucketID: bucketId, sourceKey: source, destinationKey: destination,
+      destinationBucket: toBucket, sourceVersionID: sourceVersionID)
+    if !options.copyMetadata {
+      body.copyMetadata = false
+    }
+    if options.cacheControl != nil || options.contentType != nil {
+      body.metadata = CopyBody.Metadata(
+        cacheControl: options.cacheControl?.rawValue, mimetype: options.contentType)
+    }
+
+    var headers = HTTPFields()
+    if options.upsert {
+      headers[.xUpsert] = "true"
+    }
+    if let metadata = options.metadata {
+      headers[.xMetadata] = encodeMetadata(metadata).base64EncodedString()
+    }
+
+    let response = try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/copy"),
+        method: .post,
+        headers: headers,
+        body: JSONEncoder.unconfiguredEncoder.encode(body)
+      )
+    )
+    .decoded(as: CopyResponse.self, decoder: configuration.decoder)
+
+    return UploadedObject(
+      id: response.id.flatMap(UUID.init(uuidString:)), path: destination, fullPath: response.key)
+  }
+
+  /// Copies an existing file to a new path, optionally within a different bucket.
   ///
   /// - Parameters:
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
@@ -335,6 +607,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     the file is copied within the same bucket.
   /// - Returns: The full storage path of the newly created copy.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use copy(from:to:toBucket:sourceVersionID:options:) instead. The old result is UploadedObject.fullPath."
+  )
   @discardableResult
   public func copy(
     from source: String,
@@ -375,6 +652,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURL(path:expiresIn:options:) with a Duration and SignedURLOptions instead."
+  )
   @_disfavoredOverload
   public func createSignedURL(
     path: String,
@@ -383,11 +665,25 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     transform: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) async throws -> URL {
-    struct Body: Encodable {
-      let expiresIn: Int
-      let transform: TransformOptions?
-    }
+    try await _createSignedURL(
+      path: path, expiresIn: expiresIn, transform: transform, versionID: nil, download: download,
+      cacheNonce: cacheNonce)
+  }
 
+  private struct SignBody<Transform: Encodable>: Encodable {
+    let expiresIn: Int
+    let transform: Transform?
+    let versionId: String?
+  }
+
+  private func _createSignedURL(
+    path: String,
+    expiresIn: Int,
+    transform: (some Encodable)?,
+    versionID: String?,
+    download: String?,
+    cacheNonce: String?
+  ) async throws -> URL {
     let encoder = JSONEncoder.unconfiguredEncoder
 
     let response = try await execute(
@@ -395,13 +691,58 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         url: configuration.url.appendingPathComponent("object/sign/\(_getFinalPath(path))"),
         method: .post,
         body: encoder.encode(
-          Body(expiresIn: expiresIn, transform: transform)
+          SignBody(expiresIn: expiresIn, transform: transform, versionId: versionID)
         )
       )
     )
     .decoded(as: SignedURLAPIResponse.self, decoder: configuration.decoder)
 
     return try makeSignedURL(response.signedURL, download: download, cacheNonce: cacheNonce)
+  }
+
+  /// Creates a signed URL for sharing a private file for a fixed period of time.
+  ///
+  /// ```swift
+  /// // Inline preview URL, valid for 5 minutes
+  /// let url = try await storage.from("docs").createSignedURL(path: "report.pdf", expiresIn: .seconds(300))
+  ///
+  /// // Force download with original file name
+  /// let downloadURL = try await storage.from("docs").createSignedURL(
+  ///   path: "report.pdf",
+  ///   expiresIn: .seconds(60),
+  ///   options: SignedURLOptions(download: .withOriginalName)
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
+  /// - Returns: A signed `URL` ready to share.
+  /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  public func createSignedURL(
+    path: String,
+    expiresIn: Duration,
+    options: SignedURLOptions = SignedURLOptions()
+  ) async throws -> URL {
+    try await _createSignedURL(
+      path: _cleanObjectPath(path),
+      expiresIn: Self.seconds(expiresIn),
+      transform: options.transform?.isEmpty == false ? options.transform?.body : nil,
+      versionID: options.versionID,
+      download: options.download?.queryValue,
+      cacheNonce: options.cacheNonce)
+  }
+
+  /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
+  /// traps.
+  private static func seconds(_ expiresIn: Duration) throws -> Int {
+    guard expiresIn >= .seconds(1) else {
+      throw StorageError(
+        kind: .invalidRequest, message: "A signed URL must expire at least one second from now.")
+    }
+    return Int(expiresIn.components.seconds)
   }
 
   /// Creates a signed URL for sharing a private file for a fixed period of time.
@@ -429,6 +770,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURL(path:expiresIn:options:) with a Duration and SignedURLOptions instead."
+  )
   public func createSignedURL(
     path: String,
     expiresIn: Int,
@@ -461,12 +807,65 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:options:) with a Duration and SignedURLsOptions instead."
+  )
   @_disfavoredOverload
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
     download: String? = nil,
     cacheNonce: String? = nil
+  ) async throws -> [SignedURLResult] {
+    try await _createSignedURLs(
+      paths: paths, expiresIn: expiresIn, download: download, cacheNonce: cacheNonce)
+  }
+
+  /// Creates signed URLs for multiple files in a single request.
+  ///
+  /// Each element in the returned array is a ``SignedURLResult``: either
+  /// `.success(path:signedURL:)` or `.failure(path:error:)`. Exactly one case applies per item.
+  /// Paths that do not exist produce a `.failure` result rather than throwing.
+  ///
+  /// ```swift
+  /// let results = try await storage.from("docs").createSignedURLs(
+  ///   paths: ["a.pdf", "b.pdf", "missing.pdf"],
+  ///   expiresIn: .seconds(3600)
+  /// )
+  /// for result in results {
+  ///   switch result {
+  ///   case .success(let path, let url): print(path, url)
+  ///   case .failure(let path, let error): print(path, "failed:", error)
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
+  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - options: The download behavior and cache nonce.
+  /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
+  /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
+  ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  public func createSignedURLs(
+    paths: [String],
+    expiresIn: Duration,
+    options: SignedURLsOptions = SignedURLsOptions()
+  ) async throws -> [SignedURLResult] {
+    try await _createSignedURLs(
+      paths: paths.map { try _cleanObjectPath($0) }, expiresIn: Self.seconds(expiresIn),
+      download: options.download?.queryValue,
+      cacheNonce: options.cacheNonce)
+  }
+
+  private func _createSignedURLs(
+    paths: [String],
+    expiresIn: Int,
+    download: String?,
+    cacheNonce: String?
   ) async throws -> [SignedURLResult] {
     struct Params: Encodable {
       let expiresIn: Int
@@ -526,6 +925,11 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
+  @available(
+    *, deprecated,
+    message:
+      "Use createSignedURLs(paths:expiresIn:options:) with a Duration and SignedURLsOptions instead."
+  )
   public func createSignedURLs(
     paths: [String],
     expiresIn: Int,
@@ -615,6 +1019,10 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     first 100 files sorted by name ascending.
   /// - Returns: An array of ``FileObject`` values representing the matching files and folders.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @available(
+    *, deprecated,
+    message: "Use list(path:options:) with ListOptions instead. It returns [StorageObject]."
+  )
   public func list(
     path: String? = nil,
     options: SearchOptions? = nil
@@ -641,10 +1049,70 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     .decoded(decoder: configuration.decoder)
   }
 
+  private struct ListBody: Encodable {
+    struct Sort: Encodable {
+      let column: String
+      let order: String
+    }
+
+    let prefix: String
+    let limit: Int
+    let offset: Int
+    let sortBy: Sort
+    let search: String?
+    let exactMatch: Bool?
+    let noncurrentVersions: String?
+    let deleteMarkers: String?
+  }
+
+  /// Lists all files within a bucket folder.
+  ///
+  /// ```swift
+  /// let files = try await storage.from("avatars").list(
+  ///   path: "users/", options: ListOptions(sortBy: .updatedAt, order: .descending))
+  /// ```
+  ///
+  /// A call without `options` selects the deprecated overload that returns ``FileObject`` values,
+  /// unless the context asks for ``StorageObject`` values.
+  ///
+  /// - Parameters:
+  ///   - path: The folder prefix to list, e.g. `"users/"`. Pass `nil` to list the bucket root.
+  ///   - options: Paging, sort and filters. Defaults to the first 100 entries sorted by name
+  ///     ascending.
+  /// - Returns: The files and folders one level under `path`, with names relative to it. A
+  ///   folder is an entry whose ``StorageObject/isFolder`` is `true`.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @_disfavoredOverload
+  public func list(
+    path: String? = nil,
+    options: ListOptions = ListOptions()
+  ) async throws -> [StorageObject] {
+    let body = ListBody(
+      prefix: try _cleanObjectPath(path ?? "", allowsEmpty: true),
+      limit: options.limit ?? 100,
+      offset: options.offset ?? 0,
+      sortBy: ListBody.Sort(
+        column: (options.sortBy ?? .name).rawValue,
+        order: (options.order ?? .ascending).rawValue),
+      search: options.search,
+      exactMatch: options.exactMatch,
+      noncurrentVersions: options.versions?.rawValue,
+      deleteMarkers: options.deleteMarkers?.rawValue)
+
+    return try await execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("object/list/\(bucketId)"),
+        method: .post,
+        body: JSONEncoder.unconfiguredEncoder.encode(body)
+      )
+    )
+    .decoded(decoder: configuration.decoder)
+  }
+
   /// Downloads a file from a private bucket and returns its raw bytes.
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``getPublicURL(path:download:options:cacheNonce:)`` directly.
+  /// ``publicURL(path:options:)`` directly.
   ///
   /// ```swift
   /// let data = try await storage.from("avatars").download(path: "user123.png")
@@ -694,13 +1162,32 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   /// - Parameter path: The file path including the file name, e.g. `"folder/image.png"`.
   /// - Returns: A ``FileObjectV2`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
+  @available(*, deprecated, message: "Use info(path:versionID:) instead. It returns ObjectInfo.")
   public func info(path: String) async throws -> FileObjectV2 {
-    let _path = _getFinalPath(path)
+    try await _info(path: path, versionID: nil)
+  }
 
-    return try await execute(
+  /// Retrieves metadata about an existing file without downloading its content.
+  ///
+  /// A call with only `path` selects the deprecated overload that returns ``FileObjectV2``,
+  /// unless the context asks for an ``ObjectInfo``.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - versionID: The version to describe. `nil` describes the current version.
+  /// - Returns: An ``ObjectInfo`` containing size, content type, ETag, and other metadata.
+  /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
+  @_disfavoredOverload
+  public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
+    try await _info(path: _cleanObjectPath(path), versionID: versionID)
+  }
+
+  private func _info<Info: Decodable>(path: String, versionID: String?) async throws -> Info {
+    try await execute(
       HTTPRequest(
-        url: configuration.url.appendingPathComponent("object/info/\(_path)"),
-        method: .get
+        url: configuration.url.appendingPathComponent("object/info/\(_getFinalPath(path))"),
+        method: .get,
+        query: versionID.map { [URLQueryItem(name: "versionId", value: $0)] } ?? []
       )
     )
     .decoded(decoder: configuration.decoder)
@@ -727,7 +1214,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
       var statusCode: Int?
 
       if let error = error as? StorageError {
-        statusCode = error.statusCode.flatMap(Int.init)
+        statusCode = error.serverError?.statusCode
       } else if let error = error as? HTTPError {
         statusCode = error.response.statusCode
       }
@@ -753,6 +1240,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  @available(*, deprecated, message: "Use publicURL(path:options:) instead.")
   @_disfavoredOverload
   public func getPublicURL(
     path: String,
@@ -760,35 +1248,84 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     options: TransformOptions? = nil,
     cacheNonce: String? = nil
   ) throws -> URL {
-    var queryItems: [URLQueryItem] = []
-
-    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    guard
+      let url = _publicURL(
+        path: path, download: download, transform: options?.queryItems ?? [],
+        cacheNonce: cacheNonce, versionID: nil
+      ).built
     else {
       throw URLError(.badURL)
     }
+    return url
+  }
+
+  /// A public URL built from URL components, and the same URL built by appending to the base
+  /// URL, which cannot fail.
+  private func _publicURL(
+    path: String,
+    download: String?,
+    transform: [URLQueryItem],
+    cacheNonce: String?,
+    versionID: String?
+  ) -> (built: URL?, appended: URL) {
+    var queryItems: [URLQueryItem] = []
 
     if let download {
       queryItems.append(URLQueryItem(name: "download", value: download))
     }
 
-    if let optionsQueryItems = options?.queryItems {
-      queryItems.append(contentsOf: optionsQueryItems)
-    }
+    queryItems.append(contentsOf: transform)
 
     if let cacheNonce {
       queryItems.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
     }
 
-    let renderPath = options.map { !$0.isEmpty } == true ? "render/image" : "object"
-
-    components.path += "/\(renderPath)/public/\(_getFinalPath(path))"
-    components.queryItems = !queryItems.isEmpty ? queryItems : nil
-
-    guard let generatedUrl = components.url else {
-      throw URLError(.badURL)
+    if let versionID {
+      queryItems.append(URLQueryItem(name: "versionId", value: versionID))
     }
 
-    return generatedUrl
+    let renderPath = transform.isEmpty ? "object" : "render/image"
+    let route = "\(renderPath)/public/\(_getFinalPath(path))"
+    let appended = configuration.url.appendingPathComponent(route).appendingQueryItems(queryItems)
+
+    guard var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: true)
+    else {
+      return (nil, appended)
+    }
+
+    components.path += "/\(route)"
+    components.queryItems = !queryItems.isEmpty ? queryItems : nil
+
+    return (components.url, appended)
+  }
+
+  /// Returns the public URL for a file in a public bucket.
+  ///
+  /// ```swift
+  /// // Inline display URL
+  /// let url = storage.from("avatars").publicURL(path: "user123.png")
+  ///
+  /// // Force download with original file name
+  /// let dlURL = storage.from("docs").publicURL(
+  ///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+  /// ```
+  ///
+  /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
+  ///
+  /// - Parameters:
+  ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
+  /// - Returns: The publicly accessible `URL` for the file.
+  public func publicURL(
+    path: String,
+    options: PublicURLOptions = PublicURLOptions()
+  ) -> URL {
+    let url = _publicURL(
+      path: path.split(separator: "/", omittingEmptySubsequences: true).joined(separator: "/"),
+      download: options.download?.queryValue,
+      transform: options.transform?.queryItems ?? [], cacheNonce: options.cacheNonce,
+      versionID: options.versionID)
+    return url.built ?? url.appended
   }
 
   /// Returns the public URL for a file in a public bucket.
@@ -813,6 +1350,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///     cache-busting purposes.
   /// - Returns: The publicly accessible `URL` for the file.
   /// - Throws: `URLError` if the resulting URL cannot be constructed.
+  @available(*, deprecated, message: "Use publicURL(path:options:) instead.")
   public func getPublicURL(
     path: String,
     download: DownloadBehavior? = nil,
@@ -847,16 +1385,51 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
   ///   - options: Optional ``CreateSignedUploadURLOptions`` controlling upsert behavior.
   /// - Returns: A ``SignedUploadURL`` containing the signed URL and an upload token.
   /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  @available(*, deprecated, message: "Use createSignedUploadURL(path:upsert:) instead.")
+  @_disfavoredOverload
   public func createSignedUploadURL(
     path: String,
     options: CreateSignedUploadURLOptions? = nil
   ) async throws -> SignedUploadURL {
+    try await _createSignedUploadURL(path: path, upsert: options?.upsert ?? false)
+  }
+
+  /// Creates a signed upload URL that allows uploading a file without further authentication.
+  ///
+  /// Signed upload URLs are valid for 2 hours. Pass the returned ``SignedUploadURL/token`` to
+  /// ``uploadToSignedURL(path:token:data:options:)`` (or the file-URL variant) to perform the
+  /// upload.
+  ///
+  /// ```swift
+  /// let signedUpload = try await storage.from("avatars").createSignedUploadURL(path: "user123.png")
+  /// // Share signedUpload.token with the uploader
+  /// try await storage.from("avatars").uploadToSignedURL(
+  ///   path: "user123.png",
+  ///   token: signedUpload.token,
+  ///   data: imageData
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path including the file name, e.g. `"folder/image.png"`.
+  ///   - upsert: Whether the upload made with the token may replace an existing object at
+  ///     `path`. Defaults to `false`.
+  /// - Returns: A ``SignedUploadURL`` containing the signed URL and an upload token.
+  /// - Throws: ``StorageError`` if the request fails or the caller is not authorized.
+  public func createSignedUploadURL(
+    path: String,
+    upsert: Bool = false
+  ) async throws -> SignedUploadURL {
+    try await _createSignedUploadURL(path: _cleanObjectPath(path), upsert: upsert)
+  }
+
+  private func _createSignedUploadURL(path: String, upsert: Bool) async throws -> SignedUploadURL {
     struct Response: Decodable {
       let url: String
     }
 
     var headers = HTTPFields()
-    if let upsert = options?.upsert, upsert {
+    if upsert {
       headers[.xUpsert] = "true"
     }
 
@@ -879,7 +1452,7 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     }
 
     guard let token = components.queryItems?.first(where: { $0.name == "token" })?.value else {
-      throw StorageError(statusCode: nil, message: "No token returned by API", error: nil)
+      throw StorageError(kind: .decoding, message: "No token returned by API")
     }
 
     guard let url = components.url else {
@@ -895,16 +1468,17 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 
   /// Uploads raw data to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @available(*, deprecated, message: "Use uploadToSignedURL(path:token:data:options:) instead.")
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
@@ -912,28 +1486,30 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     data: Data,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
+    let result = try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .data(data),
-      options: options
+      options: UploadParameters(options ?? FileOptions())
     )
+    return SignedURLUploadResponse(path: result.path, fullPath: result.fullPath)
   }
 
   /// Uploads a local file to a pre-signed upload URL.
   ///
-  /// Obtain the `token` from ``createSignedUploadURL(path:options:)`` before calling this method.
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
   /// Use this overload for large files where streaming from disk is preferable to loading all
   /// content into memory.
   ///
   /// - Parameters:
   ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
   ///     The bucket must already exist.
-  ///   - token: The upload token from ``createSignedUploadURL(path:options:)``.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Optional upload options such as cache control and content type.
   /// - Returns: A ``SignedURLUploadResponse`` containing the stored object path.
   /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @available(*, deprecated, message: "Use uploadToSignedURL(path:token:fileURL:options:) instead.")
   @discardableResult
   public func uploadToSignedURL(
     _ path: String,
@@ -941,22 +1517,76 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
     fileURL: URL,
     options: FileOptions? = nil
   ) async throws -> SignedURLUploadResponse {
-    try await _uploadToSignedURL(
+    let result = try await _uploadToSignedURL(
       path: path,
       token: token,
       file: .url(fileURL),
-      options: options
+      options: UploadParameters(options ?? FileOptions())
     )
+    return SignedURLUploadResponse(path: result.path, fullPath: result.fullPath)
+  }
+
+  /// Uploads raw data to a pre-signed upload URL.
+  ///
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
+  ///   - data: The raw bytes to store in the bucket.
+  ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
+  ///     the token decides whether an existing object is replaced.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    data: Data,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    let result = try await _uploadToSignedURL(
+      path: _cleanObjectPath(path), token: token, file: .data(data),
+      options: UploadParameters(options))
+    return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
+  }
+
+  /// Uploads a local file to a pre-signed upload URL.
+  ///
+  /// Obtain the `token` from ``createSignedUploadURL(path:upsert:)`` before calling this method.
+  ///
+  /// - Parameters:
+  ///   - path: The destination file path, e.g. `"folder/subfolder/filename.png"`.
+  ///     The bucket must already exist.
+  ///   - token: The upload token from ``createSignedUploadURL(path:upsert:)``.
+  ///   - fileURL: A `file://` URL pointing to the local file to upload.
+  ///   - options: Upload options such as cache control and content type. `upsert` has no effect:
+  ///     the token decides whether an existing object is replaced.
+  /// - Returns: An ``UploadedObject`` with the stored path; Storage returns no object id for a
+  ///   signed-URL upload, so ``UploadedObject/id`` is `nil`.
+  /// - Throws: ``StorageError`` if the token is invalid, expired, or the upload fails.
+  @discardableResult
+  public func uploadToSignedURL(
+    path: String,
+    token: String,
+    fileURL: URL,
+    options: UploadOptions = UploadOptions()
+  ) async throws -> UploadedObject {
+    let result = try await _uploadToSignedURL(
+      path: _cleanObjectPath(path), token: token, file: .url(fileURL),
+      options: UploadParameters(options))
+    return UploadedObject(id: nil, path: result.path, fullPath: result.fullPath)
   }
 
   private func _uploadToSignedURL(
     path: String,
     token: String,
     file: FileUpload,
-    options: FileOptions?
-  ) async throws -> SignedURLUploadResponse {
-    let options = options ?? FileOptions()
-    var headers = options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    options: UploadParameters
+  ) async throws -> (path: String, fullPath: String) {
+    var headers = options.headers
 
     headers[.xUpsert] = "\(options.upsert)"
     headers[.duplex] = options.duplex
@@ -981,14 +1611,27 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
         method: .put,
         query: [URLQueryItem(name: "token", value: token)],
         formData: formData,
-        options: options,
+        cacheControl: options.cacheControlHeader,
         headers: headers
       )
     )
     .decoded(as: UploadResponse.self, decoder: configuration.decoder)
     .Key
 
-    return SignedURLUploadResponse(path: cleanPath, fullPath: fullPath)
+    return (path: cleanPath, fullPath: fullPath)
+  }
+
+  private func _cleanObjectPath(_ path: String, allowsEmpty: Bool = false) throws -> String {
+    let segments = path.split(separator: "/", omittingEmptySubsequences: true)
+    guard allowsEmpty || !segments.isEmpty else {
+      throw StorageError(kind: .invalidRequest, message: "An object path must not be empty.")
+    }
+    if let dots = segments.first(where: { $0 == "." || $0 == ".." }) {
+      throw StorageError(
+        kind: .invalidRequest,
+        message: "An object path must not contain a '\(dots)' segment: '\(path)'.")
+    }
+    return segments.joined(separator: "/")
   }
 
   private func _getFinalPath(_ path: String) -> String {
@@ -1010,4 +1653,25 @@ public class StorageFileApi: StorageApi, @unchecked Sendable {
 extension HTTPField.Name {
   static let duplex = Self("duplex")!
   static let xUpsert = Self("x-upsert")!
+  static let xMetadata = Self("x-metadata")!
+}
+
+/// Supabase Storage File API for file operations within a specific bucket.
+///
+/// The name ``StorageFileApi`` has in the next major version.
+public typealias StorageBucket = StorageFileApi
+
+extension UploadParameters {
+  @available(*, deprecated, message: "Use init(_:) with UploadOptions instead.")
+  init(_ options: FileOptions) {
+    self.init(
+      cacheControlField: options.cacheControl,
+      cacheControlHeader: "max-age=\(options.cacheControl)",
+      contentType: options.contentType,
+      upsert: options.upsert,
+      duplex: options.duplex,
+      metadata: options.metadata,
+      headers: options.headers.map { HTTPFields($0) } ?? HTTPFields()
+    )
+  }
 }

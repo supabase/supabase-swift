@@ -511,12 +511,26 @@ features:
       - StorageByteCount
       - StorageByteCount.init
       - StorageByteCount.intValue
+      - StorageByteCount.bytes
+      - StorageByteCount.rawValue
       - StorageByteCount.kilobytes
       - StorageByteCount.megabytes
       - StorageByteCount.gigabytes
       - StorageByteCount.stringValue
       - StorageByteCount.encode
       - BucketOptions.isPublic
+      - CreateBucketOptions.isPublic
+      - BucketType
+      - BucketType.init
+      - BucketType.rawValue
+      - BucketType.encode
+      - BucketType.standard
+      - BucketType.analytics
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
   storage.file_buckets.get_bucket: implemented
   storage.file_buckets.list_file_buckets: implemented
   storage.file_buckets.update_bucket: implemented
@@ -534,6 +548,19 @@ features:
       - SortOrder.ascending
       - SortOrder.descending
       - SortOrder.encode
+      - ObjectSortColumn
+      - ObjectSortColumn.init
+      - ObjectSortColumn.rawValue
+      - ObjectSortColumn.name
+      - ObjectSortColumn.updatedAt
+      - ObjectSortColumn.createdAt
+      - ObjectSortColumn.lastAccessedAt
+      - VersionFilter
+      - VersionFilter.init
+      - VersionFilter.rawValue
+      - VersionFilter.exclude
+      - VersionFilter.include
+      - VersionFilter.only
   storage.file_buckets.move: implemented
   storage.file_buckets.copy: implemented
   storage.file_buckets.remove: implemented
@@ -567,6 +594,20 @@ features:
       - ImageFormat.webp
       - ImageFormat.avif
       - ImageFormat.encode
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented
