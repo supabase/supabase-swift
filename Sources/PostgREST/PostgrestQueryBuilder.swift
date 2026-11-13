@@ -1,5 +1,5 @@
 import ConcurrencyExtras
-import Foundation
+public import Foundation
 import HTTPTypes
 
 /// Builder for SELECT, INSERT, UPDATE, UPSERT, and DELETE operations on a table or view.
@@ -37,14 +37,17 @@ import HTTPTypes
 /// ### Inserting Rows
 ///
 /// - ``insert(_:returning:count:)``
+/// - ``insert(_:returning:count:defaultToNull:encoder:)``
 ///
 /// ### Updating Rows
 ///
 /// - ``update(_:returning:count:)``
+/// - ``update(_:returning:count:encoder:)``
 ///
 /// ### Upsert Rows
 ///
 /// - ``upsert(_:onConflict:returning:count:ignoreDuplicates:)``
+/// - ``upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
 ///
 /// ### Deleting Rows
 ///
@@ -141,7 +144,56 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     returning: PostgrestReturningOptions? = nil,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    try prepareInsert(
+      values, returning: returning, count: count, defaultToNull: true, encoder: nil)
+    return PostgrestFilterBuilder(self)
+  }
+
+  /// Inserts one or more rows into the table or view, with control over missing columns and the
+  /// encoder.
+  ///
+  /// By default, inserted rows are not returned. To receive the inserted data, chain with
+  /// ``PostgrestTransformBuilder/select(_:)`` after calling this method.
+  ///
+  /// ```swift
+  /// try await client
+  ///   .from("todos")
+  ///   .insert([Todo(task: "A"), Todo(task: "B", done: true)], defaultToNull: false)
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - values: An `Encodable` value representing a single row or an array of rows to insert.
+  ///   - returning: Controls which rows PostgREST returns. Defaults to `nil` (server decides).
+  ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - defaultToNull: Controls what happens to a column that some rows in a bulk payload name and
+  ///     others leave out. `true` inserts `null` for the rows that omit it; `false` sends
+  ///     `Prefer: missing=default` so the column's `DEFAULT` applies instead.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an insert.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  public func insert(
+    _ values: some Encodable,
+    returning: PostgrestReturning? = nil,
+    count: CountOption? = nil,
+    defaultToNull: Bool = true,
+    encoder: JSONEncoder? = nil
+  ) throws -> PostgrestTransformBuilder {
+    try prepareInsert(
+      values, returning: returning, count: count, defaultToNull: defaultToNull, encoder: encoder)
+    return PostgrestTransformBuilder(self)
+  }
+
+  private func prepareInsert(
+    _ values: some Encodable,
+    returning: PostgrestReturning?,
+    count: CountOption?,
+    defaultToNull: Bool,
+    encoder: JSONEncoder?
+  ) throws {
+    let body = try (encoder ?? configuration.encoder).encode(values)
 
     try mutableState.withValue {
       $0.request.method = .post
@@ -152,6 +204,9 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       $0.request.body = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
+      }
+      if !defaultToNull {
+        prefersHeaders.append("missing=default")
       }
       if let prefer = $0.request.headers[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
@@ -172,8 +227,6 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         )
       }
     }
-
-    return PostgrestFilterBuilder(self)
   }
 
   /// Inserts rows, updating existing rows on conflict (upsert).
@@ -212,7 +265,75 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     count: CountOption? = nil,
     ignoreDuplicates: Bool = false
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    try prepareUpsert(
+      values,
+      onConflict: onConflict,
+      returning: returning,
+      count: count,
+      ignoreDuplicates: ignoreDuplicates,
+      defaultToNull: true,
+      encoder: nil
+    )
+    return PostgrestFilterBuilder(self)
+  }
+
+  /// Inserts rows, updating existing rows on conflict (upsert), with control over missing columns
+  /// and the encoder.
+  ///
+  /// By default, upserted rows are returned. To suppress this, pass `.minimal` as `returning`.
+  ///
+  /// > Note: The next major version changes the default of `returning` to `nil`. Pass a value
+  /// > if your code depends on the returned rows.
+  ///
+  /// - Parameters:
+  ///   - values: An `Encodable` value representing a single row or an array of rows.
+  ///   - onConflict: Comma-separated UNIQUE column(s) that determine whether a row is a duplicate.
+  ///     When `nil`, PostgREST uses the table's primary key.
+  ///   - returning: Controls which rows PostgREST returns after the upsert. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - ignoreDuplicates: When `true`, conflicting rows are silently ignored. When `false` (the
+  ///     default), conflicting rows are merged with the supplied values.
+  ///   - defaultToNull: Controls what happens to a column that some rows in a bulk payload name and
+  ///     others leave out. `true` inserts `null` for the rows that omit it; `false` sends
+  ///     `Prefer: missing=default` so the column's `DEFAULT` applies instead. This also decides
+  ///     what a row omitting the conflict target merges against: under `false` the target
+  ///     resolves to the database-generated value, which is what the conflict is detected on.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
+  /// - Returns: A ``PostgrestTransformBuilder`` for shaping the returned rows or executing the request.
+  ///   Filters are not available: PostgREST ignores them on an upsert.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  public func upsert(
+    _ values: some Encodable,
+    onConflict: String? = nil,
+    returning: PostgrestReturning = .representation,
+    count: CountOption? = nil,
+    ignoreDuplicates: Bool = false,
+    defaultToNull: Bool = true,
+    encoder: JSONEncoder? = nil
+  ) throws -> PostgrestTransformBuilder {
+    try prepareUpsert(
+      values,
+      onConflict: onConflict,
+      returning: returning,
+      count: count,
+      ignoreDuplicates: ignoreDuplicates,
+      defaultToNull: defaultToNull,
+      encoder: encoder
+    )
+    return PostgrestTransformBuilder(self)
+  }
+
+  private func prepareUpsert(
+    _ values: some Encodable,
+    onConflict: String?,
+    returning: PostgrestReturning,
+    count: CountOption?,
+    ignoreDuplicates: Bool,
+    defaultToNull: Bool,
+    encoder: JSONEncoder?
+  ) throws {
+    let body = try (encoder ?? configuration.encoder).encode(values)
 
     try mutableState.withValue {
       $0.request.method = .post
@@ -226,6 +347,9 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
       $0.request.body = body
       if let count {
         prefersHeaders.append("count=\(count.rawValue)")
+      }
+      if !defaultToNull {
+        prefersHeaders.append("missing=default")
       }
       if let prefer = $0.request.headers[.prefer] {
         prefersHeaders.insert(prefer, at: 0)
@@ -247,7 +371,6 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
         )
       }
     }
-    return PostgrestFilterBuilder(self)
   }
 
   /// Performs a partial UPDATE on rows that match subsequent filters.
@@ -277,7 +400,35 @@ public final class PostgrestQueryBuilder: PostgrestBuilder, @unchecked Sendable 
     returning: PostgrestReturningOptions = .representation,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let body = try configuration.encoder.encode(values)
+    try update(values, returning: returning, count: count, encoder: nil)
+  }
+
+  /// Performs a partial UPDATE on rows that match subsequent filters, with a per-call encoder.
+  ///
+  /// By default, updated rows are returned as ``PostgrestReturningOptions/representation``. To
+  /// suppress this, pass `.minimal` as `returning`.
+  ///
+  /// > Important: Omitting a filter will update **all rows** in the table. Always chain
+  /// > a filter such as ``PostgrestFilterBuilder/eq(_:value:)`` before calling ``PostgrestBuilder/execute(options:)-96tpd``.
+  ///
+  /// > Note: The next major version changes the default of `returning` to `nil`. Pass a value
+  /// > if your code depends on the returned rows.
+  ///
+  /// - Parameters:
+  ///   - values: An `Encodable` value with the columns to update.
+  ///   - returning: Controls which rows PostgREST returns after the update. Defaults to ``PostgrestReturningOptions/representation``.
+  ///   - count: The row-count algorithm to use, or `nil` to skip counting. See ``CountOption``.
+  ///   - encoder: The `JSONEncoder` used to serialize `values`. Overrides
+  ///     ``PostgrestClient/Configuration/encoder`` when non-`nil`.
+  /// - Returns: A ``PostgrestFilterBuilder`` for scoping which rows are affected.
+  /// - Throws: An encoding error if `values` cannot be serialized, or ``PostgrestError`` on server error.
+  public func update(
+    _ values: some Encodable,
+    returning: PostgrestReturning = .representation,
+    count: CountOption? = nil,
+    encoder: JSONEncoder?
+  ) throws -> PostgrestFilterBuilder {
+    let body = try (encoder ?? configuration.encoder).encode(values)
     mutableState.withValue {
       $0.request.method = .patch
       var preferHeaders = ["return=\(returning.rawValue)"]

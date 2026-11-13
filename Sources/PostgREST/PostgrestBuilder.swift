@@ -1,6 +1,6 @@
 import ConcurrencyExtras
-import Foundation
-import HTTPTypes
+public import Foundation
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -23,7 +23,12 @@ import HTTPTypes
 ///
 /// ### Setting Headers
 ///
+/// - ``settingHeader(name:value:)``
 /// - ``setHeader(name:value:)``
+///
+/// ### Setting a Timeout
+///
+/// - ``timeout(_:)``
 ///
 /// ### Configuring Retries
 ///
@@ -33,6 +38,7 @@ import HTTPTypes
 ///
 /// - ``execute(options:)-96tpd``
 /// - ``execute(options:)-6mk2u``
+/// - ``execute(options:decoder:)``
 public class PostgrestBuilder: @unchecked Sendable {
   /// The configuration for the PostgREST client.
   let configuration: PostgrestClient.Configuration
@@ -95,9 +101,37 @@ public class PostgrestBuilder: @unchecked Sendable {
   ///   - name: The header field name.
   ///   - value: The header field value.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use settingHeader(name:value:) instead.")
   @discardableResult
   public func setHeader(name: String, value: String) -> Self {
     return self.setHeader(name: .init(name)!, value: value)
+  }
+
+  /// Adds an HTTP header to the request, or replaces it if the request already has it.
+  ///
+  /// Use this method to attach arbitrary headers — for example, to pass custom PostgREST
+  /// `Prefer` values or to forward user-supplied metadata.
+  ///
+  /// ```swift
+  /// try await client.from("todos")
+  ///   .select()
+  ///   .settingHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
+  ///   .execute()
+  /// ```
+  ///
+  /// > Important: In this version the builder is a class, so this method changes the receiver
+  /// > and returns it. In the next major version the builder is a value type: this method
+  /// > returns a new builder and leaves the receiver unchanged. Always use the returned builder,
+  /// > and the same code works in both versions. The next major version also does not offer this
+  /// > method on ``PostgrestQueryBuilder``, so call it after `select`, `insert`, `update`,
+  /// > `upsert`, `delete` or `rpc`.
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: The same builder instance so calls can be chained.
+  public func settingHeader(name: HTTPField.Name, value: String) -> Self {
+    setHeader(name: name, value: value)
   }
 
   /// Set a HTTP header for the request.
@@ -120,6 +154,41 @@ public class PostgrestBuilder: @unchecked Sendable {
   @discardableResult
   public func retry(enabled: Bool) -> Self {
     mutableState.withValue { $0.retryEnabled = enabled }
+    return self
+  }
+
+  /// Sets the timeout for this specific request.
+  ///
+  /// Without this method, a request uses a timeout of 60 seconds. Each retry attempt gets the
+  /// full duration.
+  ///
+  /// ```swift
+  /// let rows: [Todo] = try await client.from("todos").select()
+  ///   .timeout(.seconds(5))
+  ///   .execute()
+  ///   .value
+  /// ```
+  ///
+  /// > Note: The builder sets `URLRequest.timeoutInterval` on the request that it passes to
+  /// > ``PostgrestClient/Configuration/fetch``. With the default handler, `URLSession` fails the
+  /// > request once no data has moved for `duration`. A custom fetch handler must honor the
+  /// > request's `timeoutInterval` for this method to have an effect.
+  ///
+  /// > Important: In this version the builder is a class, so this method changes the receiver
+  /// > and returns it. In the next major version the builder is a value type: this method
+  /// > returns a new builder and leaves the receiver unchanged. Always use the returned builder,
+  /// > and the same code works in both versions. The next major version also does not offer this
+  /// > method on ``PostgrestQueryBuilder``, so call it after `select`, `insert`, `update`,
+  /// > `upsert`, `delete` or `rpc`.
+  ///
+  /// - Parameter duration: The idle timeout.
+  /// - Returns: The same builder instance so calls can be chained.
+  public func timeout(_ duration: Duration) -> Self {
+    mutableState.withValue {
+      $0.request.timeoutInterval =
+        TimeInterval(duration.components.seconds)
+        + TimeInterval(duration.components.attoseconds) / 1e18
+    }
     return self
   }
 
@@ -159,9 +228,38 @@ public class PostgrestBuilder: @unchecked Sendable {
   public func execute<T: Decodable>(
     options: FetchOptions = FetchOptions()
   ) async throws -> PostgrestResponse<T> {
-    try await execute(options: options) { [configuration] data in
+    try await execute(options: options, decoder: nil)
+  }
+
+  /// Executes the request and decodes the response body into the inferred type with a per-call
+  /// decoder.
+  ///
+  /// ```swift
+  /// let todos: [Todo] = try await client
+  ///   .from("todos")
+  ///   .select()
+  ///   .execute(decoder: decoder)
+  ///   .value
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - options: Options controlling whether to include a row count and whether to
+  ///     use the HEAD method. Defaults to ``FetchOptions/init(head:count:)``.
+  ///   - decoder: The `JSONDecoder` used to decode the response body into `T`. Overrides
+  ///     ``PostgrestClient/Configuration/decoder`` when non-`nil`. In this version an error body
+  ///     is still decoded with ``PostgrestClient/Configuration/decoder``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `T`.
+  /// - Throws: ``PostgrestError`` if PostgREST returns an error response, a decoding error if the
+  ///   response body cannot be decoded as `T`, or any error thrown by the fetch handler.
+  @discardableResult
+  public func execute<T: Decodable>(
+    options: FetchOptions = FetchOptions(),
+    decoder: JSONDecoder?
+  ) async throws -> PostgrestResponse<T> {
+    let decoder = decoder ?? configuration.decoder
+    return try await execute(options: options) { [configuration] data in
       do {
-        return try configuration.decoder.decode(T.self, from: data)
+        return try decoder.decode(T.self, from: data)
       } catch {
         configuration.logger?.error("Failed to decode type '\(T.self) with error: \(error)")
         throw error
@@ -303,7 +401,7 @@ extension PostgrestError {
   /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
   /// so look for that instead of matching a fixed prefix.
   fileprivate var matchedZeroRows: Bool {
-    guard let details else { return false }
+    guard let details = serverError?.details else { return false }
     let words = details.split(separator: " ")
     guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,
       let count = Int(words[rowsIndex - 1])

@@ -8,6 +8,7 @@ apikey
 Apikey
 AQAB
 Ascii
+attoseconds
 autocapitalization
 Autocapitalization
 autocorrection
@@ -43,6 +44,7 @@ dont
 dragarcia
 dummysignature
 ecdsa
+ERRCODE
 halfvec
 emaillink
 entrancy
@@ -161,6 +163,7 @@ sourcery
 Sourcery
 spotify
 Spotify
+SQLSTATE
 subclassing
 subheadline
 Subview

@@ -14,8 +14,10 @@ public import HTTPTypes
 ///
 /// ```swift
 /// let client = PostgrestClient(
-///   url: URL(string: "https://<project>.supabase.co/rest/v1")!,
-///   headers: ["apikey": "<anon-key>"]
+///   configuration: PostgrestClient.Configuration(
+///     url: URL(string: "https://<project>.supabase.co/rest/v1")!,
+///     headers: ["apikey": "<anon-key>"]
+///   )
 /// )
 ///
 /// // SELECT * FROM todos
@@ -199,7 +201,7 @@ public final class PostgrestClient: Sendable {
   /// Creates a ``PostgrestClient`` with individual configuration parameters.
   ///
   /// This is a convenience initializer that constructs a ``Configuration`` internally.
-  /// Use ``init(configuration:)`` when you need to share or reuse a configuration value.
+  /// The next major version removes it. Use ``init(configuration:)`` instead.
   ///
   /// - Parameters:
   ///   - url: The base URL of the PostgREST endpoint.
@@ -210,6 +212,7 @@ public final class PostgrestClient: Sendable {
   ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
   ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
   ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
+  @available(*, deprecated, message: "Use init(configuration:) instead.")
   public convenience init(
     url: URL,
     schema: String? = nil,

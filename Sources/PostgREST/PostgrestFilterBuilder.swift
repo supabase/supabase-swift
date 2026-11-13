@@ -2,6 +2,69 @@ import ConcurrencyExtras
 import Foundation
 import Helpers
 
+/// The set of PostgREST comparison operators available for use with
+/// ``PostgrestFilterBuilder/not(_:operator:value:)`` and
+/// ``PostgrestFilterBuilder/filter(_:operator:value:)``.
+///
+/// Most operators have dedicated convenience methods (e.g., ``PostgrestFilterBuilder/eq(_:value:)``,
+/// ``PostgrestFilterBuilder/gt(_:value:)``). Use ``PostgrestOperator`` directly only when you need
+/// ``PostgrestFilterBuilder/not(_:operator:value:)`` or the raw
+/// ``PostgrestFilterBuilder/filter(_:operator:value:)`` escape hatch.
+///
+/// ``PostgrestFilterBuilder/Operator`` is another name for this type.
+public enum PostgrestOperator: String, CaseIterable, Sendable {
+  /// Equals (`=`).
+  case eq
+  /// Not equals (`!=`).
+  case neq
+  /// Greater than (`>`).
+  case gt
+  /// Greater than or equal (`>=`).
+  case gte
+  /// Less than (`<`).
+  case lt
+  /// Less than or equal (`<=`).
+  case lte
+  /// Case-sensitive LIKE pattern match.
+  case like
+  /// Case-insensitive ILIKE pattern match.
+  case ilike
+  /// Case-sensitive regex match.
+  case match
+  /// Case-insensitive regex match.
+  case imatch
+  /// IS (for NULL / boolean checks).
+  case `is`
+  /// IS DISTINCT FROM.
+  case isdistinct
+  /// IN — value is in a list.
+  case `in`
+  /// Contains (`@>`).
+  case cs
+  /// Contained by (`<@`).
+  case cd
+  /// Range strictly left of (`<<`).
+  case sl
+  /// Range strictly right of (`>>`).
+  case sr
+  /// Range does not extend to the left (`&>`).
+  case nxl
+  /// Range does not extend to the right (`&<`).
+  case nxr
+  /// Range is adjacent (`-|-`).
+  case adj
+  /// Overlaps (`&&`).
+  case ov
+  /// Full-text search using `to_tsquery`.
+  case fts
+  /// Full-text search using `plainto_tsquery`.
+  case plfts
+  /// Full-text search using `phraseto_tsquery`.
+  case phfts
+  /// Full-text search using `websearch_to_tsquery`.
+  case wfts
+}
+
 /// Builder for applying WHERE-clause filters to a PostgREST query.
 ///
 /// Obtain a ``PostgrestFilterBuilder`` from ``PostgrestQueryBuilder/select(_:head:count:)``,
@@ -82,64 +145,8 @@ import Helpers
 ///
 /// - ``Operator``
 public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Sendable {
-  /// The set of PostgREST comparison operators available for use with ``not(_:operator:value:)``
-  /// and ``filter(_:operator:value:)``.
-  ///
-  /// Most operators have dedicated convenience methods (e.g., ``eq(_:value:)``, ``gt(_:value:)``).
-  /// Use ``Operator`` directly only when you need ``not(_:operator:value:)`` or the raw
-  /// ``filter(_:operator:value:)`` escape hatch.
-  public enum Operator: String, CaseIterable, Sendable {
-    /// Equals (`=`).
-    case eq
-    /// Not equals (`!=`).
-    case neq
-    /// Greater than (`>`).
-    case gt
-    /// Greater than or equal (`>=`).
-    case gte
-    /// Less than (`<`).
-    case lt
-    /// Less than or equal (`<=`).
-    case lte
-    /// Case-sensitive LIKE pattern match.
-    case like
-    /// Case-insensitive ILIKE pattern match.
-    case ilike
-    /// Case-sensitive regex match.
-    case match
-    /// Case-insensitive regex match.
-    case imatch
-    /// IS (for NULL / boolean checks).
-    case `is`
-    /// IS DISTINCT FROM.
-    case isdistinct
-    /// IN — value is in a list.
-    case `in`
-    /// Contains (`@>`).
-    case cs
-    /// Contained by (`<@`).
-    case cd
-    /// Range strictly left of (`<<`).
-    case sl
-    /// Range strictly right of (`>>`).
-    case sr
-    /// Range does not extend to the left (`&>`).
-    case nxl
-    /// Range does not extend to the right (`&<`).
-    case nxr
-    /// Range is adjacent (`-|-`).
-    case adj
-    /// Overlaps (`&&`).
-    case ov
-    /// Full-text search using `to_tsquery`.
-    case fts
-    /// Full-text search using `plainto_tsquery`.
-    case plfts
-    /// Full-text search using `phraseto_tsquery`.
-    case phfts
-    /// Full-text search using `websearch_to_tsquery`.
-    case wfts
-  }
+  /// The set of PostgREST comparison operators. Another name for ``PostgrestOperator``.
+  public typealias Operator = PostgrestOperator
 
   // MARK: - Filters
 
@@ -877,6 +884,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type:) instead.")
   public func fts(
     _ column: String,
     query: any PostgrestFilterValue,
@@ -954,6 +962,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use eq(_:value:) instead.")
   public func equals(
     _ column: String,
     value: String
@@ -969,6 +978,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use neq(_:value:) instead.")
   public func notEquals(
     _ column: String,
     value: String
@@ -984,6 +994,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use gt(_:value:) instead.")
   public func greaterThan(
     _ column: String,
     value: String
@@ -999,6 +1010,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use gte(_:value:) instead.")
   public func greaterThanOrEquals(
     _ column: String,
     value: String
@@ -1014,6 +1026,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use lt(_:value:) instead.")
   public func lowerThan(
     _ column: String,
     value: String
@@ -1029,6 +1042,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The column to filter on.
   ///   - value: The value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use lte(_:value:) instead.")
   public func lowerThanOrEquals(
     _ column: String,
     value: String
@@ -1044,6 +1058,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - range: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeLt(_:range:) instead.")
   public func rangeLowerThan(
     _ column: String,
     range: String
@@ -1059,6 +1074,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeGt(_:range:) instead.")
   public func rangeGreaterThan(
     _ column: String,
     value: String
@@ -1074,6 +1090,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeGte(_:range:) instead.")
   public func rangeGreaterThanOrEquals(
     _ column: String,
     value: String
@@ -1089,6 +1106,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - column: The range column to filter on.
   ///   - value: The range value to compare against.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use rangeLte(_:range:) instead.")
   public func rangeLowerThanOrEquals(
     _ column: String,
     value: String
@@ -1105,6 +1123,7 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(*, deprecated, message: "Use textSearch(_:query:config:type:) instead.")
   public func fullTextSearch(
     _ column: String,
     query: String,
@@ -1122,6 +1141,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .plain instead."
+  )
   public func plainToFullTextSearch(
     _ column: String,
     query: String,
@@ -1139,6 +1161,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .phrase instead."
+  )
   public func phraseToFullTextSearch(
     _ column: String,
     query: String,
@@ -1156,6 +1181,9 @@ public class PostgrestFilterBuilder: PostgrestTransformBuilder, @unchecked Senda
   ///   - query: The search query text.
   ///   - config: The text search configuration name. Defaults to `nil`.
   /// - Returns: The same builder instance so calls can be chained.
+  @available(
+    *, deprecated, message: "Use textSearch(_:query:config:type:) with type: .websearch instead."
+  )
   public func webFullTextSearch(
     _ column: String,
     query: String,
