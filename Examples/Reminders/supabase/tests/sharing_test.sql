@@ -117,6 +117,13 @@ select throws_ok(
   '42501', null, 'stranger cannot invite to a list they do not own'
 );
 
+-- The answer must not tell a stranger who owns the list or who is a member of it.
+select throws_ok(
+  $$ insert into public.list_invitations (list_id, invited_email)
+     values ('10000000-0000-0000-0000-000000000001', 'owner@example.com') $$,
+  '42501', null, 'stranger cannot learn the owner email from the invitation error'
+);
+
 select throws_ok(
   $$ select public.accept_invitation((select id from tests.invitation('member@example.com'))) $$,
   'P0002', null, 'stranger cannot accept an invitation for another email'

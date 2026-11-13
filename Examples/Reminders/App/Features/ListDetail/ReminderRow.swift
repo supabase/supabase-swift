@@ -46,7 +46,7 @@ struct ReminderRow: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
         }
-        if let dueAt = reminder.dueAt {
+        if let dueAt = reminder.localDueDate() {
           Text(dueText(dueAt))
             .font(.subheadline)
             .foregroundStyle(isOverdue(dueAt) ? .red : .secondary)

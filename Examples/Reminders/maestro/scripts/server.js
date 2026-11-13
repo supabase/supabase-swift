@@ -44,6 +44,34 @@ if (ACTION === 'insert_reminder') {
 } else if (ACTION === 'remove_member') {
   var profile = send('GET', '/profiles?email=' + eq(EMAIL))[0]
   send('DELETE', '/list_members?user_id=' + eq(profile.id))
+} else if (ACTION === 'complete_reminder') {
+  send('PATCH', '/reminders?title=' + eq(TITLE), { completed_at: new Date().toISOString() })
+} else if (ACTION === 'assert_reminder') {
+  // Checks the notes and the completed state of a reminder on the server.
+  // The app shows an update before the server has it, so the first reads can be early.
+  var saved
+  for (var attempt = 0; attempt < 100; attempt++) {
+    saved = send('GET', '/reminders?title=' + eq(TITLE))[0]
+    if (saved.notes === NOTES) break
+  }
+  if (saved.notes !== NOTES) {
+    throw new Error('Expected notes "' + NOTES + '", found "' + saved.notes + '"')
+  }
+  if ((saved.completed_at !== null) !== (COMPLETED === 'true')) {
+    throw new Error('Expected completed=' + COMPLETED + ', found completed_at=' + saved.completed_at)
+  }
+} else if (ACTION === 'hide_reminder') {
+  // Moves a reminder to a list of a new user, as a member of a shared list can do.
+  // The app user cannot read that list.
+  var created = http.post(SUPABASE_URL + '/auth/v1/admin/users', {
+    headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: OTHER_EMAIL, password: 'password123', email_confirm: true }),
+  })
+  if (!created.ok) {
+    throw new Error('Create user failed: ' + created.status + ' ' + created.body)
+  }
+  var hidden = send('POST', '/lists', { name: 'Hidden', owner_id: json(created.body).id })[0]
+  send('PATCH', '/reminders?title=' + eq(TITLE), { list_id: hidden.id })
 } else if (ACTION === 'assert_object_folders') {
   // Each reminder with images has one folder in the bucket.
   var response = http.post(SUPABASE_URL + '/storage/v1/object/list/attachments', {

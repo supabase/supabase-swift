@@ -4,11 +4,15 @@ import Supabase
 // Realtime sync. One channel follows every table that the app shows. Row level security
 // applies to these events, so each user gets only the changes they can read.
 extension DataStore {
-  /// Subscribes to changes. Call it after `load()`.
+  /// Subscribes to changes. Call it before `load()`, so that no change is lost between
+  /// the two: an event that arrives while the load runs makes the load read again.
   func startRealtime() async {
     await stopRealtime()
 
-    let channel = client.channel("reminders-sync")
+    // Each start has its own topic. `client.channel` gives back an open channel that
+    // has the same topic, and a channel cannot get new streams after it joins.
+    let channel = client.channel("reminders-sync-\(UUID().uuidString)")
+    realtimeChannel = channel
     // The streams must exist before `subscribe`: the join message lists them.
     let lists = channel.postgresChange(AnyAction.self, schema: "public", table: "lists")
     let reminders = channel.postgresChange(AnyAction.self, schema: "public", table: "reminders")
@@ -21,11 +25,12 @@ extension DataStore {
     do {
       try await channel.subscribeWithError()
     } catch {
-      self.error = error
+      if realtimeChannel === channel, !Task.isCancelled { self.error = error }
       return
     }
 
-    realtimeChannel = channel
+    // A newer start, or a stop, took the place of this one while it joined.
+    guard realtimeChannel === channel else { return }
     realtimeTask = Task { [weak self] in
       await withTaskGroup(of: Void.self) { group in
         group.addTask {
@@ -35,10 +40,10 @@ extension DataStore {
           for await change in reminders { await self?.applyReminderChange(change) }
         }
         group.addTask {
-          for await _ in members { await self?.membershipChanged() }
+          for await change in members { await self?.membershipChanged(change) }
         }
         group.addTask {
-          for await _ in invitations { await self?.invitationsChanged() }
+          for await change in invitations { await self?.invitationsChanged(change) }
         }
         group.addTask {
           for await change in attachments { await self?.applyAttachmentChange(change) }
@@ -82,7 +87,7 @@ extension DataStore {
         upsert(reminder, in: \.reminders)
       }
     case .delete(let action):
-      if let id = rowID(in: action.oldRecord) { reminders.removeAll { $0.id == id } }
+      if let id = rowID(in: action.oldRecord) { removeReminder(id: id) }
     }
   }
 
@@ -97,13 +102,23 @@ extension DataStore {
         upsert(attachment, in: \.attachments)
       }
     case .delete(let action):
-      if let id = rowID(in: action.oldRecord) { attachments.removeAll { $0.id == id } }
+      if let id = rowID(in: action.oldRecord), attachments.contains(where: { $0.id == id }) {
+        changeCount += 1
+        attachments.removeAll { $0.id == id }
+      }
     }
   }
 
   /// A person joined or left a list. The set of rows that this user can read may be
   /// different now, so everything is read again.
-  private func membershipChanged() async {
+  ///
+  /// Row level security does not apply to delete events: each client gets the delete
+  /// events of all users. The app ignores those for lists that it does not show.
+  private func membershipChanged(_ change: AnyAction) async {
+    if case .delete(let action) = change {
+      let listID = action.oldRecord["list_id"]?.stringValue.flatMap(UUID.init(uuidString:))
+      guard let listID, list(id: listID) != nil else { return }
+    }
     do {
       try await load()
     } catch {
@@ -112,7 +127,14 @@ extension DataStore {
   }
 
   /// An invitation row has no list name, so the app reads the invitations again.
-  private func invitationsChanged() async {
+  /// As for members, a delete event can be about an invitation of other people.
+  private func invitationsChanged(_ change: AnyAction) async {
+    if case .delete(let action) = change {
+      guard let id = rowID(in: action.oldRecord),
+        sentInvitations.contains(where: { $0.id == id })
+          || incomingInvitations.contains(where: { $0.id == id })
+      else { return }
+    }
     do {
       try await reloadInvitations()
     } catch {

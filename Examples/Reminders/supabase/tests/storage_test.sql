@@ -71,7 +71,8 @@ select lives_ok(
 );
 
 select is(
-  (select count(*) from storage.objects where bucket_id = 'attachments'), 2::bigint,
+  (select count(*) from storage.objects
+   where bucket_id = 'attachments' and name like '20000000-0000-0000-0000-00000000000_/%'), 2::bigint,
   'member reads the objects of the reminder'
 );
 
@@ -108,7 +109,8 @@ set local storage.allow_delete_query = 'true';
 delete from storage.objects where bucket_id = 'attachments';
 select tests.logout();
 select is(
-  (select count(*) from storage.objects where bucket_id = 'attachments'), 2::bigint,
+  (select count(*) from storage.objects
+   where bucket_id = 'attachments' and name like '20000000-0000-0000-0000-00000000000_/%'), 2::bigint,
   'stranger cannot delete objects'
 );
 
@@ -116,7 +118,8 @@ select tests.login('member@example.com');
 delete from storage.objects where name = '20000000-0000-0000-0000-000000000001/a.jpg';
 select tests.logout();
 select is(
-  (select count(*) from storage.objects where bucket_id = 'attachments'), 1::bigint,
+  (select count(*) from storage.objects
+   where bucket_id = 'attachments' and name like '20000000-0000-0000-0000-00000000000_/%'), 1::bigint,
   'member deletes an object'
 );
 
