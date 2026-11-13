@@ -45,4 +45,12 @@ if [[ $# -eq 0 ]]; then
   set -- "$HERE/flows"
 fi
 
-maestro --device "$UDID" test "$@"
+# The flows that change data from outside the app need the secret key of the local
+# stack. It is read here and never written to a file.
+status="$(cd "$PROJECT" && supabase status -o env 2>/dev/null)"
+value_of() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" <<<"$status"; }
+
+maestro --device "$UDID" test \
+  -e SUPABASE_URL="$(value_of API_URL)" \
+  -e SUPABASE_SECRET_KEY="$(value_of SECRET_KEY)" \
+  "$@"
