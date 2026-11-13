@@ -11,6 +11,7 @@ struct ListDetailView: View {
   @State private var showsCompleted = false
   @State private var editedReminder: Reminder?
   @State private var isEditingList = false
+  @State private var isSharingList = false
   @State private var isConfirmingDelete = false
   @State private var error: (any Error)?
   @FocusState private var isNewReminderFocused: Bool
@@ -103,6 +104,9 @@ struct ListDetailView: View {
     .sheet(isPresented: $isEditingList) {
       if let list { ListEditorView(list: list) }
     }
+    .sheet(isPresented: $isSharingList) {
+      if let list { ShareListView(listID: list.id) }
+    }
     .confirmationDialog(
       "Delete this list and all its reminders?",
       isPresented: $isConfirmingDelete,
@@ -155,6 +159,9 @@ struct ListDetailView: View {
       }
       if let list {
         Button("Edit List", systemImage: "pencil") { isEditingList = true }
+        Button("Share List", systemImage: "person.crop.circle.badge.plus") {
+          isSharingList = true
+        }
         if store.isOwner(of: list) {
           Button("Delete List", systemImage: "trash", role: .destructive) {
             isConfirmingDelete = true

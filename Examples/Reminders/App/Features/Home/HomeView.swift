@@ -7,6 +7,7 @@ struct HomeView: View {
   @State private var path: [ReminderSource] = []
   @State private var query = ""
   @State private var isAddingList = false
+  @State private var isShowingInvitations = false
   @State private var editedReminder: Reminder?
   @State private var error: (any Error)?
 
@@ -21,6 +22,9 @@ struct HomeView: View {
           searchResults
         } else {
           smartLists
+          if !store.incomingInvitations.isEmpty {
+            invitations
+          }
           myLists
         }
       }
@@ -46,6 +50,9 @@ struct HomeView: View {
       }
       .sheet(isPresented: $isAddingList) {
         ListEditorView()
+      }
+      .sheet(isPresented: $isShowingInvitations) {
+        InvitationsView()
       }
       .sheet(item: $editedReminder) { reminder in
         ReminderDetailView(reminder: reminder)
@@ -80,6 +87,27 @@ struct HomeView: View {
     }
   }
 
+  private var invitations: some View {
+    Section {
+      Button {
+        isShowingInvitations = true
+      } label: {
+        HStack {
+          Label("Invitations", systemImage: "envelope.fill")
+          Spacer()
+          Text(store.incomingInvitations.count, format: .number)
+            .font(.subheadline.bold())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(.red, in: Capsule())
+            .accessibilityIdentifier("home.invitations.badge")
+        }
+      }
+      .accessibilityIdentifier("home.invitations")
+    }
+  }
+
   private var myLists: some View {
     Section("My Lists") {
       if store.isLoaded, store.lists.isEmpty {
@@ -93,6 +121,13 @@ struct HomeView: View {
               Text(list.name)
             } icon: {
               ListIcon(list: list)
+            }
+            if store.isShared(list) {
+              Image(systemName: "person.2.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Shared")
+                .accessibilityIdentifier("home.list.\(list.name).shared")
             }
             Spacer()
             Text(store.reminders(in: list.id, includeCompleted: false).count, format: .number)
