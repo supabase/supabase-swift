@@ -1,0 +1,132 @@
+appId: com.supabase.Reminders
+env:
+  EMAIL: attach-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Home
+- tapOn:
+    id: home.list.Home
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Receipt
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Warranty
+
+# Add an image from the photo library.
+- tapOn:
+    id: reminder.Receipt.info
+- runFlow: ../subflows/pick-photo.yaml
+- extendedWaitUntil:
+    visible:
+      id: attachment.0
+    timeout: 15000
+- tapOn:
+    id: reminderDetail.done
+- assertVisible:
+    id: reminder.Receipt.attachmentCount
+    text: "1 image"
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: assert_object_folders
+      EXPECTED: "1"
+
+# The image is on the server: it is there after a restart, and it downloads again.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: home.list.Home
+    timeout: 15000
+- tapOn:
+    id: home.list.Home
+- assertVisible:
+    id: reminder.Receipt.attachmentCount
+    text: "1 image"
+- tapOn:
+    id: reminder.Receipt.info
+- extendedWaitUntil:
+    visible:
+      id: attachment.0
+    timeout: 15000
+
+# Delete the image. The file leaves the bucket too.
+- tapOn:
+    id: attachment.0
+- tapOn:
+    id: attachment.delete
+- extendedWaitUntil:
+    notVisible:
+      id: attachment.0
+    timeout: 10000
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: assert_object_folders
+      EXPECTED: "0"
+
+# Delete a reminder that has an image: its file leaves the bucket.
+- runFlow: ../subflows/pick-photo.yaml
+- extendedWaitUntil:
+    visible:
+      id: attachment.0
+    timeout: 15000
+- tapOn:
+    id: reminderDetail.done
+- swipe:
+    from:
+      id: reminder.Receipt
+    direction: LEFT
+- tapOn: Delete
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Receipt
+    timeout: 10000
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: assert_object_folders
+      EXPECTED: "0"
+
+# Delete a list that has a reminder with an image: its file leaves the bucket.
+- tapOn:
+    id: reminder.Warranty.info
+- runFlow: ../subflows/pick-photo.yaml
+- extendedWaitUntil:
+    visible:
+      id: attachment.0
+    timeout: 15000
+- tapOn:
+    id: reminderDetail.done
+- tapOn:
+    id: listDetail.menu
+- tapOn: Delete List
+- tapOn:
+    id: listDetail.confirmDelete
+- extendedWaitUntil:
+    visible:
+      id: home.addList
+    timeout: 10000
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: assert_object_folders
+      EXPECTED: "0"

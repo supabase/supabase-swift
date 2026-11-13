@@ -44,6 +44,19 @@ if (ACTION === 'insert_reminder') {
 } else if (ACTION === 'remove_member') {
   var profile = send('GET', '/profiles?email=' + eq(EMAIL))[0]
   send('DELETE', '/list_members?user_id=' + eq(profile.id))
+} else if (ACTION === 'assert_object_folders') {
+  // Each reminder with images has one folder in the bucket.
+  var response = http.post(SUPABASE_URL + '/storage/v1/object/list/attachments', {
+    headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix: '', limit: 100 }),
+  })
+  if (!response.ok) {
+    throw new Error('Storage list failed: ' + response.status + ' ' + response.body)
+  }
+  var folders = json(response.body)
+  if (folders.length !== Number(EXPECTED)) {
+    throw new Error('Expected ' + EXPECTED + ' folders in the bucket, found ' + folders.length)
+  }
 } else {
   throw new Error('Unknown ACTION: ' + ACTION)
 }

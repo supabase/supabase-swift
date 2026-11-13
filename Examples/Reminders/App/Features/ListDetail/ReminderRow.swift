@@ -6,6 +6,7 @@ struct ReminderRow: View {
   let tint: Color
   /// The name of the reminder's list. Screens that mix lists pass it.
   var listName: String?
+  var attachmentCount = 0
   let onToggle: () -> Void
   let onInfo: () -> Void
 
@@ -54,6 +55,18 @@ struct ReminderRow: View {
       }
 
       Spacer(minLength: 0)
+
+      if attachmentCount > 0 {
+        HStack(spacing: 2) {
+          Image(systemName: "paperclip")
+          Text(attachmentCount, format: .number)
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(attachmentCount == 1 ? "1 image" : "\(attachmentCount) images")
+        .accessibilityIdentifier("\(id).attachmentCount")
+      }
 
       if reminder.isFlagged {
         Image(systemName: "flag.fill")

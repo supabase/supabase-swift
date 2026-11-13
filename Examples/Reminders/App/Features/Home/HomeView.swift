@@ -151,6 +151,7 @@ struct HomeView: View {
         reminder: reminder,
         tint: ListStyle.color(named: store.list(id: reminder.listID)?.color ?? ""),
         listName: store.list(id: reminder.listID)?.name,
+        attachmentCount: store.attachments(of: reminder.id).count,
         onToggle: { store.run { try await store.toggleCompleted(id: reminder.id) } },
         onInfo: { editedReminder = reminder }
       )

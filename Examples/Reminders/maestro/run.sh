@@ -40,6 +40,8 @@ fi
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" >/dev/null
 xcrun simctl install "$UDID" "$APP"
+# The attachment flow picks this image. The newest photo is first in the picker.
+xcrun simctl addmedia "$UDID" "$HERE/fixtures/photo.jpg"
 
 if [[ $# -eq 0 ]]; then
   set -- "$HERE/flows"

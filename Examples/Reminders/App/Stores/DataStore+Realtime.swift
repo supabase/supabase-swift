@@ -15,6 +15,8 @@ extension DataStore {
     let members = channel.postgresChange(AnyAction.self, schema: "public", table: "list_members")
     let invitations = channel.postgresChange(
       AnyAction.self, schema: "public", table: "list_invitations")
+    let attachments = channel.postgresChange(
+      AnyAction.self, schema: "public", table: "reminder_attachments")
 
     do {
       try await channel.subscribeWithError()
@@ -37,6 +39,9 @@ extension DataStore {
         }
         group.addTask {
           for await _ in invitations { await self?.invitationsChanged() }
+        }
+        group.addTask {
+          for await change in attachments { await self?.applyAttachmentChange(change) }
         }
       }
     }
@@ -78,6 +83,21 @@ extension DataStore {
       }
     case .delete(let action):
       if let id = rowID(in: action.oldRecord) { reminders.removeAll { $0.id == id } }
+    }
+  }
+
+  private func applyAttachmentChange(_ change: AnyAction) {
+    switch change {
+    case .insert(let action):
+      if let attachment = decode(Attachment.self, from: action.record) {
+        upsert(attachment, in: \.attachments)
+      }
+    case .update(let action):
+      if let attachment = decode(Attachment.self, from: action.record) {
+        upsert(attachment, in: \.attachments)
+      }
+    case .delete(let action):
+      if let id = rowID(in: action.oldRecord) { attachments.removeAll { $0.id == id } }
     }
   }
 

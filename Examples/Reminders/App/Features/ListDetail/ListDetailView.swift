@@ -69,6 +69,7 @@ struct ListDetailView: View {
           reminder: reminder,
           tint: tint,
           listName: list == nil ? store.list(id: reminder.listID)?.name : nil,
+          attachmentCount: store.attachments(of: reminder.id).count,
           onToggle: { store.run { try await store.toggleCompleted(id: reminder.id) } },
           onInfo: { editedReminder = reminder }
         )

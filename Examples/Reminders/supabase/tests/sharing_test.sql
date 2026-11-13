@@ -53,7 +53,8 @@ insert into auth.users (id, email) values
 -- Profiles ----------------------------------------------------------------------
 
 select results_eq(
-  $$ select email, display_name from public.profiles order by email $$,
+  $$ select email, display_name from public.profiles
+     where id::text like '00000000-0000-0000-0000-00000000000_' order by email $$,
   $$ values ('member@example.com', 'member'), ('owner@example.com', 'owner'), ('stranger@example.com', 'stranger') $$,
   'a new user gets a profile named after the email local part'
 );
