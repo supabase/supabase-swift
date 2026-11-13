@@ -156,7 +156,7 @@ extension DataStore {
   /// echo of the first edit arrives after the second edit is on screen. Without this
   /// check the row would show the first value again for a moment.
   private func hasUpdateInFlight(_ id: UUID) -> Bool {
-    inFlight[id, default: 0] > 0
+    pendingEdits[id] != nil
   }
 
   /// A delete event has only the primary key of the row.

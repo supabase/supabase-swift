@@ -108,8 +108,12 @@ struct ReminderDetailView: View {
     }
     apply(\.title)
     apply(\.notes)
-    apply(\.dueAt)
-    apply(\.dueHasTime)
+    // `dueAt` means a different thing when `dueHasTime` changes (see `Reminder`), so a
+    // change to either one copies both.
+    if edited.dueAt != original.dueAt || edited.dueHasTime != original.dueHasTime {
+      reminder.dueAt = edited.dueAt
+      reminder.dueHasTime = edited.dueHasTime
+    }
     apply(\.priority)
     apply(\.isFlagged)
     apply(\.listID)

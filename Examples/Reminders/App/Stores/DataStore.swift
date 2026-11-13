@@ -32,9 +32,11 @@ final class DataStore {
   /// The last error of a write that a view started with `run`. The root view shows it.
   var error: (any Error)?
 
-  /// The number of updates that wait for the server, for each row id.
+  /// The updates that wait for the server, for each row id.
   /// Realtime uses it to ignore the echo of an older edit.
-  @ObservationIgnored var inFlight: [UUID: Int] = [:]
+  @ObservationIgnored var pendingEdits: [UUID: PendingEdits] = [:]
+  /// Numbers each update, so that the store knows which edit of a row is the newest.
+  @ObservationIgnored private var editCount = 0
   /// Goes up each time a server response or a Realtime event changes a row array.
   /// `load()` uses it to see that its result is older than what is on screen.
   @ObservationIgnored var changeCount = 0
@@ -209,7 +211,28 @@ final class DataStore {
     }
   }
 
-  /// Shows `new` at once, sends it, and goes back to the old row if the server refuses.
+  /// The updates of one row that wait for the server.
+  struct PendingEdits {
+    /// The number of the newest edit of the row.
+    var newest: Int
+    /// True when the server refused the newest edit.
+    var newestFailed = false
+    /// The number of edits that wait for the server.
+    var count = 0
+    /// The newest row that the server confirmed, and the number of the edit that sent it.
+    /// Before any edit returns, it is the row from before the first edit, with number 0.
+    var confirmed: (edit: Int, row: Any)
+  }
+
+  /// Shows `new` at once, sends it, and goes back to the last confirmed row if the
+  /// server refuses.
+  ///
+  /// The user can edit a row again before the server answers, and the answers can
+  /// arrive in any order. So each edit gets a number:
+  /// - Only the answer to the newest edit replaces the row. An older answer arrives too
+  ///   late to show.
+  /// - When the newest edit fails, the row shows the newest row that the server
+  ///   confirmed, never the value of an older edit that the server may refuse too.
   ///
   /// If the server finds no row, the user has no access to the row now: a person
   /// deleted it, or moved it to a list that this user cannot read. Realtime sends no
@@ -219,7 +242,7 @@ final class DataStore {
   ///   - keyPath: The array that holds the row.
   ///   - new: The row with the user's change.
   ///   - send: The server call. It returns the row as the server saved it.
-  /// - Throws: The error of `send`, after the old row is back in the array.
+  /// - Throws: The error of `send`, after the confirmed row is back in the array.
   func optimisticUpdate<Row: Identifiable>(
     _ keyPath: Rows<Row>,
     to new: Row,
@@ -227,8 +250,14 @@ final class DataStore {
   ) async throws where Row.ID == UUID {
     guard let old = self[keyPath: keyPath].first(where: { $0.id == new.id }) else { return }
 
+    editCount += 1
+    let edit = editCount
+    var start = pendingEdits[new.id] ?? PendingEdits(newest: edit, confirmed: (0, old))
+    start.newest = edit
+    start.newestFailed = false
+    start.count += 1
+    pendingEdits[new.id] = start
     upsert(new, in: keyPath)
-    inFlight[new.id, default: 0] += 1
 
     let result: Result<Row, any Error>
     do {
@@ -237,24 +266,33 @@ final class DataStore {
       result = .failure(error)
     }
 
-    let remaining = inFlight[new.id, default: 1] - 1
-    inFlight[new.id] = remaining > 0 ? remaining : nil
-
-    // A newer edit of the same row is still on its way. Its result decides what the
-    // row shows, so this one must not write over it.
-    let isLatest = remaining <= 0
-    let rowExists = self[keyPath: keyPath].contains { $0.id == new.id }
-
+    guard var state = pendingEdits[new.id] else { return }
+    state.count -= 1
+    let isNewest = edit == state.newest
     switch result {
     case .success(let saved):
-      if isLatest, rowExists { upsert(saved, in: keyPath) }
-    case .failure(let error as PostgrestError) where error.code == "PGRST116":
+      if edit > state.confirmed.edit { state.confirmed = (edit, saved) }
+    case .failure:
+      if isNewest { state.newestFailed = true }
+    }
+    pendingEdits[new.id] = state.count > 0 ? state : nil
+
+    if case .failure(let error as PostgrestError) = result, error.code == "PGRST116" {
       // `.single()` got 0 rows.
       changeCount += 1
       self[keyPath: keyPath].removeAll { $0.id == new.id }
-    case .failure(let error):
-      if isLatest, rowExists { upsert(old, in: keyPath) }
-      throw error
+      return
     }
+
+    guard self[keyPath: keyPath].contains(where: { $0.id == new.id }) else {
+      if case .failure(let error) = result { throw error }
+      return
+    }
+    if case .success(let saved) = result, isNewest {
+      upsert(saved, in: keyPath)
+    } else if state.newestFailed, let confirmed = state.confirmed.row as? Row {
+      upsert(confirmed, in: keyPath)
+    }
+    if case .failure(let error) = result { throw error }
   }
 }
