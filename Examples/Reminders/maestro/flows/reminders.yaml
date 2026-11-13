@@ -1,0 +1,135 @@
+appId: com.supabase.Reminders
+env:
+  EMAIL: reminders-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Home
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Work
+
+- tapOn:
+    id: home.list.Home
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Milk
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Bread
+
+# A title of only spaces creates nothing and sends nothing to the server.
+- tapOn:
+    id: listDetail.newReminder
+- inputText: "   "
+- pressKey: Enter
+- assertNotVisible:
+    id: error.ok
+
+# Complete: the reminder leaves the list, and comes back with Show Completed.
+- tapOn:
+    id: reminder.Milk.toggle
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Milk
+    timeout: 5000
+- tapOn:
+    id: listDetail.menu
+- tapOn: Show Completed
+- assertVisible:
+    id: reminder.Milk
+- tapOn:
+    id: reminder.Milk.toggle
+- tapOn:
+    id: listDetail.menu
+- tapOn: Hide Completed
+- assertVisible:
+    id: reminder.Milk
+
+# Edit the details.
+- tapOn:
+    id: reminder.Milk.info
+# A tap on the center of a Toggle row lands on the label and changes nothing, and
+# Maestro cannot tap a point inside an element. This point is the Flag switch on the
+# default simulator (iPhone 18 Pro).
+- assertVisible:
+    id: reminderDetail.flag
+# The sheet must be at rest, or the tap at a fixed position misses the switch.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    point: 88%,49%
+- tapOn:
+    id: reminderDetail.priority
+- tapOn: High
+# The notes come last: the keyboard covers the rows below.
+- tapOn:
+    id: reminderDetail.notes
+- inputText: 2 liters
+- tapOn:
+    id: reminderDetail.done
+- assertVisible: 2 liters
+- assertVisible:
+    id: reminder.Milk.flag
+- assertVisible:
+    id: reminder.Milk.priority
+
+# Delete with a swipe.
+- swipe:
+    from:
+      id: reminder.Bread
+    direction: LEFT
+- tapOn: Delete
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Bread
+    timeout: 5000
+
+# Move the reminder to another list.
+- tapOn:
+    id: reminder.Milk.info
+- tapOn:
+    id: reminderDetail.list
+- tapOn: Work
+- tapOn:
+    id: reminderDetail.done
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Milk
+    timeout: 5000
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: home.list.Work
+- assertVisible:
+    id: reminder.Milk
+
+# Everything is on the server: it is the same after a restart.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: home.list.Work
+    timeout: 15000
+- tapOn:
+    id: home.list.Work
+- assertVisible:
+    id: reminder.Milk
+- assertVisible: 2 liters
+- assertVisible:
+    id: reminder.Milk.flag
+- tapOn:
+    id: BackButton
+- tapOn:
+    id: home.list.Home
+- assertNotVisible:
+    id: reminder.Bread

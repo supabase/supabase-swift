@@ -1,0 +1,86 @@
+# The app follows changes that another client makes, with no reload.
+# `scripts/server.js` plays the other client.
+appId: com.supabase.Reminders
+env:
+  EMAIL: realtime-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Sync
+- tapOn:
+    id: home.list.Sync
+
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: insert_reminder
+      LIST: Sync
+      TITLE: From server
+- extendedWaitUntil:
+    visible:
+      id: reminder.From server
+    timeout: 5000
+
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: rename_reminder
+      TITLE: From server
+      NEW_TITLE: Changed on server
+- extendedWaitUntil:
+    visible:
+      id: reminder.Changed on server
+    timeout: 5000
+- assertNotVisible:
+    id: reminder.From server
+
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: delete_reminder
+      TITLE: Changed on server
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Changed on server
+    timeout: 5000
+
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: rename_list
+      LIST: Sync
+      NEW_NAME: Renamed
+- extendedWaitUntil:
+    visible: Renamed
+    timeout: 5000
+
+# The list is deleted while it is open: the app goes back to Home.
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: delete_list
+      LIST: Renamed
+- extendedWaitUntil:
+    visible:
+      id: home.addList
+    timeout: 5000
+- assertNotVisible:
+    id: home.list.Renamed
+- assertNotVisible:
+    id: error.ok

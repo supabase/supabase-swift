@@ -63,6 +63,7 @@
 		79FEFFC72B078FB000D36347 /* SwiftUIHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */; };
 		79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FEFFC82B0797F600D36347 /* AvatarImage.swift */; };
 		E23A07C8FCD6A470BA41A3F9 /* metamask-ios-sdk in Frameworks */ = {isa = PBXBuildFile; productRef = 82A0B5B97246DF189941A2A7 /* metamask-ios-sdk */; };
+		7A5E1D000000000000000001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 7A5E1D000000000000000002 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -119,6 +120,7 @@
 		79FEFFC42B078D7900D36347 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		79FEFFC62B078FB000D36347 /* SwiftUIHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIHelpers.swift; sourceTree = "<group>"; };
 		79FEFFC82B0797F600D36347 /* AvatarImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarImage.swift; sourceTree = "<group>"; };
+		7A5E1D000000000000000003 /* Reminders.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reminders.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -210,6 +212,18 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		7A5E1D000000000000000004 /* Reminders */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			name = Reminders;
+			path = Reminders/App;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,6 +260,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A5E1D000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A5E1D000000000000000001 /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -255,6 +277,7 @@
 				793895C82954ABFF0044F2B8 /* Examples */,
 				79FEFFAD2B07873600D36347 /* UserManagement */,
 				79D884C82B3C18830009EA4A /* SlackClone */,
+				7A5E1D000000000000000004 /* Reminders */,
 				793895C72954ABFF0044F2B8 /* Products */,
 				7956405A2954AC3E0088A06F /* Frameworks */,
 			);
@@ -266,6 +289,7 @@
 				793895C62954ABFF0044F2B8 /* Examples.app */,
 				79FEFFAC2B07873600D36347 /* UserManagement.app */,
 				79D884C72B3C18830009EA4A /* SlackClone.app */,
+				7A5E1D000000000000000003 /* Reminders.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -454,6 +478,29 @@
 			productReference = 79FEFFAC2B07873600D36347 /* UserManagement.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7A5E1D000000000000000005 /* Reminders */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A5E1D00000000000000000B /* Build configuration list for PBXNativeTarget "Reminders" */;
+			buildPhases = (
+				7A5E1D000000000000000006 /* Sources */,
+				7A5E1D000000000000000007 /* Frameworks */,
+				7A5E1D000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7A5E1D000000000000000004 /* Reminders */,
+			);
+			name = Reminders;
+			packageProductDependencies = (
+				7A5E1D000000000000000002 /* Supabase */,
+			);
+			productName = Reminders;
+			productReference = 7A5E1D000000000000000003 /* Reminders.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -469,6 +516,9 @@
 					};
 					79D884C62B3C18830009EA4A = {
 						CreatedOnToolsVersion = 15.1;
+					};
+					7A5E1D000000000000000005 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 					79FEFFAB2B07873600D36347 = {
 						CreatedOnToolsVersion = 15.0.1;
@@ -500,6 +550,7 @@
 				793895C52954ABFF0044F2B8 /* Examples */,
 				79FEFFAB2B07873600D36347 /* UserManagement */,
 				79D884C62B3C18830009EA4A /* SlackClone */,
+				7A5E1D000000000000000005 /* Reminders */,
 			);
 		};
 /* End PBXProject section */
@@ -529,6 +580,13 @@
 			files = (
 				79FEFFB72B07873700D36347 /* Preview Assets.xcassets in Resources */,
 				79FEFFB32B07873700D36347 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A5E1D000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -591,6 +649,13 @@
 				79FEFFC02B07895900D36347 /* AuthView.swift in Sources */,
 				79FEFFC92B0797F600D36347 /* AvatarImage.swift in Sources */,
 				79FEFFAF2B07873600D36347 /* UserManagementApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A5E1D000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -964,6 +1029,73 @@
 			};
 			name = Release;
 		};
+		7A5E1D000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Reminders;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Reminders attaches photos that you choose to a reminder.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Reminders;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7A5E1D00000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Reminders;
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Reminders attaches photos that you choose to a reminder.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.supabase.Reminders;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -999,6 +1131,15 @@
 			buildConfigurations = (
 				79FEFFB92B07873700D36347 /* Debug */,
 				79FEFFBA2B07873700D36347 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A5E1D00000000000000000B /* Build configuration list for PBXNativeTarget "Reminders" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A5E1D000000000000000009 /* Debug */,
+				7A5E1D00000000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1121,6 +1262,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6C93F238922618E376616E2E /* XCRemoteSwiftPackageReference "metamask-ios-sdk" */;
 			productName = "metamask-ios-sdk";
+		};
+		7A5E1D000000000000000002 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
