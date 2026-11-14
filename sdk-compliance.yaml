@@ -549,6 +549,8 @@ supporting_symbols:
   - SupabaseClient.auth
   - SupabaseClient.functions
   - SupabaseClient.storage
+  # The SwiftUI environment value that carries the facade client to views.
+  - EnvironmentValues.supabase
   # The facade configuration type, the client's copy of it, and its Realtime settings.
   - SupabaseClient.Configuration
   - SupabaseClient.configuration

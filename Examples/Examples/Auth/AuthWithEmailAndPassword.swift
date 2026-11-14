@@ -177,4 +177,5 @@ struct AuthWithEmailAndPassword: View {
 
 #Preview {
   AuthWithEmailAndPassword()
+    .environment(\.supabase, supabaseClient)
 }

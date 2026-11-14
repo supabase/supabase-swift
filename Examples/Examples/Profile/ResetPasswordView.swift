@@ -136,4 +136,5 @@ struct ResetPasswordView: View {
   NavigationStack {
     ResetPasswordView()
   }
+  .environment(\.supabase, supabaseClient)
 }

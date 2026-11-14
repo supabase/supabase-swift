@@ -52,4 +52,5 @@ struct UpdatePasswordView: View {
 
 #Preview {
   UpdatePasswordView()
+    .environment(\.supabase, supabaseClient)
 }

@@ -52,4 +52,5 @@ struct GoogleSignInSDKFlow: View {
 
 #Preview {
   GoogleSignInSDKFlow()
+    .environment(\.supabase, supabaseClient)
 }

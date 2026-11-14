@@ -123,4 +123,5 @@ struct SignInAnonymously: View {
 
 #Preview {
   SignInAnonymously()
+    .environment(\.supabase, supabaseClient)
 }

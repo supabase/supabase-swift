@@ -83,4 +83,5 @@ struct ImportSessionView: View {
   NavigationStack {
     ImportSessionView()
   }
+  .environment(\.supabase, supabaseClient)
 }

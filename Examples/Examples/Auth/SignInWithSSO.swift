@@ -82,4 +82,5 @@ struct SignInWithSSO: View {
   NavigationStack {
     SignInWithSSO()
   }
+  .environment(\.supabase, supabaseClient)
 }
