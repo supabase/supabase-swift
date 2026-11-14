@@ -62,16 +62,13 @@ struct ExamplesApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
+        .environment(\.supabase, supabaseClient)
         .environment(auth)
         .task {
           _ = try? await supabaseClient.storage.resumableUploads.resumeAll()
         }
     }
   }
-}
-
-extension EnvironmentValues {
-  @Entry var supabase = supabaseClient
 }
 
 // swift-format-ignore: NeverUseForceTry

@@ -71,4 +71,5 @@ struct RootView: View {
 #Preview {
   RootView()
     .environment(AuthModel(client: supabaseClient.auth))
+    .environment(\.supabase, supabaseClient)
 }

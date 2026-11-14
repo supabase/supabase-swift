@@ -302,4 +302,5 @@ struct ProfileView: View {
 
 #Preview {
   ProfileView()
+    .environment(\.supabase, supabaseClient)
 }

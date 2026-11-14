@@ -196,4 +196,5 @@ struct SignInWithPhone: View {
 
 #Preview {
   SignInWithPhone()
+    .environment(\.supabase, supabaseClient)
 }

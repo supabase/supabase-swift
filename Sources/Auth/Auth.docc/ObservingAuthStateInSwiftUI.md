@@ -52,13 +52,24 @@ consume ``AuthClient/events()``.
 
 ### Share the client with an environment value
 
-`AuthModel` does not ship an environment key, so the SDK does not import SwiftUI. To give views
-the client, declare your own key with the `@Entry` macro, which needs Xcode 16 or later. Use the
-same client as the model, so a sign-out in a view reaches the state the model follows.
+``AuthModel`` only observes. Sign in, sign up, and sign out with the client: `client.auth`.
+
+The `Supabase` module ships the `\.supabase` environment value for this. Set it near the root,
+next to the model, and read it in any view. Use the same client as the model, so a sign-out in a
+view reaches the state the model follows.
 
 ```swift
-extension EnvironmentValues {
-  @Entry var supabase = supabaseClient
+@main
+struct MyApp: App {
+  @State private var auth = AuthModel(client: supabaseClient.auth)
+
+  var body: some Scene {
+    WindowGroup {
+      RootView()
+        .environment(\.supabase, supabaseClient)
+        .environment(auth)
+    }
+  }
 }
 
 struct ProfileView: View {
@@ -71,6 +82,10 @@ struct ProfileView: View {
   }
 }
 ```
+
+A view that reads `\.supabase` with no client set above it gets a placeholder client for a local
+stack at `http://localhost:54321`, and the first such read reports an issue. Set the client on
+every root that starts a new environment, such as a `UIHostingController`.
 
 ### Support iOS 16
 

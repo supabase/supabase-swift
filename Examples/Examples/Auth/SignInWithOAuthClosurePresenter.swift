@@ -96,4 +96,5 @@ struct SignInWithOAuthClosurePresenter: View {
   NavigationStack {
     SignInWithOAuthClosurePresenter()
   }
+  .environment(\.supabase, supabaseClient)
 }

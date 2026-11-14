@@ -64,4 +64,5 @@ struct SignInWithFacebook: View {
 
 #Preview {
   SignInWithFacebook()
+    .environment(\.supabase, supabaseClient)
 }

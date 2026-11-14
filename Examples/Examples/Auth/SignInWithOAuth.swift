@@ -116,4 +116,5 @@ struct SignInWithOAuth: View {
 
 #Preview("SwiftUI") {
   SignInWithOAuth()
+    .environment(\.supabase, supabaseClient)
 }

@@ -102,4 +102,5 @@ struct SignInWithApple: View {
 
 #Preview {
   SignInWithApple()
+    .environment(\.supabase, supabaseClient)
 }

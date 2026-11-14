@@ -1070,7 +1070,7 @@ task.cancel()
 `.signedIn(Session)`) and has `session`, `user`, and `isLoading`. It keeps only the status, so consume `events()` too for an
 event such as `.passwordRecovery`. The model does not retain the client; keep the client alive.
 
-The SDK ships no SwiftUI environment key. Declare one with `@Entry` to give views the client. Use the same client as the model.
+`AuthModel` only observes. The sign-in, sign-up, and sign-out calls of your wrapper move to `client.auth`. To give views the client, set the `\.supabase` environment value that the `Supabase` module ships, and delete your own `@Entry var supabase`, which now clashes with it. Use the same client as the model.
 
 ```swift
 // v2
@@ -1085,15 +1085,15 @@ The SDK ships no SwiftUI environment key. Declare one with `@Entry` to give view
 // v3
 let supabaseClient = try! SupabaseClient(supabaseURL: url, supabaseKey: key)
 
-extension EnvironmentValues {
-  @Entry var supabase = supabaseClient
-}
-
 @main struct MyApp: App {
   @State private var auth = AuthModel(client: supabaseClient.auth)
 
   var body: some Scene {
-    WindowGroup { RootView().environment(auth) }
+    WindowGroup {
+      RootView()
+        .environment(\.supabase, supabaseClient)
+        .environment(auth)
+    }
   }
 }
 
@@ -1105,6 +1105,18 @@ struct RootView: View {
     case .loading: ProgressView()
     case .signedOut: SignInView()
     case .signedIn: HomeView()
+    }
+  }
+}
+
+struct SignInView: View {
+  @Environment(\.supabase) private var supabase
+  @State private var email = ""
+  @State private var password = ""
+
+  var body: some View {
+    Button("Sign in") {
+      Task { try await supabase.auth.signIn(email: email, password: password) }
     }
   }
 }

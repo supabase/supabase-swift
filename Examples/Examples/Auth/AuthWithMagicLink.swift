@@ -122,4 +122,5 @@ struct AuthWithMagicLink: View {
 
 #Preview {
   AuthWithMagicLink()
+    .environment(\.supabase, supabaseClient)
 }

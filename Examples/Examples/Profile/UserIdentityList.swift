@@ -354,6 +354,7 @@ struct UserIdentityList: View {
   NavigationStack {
     UserIdentityList()
   }
+  .environment(\.supabase, supabaseClient)
 }
 
 extension ASAuthorizationController {

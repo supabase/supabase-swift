@@ -10,10 +10,6 @@ let supabaseClient = try! SupabaseClient(
   supabaseKey: Config.supabaseKey
 )
 
-extension EnvironmentValues {
-  @Entry var supabase = supabaseClient
-}
-
 @main
 struct RemindersApp: App {
   /// Follows the auth state of `supabaseClient`. The stored session comes first, and the
@@ -29,6 +25,7 @@ struct RemindersApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
+        .environment(\.supabase, supabaseClient)
         .environment(auth)
     }
   }

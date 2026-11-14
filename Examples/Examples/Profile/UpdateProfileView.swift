@@ -293,4 +293,5 @@ struct UpdateProfileView: View {
       updatedAt: Date()
     )
   )
+  .environment(\.supabase, supabaseClient)
 }
