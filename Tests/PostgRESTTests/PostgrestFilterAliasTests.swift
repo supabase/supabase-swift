@@ -15,7 +15,7 @@ struct PostgrestFilterAliasTests {
   private func query(
     _ build: (PostgrestFilterBuilder) -> PostgrestFilterBuilder
   ) async throws -> String? {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await build(capture.client.from("users").select()).execute()
     return capture.query
   }

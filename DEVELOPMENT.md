@@ -69,7 +69,76 @@ PLATFORM=IOS XCODEBUILD_ARGUMENT=test ./scripts/xcodebuild.sh
 
 # Generate code coverage
 DERIVED_DATA_PATH=~/.derivedData/Debug ./scripts/generate-coverage.sh
+
+# Run mutation testing on the critical code (see "Mutation testing")
+./scripts/mutation-test.sh auth
 ```
+
+### Running the tests on Android
+
+`scripts/test-android.sh` cross-compiles the unit test targets with the Swift SDK for Android,
+pushes them to an attached device or emulator, and runs them there. It skips IntegrationTests and
+PostgrestMacrosTests. The `android` job in `ci.yml` runs the same script on an x86_64 emulator.
+
+One-time setup. The host toolchain must match the Swift SDK version exactly, so Xcode's own
+toolchain does not work:
+
+```bash
+swiftly install 6.4.0 --use
+swift sdk install https://download.swift.org/swift-6.4.0-release/android-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_android.artifactbundle.tar.gz \
+  --checksum 21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43
+# Download Android NDK r30 and point ANDROID_NDK_HOME at it, then link it into the Swift SDK.
+# On Linux the SDK lives under ~/.config/swiftpm/swift-sdks (or ~/.swiftpm/swift-sdks) instead.
+export ANDROID_NDK_HOME=/path/to/android-ndk-r30
+~/Library/org.swift.swiftpm/swift-sdks/swift-6.4.0-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh
+```
+
+Start a device or an emulator that `adb devices` lists, then run:
+
+```bash
+# arm64 device or emulator (default)
+./scripts/test-android.sh
+
+# x86_64 emulator, one target
+ARCH=x86_64 TARGETS=RealtimeTests ./scripts/test-android.sh
+```
+
+`TARGETS`, `FILTER`, `CONFIG`, `API`, and `SCRATCH_PATH` override the defaults at the top of the
+script. `BUILD_ONLY=1` builds the tests and stops, with no device needed.
+
+### Mutation testing
+
+[swift-mutation-testing](https://github.com/ericodx/swift-mutation-testing) makes small changes
+to the code, for example `<` to `<=`, and runs the tests once for each change. A change that no
+test catches "survives". It shows a line that runs in a test, but whose result no test checks.
+
+Install the tool (macOS 15+, Swift 6.2+):
+
+```bash
+brew tap ericodx/homebrew-tools
+brew trust --formula ericodx/tools/swift-mutation-testing
+brew install swift-mutation-testing
+```
+
+Run it with `./scripts/mutation-test.sh [auth|helpers|postgrest|realtime|realtime-core|all]`.
+Each Realtime scope takes about two hours; the others take minutes to an hour. Extra options go
+to the tool, for example `--min-score 80`. The list of files is the `SCOPES` array in the
+script, and the settings are in `scripts/mutation-testing.yml`. Reports go to
+`.mutation-testing/reports/`. A first run builds the package from scratch, so it is slow.
+
+- Why a wrapper: the tool does not run at the repository root. It refuses
+  `Supabase.xcworkspace`, because the workspace refers to the root folder itself, and a plain
+  SwiftPM run cannot build the tests without the [macOS test flags](#macos-test-flags). So the
+  script copies the package into `.mutation-testing/supabase-swift/` and builds it through a
+  workspace that refers to that folder.
+- Why `no-cache`: in version 1.7.1, the tool's coverage map leaves real tests out of a mutant's
+  run, so mutants survive that the suite kills. Without the cache, each mutant runs the whole
+  suite of its scheme.
+- Kill a survivor with a test, never with a change to production code. Read the
+  [skill](https://github.com/ericodx/swift-mutation-testing/blob/main/skills/swift-mutation-testing/SKILL.md)
+  for how to read the report.
+- `// swift-mutation-testing:disable-next-line` skips one line. Use it only for a mutant that
+  cannot compile or cannot change behavior, and write the reason after it.
 
 ## Code Formatting
 
@@ -84,7 +153,14 @@ Lint rules live in `.swift-format` at the repo root, which enables `NeverUseForc
 `NeverUseImplicitlyUnwrappedOptionals` on top of the defaults. Library code must not trap on a
 value a caller supplied — see SDK-1793.
 
-`Tests/.swift-format` turns both back off. Test code has no users to crash: `try!` on a bundled
+The root file also enables `AllPublicDeclarationsHaveDocumentation` and
+`ValidateDocumentationComments`. Every public type, function, initializer and property needs a `///` comment. A comment that has a
+`- Parameters:` section must name each parameter, and must have `- Returns:` and `- Throws:` where
+they apply. The lint step in CI fails on a missing one. The rules do not check enum cases, protocol
+requirements, or the `- Throws:` of a comment with no `- Parameters:` section, so review those by
+hand.
+
+`Tests/.swift-format` turns all four back off. Test code has no users to crash: `try!` on a bundled
 fixture is the right tool (a missing fixture should fail the run loudly, and a `static let` cannot
 be `throws`), and `PostgrestMacrosTests` declares an implicitly unwrapped property on purpose, to
 cover how the `@Table` macro handles that spelling.
@@ -143,7 +219,28 @@ wait on a stream, a status or a frame with a bounded timeout (see `RealtimeTestH
 ./scripts/test-docs.sh
 ```
 
-Ensures DocC documentation builds without warnings.
+Ensures that the DocC documentation builds without broken links, and that each article in a
+`.docc` catalog is linked from the landing page of its catalog
+(`./scripts/check-docc-curation.sh`).
+
+### Compiled snippets
+
+The Swift snippets of `README.md` are compiled with the tests. `./scripts/check-doc-snippets.sh`
+copies each ` ```swift ` fence into `Tests/DocSnippetsTests/READMESnippets.swift`, one function for
+each snippet, so `swift build --build-tests` fails when a snippet no longer compiles.
+
+```bash
+# After you change a snippet in README.md
+./scripts/check-doc-snippets.sh --update
+```
+
+- CI fails when the generated file does not match `README.md`.
+- A snippet can use `client`, a `SupabaseClient`. Put other names that an app defines itself in
+  `Tests/DocSnippetsTests/Prelude.swift`.
+- Put `<!-- snippet: no-compile -->` on the line before a fence that cannot compile on its own,
+  such as a `Package.swift` fragment or a SwiftUI modifier.
+- To check another Markdown file, add it to `DOCS` in the script.
+- The script fails on a Swift fence that it cannot read, such as an indented one.
 
 ## Running a Local Supabase Stack
 
@@ -168,12 +265,66 @@ supabase start --runtime native
   ```
 - Linux has no native stack. There, run plain `supabase start`, which uses Docker.
 
+### Running several local projects (worktrees, agents)
+
+The experimental stack can run one local project for each git worktree, branch, or `--stack` name
+on one machine. See the CLI guide
+[Running multiple local projects](https://supabase.com/docs/guides/local-development/running-multiple-local-projects).
+It needs Supabase CLI v2.119.0 or later (v2.121.0 or later to change ports on a stopped project).
+
+- **Isolation.** A local project is identified by its project root (the directory with
+  `supabase/config.toml`), the git branch, and an optional `--stack` name. Two worktrees of this
+  repository are two local projects, with separate ports and data. Two agents in one checkout on
+  one branch share one project. Give each agent its own worktree, or its own `--stack` name:
+
+  ```bash
+  supabase start --stack test
+  supabase stop --stack test
+  ```
+- **Dynamic ports.** The CLI uses a port in `config.toml` exactly as written, so this
+  repository's integration projects (`Tests/IntegrationTests/supabase` and
+  `supabase-secure-email-change`) set none. The native stack picks stable ports from 20000–32767
+  for each project, so worktrees do not conflict. Do not add a `port` key back. The `Examples`
+  apps still have fixed ports (their `Supabase.swift` files use `54321`), so run one of them at a
+  time.
+- **Find the endpoints.** Run `supabase status` in the project directory (add `--stack <name>`
+  for a named project). `supabase status --env --output-format text` prints `API_URL`, `DB_URL`,
+  `MAILPIT_URL`, and the other values as variables.
+- **Point the tests at the project.** The integration tests read `SUPABASE_URL` and `MAILPIT_URL`
+  from the environment (`Tests/IntegrationTests/DotEnv.swift`) and fall back to the Docker
+  stack's ports. After `supabase start`, run:
+
+  ```bash
+  export $(scripts/stack-env.sh Tests/IntegrationTests)
+  ```
+
+  `./scripts/test-integration.sh` and CI do this for you. Run it again for
+  `supabase-secure-email-change`, which is a different project with different ports. For a
+  project started with `--stack <name>`, pass the name as a second argument:
+  `scripts/stack-env.sh Tests/IntegrationTests <name>`. The script is for the experimental stack
+  only; skip it on the Docker stack.
+- **Manage projects.** `supabase stack list` shows every local project on the machine.
+  `supabase stack logs` prints the logs of the current one. `supabase stop` keeps the data.
+  `supabase stack stop --all` stops every project. `supabase stack destroy` deletes one project
+  and its data; add `--stack <name>` to pick a named project.
+- **Runtime.** With no `--runtime` flag, the CLI picks Docker, then Podman, then native. The
+  native runtime shares the host's process table and file locks, so for many projects at once the
+  CLI guide recommends Docker. This repository still uses `--runtime native` on macOS for speed.
+- **`stack = true` instead of the variable.** You may set `stack = true` under `[experimental]`
+  in `supabase/config.toml` in place of `SUPABASE_EXPERIMENTAL_STACK=1`. The variable wins when
+  both are set. `SUPABASE_EXPERIMENTAL_STACK=0` turns the stack off for one session.
+- **Database commands.** `supabase db`, `migration`, and similar commands do not accept
+  `--stack`. They use the default project for the current branch. To reach a named project,
+  pass its `DB_URL` as `--remote=<postgres-url>`.
+
 ## Working with Integration Tests
 
 Integration tests require a local Supabase instance (see "Running a Local Supabase Stack"). The
 `swift test` commands below use the [macOS test flags](#macos-test-flags), as CI's macOS job
-does. `--eager` starts every service before `start` returns, as CI does. On Linux, drop the
-experimental-stack variable and every flag, but keep `INTEGRATION_TESTS`:
+does. `--eager` starts every service before `start` returns, as CI does. On Linux, or with the
+Docker stack on macOS, drop the experimental-stack variable, every flag, and the
+`scripts/stack-env.sh` line (the Docker stack keeps the default ports), and make sure
+`SUPABASE_URL` and `MAILPIT_URL` are unset. Keep `INTEGRATION_TESTS`:
 
 ```bash
 export INTEGRATION_TESTS=1  # the suites skip themselves without it
@@ -182,12 +333,15 @@ SWIFT_FLAGS=(--triple "$(uname -m)-apple-macosx14.0" -Xswiftc -Xfrontend -Xswift
 cd Tests/IntegrationTests
 supabase start --runtime native --eager
 cd ../..
+export $(scripts/stack-env.sh Tests/IntegrationTests)
 swift test "${SWIFT_FLAGS[@]}" --filter IntegrationTests --skip verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests
 supabase stop
 ```
 
-`./scripts/test-integration.sh` runs these steps for you.
+`./scripts/test-integration.sh` runs these steps for you. On macOS, run
+`export $(scripts/stack-env.sh Tests/IntegrationTests)` after each `supabase start` (see "Running
+several local projects"), because the native stack picks its own ports.
 
 The CLI starts Storage without object lifecycles, object versioning, analytics (Iceberg) buckets
 or a CDN purge endpoint, and has no setting for them. On the Docker stack (Linux, and CI's Linux job),
@@ -207,6 +361,7 @@ second, minimal project instead of forking that setting for the whole suite:
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase start --runtime native --eager
 cd ../../..
+export $(scripts/stack-env.sh Tests/IntegrationTests/supabase-secure-email-change)
 swift test "${SWIFT_FLAGS[@]}" --filter verifyOTPForSecureEmailChange --no-parallel
 cd Tests/IntegrationTests/supabase-secure-email-change
 supabase stop
@@ -224,13 +379,19 @@ supabase stop
   `release/*` run everything. Edit the filters in `ci.yml` when you add a path a job depends on.
 - `release.yml`: Automated releases via release-please
 - `conventional-commits.yml`: Validates commit message format
+- `mutation-testing.yml`: Runs `scripts/mutation-test.sh` weekly and on demand, one job per
+  scope. It writes the summary to the job page and uploads the reports as artifacts. A failed
+  weekly run posts to Slack, as `ci.yml` does for a failure on `main`
 
 ### Platform Testing
 
 Tests run on:
 
 - macOS (iOS, macOS, Mac Catalyst, tvOS, watchOS, visionOS simulators)
-- Linux (build only, not fully supported)
+- Linux (build and unit tests, including the Auth suite; not fully supported)
+- Android (unit tests on an x86_64 emulator; best-effort: the job may fail and does not block
+  merges, see [Running the tests on Android](#running-the-tests-on-android))
+- Windows is best-effort: CI has no runner for it, so the package is not build-checked there
 - Multiple Xcode versions (latest and legacy)
 
 ### Code Coverage

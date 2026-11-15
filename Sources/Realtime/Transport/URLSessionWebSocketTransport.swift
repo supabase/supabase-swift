@@ -6,39 +6,108 @@
 //
 
 import ConcurrencyExtras
-package import Foundation
-package import HTTPTypes
+public import Foundation
+public import HTTPTypes
+import Helpers
 import IssueReporting
 
 #if canImport(FoundationNetworking)
-  package import FoundationNetworking
+  public import FoundationNetworking
 #endif
 
 /// The default ``WebSocketTransport``, built on `URLSessionWebSocketTask`.
 ///
 /// Every connection gets its own `URLSession` copied from `configuration`, so process-wide
 /// `URLSession` state never reaches the socket and the session can be invalidated on close.
-/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates.
-package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
+/// `delegate` is consulted for TLS challenges only, which is how an app pins certificates:
+///
+/// ```swift
+/// var configuration = RealtimeClient.Configuration(url: realtimeURL)
+/// configuration.webSocketTransport = URLSessionWebSocketTransport(
+///   configuration: pinnedSession.configuration,
+///   delegate: pinnedSession.delegate
+/// )
+/// ```
+///
+/// On watchOS the system blocks `URLSessionWebSocketTask` for most apps, and the connection
+/// waits forever (Apple's TN3135). The transport therefore refuses to connect there unless the
+/// app opts in with `allowsWatchOSConnections`. See <doc:PlatformNotes>.
+public struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Sendable {
   let configuration: URLSessionConfiguration
   let delegate: (any URLSessionDelegate)?
+  let allowsWatchOSConnections: Bool
+  let isWatchOS: Bool
+  let handshakeTimeout: TimeInterval
 
-  package init(
+  /// Creates a transport.
+  ///
+  /// - Parameters:
+  ///   - configuration: The configuration each connection's `URLSession` uses. The transport
+  ///     keeps a copy, so later changes to `configuration` do not reach it.
+  ///   - delegate: Answers TLS authentication challenges. Other delegate methods are not called.
+  ///   - allowsWatchOSConnections: Set to `true` only when the watchOS app runs in a context
+  ///     where the system allows WebSockets, such as audio streaming. On watchOS, `connect` throws
+  ///     a non-retryable ``RealtimeError/Kind-swift.struct/invalidRequest`` error when this is
+  ///     `false`. It has no effect on other platforms. Defaults to `false`.
+  public init(
     configuration: URLSessionConfiguration = .default,
-    delegate: (any URLSessionDelegate)? = nil
+    delegate: (any URLSessionDelegate)? = nil,
+    allowsWatchOSConnections: Bool = false
   ) {
-    self.configuration = configuration
-    self.delegate = delegate
+    self.init(
+      configuration: configuration,
+      delegate: delegate,
+      allowsWatchOSConnections: allowsWatchOSConnections,
+      isWatchOS: Self.runsOnWatchOS,
+      handshakeTimeout: nil
+    )
   }
 
-  package func connect(to url: URL, headerFields: HTTPFields) async throws
+  /// `isWatchOS` and `handshakeTimeout` are injected so tests can reach the watchOS paths on any
+  /// platform. `handshakeTimeout` defaults to the configuration's `timeoutIntervalForRequest`.
+  init(
+    configuration: URLSessionConfiguration = .default,
+    delegate: (any URLSessionDelegate)? = nil,
+    allowsWatchOSConnections: Bool = false,
+    isWatchOS: Bool,
+    handshakeTimeout: TimeInterval? = nil
+  ) {
+    // A copy, because `URLSessionConfiguration` is a mutable class and this type is `Sendable`.
+    let configuration = configuration.copy() as! URLSessionConfiguration
+    self.configuration = configuration
+    self.delegate = delegate
+    self.allowsWatchOSConnections = allowsWatchOSConnections
+    self.isWatchOS = isWatchOS
+    self.handshakeTimeout = handshakeTimeout ?? configuration.timeoutIntervalForRequest
+  }
+
+  private static var runsOnWatchOS: Bool {
+    #if os(watchOS)
+      return true
+    #else
+      return false
+    #endif
+  }
+
+  /// Opens a `URLSessionWebSocketTask` and waits for the upgrade to finish.
+  ///
+  /// On watchOS this throws at once, unless `allowsWatchOSConnections` is `true`.
+  public func connect(to url: URL, headerFields: HTTPFields) async throws
     -> any WebSocketConnection
   {
+    if isWatchOS && !allowsWatchOSConnections {
+      throw RealtimeError.invalidRequest(
+        """
+        watchOS blocks WebSocket connections for most apps (Apple TN3135), so the connection \
+        would wait forever. If the app streams audio or runs in another context TN3135 \
+        allows, set allowsWatchOSConnections to true on URLSessionWebSocketTransport.
+        """
+      )
+    }
+
     guard url.scheme == "ws" || url.scheme == "wss" else {
-      throw RealtimeError(
-        kind: .transport,
-        message: "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
-        isRetryable: false,
+      throw RealtimeError.invalidRequest(
+        "only ws: and wss: schemes are supported, got \(url.scheme ?? "no scheme").",
         underlyingError: URLError(.unsupportedURL)
       )
     }
@@ -98,8 +167,8 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
     task.maximumMessageSize = 5_000_000
     (session.delegate as? _Delegate)?.associatedTask.setValue(task)
 
-    do {
-      return try await withTaskCancellationHandler {
+    let awaitHandshake = {
+      try await withTaskCancellationHandler {
         try await withCheckedThrowingContinuation {
           (continuation: CheckedContinuation<URLSessionWebSocketConnection, any Error>) in
           handshake.withValue { $0.continuation = continuation }
@@ -108,10 +177,32 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
       } onCancel: {
         task.cancel()
       }
+    }
+
+    do {
+      // On watchOS the task can sit in the waiting state with no URLSession timeout, so the
+      // transport enforces its own deadline there. A configuration that disables timeouts with
+      // `.infinity` or 0 disables this one too.
+      guard isWatchOS, handshakeTimeout.isFinite, handshakeTimeout > 0 else {
+        return try await awaitHandshake()
+      }
+      return try await withTimeout(.seconds(handshakeTimeout), body: awaitHandshake)
     } catch {
       // `URLError.cancelled` alone is not a cancellation: a delegate that rejects a pinned
       // certificate cancels the challenge, and that failure must stay retryable.
       if Task.isCancelled { throw CancellationError() }
+      if error is TimeoutError {
+        // A handshake that finished as the deadline fired left an open socket nobody owns.
+        handshake.withValue(\.connection)?.close(code: .normalClosure, reason: "Connect timed out")
+        throw RealtimeError(
+          kind: .transport,
+          message: """
+            the WebSocket handshake did not finish within \(handshakeTimeout) seconds. watchOS \
+            blocks WebSocket connections outside a few contexts (Apple TN3135).
+            """,
+          underlyingError: URLError(.timedOut)
+        )
+      }
       throw error
     }
   }
@@ -119,7 +210,7 @@ package struct URLSessionWebSocketTransport: WebSocketTransport, @unchecked Send
   /// Maps a failed handshake to the error `connect` throws.
   static func connectError(task: URLSessionTask, error: (any Error)?) -> any Error {
     if let response = task.response as? HTTPURLResponse, response.statusCode != 101 {
-      return RealtimeError.upgradeFailed(status: response.statusCode, underlyingError: error)
+      return RealtimeError.upgradeFailed(response: response, underlyingError: error)
     }
     return RealtimeError(
       kind: .transport,
@@ -192,7 +283,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     self.task = task
     self.session = session
     (events, continuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
-    receiveTask.setValue(Task { await receiveLoop() })
+    receiveTask.setValue(Task.named("supabase.realtime.receiver") { await receiveLoop() })
   }
 
   private func receiveLoop() async {
@@ -301,5 +392,19 @@ final class URLSessionWebSocketConnection: WebSocketConnection {
     continuation.finish()
     session.finishTasksAndInvalidate()
     receiveTask.value?.cancel()
+  }
+}
+
+extension RealtimeError {
+  /// The error for an HTTP upgrade the server refused with `response`, keeping its headers, such
+  /// as `Retry-After` and the request ID.
+  static func upgradeFailed(response: HTTPURLResponse, underlyingError: (any Error)?)
+    -> RealtimeError
+  {
+    var error = upgradeFailed(status: response.statusCode, underlyingError: underlyingError)
+    if let head = response.httpResponse {
+      error.response = HTTPErrorResponse(head, body: Data())
+    }
+    return error
   }
 }

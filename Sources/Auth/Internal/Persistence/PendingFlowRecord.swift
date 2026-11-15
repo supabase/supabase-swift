@@ -12,7 +12,7 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
     case linkIdentity = "link_identity"
   }
 
-  static let timeToLive: TimeInterval = 60 * 60
+  static let timeToLive: Duration = .seconds(60 * 60)
 
   var id: UUID
   var verifier: String
@@ -33,7 +33,7 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
   }
 
   static func isExpired(createdAt: Date, at now: Date) -> Bool {
-    now.timeIntervalSince(createdAt) >= timeToLive
+    now.duration(since: createdAt) >= timeToLive
   }
 
   static func decode(_ data: Data) throws -> PendingFlowRecord {
@@ -42,6 +42,36 @@ struct PendingFlowRecord: Codable, Hashable, Sendable {
 
   func encoded() throws -> Data {
     try PersistedJSON.encoder.encode(self)
+  }
+}
+
+extension PendingFlowRecord: CustomStringConvertible {
+  /// Leaves out the PKCE verifier, and the redirect URL, whose query can hold a state value.
+  var description: String {
+    "PendingFlowRecord(id: \(id), purpose: \(purpose.rawValue), created_at: \(createdAt))"
+  }
+}
+
+extension PendingFlowRecord.Purpose {
+  /// How a finished flow of this purpose commits its session.
+  ///
+  /// An email change or an identity link updates the held user, so it emits
+  /// ``AuthEvent/userUpdated``; for another user it signs that user in.
+  func transition(_ session: Session) -> SessionStore.Transition {
+    switch self {
+    case .signIn: .signedIn(session, event: .signedIn)
+    case .recovery: .signedIn(session, event: .passwordRecovery)
+    case .emailChange, .linkIdentity: .userChangeVerified(session)
+    }
+  }
+
+  /// The email link type a finished flow of this purpose reports in ``RedirectResult``.
+  var verification: EmailOTPType? {
+    switch self {
+    case .recovery: .recovery
+    case .emailChange: .emailChange
+    case .signIn, .linkIdentity: nil
+    }
   }
 }
 

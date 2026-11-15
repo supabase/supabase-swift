@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct UpdateProfileView: View {
+  @Environment(\.supabase) private var supabase
   let user: User
 
   @State var email = ""
@@ -225,24 +226,24 @@ struct UpdateProfileView: View {
 
   @MainActor
   private func updateButtonTapped() async {
-    var attributes = UserAttributes()
+    var changes = UpdateUser()
 
     if emailChanged {
-      attributes.email = email
+      changes.email = email
     }
 
     if phoneChanged {
-      attributes.phone = phone
+      changes.phone = phone
     }
 
     if password.isEmpty == false {
-      attributes.password = password
+      changes.password = password
     }
 
     actionState = .inFlight
 
     do {
-      try await supabase.auth.update(user: attributes, redirectTo: Constants.redirectToURL)
+      try await supabase.auth.updateUser(changes, redirectTo: Constants.redirectToURL)
 
       var messages: [String] = []
       if emailChanged {
@@ -292,4 +293,5 @@ struct UpdateProfileView: View {
       updatedAt: Date()
     )
   )
+  .environment(\.supabase, supabaseClient)
 }

@@ -1,6 +1,6 @@
 # PostgREST v3 migration
 
-This file covers the changes to `PostgrestClient` and the string query builders from v2.55.4 to
+This file covers the changes to `PostgrestClient` and the string query builders from v2 to
 v3. See [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every
 module.
 
@@ -8,17 +8,21 @@ module.
 
 Changes that still compile but behave differently. Check each one by hand.
 
+- **A value that does not encode throws `PostgrestError`.** `insert`, `upsert`, `update` and
+  `rpc` throw a `PostgrestError` of kind `.invalidRequest` instead of the raw `EncodingError`,
+  which moves to `underlyingError`. Nothing is sent. Search for `as EncodingError` near
+  PostgREST calls.
 - **`update`, `upsert` and `delete` no longer return rows by default.** `returning` now defaults
   to `nil`, so no `Prefer: return=representation` is sent. Find each `update`, `upsert` or
   `delete` that reads `.value` and add `.select()` to the chain.
 - **`order` no longer forces `NULLS LAST`.** `nullsFirst` is now `Bool?` and defaults to `nil`,
   so the database picks the null placement (`NULLS FIRST` on a descending sort). Pass
   `nullsFirst: false` to keep the v2 order.
-- **`setHeader` and `retry` return a new builder.** The builders are structs, so a call whose
-  result you drop has no effect. The compiler only gives an "unused result" warning. Chain the
-  call, or assign its result.
+- **`retry` returns a new builder.** The builders are structs, so a call whose result you drop
+  has no effect. The compiler only gives an "unused result" warning. Chain the call, or assign
+  its result. The same holds for `settingHeader`.
 - **Enum-like values accept any raw value.** `init(rawValue:)` on `PostgrestOperator`,
-  `CountOption`, `PostgrestReturningOptions` and `TextSearchType` never returns `nil` now, so an
+  `CountOption`, `PostgrestReturning` and `TextSearchType` never returns `nil` now, so an
   `X(rawValue: s) != nil` check is always `true`. String interpolation prints
   `CountOption(rawValue: "exact")`, not `exact`. Use `.rawValue` where you need the string.
 - **Error responses always decode.** A PostgREST error body is decoded with a fixed decoder, not
@@ -32,31 +36,44 @@ Changes that still compile but behave differently. Check each one by hand.
   as a `PostgrestError` of kind `.invalidRequest`. The message is now always
   "`` `.csv()` cannot be combined with `.stripNulls()` ``", whatever the call order. Search for
   code that matches the v2 message "`` `.stripNulls()` cannot be combined with `.csv()` ``".
+- **`configuration.headers` holds only the headers you passed.** `PostgrestClient.configuration`
+  no longer contains the SDK's default `X-Client-Info`. The client still sends it on every
+  request unless you set that header. Search for code that reads
+  `configuration.headers[.xClientInfo]`.
 
 ## Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
-| `PostgrestClient.setAuth(_:)` | `accessToken:` closure on `PostgrestClient.init` and `Configuration.init` |
-| `PostgrestClient(… fetch:)`, `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
+| `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
+| `PostgrestClient.setAuth(_:)` | `AccessTokenMiddleware` in `Configuration.http`; see [Access token](#access-token) |
+| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:))`; the flat init is gone, and `http` now comes before `logger` |
+| `Configuration.headers: [String: String]` | `Configuration.headers: HTTPFields`, for example `[.apikey: key]` |
+| `PostgrestClient.Configuration.defaultHeaders` | removed; the client still adds `X-Client-Info` unless you set it |
+| `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` and `Configuration.clock` are public too |
+| `PostgrestClient.Configuration.jsonEncoder`, `.jsonDecoder` | removed; see [Default coders](#default-coders) |
+| `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
 | `PostgrestClient.FetchHandler` | `any ClientTransport` |
 | `logger: (any SupabaseLogger)?` | `logger: Logging.Logger` |
 | `PostgrestClient`, builders: `final class` | `struct` |
 | `PostgrestBuilder` | `any PostgrestExecutableBuilder`, or `PostgrestFilterBuilder` / `PostgrestTransformBuilder` |
-| `Configuration.encoder`, `.decoder`: `var` | `let`; pass them to `init`, or per call with `encoder:` / `decoder:` |
 | `PostgrestFilterBuilder.Operator`: `enum` | `PostgrestOperator` struct (`Operator` is a type alias) |
-| `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members |
+| `CountOption`, `PostgrestReturningOptions`, `TextSearchType`: `enum` | `struct` with the same static members; `PostgrestReturningOptions` is `PostgrestReturning` |
 | `insert(…)`, `upsert(…)` return `PostgrestFilterBuilder` | return `PostgrestTransformBuilder` |
-| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.response: HTTPResponse` |
+| `PostgrestResponse.response: HTTPURLResponse` | `PostgrestResponse.status: HTTPResponse.Status`, `.headers: HTTPFields` |
+| `PostgrestResponse.status: Int` | `PostgrestResponse.status: HTTPResponse.Status`; use `.status.code` for the `Int` |
+| `PostgrestResponse.data` | `PostgrestResponse.body` |
+| `PostgrestResponse(data:response:value:)`; `let` fields | `PostgrestResponse(status:headers:body:count:value:)`; `var` fields |
 | `URLQueryRepresentable` | `PostgrestFilterValue` |
 | `PostgrestFilterValue.queryValue` | `PostgrestFilterValue.rawValue` |
 | `.like(_:value:)`, `.ilike(_:value:)` | `.like(_:pattern:)`, `.ilike(_:pattern:)` |
 | `.in(_:value:)` | `.in(_:values:)` |
 | `.plfts`, `.phfts`, `.wfts(_:query:config:)` | `.textSearch(_:query:config:type:)` with `.plain`, `.phrase`, `.websearch` |
 | `.explain(…, format: String)` | `.explain(…, format: ExplainFormat)` |
-| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [Errors](#errors) |
+| `PostgrestError.detail`, `init(detail:hint:code:message:)` | removed; see [`PostgrestError` is a struct](#postgresterror-is-a-struct) |
+| `Helpers.PostgrestError`, also visible through `import Auth`, `Functions`, `Realtime` or `Storage` | `PostgREST.PostgrestError`; import `PostgREST` or `Supabase` |
 
-A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturningOptions` or
+A `switch` over `PostgrestOperator`, `CountOption`, `PostgrestReturning` or
 `TextSearchType` needs a `default:` case. `PostgrestOperator.allCases` is gone.
 
 ## Access token
@@ -67,16 +84,23 @@ let client = PostgrestClient(url: url)
 client.setAuth(token)
 
 // v3
-let client = PostgrestClient(url: url, accessToken: { try await auth.session.accessToken })
+let client = try PostgrestClient(
+  configuration: .init(
+    url: url,
+    http: .init(middlewares: [AccessTokenMiddleware { try await auth.session().accessToken }])
+  )
+)
 ```
 
-An `Authorization` header in `headers:` or from `setHeader` wins over the closure.
+The middleware runs on every attempt, so a retried request gets a fresh token. A provider that
+throws fails the request with a `PostgrestError` of kind `.accessToken`. An `Authorization` header
+in `headers:` or from `settingHeader` wins over the middleware.
 
 ## Value-type builders
 
 Code that holds a builder or client as a reference type no longer compiles: `weak`, `unowned`,
-`AnyObject`, `===` and subclasses. `setHeader` and `retry` are not available on the builder that
-`from(_:)` returns; pick an operation first, or set the header on the client.
+`AnyObject`, `===` and subclasses. `settingHeader` and `retry` are not available on the builder
+that `from(_:)` returns; pick an operation first, or set the header on the client.
 
 ```swift
 // v2
@@ -86,7 +110,9 @@ try await client.from("todos").setHeader(name: "Prefer", value: "params=single-o
 
 // v3
 var database: PostgrestClient?
-let client = PostgrestClient(url: url, headers: ["Prefer": "params=single-object"])
+let client = try PostgrestClient(
+  configuration: .init(url: url, headers: [HTTPField.Name("Prefer")!: "params=single-object"])
+)
 try await client.from("todos").select(count: .exact).execute()
 ```
 
@@ -129,13 +155,14 @@ let scoped = email.map { query.eq("email", value: $0) } ?? query.is("email", val
 try await scoped.execute()
 ```
 
-## Errors
+## `PostgrestError` is a struct
 
-`PostgrestError` is a wrapper with `kind`, `message`, `serverError`, `response` and
-`underlyingError`. The PostgREST body (`code`, `message`, `details`, `hint`) moves to
-`serverError`. `HTTPError`, `URLError` and `DecodingError` from a query now arrive as a
-`PostgrestError` with kind `.server`, `.transport` or `.decoding`. A throwing `accessToken`
-closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
+`PostgrestError` is a wrapper with `kind`, `message`, `code`, `serverError`, `response` and
+`underlyingError`. The body's `code` is `PostgrestError.code`, a `PostgrestError.Code?` with
+static members for common PostgreSQL codes, such as `.uniqueViolation` for `23505`. The rest of
+the PostgREST body (`message`, `details`, `hint`) moves to `serverError`. `HTTPError`, `URLError` and `DecodingError` from a query now arrive as a
+`PostgrestError` with kind `.server`, `.transport` or `.decoding`. A token provider that
+throws gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 
 ```swift
 // v2
@@ -146,9 +173,11 @@ closure gives kind `.accessToken`. `PostgrestError` is no longer `Codable`.
 }
 
 // v3
+} catch PostgrestError.Code.uniqueViolation {
+  showDuplicate()
 } catch let error as PostgrestError {
-  if error.serverError?.code == "23505" { showDuplicate(error.serverError?.details) }
-  print(error.response?.statusCode ?? 0, error.response?.requestID ?? "")
+  if error.code == "PGRST116" { showNotFound() }
+  print(error.response?.status.code ?? 0, error.response?.requestID ?? "")
 }
 ```
 
@@ -192,6 +221,23 @@ The v2 builders (`from("table")`, `rpc`, `PostgrestQueryBuilder`, `PostgrestFilt
 `PostgrestTransformBuilder`) keep their names and stay supported in v3, apart from the changes
 above. They moved to `Sources/PostgREST/Untyped/` and send requests through the same core as the
 typed API. You do not need to move to the typed API.
+
+## Default coders
+
+`PostgrestClient.Configuration.jsonEncoder` and `.jsonDecoder` are gone. They were one shared
+instance, so a change to one changed every client that used it. `JSONEncoder.supabase()` and
+`JSONDecoder.supabase()` return a new coder with the same settings on each call. Each
+`Configuration` gets its own.
+
+```swift
+// v2
+let decoder = PostgrestClient.Configuration.jsonDecoder
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+// v3
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+```
 
 ## Experimental APIs
 

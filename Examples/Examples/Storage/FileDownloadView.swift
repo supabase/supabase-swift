@@ -174,7 +174,7 @@ struct FileDownloadView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -190,7 +190,7 @@ struct FileDownloadView: View {
       isLoading = true
       defer { isLoading = false }
 
-      files = try await supabase.storage
+      files = try await supabaseClient.storage
         .from(selectedBucket)
         .list()
     } catch {
@@ -208,7 +208,7 @@ struct FileDownloadView: View {
       isLoading = true
       defer { isLoading = false }
 
-      let data = try await supabase.storage
+      let data = try await supabaseClient.storage
         .from(selectedBucket)
         .download(path: path)
         .data()

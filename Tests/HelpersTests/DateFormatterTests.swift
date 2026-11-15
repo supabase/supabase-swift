@@ -62,6 +62,24 @@ struct DateFormatterTests {
   }
 
   @Test
+  func supabaseDecoderReadsPostgresTimestamps() throws {
+    let data = Data(#"["2024-01-02T03:04:05.5+00", "2024-01-02"]"#.utf8)
+
+    let dates = try JSONDecoder.supabase().decode([Date].self, from: data)
+
+    #expect(
+      dates == [
+        Date(timeIntervalSince1970: 1_704_164_645.5), Date(timeIntervalSince1970: 1_704_153_600),
+      ])
+  }
+
+  @Test
+  func supabaseCodersAreNewOnEachCall() {
+    #expect(JSONDecoder.supabase() !== JSONDecoder.supabase())
+    #expect(JSONEncoder.supabase() !== JSONEncoder.supabase())
+  }
+
+  @Test
   func roundTripIsExactForWholeMilliseconds() throws {
     let date = Date(timeIntervalSince1970: 1_704_164_645.5)
 

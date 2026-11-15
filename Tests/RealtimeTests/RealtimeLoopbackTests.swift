@@ -32,22 +32,65 @@ import Testing
       #expect(await client.status == .connected)
 
       let channel = await client.channel("room") {
-        $0.broadcast.receiveOwnBroadcasts = true
+        $0.broadcast.receivesOwnMessages = true
       }
       let pings = await channel.broadcasts(event: "ping")
       try await channel.subscribe()
       #expect(await channel.status == .subscribed)
       #expect(joins.value == 1)
 
-      try await channel.broadcast(event: "ping", message: ["n": 1] as JSONObject)
+      try await channel.broadcast(event: "ping", payload: ["n": 1] as JSONObject)
       let received = try await withTimeout(.seconds(10)) {
         await pings.first { _ in true }
       }
-      #expect(received?["event"] == "ping")
-      #expect(received?["payload"]?.objectValue?["n"] == 1)
+      #expect(received?.event == "ping")
+      #expect(received?.payload == .json(["n": 1]))
 
       await client.disconnect()
       #expect(await client.status == .disconnected)
+    }
+
+    @Test
+    func watchOSWithoutOptInFailsConnectAndSubscribeWithoutRetrying() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let joins = script(server)
+
+      let client = makeClient(port: port, transport: URLSessionWebSocketTransport(isWatchOS: true))
+
+      let connectError = await #expect(throws: RealtimeError.self) { try await client.connect() }
+      #expect(connectError?.kind == .invalidRequest)
+      #expect(connectError?.isRetryable == false)
+      #expect(connectError?.message.contains("TN3135") == true)
+      #expect(await client.status == .disconnected)
+
+      let channel = await client.channel("room")
+      let subscribeError = await #expect(throws: RealtimeError.self) {
+        try await channel.subscribe()
+      }
+      #expect(subscribeError?.kind == .invalidRequest)
+      #expect(subscribeError?.message.contains("TN3135") == true)
+      #expect(joins.value == 0)
+    }
+
+    @Test
+    func watchOSWithOptInConnectsAndJoins() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let joins = script(server)
+
+      let client = makeClient(
+        port: port,
+        transport: URLSessionWebSocketTransport(allowsWatchOSConnections: true, isWatchOS: true))
+      try await client.connect()
+      let channel = await client.channel("room")
+      try await channel.subscribe()
+
+      #expect(await channel.status == .subscribed)
+      #expect(joins.value == 1)
+      await client.disconnect()
     }
 
     @Test
@@ -75,7 +118,6 @@ import Testing
       #expect(dropped?.error?.closeCode == .goingAway)
       #expect(await clientStatuses.next() == .connecting)
       #expect(await clientStatuses.next() == .connected)
-      #expect(await channelStatuses.next() == .unsubscribed)
       #expect(await channelStatuses.next() == .subscribing)
       #expect(await channelStatuses.next() == .subscribed)
       #expect(await channelEvents.next() == .resubscribed)
@@ -84,27 +126,72 @@ import Testing
       await client.disconnect()
     }
 
+    /// The server keeps the socket open and stops answering, as a suspended app finds it. The
+    /// foreground probe reconnects after its 5 s deadline, and the 30 s backoff does not apply.
+    @Test
+    func foregroundProbeReconnectsWhenTheSocketStoppedAnswering() async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let answersHeartbeats = LockIsolated(true)
+      let joins = script(server, answersHeartbeats: answersHeartbeats)
+
+      let client = makeClient(port: port, reconnectBackoff: .steps([.seconds(30)]))
+      let channel = await client.channel("room")
+      try await channel.subscribe()
+      #expect(joins.value == 1)
+
+      var clientStatuses = await client.statusChanges().makeAsyncIterator()
+      var channelStatuses = await channel.statusChanges().makeAsyncIterator()
+      #expect(await clientStatuses.next() == .connected)
+      #expect(await channelStatuses.next() == .subscribed)
+
+      answersHeartbeats.setValue(false)
+      await client.handleAppForeground()
+
+      #expect(await clientStatuses.next() == .reconnecting)
+      #expect(await clientStatuses.next() == .connecting)
+      #expect(await clientStatuses.next() == .connected)
+      #expect(await channelStatuses.next() == .subscribing)
+      #expect(await channelStatuses.next() == .subscribed)
+      #expect(joins.value == 2)
+
+      await client.disconnect()
+    }
+
     // MARK: - Helpers
 
-    private func makeClient(port: UInt16) -> RealtimeClient {
-      RealtimeClient(
+    private func makeClient(
+      port: UInt16,
+      transport: URLSessionWebSocketTransport = URLSessionWebSocketTransport(),
+      reconnectBackoff: BackoffPolicy = .fullJitter(base: .milliseconds(100), cap: .seconds(30))
+    ) -> RealtimeClient {
+      let configuration = RealtimeClient.Configuration(
         url: URL(string: "http://127.0.0.1:\(port)")!,
-        options: RealtimeClientOptions(
-          heartbeatInterval: .seconds(30),
-          reconnectDelay: .milliseconds(100),
-          timeout: .seconds(10),
-          handleAppLifecycle: false
-        )
+        heartbeatInterval: .seconds(30),
+        requestTimeout: .seconds(10),
+        observesAppLifecycle: false,
+        monitorsNetworkPath: false
+      )
+      return RealtimeClient(
+        configuration: configuration,
+        transport: transport,
+        http: HTTPClient(configuration: configuration.http, appending: []),
+        clock: configuration.clock,
+        reconnectBackoff: reconnectBackoff
       )
     }
 
     /// Scripts the server: confirms joins, acknowledges heartbeats and echoes broadcasts back
-    /// to the client. Returns the number of joins received.
-    private func script(_ server: LoopbackWebSocketServer) -> LockIsolated<Int> {
+    /// to the client. Returns the number of joins received. While `answersHeartbeats` is
+    /// `false`, the server ignores heartbeats.
+    private func script(
+      _ server: LoopbackWebSocketServer, answersHeartbeats: LockIsolated<Bool> = LockIsolated(true)
+    ) -> LockIsolated<Int> {
       let joins = LockIsolated(0)
       server.onMessage = { data in
         let serializer = RealtimeSerializer()
-        func send(_ reply: RealtimeMessageV2) {
+        func send(_ reply: RealtimeMessage) {
           if let text = try? serializer.encodeText(reply) {
             server.send(text: text)
           }
@@ -117,22 +204,23 @@ import Testing
           case "phx_join":
             joins.withValue { $0 += 1 }
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: message.joinRef, ref: message.ref, topic: message.topic,
                 event: "phx_reply",
                 payload: ["status": "ok", "response": ["postgres_changes": []]]
               )
             )
           case "heartbeat":
+            guard answersHeartbeats.value else { break }
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: nil, ref: message.ref, topic: "phoenix", event: "phx_reply",
                 payload: ["status": "ok", "response": [:]]
               )
             )
           case "broadcast":
             send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: nil, ref: nil, topic: message.topic, event: "broadcast",
                 payload: message.payload
               )
@@ -142,7 +230,7 @@ import Testing
           }
         } else if let push = Self.parseBroadcastPush(data) {
           send(
-            RealtimeMessageV2(
+            RealtimeMessage(
               joinRef: nil, ref: nil, topic: push.topic, event: "broadcast",
               payload: [
                 "type": "broadcast", "event": .string(push.event), "payload": .object(push.payload),

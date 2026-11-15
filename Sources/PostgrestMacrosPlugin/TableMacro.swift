@@ -53,6 +53,10 @@ public struct TableMacro: ExtensionMacro {
     return base.trimmedDescription
   }
 
+  /// Builds the extension that makes the attached struct conform to `_PostgrestRelation`.
+  ///
+  /// Reports a diagnostic and returns no extension when the declaration is not valid for
+  /// `@Table`.
   public static func expansion(
     of node: AttributeSyntax,
     attachedTo declaration: some DeclGroupSyntax,
@@ -120,13 +124,7 @@ public struct TableMacro: ExtensionMacro {
       missing: protocols
     )
     return [
-      try ExtensionDeclSyntax(
-        """
-        extension \(type.trimmed)\(raw: clause) {
-        \(raw: body.joined(separator: "\n\n"))
-        }
-        """
-      )
+      try conformanceExtension(of: type, clause: clause, body: body)
     ]
   }
 
@@ -163,7 +161,7 @@ public struct TableMacro: ExtensionMacro {
     type: String,
     properties: [StoredProperty]
   ) -> String {
-    var lines = ["  \(access)struct Columns: Sendable {"]
+    var lines = ["  \(access)nonisolated struct Columns: Sendable {"]
     for property in properties {
       let column: String
       if property.isGenerated {
@@ -196,7 +194,7 @@ public struct TableMacro: ExtensionMacro {
     access: String,
     fields: [(property: StoredProperty, type: String)]
   ) -> String {
-    var lines: [String] = ["  \(access)struct \(name): Encodable, Sendable {"]
+    var lines: [String] = ["  \(access)nonisolated struct \(name): Encodable, Sendable {"]
 
     for field in fields {
       lines.append("    \(access)var \(field.property.name): \(field.type)")

@@ -9,6 +9,7 @@ import Supabase
 import SwiftUI
 
 struct ProfileView: View {
+  @Environment(\.supabase) private var supabase
   @State var user: User?
   @State var error: Error?
   @State var isLoading = false
@@ -173,7 +174,7 @@ struct ProfileView: View {
                       await unlinkIdentity(identity)
                     }
                   } label: {
-                    Label("Unlink \(identity.provider)", systemImage: "link.badge.minus")
+                    Label("Unlink \(identity.provider.rawValue)", systemImage: "link.badge.minus")
                   }
                 }
               } label: {
@@ -301,4 +302,5 @@ struct ProfileView: View {
 
 #Preview {
   ProfileView()
+    .environment(\.supabase, supabaseClient)
 }

@@ -91,8 +91,8 @@
       return HTTPBody(chunks, length: body.length, iterationBehavior: .single)
     }
 
-    let storage = StorageClient(
-      configuration: StorageClientConfiguration(
+    let storage = try! StorageClient(
+      configuration: StorageClient.Configuration(
         url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
         headers: [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"]
       )
@@ -103,7 +103,7 @@
     var authHeaders: HTTPFields {
       [
         .authorization: "Bearer \(DotEnv.supabaseSecretKey)",
-        .init("apikey")!: DotEnv.supabaseSecretKey,
+        .apikey: DotEnv.supabaseSecretKey,
       ]
     }
 
@@ -206,7 +206,7 @@
         defer { try? FileManager.default.removeItem(at: directory) }
         var configuration = storage.configuration
         configuration.resumable.directory = directory
-        let resumable = StorageClient(configuration: configuration).from(bucket)
+        let resumable = try StorageClient(configuration: configuration).from(bucket)
         try await measure("storage.resumableUpload(fileURL:)") {
           let upload = try resumable.resumableUpload(path: "o.bin", fileURL: fileURL)
           try await upload.start()

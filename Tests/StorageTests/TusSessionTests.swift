@@ -20,10 +20,10 @@ struct TusSessionTests {
 
   private func makeSUT(
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
-  ) -> TusSession {
+  ) throws -> TusSession {
     TusSession(
-      api: StorageAPI(
-        configuration: StorageClientConfiguration(
+      api: try StorageAPI(
+        configuration: StorageClient.Configuration(
           url: supabaseURL,
           headers: [.authorization: "Bearer test.api.key", .xClientInfo: "storage-swift/x.y.z"],
           http: .init(
@@ -58,7 +58,7 @@ struct TusSessionTests {
 
   @Test
   func createSendsTusHeadersAndReadsTheLocation() async throws {
-    let sut = makeSUT { request in
+    let sut = try makeSUT { request in
       assertInlineSnapshot(of: request, as: .curl) {
         #"""
         curl \
@@ -91,7 +91,7 @@ struct TusSessionTests {
 
   @Test
   func createWithoutUploadOffsetStartsAtZero() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
     }
 
@@ -105,8 +105,8 @@ struct TusSessionTests {
   func createTargetsTheStorageHostOnHostedSupabase() async throws {
     let sent = LockIsolated<URL?>(nil)
     let sut = TusSession(
-      api: StorageAPI(
-        configuration: StorageClientConfiguration(
+      api: try StorageAPI(
+        configuration: StorageClient.Configuration(
           url: URL(string: "https://ref.supabase.co/storage/v1")!,
           headers: [:],
           http: .init(
@@ -132,7 +132,7 @@ struct TusSessionTests {
 
   @Test
   func createWithTheFirstChunkSendsItAsAnOffsetStream() async throws {
-    let sut = makeSUT { request in
+    let sut = try makeSUT { request in
       #expect(
         request.value(forHTTPHeaderField: "Content-Type") == "application/offset+octet-stream")
       #expect(request.httpBody == Data(repeating: 1, count: 6))
@@ -150,7 +150,7 @@ struct TusSessionTests {
 
   @Test
   func createWithTheFirstChunkRequiresUploadOffset() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(201, headers: ["Location": "/storage/v1/upload/resumable/abc"])
     }
 
@@ -163,7 +163,7 @@ struct TusSessionTests {
 
   @Test
   func createPassesServerErrorsThrough() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(413, headers: ["Content-Type": "text/plain"], body: "Payload too large")
     }
 
@@ -171,12 +171,13 @@ struct TusSessionTests {
       try await sut.create(
         bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
     }
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
   }
 
   @Test
   func offsetSendsHeadAndReadsUploadOffset() async throws {
-    let sut = makeSUT { request in
+    let sut = try makeSUT { request in
       #expect(request.httpMethod == "HEAD")
       #expect(request.url == self.uploadURL)
       #expect(request.value(forHTTPHeaderField: "Tus-Resumable") == "1.0.0")
@@ -188,7 +189,7 @@ struct TusSessionTests {
 
   @Test
   func offsetOfAGoneUploadThrowsUploadGone() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(404, headers: ["Content-Type": "text/plain"], body: "Not found")
     }
 
@@ -197,7 +198,7 @@ struct TusSessionTests {
 
   @Test
   func appendSendsPatchAndReadsOffsetAndCompletion() async throws {
-    let sut = makeSUT { request in
+    let sut = try makeSUT { request in
       assertInlineSnapshot(of: request, as: .curl) {
         #"""
         curl \
@@ -224,7 +225,7 @@ struct TusSessionTests {
 
   @Test
   func appendWithoutCompletionReportsIncomplete() async throws {
-    let sut = makeSUT { _ in self.response(204, headers: ["Upload-Offset": "17"]) }
+    let sut = try makeSUT { _ in self.response(204, headers: ["Upload-Offset": "17"]) }
 
     let appended = try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
 
@@ -233,7 +234,7 @@ struct TusSessionTests {
 
   @Test
   func appendOffsetConflictThrowsOffsetConflict() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(409, headers: ["Content-Type": "text/plain"], body: "Offset conflict")
     }
 
@@ -244,12 +245,12 @@ struct TusSessionTests {
       Issue.record("Expected offsetConflict, got \(String(describing: error))")
       return
     }
-    #expect(storageError.serverStatusCode == 409)
+    #expect(storageError.serverError?.statusCode == 409)
   }
 
   @Test
   func appendToAGoneUploadThrowsUploadGone() async throws {
-    let sut = makeSUT { _ in
+    let sut = try makeSUT { _ in
       self.response(410, headers: ["Content-Type": "text/plain"], body: "Gone")
     }
 
@@ -265,7 +266,7 @@ struct TusSessionTests {
   @Test
   func terminateSendsDeleteAndIgnoresFailure() async throws {
     let sent = LockIsolated<URLRequest?>(nil)
-    let sut = makeSUT { request in
+    let sut = try makeSUT { request in
       sent.setValue(request)
       return self.response(500)
     }

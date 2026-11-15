@@ -52,6 +52,9 @@ public protocol PostgrestFilterValue: PostgrestArrayElement {
 }
 
 extension PostgrestFilterValue {
+  /// The operand the typed query API sends for this value, which defaults to ``rawValue``.
+  ///
+  /// Implementation detail of the typed query API. Do not call it directly.
   public var _typedOperand: String? { rawValue }
 
   /// Escaping the raw value as a scalar is always correct for a non-`nil`, non-array value.
@@ -61,46 +64,58 @@ extension PostgrestFilterValue {
 }
 
 extension String: PostgrestFilterValue {
+  /// The string itself, unchanged.
   public var rawValue: String { self }
 }
 
 extension Int: PostgrestFilterValue {
+  /// The integer as decimal text, for example `"42"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Int16: PostgrestFilterValue {
+  /// The integer as decimal text, for example `"42"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Int32: PostgrestFilterValue {
+  /// The integer as decimal text, for example `"42"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Int64: PostgrestFilterValue {
+  /// The integer as decimal text, for example `"42"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Double: PostgrestFilterValue {
+  /// The number as text, for example `"3.14"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Float: PostgrestFilterValue {
+  /// The number as text, for example `"3.14"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Decimal: PostgrestFilterValue {
+  /// The number as text, for example `"9.99"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension Bool: PostgrestFilterValue {
+  /// The text `"true"` or `"false"`.
   public var rawValue: String { "\(self)" }
 }
 
 extension UUID: PostgrestFilterValue {
+  /// The UUID string, in uppercase with hyphens.
   public var rawValue: String { uuidString }
 }
 
 extension Date: PostgrestFilterValue {
+  /// The date in ISO 8601 form with fractional seconds, for example
+  /// `"2024-01-15T12:00:00.000Z"`.
   public var rawValue: String {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -109,23 +124,28 @@ extension Date: PostgrestFilterValue {
 }
 
 extension Array: PostgrestFilterValue where Element: PostgrestArrayElement {
+  /// The Postgres array literal for the elements, for example `"{a,b,c}"`.
   public var rawValue: String {
     "{\(map(\.postgrestArrayElement).joined(separator: ","))}"
   }
 }
 
 extension Array: PostgrestArrayElement where Element: PostgrestArrayElement {
+  /// The nested Postgres array literal, which is the same text as ``rawValue``.
   public var postgrestArrayElement: String { rawValue }
 }
 
 extension JSONValue: PostgrestFilterValue {
+  /// The filter form the untyped builder sends for this JSON value.
+  ///
+  /// A `.string` is sent bare, an `.array` as a Postgres array literal, an `.object` as JSON
+  /// text, and `.null` as `NULL`.
   public var rawValue: String {
     switch self {
     case .array(let array): array.rawValue
     case .object(let object): object.rawValue
     case .string(let string): string.rawValue
-    case .double(let double): double.rawValue
-    case .integer(let integer): integer.rawValue
+    case .number(let number): number.description
     case .bool(let bool): bool.rawValue
     case .null: "NULL"
     }
@@ -136,7 +156,7 @@ extension JSONValue: PostgrestFilterValue {
   /// it is encoded as JSON here, where ``rawValue`` is the filter form the untyped builder sends —
   /// a `.string` bare, an `.array` as the Postgres literal `{20}`, `.null` as `NULL`.
   ///
-  /// Only a non-finite `.double` fails to encode, and then this is `nil`. No operand stands in for
+  /// Only a `.number` that no Swift number type holds exactly fails to encode, and then this is `nil`. No operand stands in for
   /// it: `null` is a valid operand that matches JSON-null rows, so a `delete` would remove them.
   public var _typedOperand: String? {
     let encoder = JSONEncoder()
@@ -150,13 +170,14 @@ extension JSONValue: PostgrestFilterValue {
     switch self {
     case .array(let array): array.postgrestArrayElement
     case .null: "NULL"
-    case .object, .string, .double, .integer, .bool:
+    case .object, .string, .number, .bool:
       escapePostgRESTArrayLiteralElement(rawValue)
     }
   }
 }
 
 extension Optional: PostgrestArrayElement where Wrapped: PostgrestArrayElement {
+  /// The wrapped value's array element encoding, or an unquoted SQL `NULL` for `nil`.
   public var postgrestArrayElement: String {
     guard let self else { return "NULL" }
     return self.postgrestArrayElement
@@ -166,6 +187,7 @@ extension Optional: PostgrestArrayElement where Wrapped: PostgrestArrayElement {
 extension JSONObject: PostgrestArrayElement {}
 
 extension JSONObject: PostgrestFilterValue {
+  /// The object as JSON text with sorted keys, or `"{}"` when it cannot be serialized.
   public var rawValue: String {
     let value = mapValues(\.value)
     guard let serialized = JSONSerialization.stringify(value) else {

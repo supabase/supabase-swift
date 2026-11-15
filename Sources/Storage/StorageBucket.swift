@@ -42,30 +42,30 @@ public import HTTPTypes
 ///
 /// ### Downloading files
 ///
-/// - ``download(path:transform:options:progress:)``
+/// - ``download(path:options:progress:)``
 /// - ``DownloadResponse``
-/// - ``publicURL(path:download:transform:versionId:cacheNonce:)``
+/// - ``publicURL(path:options:)``
 ///
 /// ### Managing files
 ///
-/// - ``move(from:to:toBucket:sourceVersionId:)``
-/// - ``copy(from:to:toBucket:sourceVersionId:options:)``
+/// - ``move(from:to:toBucket:sourceVersionID:)``
+/// - ``copy(from:to:toBucket:sourceVersionID:options:)``
 /// - ``remove(paths:)``
 /// - ``remove(versions:)``
 /// - ``objects(prefix:options:)``
 /// - ``list(path:options:)``
-/// - ``info(path:versionId:)``
+/// - ``info(path:versionID:)``
 /// - ``exists(path:)``
-/// - ``purgeCache(path:includingTransformations:)``
+/// - ``purgeCache(path:transformationsOnly:)``
 ///
 /// ### Creating signed URLs
 ///
-/// - ``createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
-/// - ``createSignedURLs(paths:expiresIn:download:cacheNonce:)``
+/// - ``createSignedURL(path:expiresIn:options:)``
+/// - ``createSignedURLs(paths:expiresIn:options:)``
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(name:value:)``
+/// - ``settingHeader(name:value:)``
 ///
 /// ### Configuration
 ///
@@ -77,7 +77,7 @@ public struct StorageBucket: Sendable {
   let api: StorageAPI
 
   /// The configuration used to initialize this client instance.
-  public var configuration: StorageClientConfiguration { api.configuration }
+  public var configuration: StorageClient.Configuration { api.configuration }
 
   init(id: String, api: StorageAPI) {
     self.id = id
@@ -92,7 +92,7 @@ public struct StorageBucket: Sendable {
   ///
   /// ```swift
   /// storage.from("avatars")
-  ///   .setHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
+  ///   .settingHeader(name: .init("X-Custom-Header")!, value: "x-custom-header")
   ///   .list()
   /// ```
   ///
@@ -100,8 +100,8 @@ public struct StorageBucket: Sendable {
   ///   - name: The header field. Names match case-insensitively.
   ///   - value: The value of the header field.
   /// - Returns: A new ``StorageBucket`` with the header merged into the configuration's headers.
-  public func setHeader(name: HTTPField.Name, value: String) -> Self {
-    StorageBucket(id: id, api: api.setHeader(name: name, value: value))
+  public func settingHeader(name: HTTPField.Name, value: String) -> Self {
+    StorageBucket(id: id, api: api.settingHeader(name: name, value: value))
   }
 
   private struct SignedURLAPIResponse: Decodable {
@@ -247,6 +247,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.mp4"`.
   ///   - fileURL: A `file://` URL pointing to the local file to upload.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: The upload, not yet started.
   /// - Throws: ``StorageError`` if `path` is not a valid object path, and the file system's error
   ///   if `fileURL` cannot be read.
   @_spi(Experimental)
@@ -258,11 +259,11 @@ public struct StorageBucket: Sendable {
     let key = try ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
     let fingerprint = try ResumableStore.fingerprint(
-      url: api.configuration.url, bucketId: id, path: key.path, fileURL: fileURL)
+      url: api.configuration.url, bucketID: id, path: key.path, fileURL: fileURL)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
-        id: ResumableUpload.ID(rawValue: fingerprint),
-        bucketId: id, path: key.path, totalBytes: size, input: .file(fileURL),
+        fingerprint: fingerprint,
+        bucketID: id, path: key.path, totalBytes: size, input: .file(fileURL),
         options: options.inferringContentType(from: fileURL), api: api)
     }
   }
@@ -276,6 +277,7 @@ public struct StorageBucket: Sendable {
   ///   - path: The relative file path within the bucket, e.g. `"folder/subfolder/filename.png"`.
   ///   - data: The raw bytes to store in the bucket.
   ///   - options: Upload options such as cache control, content type, and upsert behavior.
+  /// - Returns: The upload, not yet started.
   /// - Throws: ``StorageError`` if `path` is not a valid object path.
   @_spi(Experimental)
   public func resumableUpload(
@@ -285,11 +287,11 @@ public struct StorageBucket: Sendable {
   ) throws -> ResumableUpload {
     let key = try ObjectKey(path)
     let fingerprint = ResumableStore.fingerprint(
-      url: api.configuration.url, bucketId: id, path: key.path, data: data)
+      url: api.configuration.url, bucketID: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
       ResumableUpload(
-        id: ResumableUpload.ID(rawValue: fingerprint),
-        bucketId: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
+        fingerprint: fingerprint,
+        bucketID: id, path: key.path, totalBytes: Int64(data.count), input: .data(data),
         options: options, api: api)
     }
   }
@@ -384,18 +386,18 @@ public struct StorageBucket: Sendable {
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The new file path including the new file name, e.g. `"archive/image.png"`.
   ///   - toBucket: The bucket to move the file into. `nil` moves it within this bucket.
-  ///   - sourceVersionId: The version of the source to move. `nil` moves the current version.
+  ///   - sourceVersionID: The version of the source to move. `nil` moves the current version.
   /// - Throws: ``StorageError`` if the source does not exist or the caller is not authorized.
   public func move(
     from source: String,
     to destination: String,
     toBucket: String? = nil,
-    sourceVersionId: String? = nil
+    sourceVersionID: String? = nil
   ) async throws {
     try await api.execute(
       api.requests.move(
         bucket: id, source: ObjectKey(source), destination: ObjectKey(destination),
-        destinationBucket: toBucket, sourceVersionId: sourceVersionId)
+        destinationBucket: toBucket, sourceVersionID: sourceVersionID)
     )
   }
 
@@ -410,7 +412,7 @@ public struct StorageBucket: Sendable {
   ///   - source: The original file path including the file name, e.g. `"folder/image.png"`.
   ///   - destination: The destination path including the new file name, e.g. `"folder/image-copy.png"`.
   ///   - toBucket: The bucket to copy the file into. `nil` copies it within this bucket.
-  ///   - sourceVersionId: The version of the source to copy. `nil` copies the current version.
+  ///   - sourceVersionID: The version of the source to copy. `nil` copies the current version.
   ///   - options: Whether to replace an existing destination, and the metadata of the copy.
   /// - Returns: The copy's identifier and path.
   /// - Throws: ``StorageError`` if the source does not exist, the destination exists and
@@ -420,14 +422,14 @@ public struct StorageBucket: Sendable {
     from source: String,
     to destination: String,
     toBucket: String? = nil,
-    sourceVersionId: String? = nil,
+    sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
     let destinationKey = try ObjectKey(destination)
     let response = try await api.execute(
       api.requests.copy(
         bucket: id, source: ObjectKey(source), destination: destinationKey,
-        destinationBucket: toBucket, sourceVersionId: sourceVersionId, options: options)
+        destinationBucket: toBucket, sourceVersionID: sourceVersionID, options: options)
     )
     .decoded(as: UploadResponse.self)
     return UploadedObject(
@@ -445,7 +447,7 @@ public struct StorageBucket: Sendable {
   /// let downloadURL = try await storage.from("docs").createSignedURL(
   ///   path: "report.pdf",
   ///   expiresIn: .seconds(60),
-  ///   download: .withOriginalName
+  ///   options: SignedURLOptions(download: .withOriginalName)
   /// )
   /// ```
   ///
@@ -453,32 +455,24 @@ public struct StorageBucket: Sendable {
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
   ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
   ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
-  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
-  ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
-  ///     `nil` for inline display.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - versionId: The version the URL serves. `nil` serves the current version.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
   public func createSignedURL(
     path: String,
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    transform: ImageTransform? = nil,
-    versionId: String? = nil,
-    cacheNonce: String? = nil
+    options: SignedURLOptions = SignedURLOptions()
   ) async throws -> URL {
     let response = try await api.execute(
       api.requests.sign(
         bucket: id, key: ObjectKey(path), expiresIn: Self.seconds(expiresIn),
-        transform: transform, versionId: versionId)
+        transform: options.transform, versionID: options.versionID)
     )
     .decoded(as: SignedURLAPIResponse.self)
 
     return try api.requests.resolve(
-      response.signedURL, query: Self.urlQuery(download: download, cacheNonce: cacheNonce))
+      response.signedURL,
+      query: Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce))
   }
 
   /// Creates signed URLs for multiple files in a single request.
@@ -504,19 +498,14 @@ public struct StorageBucket: Sendable {
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
   ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
   ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
-  ///   - download: Controls whether the URLs trigger a file download. Pass `.withOriginalName` to
-  ///     download using each file's original name, `.named("custom")` for a custom name, or `nil`
-  ///     for inline display.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior and cache nonce.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
   ///   paths are reported as ``SignedURLResult/failure(path:error:)`` rather than thrown.
   public func createSignedURLs(
     paths: [String],
     expiresIn: Duration,
-    download: DownloadBehavior? = nil,
-    cacheNonce: String? = nil
+    options: SignedURLsOptions = SignedURLsOptions()
   ) async throws -> [SignedURLResult] {
     let response = try await api.execute(
       api.requests.sign(
@@ -524,7 +513,7 @@ public struct StorageBucket: Sendable {
     )
     .decoded(as: [SignedURLsAPIResponse].self)
 
-    let query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
+    let query = Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce)
     return try response.map { item in
       if let signedURLString = item.signedURL {
         let url = try api.requests.resolve(signedURLString, query: query)
@@ -583,7 +572,7 @@ public struct StorageBucket: Sendable {
   /// let versions = try await bucket.list(path: "docs", options: ListOptions(versions: .only))
   /// try await bucket.remove(
   ///   versions: versions.compactMap { object in
-  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionId: $0) }
+  ///     object.version.map { ObjectVersion(path: "docs/\(object.name)", versionID: $0) }
   ///   })
   /// ```
   ///
@@ -596,7 +585,7 @@ public struct StorageBucket: Sendable {
   public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.remove(
-        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionId) })
+        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionID) })
     )
     .decoded()
   }
@@ -645,12 +634,11 @@ public struct StorageBucket: Sendable {
   /// ```
   ///
   /// For public buckets, prefer requesting the URL returned by
-  /// ``publicURL(path:download:transform:versionId:cacheNonce:)`` directly.
+  /// ``publicURL(path:options:)`` directly.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - options: The byte range, version, cache nonce and extra headers.
+  ///   - options: The byte range, version, cache nonce, image transformation and extra headers.
   ///   - progress: Called as the body is read; see ``TransferProgress``.
   ///     ``TransferProgress/totalBytes`` is `nil` when Storage sends no `Content-Length`, as for a
   ///     transformed image.
@@ -660,13 +648,11 @@ public struct StorageBucket: Sendable {
   ///   ``StorageError`` with kind `transport` from the body.
   public func download(
     path: String,
-    transform: ImageTransform? = nil,
     options: DownloadOptions = DownloadOptions(),
     progress: (@Sendable (TransferProgress) -> Void)? = nil
   ) async throws -> DownloadResponse {
     let (head, body) = try await api.stream(
-      api.requests.download(
-        bucket: id, key: ObjectKey(path), transform: transform, options: options)
+      api.requests.download(bucket: id, key: ObjectKey(path), options: options)
     )
     var response = body ?? HTTPBody(Data())
     if let progress {
@@ -683,18 +669,18 @@ public struct StorageBucket: Sendable {
         },
         length: length, iterationBehavior: .single)
     }
-    return DownloadResponse(httpResponse: head, body: response)
+    return DownloadResponse(status: head.status, headers: head.headerFields, body: response)
   }
 
   /// Retrieves metadata about an existing file without downloading its content.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - versionId: The version to describe. `nil` describes the current version.
+  ///   - versionID: The version to describe. `nil` describes the current version.
   /// - Returns: A ``ObjectInfo`` containing size, content type, ETag, and other metadata.
   /// - Throws: ``StorageError`` if the file does not exist or the caller is not authorized.
-  public func info(path: String, versionId: String? = nil) async throws -> ObjectInfo {
-    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path), versionId: versionId))
+  public func info(path: String, versionID: String? = nil) async throws -> ObjectInfo {
+    try await api.execute(api.requests.info(bucket: id, key: ObjectKey(path), versionID: versionID))
       .decoded()
   }
 
@@ -715,7 +701,7 @@ public struct StorageBucket: Sendable {
       _ = try await info(path: path)
       return true
     } catch let error as StorageError
-      where error.code == .noSuchKey || (error.code == nil && error.serverStatusCode == 404)
+      where error.code == .noSuchKey || (error.code == nil && error.serverError?.statusCode == 404)
     {
       return false
     }
@@ -731,12 +717,13 @@ public struct StorageBucket: Sendable {
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`. Only that exact
   ///     file is purged; there is no wildcard or folder purge.
-  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants and
+  ///     keep the original cached. By default, the original and all its variants are purged.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(path: String, includingTransformations: Bool = false) async throws {
+  public func purgeCache(path: String, transformationsOnly: Bool = false) async throws {
     try await api.execute(
       api.requests.purgeCache(
-        bucket: id, key: ObjectKey(path), includingTransformations: includingTransformations)
+        bucket: id, key: ObjectKey(path), transformationsOnly: transformationsOnly)
     )
   }
 
@@ -747,7 +734,8 @@ public struct StorageBucket: Sendable {
   /// let url = storage.from("avatars").publicURL(path: "user123.png")
   ///
   /// // Force download with original file name
-  /// let dlURL = storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
+  /// let dlURL = storage.from("docs").publicURL(
+  ///   path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
   /// ```
   ///
   /// > Note: The bucket must be set to public for this URL to be accessible without authentication.
@@ -758,27 +746,18 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName` to
-  ///     download using the file's original name, `.named("custom.pdf")` for a custom name, or
-  ///     `nil` for inline display.
-  ///   - transform: An optional image transformation applied server-side before delivery.
-  ///   - versionId: The version the URL serves. `nil` serves the current version.
-  ///   - cacheNonce: An optional nonce appended as a `cacheNonce` query parameter for
-  ///     cache-busting purposes.
+  ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: The publicly accessible `URL` for the file.
   public func publicURL(
     path: String,
-    download: DownloadBehavior? = nil,
-    transform: ImageTransform? = nil,
-    versionId: String? = nil,
-    cacheNonce: String? = nil
+    options: PublicURLOptions = PublicURLOptions()
   ) -> URL {
-    var query = Self.urlQuery(download: download, cacheNonce: cacheNonce)
-    if let versionId {
-      query.append(URLQueryItem(name: "versionId", value: versionId))
+    var query = Self.urlQuery(download: options.download, cacheNonce: options.cacheNonce)
+    if let versionID = options.versionID {
+      query.append(URLQueryItem(name: "versionId", value: versionID))
     }
     return api.requests.publicURL(
-      bucket: id, key: ObjectKey(lenient: path), transform: transform?.queryItems ?? [],
+      bucket: id, key: ObjectKey(lenient: path), transform: options.transform?.queryItems ?? [],
       query: query)
   }
 

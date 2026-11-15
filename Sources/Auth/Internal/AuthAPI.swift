@@ -27,15 +27,18 @@ struct AuthAPI: Sendable {
   let defaultRedirectURL: URL?
   let encoder: JSONEncoder
   let decoder: JSONDecoder
+  /// Stamps the session of a response with the time the client received it.
+  let now: @Sendable () -> Date
 
   init(
     url: URL,
-    headers: [String: String],
+    headers: HTTPFields,
     defaultRedirectURL: URL?,
     encoder: JSONEncoder,
-    decoder: JSONDecoder
+    decoder: JSONDecoder,
+    now: @escaping @Sendable () -> Date
   ) {
-    var headers = HTTPFields(headers)
+    var headers = headers
     if headers[.apiVersionHeaderName] == nil {
       headers[.apiVersionHeaderName] = Self.apiVersion
     }
@@ -44,6 +47,7 @@ struct AuthAPI: Sendable {
     self.defaultRedirectURL = defaultRedirectURL
     self.encoder = encoder
     self.decoder = decoder
+    self.now = now
   }
 }
 
@@ -105,8 +109,32 @@ extension AuthAPI {
     return AuthRequest(head: head, body: body, decodeBody: decode)
   }
 
+  /// Encodes a request body as JSON.
+  ///
+  /// - Throws: ``AuthError`` with kind ``AuthError/Kind-swift.struct/invalidRequest`` when
+  ///   `value` does not encode.
+  func encodeBody(_ value: some Encodable) throws -> Data {
+    do {
+      return try encoder.encode(value)
+    } catch {
+      throw AuthError.invalidRequest(
+        "The request body cannot be encoded as JSON.", underlyingError: error)
+    }
+  }
+
+  func decodingSession() -> @Sendable (HTTPResponse, Data) throws -> Session {
+    decoding(Session.self) { [now] in $0.received(at: now()) }
+  }
+
   func decoding<T: Decodable>(_: T.Type) -> @Sendable (HTTPResponse, Data) throws -> T {
     { [decoder] _, data in try data.decoded(as: T.self, decoder: decoder) }
+  }
+
+  /// Decodes the body as `T`, then returns the part of it that `transform` picks.
+  func decoding<T: Decodable, R>(
+    _: T.Type, _ transform: @escaping @Sendable (T) -> R
+  ) -> @Sendable (HTTPResponse, Data) throws -> R {
+    { [decoder] _, data in try transform(data.decoded(as: T.self, decoder: decoder)) }
   }
 
   var ignoringBody: @Sendable (HTTPResponse, Data) throws -> Void {
@@ -142,24 +170,24 @@ extension AuthAPI {
   func signUp(
     email: String,
     password: String,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
-  ) throws -> AuthRequest<AuthResponse> {
+  ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
           email: email,
           password: password,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
           codeChallenge: pkce?.codeChallenge,
           codeChallengeMethod: pkce?.codeChallengeMethod
         )
       ),
-      decode: decoding(AuthResponse.self)
+      decode: decoding(SignUpResult.self) { [now] in $0.received(at: now()) }
     )
   }
 
@@ -167,39 +195,39 @@ extension AuthAPI {
     phone: String,
     password: String,
     channel: MessagingChannel,
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?
-  ) throws -> AuthRequest<AuthResponse> {
+  ) throws -> AuthRequest<SignUpResult> {
     try request(
       .post, "signup",
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
           password: password,
           phone: phone,
           channel: channel,
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(AuthResponse.self)
+      decode: decoding(SignUpResult.self) { [now] in $0.received(at: now()) }
     )
   }
 
   /// `POST /signup` with neither email nor phone, which the server treats as an anonymous
   /// sign-up. It always returns a session.
   func signInAnonymously(
-    data: [String: JSONValue]?,
+    userMetadata: JSONObject,
     captchaToken: String?
   ) throws -> AuthRequest<Session> {
     try request(
       .post, "signup",
-      body: encoder.encode(
+      body: encodeBody(
         SignUpRequest(
-          data: data,
+          data: userMetadata.nilIfEmpty,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
@@ -211,7 +239,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "password",
-      body: encoder.encode(
+      body: encodeBody(
         UserCredentials(
           email: email,
           password: password,
@@ -219,45 +247,64 @@ extension AuthAPI {
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(Session.self)
+      decode: decodingSession()
     )
   }
 
   /// `POST /token?grant_type=id_token`. Pass the user's access token to link the identity to
   /// that user instead of signing in.
-  func signInWithIdToken(
-    credentials: OpenIDConnectCredentials,
+  func signInWithIDToken(
+    credentials: IDTokenCredentials,
     linkingTo accessToken: String? = nil
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "id_token",
       authorization: accessToken.map(bearer),
-      body: encoder.encode(credentials),
-      decode: decoding(Session.self)
+      body: encodeBody(
+        IDTokenBody(
+          provider: credentials.provider.rawValue,
+          idToken: credentials.idToken,
+          accessToken: credentials.accessToken,
+          nonce: credentials.nonce,
+          gotrueMetaSecurity: credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          linkIdentity: accessToken != nil
+        )
+      ),
+      decode: decodingSession()
     )
   }
 
   func signInWithWeb3(credentials: Web3Credentials) throws -> AuthRequest<Session> {
     try token(
-      grantType: "web3", body: encoder.encode(credentials), decode: decoding(Session.self))
+      grantType: "web3",
+      body: encodeBody(
+        Web3Body(
+          chain: credentials.chain,
+          message: credentials.message,
+          signature: credentials.signature,
+          gotrueMetaSecurity: credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+        )
+      ),
+      decode: decodingSession()
+    )
   }
 
   func exchangeCodeForSession(
     authCode: String,
-    codeVerifier: String?
+    codeVerifier: String
   ) throws -> AuthRequest<Session> {
     try token(
       grantType: "pkce",
-      body: encoder.encode(["auth_code": authCode, "code_verifier": codeVerifier]),
-      decode: decoding(Session.self)
+      body: encodeBody(["auth_code": authCode, "code_verifier": codeVerifier]),
+      decode: decodingSession()
     )
   }
 
   func refreshSession(refreshToken: String) throws -> AuthRequest<Session> {
     try token(
       grantType: "refresh_token",
-      body: encoder.encode(UserCredentials(refreshToken: refreshToken)),
-      decode: decoding(Session.self)
+      body: encodeBody(UserCredentials(refreshToken: refreshToken)),
+      decode: decodingSession()
     )
   }
 
@@ -273,20 +320,17 @@ extension AuthAPI {
 extension AuthAPI {
   func signInWithOTP(
     email: String,
-    redirectTo: URL?,
-    shouldCreateUser: Bool,
-    data: [String: JSONValue]?,
-    captchaToken: String?,
+    options: EmailOTPOptions,
     pkce: PKCEChallenge?
   ) throws -> AuthRequest<Void> {
     try request(
-      .post, "otp", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      .post, "otp", query: redirectQuery(options.redirectTo),
+      body: encodeBody(
         OTPParams(
           email: email,
-          createUser: shouldCreateUser,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
+          createUser: options.shouldCreateUser,
+          data: options.userMetadata.nilIfEmpty,
+          gotrueMetaSecurity: options.captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
           codeChallenge: pkce?.codeChallenge,
           codeChallengeMethod: pkce?.codeChallengeMethod
         )
@@ -295,81 +339,58 @@ extension AuthAPI {
     )
   }
 
-  func signInWithOTP(
-    phone: String,
-    channel: MessagingChannel,
-    shouldCreateUser: Bool,
-    data: [String: JSONValue]?,
-    captchaToken: String?
-  ) throws -> AuthRequest<Void> {
+  func signInWithOTP(phone: String, options: PhoneOTPOptions) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "otp",
-      body: encoder.encode(
+      body: encodeBody(
         OTPParams(
           phone: phone,
-          createUser: shouldCreateUser,
-          channel: channel,
-          data: data,
-          gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+          createUser: options.shouldCreateUser,
+          channel: options.channel,
+          data: options.userMetadata.nilIfEmpty,
+          gotrueMetaSecurity: options.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: ignoringBody
+      decode: decoding(MessageIDBody.self) { $0.messageID }
     )
   }
 
+  /// `POST /verify` checks no captcha token, so the verify requests send none.
   func verifyOTP(
     email: String,
     token: String,
-    type: EmailOTPType,
-    redirectTo: URL?,
-    captchaToken: String?
-  ) throws -> AuthRequest<VerifyOTPResponse> {
+    type: EmailOTPType
+  ) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
-      body: encoder.encode(
-        VerifyOTPParams.email(
-          VerifyEmailOTPParams(
-            email: email,
-            token: token,
-            type: type,
-            redirectTo: redirectTo ?? defaultRedirectURL,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      body: encodeBody(
+        VerifyOTPParams.email(VerifyEmailOTPParams(email: email, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
     )
   }
 
   func verifyOTP(
     phone: String,
     token: String,
-    type: MobileOTPType,
-    captchaToken: String?
-  ) throws -> AuthRequest<VerifyOTPResponse> {
+    type: PhoneOTPType
+  ) throws -> AuthRequest<Session> {
     try request(
       .post, "verify",
-      body: encoder.encode(
-        VerifyOTPParams.mobile(
-          VerifyMobileOTPParams(
-            phone: phone,
-            token: token,
-            type: type,
-            gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
-          )
-        )
+      body: encodeBody(
+        VerifyOTPParams.phone(VerifyPhoneOTPParams(phone: phone, token: token, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decodingSession()
     )
   }
 
-  func verifyOTP(tokenHash: String, type: EmailOTPType) throws -> AuthRequest<VerifyOTPResponse> {
+  func verifyOTP(tokenHash: String, type: EmailOTPType) throws -> AuthRequest<VerifyOTPResult> {
     try request(
       .post, "verify",
-      body: encoder.encode(
+      body: encodeBody(
         VerifyOTPParams.tokenHash(VerifyTokenHashParams(tokenHash: tokenHash, type: type))
       ),
-      decode: decoding(VerifyOTPResponse.self)
+      decode: decoding(VerifyOTPBody.self) { [now] in $0.result.received(at: now()) }
     )
   }
 
@@ -382,7 +403,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<Void> {
     try request(
       .post, "resend", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         ResendEmailParams(
           type: type,
           email: email,
@@ -397,31 +418,31 @@ extension AuthAPI {
 
   func resend(
     phone: String,
-    type: ResendMobileType,
+    type: ResendPhoneType,
     captchaToken: String?
-  ) throws -> AuthRequest<ResendMobileResponse> {
+  ) throws -> AuthRequest<MessageID?> {
     try request(
       .post, "resend",
-      body: encoder.encode(
-        ResendMobileParams(
+      body: encodeBody(
+        ResendPhoneParams(
           type: type,
           phone: phone,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:))
         )
       ),
-      decode: decoding(ResendMobileResponse.self)
+      decode: decoding(MessageIDBody.self) { $0.messageID }
     )
   }
 
-  func resetPasswordForEmail(
-    _ email: String,
+  func resetPassword(
+    email: String,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
   ) throws -> AuthRequest<Void> {
     try request(
       .post, "recover", query: redirectQuery(redirectTo),
-      body: encoder.encode(
+      body: encodeBody(
         RecoverParams(
           email: email,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -444,17 +465,21 @@ extension AuthAPI {
   /// `POST /sso`. Unlike every other endpoint, GoTrue reads `redirect_to` and
   /// `skip_http_redirect` from the body here.
   func signInWithSSO(
-    providerId: String? = nil,
-    domain: String? = nil,
+    _ target: SSOTarget,
     redirectTo: URL?,
     captchaToken: String?,
     pkce: PKCEChallenge?
-  ) throws -> AuthRequest<SSOResponse> {
-    try request(
+  ) throws -> AuthRequest<URL> {
+    let (providerID, domain): (UUID?, String?) =
+      switch target {
+      case .domain(let domain): (nil, domain)
+      case .providerID(let id): (id, nil)
+      }
+    return try request(
       .post, "sso",
-      body: encoder.encode(
+      body: encodeBody(
         SignInWithSSORequest(
-          providerId: providerId,
+          providerID: providerID,
           domain: domain,
           redirectTo: redirectTo ?? defaultRedirectURL,
           gotrueMetaSecurity: captchaToken.map(AuthMetaSecurity.init(captchaToken:)),
@@ -463,7 +488,7 @@ extension AuthAPI {
           skipHttpRedirect: true
         )
       ),
-      decode: decoding(SSOResponse.self)
+      decode: decoding(URLBody.self) { $0.url }
     )
   }
 
@@ -492,17 +517,13 @@ extension AuthAPI {
     pkce: PKCEChallenge?,
     accessToken: String
   ) throws -> AuthRequest<URL> {
-    struct Response: Decodable {
-      let url: URL
-    }
-
     let url = try providerURL(
       url.appendingPathComponent("user/identities/authorize"), provider: provider, scopes: scopes,
       redirectTo: redirectTo, queryParams: queryParams, pkce: pkce, skipHTTPRedirect: true)
 
     return request(
       .get, url: url, authorization: bearer(accessToken),
-      decode: { [decoder] _, data in try data.decoded(as: Response.self, decoder: decoder).url })
+      decode: decoding(URLBody.self) { $0.url })
   }
 
   private func providerURL(
@@ -515,7 +536,8 @@ extension AuthAPI {
     skipHTTPRedirect: Bool
   ) throws -> URL {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      throw URLError(.badURL)
+      throw AuthError.invalidRequest(
+        "The sign-in URL cannot be built from \(url).", underlyingError: URLError(.badURL))
     }
 
     var queryItems = [URLQueryItem(name: "provider", value: provider.rawValue)]
@@ -543,7 +565,8 @@ extension AuthAPI {
     components.queryItems = queryItems
 
     guard let url = components.url else {
-      throw URLError(.badURL)
+      throw AuthError.invalidRequest(
+        "The sign-in URL cannot be built from \(components).", underlyingError: URLError(.badURL))
     }
 
     return url
@@ -560,28 +583,31 @@ extension AuthAPI {
   }
 
   func updateUser(
-    _ user: UserAttributes,
+    _ user: UpdateUser,
     redirectTo: URL?,
     pkce: PKCEChallenge?,
     accessToken: String
   ) throws -> AuthRequest<User> {
     var user = user
+    user.userMetadata = user.userMetadata?.nilIfEmpty
     user.codeChallenge = pkce?.codeChallenge
     user.codeChallengeMethod = pkce?.codeChallengeMethod
 
     return try request(
       .put, "user", query: redirectQuery(redirectTo), authorization: bearer(accessToken),
-      body: encoder.encode(user), decode: decoding(User.self))
+      body: encodeBody(user), decode: decoding(User.self))
   }
 
   func unlinkIdentity(_ identity: UserIdentity, accessToken: String) -> AuthRequest<Void> {
     request(
-      .delete, "user/identities/\(identity.identityId)", authorization: bearer(accessToken),
+      .delete, "user/identities/\(identity.id)", authorization: bearer(accessToken),
       decode: ignoringBody)
   }
 
   func jwks() -> AuthRequest<JWKS> {
-    request(.get, ".well-known/jwks.json", decode: decoding(JWKS.self))
+    request(.get, ".well-known/jwks.json") { _, data in
+      try data.decoded(as: JWKS.self, decoder: JSONDecoder())
+    }
   }
 }
 
@@ -591,26 +617,26 @@ extension AuthAPI {
   func oauthAuthorizationDetails(
     id: String,
     accessToken: String
-  ) -> AuthRequest<OAuthAuthorizationDetailsResponse> {
+  ) -> AuthRequest<OAuthAuthorizationDetailsResult> {
     request(
       .get,
       url: url.appendingPathComponent("oauth/authorizations").appendingPathComponent(id),
       authorization: bearer(accessToken),
-      decode: decoding(OAuthAuthorizationDetailsResponse.self))
+      decode: decoding(OAuthAuthorizationDetailsResult.self))
   }
 
   func oauthConsent(
-    authorizationId: String,
+    authorizationID: String,
     action: String,
     accessToken: String
   ) throws -> AuthRequest<OAuthRedirect> {
     try request(
       .post,
       url: url.appendingPathComponent("oauth/authorizations")
-        .appendingPathComponent(authorizationId)
+        .appendingPathComponent(authorizationID)
         .appendingPathComponent("consent"),
       authorization: bearer(accessToken),
-      body: encoder.encode(["action": action]), decode: decoding(OAuthRedirect.self))
+      body: encodeBody(["action": action]), decode: decoding(OAuthRedirect.self))
   }
 
   func oauthGrants(accessToken: String) -> AuthRequest<[OAuthGrant]> {
@@ -619,10 +645,10 @@ extension AuthAPI {
       decode: decoding([OAuthGrant].self))
   }
 
-  func revokeOAuthGrant(clientId: UUID, accessToken: String) -> AuthRequest<Void> {
+  func revokeOAuthGrant(clientID: UUID, accessToken: String) -> AuthRequest<Void> {
     request(
       .delete, "user/oauth/grants",
-      query: [URLQueryItem(name: "client_id", value: clientId.uuidString)],
+      query: [URLQueryItem(name: "client_id", value: clientID.uuidString)],
       authorization: bearer(accessToken), decode: ignoringBody)
   }
 }

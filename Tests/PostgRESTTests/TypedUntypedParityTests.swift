@@ -79,8 +79,8 @@ struct TypedUntypedParityTests {
     line: UInt = #line,
     column: UInt = #column
   ) async throws {
-    let typedCapture = QueryCapture(body: body, responseHeaders: responseHeaders)
-    let untypedCapture = QueryCapture(body: body, responseHeaders: responseHeaders)
+    let typedCapture = try QueryCapture(body: body, responseHeaders: responseHeaders)
+    let untypedCapture = try QueryCapture(body: body, responseHeaders: responseHeaders)
     try await typed(typedCapture.client)
     try await untyped(untypedCapture.client)
     var expected = Wire(untypedCapture)

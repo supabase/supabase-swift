@@ -19,13 +19,22 @@ public import HTTPTypes
 ///     (HTTPResponse(status: .ok), HTTPBody(Data("[]".utf8)))
 ///   }
 /// }
-/// let client = SupabaseClient(
+/// let client = try SupabaseClient(
 ///   supabaseURL: url, supabaseKey: key,
-///   options: .init(global: .init(http: .init(transport: RecordingTransport())))
+///   configuration: .init(global: .init(http: .init(transport: RecordingTransport())))
 /// )
 /// ```
 ///
 /// The default implementation is ``URLSessionTransport``.
+///
+/// ## Isolation
+///
+/// The SDK enables `NonisolatedNonsendingByDefault`, so it calls ``send(_:body:)`` on the actor
+/// that started the request: the main actor when your UI code calls the SDK, or an internal SDK
+/// actor for a request the SDK starts itself, such as a token refresh. When your `send` is
+/// `nonisolated(nonsending)`, the default in a module that enables the same feature, it runs on
+/// that actor until it first suspends. Do not block in it: await asynchronous I/O, and move
+/// CPU-heavy work to a `@concurrent` function.
 public protocol ClientTransport: Sendable {
   /// Sends a request and returns the response head as soon as it arrives. The body streams.
   ///
@@ -35,6 +44,8 @@ public protocol ClientTransport: Sendable {
   ///   - body: The request body, or `nil` for a bodiless request. Check
   ///     ``HTTPBody/length`` to pick `Content-Length` versus chunked framing.
   /// - Returns: The response head and body. Return `nil` for an empty body.
+  /// - Throws: The transport's error when no response head arrives, or `CancellationError` when
+  ///   the task is cancelled.
   func send(_ request: HTTPTypes.HTTPRequest, body: HTTPBody?) async throws -> (
     HTTPTypes.HTTPResponse, HTTPBody?
   )
@@ -61,6 +72,9 @@ public protocol ClientTransport: Sendable {
 ///
 /// A middleware that retries must check ``HTTPBody/iterationBehavior`` and skip the retry
 /// when it is ``HTTPBody/IterationBehavior/single``.
+///
+/// Like a ``ClientTransport``, a middleware can run on the actor that started the request until
+/// it first suspends, so it must not block.
 public protocol ClientMiddleware: Sendable {
   /// Handles one exchange.
   ///
@@ -70,6 +84,8 @@ public protocol ClientMiddleware: Sendable {
   ///   - next: The rest of the chain, ending in the transport.
   ///     It runs on the caller's executor whether or not your module enables
   ///     `NonisolatedNonsendingByDefault`, so spell the type as written here.
+  /// - Returns: The response head and body, from `next` or from the middleware itself.
+  /// - Throws: Whatever `next` throws, or the middleware's own error to fail the request.
   func intercept(
     _ request: HTTPTypes.HTTPRequest,
     body: HTTPBody?,

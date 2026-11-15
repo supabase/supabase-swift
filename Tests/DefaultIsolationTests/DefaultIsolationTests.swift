@@ -16,13 +16,12 @@ import Testing
 /// constructed. The SDK modules themselves stay nonisolated.
 @Suite
 struct DefaultIsolationTests {
-  /// `AuthLocalStorage` refines `Sendable`, so its conformance cannot be main-actor isolated. A
-  /// consumer under default isolation opts the type out with `nonisolated`, as an app would. An
-  /// explicit storage also keeps this target building on Linux, which has no default storage.
-  nonisolated struct NoopAuthStorage: AuthLocalStorage {
-    func store(key: String, value: Data) throws {}
-    func retrieve(key: String) throws -> Data? { nil }
-    func remove(key: String) throws {}
+  /// `AuthStorage` refines `Sendable`, so its conformance cannot be main-actor isolated. A
+  /// consumer under default isolation opts the type out with `nonisolated`, as an app would.
+  nonisolated struct NoopAuthStorage: AuthStorage {
+    func load(key: String) async throws -> Data? { nil }
+    func save(_ data: Data, key: String) async throws {}
+    func remove(key: String) async throws {}
   }
 
   struct Prompt: Encodable {
@@ -34,10 +33,10 @@ struct DefaultIsolationTests {
   }
 
   final class Model {
-    let client = SupabaseClient(
+    let client = try! SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "anon-key",
-      options: SupabaseClientOptions(auth: .init(storage: NoopAuthStorage()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: NoopAuthStorage()))
     )
     var rows: [String] = []
 
@@ -47,6 +46,15 @@ struct DefaultIsolationTests {
       rows = try await client.from("table").select().execute().value
       let channel = await client.channel("room")
       for await status in await channel.statusChanges() { _ = status }
+      for await message in await channel.broadcasts(event: "answer") {
+        _ = try message.decode(as: Answer.self)
+      }
+      for await change in await channel.postgresChanges(table: "answers") {
+        _ = try change.record?.decode(as: Answer.self)
+      }
+      for await change in await channel.postgresChanges(of: Answer.self, table: "answers") {
+        _ = try change.row()
+      }
       try await client.storage.from("bucket").upload(path: "key", data: Data())
       _ = try await client.functions.invoke("function")
       let answer: Answer = try await client.functions.invoke(
@@ -55,7 +63,7 @@ struct DefaultIsolationTests {
       _ = try await client.functions.invoke("function", as: Answer.self)
       let streamed = try await client.functions.stream("function")
       for try await chunk in streamed.body { _ = chunk }
-      for await (event, session) in client.auth.authStateChanges { _ = (event, session) }
+      for await change in client.auth.events() { _ = change }
     }
   }
 

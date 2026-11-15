@@ -22,6 +22,7 @@ extension URLSession {
   ///   - onComplete: Optional callback when a task completes (with or without error).
   ///   - onWebSocketTaskOpened: Optional callback when a WebSocket connection opens successfully.
   ///   - onWebSocketTaskClosed: Optional callback when a WebSocket connection closes.
+  ///   - wrappedDelegate: An optional delegate that receives the auth challenges.
   /// - Returns: A configured URLSession instance.
   static func sessionWithConfiguration(
     _ configuration: URLSessionConfiguration,

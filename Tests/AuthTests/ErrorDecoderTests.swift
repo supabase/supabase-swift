@@ -50,10 +50,10 @@ struct ErrorDecoderTests {
     let error = try Self.decode(status: 400, body: body)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .invalidCredentials)
+    #expect(error.code == .invalidCredentials)
     #expect(error.message == "Invalid login credentials")
     #expect(error.oauthError == nil)
-    #expect(error.response?.statusCode == 400)
+    #expect(error.response?.status == 400)
     #expect(error.response?.body == Data(body.utf8))
   }
 
@@ -67,7 +67,7 @@ struct ErrorDecoderTests {
         """#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .weakPassword)
+    #expect(error.code == .weakPassword)
     #expect(error.weakPasswordReasons == ["length", "characters", "pwned"])
   }
 
@@ -78,7 +78,7 @@ struct ErrorDecoderTests {
       body: #"{"code":403,"error_code":"session_not_found","msg":"Session not found"}"#)
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .sessionNotFound)
+    #expect(error.code == .sessionNotFound)
     #expect(error.message == "Session not found")
   }
 
@@ -88,7 +88,7 @@ struct ErrorDecoderTests {
       status: 500, body: #"{"code":500,"msg":"Error sending confirmation email"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .unknown)
+    #expect(error.code == nil)
     #expect(error.message == "Error sending confirmation email")
   }
 
@@ -100,7 +100,7 @@ struct ErrorDecoderTests {
       status: 400, body: #"{"code":"invalid_credentials","message":"Invalid login credentials"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode == .invalidCredentials)
+    #expect(error.code == .invalidCredentials)
     #expect(error.message == "Invalid login credentials")
     #expect(error.oauthError == nil)
   }
@@ -114,7 +114,7 @@ struct ErrorDecoderTests {
          "weak_password":{"reasons":["pwned"]}}
         """#)
 
-    #expect(error.errorCode == .weakPassword)
+    #expect(error.code == .weakPassword)
     #expect(error.weakPasswordReasons == ["pwned"])
   }
 
@@ -126,7 +126,7 @@ struct ErrorDecoderTests {
       request: Self.refreshRequest)
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .refreshTokenNotFound)
+    #expect(error.code == .refreshTokenNotFound)
     #expect(error.message == "Invalid Refresh Token")
   }
 
@@ -136,7 +136,7 @@ struct ErrorDecoderTests {
       status: 400, body: #"{"code":"added_next_release","message":"Something new"}"#)
 
     #expect(error.kind == .server)
-    #expect(error.errorCode.rawValue == "added_next_release")
+    #expect(error.code?.rawValue == "added_next_release")
   }
 
   // MARK: OAuth-style shape
@@ -150,7 +150,7 @@ struct ErrorDecoderTests {
 
     #expect(error.kind == .server)
     #expect(error.oauthError == "invalid nonce")
-    #expect(error.errorCode == .unknown)
+    #expect(error.code == nil)
     #expect(error.message == "Nonces mismatch")
   }
 
@@ -195,7 +195,7 @@ struct ErrorDecoderTests {
 
     #expect(error.kind == .server)
     #expect(error.message == "HTTP 500: \(HTTPURLResponse.localizedString(forStatusCode: 500))")
-    #expect(error.errorCode == .unexpectedFailure)
+    #expect(error.code == nil)
     #expect(error.response?.body == Data(body.utf8))
   }
 
@@ -206,7 +206,7 @@ struct ErrorDecoderTests {
       body: #"{"code":"invalid_credentials","message":"Not from GoTrue"}"#,
       contentType: "text/plain")
 
-    #expect(error.errorCode == .unexpectedFailure)
+    #expect(error.code == nil)
     #expect(error.message == "HTTP 502: \(HTTPURLResponse.localizedString(forStatusCode: 502))")
   }
 
@@ -236,7 +236,7 @@ struct ErrorDecoderTests {
     )
 
     #expect(error.kind == .sessionInvalidated)
-    #expect(error.errorCode == .sessionExpired)
+    #expect(error.code == .sessionExpired)
   }
 
   @Test
@@ -251,11 +251,11 @@ struct ErrorDecoderTests {
 
   @Test
   func undecodableSuccessBodyIsADecodingError() async throws {
-    let sut = AuthClient(
+    let sut = try AuthClient(
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in
             (
@@ -267,7 +267,7 @@ struct ErrorDecoderTests {
     try await sut.seedSession(.valid)
 
     let error = await #expect(throws: AuthError.self) {
-      try await sut.mfa.unenroll(params: MFAUnenrollParams(factorId: UUID()))
+      try await sut.mfa.unenroll(factorID: UUID())
     }
     #expect(error?.kind == .decoding)
   }
@@ -279,19 +279,17 @@ struct ErrorDecoderTests {
     let body: String
     let request: HTTPTypes.HTTPRequest
     let kind: AuthError.Kind
-    let isRetryable: Bool
     let invalidatesSession: Bool
 
     init(
       _ status: Int, _ body: String,
       on request: HTTPTypes.HTTPRequest = ErrorDecoderTests.signInRequest,
-      kind: AuthError.Kind, isRetryable: Bool = false, invalidatesSession: Bool = false
+      kind: AuthError.Kind, invalidatesSession: Bool = false
     ) {
       self.status = status
       self.body = body
       self.request = request
       self.kind = kind
-      self.isRetryable = isRetryable
       self.invalidatesSession = invalidatesSession
     }
 
@@ -317,17 +315,16 @@ struct ErrorDecoderTests {
     Row(
       400, #"{"error":"invalid_grant","error_description":"m"}"#, on: refreshRequest,
       kind: .sessionInvalidated, invalidatesSession: true),
-    Row(409, #"{"code":"conflict","message":"m"}"#, kind: .server, isRetryable: true),
+    Row(409, #"{"code":"conflict","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_request_rate_limit","message":"m"}"#, kind: .server, isRetryable: true),
+      429, #"{"code":"over_request_rate_limit","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_email_send_rate_limit","message":"m"}"#, kind: .server,
-      isRetryable: true),
+      429, #"{"code":"over_email_send_rate_limit","message":"m"}"#, kind: .server),
     Row(
-      429, #"{"code":"over_sms_send_rate_limit","message":"m"}"#, kind: .server, isRetryable: true),
-    Row(500, #"{"code":"unexpected_failure","message":"m"}"#, kind: .server, isRetryable: true),
-    Row(520, "", kind: .server, isRetryable: true),
-    Row(408, #"{"code":"request_timeout","message":"m"}"#, kind: .server, isRetryable: true),
+      429, #"{"code":"over_sms_send_rate_limit","message":"m"}"#, kind: .server),
+    Row(500, #"{"code":"unexpected_failure","message":"m"}"#, kind: .server),
+    Row(520, "", kind: .server),
+    Row(408, #"{"code":"request_timeout","message":"m"}"#, kind: .server),
     Row(403, #"{"code":"bad_jwt","message":"m"}"#, kind: .server),
     Row(422, #"{"code":"weak_password","message":"m"}"#, kind: .server),
     Row(400, #"{"code":"invalid_credentials","message":"m"}"#, kind: .server),
@@ -348,26 +345,11 @@ struct ErrorDecoderTests {
     let error = try Self.decode(status: row.status, body: row.body, request: row.request)
 
     #expect(error.kind == row.kind)
-    #expect(error.isRetryable == row.isRetryable)
     #expect(error.invalidatesSession == row.invalidatesSession)
   }
 
-  @Test
-  func transportErrorIsRetryableAndKeepsTheSession() {
-    let error = AuthError(
-      kind: .transport, message: "offline", underlyingError: URLError(.notConnectedToInternet))
-
-    #expect(error.isRetryable)
-    #expect(!error.invalidatesSession)
-  }
-
-  @Test
-  func decodingErrorIsNotRetryable() {
-    let error = AuthError(
-      kind: .decoding, message: "bad body",
-      response: HTTPErrorResponse(statusCode: 200, headers: [:], body: Data()))
-
-    #expect(!error.isRetryable)
-    #expect(!error.invalidatesSession)
+  @Test(arguments: [AuthError.Kind.transport, .decoding])
+  func clientSideFailureKeepsTheSession(kind: AuthError.Kind) {
+    #expect(!AuthError(kind: kind, message: "m").invalidatesSession)
   }
 }

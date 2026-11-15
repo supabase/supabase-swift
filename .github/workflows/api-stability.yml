@@ -17,11 +17,14 @@ permissions:
 jobs:
   api-stability:
     name: API stability check
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: blacksmith-6vcpu-macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # Package.swift declares swift-tools-version 6.4, so the check needs the Swift 6.4 toolchain.
+      - name: Select Xcode 27.0
+        run: sudo xcode-select -s /Applications/Xcode_27.0.app
       - name: Check for breaking API changes
         id: api-check
         env:
@@ -36,6 +39,7 @@ jobs:
           # Run the breaking changes check.
           # stdout receives only the filtered "API breakage:" lines (see the script).
           # stderr (full build log) flows directly to the CI log for debugging.
+          # Exit status: 0 = no breakage, 1 = breakage found, anything else = the check could not run.
           set +e
           API_OUTPUT=$(bash scripts/check-for-breaking-api-changes.sh)
           API_EXIT_CODE=$?
@@ -44,6 +48,9 @@ jobs:
           if [ $API_EXIT_CODE -eq 0 ]; then
             echo "✅ No breaking API changes detected"
             echo "has_breaking_changes=false" >> $GITHUB_OUTPUT
+          elif [ $API_EXIT_CODE -ne 1 ]; then
+            echo "::error title=API stability check could not run::The API breakage tool failed (exit $API_EXIT_CODE) before it compared any API. This is not a breaking-change report. See the step log for the cause."
+            exit 1
           else
             echo "⚠️ Breaking API changes detected"
             echo ""

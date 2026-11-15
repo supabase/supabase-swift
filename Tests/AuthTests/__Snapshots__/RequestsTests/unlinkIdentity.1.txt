@@ -1,7 +1,0 @@
-curl \
-	--request DELETE \
-	--header "Apikey: dummy.api.key" \
-	--header "Authorization: Bearer accesstoken" \
-	--header "X-Client-Info: gotrue-swift/x.y.z" \
-	--header "X-Supabase-Api-Version: 2024-01-01" \
-	"http://localhost:54321/auth/v1/user/identities/E621E1F8-C36C-495A-93FC-0C247A3E6E5F"

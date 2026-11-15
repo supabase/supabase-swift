@@ -32,7 +32,7 @@ struct PostgrestRawQueryTests {
 
   @Test
   func csvAsksForCSVAndReturnsTheText() async throws {
-    let capture = QueryCapture(body: "id\n1\n")
+    let capture = try QueryCapture(body: "id\n1\n")
     let csv = try await capture.client.from(Todo.self).select().csv().execute().value
     #expect(csv == "id\n1\n")
     #expect(capture.header("Accept") == "text/csv")
@@ -40,21 +40,21 @@ struct PostgrestRawQueryTests {
 
   @Test
   func stripNullsBeforeCSVIsNotSent() async throws {
-    let capture = QueryCapture(body: "id\n1\n")
+    let capture = try QueryCapture(body: "id\n1\n")
     _ = try await capture.client.from(Todo.self).select().stripNulls().csv().execute()
     #expect(capture.header("Accept") == "text/csv")
   }
 
   @Test
   func geojsonAsksForGeoJSON() async throws {
-    let capture = QueryCapture(body: "{}")
+    let capture = try QueryCapture(body: "{}")
     _ = try await capture.client.from(Todo.self).select().geojson().execute()
     #expect(capture.header("Accept") == "application/geo+json")
   }
 
   @Test
   func explainPlansTheMediaTypeTheQueryWouldHaveAskedFor() async throws {
-    let capture = QueryCapture(body: "plan")
+    let capture = try QueryCapture(body: "plan")
     _ = try await capture.client.from(Todo.self).select().single()
       .explain(analyze: true, verbose: true, format: .json).execute()
     #expect(

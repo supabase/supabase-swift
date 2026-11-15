@@ -98,7 +98,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func requiringRendersTheTargetQuery() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     let me = 42
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithComments.self)
@@ -122,11 +122,13 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func anOperandWithNoJSONFormInAScopeFailsTheQuery() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     await #expect(throws: PostgrestError.self) {
       try await capture.client.from(Todo.self)
         .select(TodoWithComments.self)
-        .embedded(\.comments) { $0.where { $0.meta.containsJSON(["n": .double(.nan)]) } }
+        .embedded(\.comments) {
+          $0.where { $0.meta.containsJSON(["n": .number(JSONNumber("1e-400")!)]) }
+        }
         .execute()
     }
     #expect(capture.query == nil)
@@ -134,7 +136,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func embeddedLeavesTheSelectEntryAlone() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithComments.self)
       .embedded(\.comments) { $0.where { $0.approved.eq(true) } }
@@ -148,7 +150,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func nestedScopesRenderDottedPaths() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithThreads.self)
       .embedded(\.comments) {
@@ -165,7 +167,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func nestedRequiringMarksTheInnerEntryOnly() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithThreads.self)
       .embedded(\.comments) {
@@ -182,7 +184,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func repeatedRequiringMarksTheEntryOnce() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithComments.self)
       .requiring(\.comments) { $0.limit(1) }
@@ -198,7 +200,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func orderKeysMergeWithinAScope() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithComments.self)
       .embedded(\.comments) { $0.order { $0.createdAt.desc() }.order { $0.id } }
@@ -209,7 +211,7 @@ struct PostgrestEmbeddedScopeTests {
 
   @Test
   func rangeRendersOffsetAndLimit() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select(TodoWithComments.self)
       .embedded(\.comments) { $0.range(10...19) }
@@ -223,16 +225,16 @@ struct PostgrestEmbeddedScopeTests {
     let body = """
       {"code":"PGRST201","message":"Could not embed because more than one relationship was found for 'todos' and 'comments'","details":[{"cardinality":"one-to-many","embedding":"todos with comments","relationship":"comments_todo_id_fkey using todos(id) and comments(todo_id)"}],"hint":"Try changing 'comments' to one of the following: 'comments!comments_todo_id_fkey', 'comments!comments_parent_todo_id_fkey'. Find the desired relationship in the 'details' key."}
       """
-    let capture = QueryCapture(body: body, status: .multipleChoices)
+    let capture = try QueryCapture(body: body, status: .multipleChoices)
 
     await #expect { () async throws in
       _ = try await capture.client.from("todos").select("id,comments(*)").execute()
     } throws: { error in
       guard let error = error as? PostgrestError else { return false }
       return error.kind == .server
-        && error.serverError?.code == "PGRST201"
+        && error.code == "PGRST201"
         && error.serverError?.hint?.contains("comments!comments_todo_id_fkey") == true
-        && error.response?.statusCode == 300
+        && error.response?.status == 300
     }
   }
 }

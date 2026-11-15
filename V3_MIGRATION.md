@@ -4,17 +4,18 @@ This guide moves an app from supabase-swift v2 (`2.55.4`) to v3. This file cover
 that apply to every module and to `SupabaseClient`; each module has its own file for the rest.
 
 > [!NOTE]
-> v3 is in prerelease (alpha). The Auth and Realtime APIs can still change before the final
-> release.
+> v3 is in prerelease (alpha). APIs can still change before the final release.
 
 ## How to migrate
 
 1. Install Xcode 26.0 or later (Swift 6.2 or later).
 2. Update the package requirement:
 
+   <!-- x-release-please-start-version -->
    ```swift
    .package(url: "https://github.com/supabase/supabase-swift", from: "3.0.0-alpha.1")
    ```
+   <!-- x-release-please-end -->
 
 3. Build. Expect many compile errors.
 4. Fix the errors in [Changes in every module](#changes-in-every-module) and
@@ -29,11 +30,11 @@ that apply to every module and to `SupabaseClient`; each module has its own file
 
 | Module | Guide | Status |
 | --- | --- | --- |
-| Auth | [Auth.md](docs/migrations/v3/Auth.md) | still changing |
+| Auth | [Auth.md](docs/migrations/v3/Auth.md) | ready for feedback |
 | PostgREST | [PostgREST.md](docs/migrations/v3/PostgREST.md) | ready for feedback |
 | Storage | [Storage.md](docs/migrations/v3/Storage.md) | ready for feedback |
 | Functions | [Functions.md](docs/migrations/v3/Functions.md) | ready for feedback |
-| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | still changing |
+| Realtime | [Realtime.md](docs/migrations/v3/Realtime.md) | ready for feedback |
 
 ## Changes in every module
 
@@ -57,7 +58,7 @@ Changes that still compile but behave differently. Check each one by hand.
   through one shared policy with jittered backoff, and they honor `Retry-After`. Each retry runs
   your `ClientMiddleware` and `ClientTransport` again. Storage reads now retry (pass
   `retryEnabled: false` to stop it). PostgREST no longer retries an error that your own transport,
-  middleware or `accessToken` closure throws.
+  middleware or token provider throws.
 - **Timeouts come from the SDK.** The SDK sets the request timeout itself: 60 seconds, or
   150 seconds for Functions. `URLSessionConfiguration.timeoutIntervalForRequest` has no effect on
   SDK requests. Set `HTTPClientConfiguration(timeout:)` instead.
@@ -66,32 +67,125 @@ Changes that still compile but behave differently. Check each one by hand.
   `HTTPBody(_:length:iterationBehavior: .single)`. A `.single` body with `length: .known(n)` must
   yield exactly `n` bytes, or the request fails with `HTTPBodyLengthMismatchError`. Search for
   `iterationBehavior: .single`.
+- **`X-Client-Info` names the platform in every module.** A standalone client now sends
+  `<module>-swift/<version>; platform=…; platform-version=…; runtime=swift; runtime-version=…`, as
+  `SupabaseClient` already did. A standalone `RealtimeClient` also sends this value as the `version`
+  of each channel join. An `X-Client-Info` header that you set still wins. On Linux and Android,
+  `platform-version` is now the kernel release (for example `6.8.0-45-generic`), not the whole
+  `/proc/version` line. Parameter values are trimmed, a value that is empty after trimming is left
+  out, and `;`, `%` and characters outside printable ASCII are percent-encoded. Search for code that parses this header, for example in a middleware or on your server.
+
+- **`JSONValue` numbers keep their exact digits.** A JSON number is now `.number(JSONNumber)`.
+  Two numbers with the same value are equal, so `JSONValue(1) == JSONValue(1.0)`. `doubleValue`
+  returns a value for every number, also an integer. `value` returns a `Decimal` for a number that
+  neither `Int` nor `Double` holds exactly. A number with a fraction, such as
+  `12345678901234567.89`, no longer decodes as a cut-off integer. See
+  [JSONValue numbers](#jsonvalue-numbers-keep-their-exact-digits).
 
 ### Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
 | `AnyJSON` | `JSONValue` |
+| `AnyJSON.integer(Int)`, `AnyJSON.double(Double)` | `JSONValue.number(JSONNumber)`; see [JSONValue numbers](#jsonvalue-numbers-keep-their-exact-digits) |
+| `AnyJSON.encoder`, `AnyJSON.decoder` | removed; see [Default coders](#default-coders) |
 | `SupabaseLogger`, `SupabaseLogMessage`, `SupabaseLogLevel`, `OSLogSupabaseLogger` | `Logging.Logger` from swift-log |
 | `AuthClient.FetchHandler`, `PostgrestClient.FetchHandler`, `FunctionsClient.FetchHandler` | `any ClientTransport` |
 | `StorageHTTPSession` | `any ClientTransport` |
 | `fetch:` argument on `AuthClient`, `AuthClient.Configuration`, `PostgrestClient`, `PostgrestClient.Configuration`, `FunctionsClient`, `RealtimeClientOptions` | `http: HTTPClientConfiguration` |
-| `StorageClientConfiguration(session:)` | `StorageClientConfiguration(http:)` |
+| `StorageClientConfiguration(session:)` | `StorageClient.Configuration(http:)` |
 | `HTTPURLResponse` in public signatures (for example `PostgrestResponse.response`) | `HTTPResponse` (swift-http-types) |
 | `HTTPError` | the module error, with `response: HTTPErrorResponse?` |
+| `PostgrestError` through `import Auth`, `Functions`, `Realtime` or `Storage` | `import PostgREST` or `Supabase` |
+| `ObservationToken` | removed; cancel the task that reads the stream |
+| `headers: [String: String]` on `PostgrestClient.Configuration`, `RealtimeClientOptions`, `GlobalOptions`, and `SupabaseClient` | `headers: HTTPFields`; write each key as an `HTTPField.Name`, for example `[.apikey: key]` or `[HTTPField.Name("x-app")!: "demo"]` |
+| `HTTPField.Name("apikey")!` | `.apikey` |
+| Auth `ErrorCode`, `AuthError.errorCode`; PostgREST `PostgrestError.code: String?` | `code: <Module>Error.Code?` on every module error |
+| Storage `StorageError.statusCode: String?`, `StorageError.error` | `serverError?.statusCode: Int?`, `serverError?.error`; `code` holds only the body's `code` key |
 
 Naming rules applied across all modules (the module tables list each symbol):
 
 - A method that only reads a value drops its `get` prefix: `getPublicURL` is `publicURL`.
 - An argument that names an identifier is `id:`: `deleteClient(clientId:)` is
   `deleteClient(id:)`.
-- A Boolean property reads as an assertion: `autoRefreshToken` is `automaticallyRefreshesToken`.
+- An acronym keeps its capitals in a public name: `ID`, `URL`, `URI`, `JWT` and `OTP`, as in
+  `versionID`, `redirectURIs` and `factorID`. `supabase-typegen` follows the rule when it names a
+  property from a column: `channel_id` becomes `channelID`, so regenerate your models and rename
+  their uses.
+- A Boolean property reads as an assertion: `useNewHostname` is `usesNewHostname`.
+- A concept has one type and one name, in requests and in responses. Links are `URL`, a typed
+  value the SDK accepts is also the type it returns (`CacheControl`, `WebSocketCloseCode`), and
+  metadata is `JSONObject`: `User.actionLink` is a `URL?`, `ObjectInfo.version` is `versionID`.
 - Enum-like values with an open set of cases are structs. A `switch` over one needs `default:`.
+  Each one has `rawValue`, `init(rawValue:)` and a literal initializer, and no other
+  initializer: `ErrorCode("x")` is `AuthError.Code(rawValue: "x")` or the literal `"x"`.
+
+### Default coders
+
+`JSONEncoder.supabase()` and `JSONDecoder.supabase()` are public. They write and read `Date` the
+way Postgres does: ISO 8601 with fractional seconds, with or without an offset. Foundation's
+`.iso8601` strategy reads neither form. Each call returns a new coder. To change one setting, start
+from them so dates still work. The shared `AnyJSON.encoder`, `AnyJSON.decoder`, and
+`PostgrestClient.Configuration.jsonEncoder` and `.jsonDecoder` are gone.
+
+Every per-call `encoder:` and `decoder:` parameter is optional. `nil` uses the client's configured
+coder, or `JSONEncoder.supabase()` / `JSONDecoder.supabase()` where the client has none.
+
+```swift
+// v2
+let decoder = AnyJSON.decoder
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)  // payload: JSONObject
+
+// v3
+let decoder = JSONDecoder.supabase()
+decoder.keyDecodingStrategy = .convertFromSnakeCase
+let user = try payload.decode(as: User.self, decoder: decoder)
+```
+
+### `JSONValue` numbers keep their exact digits
+
+`.integer` and `.double` are one case, `.number(JSONNumber)`. `JSONNumber` keeps every digit, so a
+`numeric` value or a `UInt64` above `Int.max` reaches your `Decimal` or `UInt64` field unchanged.
+Read it with `intValue` or `decimalValue` (exact, or `nil`) or `doubleValue` (the nearest `Double`).
+A literal still works: `["count": 1, "ratio": 0.5]`.
+
+```swift
+// v2
+let count = AnyJSON.integer(n)
+switch value {
+case .integer(let int): print(int)
+case .double(let double): print(double)
+default: break
+}
+
+// v3
+let count = JSONValue.number(JSONNumber(n))
+switch value {
+case .number(let number): print(number.intValue.map(String.init) ?? number.description)
+default: break
+}
+```
+
+A `Double` that is NaN or infinite has no JSON form, so `JSONNumber(_: Double)` returns `nil` for
+it. A number decoded from JSON keeps at most 38 significant digits.
 
 ### Minimum toolchain: Xcode 26 and Swift 6.2
 
 v3 needs Xcode 26.0 or later and Swift 6.2 or later. v2 needed Xcode 16.4 and Swift 6.1. No
 source change is needed for this item.
+
+### Dependencies: swift-crypto 4.0.0 or later
+
+The minimum version of swift-crypto moves from 3.0.0 to 4.0.0. Auth now also depends on the
+`CryptoExtras` product of swift-crypto, which it uses to verify RS256 tokens. swift-crypto 4.0.0
+is the first release that ships this product. Every app that uses the package needs this version,
+not only apps that use Auth. If your app pins swift-crypto below 4.0.0, raise the pin, or the
+package fails to resolve.
+
+Some packages cap swift-crypto below 4.0.0. For example, jwt-kit 4.x allows only
+`"2.0.0"..<"4.0.0"`. Move such a package to a release that allows swift-crypto 4, such as
+jwt-kit 5.
 
 ### All deprecated APIs are removed
 
@@ -120,9 +214,9 @@ import Logging
 
 var logger = Logger(label: "myapp")
 logger.logLevel = .debug
-let client = SupabaseClient(
+let client = try SupabaseClient(
   supabaseURL: url, supabaseKey: key,
-  options: .init(global: .init(logger: logger))
+  configuration: .init(global: .init(logger: logger))
 )
 ```
 
@@ -154,9 +248,9 @@ let storage = SupabaseStorageClient(
 
 // v3
 let http = HTTPClientConfiguration(transport: URLSessionTransport(session: session))
-let database = PostgrestClient(url: databaseURL, http: http)
-let storage = StorageClient(
-  configuration: StorageClientConfiguration(url: storageURL, headers: headers, http: http)
+let database = try PostgrestClient(configuration: .init(url: databaseURL, http: http))
+let storage = try StorageClient(
+  configuration: .init(url: storageURL, headers: headers, http: http)
 )
 ```
 
@@ -182,9 +276,13 @@ that retries must not retry a body whose `iterationBehavior` is `.single`. `impo
 brings in the `HTTPTypes` names (`HTTPRequest`, `HTTPResponse`, `HTTPFields`). If another library
 exports the same names, write `HTTPTypes.HTTPRequest`.
 
-### `HTTPResponse` replaces `HTTPURLResponse`
+### Response wrappers replace `HTTPURLResponse`
 
-`HTTPResponse` has `status` and `headerFields`. It has no URL.
+Every response wrapper has the same fields: `status` (`HTTPResponse.Status`), `headers`
+(`HTTPFields`), `body` (`Data`, or `HTTPBody` when it streams) and `requestID`. This applies to
+`PostgrestResponse`, `FunctionResponse`, `FunctionStreamResponse`, Storage's `DownloadResponse`,
+and the `HTTPErrorResponse` that every error carries. None of them has a URL. Each has a public
+memberwise init, so tests and previews can build one.
 
 ```swift
 // v2
@@ -192,18 +290,37 @@ let etag = response.response.value(forHTTPHeaderField: "ETag")
 let code = response.response.statusCode
 
 // v3
-let etag = response.response.headerFields[.eTag]
-let code = response.response.status.code
+let etag = response.headers[.eTag]
+let code = response.status.code
 ```
 
-If a dependency needs an `HTTPURLResponse`, use the failable
+`status` is an `HTTPResponse.Status`, so `status == 404` and `status == .notFound` both compile.
+Interpolating it prints the code and the server's reason phrase, which is often empty (`"404 "`).
+Use `status.code` where you need the bare number.
+
+A custom `ClientTransport` or middleware still sees `HTTPResponse`, which has `status` and
+`headerFields`. If a dependency needs an `HTTPURLResponse`, use the failable
 `HTTPURLResponse(httpResponse:url:)`.
 
 ### `HTTPError` is removed
 
-Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorResponse?` (status
-code, `HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
+Each module error conforms to `SupabaseError`. It carries `response: HTTPErrorResponse?` (`status`,
+`HTTPFields` headers, raw body, `requestID`) and `underlyingError`. A body that is not the
 module's error format gives kind `.server` with no `serverError`.
+
+Every module error has `kind` and `code: <Module>Error.Code?`, the machine-readable code the
+server sent. `code` is `nil` when the server sent none. A `catch` clause can name a kind or a code
+of any module directly:
+
+```swift
+do {
+  try await supabase.from("todos").insert(todo).execute()
+} catch PostgrestError.Code.uniqueViolation {
+  showDuplicate()
+} catch PostgrestError.Kind.transport {
+  showOfflineBanner()
+}
+```
 
 ```swift
 // v2
@@ -217,14 +334,45 @@ module's error format gives kind `.server` with no `serverError`.
 // v3
 } catch let error as any SupabaseError {
   if let response = error.response {
-    print(response.statusCode, String(decoding: response.body, as: UTF8.self))
+    print(response.status.code, String(decoding: response.body, as: UTF8.self))
   } else if (error.underlyingError as? URLError)?.code == .notConnectedToInternet {
     showOfflineBanner()
   }
 }
 ```
 
-Errors that your own transport, middleware or `accessToken` closure throws are not wrapped.
+Errors that your own transport or middleware throws are not wrapped. A token provider that throws
+(an `AccessTokenMiddleware`, or the session through `SupabaseClient`) gives the module's error with
+kind `.accessToken`, and your error in `underlyingError`.
+
+### Client initializers throw
+
+Every client initializer throws when its URL has no scheme or no host. The error is the module's
+own error type, with kind `.invalidConfiguration`. Add `try`. A server that reads project URLs from
+configuration can catch the error instead of crashing. For a URL that is fixed in your app, `try!`
+is enough.
+
+| Initializer | Throws |
+| --- | --- |
+| `SupabaseClient(supabaseURL:supabaseKey:configuration:)` | `SupabaseClientError` |
+| `AuthClient(configuration:)` | `AuthError` |
+| `PostgrestClient(configuration:)` | `PostgrestError` |
+| `StorageClient(configuration:)` | `StorageError` |
+| `FunctionsClient(configuration:)` | `FunctionsError` |
+| `RealtimeClient(configuration:)` | `RealtimeError` |
+
+The sub-clients of a `SupabaseClient`, such as `supabase.storage` and `supabase.realtime`, do not
+throw: `SupabaseClient` checks the URL once, when you create it.
+
+```swift
+// v2
+let supabase = SupabaseClient(supabaseURL: url, supabaseKey: key)
+let database = PostgrestClient(url: databaseURL)
+
+// v3
+let supabase = try SupabaseClient(supabaseURL: url, supabaseKey: key)
+let database = try PostgrestClient(configuration: .init(url: databaseURL))
+```
 
 ### SDK `async` functions run on the caller's executor
 
@@ -254,62 +402,117 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Your `Authorization` header wins.** PostgREST, Storage and Functions set `Authorization`
   only when the request does not have one. In v2, the session token replaced a header that you
   set with `setHeader`. Search for `Authorization` set on a builder, a Storage `setHeader`, or
-  `FunctionInvokeOptions.headers`. A middleware in `GlobalOptions.http.middlewares` no longer
+  `FunctionInvokeOptions.headers`. A middleware in `Configuration.Global.http.middlewares` no longer
   sees `Authorization` on these requests; read it in a `ClientTransport`.
 - **Access-token errors fail the request.** If the session refresh or your
-  `AuthOptions.accessToken` closure throws, the request now fails with that error. In v2 the
-  request went out with the API key. Only a missing session still falls back to the key. A
-  refresh the server rejects fails the request with an `AuthError` of kind `.sessionInvalidated`.
-- **Realtime uses the global logger.** `SupabaseClient` replaces `logger` in
-  `SupabaseClientOptions(realtime:)` with `GlobalOptions.logger`. Build `RealtimeClient`
-  yourself if you need a separate Realtime logger.
-- **Realtime does not get the global `URLSession`.** Pass the session to
-  `RealtimeClientOptions(session:)` if the WebSocket needs it (for example for certificate
-  pinning).
+  `Configuration.Auth.accessToken` closure throws, the request now fails with a `PostgrestError`,
+  `StorageError` or `FunctionsError` of kind `.accessToken`, and that error in `underlyingError`.
+  In v2 the request went out with the API key. Only a missing session still falls back to the key.
+  A refresh the server rejects gives an `AuthError` of kind `.sessionInvalidated` in
+  `underlyingError`.
+- **Realtime uses the global logger when you pass none.** `SupabaseClient` keeps a `logger`
+  you set in `SupabaseClient.Configuration.Realtime`. With `nil`, the default, it uses
+  `Configuration.Global.logger`.
+- **Auth events do not build the Realtime client.** `SupabaseClient` pushes a new token only to
+  a Realtime client that already exists. A client built later fetches the current token itself.
+- **Realtime gets the token after every session change.** `SupabaseClient` pushes the access
+  token whenever it differs from the last one it pushed, whatever the event was. In v2 only
+  `.initialSession`, `.signedIn`, `.tokenRefreshed` and `.signedOut` did. After `mfa.verify` or
+  `linkIdentity(idToken:)`, channels now use the new token instead of the old one. `.signedOut` resets Realtime to the API key.
+- **Realtime does not get the global `URLSession`.** If the WebSocket needs it (for example
+  for certificate pinning), pass `SupabaseClient.Configuration.Realtime(webSocketTransport:)` a
+  `URLSessionWebSocketTransport` built from the session.
 - **`supabase.functions` is cached.** Each access returns the same client. The default
-  `FunctionsOptions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
+  `Configuration.Functions` decoder changed; see [Functions.md](docs/migrations/v3/Functions.md).
 
 ### Renames and type changes
 
 | v2 | v3 |
 | --- | --- |
+| `SupabaseClientOptions` | `SupabaseClient.Configuration`; see below |
+| `SupabaseClient(supabaseURL:supabaseKey:options:)` | `SupabaseClient(supabaseURL:supabaseKey:configuration:)` |
+| `SupabaseClientOptions.db`, `DatabaseOptions` | `Configuration.database`, `Configuration.Database` |
+| `SupabaseClientOptions.AuthOptions`, `GlobalOptions`, `FunctionsOptions`, `StorageOptions` | `SupabaseClient.Configuration.Auth`, `.Global`, `.Functions`, `.Storage` |
+| `SupabaseClientOptions(realtime: RealtimeClientOptions)` | `SupabaseClient.Configuration.Realtime`; no `accessToken` |
+| `RealtimeClientOptions(handleAppLifecycle:)` | `Configuration.Realtime(observesAppLifecycle:)` |
 | `supabase.database` | `supabase.from(_:)`, `supabase.rpc(_:)`, `supabase.schema(_:)` |
-| `supabase.channel(_:options:)`, `supabase.channels` | same names, `async` |
+| `supabase.realtimeV2` | `supabase.realtime`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
+| `supabase.channel(_:options:)`, `supabase.channels` | `await supabase.channel(_:configure:)`, `await supabase.channels`; see [Realtime.md](docs/migrations/v3/Realtime.md) |
 | `supabase.storage: SupabaseStorageClient` | `supabase.storage: StorageClient` |
-| `GlobalOptions(session:)` | `GlobalOptions(http: .init(transport: URLSessionTransport(session:)))` |
-| `GlobalOptions.logger: (any SupabaseLogger)?` | `GlobalOptions.logger: Logging.Logger` |
-| `AuthOptions.autoRefreshToken` | `AuthOptions.automaticallyRefreshesToken` |
+| `GlobalOptions(session:)` | `Configuration.Global(http: .init(transport: URLSessionTransport(session:)))` |
+| `GlobalOptions.logger: (any SupabaseLogger)?` | `Configuration.Global.logger: Logging.Logger` |
+| `GlobalOptions.headers: [String: String]`, `RealtimeClientOptions.headers: [String: String]` | `Configuration.Global.headers: HTTPFields`, `Configuration.Realtime.headers: HTTPFields` |
+| `supabase.headers: [String: String]` | `supabase.headers: HTTPFields` |
+| `AuthOptions.redirectToURL`, `AuthOptions(redirectToURL:)` | `Configuration.Auth.redirectTo`, `Configuration.Auth(redirectTo:)` |
+| `AuthOptions.autoRefreshToken: Bool` | `Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see [Auth.md](docs/migrations/v3/Auth.md) |
 | `AuthOptions(encoder:decoder:)` | removed |
 | `AuthOptions(emitLocalSessionAsInitialSession:)` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
-| `StorageOptions.useNewHostname` | `StorageOptions.usesNewHostname` |
-| `FunctionsOptions.region: String?` | `FunctionsOptions.region: FunctionRegion?` |
+| `AuthOptions.flowType: AuthFlowType` | removed; see [Auth.md](docs/migrations/v3/Auth.md) |
+| `supabase.handle(_:)` | `supabase.handleRedirect(_:)`; see [Auth.md](docs/migrations/v3/Auth.md) |
+| `StorageOptions.useNewHostname` | `Configuration.Storage.usesNewHostname` |
+| `FunctionsOptions.region: String?` | `Configuration.Functions.region: FunctionRegion?` |
+
+### `SupabaseClientOptions` is `SupabaseClient.Configuration`
+
+The options type moves into `SupabaseClient` and the init label is `configuration:`. Each nested
+type drops its `Options` suffix, and `db` is `database`. Every field is a `var`, so you can build
+a value and change it before you create the client. `client.configuration` returns the value
+that the client uses.
+
+The Realtime field takes `SupabaseClient.Configuration.Realtime`, not `RealtimeClientOptions`. It
+has no `accessToken`: `SupabaseClient` sends the Auth token to Realtime. To supply your own token,
+set `Configuration.Auth.accessToken`.
+
+```swift
+// v2
+let client = SupabaseClient(
+  supabaseURL: url, supabaseKey: key,
+  options: SupabaseClientOptions(
+    db: .init(schema: "app"),
+    global: .init(headers: ["x-app": "demo"])
+  )
+)
+
+// v3
+var configuration = SupabaseClient.Configuration()
+configuration.database.schema = "app"
+configuration.global.headers = [HTTPField.Name("x-app")!: "demo"]
+let client = try SupabaseClient(supabaseURL: url, supabaseKey: key, configuration: configuration)
+```
 
 ### `GlobalOptions.session` is removed
 
 Configure the `URLSession` on the transport. One `http` value covers every sub-client.
+`Configuration.Auth` also gains `http`, `logger` and `clock` to override the global value for Auth
+alone; `nil` means the global value.
 
 ```swift
 // v2
 options: .init(global: .init(session: mySession))
 
 // v3
-options: .init(
+configuration: .init(
   global: .init(http: .init(transport: URLSessionTransport(session: mySession))),
-  realtime: .init(session: mySession)  // only if the WebSocket needs the session
+  // Only if the WebSocket needs the session:
+  realtime: .init(
+    webSocketTransport: URLSessionWebSocketTransport(
+      configuration: mySession.configuration, delegate: mySession.delegate
+    )
+  )
 )
 ```
 
-### `FunctionsOptions` takes a `FunctionRegion`
+### `Configuration.Functions` takes a `FunctionRegion`
 
 The `String?` initializer is removed. A string literal still compiles; a `String` variable needs
-a conversion. `FunctionsOptions` also gains `http` and `logger`; `nil` means the global value.
+a conversion. `Configuration.Functions` also gains `http` and `logger`; `nil` means the global value.
 
 ```swift
 // v2
 let options = SupabaseClientOptions(functions: .init(region: settings.functionsRegion))
 
 // v3
-let options = SupabaseClientOptions(
+let configuration = SupabaseClient.Configuration(
   functions: .init(region: FunctionRegion(rawValue: settings.functionsRegion))
 )
 ```

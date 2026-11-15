@@ -6,6 +6,7 @@
 //
 
 public import Foundation
+public import HTTPTypes
 public import Helpers
 public import Logging
 
@@ -21,188 +22,165 @@ extension AuthClient {
   /// ### Networking
   /// - ``url``
   /// - ``headers``
-  /// - ``flowType``
-  /// - ``redirectToURL``
+  /// - ``redirectTo``
   /// - ``http``
   ///
   /// ### Storage
-  /// - ``localStorage``
+  /// - ``storage``
   /// - ``storageKey``
   ///
-  /// ### Encoding / decoding
-  /// - ``jsonEncoder``
-  /// - ``jsonDecoder``
-  ///
   /// ### Token refresh
-  /// - ``automaticallyRefreshesToken``
-  /// - ``defaultAutomaticallyRefreshesToken``
-  /// - ``clock``
+  /// - ``autoRefresh``
+  /// - ``observesAppLifecycle``
+  /// - ``initialRefreshTimeout``
   ///
-  /// ### Defaults
-  /// - ``defaultFlowType``
-  /// - ``defaultHeaders``
+  /// ### Retries
+  /// - ``retryEnabled``
+  ///
+  /// ### Testing
+  /// - ``clock``
+  /// - ``now``
   public struct Configuration: Sendable {
-    /// The URL of the Auth server.
-    public let url: URL
+    /// The URL of the Auth server, such as `https://<project>.supabase.co/auth/v1`.
+    public var url: URL
 
-    /// Any additional headers to send to the Auth server.
-    public var headers: [String: String]
+    /// Headers to send with every request, such as the `apikey` header. The client adds
+    /// `X-Client-Info` unless this sets it.
+    public var headers: HTTPFields
 
-    /// The OAuth / sign-in flow type to use (``AuthFlowType/implicit`` or ``AuthFlowType/pkce``).
-    public let flowType: AuthFlowType
+    /// Where the client persists the session and its pending flows. Defaults to
+    /// ``KeychainStorage`` on Apple platforms, with the session kept on this device and, on macOS,
+    /// in the file-based Keychain. Defaults to ``InMemoryAuthStorage`` elsewhere, on Linux,
+    /// Android, and Windows, so the user signs in again after the process restarts. Pass an
+    /// ``AuthStorage`` that keeps the session, such as a file or the Android Keystore, to avoid it.
+    public var storage: any AuthStorage
+
+    /// The key the client stores the session under. Clients that share a ``storage`` need
+    /// different keys. `SupabaseClient` derives `sb-<project-ref>-auth-token` from its URL.
+    public var storageKey: String
 
     /// Default URL to be used for redirect on the flows that requires it.
-    public let redirectToURL: URL?
-
-    /// Optional key name used for storing tokens in local storage.
-    public var storageKey: String?
-
-    /// Provider your own local storage implementation to use instead of the default one.
-    public let localStorage: any AuthLocalStorage
+    public var redirectTo: URL?
 
     /// The logger used by the Auth library. Defaults to a build-config-aware logger: visible
     /// (warning+) in debug builds, silent in release builds. Pass your own `Logging.Logger` for
     /// custom behavior — see swift-log's documentation for available `LogHandler`s.
-    public let logger: Logging.Logger
-
-    /// The JSON encoder used to serialize request bodies sent to the Auth server.
-    let resolvedEncoder: JSONEncoder
-
-    /// The JSON decoder used to deserialize responses received from the Auth server.
-    let resolvedDecoder: JSONDecoder
+    ///
+    /// The client removes tokens, secrets, and URL query strings from each line before your handler
+    /// sees it, and tags the logger with the `system` metadata key set to `auth`.
+    public var logger: Logging.Logger
 
     /// The transport and middleware chain every request goes through.
-    public let http: HTTPClientConfiguration
+    public var http: HTTPClientConfiguration
 
-    /// Set to `true` if you want to automatically refresh the token before expiring.
-    public let automaticallyRefreshesToken: Bool
+    /// When the client refreshes the session on its own. Defaults to
+    /// ``AuthClient/AutoRefreshPolicy/automatic``.
+    public var autoRefresh: AutoRefreshPolicy
 
-    /// The clock the auto-refresh loop sleeps on between ticks.
+    /// Whether auto refresh follows the app lifecycle. Defaults to `true`.
+    ///
+    /// On iOS, iPadOS, tvOS, visionOS, Mac Catalyst, and watchOS, auto refresh pauses when the app
+    /// enters the background, and does not start while the app launches in the background. When
+    /// the app returns to the foreground, the client refreshes at once if the session is due. On
+    /// macOS it checks each time the app becomes active, and it does not pause. Other platforms have no
+    /// app lifecycle, so this has no effect there. Set it to `false` to drive auto refresh with
+    /// ``AuthClient/startAutoRefresh()`` and ``AuthClient/stopAutoRefresh()`` yourself, for
+    /// example from a SwiftUI `scenePhase` change.
+    ///
+    /// Auto refresh follows the app lifecycle only when ``autoRefresh`` is
+    /// ``AuthClient/AutoRefreshPolicy/automatic``. Under another policy the client does not
+    /// refresh on its own, so the lifecycle has nothing to pause or resume.
+    ///
+    /// Whether this is `true` or `false`, and under every ``autoRefresh`` policy, on iOS, iPadOS,
+    /// tvOS, visionOS, and Mac Catalyst the client reads storage again when protected data becomes
+    /// available, so a session that a locked Keychain hid at launch loads once the device unlocks.
+    /// watchOS, macOS, and other platforms post no such notification. There, the client reads
+    /// storage again only when a call needs the session: ``AuthClient/session()``,
+    /// ``AuthClient/refreshSessionIfNeeded()``, a request that sends the session's access token, a
+    /// new ``AuthClient/events()`` stream, or ``AuthClient/initialization()``.
+    public var observesAppLifecycle: Bool
+
+    /// Whether to retry transient errors on `GET` requests. Defaults to `true`.
+    ///
+    /// A token request is retried only after a connection failure, whatever this value is set
+    /// to; turning it off stops those retries too.
+    public var retryEnabled: Bool
+
+    /// The clock auto refresh sleeps on until the refresh is due, and between retries.
+    ///
+    /// Keep it in step with ``now``: the refresh deadline sleeps on this clock, and expiry checks
+    /// read ``now``.
     ///
     /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive token refresh
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public let clock: any Clock<Duration>
+    public var clock: any Clock<Duration>
 
-    /// Initializes a AuthClient Configuration with optional parameters.
+    /// The time source for every expiry check and every receipt time the client records.
+    ///
+    /// Defaults to the system clock. Pass a fixed or stepped time in tests, together with a
+    /// ``clock`` you control.
+    public var now: @Sendable () -> Date
+
+    /// How long the client waits, when it is created with an expired stored session, for one
+    /// refresh of that session before it delivers ``AuthEvent/initialSession``.
+    ///
+    /// Defaults to 5 seconds. A refresh that finishes in time makes the initial session the
+    /// refreshed one. A refresh that fails, or does not finish in time, makes it the expired
+    /// session. A refresh that is still running then commits as ``AuthEvent/tokenRefreshed``. The
+    /// wait uses ``clock``.
+    ///
+    /// The client refreshes at start-up only under ``AuthClient/AutoRefreshPolicy/automatic``. A
+    /// value of zero or less turns it off.
+    public var initialRefreshTimeout: Duration
+
+    /// Creates a configuration.
     ///
     /// - Parameters:
-    ///   - url: The base URL of the Auth server.
-    ///   - headers: Custom headers to be included in requests.
-    ///   - flowType: The authentication flow type.
-    ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
-    ///   - storageKey: Optional key name used for storing tokens in local storage.
-    ///   - localStorage: The storage mechanism for local data.
-    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
+    ///   - url: The URL of the Auth server.
+    ///   - storageKey: The key the session is stored under.
+    ///   - headers: Headers to send with every request.
+    ///   - storage: Where the client persists the session. `nil` uses the platform's default.
+    ///   - redirectTo: Default URL to be used for redirect on the flows that requires it.
+    ///   - autoRefresh: When the client refreshes the session on its own.
+    ///   - observesAppLifecycle: Whether auto refresh pauses in the background and resumes in the
+    ///     foreground.
+    ///   - initialRefreshTimeout: How long to wait for the refresh of an expired stored session
+    ///     before ``AuthEvent/initialSession``. Defaults to 5 seconds.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
-    ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
+    ///   - logger: The logger to use. Defaults to a build-config-aware logger — see ``logger``.
+    ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
+    ///   - clock: The clock auto refresh sleeps on. Defaults to `ContinuousClock()`.
+    ///   - now: The time source for expiry checks. Defaults to the system clock.
     public init(
-      url: URL? = nil,
-      headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
-      redirectToURL: URL? = nil,
-      storageKey: String? = nil,
-      localStorage: any AuthLocalStorage,
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
+      url: URL,
+      storageKey: String,
+      headers: HTTPFields = [:],
+      storage: (any AuthStorage)? = nil,
+      redirectTo: URL? = nil,
+      autoRefresh: AutoRefreshPolicy = .automatic,
+      observesAppLifecycle: Bool = true,
+      initialRefreshTimeout: Duration = .seconds(5),
       http: HTTPClientConfiguration = .init(),
-      automaticallyRefreshesToken: Bool = AuthClient.Configuration
-        .defaultAutomaticallyRefreshesToken,
-      clock: any Clock<Duration> = ContinuousClock()
-    ) {
-      self.init(
-        url: url,
-        headers: headers,
-        flowType: flowType,
-        redirectToURL: redirectToURL,
-        storageKey: storageKey,
-        localStorage: localStorage,
-        logger: logger,
-        resolvedEncoder: AuthClient.Configuration.jsonEncoder,
-        resolvedDecoder: AuthClient.Configuration.jsonDecoder,
-        http: http,
-        automaticallyRefreshesToken: automaticallyRefreshesToken,
-        clock: clock
-      )
-    }
-
-    /// Designated initializer that stores the resolved JSON encoder/decoder.
-    ///
-    /// Kept internal since customizing Auth's JSON encoding/decoding is not a
-    /// publicly supported customization point.
-    init(
-      url: URL? = nil,
-      headers: [String: String] = [:],
-      flowType: AuthFlowType = Configuration.defaultFlowType,
-      redirectToURL: URL? = nil,
-      storageKey: String? = nil,
-      localStorage: any AuthLocalStorage,
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-      resolvedEncoder: JSONEncoder,
-      resolvedDecoder: JSONDecoder,
-      http: HTTPClientConfiguration = .init(),
-      automaticallyRefreshesToken: Bool = AuthClient.Configuration
-        .defaultAutomaticallyRefreshesToken,
-      clock: any Clock<Duration> = ContinuousClock()
+      retryEnabled: Bool = true,
+      clock: any Clock<Duration> = ContinuousClock(),
+      now: @escaping @Sendable () -> Date = { Date() }
     ) {
-      let headers = headers.merging(Configuration.defaultHeaders) { l, _ in l }
-
-      self.url = url ?? defaultAuthURL
-      self.headers = headers
-      self.flowType = flowType
-      self.redirectToURL = redirectToURL
+      self.url = url
       self.storageKey = storageKey
-      self.localStorage = localStorage
-      var logger = logger
-      logger[metadataKey: "system"] = "auth"
+      self.headers = headers
+      self.storage = storage ?? AuthPlatform.defaultStorage
+      self.redirectTo = redirectTo
       self.logger = logger
-      self.resolvedEncoder = resolvedEncoder
-      self.resolvedDecoder = resolvedDecoder
       self.http = http
-      self.automaticallyRefreshesToken = automaticallyRefreshesToken
+      self.autoRefresh = autoRefresh
+      self.observesAppLifecycle = observesAppLifecycle
+      self.retryEnabled = retryEnabled
       self.clock = clock
+      self.now = now
+      self.initialRefreshTimeout = initialRefreshTimeout
     }
-  }
-
-  /// Initializes a AuthClient with optional parameters.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL of the Auth server.
-  ///   - headers: Custom headers to be included in requests.
-  ///   - flowType: The authentication flow type..
-  ///   - redirectToURL: Default URL to be used for redirect on the flows that requires it.
-  ///   - storageKey: Optional key name used for storing tokens in local storage.
-  ///   - localStorage: The storage mechanism for local data..
-  ///   - logger: The logger to use. Defaults to a build-config-aware logger — see `Configuration.logger`.
-  ///   - http: The transport and middleware chain every request goes through.
-  ///   - automaticallyRefreshesToken: Set to `true` if you want to automatically refresh the token before expiring.
-  ///   - clock: The clock the auto-refresh loop sleeps on. Defaults to `ContinuousClock()`.
-  public convenience init(
-    url: URL? = nil,
-    headers: [String: String] = [:],
-    flowType: AuthFlowType = AuthClient.Configuration.defaultFlowType,
-    redirectToURL: URL? = nil,
-    storageKey: String? = nil,
-    localStorage: any AuthLocalStorage,
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.auth"),
-    http: HTTPClientConfiguration = .init(),
-    automaticallyRefreshesToken: Bool = AuthClient.Configuration.defaultAutomaticallyRefreshesToken,
-    clock: any Clock<Duration> = ContinuousClock()
-  ) {
-    self.init(
-      configuration: Configuration(
-        url: url,
-        headers: headers,
-        flowType: flowType,
-        redirectToURL: redirectToURL,
-        storageKey: storageKey,
-        localStorage: localStorage,
-        logger: logger,
-        http: http,
-        automaticallyRefreshesToken: automaticallyRefreshesToken,
-        clock: clock
-      )
-    )
   }
 }

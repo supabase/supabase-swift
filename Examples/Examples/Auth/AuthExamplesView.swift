@@ -69,6 +69,22 @@ struct AuthExamplesView: View {
           )
         }
 
+        NavigationLink(destination: SignInWithOAuthClosurePresenter()) {
+          ExampleRow(
+            title: "OAuth with a ClosurePresenter",
+            description: "Show the provider page with SwiftUI's webAuthenticationSession",
+            icon: "safari.fill"
+          )
+        }
+
+        NavigationLink(destination: SignInWithSSO()) {
+          ExampleRow(
+            title: "Single Sign-On",
+            description: "SAML sign-in by email domain",
+            icon: "building.2.fill"
+          )
+        }
+
         #if canImport(UIKit)
           NavigationLink(
             destination: UIViewControllerWrapper(SignInWithOAuthViewController())
@@ -97,6 +113,16 @@ struct AuthExamplesView: View {
             title: "Sign in with a passkey",
             description: "Passwordless, discoverable WebAuthn sign-in",
             icon: "person.badge.key.fill"
+          )
+        }
+      }
+
+      Section("Sessions") {
+        NavigationLink(destination: ImportSessionView()) {
+          ExampleRow(
+            title: "Import a session",
+            description: "Sign in with an access token and a refresh token",
+            icon: "key.fill"
           )
         }
       }

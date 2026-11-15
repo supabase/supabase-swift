@@ -59,6 +59,7 @@ extension _PostgrestQuery {
   /// Repeated calls append, so the second key breaks ties in the first.
   ///
   /// - Parameter build: Builds the sort key from the relation's columns.
+  /// - Returns: A new query with the sort key appended. The receiver is unchanged.
   public func order(
     _ build: (R.Columns) -> _PostgrestOrdering<R>
   ) -> Self {

@@ -30,7 +30,7 @@ struct APIClientTests {
       configuration: AuthClient.Configuration(
         url: URL(string: "http://localhost/auth/v1")!,
         storageKey: uniqueStorageKey(),
-        localStorage: InMemoryLocalStorage(),
+        storage: InMemoryTestStorage(),
         http: .init(
           transport: ClosureTransport { _, _ in
             attempts.withValue { $0 += 1 }
@@ -69,9 +69,7 @@ struct APIClientTests {
 
     await #expect(throws: AuthError.self) {
       try await client.execute(
-        authAPI.signInWithOTP(
-          email: "a@b.c", redirectTo: nil, shouldCreateUser: true, data: nil, captchaToken: nil,
-          pkce: nil))
+        authAPI.signInWithOTP(email: "a@b.c", options: EmailOTPOptions(), pkce: nil))
     }
     #expect(attempts.value == 1)
   }
@@ -126,6 +124,56 @@ struct APIClientTests {
   }
 
   @Test
+  func getRequestIsRetriedAfterARateLimitWithRetryAfter() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      let attempt = attempts.withValue {
+        $0 += 1
+        return $0
+      }
+      if attempt == 1 {
+        return (
+          HTTPTypes.HTTPResponse(status: .tooManyRequests, headerFields: [.retryAfter: "1"]), Data()
+        )
+      }
+      return (HTTPTypes.HTTPResponse(status: .ok), MockData.user)
+    }
+
+    _ = try await client.execute(authAPI.user(accessToken: "access-token"))
+
+    #expect(attempts.value == 2)
+  }
+
+  @Test
+  func getRequestIsNotRetriedAfterARateLimitWithoutRetryAfter() async throws {
+    let attempts = LockIsolated(0)
+    let client = makeClient { _ in
+      attempts.withValue { $0 += 1 }
+      return (HTTPTypes.HTTPResponse(status: .tooManyRequests), Data())
+    }
+
+    await #expect(throws: AuthError.self) {
+      try await client.execute(authAPI.user(accessToken: "access-token"))
+    }
+    #expect(attempts.value == 1)
+  }
+
+  @Test
+  func cancelDuringTheResponseBodySurfacesAsCancellationError() async {
+    let reading = LockIsolated(false)
+    let client = makeClient(
+      transport: ClosureTransport { _, _ in
+        (HTTPTypes.HTTPResponse(status: .ok), .cancelledRead { reading.setValue(true) })
+      })
+
+    let task = Task { try await client.execute(authAPI.user(accessToken: "access-token")) }
+    await waitUntil { reading.value }
+    task.cancel()
+
+    await #expect(throws: CancellationError.self) { try await task.value }
+  }
+
+  @Test
   func onlyGetRequestsRetryBeyondConnectionFailures() throws {
     #expect(try authAPI.refreshSession(refreshToken: "r").retriesOnlyConnectionFailures)
     #expect(authAPI.signOut(accessToken: "a", scope: .global).retriesOnlyConnectionFailures)
@@ -137,23 +185,28 @@ struct APIClientTests {
     headers: [:],
     defaultRedirectURL: nil,
     encoder: AuthClient.Configuration.jsonEncoder,
-    decoder: AuthClient.Configuration.jsonDecoder
+    decoder: AuthClient.Configuration.jsonDecoder,
+    now: { Date(timeIntervalSince1970: 1_700_000_000) }
   )
 
   private func makeClient(
     _ respond: @escaping @Sendable (HTTPTypes.HTTPRequest) throws -> (HTTPTypes.HTTPResponse, Data)
   ) -> APIClient {
+    makeClient(
+      transport: ClosureTransport { request, _ in
+        let (response, data) = try respond(request)
+        return (response, HTTPBody(data))
+      })
+  }
+
+  private func makeClient(transport: ClosureTransport) -> APIClient {
     APIClient(
       http: HTTPClient(
         configuration: AuthClient.Configuration(
           url: URL(string: "http://localhost/auth/v1")!,
           storageKey: uniqueStorageKey(),
-          localStorage: InMemoryLocalStorage(),
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              let (response, data) = try respond(request)
-              return (response, HTTPBody(data))
-            }),
+          storage: InMemoryTestStorage(),
+          http: .init(transport: transport),
           clock: ImmediateClock()
         )))
   }

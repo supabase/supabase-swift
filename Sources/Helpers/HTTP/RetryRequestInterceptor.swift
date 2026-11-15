@@ -24,8 +24,8 @@ package import HTTPTypes
 /// A request whose body is ``HTTPBody/IterationBehavior/single`` is never retried — the bytes
 /// are gone after the first send. Only a `URLError` in ``retryableURLErrorCodes`` counts as a
 /// transport failure; a deterministic one (bad URL, untrusted certificate) and any error thrown
-/// by user code propagate untouched. A cancelled task ends the loop at once and always surfaces
-/// as `CancellationError`, even when the transport reported it as `URLError.cancelled`.
+/// by user code propagate untouched. A cancelled task ends the loop at once and surfaces as
+/// `CancellationError`.
 package struct RetryRequestInterceptor: ClientMiddleware {
   /// The `URLError` codes that mean "try again", as opposed to a deterministic failure.
   static let retryableURLErrorCodes: Set<URLError.Code> = [
@@ -67,6 +67,8 @@ package struct RetryRequestInterceptor: ClientMiddleware {
     }
 
     var attempt = 1
+    // A mutated `while true` is no longer provably infinite: "missing return".
+    // swift-mutation-testing:disable-next-line — every mutant here fails to compile
     while true {
       var current = request
       if attempt > 1 {
@@ -81,14 +83,13 @@ package struct RetryRequestInterceptor: ClientMiddleware {
       }
 
       guard attempt < policy.maxAttempts, shouldRetry(request, result: result) else {
-        // A cancellation mid-flight comes back from the transport as `URLError.cancelled`;
-        // report it as what it is.
+        // A task cancelled while the attempt ran gets no result, whatever the attempt returned.
         try Task.checkCancellation()
         return try result.get()
       }
 
       if let responseBody = result.value?.1 {
-        _ = try? await Data(collecting: responseBody, upTo: 1 << 20)
+        _ = try? await Data(collecting: responseBody, truncatingAt: HTTPClient.maxErrorBodyBytes)
       }
 
       let retryAfter = result.value?.0.headerFields[.retryAfter]
@@ -110,7 +111,7 @@ package struct RetryRequestInterceptor: ClientMiddleware {
 
     switch result {
     case .success(let (head, _)):
-      return policy.retryableStatuses.contains(head.status.code)
+      return policy.retries(head)
     case .failure(let error as URLError):
       return Self.retryableURLErrorCodes.contains(error.code)
     case .failure:

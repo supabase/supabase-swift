@@ -48,8 +48,10 @@ private actor MainSerialExecutorGate {
 /// nondeterministic scheduling and cascading failures that don't reproduce when either target's
 /// tests run alone.
 ///
-/// `isRecursive` is `false`, mirroring `MockerSerializedTrait`: apply directly to every concrete
-/// `@Suite` that calls `withMainSerialExecutor`, not to an enclosing namespace enum.
+/// `isRecursive` is `false`: apply directly to every concrete `@Suite` that calls
+/// `withMainSerialExecutor`, not to an enclosing namespace enum. A recursive trait on a test-less
+/// namespace whose nested suites are declared in `extension`s in other files overflows the stack
+/// in Swift Testing's trait-application graph.
 package struct MainSerialExecutorSerializedTrait: SuiteTrait, TestScoping {
   package var isRecursive: Bool { false }
 

@@ -15,8 +15,8 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class VectorIndexClientIntegrationTests {
-  let vectors = StorageClient(
-    configuration: StorageClientConfiguration(
+  let vectors = try! StorageClient(
+    configuration: StorageClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/storage/v1")!,
       headers: [
         .authorization: "Bearer \(DotEnv.supabaseSecretKey)"
@@ -62,7 +62,7 @@ final class VectorIndexClientIntegrationTests {
       )
     )
 
-    let index = try await bucket.indexDetails(indexName)
+    let index = try await bucket.index(indexName)
     #expect(index.indexName == indexName)
     #expect(index.vectorBucketName == bucketName)
     #expect(index.dataType == .float32)
@@ -83,7 +83,7 @@ final class VectorIndexClientIntegrationTests {
     let indexName = "test-index"
     let bucket = vectors.from(bucketName)
     try await bucket.createIndex(indexName, dimension: 3, distanceMetric: .cosine)
-    let index = bucket.index(indexName)
+    let index = bucket.from(indexName)
 
     try await index.putVectors([
       VectorEntry(
@@ -92,7 +92,7 @@ final class VectorIndexClientIntegrationTests {
     ])
 
     let fetched = try await index.vectors(
-      keys: ["a", "b"], returnData: true, returnMetadata: true)
+      keys: ["a", "b"], options: GetVectorsOptions(returnData: true, returnMetadata: true))
     #expect(fetched.count == 2)
     let a = try #require(fetched.first { $0.key == "a" })
     let aData = try #require(a.data?.float32)
@@ -101,7 +101,7 @@ final class VectorIndexClientIntegrationTests {
     }
     #expect(a.metadata?["type"]?.stringValue == "doc")
 
-    let listed = try await index.listVectors(returnData: true).page()
+    let listed = try await index.listVectors(options: ListVectorsOptions(returnData: true)).page()
     #expect(listed.vectors.map(\.key).sorted() == ["a", "b"])
 
     try await index.deleteVectors(keys: ["a"])
@@ -115,7 +115,7 @@ final class VectorIndexClientIntegrationTests {
     let indexName = "test-index"
     let bucket = vectors.from(bucketName)
     try await bucket.createIndex(indexName, dimension: 2, distanceMetric: .cosine)
-    let index = bucket.index(indexName)
+    let index = bucket.from(indexName)
 
     try await index.putVectors([
       VectorEntry(key: "close", data: VectorData(float32: [1.0, 0.0])),
@@ -123,10 +123,7 @@ final class VectorIndexClientIntegrationTests {
     ])
 
     let response = try await index.queryVectors(
-      VectorData(float32: [0.9, 0.1]),
-      topK: 2,
-      returnDistance: true
-    )
+      VectorData(float32: [0.9, 0.1]), topK: 2, options: QueryVectorsOptions(returnDistance: true))
     #expect(response.vectors.map(\.key) == ["close", "far"])
     #expect(response.distanceMetric == .cosine)
   }

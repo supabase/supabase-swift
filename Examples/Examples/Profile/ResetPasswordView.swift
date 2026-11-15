@@ -5,10 +5,12 @@
 //  Demonstrates password reset functionality via email
 //
 
+import Supabase
 import SwiftUI
 import SwiftUINavigation
 
 struct ResetPasswordView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
 
   @State private var email: String = ""
@@ -122,7 +124,7 @@ struct ResetPasswordView: View {
     actionState = .inFlight
 
     do {
-      try await supabase.auth.resetPasswordForEmail(email)
+      try await supabase.auth.resetPassword(email: email)
       actionState = .result(.success(()))
     } catch {
       actionState = .result(.failure(error))
@@ -134,4 +136,5 @@ struct ResetPasswordView: View {
   NavigationStack {
     ResetPasswordView()
   }
+  .environment(\.supabase, supabaseClient)
 }

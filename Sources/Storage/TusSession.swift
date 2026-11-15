@@ -91,7 +91,7 @@ struct TusSession: Sendable {
     do {
       return try await api.stream(request)
     } catch let error as StorageError {
-      switch error.serverStatusCode {
+      switch error.serverError?.statusCode {
       case 404, 410: throw Failure.uploadGone(error)
       case 409 where conflictIsOffset: throw Failure.offsetConflict(error)
       default: throw error

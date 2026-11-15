@@ -21,9 +21,9 @@ enum StorageIntegration {
   static func client(
     headers: HTTPFields = [.authorization: "Bearer \(DotEnv.supabaseSecretKey)"],
     middlewares: [any ClientMiddleware] = []
-  ) -> StorageClient {
-    StorageClient(
-      configuration: StorageClientConfiguration(
+  ) throws -> StorageClient {
+    try StorageClient(
+      configuration: StorageClient.Configuration(
         url: url,
         headers: headers,
         http: HTTPClientConfiguration(middlewares: middlewares)
@@ -35,8 +35,14 @@ enum StorageIntegration {
   struct ForwardedPurge: Decodable, Equatable {
     struct Body: Decodable, Equatable {
       var type: String
-      var bucketId: String?
+      var bucketID: String?
       var objectName: String?
+
+      enum CodingKeys: String, CodingKey {
+        case type
+        case bucketID = "bucketId"
+        case objectName
+      }
     }
     var path: String
     var body: Body
@@ -53,7 +59,7 @@ enum StorageIntegration {
     _ = try await URLSession.shared.data(for: request)
   }
 
-  static let admin = client()
+  static let admin = try! client()
 
   static func newBucket(
     _ prefix: String, options: CreateBucketOptions = CreateBucketOptions(isPublic: true)

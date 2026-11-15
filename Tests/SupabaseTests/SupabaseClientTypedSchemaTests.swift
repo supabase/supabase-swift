@@ -5,41 +5,14 @@
 //  Created by Ranbir Singh on 19/09/26.
 //
 
-import ConcurrencyExtras
 import Foundation
+import HTTPTypes
+import TestHelpers
 import Testing
 
 @_spi(Experimental) @testable import Supabase
 
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-private final class TypedSchemaCapturingProtocol: URLProtocol {
-  private static let storage = LockIsolated<URLRequest?>(nil)
-  static var capturedRequest: URLRequest? {
-    get { storage.value }
-    set { storage.setValue(newValue) }
-  }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    Self.capturedRequest = request
-    let response = HTTPURLResponse(
-      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
-      headerFields: ["Content-Type": "application/json"]
-    )!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Data("[]".utf8))
-    client?.urlProtocolDidFinishLoading(self)
-  }
-
-  override func stopLoading() {}
-}
-
-@Suite(.serialized)
+@Suite
 struct SupabaseClientTypedSchemaTests {
   enum PrivateSchema: _PostgrestSchema {
     static let name = "private"
@@ -59,36 +32,35 @@ struct SupabaseClientTypedSchemaTests {
     static let columns = Columns()
   }
 
-  private func makeClient(schema: String? = nil) -> SupabaseClient {
-    TypedSchemaCapturingProtocol.capturedRequest = nil
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.protocolClasses = [TypedSchemaCapturingProtocol.self]
-    return SupabaseClient(
+  private let transport = RecordingTransport { _, _ in
+    (
+      HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]),
+      Data("[]".utf8)
+    )
+  }
+
+  private func makeClient(schema: String? = nil) throws -> SupabaseClient {
+    try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(schema: schema),
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(schema: schema),
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
-          http: .init(
-            transport: URLSessionTransport(session: URLSession(configuration: configuration))
-          )
-        )
+        global: SupabaseClient.Configuration.Global(http: .init(transport: transport))
       )
     )
   }
 
   private func sentProfile() throws -> String? {
-    try #require(TypedSchemaCapturingProtocol.capturedRequest)
-      .value(forHTTPHeaderField: "Accept-Profile")
+    try #require(transport.requests.last).head.headerFields[HTTPField.Name("Accept-Profile")!]
   }
 
   @Test
   func fromQueriesTheRelationInItsOwnSchema() async throws {
-    let supabase = makeClient()
+    let supabase = try makeClient()
 
     _ = try await supabase.from(Secret.self).select().execute()
 
@@ -97,7 +69,7 @@ struct SupabaseClientTypedSchemaTests {
 
   @Test
   func theScopeQueriesItsSchema() async throws {
-    let supabase = makeClient()
+    let supabase = try makeClient()
 
     _ = try await supabase.schema(PrivateSchema.self).from(Secret.self).select().execute()
 
@@ -105,8 +77,8 @@ struct SupabaseClientTypedSchemaTests {
   }
 
   @Test
-  func aSchemaInTheDatabaseOptionsWins() async throws {
-    let supabase = makeClient(schema: "public")
+  func aSchemaInTheDatabaseConfigurationWins() async throws {
+    let supabase = try makeClient(schema: "public")
 
     _ = try await supabase.from(Secret.self).select().execute()
 

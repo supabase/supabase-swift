@@ -46,6 +46,7 @@ public struct _PostgrestQuery<R: _PostgrestRelation, Output: Decodable & Sendabl
 }
 
 extension _PostgrestQuery: _PostgrestFilterableRequest {
+  /// The relation whose columns this query accepts in a filter.
   public typealias Relation = R
 }
 
@@ -53,6 +54,7 @@ extension _PostgrestQuery {
   /// Sends the request and decodes the response.
   ///
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output`.
+  /// - Throws: ``PostgrestError`` when the request fails or the response cannot be decoded.
   @discardableResult
   public func execute() async throws -> PostgrestResponse<Output> {
     try await send(request)
@@ -79,6 +81,9 @@ extension _PostgrestQuery {
   ///   trade-off.
   /// - Returns: A ``PostgrestResponse`` whose `value` is the decoded `Output` and whose
   ///   ``PostgrestResponse/count`` is the total.
+  /// - Throws: ``PostgrestError`` with kind `.decoding` if the body cannot be decoded as `Output`,
+  ///   or another kind for server, transport and invalid-request failures. `CancellationError`
+  ///   if the task is cancelled.
   @discardableResult
   public func execute(count: CountOption) async throws -> PostgrestResponse<Output> {
     var request = request

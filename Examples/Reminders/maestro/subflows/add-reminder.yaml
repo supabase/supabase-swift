@@ -1,0 +1,12 @@
+# Adds a reminder with the inline field of the open list.
+# Env: TITLE
+appId: com.supabase.Reminders
+---
+- tapOn:
+    id: listDetail.newReminder
+- inputText: ${TITLE}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: reminder.${TITLE}
+    timeout: 10000

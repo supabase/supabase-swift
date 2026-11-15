@@ -16,7 +16,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_withAllFields() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: "1",
       ref: "2",
       topic: "realtime:public:messages",
@@ -37,7 +37,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_withNilRefs() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil,
       ref: nil,
       topic: "phoenix",
@@ -101,7 +101,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func textRoundTrip() throws {
-    let original = RealtimeMessageV2(
+    let original = RealtimeMessage(
       joinRef: "join-1",
       ref: "ref-42",
       topic: "realtime:public:messages",
@@ -203,7 +203,7 @@ struct RealtimeSerializerTests {
   func decodeBinary_jsonPayload() throws {
     let topic = "realtime:test"
     let event = "my_event"
-    let jsonPayload: JSONObject = ["count": .integer(42)]
+    let jsonPayload: JSONObject = ["count": .number(42)]
     let payloadData = try JSONEncoder().encode(jsonPayload)
 
     let topicBytes = Data(topic.utf8)
@@ -296,7 +296,7 @@ struct RealtimeSerializerTests {
 
   @Test
   func encodeText_emptyPayload() throws {
-    let message = RealtimeMessageV2(
+    let message = RealtimeMessage(
       joinRef: nil, ref: nil, topic: "t", event: "e", payload: [:])
     let text = try serializer.encodeText(message)
     let decoded = try serializer.decodeText(text)
@@ -390,12 +390,12 @@ struct RealtimeSerializerTests {
   }
 
   @Test(arguments: HeaderField.allCases)
-  func encodeBroadcastPushRejectsHeaderFieldsOver255BytesWithEncodingKind(_ field: HeaderField) {
+  func encodeBroadcastPushRejectsHeaderFieldsOver255BytesAsAnInvalidRequest(_ field: HeaderField) {
     do {
       _ = try encodePush(field, value: String(repeating: "a", count: 256))
       Issue.record("Expected failure")
     } catch let error as RealtimeError {
-      #expect(error.kind == .encoding)
+      #expect(error.kind == .invalidRequest)
     } catch {
       Issue.record("Unexpected error \(error)")
     }

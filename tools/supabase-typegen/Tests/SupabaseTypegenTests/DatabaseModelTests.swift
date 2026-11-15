@@ -45,6 +45,41 @@ struct DatabaseModelTests {
   }
 
   @Test
+  func rpcFunctionsAreThoseOfTheSelectedSchemas() throws {
+    let hostile = Fixture.data("hostile_metadata")
+    let all = try #require(model(hostile).rpcFunctions)
+    #expect(Set(all.map(\.name.schema)) == ["date", "inventory", #"my"schema"#, "public"])
+    let names = all.map(\.name)
+    #expect(names == names.sorted())
+
+    let selected = try #require(model(hostile, schemas: ["public", "date"]).rpcFunctions)
+    #expect(Set(selected.map(\.name.schema)) == ["date", "public"])
+  }
+
+  @Test
+  func rpcOverloadsResolveTheirRelationsAndEnums() throws {
+    let functions = try #require(model(Fixture.integration).rpcFunctions)
+    let messageById = try #require(functions.first { $0.name.name == "message_by_id" })
+    #expect(
+      messageById.overloads.first?.returnRelation
+        == QualifiedName(schema: "public", name: "messages"))
+    #expect(messageById.overloads.first?.returnsRelationRows == true)
+
+    let messageIds = try #require(functions.first { $0.name.name == "message_ids" })
+    let statuses = try #require(messageIds.overloads.first?.arguments.first?.type)
+    #expect(statuses.name == QualifiedName(schema: "public", name: "_user_status"))
+    #expect(statuses.enumID != nil)
+  }
+
+  @Test
+  func rpcFunctionsAreNilWhenTheDocumentPredatesThem() throws {
+    let data = Fixture.integration { object in
+      object["rpcFunctions"] = nil
+    }
+    #expect(try model(data).rpcFunctions == nil)
+  }
+
+  @Test
   func viewFlagsFallBackToIsUpdatable() throws {
     func kind(isUpdatable: Bool, isInsertEnabled: Bool?) throws -> DatabaseModel.Relation.Kind {
       let data = Fixture.integration { object in

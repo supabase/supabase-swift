@@ -8,6 +8,7 @@
 import Clocks
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import Logging
 import TestHelpers
 import Testing
@@ -22,30 +23,41 @@ struct RealtimeLifecycleTests {
   let http: RecordingTransport
   let testClock: SignalingTestClock
   let servers: LockIsolated<[FakeWebSocket]>
+  /// Whether the fake server answers heartbeats. Off, the socket is dead the way a suspended
+  /// app leaves it: open, and silent.
+  let answersHeartbeats: LockIsolated<Bool>
 
   init() {
     http = RecordingTransport()
     testClock = SignalingTestClock()
     servers = LockIsolated([])
+    answersHeartbeats = LockIsolated(true)
   }
 
-  private func makeClient(handleAppLifecycle: Bool = false) -> RealtimeClient {
+  private func makeClient(
+    observesAppLifecycle: Bool = false, monitorsNetworkPath: Bool = false,
+    reconnectBackoff: BackoffPolicy? = nil,
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      noLifecycleEvents
+  ) -> RealtimeClient {
     RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
-        headers: ["apikey": apiKey],
-        accessToken: { "custom.access.token" },
-        handleAppLifecycle: handleAppLifecycle
+      configuration: RealtimeClient.Configuration(
+        url: url,
+        headers: [.apikey: apiKey],
+        observesAppLifecycle: observesAppLifecycle,
+        monitorsNetworkPath: monitorsNetworkPath,
+        accessToken: { "custom.access.token" }
       ),
-      wsTransport: { [servers] _, _ in
+      wsTransport: { [servers, answersHeartbeats] _, _ in
         let (client, server) = FakeWebSocket.fakes()
         servers.withValue { $0.append(server) }
         Task { [server] in
           for await event in server.events {
             guard let msg = event.realtimeMessage else { continue }
             if msg.event == "heartbeat" {
+              guard answersHeartbeats.value else { continue }
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: "phoenix",
@@ -55,7 +67,7 @@ struct RealtimeLifecycleTests {
               )
             } else if msg.event == "phx_join" {
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: msg.topic,
@@ -74,12 +86,14 @@ struct RealtimeLifecycleTests {
         return client
       },
       http: HTTPClient(transport: http),
-      clock: testClock
+      clock: testClock,
+      reconnectBackoff: reconnectBackoff ?? RealtimeClient.defaultReconnectBackoff,
+      lifecycleEvents: lifecycleEvents
     )
   }
 
   @Test
-  func handleAppForegroundWhileConnectedIsNoOp() async throws {
+  func handleAppForegroundWhileConnectedKeepsTheConnection() async throws {
     let sut = makeClient()
     let channel = await sut.channel("public:messages")
     try await channel.subscribe()
@@ -92,6 +106,83 @@ struct RealtimeLifecycleTests {
 
     #expect(await sut.status == .connected)
     #expect(await channel.status == .subscribed)
+  }
+
+  /// A suspended app leaves the socket open and silent, and `status` still says connected. The
+  /// foreground probe finds out after its 5 s deadline, not after the 25 s heartbeat interval.
+  @Test
+  func foregroundProbeOnADeadSocketReconnectsBeforeTheHeartbeatInterval() async throws {
+    let sut = makeClient()
+    try await sut.connect()
+    #expect(servers.value.count == 1)
+    answersHeartbeats.setValue(false)
+    let statusUpdates = await sut.statusChanges()
+    let start = testClock.now
+
+    await sut.handleAppForeground()
+    await testClock.advance(by: .seconds(5))
+
+    _ = await statusUpdates.first { $0 == .connecting }
+    _ = await statusUpdates.first { $0 == .connected }
+    #expect(servers.value.count == 2)
+    #expect(start.duration(to: testClock.now) == .seconds(5))
+  }
+
+  @Test
+  func foregroundProbeOnALiveSocketKeepsTheConnection() async throws {
+    let sut = makeClient()
+    try await sut.connect()
+    let heartbeats = await sut.heartbeats()
+
+    await sut.handleAppForeground()
+    _ = await heartbeats.first { if case .acknowledged = $0 { true } else { false } }
+    await testClock.advance(by: .seconds(5))
+    await sut.flushInbox()
+
+    #expect(await sut.status == .connected)
+    #expect(servers.value.count == 1)
+  }
+
+  /// The network is back while the client sleeps out a 30 s backoff: the wake retries at once.
+  @Test
+  func wakeCutsABackoffShort() async throws {
+    let sut = makeClient(reconnectBackoff: .steps([.seconds(30)]))
+    try await sut.connect()
+    await testClock.advance(by: .seconds(3))
+    let statusUpdates = await sut.statusChanges()
+    servers.value.last?.close(code: nil, reason: "network change")
+    _ = await statusUpdates.first { $0 == .reconnecting }
+    let start = testClock.now
+
+    sut.inbox.yield(.wake)
+    _ = await statusUpdates.first { $0 == .connected }
+
+    #expect(servers.value.count == 2)
+    #expect(testClock.now == start)
+  }
+
+  /// A path that flaps right after an attempt started cannot start another at once: the wake
+  /// retries when 2 s have passed since that attempt, long before the 30 s backoff ends.
+  @Test
+  func wakeJustAfterAnAttemptWaitsForTheCooldown() async throws {
+    let sut = makeClient(reconnectBackoff: .steps([.seconds(30)]))
+    try await sut.connect()
+    let statusUpdates = await sut.statusChanges()
+    servers.value.last?.close(code: nil, reason: "network change")
+    _ = await statusUpdates.first { $0 == .reconnecting }
+    let start = testClock.now
+
+    sut.inbox.yield(.wake)
+    sut.inbox.yield(.wake)
+    await sut.flushInbox()
+    #expect(servers.value.count == 1)
+    #expect(await sut.status == .reconnecting)
+
+    await testClock.advance(by: .seconds(2))
+    _ = await statusUpdates.first { $0 == .connected }
+
+    #expect(servers.value.count == 2)
+    #expect(start.duration(to: testClock.now) == .seconds(2))
   }
 
   @Test
@@ -173,9 +264,9 @@ struct RealtimeLifecycleTests {
     let rejoinJoinTopics = LockIsolated<Set<String>>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: RealtimeClientOptions(
-        headers: ["apikey": apiKey],
+      configuration: RealtimeClient.Configuration(
+        url: url,
+        headers: [.apikey: apiKey],
         accessToken: { "custom.access.token" }
       ),
       wsTransport: { [servers, connectionCount, rejoinJoinTopics] _, _ in
@@ -190,7 +281,7 @@ struct RealtimeLifecycleTests {
             guard let msg = event.realtimeMessage else { continue }
             if msg.event == "heartbeat" {
               server.send(
-                RealtimeMessageV2(
+                RealtimeMessage(
                   joinRef: msg.joinRef,
                   ref: msg.ref,
                   topic: "phoenix",
@@ -201,7 +292,7 @@ struct RealtimeLifecycleTests {
             } else if msg.event == "phx_join" {
               if isFirstConnection {
                 server.send(
-                  RealtimeMessageV2(
+                  RealtimeMessage(
                     joinRef: msg.joinRef,
                     ref: msg.ref,
                     topic: msg.topic,
@@ -213,7 +304,7 @@ struct RealtimeLifecycleTests {
                   )
                 )
               } else {
-                rejoinJoinTopics.withValue { $0.insert(msg.topic) }
+                rejoinJoinTopics.withValue { _ = $0.insert(msg.topic) }
               }
             }
           }
@@ -315,18 +406,153 @@ struct RealtimeLifecycleTests {
     )
   }
 
+  /// The lifecycle task holds only the inbox, so a client that observes a lifecycle that never
+  /// ends is still released.
   @Test
-  func handleAppLifecycleFalseDoesNotInstallLifecycleManager() {
-    let sut = makeClient(handleAppLifecycle: false)
-    #expect(sut.lifecycleManager == nil)
+  func theLifecycleTaskDoesNotRetainTheClient() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+    }
+    let box = WeakBox()
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+
+    func scope() async throws {
+      let sut = makeClient(observesAppLifecycle: true, lifecycleEvents: { events })
+      box.client = sut
+      try await sut.connect()
+      lifecycle.yield(.foreground)
+    }
+    try await scope()
+
+    #expect(await waitUntil(timeout: 5) { box.client == nil })
+    lifecycle.finish()
   }
 
-  #if os(iOS) || os(tvOS) || os(visionOS) || os(macOS)
+  @Test
+  func releasingTheClientAndItsChannelsClosesTheSocket() async throws {
+    final class WeakBox: @unchecked Sendable {
+      weak var client: RealtimeClient?
+      weak var subscribed: RealtimeChannel?
+      weak var idle: RealtimeChannel?
+    }
+    let box = WeakBox()
+
+    func scope() async throws {
+      let sut = makeClient()
+      box.client = sut
+      try await sut.connect()
+      let subscribed = await sut.channel("subscribed")
+      try await subscribed.subscribe()
+      box.subscribed = subscribed
+      box.idle = await sut.channel("idle")
+    }
+    try await scope()
+
+    let server = try #require(servers.value.last)
+    await waitUntil(timeout: 5) {
+      box.client == nil && box.subscribed == nil && box.idle == nil && server.isClosed
+    }
+
+    #expect(box.client == nil, "RealtimeClient leaked while it still had channels.")
+    #expect(box.subscribed == nil && box.idle == nil, "A channel outlived its client.")
+    #expect(server.isClosed, "WebSocket was left open after the client was released.")
+  }
+
+  @Test
+  func observesAppLifecycleFalseDoesNotObserveTheLifecycle() async {
+    let observed = LockIsolated(false)
+    let sut = makeClient(
+      observesAppLifecycle: false,
+      lifecycleEvents: {
+        observed.setValue(true)
+        return AsyncStream { $0.finish() }
+      }
+    )
+    try? await sut.connect()
+    await sut.flushInbox()
+
+    #expect(!observed.value)
+  }
+
+  @Test
+  func theLifecycleObserverIsNamedTheLifecycle() async throws {
+    guard #available(iOS 26, macOS 26, tvOS 26, watchOS 26, visionOS 26, *) else { return }
+    let name = LockIsolated<String??>(nil)
+    let sut = makeClient(
+      observesAppLifecycle: true,
+      lifecycleEvents: {
+        name.setValue(.some(Task.name))
+        return AsyncStream { $0.finish() }
+      }
+    )
+
+    #expect(await waitUntil { name.value != nil })
+    #expect(name.value == .some("supabase.realtime.lifecycle"))
+    _ = sut
+  }
+
+  /// The Mac waking from sleep is a return to the foreground: a connected socket gets a
+  /// liveness probe at once. The first event is the state at launch, which is not a change.
+  @Test(arguments: [AppLifecycleEvent.foreground, .systemDidWake])
+  func aReturnToTheForegroundProbesTheSocket(_ event: AppLifecycleEvent) async throws {
+    let (events, lifecycle) = AsyncStream.makeStream(of: AppLifecycleEvent.self)
+    let sut = makeClient(observesAppLifecycle: true, lifecycleEvents: { events })
+    try await sut.connect()
+    let heartbeats = await sut.heartbeats()
+
+    lifecycle.yield(.foreground)
+    lifecycle.yield(event)
+
+    _ = await heartbeats.first { $0 == .sent }
+    #expect(await sut.status == .connected)
+  }
+
+  @Test
+  func eachLifecycleEventMapsToTheRealtimePolicy() {
+    func name(_ input: Input?) -> String? {
+      switch input {
+      case .appForeground?: "appForeground"
+      case .appBackground?: "appBackground"
+      case nil: nil
+      default: "other"
+      }
+    }
+
+    #expect(name(Input(.foreground, isLaunchState: false)) == "appForeground")
+    #expect(name(Input(.systemDidWake, isLaunchState: false)) == "appForeground")
+    #expect(name(Input(.background, isLaunchState: false)) == "appBackground")
+    #expect(name(Input(.systemWillSleep, isLaunchState: false)) == "appBackground")
+    #expect(name(Input(.didBecomeActive, isLaunchState: false)) == nil)
+    #expect(name(Input(.protectedDataDidBecomeAvailable, isLaunchState: false)) == nil)
+    // At launch the foreground is not a return to it, but the background still records whether
+    // the client was connected when the app left.
+    #expect(name(Input(.foreground, isLaunchState: true)) == nil)
+    #expect(name(Input(.background, isLaunchState: true)) == "appBackground")
+  }
+
+  @Test
+  func monitorsNetworkPathFalseDoesNotInstallNetworkPathObserver() async {
+    let sut = makeClient(monitorsNetworkPath: false)
+    #expect(await !sut.hasNetworkPathObserver)
+  }
+
+  #if canImport(Network)
     @Test
-    func handleAppLifecycleTrueInstallsLifecycleManager() {
-      let sut = makeClient(handleAppLifecycle: true)
-      #expect(sut.lifecycleManager != nil)
+    func monitorsNetworkPathTrueInstallsNetworkPathObserver() async {
+      let sut = makeClient(monitorsNetworkPath: true)
+      #expect(await sut.hasNetworkPathObserver)
       _ = sut
     }
   #endif
+}
+
+extension RealtimeClient {
+  /// Whether the client watches the network path.
+  fileprivate var hasNetworkPathObserver: Bool {
+    #if canImport(Network)
+      networkPathObserver != nil
+    #else
+      false
+    #endif
+  }
 }

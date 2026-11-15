@@ -192,7 +192,7 @@ final class StorageTransferIntegrationTests {
     #endif
     #expect(response.contentType == "application/octet-stream")
     #expect(response.contentLength == Int64(payload.count))
-    #expect(response.cacheControl?.contains("no-cache") == true)
+    #expect(response.cacheControl?.rawValue.contains("no-cache") == true)
     #expect(response.eTag != nil)
     #expect(response.lastModified != nil)
   }
@@ -204,7 +204,7 @@ final class StorageTransferIntegrationTests {
     let response = try await bucket.download(
       path: "bytes-range.bin", options: DownloadOptions(range: 10...19))
 
-    #expect(response.httpResponse.status == .partialContent)
+    #expect(response.status == .partialContent)
     #expect(response.contentRange == "bytes 10-19/\(payload.count)")
     #expect(response.contentLength == 10)
     #expect(try await response.data() == payload[10...19])

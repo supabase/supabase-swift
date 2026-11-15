@@ -11,7 +11,7 @@ struct PersistedSessionCodecTests {
     let decoded = try PersistedSessionCodec.decode(json(named: fixture))
 
     #expect(!decoded.isCurrentSchema)
-    expectNoDifference(decoded.session.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(decoded.session, PersistedSessionFixtures.expectedSession)
     #expect(decoded.session.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
 
     let reEncoded = try PersistedSessionCodec.encode(decoded.session)
@@ -21,12 +21,33 @@ struct PersistedSessionCodecTests {
     )
   }
 
+  /// v2 stored metadata keys verbatim: Foundation applies no key strategy to `[String: _]` keys.
+  @Test(arguments: PersistedSessionFixtures.v2Shapes)
+  func keepsV2MetadataKeysVerbatim(fixture: String) throws {
+    let original = String(decoding: try json(named: fixture), as: UTF8.self)
+    let mixedKeys = original.replacingOccurrences(
+      of: #""referrer_id":null"#,
+      with: #""referrer_id":null,"signupSource":"ios","_private_":{"nested_key":1}"#
+    )
+    try #require(mixedKeys != original)
+
+    let decoded = try PersistedSessionCodec.decode(Data(mixedKeys.utf8))
+
+    expectNoDifference(
+      decoded.session.user.userMetadata,
+      [
+        "name": "Jane", "referrer_id": nil, "age": 42, "signupSource": "ios",
+        "_private_": ["nested_key": 1],
+      ]
+    )
+  }
+
   @Test
   func decodesSchema1() throws {
     let decoded = try PersistedSessionCodec.decode(json(named: PersistedSessionFixtures.schema1))
 
     #expect(decoded.isCurrentSchema)
-    expectNoDifference(decoded.session.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(decoded.session, PersistedSessionFixtures.expectedSession)
     #expect(decoded.session.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
   }
 
@@ -44,13 +65,24 @@ struct PersistedSessionCodecTests {
         updatedAt: Date()
       )
     ]
-    session.user.identities?[0].identityData = nil
-    let received = ReceivedSession(session: session, receivedAt: Date())
-
-    let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(received))
+    session.user.identities?[0].identityData = [:]
+    session.user.identities?[0].email = "jane@example.com"
+    session.user.actionLink = URL(string: "https://example.com/auth/v1/verify?token=t&type=signup")
+    let decoded = try PersistedSessionCodec.decode(PersistedSessionCodec.encode(session))
 
     #expect(decoded.isCurrentSchema)
-    expectNoDifference(decoded.session, received)
+    expectNoDifference(decoded.session, session)
+  }
+
+  @Test(arguments: PersistedSessionFixtures.v2Shapes + [PersistedSessionFixtures.schema1])
+  func identityIDsMapAfterReshape(fixture: String) throws {
+    let decoded = try PersistedSessionCodec.decode(json(named: fixture))
+    let identity = try #require(decoded.session.user.identities?.first)
+
+    #expect(identity.id == UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF"))
+    #expect(identity.providerUserID == "859f402d-b3de-4105-a1b9-932836d9193b")
+    #expect(identity.userID == UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B"))
+    #expect(identity.provider == .email)
   }
 
   @Test
@@ -64,8 +96,27 @@ struct PersistedSessionCodecTests {
     }
   }
 
+  @Test
+  func schema1WithAnExpiresInOutOfRangeFailsInsteadOfTrapping() throws {
+    let valid = String(
+      decoding: try PersistedSessionCodec.encode(Session.valid), as: UTF8.self)
+    let corrupt = valid.replacingOccurrences(of: #""expires_in":120"#, with: #""expires_in":1e30"#)
+    try #require(corrupt != valid)
+
+    #expect(throws: DecodingError.self) {
+      try PersistedSessionCodec.decode(Data(corrupt.utf8))
+    }
+  }
+
+  @Test
+  func rejectsANewerSchemaWithoutCallingItCorrupt() {
+    #expect(throws: PersistedSessionCodec.NewerSchema(schema: 2)) {
+      try PersistedSessionCodec.decode(Data(#"{"schema":2,"access_token":"a"}"#.utf8))
+    }
+  }
+
   @Test(arguments: [
-    #"{"schema":2,"access_token":"a"}"#,
+    #"{"schema":0,"access_token":"a"}"#,
     #"{"token":"a"}"#,
     "not-json",
   ])
@@ -97,18 +148,13 @@ struct PersistedSessionCodecTests {
         try AuthClient.Configuration.jsonEncoder.encode(
           V2WrappedSession(
             session: session,
-            expirationDate: Date(timeIntervalSince1970: session.expiresAt)
+            expirationDate: session.expiresAt
           )
         )
       ),
       (
         PersistedSessionFixtures.schema1,
-        try PersistedSessionCodec.encode(
-          ReceivedSession(
-            session: PersistedSessionFixtures.expectedSession,
-            receivedAt: PersistedSessionFixtures.expectedReceivedAt
-          )
-        )
+        try PersistedSessionCodec.encode(PersistedSessionFixtures.expectedSession)
       ),
     ]
 
@@ -135,8 +181,9 @@ enum PersistedSessionFixtures {
     providerRefreshToken: "provider-refresh-token",
     accessToken: "access-token",
     tokenType: "bearer",
-    expiresIn: 3600,
-    expiresAt: 1_790_074_965,
+    expiresIn: .seconds(3600),
+    expiresAt: Date(timeIntervalSince1970: 1_790_074_965),
+    receivedAt: Date(timeIntervalSince1970: 1_790_074_965 - 3600),
     refreshToken: "refresh-token",
     weakPassword: WeakPassword(reasons: ["length", "pwned"]),
     user: User(
@@ -161,11 +208,11 @@ enum PersistedSessionFixtures {
       updatedAt: date(1_790_071_365),
       identities: [
         UserIdentity(
-          id: "859f402d-b3de-4105-a1b9-932836d9193b",
-          identityId: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
-          userId: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+          id: UUID(uuidString: "6C69F399-BE1B-467A-9C53-D3753ABDD2DF")!,
+          providerUserID: "859f402d-b3de-4105-a1b9-932836d9193b",
+          userID: UUID(uuidString: "859F402D-B3DE-4105-A1B9-932836D9193B")!,
+          provider: .email,
           identityData: ["sub": "859f402d-b3de-4105-a1b9-932836d9193b", "email_verified": true],
-          provider: "email",
           createdAt: date(1_789_000_000),
           lastSignInAt: date(1_790_071_365),
           updatedAt: date(1_790_071_365)

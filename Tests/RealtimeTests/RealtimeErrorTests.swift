@@ -24,7 +24,6 @@ struct RealtimeErrorTests {
   @Test
   func statics() {
     #expect(RealtimeError.channelClosedByServer.kind == .channelClosedByServer)
-    #expect(RealtimeError.accessTokenMissing.kind == .accessTokenMissing)
     #expect(RealtimeError.heartbeatTimeout.kind == .timeout)
   }
 
@@ -33,10 +32,12 @@ struct RealtimeErrorTests {
     let error = RealtimeError(
       kind: .server,
       message: "Server error",
-      response: HTTPErrorResponse(statusCode: 500, headers: HTTPFields(), body: Data())
+      code: .malformedJWT,
+      response: HTTPErrorResponse(status: 500, headers: HTTPFields(), body: Data())
     )
 
-    #expect(error.description == "RealtimeError(server): Server error [status 500]")
+    #expect(
+      error.description == "RealtimeError(server): Server error [status 500] [code MalformedJWT]")
   }
 
   @Test
@@ -48,7 +49,7 @@ struct RealtimeErrorTests {
 
   struct JoinReasonRow: CustomTestStringConvertible {
     let reason: String
-    let code: RealtimeError.ServerCode?
+    let code: RealtimeError.Code?
     let kind: RealtimeError.Kind
     let isRetryable: Bool
     var testDescription: String { reason }
@@ -135,7 +136,7 @@ struct RealtimeErrorTests {
       code: .errorOnRpcCall, kind: .server, isRetryable: true),
     .init(
       reason: "PostgresChangesSubscribeTimeout: Timed out after 15000ms",
-      code: .postgresChangesSubscribeTimeout, kind: .server, isRetryable: true),
+      code: .postgresChangesSubscribeTimeout, kind: .server, isRetryable: false),
     .init(
       reason: "UnknownErrorOnChannel: %RuntimeError{}",
       code: .unknownErrorOnChannel, kind: .server, isRetryable: true),
@@ -159,7 +160,7 @@ struct RealtimeErrorTests {
   func joinErrorClassifiesEveryServerReason(row: JoinReasonRow) {
     let error = RealtimeError.joinError(reason: row.reason)
 
-    #expect(error.serverCode == row.code)
+    #expect(error.code == row.code)
     #expect(error.kind == row.kind)
     #expect(error.isRetryable == row.isRetryable)
     #expect(error.message == row.reason)
@@ -169,7 +170,7 @@ struct RealtimeErrorTests {
   func joinErrorDoesNotTreatAProseSentenceWithAColonAsACode() {
     let error = RealtimeError.joinError(reason: "Something went wrong: details")
 
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
     #expect(error.isRetryable)
   }
 
@@ -205,7 +206,9 @@ struct RealtimeErrorTests {
     .init(reason: "MissingPartition: x", expected: .retry),
     .init(reason: "TimeoutOnRpcCall: x", expected: .retry),
     .init(reason: "ErrorOnRpcCall: x", expected: .retry),
-    .init(reason: "PostgresChangesSubscribeTimeout: x", expected: .retry),
+    // `subscribe()` returns only once changes are live, so a server-side wait that runs out
+    // fails it instead of joining again.
+    .init(reason: "PostgresChangesSubscribeTimeout: x", expected: .fail),
     .init(reason: "UnknownErrorOnChannel: x", expected: .retry),
     .init(reason: "BrandNewCode: x", expected: .retry),
     .init(reason: "Realtime was unable to connect to the project database", expected: .retry),
@@ -249,7 +252,7 @@ struct RealtimeErrorTests {
 
     #expect(error.kind == .payloadTooLarge)
     #expect(!error.isRetryable)
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
   }
 
   @Test
@@ -283,7 +286,6 @@ struct RealtimeErrorTests {
   func upgradeFailedIsFatalForAuthAndNotFoundStatuses(status: Int) {
     let error = RealtimeError.upgradeFailed(status: status)
 
-    #expect(error.kind == .transport)
     #expect(!error.isRetryable)
     #expect(error.message.contains("\(status)"))
   }
@@ -292,8 +294,31 @@ struct RealtimeErrorTests {
   func upgradeFailedIsRetryableForRateLimitAndServerStatuses(status: Int) {
     let error = RealtimeError.upgradeFailed(status: status)
 
-    #expect(error.kind == .transport)
     #expect(error.isRetryable)
+  }
+
+  @Test
+  func upgradeFailedWithAStatusOutsideTheHTTPRangeHasNoResponse() {
+    for status in [-1, 1000] {
+      let error = RealtimeError.upgradeFailed(status: status)
+
+      #expect(error.kind == .server)
+      #expect(error.response == nil)
+      #expect(error.message.contains("\(status)"))
+    }
+  }
+
+  @Test(arguments: [
+    (401, RealtimeError.Kind.unauthorized), (403, .unauthorized), (404, .server),
+    (429, .rateLimited), (500, .server), (503, .server),
+  ])
+  func upgradeFailedPicksTheKindFromTheStatusAndKeepsTheResponse(
+    status: Int, kind: RealtimeError.Kind
+  ) {
+    let error = RealtimeError.upgradeFailed(status: status)
+
+    #expect(error.kind == kind)
+    #expect(error.response?.status.code == status)
   }
 
   @Test
@@ -301,7 +326,53 @@ struct RealtimeErrorTests {
     let error = RealtimeError(kind: .timeout, message: "slow")
 
     #expect(error.isRetryable)
-    #expect(error.serverCode == nil)
+    #expect(error.code == nil)
     #expect(error.closeCode == nil)
+  }
+
+  @Test(arguments: Array(RealtimeError.Kind.nonRetryable))
+  func initStopsRetryingForKindsTheCallerMustFix(kind: RealtimeError.Kind) {
+    #expect(!RealtimeError(kind: kind, message: "m").isRetryable)
+  }
+
+  @Test(arguments: [RealtimeError.Kind.transport, .server, .rateLimited])
+  func initRetriesEveryOtherKind(kind: RealtimeError.Kind) {
+    #expect(RealtimeError(kind: kind, message: "m").isRetryable)
+  }
+
+  @Test
+  func retryFollowsAKindChangedAfterInit() {
+    var error = RealtimeError(kind: .transport, message: "m")
+    error.kind = .invalidRequest
+
+    #expect(!error.isRetryable)
+  }
+
+  @Test
+  func catchMatchesKindAndCode() {
+    let error: any Error = RealtimeError(
+      kind: .unauthorized, message: "denied", code: .unauthorized)
+
+    #expect(RealtimeError.Kind.unauthorized ~= error)
+    #expect(!(RealtimeError.Kind.timeout ~= error))
+    #expect(RealtimeError.Code.unauthorized ~= error)
+    #expect(!(RealtimeError.Code.privateOnly ~= error))
+    #expect(!(RealtimeError.Code.unauthorized ~= URLError(.timedOut)))
+    #expect(!(RealtimeError.Kind.unauthorized ~= URLError(.timedOut)))
+
+    do {
+      throw error
+    } catch RealtimeError.Code.unauthorized {
+    } catch {
+      Issue.record("Expected RealtimeError.Code.unauthorized, got \(error)")
+    }
+  }
+
+  @Test
+  func descriptionPrintsAServerReasonCodeOnce() {
+    let error = RealtimeError.joinError(reason: "InvalidJWTToken: Token has expired")
+
+    #expect(error.code == .invalidJWTToken)
+    #expect(error.description == "RealtimeError(unauthorized): InvalidJWTToken: Token has expired")
   }
 }

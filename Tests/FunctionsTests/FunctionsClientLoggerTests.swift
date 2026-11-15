@@ -51,10 +51,10 @@ struct FunctionsClientLoggerTests {
     let capture = MetadataCapture()
     let logger = Logging.Logger(label: "test") { _ in CapturingLogHandler(capture: capture) }
 
-    let sut = FunctionsClient(
+    let sut = try FunctionsClient(
       configuration: .init(
         url: url,
-        headers: [HTTPField.Name("apikey")!: apiKey],
+        headers: [.apikey: apiKey],
         http: .init(
           transport: ClosureTransport { _, _ in
             (HTTPTypes.HTTPResponse(status: .ok), nil)

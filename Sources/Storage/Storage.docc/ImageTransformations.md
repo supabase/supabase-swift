@@ -8,19 +8,21 @@ An ``ImageTransform`` describes the image you want. Storage renders it from the 
 so you upload one original and serve every size from it. Pass the same value to any of three
 methods:
 
-- ``StorageBucket/publicURL(path:download:transform:versionId:cacheNonce:)`` for a public bucket.
-- ``StorageBucket/createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)`` for
+- ``StorageBucket/publicURL(path:options:)`` for a public bucket.
+- ``StorageBucket/createSignedURL(path:expiresIn:options:)`` for
   a private bucket.
-- ``StorageBucket/download(path:transform:options:progress:)`` to fetch the bytes.
+- ``StorageBucket/download(path:options:progress:)`` to fetch the bytes.
 
 ```swift
 let avatars = supabase.storage.from("avatars")
 let transform = ImageTransform(width: 200, height: 200, resize: .cover, quality: 80)
 
-let publicURL = avatars.publicURL(path: "user123.png", transform: transform)
+let publicURL = avatars.publicURL(path: "user123.png", options: PublicURLOptions(transform: transform))
 let signedURL = try await avatars.createSignedURL(
-  path: "user123.png", expiresIn: .seconds(3600), transform: transform)
-let data = try await avatars.download(path: "user123.png", transform: transform).data()
+  path: "user123.png", expiresIn: .seconds(3600), options: SignedURLOptions(transform: transform))
+let data = try await avatars.download(
+  path: "user123.png", options: DownloadOptions(transform: transform)
+).data()
 ```
 
 ### Size and fit

@@ -161,6 +161,7 @@ extension StorageClient {
   /// Returns the lifecycle policy of a Standard bucket, or `nil` if it has none.
   ///
   /// - Parameter id: The unique identifier of the bucket.
+  /// - Returns: The lifecycle policy, or `nil` if the bucket has none.
   /// - Throws: ``StorageError`` if lifecycle support is off for the project, the bucket is not a
   ///   Standard bucket, or the caller is not authorized.
   public func lifecycle(forBucket id: String) async throws -> LifecycleConfiguration? {
@@ -225,10 +226,11 @@ extension StorageClient {
   ///
   /// - Parameters:
   ///   - bucket: The unique identifier of the bucket to purge, or `nil` to purge every bucket.
-  ///   - includingTransformations: Pass `true` to also purge the resized and reformatted variants.
+  ///   - transformationsOnly: Pass `true` to purge only the resized and reformatted variants and
+  ///     keep the original cached. By default, the original and all its variants are purged.
   /// - Throws: ``StorageError`` if the caller is not authorized or cache purging is not enabled.
-  public func purgeCache(bucket: String?, includingTransformations: Bool = false) async throws {
+  public func purgeCache(bucket: String?, transformationsOnly: Bool = false) async throws {
     try await api.execute(
-      api.requests.purgeCache(bucket: bucket, includingTransformations: includingTransformations))
+      api.requests.purgeCache(bucket: bucket, transformationsOnly: transformationsOnly))
   }
 }

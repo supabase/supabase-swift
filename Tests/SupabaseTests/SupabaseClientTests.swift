@@ -19,89 +19,60 @@ import Testing
   import FoundationNetworking
 #endif
 
-final class RequestCapturingProtocol: URLProtocol {
-  private static let storage = LockIsolated<[URLRequest]>([])
-
-  static var capturedRequests: [URLRequest] {
-    get { storage.value }
-    set { storage.setValue(newValue) }
-  }
-
-  override static func canInit(with request: URLRequest) -> Bool { true }
-  override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-  override func startLoading() {
-    Self.capturedRequests.append(request)
-    let response = HTTPURLResponse(
-      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
-    )!
-    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-    client?.urlProtocol(self, didLoad: Data("[]".utf8))
-    client?.urlProtocolDidFinishLoading(self)
-  }
-
-  override func stopLoading() {}
-}
-
-func makeMockSession() -> URLSession {
-  let config = URLSessionConfiguration.ephemeral
-  config.protocolClasses = [RequestCapturingProtocol.self]
-  return URLSession(configuration: config)
-}
-
-final class AuthLocalStorageMock: AuthLocalStorage {
-  func store(key _: String, value _: Data) throws {}
-
-  func retrieve(key _: String) throws -> Data? {
-    nil
-  }
-
-  func remove(key _: String) throws {}
-}
-
 @Suite
 struct SupabaseClientTests {
   @Test
-  func globalClockReachesAuthAndRealtime() {
+  func eachDatabaseConfigurationGetsItsOwnDefaultCoders() {
+    let first = SupabaseClient.Configuration.Database()
+    let second = SupabaseClient.Configuration.Database()
+
+    #expect(first.encoder !== second.encoder)
+    #expect(first.decoder !== second.decoder)
+  }
+
+  @Test
+  func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
-        global: SupabaseClientOptions.GlobalOptions(clock: clock)
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        global: SupabaseClient.Configuration.Global(clock: clock)
       )
     )
 
     #expect(client.auth.configuration.clock as AnyObject === clock)
-    #expect(client.realtime.options.clock as AnyObject === clock)
+    #expect(client.realtime.configuration.clock as AnyObject === clock)
+    #expect(client.rest.configuration.clock as AnyObject === clock)
+    #expect(client.storage.configuration.clock as AnyObject === clock)
   }
 
   @Test
-  func clientInitialization() async {
+  func clientInitialization() async throws {
     let logger = Logging.Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
     let customSchema = "custom_schema"
-    let localStorage = AuthLocalStorageMock()
-    let customHeaders = ["header_field": "header_value"]
+    let localStorage = InMemoryAuthStorage()
+    let customHeaders: HTTPFields = [HTTPField.Name("header_field")!: "header_value"]
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(schema: customSchema),
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(schema: customSchema),
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           headers: customHeaders,
           logger: logger
         ),
-        functions: SupabaseClientOptions.FunctionsOptions(
+        functions: SupabaseClient.Configuration.Functions(
           region: .apNortheast1
         ),
-        realtime: RealtimeClientOptions(
-          headers: ["custom_realtime_header_key": "custom_realtime_header_value"]
+        realtime: SupabaseClient.Configuration.Realtime(
+          headers: [HTTPField.Name("custom_realtime_header_key")!: "custom_realtime_header_value"]
         )
       )
     )
@@ -115,37 +86,36 @@ struct SupabaseClientTests {
         == "https://project-ref.supabase.co/functions/v1"
     )
 
-    assertInlineSnapshot(of: client.headers, as: .customDump) {
-      """
+    expectNoDifference(
+      client.headers,
       [
-        "Apikey": "PUBLISHABLE_KEY",
-        "Authorization": "Bearer PUBLISHABLE_KEY",
-        "X-Client-Info": "supabase-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
-        "header_field": "header_value"
+        .apikey: "PUBLISHABLE_KEY",
+        .authorization: "Bearer PUBLISHABLE_KEY",
+        .xClientInfo:
+          "supabase-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0",
+        HTTPField.Name("header_field")!: "header_value",
       ]
-      """
-    }
+    )
     expectNoDifference(client.headers, client.auth.configuration.headers)
     var dataHeaders = client.headers
-    dataHeaders["Authorization"] = nil
-    expectNoDifference(dataHeaders, client.functions.configuration.headers.dictionary)
-    expectNoDifference(dataHeaders, client.storage.configuration.headers.dictionary)
+    dataHeaders[.authorization] = nil
+    expectNoDifference(dataHeaders, client.functions.configuration.headers)
+    expectNoDifference(dataHeaders, client.storage.configuration.headers)
     expectNoDifference(dataHeaders, client.rest.configuration.headers)
 
     #expect(client.functions.configuration.region == .apNortheast1)
 
-    let realtimeURL = client.realtime.url
+    let realtimeURL = client.realtime.configuration.url
     #expect(realtimeURL.absoluteString == "https://project-ref.supabase.co/realtime/v1")
 
-    let realtimeOptions = client.realtime.options
-    let expectedRealtimeHeader = client._headers.merging(with: [
+    let expectedRealtimeHeader = client.headers.merging(with: [
       .init("custom_realtime_header_key")!: "custom_realtime_header_value"
     ]
     )
-    expectNoDifference(realtimeOptions.headers, expectedRealtimeHeader)
-    #expect(realtimeOptions.logger.label == logger.label)
+    expectNoDifference(client.realtime.headers, expectedRealtimeHeader)
+    #expect(client.realtime.logger.label == logger.label)
 
-    #expect(!client.auth.configuration.automaticallyRefreshesToken)
+    #expect(client.auth.configuration.autoRefresh == .manual)
     #expect(client.auth.configuration.storageKey == "sb-project-ref-auth-token")
 
     #expect(
@@ -155,59 +125,129 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeLoggerIsTaggedWithSystemMetadataEvenThoughGlobalLoggerOverridesIt() {
+  func exposesTheConfigurationItWasCreatedWith() throws {
+    var configuration = SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
+    configuration.database.schema = "custom"
+    configuration.storage.usesNewHostname = true
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: configuration
+    )
+
+    #expect(client.configuration.database.schema == "custom")
+    #expect(client.configuration.storage.usesNewHostname)
+  }
+
+  @Test
+  func realtimeHeadersMergeCaseInsensitively() throws {
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        realtime: SupabaseClient.Configuration.Realtime(headers: [
+          .apikey: "other", HTTPField.Name("X-Custom")!: "1",
+        ])
+      )
+    )
+
+    let headers = client.realtime.headers
+    #expect(headers[values: .apikey] == ["other"])
+    #expect(headers[HTTPField.Name("x-custom")!] == "1")
+    #expect(client.realtime.configuration.headers[HTTPField.Name("X-Custom")!] == "1")
+  }
+
+  @Test
+  func realtimeFallsBackToTheGlobalLoggerTaggedWithSystemMetadata() throws {
     // Uses a plain Logger (not SwiftLogNoOpLogHandler) because a no-op handler's metadata
     // subscript always reads back nil, which would make this assertion untestable.
     let logger = Logging.Logger(label: "test")
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(logger: logger)
+        global: SupabaseClient.Configuration.Global(logger: logger)
       )
     )
 
-    let realtimeOptions = client.realtime.options
-    #expect(realtimeOptions.logger[metadataKey: "system"] == "realtime")
+    #expect(client.realtime.logger.label == "test")
+    #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
   }
 
   @Test
-  func dbRetryOptionForwardsToPostgrestClient() {
-    let defaultClient = SupabaseClient(
+  func authRetryOptionForwardsToAuthClient() throws {
+    let defaultClient = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock())
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
+      )
+    )
+    #expect(defaultClient.auth.configuration.retryEnabled == true)
+
+    let noRetryClient = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage(), retryEnabled: false)
+      )
+    )
+    #expect(noRetryClient.auth.configuration.retryEnabled == false)
+  }
+
+  @Test
+  func dbRetryOptionForwardsToPostgrestClient() throws {
+    let defaultClient = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
       )
     )
     #expect(defaultClient.rest.configuration.retryEnabled == true)
 
-    let noRetryClient = SupabaseClient(
+    let noRetryClient = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        db: SupabaseClientOptions.DatabaseOptions(retry: false),
-        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock())
+      configuration: SupabaseClient.Configuration(
+        database: SupabaseClient.Configuration.Database(retryEnabled: false),
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage())
       )
     )
     #expect(noRetryClient.rest.configuration.retryEnabled == false)
   }
 
   @Test
-  func storageResumableOptionForwardsToStorageClient() {
-    var storageOptions = SupabaseClientOptions.StorageOptions()
-    storageOptions.resumable = ResumableUploadConfiguration(
-      chunkSize: 1024, retryTimeout: .seconds(5))
-    let client = SupabaseClient(
+  func realtimeObservesAppLifecycleForwardsToRealtimeClient() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock()),
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
+      )
+    )
+
+    #expect(client.realtime.configuration.observesAppLifecycle == false)
+  }
+
+  @Test
+  func storageResumableOptionForwardsToStorageClient() throws {
+    var storageOptions = SupabaseClient.Configuration.Storage()
+    storageOptions.resumable = ResumableUploadConfiguration(
+      chunkSize: 1024, retryTimeout: .seconds(5))
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
         storage: storageOptions
       )
     )
@@ -217,118 +257,124 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func clientInitWithDefaultOptions() {
-    // Its own project, so the Keychain-backed session store is not shared with the parallel tests
-    // that use mock storage: a test bundle on the iOS simulator cannot read the Keychain.
-    _ = SupabaseClient(
-      supabaseURL: URL(string: "https://default-options.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY"
-    )
+  func clientInitWithDefaultOptions() async throws {
+    // A test bundle has no Keychain entitlement, so reading the stored session reports it. The
+    // client reads it in a task it starts, so the test reads the session inside the known issue.
+    // `initialization()` is no option: it never returns while the read fails.
+    try await withKnownIssue(isIntermittent: true) {
+      let client = try SupabaseClient(
+        supabaseURL: URL(string: "https://default-options.supabase.co")!,
+        supabaseKey: "PUBLISHABLE_KEY"
+      )
+      _ = try? await client.auth.session()
+    } matching: { issue in
+      issue.comments.contains { $0.rawValue.contains("errSecMissingEntitlement") }
+    }
   }
 
   @Test
-  func defaultTransportPropagatedToRealtimeClient() {
-    let localStorage = AuthLocalStorageMock()
-    let client = SupabaseClient(
+  func defaultTransportPropagatedToRealtimeClient() throws {
+    let localStorage = InMemoryAuthStorage()
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         )
       )
     )
 
     #expect(
-      client.realtime.options.http.transport is URLSessionTransport,
+      client.realtime.configuration.http.transport is URLSessionTransport,
       "the default URLSessionTransport should be propagated to Realtime client"
     )
     #expect(
-      client.realtime.options.http.middlewares.contains { $0 is TraceContextMiddleware },
+      client.realtime.configuration.http.middlewares.contains { $0 is TraceContextMiddleware },
       "SDK middlewares should be installed when the caller sets no transport"
     )
   }
 
   @Test
-  func userProvidedRealtimeTransportIsNotOverridden() {
-    let localStorage = AuthLocalStorageMock()
-    let client = SupabaseClient(
+  func userProvidedRealtimeTransportIsNotOverridden() throws {
+    let localStorage = InMemoryAuthStorage()
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
-        realtime: RealtimeClientOptions(
+        realtime: SupabaseClient.Configuration.Realtime(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
 
     #expect(
-      client.realtime.options.http.transport is ClosureTransport,
+      client.realtime.configuration.http.transport is ClosureTransport,
       "user-provided realtime transport should be preserved"
     )
     #expect(
-      client.realtime.options.http.middlewares.isEmpty,
-      "middlewares should stay as the caller passed them when they set a transport"
+      client.realtime.configuration.http.middlewares.contains { $0 is TraceContextMiddleware },
+      "SDK middlewares should stay installed when the caller sets a transport"
     )
   }
 
   @Test
-  func realtimeWebSocketSessionComesOnlyFromRealtimeOptions() {
-    let localStorage = AuthLocalStorageMock()
+  func realtimeWebSocketTransportComesOnlyFromRealtimeConfiguration() throws {
+    let localStorage = InMemoryAuthStorage()
     let httpSession = URLSession(configuration: .ephemeral)
-    let realtimeSpecificSession = URLSession(configuration: .default)
-    let client = SupabaseClient(
+    let realtimeTransport = MarkerWebSocketTransport()
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: httpSession))
         ),
-        realtime: RealtimeClientOptions(session: realtimeSpecificSession)
+        realtime: SupabaseClient.Configuration.Realtime(webSocketTransport: realtimeTransport)
       )
     )
 
     #expect(
-      client.realtime.options.session === realtimeSpecificSession,
-      "user-provided realtime session should be preserved"
+      client.realtime.transport as AnyObject === realtimeTransport,
+      "user-provided realtime transport should be used"
     )
 
-    let clientWithoutRealtimeSession = SupabaseClient(
+    let clientWithoutRealtimeTransport = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
           storage: localStorage,
-          automaticallyRefreshesToken: false
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: URLSessionTransport(session: httpSession))
         )
       )
     )
 
     #expect(
-      clientWithoutRealtimeSession.realtime.options.session == nil,
+      clientWithoutRealtimeTransport.realtime.transport is URLSessionWebSocketTransport,
       "the HTTP transport's URLSession must not leak into Realtime's WebSocket"
     )
   }
 
   @Test
-  func clientInitWithCustomAccessToken() async {
-    let localStorage = AuthLocalStorageMock()
+  func clientInitWithCustomAccessToken() async throws {
+    let localStorage = InMemoryAuthStorage()
 
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(
           storage: localStorage,
           accessToken: { "jwt" }
@@ -343,102 +389,126 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async {
+  func customAccessTokenErrorPropagatesInsteadOfFallingBackToAnonKey() async throws {
     struct TokenProviderError: Error, Equatable {}
 
-    final class UnreachableProtocol: URLProtocol {
-      override static func canInit(with request: URLRequest) -> Bool { true }
-      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    let transport = ClosureTransport { _, _ in throw URLError(.unknown) }
 
-      override func startLoading() {
-        client?.urlProtocol(self, didFailWithError: URLError(.unknown))
-      }
-
-      override func stopLoading() {}
-    }
-
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [UnreachableProtocol.self]
-
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
+      configuration: .init(
         auth: .init(
-          storage: AuthLocalStorageMock(),
+          storage: InMemoryAuthStorage(),
           accessToken: { throw TokenProviderError() }
         ),
-        global: .init(
-          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
-        )
+        global: .init(http: .init(transport: transport))
       )
     )
 
-    await #expect(throws: TokenProviderError.self) {
+    let error = await #expect(throws: PostgrestError.self) {
       try await client.rpc("some_fn").execute()
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenProviderError)
+  }
+
+  @Test
+  func customAccessTokenClientDoesNotRefreshTheStoredSession() async throws {
+    final class StoredSessionStorage: AuthStorage {
+      let data: Data
+      init(data: Data) { self.data = data }
+      func save(_: Data, key _: String) async throws {}
+      func load(key _: String) async throws -> Data? { data }
+      func remove(key _: String) async throws {}
+    }
+
+    let now = Date()
+    let stored = Auth.Session(
+      accessToken: "stored-access-token",
+      tokenType: "bearer",
+      expiresIn: .seconds(30),
+      expiresAt: now.addingTimeInterval(30),
+      receivedAt: now,
+      refreshToken: "stored-refresh-token",
+      user: Auth.User(
+        id: UUID(),
+        appMetadata: [:],
+        userMetadata: [:],
+        audience: "authenticated",
+        createdAt: now,
+        updatedAt: now
+      )
+    )
+    let storage = StoredSessionStorage(
+      data: try PersistedSessionCodec.encode(stored)
+    )
+
+    let seen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
+    let transport = ClosureTransport { request, _ in
+      seen.withValue { $0.append(request) }
+      return (
+        HTTPTypes.HTTPResponse(
+          status: .badRequest, headerFields: [.contentType: "application/json"]
+        ),
+        HTTPBody(Data("{}".utf8))
+      )
+    }
+
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: .init(
+        auth: .init(storage: storage, accessToken: { "third-party-jwt" }),
+        global: .init(http: .init(transport: transport))
+      )
+    )
+
+    let session = try await client._auth.session()
+
+    #expect(session.accessToken == "stored-access-token")
+    #expect(
+      !seen.value.contains { $0.path?.hasPrefix("/auth/v1/token") == true },
+      "a client with a third-party access token must not redeem the stored refresh token"
+    )
   }
 
   @Test
   func missingSessionFallsBackToAnonKeyWithoutCustomAccessToken() async throws {
-    final class CapturingProtocol: URLProtocol {
-      private static let storage = LockIsolated<URLRequest?>(nil)
-      static var capturedRequest: URLRequest? {
-        get { storage.value }
-        set { storage.setValue(newValue) }
-      }
-
-      override static func canInit(with request: URLRequest) -> Bool { true }
-      override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-      override func startLoading() {
-        Self.capturedRequest = request
-        let response = HTTPURLResponse(
-          url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("[]".utf8))
-        client?.urlProtocolDidFinishLoading(self)
-      }
-
-      override func stopLoading() {}
+    let transport = RecordingTransport { _, _ in
+      (HTTPTypes.HTTPResponse(status: .ok), Data("[]".utf8))
     }
 
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [CapturingProtocol.self]
-
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: .init(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
-        global: .init(
-          http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
-        )
+      configuration: .init(
+        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
+        global: .init(http: .init(transport: transport))
       )
     )
 
     try await client.rpc("some_fn").execute()
 
-    let request = try #require(CapturingProtocol.capturedRequest)
-    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer PUBLISHABLE_KEY")
+    let request = try #require(transport.requests.last)
+    #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
 
   @Test
-  func listenForAuthEventsTaskDoesNotRetainClient() async {
+  func listenForAuthEventsTaskDoesNotRetainClient() async throws {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
     }
     let box = WeakBox()
 
-    func scope() {
-      let client = SupabaseClient(
+    func scope() throws {
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
-        options: SupabaseClientOptions(
-          auth: SupabaseClientOptions.AuthOptions(
-            storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
+        configuration: SupabaseClient.Configuration(
+          auth: SupabaseClient.Configuration.Auth(
+            storage: InMemoryAuthStorage(),
+            autoRefresh: .manual
           )
         )
       )
@@ -449,7 +519,7 @@ struct SupabaseClientTests {
         "test precondition: client should be listening for internal auth events"
       )
     }
-    scope()
+    try scope()
 
     await Task.megaYield()
 
@@ -460,20 +530,20 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func subClientsDoNotRetainClient() async {
+  func subClientsDoNotRetainClient() async throws {
     final class WeakBox: @unchecked Sendable {
       weak var client: SupabaseClient?
     }
     let box = WeakBox()
 
-    func scope() {
-      let client = SupabaseClient(
+    func scope() throws {
+      let client = try SupabaseClient(
         supabaseURL: URL(string: "https://project-ref.supabase.co")!,
         supabaseKey: "PUBLISHABLE_KEY",
-        options: SupabaseClientOptions(
-          auth: SupabaseClientOptions.AuthOptions(
-            storage: AuthLocalStorageMock(),
-            automaticallyRefreshesToken: false
+        configuration: SupabaseClient.Configuration(
+          auth: SupabaseClient.Configuration.Auth(
+            storage: InMemoryAuthStorage(),
+            autoRefresh: .manual
           )
         )
       )
@@ -485,7 +555,7 @@ struct SupabaseClientTests {
 
       _ = client.storage
     }
-    scope()
+    try scope()
 
     await Task.megaYield()
 
@@ -496,40 +566,40 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsOmitsAuthorizationBearerForNewFormatKey() {
-    let client = SupabaseClient(
+  func functionsOmitsAuthorizationBearerForNewFormatKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
-    #expect(client.functions.configuration.headers[.init("Apikey")!] == "sb_publishable_abc123")
+    #expect(client.functions.configuration.headers[.apikey] == "sb_publishable_abc123")
   }
 
   @Test
-  func storageOmitsAuthorizationBearerForNewFormatKey() {
-    let client = SupabaseClient(
+  func storageOmitsAuthorizationBearerForNewFormatKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "sb_publishable_abc123",
-      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     let headers = client.storage.configuration.headers
     #expect(headers[.authorization] == nil)
-    #expect(headers[.init("Apikey")!] == "sb_publishable_abc123")
+    #expect(headers[.apikey] == "sb_publishable_abc123")
   }
 
   @Test
-  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() {
-    let client = SupabaseClient(
+  func functionsCarriesNoStaticAuthorizationHeaderForLegacyKey() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "legacy-jwt-key",
-      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.functions.configuration.headers[.authorization] == nil)
-    #expect(client.functions.configuration.headers[.init("Apikey")!] == "legacy-jwt-key")
+    #expect(client.functions.configuration.headers[.apikey] == "legacy-jwt-key")
   }
 
   @Test
@@ -543,16 +613,16 @@ struct SupabaseClientTests {
         HTTPBody(Data("[]".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false,
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual,
           accessToken: { "live-session-token" }
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, middlewares: [TagMiddleware(seen: seenByMiddleware)]))
       )
     )
@@ -576,11 +646,11 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsIsBuiltOnceAndCached() {
-    let client = SupabaseClient(
+  func functionsIsBuiltOnceAndCached() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(auth: .init(storage: AuthLocalStorageMock()))
+      configuration: SupabaseClient.Configuration(auth: .init(storage: InMemoryAuthStorage()))
     )
 
     #expect(client.mutableState.functions == nil)
@@ -595,11 +665,11 @@ struct SupabaseClientTests {
       seen.withValue { $0.append(request) }
       return (HTTPTypes.HTTPResponse(status: .ok), nil)
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+      configuration: SupabaseClient.Configuration(
+        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(http: .init(transport: transport)),
         functions: .init(region: .usEast1)
       )
@@ -616,11 +686,11 @@ struct SupabaseClientTests {
   func functionsHTTPOverridesTheGlobalTransport() async throws {
     let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
     let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock(), automaticallyRefreshesToken: false),
+      configuration: SupabaseClient.Configuration(
+        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
         global: .init(
           http: .init(
             transport: ClosureTransport { request, _ in
@@ -645,12 +715,12 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() {
-    let client = SupabaseClient(
+  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: .init(storage: AuthLocalStorageMock()),
+      configuration: SupabaseClient.Configuration(
+        auth: .init(storage: InMemoryAuthStorage()),
         global: .init(logger: Logging.Logger(label: "global")),
         functions: .init(logger: Logging.Logger(label: "functions"))
       )
@@ -669,15 +739,15 @@ struct SupabaseClientTests {
         HTTPBody(Data("[]".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, timeout: .seconds(7)))
       )
     )
@@ -685,7 +755,7 @@ struct SupabaseClientTests {
     _ = try await client.from("todos").select().execute()
     _ = try? await client.storage.listBuckets()
     _ = try? await client.functions.invoke("hello")
-    _ = try? await client.auth.resetPasswordForEmail("a@b.c")
+    _ = try? await client.auth.resetPassword(email: "a@b.c")
 
     for prefix in [
       "/rest/v1/todos", "/storage/v1/bucket", "/functions/v1/hello", "/auth/v1/recover",
@@ -693,7 +763,7 @@ struct SupabaseClientTests {
       let entry = try #require(seen.value.first { $0.path.hasPrefix(prefix) }, "\(prefix)")
       #expect(entry.timeout == .seconds(7), "\(prefix)")
     }
-    #expect(client.realtime.options.http.timeout == .seconds(7))
+    #expect(client.realtime.configuration.http.timeout == .seconds(7))
   }
 
   @Test
@@ -708,15 +778,15 @@ struct SupabaseClientTests {
         HTTPBody(Data("{}".utf8))
       )
     }
-    let client = SupabaseClient(
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
         ),
-        global: SupabaseClientOptions.GlobalOptions(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: transport, middlewares: [TagMiddleware()]))
       )
     )
@@ -728,22 +798,105 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() {
-    let client = SupabaseClient(
+  func realtimeKeepsCallerMiddlewaresWhenSDKInstallsItsOwn() throws {
+    let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
-      options: SupabaseClientOptions(
-        auth: SupabaseClientOptions.AuthOptions(
-          storage: AuthLocalStorageMock(),
-          automaticallyRefreshesToken: false
+      configuration: SupabaseClient.Configuration(
+        auth: SupabaseClient.Configuration.Auth(
+          storage: InMemoryAuthStorage(),
+          autoRefresh: .manual
         ),
-        realtime: RealtimeClientOptions(http: .init(middlewares: [TagMiddleware()]))
+        realtime: SupabaseClient.Configuration.Realtime(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
-    let middlewares = client.realtime.options.http.middlewares
+    let middlewares = client.realtime.configuration.http.middlewares
     #expect(middlewares.contains { $0 is TagMiddleware })
     #expect(middlewares.contains { $0 is TraceContextMiddleware })
+  }
+
+  @Test
+  func authEventsDoNotBuildRealtime() async throws {
+    let client = try makeRealtimeAuthClient()
+
+    await client.handleTokenChanged(event: .initialSession, session: nil)
+    await client.handleTokenChanged(event: .signedIn, session: .stub(accessToken: "user-token"))
+    await client.handleTokenChanged(event: .signedOut, session: nil)
+
+    #expect(client.mutableState.realtime == nil)
+  }
+
+  @Test
+  func authEventsReachAnExistingRealtimeClient() async throws {
+    let client = try makeRealtimeAuthClient()
+    let realtime = client.realtime
+
+    await client.handleTokenChanged(
+      event: .tokenRefreshed, session: .stub(accessToken: "refreshed-token"))
+    #expect(await realtime.accessToken == "refreshed-token")
+
+    await client.handleTokenChanged(event: .signedOut, session: nil)
+    #expect(await realtime.accessToken == "PUBLISHABLE_KEY")
+  }
+
+  @Test(arguments: [AuthEvent.passwordRecovery, .userUpdated, .mfaChallengeVerified])
+  func anyEventThatChangesTheAccessTokenReachesRealtime(event: AuthEvent) async throws {
+    let client = try makeRealtimeAuthClient()
+    let realtime = client.realtime
+
+    await client.handleTokenChanged(event: event, session: .stub(accessToken: "new-token"))
+
+    #expect(await realtime.accessToken == "new-token")
+  }
+
+  @Test
+  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+    let client = try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
+        global: .init(logger: Logging.Logger(label: "global")),
+        realtime: SupabaseClient.Configuration.Realtime(logger: Logging.Logger(label: "realtime"))
+      )
+    )
+
+    #expect(client.realtime.logger.label == "realtime")
+    #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
+  }
+
+  /// A third-party `accessToken` keeps the client from listening for auth events, so only the
+  /// events a test delivers reach `handleTokenChanged`.
+  private func makeRealtimeAuthClient() throws -> SupabaseClient {
+    try SupabaseClient(
+      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+      supabaseKey: "PUBLISHABLE_KEY",
+      configuration: SupabaseClient.Configuration(
+        auth: .init(storage: InMemoryAuthStorage(), accessToken: { nil }),
+        realtime: SupabaseClient.Configuration.Realtime(observesAppLifecycle: false)
+      )
+    )
+  }
+}
+
+extension Session {
+  static func stub(accessToken: String) -> Session {
+    Session(
+      accessToken: accessToken,
+      tokenType: "bearer",
+      expiresIn: .seconds(3600),
+      expiresAt: Date(timeIntervalSince1970: 4_102_444_800),
+      refreshToken: "refresh-token",
+      user: User(
+        id: UUID(),
+        appMetadata: [:],
+        userMetadata: [:],
+        audience: "authenticated",
+        createdAt: Date(),
+        updatedAt: Date()
+      )
+    )
   }
 }
 
@@ -778,4 +931,10 @@ private func authorization(
 
 extension HTTPField.Name {
   fileprivate static let tag = HTTPField.Name("X-Tag")!
+}
+
+private final class MarkerWebSocketTransport: WebSocketTransport {
+  func connect(to url: URL, headerFields: HTTPFields) async throws -> any WebSocketConnection {
+    throw URLError(.cancelled)
+  }
 }

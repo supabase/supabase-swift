@@ -1,0 +1,106 @@
+name: Mutation Testing
+
+# Runs scripts/mutation-test.sh on the critical parts of the SDK. Each mutant runs its module's
+# whole suite, so a run takes too long for every pull request: it runs weekly and on demand.
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays at 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Scope to run"
+        type: choice
+        default: all
+        options: [all, auth, helpers, postgrest, realtime, realtime-core]
+
+concurrency:
+  group: mutation-testing-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-testing:
+    name: Mutation testing (${{ matrix.scope }})
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        # A scheduled run, or a manual run of `all`, runs every scope; a manual run of one scope
+        # runs only that one.
+        scope: >-
+          ${{ fromJSON((github.event_name == 'schedule' || inputs.scope == 'all')
+          && '["auth", "helpers", "postgrest", "realtime", "realtime-core"]'
+          || format('["{0}"]', inputs.scope)) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode 27.0
+        run: sudo xcode-select -s /Applications/Xcode_27.0.app
+      - name: Install swift-mutation-testing
+        run: |
+          brew tap ericodx/homebrew-tools
+          brew trust --formula ericodx/tools/swift-mutation-testing
+          brew install swift-mutation-testing
+          swift-mutation-testing --version
+      - name: Run mutation testing
+        run: ./scripts/mutation-test.sh "${{ matrix.scope }}" --quiet
+      - name: Write job summary
+        if: always()
+        run: cat .mutation-testing/reports/*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-reports-${{ matrix.scope }}
+          path: .mutation-testing/reports/
+          if-no-files-found: ignore
+
+  # The weekly run has nobody watching it, so a failure would go unseen without an alert. A
+  # manual run does not alert: the person who started it watches it.
+  notify-slack-on-failure:
+    name: Notify Slack on mutation testing failure
+    needs: [mutation-testing]
+    if: always() && github.event_name == 'schedule' && needs.mutation-testing.result == 'failure'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Send Slack alert
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          payload=$(cat <<EOF
+          {
+            "text": "❌ Mutation testing failed in ${GITHUB_REPO}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": { "type": "plain_text", "text": "❌ Mutation testing failed", "emoji": true }
+              },
+              {
+                "type": "section",
+                "text": { "type": "mrkdwn", "text": "A scope failed its quality gate or did not finish. The run's summary and artifacts list the surviving mutants." }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  { "type": "mrkdwn", "text": "*Repository*\n${GITHUB_REPO}" },
+                  { "type": "mrkdwn", "text": "*Branch*\n${{ github.ref_name }}" }
+                ]
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": { "type": "plain_text", "text": "View Run" },
+                    "url": "https://github.com/${GITHUB_REPO}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl --proto '=https' -sf -X POST -H 'Content-type: application/json' --data "$payload" "${{ secrets.SLACK_CLIENT_LIBS_WEBHOOK }}"

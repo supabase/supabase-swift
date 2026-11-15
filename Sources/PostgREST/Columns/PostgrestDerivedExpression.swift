@@ -28,6 +28,8 @@ public struct _PostgrestDerivedExpression<
     self.inner = inner
   }
 
+  /// The text PostgREST expects: the inner expression, inside the embed's parentheses when
+  /// there is an embed.
   public var postgrestExpression: String {
     embed.map { "\($0)(\(inner))" } ?? inner
   }

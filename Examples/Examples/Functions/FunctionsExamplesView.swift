@@ -116,7 +116,7 @@ struct FunctionsExamplesView: View {
 
       let request = HelloWorldRequest(name: name)
 
-      let response: HelloWorldResponse = try await supabase.functions.invoke(
+      let response: HelloWorldResponse = try await supabaseClient.functions.invoke(
         "hello-world",
         body: .json(request)
       )

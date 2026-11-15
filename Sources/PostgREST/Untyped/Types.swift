@@ -1,87 +1,108 @@
 public import Foundation
 public import HTTPTypes
+import Helpers
 
-/// The response returned by a PostgREST query, containing the raw data, HTTP response, row count, and decoded value.
-///
-/// ``PostgrestResponse`` wraps the raw network response from PostgREST and provides decoded access
-/// to the returned rows alongside metadata such as the total row count (when requested via
-/// ``CountOption``) and the HTTP status code.
+/// The response returned by a PostgREST query: the status, the headers, the raw body, the row
+/// count, and the decoded value.
 ///
 /// ```swift
 /// let response: PostgrestResponse<[Todo]> = try await client
 ///   .from("todos")
-///   .select()
+///   .select(count: .exact)
 ///   .execute()
 ///
 /// print(response.value)  // [Todo]
 /// print(response.count)  // optional total count
-/// print(response.status) // HTTP status code
+/// print(response.status.code) // 200
 /// ```
 ///
 /// ## Topics
 ///
 /// ### Response Data
 ///
-/// - ``data``
 /// - ``value``
 /// - ``count``
 /// - ``status``
-/// - ``response``
+/// - ``headers``
+/// - ``body``
+/// - ``requestID``
+///
+/// ### Creating a Response
+///
+/// - ``init(status:headers:body:count:value:)``
 ///
 /// ### Converting the Response
 ///
 /// - ``string(encoding:)``
 public struct PostgrestResponse<T> {
-  /// The raw response body as `Data`.
-  public let data: Data
+  /// The HTTP status PostgREST answered with.
+  ///
+  /// A ``PostgrestRequestBuilder/maybeSingle()`` request that matches no row reads as `200 OK`
+  /// with a `null` ``body``, although PostgREST answers it with `406 Not Acceptable`.
+  public var status: HTTPResponse.Status
 
-  /// The HTTP response head: status and header fields.
-  public let response: HTTPResponse
+  /// Every response header. Import `HTTPTypes` to spell header names.
+  public var headers: HTTPFields
+
+  /// The raw response body. Empty when PostgREST sent none.
+  public var body: Data
 
   /// The total number of rows matching the query, or `nil` if no count was requested.
   ///
-  /// This value is populated from the `Content-Range` response header when a ``CountOption`` is
-  /// passed to the query. It respects any applied filters but ignores modifiers such as `limit`
-  /// and `range`.
-  public let count: Int?
+  /// The SDK reads it from the `Content-Range` header when a ``CountOption`` is passed to the
+  /// query. It respects any applied filters but ignores modifiers such as `limit` and `range`.
+  public var count: Int?
 
   /// The decoded response value.
-  public let value: T
+  public var value: T
 
-  /// The HTTP status code of the response.
-  public var status: Int {
-    response.status.code
-  }
+  /// The `sb-request-id` header Supabase attaches to every response through its API gateway.
+  ///
+  /// Quote this value when contacting Supabase support. `nil` on self-hosted stacks that do not
+  /// set the header.
+  public var requestID: String? { headers[.sbRequestID] }
 
-  /// Creates a ``PostgrestResponse`` from raw response data.
+  /// Creates a response, for tests and mocks.
   ///
   /// - Parameters:
-  ///   - data: The raw response body.
-  ///   - response: The HTTP response head.
+  ///   - status: The HTTP status.
+  ///   - headers: The response headers.
+  ///   - body: The raw response body.
+  ///   - count: The total row count, or `nil` when no count was requested.
   ///   - value: The decoded value.
   public init(
-    data: Data,
-    response: HTTPResponse,
+    status: HTTPResponse.Status,
+    headers: HTTPFields,
+    body: Data,
+    count: Int? = nil,
     value: T
   ) {
-    var count: Int?
-
-    if let contentRange = response.headerFields[.contentRange]?.split(separator: "/").last {
-      count = contentRange == "*" ? nil : Int(contentRange)
-    }
-
-    self.data = data
-    self.response = response
+    self.status = status
+    self.headers = headers
+    self.body = body
     self.count = count
     self.value = value
+  }
+
+  /// Creates a response from a response head, reading ``count`` from `Content-Range`.
+  init(_ response: HTTPResponse, body: Data, value: T) {
+    let total = response.headerFields[.contentRange]?.split(separator: "/").last
+    self.init(
+      status: response.status,
+      headers: response.headerFields,
+      body: body,
+      count: total.flatMap { Int($0) },
+      value: value
+    )
   }
 
   /// Returns the response body as a string using the specified encoding.
   ///
   /// - Parameter encoding: The string encoding to use. Defaults to `.utf8`.
-  /// - Returns: A `String` decoded from ``data``, or `nil` if the data cannot be decoded with the given encoding.
+  /// - Returns: A `String` decoded from ``body``, or `nil` if the body cannot be decoded with the
+  ///   given encoding.
   public func string(encoding: String.Encoding = .utf8) -> String? {
-    String(data: data, encoding: encoding)
+    String(data: body, encoding: encoding)
   }
 }
 
@@ -100,6 +121,7 @@ extension PostgrestResponse: Sendable where T: Sendable {}
 /// | ``planned`` | Approximate | Fast |
 /// | ``estimated`` | Adaptive | Moderate |
 public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The value sent in the `count` preference, such as `"exact"`.
   public let rawValue: String
 
   /// Creates a ``CountOption`` from a raw string value.
@@ -133,23 +155,24 @@ public struct CountOption: RawRepresentable, Hashable, Sendable, ExpressibleBySt
 
 /// Controls which rows PostgREST returns after a write operation.
 ///
-/// Pass a ``PostgrestReturningOptions`` value to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
+/// Pass a ``PostgrestReturning`` value to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
 /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``,
 /// or ``PostgrestRequestBuilder/delete(returning:count:)`` to specify what the server sends back.
 ///
 /// See the [PostgREST documentation](https://postgrest.org/en/v9.0/api.html?highlight=PREFER#insertions-updates)
 /// for more detail.
-public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
+public struct PostgrestReturning: RawRepresentable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The value sent in the `return` preference, such as `"minimal"`.
   public let rawValue: String
 
-  /// Creates a ``PostgrestReturningOptions`` from a raw string value.
+  /// Creates a ``PostgrestReturning`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }
 
-  /// Creates a ``PostgrestReturningOptions`` from a string literal.
+  /// Creates a ``PostgrestReturning`` from a string literal.
   public init(stringLiteral value: String) {
     self.init(rawValue: value)
   }
@@ -158,13 +181,13 @@ public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
   ///
   /// Use this option when you do not need the affected rows, as it avoids
   /// the overhead of serializing and transmitting them.
-  public static let minimal: PostgrestReturningOptions = "minimal"
+  public static let minimal: PostgrestReturning = "minimal"
 
   /// Returns a copy of the written rows.
   ///
   /// Use this option (or chain `.select()` after the call) when you need the
   /// server-generated values such as `id`, `created_at`, or computed columns.
-  public static let representation: PostgrestReturningOptions = "representation"
+  public static let representation: PostgrestReturning = "representation"
 }
 
 /// The conversion strategy used to turn a plain-text search query into a `tsquery` expression.
@@ -172,6 +195,7 @@ public struct PostgrestReturningOptions: RawRepresentable, Hashable, Sendable,
 /// Pass a ``TextSearchType`` to ``PostgrestRequestBuilder/textSearch(_:query:config:type:)`` to
 /// control how user-supplied text is interpreted by PostgreSQL's full-text search engine.
 public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  /// The prefix PostgREST expects before `fts`, such as `"pl"`.
   public let rawValue: String
 
   /// Creates a ``TextSearchType`` from a raw string value.
@@ -219,7 +243,8 @@ public struct TextSearchType: RawRepresentable, Hashable, Sendable, ExpressibleB
 /// ### Creating a Custom Format
 ///
 /// - ``init(rawValue:)``
-public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
+/// - ``init(stringLiteral:)``
+public struct ExplainFormat: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
   /// The raw PostgREST format string (e.g., `"text"` or `"json"`).
   public let rawValue: String
 
@@ -232,15 +257,20 @@ public struct ExplainFormat: RawRepresentable, Hashable, Sendable {
     self.rawValue = rawValue
   }
 
+  /// Creates an ``ExplainFormat`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
   /// Human-readable text output (the default).
   ///
   /// Produces the same indented text that `EXPLAIN` prints in `psql`. // cspell:ignore psql
-  public static let text = ExplainFormat(rawValue: "text")
+  public static let text: ExplainFormat = "text"
 
   /// Machine-readable JSON output.
   ///
   /// Useful when you want to programmatically inspect or visualize the query plan.
-  public static let json = ExplainFormat(rawValue: "json")
+  public static let json: ExplainFormat = "json"
 }
 
 /// Options for controlling whether the response body is returned and how rows are counted.

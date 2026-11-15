@@ -58,6 +58,7 @@ extension _PostgrestColumnExpression {
   /// > `cost::text::int`, and rejects a JSON path applied to a cast (`cost::text->>k`).
   ///
   /// - Parameter target: The Postgres type to cast to.
+  /// - Returns: A select-only expression of the target's Swift type.
   public func cast<T>(
     to target: _PostgrestCastTarget<T>
   ) -> _PostgrestDerivedExpression<Root, T, _PostgrestSelectOnly> {
@@ -80,6 +81,7 @@ extension _PostgrestColumnExpression where Value == JSONValue {
   ///
   /// - Parameter key: The object key to read. Always a key, even when it looks like a number:
   ///   `jsonText("0")` reads the key `"0"`. Use ``jsonText(_:)-(Int)`` for an array element.
+  /// - Returns: A `String` expression with the receiver's positions.
   public func jsonText(_ key: String) -> _PostgrestDerivedExpression<Root, String, Position> {
     _deriving("->>\(quotedJSONKey(key))")
   }
@@ -87,6 +89,7 @@ extension _PostgrestColumnExpression where Value == JSONValue {
   /// Reads a `json`/`jsonb` array element as text, with `->>`.
   ///
   /// - Parameter index: The zero-based array index. A negative index counts from the end.
+  /// - Returns: A `String` expression with the receiver's positions.
   public func jsonText(_ index: Int) -> _PostgrestDerivedExpression<Root, String, Position> {
     _deriving("->>\(index)")
   }
@@ -103,6 +106,7 @@ extension _PostgrestColumnExpression where Value == JSONValue {
   ///
   /// - Parameter key: The object key to read. Always a key, even when it looks like a number.
   ///   Use ``jsonObject(_:)-(Int)`` for an array element.
+  /// - Returns: A `JSONValue` expression with the receiver's positions.
   public func jsonObject(_ key: String) -> _PostgrestDerivedExpression<Root, JSONValue, Position> {
     _deriving("->\(quotedJSONKey(key))")
   }
@@ -110,6 +114,7 @@ extension _PostgrestColumnExpression where Value == JSONValue {
   /// Reads a `json`/`jsonb` array element as JSON, with `->`.
   ///
   /// - Parameter index: The zero-based array index. A negative index counts from the end.
+  /// - Returns: A `JSONValue` expression with the receiver's positions.
   public func jsonObject(_ index: Int) -> _PostgrestDerivedExpression<Root, JSONValue, Position> {
     _deriving("->\(index)")
   }

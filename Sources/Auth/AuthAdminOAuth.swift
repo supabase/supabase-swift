@@ -10,7 +10,7 @@ public import Foundation
 /// Admin operations for managing OAuth 2.1 clients registered in Supabase Auth.
 ///
 /// Only relevant when the OAuth 2.1 server feature is enabled in Supabase Auth.
-/// Access this namespace via ``AuthAdmin/oauth``.
+/// Access this namespace via ``AuthAdminClient/oauth``.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app — call these methods from a secure server-side environment only.
@@ -18,41 +18,48 @@ public import Foundation
 /// ## Topics
 ///
 /// ### Managing clients
-/// - ``listClients(params:)``
-/// - ``createClient(params:)``
+/// - ``listClients()``
+/// - ``createClient(_:)``
 /// - ``client(id:)``
-/// - ``updateClient(id:params:)``
+/// - ``updateClient(id:_:)``
 /// - ``deleteClient(id:)``
 /// - ``regenerateClientSecret(id:)``
 public struct AuthAdminOAuth: Sendable {
-  let admin: AuthAdmin
+  let admin: AuthAdminClient
 
   var api: APIClient { admin.api }
   var authAPI: AuthAPI { admin.authAPI }
 
-  /// Lists all OAuth clients with optional pagination.
+  /// Lists every OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
+  /// The server returns every client in one response, newest first. It does not page this list.
+  ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func listClients(
-    params: PageParams? = nil
-  ) async throws -> ListOAuthClientsPaginatedResponse {
-    try await api.execute(authAPI.adminListOAuthClients(params: params))
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
+  public func listClients() async throws -> [OAuthClient] {
+    try await api.execute(authAPI.adminListOAuthClients())
   }
 
   /// Creates a new OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  ///
+  /// - Throws: ``AuthError`` when the request fails.
   @discardableResult
-  public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
-    try await api.execute(authAPI.adminCreateOAuthClient(params: params))
+  public func createClient(_ client: CreateOAuthClient) async throws -> OAuthClient {
+    try await api.execute(authAPI.adminCreateOAuthClient(client))
   }
 
   /// Gets details of a specific OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter id: The unique identifier of the OAuth client.
+  /// - Returns: The OAuth client.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func client(id: UUID) async throws -> OAuthClient {
     try await api.execute(authAPI.adminOAuthClient(id: id))
@@ -61,20 +68,26 @@ public struct AuthAdminOAuth: Sendable {
   /// Updates an existing OAuth client registration. Only the provided fields will be updated.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
-  /// - Parameter id: The unique identifier of the OAuth client.
-  /// - Parameter params: The fields to update.
+  /// - Parameters:
+  ///   - id: The unique identifier of the OAuth client.
+  ///   - changes: The fields to update.
+  /// - Returns: The updated OAuth client.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func updateClient(
     id: UUID,
-    params: UpdateOAuthClientParams
+    _ changes: UpdateOAuthClient
   ) async throws -> OAuthClient {
-    try await api.execute(authAPI.adminUpdateOAuthClient(id: id, params: params))
+    try await api.execute(authAPI.adminUpdateOAuthClient(id: id, changes))
   }
 
   /// Deletes an OAuth client.
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter id: The unique identifier of the OAuth client to delete.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   public func deleteClient(id: UUID) async throws {
     try await api.execute(authAPI.adminDeleteOAuthClient(id: id))
@@ -84,6 +97,9 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Parameter id: The unique identifier of the OAuth client.
+  /// - Returns: The OAuth client, with its new secret.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
   public func regenerateClientSecret(id: UUID) async throws -> OAuthClient {

@@ -7,16 +7,17 @@
 
 import Foundation
 import InlineSnapshotTesting
+import HTTPTypes
 import PostgREST
 import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestTransformsTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.supabasePublishableKey
+        .apikey: DotEnv.supabasePublishableKey
       ]
     )
   )
@@ -215,6 +216,24 @@ struct PostgrestTransformsTests {
       .execute().value
 
     #expect(res == nil)
+  }
+
+  /// PostgREST answers a write that affects no row with 406 and `PGRST116`; `maybeSingle()` reads
+  /// it as a success with no row.
+  @Test
+  func maybeSingleOnAWriteThatAffectsNoRowReportsOK() async throws {
+    let response: PostgrestResponse<JSONValue?> =
+      try await client.from("users")
+      .update(["catchphrase": "never written"])
+      .eq("username", value: "does-not-exist")
+      .select("username")
+      .maybeSingle()
+      .execute()
+
+    #expect(response.value == nil)
+    #expect(response.status == .ok)
+    #expect(String(decoding: response.body, as: UTF8.self) == "null")
+    #expect(response.headers[HTTPField.Name("Proxy-Status")!] == nil)
   }
 
   @Test

@@ -1,6 +1,7 @@
 import Foundation
 import HTTPTypes
 import IssueReporting
+import Logging
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -9,7 +10,7 @@ import IssueReporting
 /// Internal implementation detail shared by ``StorageClient``, ``StorageBucket``, and the
 /// Vectors trio (``StorageVectorsClient``, ``VectorBucketClient``, ``VectorIndexClient``).
 ///
-/// Holds the ``StorageClientConfiguration``, the ``StorageRequests`` builder for its base URL,
+/// Holds the ``StorageClient/Configuration``, the ``StorageRequests`` builder for its base URL,
 /// and sends requests through the shared `HTTPClient`. Each of the types above holds a
 /// ``StorageAPI`` value and delegates to it rather than inheriting from it.
 struct StorageAPI: Sendable {
@@ -31,42 +32,51 @@ struct StorageAPI: Sendable {
 
   /// `url` with `project-ref.supabase.co` rewritten to `project-ref.storage.supabase.co`; any
   /// other host is returned as is.
-  static func storageHost(_ url: URL) -> URL {
-    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-      let host = components.host
+  static func storageHost(_ url: URL) throws -> URL {
+    guard url.hasSchemeAndHost,
+      var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      let host = components.host, !host.isEmpty
     else {
-      preconditionFailure("Storage client initialized with an invalid URL: \(url)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "StorageClient configured with a URL that has no scheme or host: \(url)")
     }
     guard isLegacySupabaseHost(host) else { return url }
 
     components.host = host.replacingOccurrences(of: ".supabase.", with: ".storage.supabase.")
     guard let rewritten = components.url else {
-      preconditionFailure("Rewriting the storage host produced an invalid URL: \(components)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "Rewriting the storage host produced an invalid URL: \(components)")
     }
     return rewritten
   }
 
-  private(set) var configuration: StorageClientConfiguration
+  private(set) var configuration: StorageClient.Configuration
 
   /// Builds the request for each route under ``configuration``'s URL.
   let requests: StorageRequests
+
+  /// Sent unless the configured headers set the same name.
+  static let defaultHeaders: HTTPFields = [.xClientInfo: clientInfo(library: "storage-swift")]
 
   /// Creates a ``StorageAPI`` with the given configuration.
   ///
   /// - Parameter configuration: The configuration that controls the endpoint URL, authentication
   ///   headers, and transport.
-  init(configuration: StorageClientConfiguration) {
+  /// - Throws: ``StorageError`` with kind ``StorageError/Kind-swift.struct/invalidConfiguration``
+  ///   if the configuration's URL has no scheme, no host, or cannot be split into components.
+  init(configuration: StorageClient.Configuration) throws {
     var configuration = configuration
-    if configuration.headers[.xClientInfo] == nil {
-      configuration.headers[.xClientInfo] = "storage-swift/\(version)"
-    }
+    configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "storage"
 
     if configuration.usesNewHostname == true {
-      configuration.url = Self.storageHost(configuration.url)
+      configuration.url = try Self.storageHost(configuration.url)
     }
 
     self.configuration = configuration
-    self.requests = StorageRequests(url: configuration.url)
+    self.requests = try StorageRequests(url: configuration.url)
   }
 
   /// Returns a copy with `value` merged into ``configuration``'s headers, included in all requests
@@ -75,7 +85,8 @@ struct StorageAPI: Sendable {
   /// - Parameters:
   ///   - name: The header field.
   ///   - value: The value of the header field.
-  func setHeader(name: HTTPField.Name, value: String) -> Self {
+  /// - Returns: The copy with the header set.
+  func settingHeader(name: HTTPField.Name, value: String) -> Self {
     var copy = self
     copy.configuration.headers[name] = value
     return copy
@@ -90,7 +101,7 @@ struct StorageAPI: Sendable {
   /// Sends `request` with the client's default headers and returns the response body.
   ///
   /// Only `GET`, `HEAD` and ``StorageRequest/replayable`` requests are retried, and only when
-  /// ``StorageClientConfiguration/retryEnabled`` is `true`.
+  /// ``StorageClient/Configuration/retryEnabled`` is `true`.
   @discardableResult
   func execute(_ request: StorageRequest) async throws -> Data {
     guard let body = try await stream(request).body else { return Data() }
@@ -111,7 +122,9 @@ struct StorageAPI: Sendable {
     )
 
     var head = request.head
-    head.headerFields = configuration.headers.merging(with: head.headerFields)
+    head.headerFields = Self.defaultHeaders
+      .merging(with: configuration.headers)
+      .merging(with: head.headerFields)
 
     let response: HTTPResponse
     let body: HTTPBody?
@@ -120,51 +133,41 @@ struct StorageAPI: Sendable {
     } catch {
       throw Self.transportError(error)
     }
-    let mapped = body?.mapError(Self.transportError)
-
     guard (200..<300).contains(response.status.code) else {
-      let data =
-        if let mapped {
-          try await Data(collecting: mapped, truncatingAt: Self.errorBodyCap)
-        } else {
-          Data()
-        }
+      // `HTTPClient` has already buffered and capped this non-2xx body.
+      let data = if let body { try await Data(collecting: body, upTo: .max) } else { Data() }
       throw Self.serverError(response, body: data)
     }
 
-    return (response, mapped)
+    return (response, body?.mapError(Self.transportError))
   }
 
-  /// Relabels the network layer's own failures. `CancellationError`, and anything thrown by user
-  /// code that runs inside the exchange (a custom `ClientTransport` or middleware), pass through
-  /// as themselves.
+  /// Relabels the network layer's own failures as `.transport` and a token provider's failure as
+  /// `.accessToken`. `CancellationError`, and anything else thrown by user code that runs inside
+  /// the exchange (a custom `ClientTransport` or middleware), pass through as themselves.
   private static func transportError(_ error: any Error) -> any Error {
+    if let failure = error as? AccessTokenFailure {
+      return StorageError(
+        kind: .accessToken,
+        message: AccessTokenFailure.message,
+        underlyingError: failure.underlyingError)
+    }
     guard let urlError = error as? URLError else { return error }
-    // `URLSession` reports a cancelled `Task` as `URLError(.cancelled)`. A `.cancelled` with no
-    // task cancellation behind it (a middleware cancelled the request) stays a transport error.
-    if urlError.code == .cancelled, Task.isCancelled { return CancellationError() }
     return StorageError(
       kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
   }
 
-  /// How much of an error body is kept. A failure never needs more, and a request that reached
-  /// the wrong host can answer with a page or a file.
-  static let errorBodyCap = 1 << 20
-
   /// The ``StorageError`` for a non-2xx response: the decoded JSON body when there is one, the
-  /// text of a plain-text body (the tus routes answer that way, with the code implied by the
-  /// status), or the status alone.
+  /// text of a plain-text body (the tus routes answer that way), or the status alone.
   static func serverError(_ response: HTTPResponse, body: Data) -> StorageError {
     let httpResponse = HTTPErrorResponse(response, body: body)
 
-    if let serverError = try? JSONDecoder.storage.decode(StorageError.ServerError.self, from: body)
-    {
+    if let decoded = try? JSONDecoder.storage.decode(StorageError.Body.self, from: body) {
       return StorageError(
         kind: .server,
-        message: serverError.message,
-        code: serverError.code,
-        serverStatusCode: serverError.statusCode,
-        serverError: serverError,
+        message: decoded.serverError.message,
+        code: decoded.code,
+        serverError: decoded.serverError,
         response: httpResponse
       )
     }
@@ -175,19 +178,10 @@ struct StorageAPI: Sendable {
         in: .whitespacesAndNewlines),
       !text.isEmpty
     {
-      let code: StorageError.Code? =
-        switch status {
-        case 404: .noSuchUpload
-        case 409: .keyAlreadyExists
-        case 413: .entityTooLarge
-        default: nil
-        }
       return StorageError(
         kind: .server,
         message: text,
-        code: code,
-        serverStatusCode: status,
-        serverError: .init(statusCode: status, code: code, message: text),
+        serverError: .init(statusCode: status, message: text),
         response: httpResponse
       )
     }
@@ -197,21 +191,6 @@ struct StorageAPI: Sendable {
       message: "Unexpected response with status code \(status).",
       response: httpResponse
     )
-  }
-}
-
-extension Data {
-  /// Collects `body` and stops after `cap` bytes instead of throwing, for bodies that are only
-  /// reported, never used.
-  fileprivate init(collecting body: HTTPBody, truncatingAt cap: Int) async throws {
-    self.init()
-    for try await chunk in body {
-      append(contentsOf: chunk)
-      if count >= cap {
-        removeSubrange(cap...)
-        break
-      }
-    }
   }
 }
 

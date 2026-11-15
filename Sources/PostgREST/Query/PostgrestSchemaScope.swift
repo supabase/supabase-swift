@@ -36,6 +36,8 @@ extension PostgrestClient {
     return _PostgrestSchemaScope(client: self.schema(S.name))
   }
 
+  /// Unavailable. Opt in to the typed query API with `@_spi(Experimental) import Supabase`, then
+  /// use ``schema(_:)->_PostgrestSchemaScope<S>``.
   @available(
     *, unavailable,
     message:

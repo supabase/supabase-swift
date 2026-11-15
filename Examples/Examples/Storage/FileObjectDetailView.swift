@@ -25,7 +25,7 @@ struct FileObjectDetailView: View {
             "updatedAt": fileObject.updatedAt.map { .string($0.description) } ?? .null,
             "createdAt": fileObject.createdAt.map { .string($0.description) } ?? .null,
             "lastAccessedAt": fileObject.lastAccessedAt.map { .string($0.description) } ?? .null,
-            "version": fileObject.version.map(JSONValue.string) ?? .null,
+            "version": fileObject.versionID.map(JSONValue.string) ?? .null,
             "size": fileObject.metadata?.size.map { .string(String($0)) } ?? .null,
             "mimeType": fileObject.metadata?.mimeType.map(JSONValue.string) ?? .null,
             "eTag": fileObject.metadata?.eTag.map(JSONValue.string) ?? .null,
@@ -50,10 +50,8 @@ struct FileObjectDetailView: View {
           Task {
             do {
               let url = try await api.createSignedURL(
-                path: fileObject.name,
-                expiresIn: .seconds(60),
-                download: .withOriginalName
-              )
+                path: fileObject.name, expiresIn: .seconds(60),
+                options: SignedURLOptions(download: .withOriginalName))
               lastActionResult = ("createSignedURL (download)", url)
               openURL(url)
             } catch {}

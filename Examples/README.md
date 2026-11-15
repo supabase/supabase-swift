@@ -25,7 +25,11 @@ Comprehensive authentication examples with multiple sign-in methods:
   - Sign in with Apple (native integration)
   - Sign in with Google (using Google Sign-In SDK)
   - Sign in with Facebook
-  - Generic OAuth flow for other providers
+  - Generic OAuth flow for other providers, with the default presenter
+  - OAuth with a `ClosurePresenter` and SwiftUI's `webAuthenticationSession`
+  - SAML single sign-on by email domain
+- **Session handling**: `AuthModel` drives the root view, one `onOpenURL` calls
+  `handleRedirect(_:)`, and `importSession` signs in with existing tokens
 - **Anonymous Sign-In**: Temporary guest access with account conversion
 - **Multi-Factor Authentication (MFA)**:
   - TOTP enrollment with QR codes
@@ -171,6 +175,14 @@ Features:
 - Inline code examples
 - Educational tooltips
 
+## Other Example Apps
+
+This folder also has complete apps. Each one is a target in `Examples.xcodeproj`:
+
+- **[Reminders](Reminders/README.md)**: a clone of the iOS Reminders app with Auth, Row Level Security, Realtime sync, list sharing, and image attachments. It uses a local Supabase stack with declarative schemas, and it has database tests and UI tests.
+- **SlackClone**: a chat app with Realtime.
+- **UserManagement**: profile management with Auth and Storage.
+
 ## Prerequisites
 
 - Xcode 15.0 or later
@@ -196,6 +208,11 @@ The native stack starts much faster than Docker, and CI uses it too. On Linux, r
 `supabase start`, which uses Docker. If `start` fails because port 54322 is already in use, an
 older Docker stack still holds the ports. Stop it with the experimental variable unset:
 `env -u SUPABASE_EXPERIMENTAL_STACK supabase stop`.
+
+To run this project next to other local Supabase projects (for example, in another git worktree),
+see "Running several local projects" in [DEVELOPMENT.md](../DEVELOPMENT.md#running-several-local-projects-worktrees-agents).
+The ports below are the defaults. If you removed the fixed ports, run `supabase status` for the
+real URLs and update `Supabase.swift` to match.
 
 This will start the local Supabase services:
 - **API**: http://127.0.0.1:54321
@@ -348,7 +365,11 @@ Examples/
 │   │   ├── SignInAnonymously.swift          # Anonymous auth
 │   │   ├── SignInWithApple.swift            # Apple Sign In
 │   │   ├── SignInWithFacebook.swift         # Facebook auth
-│   │   ├── SignInWithOAuth.swift            # Generic OAuth
+│   │   ├── SignInWithOAuth.swift            # Generic OAuth, default presenter
+│   │   ├── SignInWithOAuthClosurePresenter.swift # OAuth with a ClosurePresenter
+│   │   ├── SignInWithSSO.swift              # SAML single sign-on
+│   │   ├── ImportSessionView.swift          # importSession
+│   │   ├── UpdatePasswordView.swift         # Password recovery
 │   │   └── GoogleSignInSDKFlow.swift        # Google Sign-In SDK
 │   │
 │   ├── Database/          # PostgREST database examples

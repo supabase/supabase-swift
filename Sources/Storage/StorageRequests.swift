@@ -33,19 +33,20 @@ struct StorageRequests: Sendable {
   /// The base URL every route is appended to.
   let url: URL
 
-  init(url: URL) {
+  init(url: URL) throws {
     guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-      preconditionFailure("Storage client initialized with an invalid URL: \(url)")
+      throw StorageError(
+        kind: .invalidConfiguration,
+        message: "Storage client initialized with an invalid URL: \(url)")
     }
+    let resumableURL = try StorageAPI.storageHost(url)
     while components.percentEncodedPath.hasSuffix("/") {
       components.percentEncodedPath.removeLast()
     }
     self.base = components
     self.url = url
     var resumable = components
-    resumable.host =
-      URLComponents(
-        url: StorageAPI.storageHost(url), resolvingAgainstBaseURL: false)?.host
+    resumable.host = URLComponents(url: resumableURL, resolvingAgainstBaseURL: false)?.host
     self.resumableBase = resumable
   }
 
@@ -136,7 +137,7 @@ struct StorageRequests: Sendable {
 
   /// `DELETE cdn/` purges the whole tenant, `cdn/{bucket}` one bucket, `cdn/{bucket}/{key}` one
   /// object.
-  func purgeCache(bucket: String?, key: ObjectKey? = nil, includingTransformations: Bool)
+  func purgeCache(bucket: String?, key: ObjectKey? = nil, transformationsOnly: Bool)
     -> StorageRequest
   {
     let path =
@@ -146,7 +147,7 @@ struct StorageRequests: Sendable {
         method: .delete,
         url: url(
           "cdn/\(path)",
-          query: includingTransformations
+          query: transformationsOnly
             ? [URLQueryItem(name: "transformations", value: "true")] : [])
       ))
   }
@@ -307,36 +308,46 @@ struct StorageRequests: Sendable {
       let mimetype: String?
     }
 
-    let bucketId: String
+    let bucketID: String
     let sourceKey: String
     let destinationKey: String
     let destinationBucket: String?
-    let sourceVersionId: String?
+    let sourceVersionID: String?
     var copyMetadata: Bool?
     var metadata: Metadata?
+
+    enum CodingKeys: String, CodingKey {
+      case bucketID = "bucketId"
+      case sourceKey
+      case destinationKey
+      case destinationBucket
+      case sourceVersionID = "sourceVersionId"
+      case copyMetadata
+      case metadata
+    }
   }
 
   func move(
     bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?,
-    sourceVersionId: String?
+    sourceVersionID: String?
   ) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/move")),
       body: try json(
         MoveOrCopyBody(
-          bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
-          destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)))
+          bucketID: bucket, sourceKey: source.path, destinationKey: destination.path,
+          destinationBucket: destinationBucket, sourceVersionID: sourceVersionID)))
   }
 
   /// User metadata and upsert travel in headers, as on upload; the system metadata override in
   /// the body.
   func copy(
     bucket: String, source: ObjectKey, destination: ObjectKey, destinationBucket: String?,
-    sourceVersionId: String?, options: CopyOptions
+    sourceVersionID: String?, options: CopyOptions
   ) throws -> StorageRequest {
     var body = MoveOrCopyBody(
-      bucketId: bucket, sourceKey: source.path, destinationKey: destination.path,
-      destinationBucket: destinationBucket, sourceVersionId: sourceVersionId)
+      bucketID: bucket, sourceKey: source.path, destinationKey: destination.path,
+      destinationBucket: destinationBucket, sourceVersionID: sourceVersionID)
     if !options.copyMetadata {
       body.copyMetadata = false
     }
@@ -359,18 +370,24 @@ struct StorageRequests: Sendable {
   private struct SignBody: Encodable {
     let expiresIn: Int
     let transform: ImageTransform.Body?
-    let versionId: String?
+    let versionID: String?
+
+    enum CodingKeys: String, CodingKey {
+      case expiresIn
+      case transform
+      case versionID = "versionId"
+    }
   }
 
   func sign(
-    bucket: String, key: ObjectKey, expiresIn: Int, transform: ImageTransform?, versionId: String?
+    bucket: String, key: ObjectKey, expiresIn: Int, transform: ImageTransform?, versionID: String?
   ) throws -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(method: .post, url: url("object/sign/\(objectPath(bucket, key))")),
       body: try json(
         SignBody(
           expiresIn: expiresIn, transform: transform?.isEmpty == false ? transform?.body : nil,
-          versionId: versionId)))
+          versionID: versionID)))
   }
 
   private struct SignManyBody: Encodable {
@@ -390,7 +407,12 @@ struct StorageRequests: Sendable {
 
   private struct VersionPrefix: Encodable {
     let path: String
-    let versionId: String
+    let versionID: String
+
+    enum CodingKeys: String, CodingKey {
+      case path
+      case versionID = "versionId"
+    }
   }
 
   func remove(bucket: String, keys: [ObjectKey]) throws -> StorageRequest {
@@ -399,14 +421,14 @@ struct StorageRequests: Sendable {
       body: try json(RemoveBody(prefixes: keys.map(\.path))))
   }
 
-  func remove(bucket: String, versions: [(key: ObjectKey, versionId: String)]) throws
+  func remove(bucket: String, versions: [(key: ObjectKey, versionID: String)]) throws
     -> StorageRequest
   {
     StorageRequest(
       head: HTTPRequest(method: .delete, url: url("object/\(ObjectKey.encode(bucket))")),
       body: try json(
         RemoveBody(
-          prefixes: versions.map { VersionPrefix(path: $0.key.path, versionId: $0.versionId) })))
+          prefixes: versions.map { VersionPrefix(path: $0.key.path, versionID: $0.versionID) })))
   }
 
   private struct SortBody: Encodable {
@@ -483,14 +505,12 @@ struct StorageRequests: Sendable {
   }
 
   /// A transform routes to `render/image/authenticated`; the plain object route otherwise.
-  func download(
-    bucket: String, key: ObjectKey, transform: ImageTransform?, options: DownloadOptions
-  ) -> StorageRequest {
-    let transform = transform?.queryItems ?? []
+  func download(bucket: String, key: ObjectKey, options: DownloadOptions) -> StorageRequest {
+    let transform = options.transform?.queryItems ?? []
     let route = transform.isEmpty ? "object" : "render/image/authenticated"
     var query = transform
-    if let versionId = options.versionId {
-      query.append(URLQueryItem(name: "versionId", value: versionId))
+    if let versionID = options.versionID {
+      query.append(URLQueryItem(name: "versionId", value: versionID))
     }
     if let cacheNonce = options.cacheNonce {
       query.append(URLQueryItem(name: "cacheNonce", value: cacheNonce))
@@ -505,13 +525,13 @@ struct StorageRequests: Sendable {
         headerFields: headers.merging(with: options.headers)))
   }
 
-  func info(bucket: String, key: ObjectKey, versionId: String?) -> StorageRequest {
+  func info(bucket: String, key: ObjectKey, versionID: String?) -> StorageRequest {
     StorageRequest(
       head: HTTPRequest(
         method: .get,
         url: url(
           "object/info/\(objectPath(bucket, key))",
-          query: versionId.map { [URLQueryItem(name: "versionId", value: $0)] } ?? [])))
+          query: versionID.map { [URLQueryItem(name: "versionId", value: $0)] } ?? [])))
   }
 
   /// A transform routes to `render/image/public`; the plain public object route otherwise.

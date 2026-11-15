@@ -14,9 +14,11 @@ public import Logging
 /// stored function.
 ///
 /// ```swift
-/// let client = PostgrestClient(
-///   url: URL(string: "https://<project>.supabase.co/rest/v1")!,
-///   headers: ["apikey": "<anon-key>"]
+/// let client = try PostgrestClient(
+///   configuration: .init(
+///     url: URL(string: "https://<project>.supabase.co/rest/v1")!,
+///     headers: [.apikey: "<anon-key>"]
+///   )
 /// )
 ///
 /// // SELECT * FROM todos
@@ -32,7 +34,6 @@ public import Logging
 /// ### Creating a Client
 ///
 /// - ``init(configuration:)``
-/// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
 /// - ``Configuration``
 ///
 /// ### Querying and Mutating Data
@@ -53,13 +54,14 @@ public struct PostgrestClient: Sendable {
   ///
   /// Create a ``Configuration`` value and pass it to ``PostgrestClient/init(configuration:)`` when
   /// you need fine-grained control over the client, such as supplying a custom ``http`` transport
-  /// or middleware chain, or a custom ``jsonEncoder``/``jsonDecoder``.
+  /// or middleware chain, or a custom ``encoder`` and ``decoder``. Start a custom coder from
+  /// `JSONEncoder.supabase()` or `JSONDecoder.supabase()`, so `Date` values keep working.
   ///
   /// ## Topics
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:logger:http:encoder:decoder:retryEnabled:accessToken:)``
+  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:)``
   ///
   /// ### Configuration Properties
   ///
@@ -67,16 +69,11 @@ public struct PostgrestClient: Sendable {
   /// - ``schema``
   /// - ``headers``
   /// - ``http``
+  /// - ``logger``
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
-  /// - ``accessToken``
-  ///
-  /// ### Defaults
-  ///
-  /// - ``jsonEncoder``
-  /// - ``jsonDecoder``
-  /// - ``defaultHeaders``
+  /// - ``clock``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
     public var url: URL
@@ -85,35 +82,62 @@ public struct PostgrestClient: Sendable {
     public var schema: String?
 
     /// Additional HTTP headers sent with every request.
-    public var headers: [String: String]
+    ///
+    /// Header names compare without regard to case. The client adds an `X-Client-Info` header
+    /// unless you set that header yourself.
+    public var headers: HTTPFields
 
     /// The transport and middleware chain every request goes through.
+    ///
+    /// To send a user's access token, add an `AccessTokenMiddleware` to its middlewares. It runs
+    /// on every attempt, so a retried request gets a fresh token. A provider failure throws
+    /// ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/accessToken``. An
+    /// `Authorization` header in ``headers`` or on the request wins over the middleware.
+    ///
+    /// ```swift
+    /// let client = try PostgrestClient(
+    ///   configuration: .init(
+    ///     url: url,
+    ///     headers: [.apikey: key],
+    ///     http: .init(middlewares: [AccessTokenMiddleware { try await tokens.current() }])
+    ///   )
+    /// )
+    /// ```
     public var http: HTTPClientConfiguration
+
+    /// The logger for request and response diagnostics. Defaults to a build-config-aware
+    /// logger. The client removes tokens, secrets, and URL query strings from each line before
+    /// your handler sees it, and tags the logger with the `system` metadata key set to `postgrest`.
+    public var logger: Logging.Logger
 
     /// The `JSONEncoder` used to serialize request bodies.
     ///
-    /// Defaults to ``jsonEncoder``, which is pre-configured with Supabase-compatible settings.
+    /// Defaults to a new `JSONEncoder.supabase()`, which writes `Date` values the way Postgres
+    /// reads them.
+    ///
     /// Individual calls to ``PostgrestRequestBuilder/insert(_:returning:count:defaultToNull:encoder:)``,
     /// ``PostgrestRequestBuilder/update(_:returning:count:encoder:)``, and
     /// ``PostgrestRequestBuilder/upsert(_:onConflict:returning:count:ignoreDuplicates:defaultToNull:encoder:)``
     /// can override this per call.
     ///
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses ``jsonEncoder``, so a key strategy here cannot change the column names it
-    /// derives from `CodingKeys`.
-    public let encoder: JSONEncoder
+    /// always uses a fixed `JSONEncoder.supabase()`, so a key strategy here cannot change the
+    /// column names it derives from `CodingKeys`.
+    public var encoder: JSONEncoder
 
     /// The `JSONDecoder` used to deserialize response bodies.
     ///
-    /// Defaults to ``jsonDecoder``, which is pre-configured with Supabase-compatible settings.
+    /// Defaults to a new `JSONDecoder.supabase()`, which reads `Date` values the way Postgres
+    /// writes them.
+    ///
     /// Individual calls to ``PostgrestRequestBuilder/execute(options:decoder:)``
     /// can override this per call. Never used to decode ``PostgrestError/ServerError`` — that
     /// always uses a fixed internal decoder, decoupled from this setting.
     ///
     /// Applies to the untyped builders only. The typed API (`from(_:)` with a relation type)
-    /// always uses ``jsonDecoder``, so a key strategy here cannot change the column names it
-    /// derives from `CodingKeys`.
-    public let decoder: JSONDecoder
+    /// always uses a fixed `JSONDecoder.supabase()`, so a key strategy here cannot change the
+    /// column names it derives from `CodingKeys`.
+    public var decoder: JSONDecoder
 
     /// Whether the client should automatically retry transient errors.
     ///
@@ -135,18 +159,13 @@ public struct PostgrestClient: Sendable {
       retryableMethods: [.get, .head]
     )
 
-    /// An async closure returning the current access token, resolved fresh for every request and
-    /// sent as `Authorization: Bearer <token>`. `nil` (the default) sends no bearer token from this
-    /// closure. An `Authorization` header already present on the request — from `headers` above, or
-    /// from an explicit `PostgrestRequestBuilder.setHeader("Authorization", ...)` call — always
-    /// takes precedence over this closure's result.
+    /// The clock the waits between retries sleep on.
     ///
-    /// If the closure throws, the request is not sent and fails with a ``PostgrestError`` of kind
-    /// ``PostgrestError/Kind/accessToken``, carrying the thrown error in
-    /// ``PostgrestError/underlyingError``.
-    public var accessToken: (@Sendable () async throws -> String?)?
-
-    let logger: Logging.Logger
+    /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive retries deterministically in
+    /// tests instead of waiting out real seconds. `TestClock` comes from
+    /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
+    /// yourself, as this package does not export it.
+    public var clock: any Clock<Duration>
 
     /// Creates a new ``Configuration``.
     ///
@@ -154,94 +173,61 @@ public struct PostgrestClient: Sendable {
     ///   - url: The base URL of the PostgREST endpoint.
     ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
     ///   - headers: Additional HTTP headers sent with every request.
-    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
     ///   - http: The transport and middleware chain every request goes through.
-    ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``jsonEncoder``.
-    ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``jsonDecoder``.
+    ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
+    ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to a new
+    ///     `JSONEncoder.supabase()`.
+    ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new
+    ///     `JSONDecoder.supabase()`.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-    ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
+    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
       schema: String? = nil,
-      headers: [String: String] = [:],
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
+      headers: HTTPFields = [:],
       http: HTTPClientConfiguration = .init(),
-      encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-      decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
+      encoder: JSONEncoder = .supabase(),
+      decoder: JSONDecoder = .supabase(),
       retryEnabled: Bool = true,
-      accessToken: (@Sendable () async throws -> String?)? = nil
+      clock: any Clock<Duration> = ContinuousClock()
     ) {
       self.url = url
       self.schema = schema
       self.headers = headers
-      var logger = logger
-      logger[metadataKey: "system"] = "postgrest"
-      self.logger = logger
       self.http = http
+      self.logger = logger
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
-      self.accessToken = accessToken
+      self.clock = clock
     }
   }
 
   /// The configuration this client was created with.
   public let configuration: Configuration
-  let clock: any Clock<Duration>
 
-  /// Creates a ``PostgrestClient`` from an existing ``Configuration``.
+  /// Creates a ``PostgrestClient`` from a ``Configuration``.
   ///
   /// - Parameter configuration: The configuration to use.
-  public init(configuration: Configuration) {
-    self.init(configuration: configuration, clock: ContinuousClock())
+  /// - Throws: ``PostgrestError`` with kind ``PostgrestError/Kind-swift.struct/invalidConfiguration``
+  ///   if `configuration.url` has no scheme or no host.
+  public init(configuration: Configuration) throws {
+    guard configuration.url.hasSchemeAndHost else {
+      throw PostgrestError(
+        kind: .invalidConfiguration,
+        message:
+          "PostgrestClient configured with a URL that has no scheme or host: \(configuration.url)")
+    }
+    self.init(checkedConfiguration: configuration)
   }
 
-  init(configuration: Configuration, clock: any Clock<Duration>) {
+  /// Creates a client from a configuration whose URL ``init(configuration:)`` already accepted.
+  private init(checkedConfiguration configuration: Configuration) {
     var configuration = configuration
-    configuration.headers.merge(Configuration.defaultHeaders) { l, _ in l }
+    configuration.logger = configuration.logger.redactingSecrets()
+    configuration.logger[metadataKey: "system"] = "postgrest"
     self.configuration = configuration
-    self.clock = clock
-  }
-
-  /// Creates a ``PostgrestClient`` with individual configuration parameters.
-  ///
-  /// This is a convenience initializer that constructs a ``Configuration`` internally.
-  /// Use ``init(configuration:)`` when you need to share or reuse a configuration value.
-  ///
-  /// - Parameters:
-  ///   - url: The base URL of the PostgREST endpoint.
-  ///   - schema: The PostgreSQL schema to use. Defaults to `nil` (PostgREST default).
-  ///   - headers: Additional HTTP headers sent with every request.
-  ///   - logger: A logger for diagnostic output. Defaults to a build-config-aware logger.
-  ///   - http: The transport and middleware chain every request goes through.
-  ///   - encoder: The `JSONEncoder` used for request bodies. Defaults to ``Configuration/jsonEncoder``.
-  ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to ``Configuration/jsonDecoder``.
-  ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-  ///   - accessToken: An async closure returning the current access token. Defaults to `nil`.
-  public init(
-    url: URL,
-    schema: String? = nil,
-    headers: [String: String] = [:],
-    logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
-    http: HTTPClientConfiguration = .init(),
-    encoder: JSONEncoder = PostgrestClient.Configuration.jsonEncoder,
-    decoder: JSONDecoder = PostgrestClient.Configuration.jsonDecoder,
-    retryEnabled: Bool = true,
-    accessToken: (@Sendable () async throws -> String?)? = nil
-  ) {
-    self.init(
-      configuration: Configuration(
-        url: url,
-        schema: schema,
-        headers: headers,
-        logger: logger,
-        http: http,
-        encoder: encoder,
-        decoder: decoder,
-        retryEnabled: retryEnabled,
-        accessToken: accessToken
-      )
-    )
   }
 
   /// Returns a query builder targeting the specified table or view.
@@ -275,7 +261,8 @@ public struct PostgrestClient: Sendable {
   ///   - get: When `true`, parameters are sent as query string items and the function runs in read-only mode.
   ///   - count: The row-count algorithm to use for [set-returning functions](https://www.postgresql.org/docs/current/functions-srf.html), or `nil` to skip counting.
   /// - Returns: A ``PostgrestFilterBuilder`` that you can further filter or execute.
-  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if `params` cannot be serialized to a key-value JSON object when using `head` or `get`.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `params` does not encode, or
+  ///   does not encode as a key-value JSON object when `head` or `get` is `true`. Nothing is sent.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -283,21 +270,18 @@ public struct PostgrestClient: Sendable {
     get: Bool = false,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
-    let bodyData = try configuration.encoder.encode(params)
+    let bodyData = try configuration.encoder.encodeRequestBody(params)
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard case .object(let json) = try JSONValue.decoder.decode(JSONValue.self, from: bodyData)
-      else {
+      guard let arguments = Self.queryItems(forJSONObject: bodyData) else {
         throw PostgrestError(
           kind: .invalidRequest,
           message: "Params should be a key-value type when using `GET` or `HEAD` options."
         )
       }
 
-      for (key, value) in json {
-        request.leadingQuery.append(URLQueryItem(name: key, value: queryValue(for: value)))
-      }
+      request.leadingQuery.append(contentsOf: arguments)
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -351,19 +335,29 @@ public struct PostgrestClient: Sendable {
   public func schema(_ schema: String) -> PostgrestClient {
     var configuration = configuration
     configuration.schema = schema
-    return PostgrestClient(configuration: configuration, clock: clock)
+    return PostgrestClient(checkedConfiguration: configuration)
   }
 
-  private func queryValue(for value: JSONValue) -> String {
+  /// The arguments in `body`, one query item per key in key order, or `nil` when `body` is not a
+  /// JSON object. A number keeps its exact digits.
+  static func queryItems(forJSONObject body: Data) -> [URLQueryItem]? {
+    guard case .object(let arguments)? = try? JSONDecoder().decode(JSONValue.self, from: body)
+    else { return nil }
+    return arguments.sorted { $0.key < $1.key }.map { key, value in
+      URLQueryItem(name: key, value: queryValue(for: value))
+    }
+  }
+
+  /// A Postgres array literal for an array, compact JSON with sorted keys for an object, and the
+  /// plain text of any other value.
+  private static func queryValue(for value: JSONValue) -> String {
     switch value {
     case .null:
       return "null"
     case .bool(let bool):
       return bool ? "true" : "false"
-    case .integer(let integer):
-      return String(integer)
-    case .double(let double):
-      return String(double)
+    case .number(let number):
+      return number.description
     case .string(let string):
       return string
     case .array(let array):
@@ -371,23 +365,19 @@ public struct PostgrestClient: Sendable {
     case .object:
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-      if let data = try? encoder.encode(value),
-        let json = String(data: data, encoding: .utf8)
-      {
-        return json
-      }
-      return ""
+      guard let data = try? encoder.encode(value) else { return "" }
+      return String(decoding: data, as: UTF8.self)
     }
   }
 
   /// One element of a Postgres array literal. An element that is empty, spells NULL, or holds
   /// `,` `{` `}` `"` `\` is double-quoted, as for the `cs`/`cd` filters, so it stays one element
   /// with its own text. A nested array stays a bare sub-literal, and a JSON null a bare `null`.
-  private func arrayElementValue(for value: JSONValue) -> String {
+  private static func arrayElementValue(for value: JSONValue) -> String {
     switch value {
     case .null, .array:
       return queryValue(for: value)
-    case .bool, .integer, .double, .string, .object:
+    case .bool, .number, .string, .object:
       return escapePostgRESTArrayLiteralElement(queryValue(for: value))
     }
   }

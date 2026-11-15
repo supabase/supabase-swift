@@ -25,16 +25,34 @@ warnings that `PostgrestMacros` was not compiled with library evolution; they ar
 macOS CI jobs compile the generated code with library evolution; the Linux job runs the same
 behavioral tests without it. A change to the macros or to `PostgREST` that breaks generated code
 fails `swift test` at the root; a generator change that is not recorded fails `EmitterTests`.
+`SupabaseTypegenPostgrestTypegenOutputTests` and `SupabaseTypegenHostileOutputTests` build with
+`.defaultIsolation(MainActor.self)` and `InferIsolatedConformances`, as an app with Xcode's
+"Approachable Concurrency" does; `SupabaseTypegenOutputTests` keeps the nonisolated default.
 `SupabaseTypegenOutputTests` also runs queries through the generated types. `IntegrationTests`
 compiles the same file through the symlink `Tests/IntegrationTests/Postgrest/Generated.swift` (a
 test target cannot depend on another), so the Postgrest integration tests query the integration
 schema with its generated models. After changing a migration there, refresh the fixtures and record
 the goldens.
 
+The generated file starts with a comment that says not to edit it and names the generator release
+(`version` in `Version.swift`). The goldens hold `VERSION` in its place, so a release bump does not
+change them.
+
 A Postgres enum becomes a Swift `enum` (`String, Codable, Hashable, Sendable,
 PostgrestFilterValue`), generated for every enum in a selected schema and for any other enum a
-generated column uses. "Enum-like Values" in [CODE_STYLE.md](../../CODE_STYLE.md) governs the SDK's own types, not this generated code: a
-label added to the Postgres enum fails to decode until the user regenerates.
+generated column uses. The set is closed on purpose. "Enum-like Values" in
+[CODE_STYLE.md](../../CODE_STYLE.md) governs the SDK's own types, whose values the server owns. A
+generated enum mirrors the app's own schema instead, so the app regenerates its types when that
+schema changes, as it does for a new column. Until it does, a label added to the Postgres enum
+fails to decode.
+
+Generated code names PostgREST types that start with an underscore: the `_Postgres…` value types
+below, `_PostgrestComputedField`, `_PostgrestToOneRelation`, `_PostgrestToManyRelation`,
+`_PostgrestFunctions` and `_PostgrestFunctionQuery`. They are public only so that generated code
+and macro expansions in another module can use them. An app reaches them through generated
+properties and methods, such as `row.duration` or `client.rpc.searchBooks(query:)`, and does not
+need to write their names. The underscore keeps them out of code completion and marks them as
+support types whose names can change.
 
 Each Postgres type maps to one Swift type, so the generated `@Table` property's type is the column's
 Postgres type. An app that decodes a column as its own type declares it in `@SelectionOf`. A type
@@ -59,13 +77,55 @@ column on standard error. It has no filters: Postgres has no equality for a comp
 A Postgres `date` becomes `Date`, read and written as midnight UTC. A caller who builds "today" at
 local midnight east of UTC writes the previous day; build the value in a UTC calendar.
 
-Computed fields and relationships come from `functions`: one `extension <Type>.Columns` per
-relation, for each function with one input argument of the relation's row type, in the relation's
-own schema, and not named like a column (compared as Postgres names). A scalar return type gives
+Computed fields and relationships come from `functions`: one `nonisolated extension <Type>.Columns`
+per relation (so an app built with `.defaultIsolation(MainActor.self)` can read them from the
+nonisolated `@SelectionOf` expansion), for each function with one input argument of the
+relation's row type, in the relation's own schema, and not named like a column (compared as
+Postgres names). A scalar return type gives
 `_PostgrestComputedField` (the mapping above applies); a row type gives `_PostgrestToOneRelation`, or
 `_PostgrestToManyRelation` when the function returns a `SETOF` with more than one `ROWS`. A function
 that returns `void`, `record`, a set of scalars, or a row type the generator does not emit is
 skipped. Each skip, and each rename that a name clash needs, is a note on standard error.
+
+Function calls come from `rpcFunctions`, which postgrest-typegen 0.5.0 and later resolve from
+`functions` the way PostgREST does. Each callable overload becomes two declarations: a `@Function`
+struct that holds the arguments, named `<Function>Function`, and a method in an
+`extension _PostgrestFunctions` that builds the struct and calls it. The call reads
+`client.rpc.searchBooks(query: "dune")`, and because the method goes through the typed `rpc(_:)`,
+`.readOnly()`, `.where`, `.order` and the rest of the typed query API apply. Overloads share the
+method name and differ in their argument labels, which is how PostgREST tells them apart too; each
+gets a struct of its own, and a struct name that would repeat another type's is numbered, with a
+note, as is a method that would repeat another method's labels and types. A function outside
+`public` carries its schema as a prefix, `inventoryRestock(amount:)`, and is called in that
+schema. A defaulted parameter is optional and left out when `nil`, so the function's default
+applies.
+
+The return type decides the struct's `Result`:
+
+| Postgres result | `Result` |
+| --------------- | -------- |
+| `SETOF` a generated relation | `[Relation]`, filterable through its columns |
+| `RETURNS TABLE` or `OUT` parameters | `[<Function>Row]`, a read-only `@Table` struct, filterable through its columns |
+| a scalar, an array, or a set of scalars | `T?`, or `[T?]` for a set |
+| `void` | none, so `Void` |
+
+A `<Function>Row` struct names the function as its relation, so `client.from(_:)` accepts it but
+sends a request for a relation that does not exist: reach its rows through the function's method.
+
+Parameters come in the order postgrest-typegen lists them: required ones first, then the defaulted
+ones, each by name rather than by their position in the function's declaration. A numbered
+overload's number follows the document's order of overloads, so adding an overload can renumber
+the ones after it.
+
+A function whose sole parameter is an unnamed `json` or `jsonb` takes the whole body as
+`_ body: JSONValue`; its struct is written out by hand instead of with `@Function`, because the
+body is not an object. An overload PostgREST cannot resolve, one with another unnamed parameter,
+one that takes a row, one that returns a single row, and one that returns the rows of a relation
+the file does not declare get no method, only a note on standard error. A single row is skipped
+because PostgREST answers a function that finds none with an object whose every field is `null`,
+which a typed call cannot yet decode as `nil`; a computed field is left to its relation's `Columns`
+without a note. A document without `rpcFunctions` still generates, with a note and no function
+calls.
 
 ## Releasing the typegen binary
 

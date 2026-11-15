@@ -64,7 +64,7 @@ struct RelationshipsView: View {
       defer { isLoading = false }
 
       todosWithProfiles =
-        try await supabase
+        try await supabaseClient
         .from("todos")
         .select(
           """

@@ -42,7 +42,7 @@ struct DependencyBoundaryTests {
 
   @Test
   func readsWithAHandWrittenConformance() async throws {
-    let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"buy milk","is_done":false}]"#)
 
     let todos = try await capture.client.from(Todo.self)
       .select()
@@ -57,7 +57,7 @@ struct DependencyBoundaryTests {
 
   @Test
   func writesWithAHandWrittenConformance() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
 
     _ = try await capture.client.from(Todo.self).insert(Todo.Draft(task: "buy milk")).execute()
 

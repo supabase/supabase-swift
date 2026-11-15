@@ -8,56 +8,38 @@
 public import Foundation
 import Helpers
 
-/// Parameters for enrolling a new WebAuthn (passkey) factor as a second factor (MFA).
+/// Relying-party options sent when challenging a WebAuthn factor.
 ///
 /// - Warning: WebAuthn/passkey support is experimental and may change in a future release. Opt in
 ///   with `@_spi(Experimental) import Supabase`.
 @_spi(Experimental)
-public struct MFAWebAuthnEnrollParams: MFAEnrollParamsType {
-  public let factorType: FactorType = "webauthn"
-
-  /// Human readable name assigned to the factor.
-  public let friendlyName: String?
-
-  public init(friendlyName: String? = nil) {
-    self.friendlyName = friendlyName
-  }
-}
-
-@_spi(Experimental)
-extension MFAEnrollParamsType where Self == MFAWebAuthnEnrollParams {
-  /// Creates parameters for enrolling a WebAuthn (passkey) factor.
-  ///
-  /// - Parameter friendlyName: Human readable name assigned to the factor.
-  public static func webAuthn(friendlyName: String? = nil) -> Self {
-    MFAWebAuthnEnrollParams(friendlyName: friendlyName)
-  }
-}
-
-/// Relying-party options sent when challenging a WebAuthn factor.
-///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
-@_spi(Experimental)
 public struct WebAuthnChallengeOptions: Encodable, Hashable, Sendable {
   /// The relying party identifier (typically your app's associated domain, e.g. `example.com`).
-  public let rpId: String?
+  public var rpID: String?
 
   /// Allowed relying party origins (e.g. `https://example.com`).
-  public let rpOrigins: [String]?
+  public var rpOrigins: [String]?
 
-  public init(rpId: String? = nil, rpOrigins: [String]? = nil) {
-    self.rpId = rpId
+  private enum CodingKeys: String, CodingKey {
+    case rpID = "rp_id"
+    case rpOrigins = "rp_origins"
+  }
+
+  /// Creates a ``WebAuthnChallengeOptions``.
+  public init(rpID: String? = nil, rpOrigins: [String]? = nil) {
+    self.rpID = rpID
     self.rpOrigins = rpOrigins
   }
 }
 
 /// The kind of WebAuthn ceremony a challenge requests.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Sendable,
   ExpressibleByStringLiteral
 {
+  /// The ceremony name as the server sends it, such as `"create"`.
   public let rawValue: String
 
   /// Creates a ``WebAuthnChallengeType`` from a raw string value.
@@ -77,36 +59,59 @@ public struct WebAuthnChallengeType: RawRepresentable, Decodable, Hashable, Send
   public static let request: WebAuthnChallengeType = "request"
 }
 
-/// WebAuthn-specific payload returned by ``AuthMFA/challenge(params:)`` for `webauthn` factors.
+/// WebAuthn-specific payload returned by ``AuthMFA/challenge(factorID:webAuthn:)`` for `webauthn` factors.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct WebAuthnChallengeResponseData: Decodable, Hashable, Sendable {
   /// Whether the authenticator should create a new credential or assert an existing one.
-  public let type: WebAuthnChallengeType
+  public var type: WebAuthnChallengeType
 
-  /// The W3C credential options (creation or request) to forward to the authenticator. Field
-  /// names follow the W3C spec verbatim (camelCase) and are not transformed.
-  public let credentialOptions: JSONValue
+  /// The W3C credential options (creation or request), wrapped as `{"publicKey": {…}}` like the
+  /// argument of `navigator.credentials.create()`. Passkey endpoints send the inner object bare.
+  /// Field names follow the W3C spec verbatim (camelCase) and are not transformed.
+  public var credentialOptions: JSONValue
+
+  /// Creates a ``WebAuthnChallengeResponseData``.
+  public init(
+    type: WebAuthnChallengeType,
+    credentialOptions: JSONValue
+  ) {
+    self.type = type
+    self.credentialOptions = credentialOptions
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case type
+    case credentialOptions = "credential_options"
+  }
 }
 
 /// A passkey registered for the current user.
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
   /// Unique identifier of the passkey.
-  public let id: UUID
+  public var id: UUID
 
   /// Human readable name assigned to the passkey.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// When the passkey was registered.
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// When the passkey was last used to authenticate, if ever.
-  public let lastUsedAt: Date?
+  public var lastUsedAt: Date?
 
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName = "friendly_name"
+    case createdAt = "created_at"
+    case lastUsedAt = "last_used_at"
+  }
+
+  /// Creates a ``PasskeyListItem``.
   public init(id: UUID, friendlyName: String?, createdAt: Date, lastUsedAt: Date?) {
     self.id = id
     self.friendlyName = friendlyName
@@ -117,39 +122,80 @@ public struct PasskeyListItem: Decodable, Identifiable, Hashable, Sendable {
 
 /// Credential creation options for registering a new passkey (first factor).
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyRegistrationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeId: String
+  public var challengeID: UUID
 
   /// W3C `PublicKeyCredentialCreationOptions`, forwarded verbatim to the authenticator.
-  public let options: JSONValue
+  public var options: JSONValue
 
-  /// Unix timestamp (seconds since epoch) when the challenge expires.
-  public let expiresAt: TimeInterval
+  /// When the challenge expires.
+  public var expiresAt: Date
+
+  /// Creates a ``PasskeyRegistrationOptions``.
+  public init(
+    challengeID: UUID,
+    options: JSONValue,
+    expiresAt: Date
+  ) {
+    self.challengeID = challengeID
+    self.options = options
+    self.expiresAt = expiresAt
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case challengeID = "challenge_id"
+    case options
+    case expiresAt = "expires_at"
+  }
+
+  /// Decodes the options. Reads `expires_at` as a Unix timestamp.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    challengeID = try container.decode(UUID.self, forKey: .challengeID)
+    options = try container.decode(JSONValue.self, forKey: .options)
+    expiresAt = try container.decodeUnixDate(forKey: .expiresAt)
+  }
 }
 
 /// Assertion options for authenticating with a passkey (first factor).
 ///
-/// - Warning: Experimental. See ``MFAWebAuthnEnrollParams``.
+/// - Warning: Experimental. See ``WebAuthnChallengeOptions``.
 @_spi(Experimental)
 public struct PasskeyAuthenticationOptions: Decodable, Hashable, Sendable {
   /// ID of the challenge, to be passed back when verifying.
-  public let challengeId: String
+  public var challengeID: UUID
 
   /// W3C `PublicKeyCredentialRequestOptions`, forwarded verbatim to the authenticator.
-  public let options: JSONValue
+  public var options: JSONValue
 
-  /// Unix timestamp (seconds since epoch) when the challenge expires.
-  public let expiresAt: TimeInterval
-}
+  /// When the challenge expires.
+  public var expiresAt: Date
 
-/// Encodes a WebAuthn request body without applying the snake_case key strategy, so the embedded
-/// W3C credential JSON (which uses camelCase field names such as `clientDataJSON`) reaches the
-/// backend verbatim. All backend field names must be spelled out explicitly by the caller.
-func encodeWebAuthnBody(_ json: JSONValue) throws -> Data {
-  let encoder = JSONEncoder()
-  encoder.outputFormatting = [.sortedKeys]
-  return try encoder.encode(json)
+  /// Creates a ``PasskeyAuthenticationOptions``.
+  public init(
+    challengeID: UUID,
+    options: JSONValue,
+    expiresAt: Date
+  ) {
+    self.challengeID = challengeID
+    self.options = options
+    self.expiresAt = expiresAt
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case challengeID = "challenge_id"
+    case options
+    case expiresAt = "expires_at"
+  }
+
+  /// Decodes the options. Reads `expires_at` as a Unix timestamp.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    challengeID = try container.decode(UUID.self, forKey: .challengeID)
+    options = try container.decode(JSONValue.self, forKey: .options)
+    expiresAt = try container.decodeUnixDate(forKey: .expiresAt)
+  }
 }

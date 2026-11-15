@@ -200,7 +200,7 @@ public struct UploadOptions: Sendable {
 
   /// Arbitrary key-value metadata to attach to the uploaded object. You can later use this to
   /// filter or search for files.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// Extra HTTP headers to include with the upload request. A header set here wins over the one
   /// the SDK would send for the same name.
@@ -218,7 +218,7 @@ public struct UploadOptions: Sendable {
     contentType: String? = nil,
     cacheControl: CacheControl = .maxAge(.seconds(3600)),
     upsert: Bool = false,
-    metadata: [String: JSONValue]? = nil,
+    metadata: JSONObject? = nil,
     headers: HTTPFields = [:]
   ) {
     self.contentType = contentType
@@ -243,11 +243,15 @@ public struct DownloadOptions: Sendable {
 
   /// The version of the object to fetch, for a bucket with versioning. `nil` (the default)
   /// fetches the current version.
-  public var versionId: String?
+  public var versionID: String?
 
   /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
   /// of a cached one.
   public var cacheNonce: String?
+
+  /// An image transformation that Storage applies before delivery. `nil` (the default) fetches
+  /// the object as stored.
+  public var transform: ImageTransform?
 
   /// Extra HTTP headers to include with the download request. A header set here wins over the
   /// one the SDK would send for the same name.
@@ -257,19 +261,130 @@ public struct DownloadOptions: Sendable {
   ///
   /// - Parameters:
   ///   - range: The bytes to fetch, both ends included. Fetches the whole object when `nil`.
-  ///   - versionId: The version of the object to fetch. Fetches the current version when `nil`.
+  ///   - versionID: The version of the object to fetch. Fetches the current version when `nil`.
   ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  ///   - transform: An image transformation that Storage applies before delivery.
   ///   - headers: Extra HTTP headers for the download request.
   public init(
     range: ClosedRange<Int64>? = nil,
-    versionId: String? = nil,
+    versionID: String? = nil,
     cacheNonce: String? = nil,
+    transform: ImageTransform? = nil,
     headers: HTTPFields = [:]
   ) {
     self.range = range
-    self.versionId = versionId
+    self.versionID = versionID
     self.cacheNonce = cacheNonce
+    self.transform = transform
     self.headers = headers
+  }
+}
+
+/// Options for ``StorageBucket/createSignedURL(path:expiresIn:options:)``.
+///
+/// ```swift
+/// let url = try await bucket.createSignedURL(
+///   path: "report.pdf",
+///   expiresIn: .seconds(60),
+///   options: SignedURLOptions(download: .withOriginalName)
+/// )
+/// ```
+public struct SignedURLOptions: Sendable {
+  /// Controls whether the URL triggers a file download. `nil` (the default) displays the file
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// An image transformation that Storage applies before delivery.
+  public var transform: ImageTransform?
+
+  /// The version the URL serves. `nil` (the default) serves the current version.
+  public var versionID: String?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``SignedURLOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
+  ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
+  ///   - transform: An image transformation that Storage applies before delivery.
+  ///   - versionID: The version the URL serves.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(
+    download: DownloadBehavior? = nil,
+    transform: ImageTransform? = nil,
+    versionID: String? = nil,
+    cacheNonce: String? = nil
+  ) {
+    self.download = download
+    self.transform = transform
+    self.versionID = versionID
+    self.cacheNonce = cacheNonce
+  }
+}
+
+/// Options for ``StorageBucket/createSignedURLs(paths:expiresIn:options:)``.
+public struct SignedURLsOptions: Sendable {
+  /// Controls whether the URLs trigger a file download. `nil` (the default) displays the files
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``SignedURLsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URLs trigger a file download. Pass `.withOriginalName`
+  ///     to download with each file's original name, or `.named("custom")` for a custom name.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(download: DownloadBehavior? = nil, cacheNonce: String? = nil) {
+    self.download = download
+    self.cacheNonce = cacheNonce
+  }
+}
+
+/// Options for ``StorageBucket/publicURL(path:options:)``.
+///
+/// ```swift
+/// let url = bucket.publicURL(path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// ```
+public struct PublicURLOptions: Sendable {
+  /// Controls whether the URL triggers a file download. `nil` (the default) displays the file
+  /// inline.
+  public var download: DownloadBehavior?
+
+  /// An image transformation that Storage applies before delivery.
+  public var transform: ImageTransform?
+
+  /// The version the URL serves. `nil` (the default) serves the current version.
+  public var versionID: String?
+
+  /// A nonce appended as a `cacheNonce` query parameter, so a CDN serves a fresh copy instead
+  /// of a cached one.
+  public var cacheNonce: String?
+
+  /// Creates a ``PublicURLOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - download: Controls whether the URL triggers a file download. Pass `.withOriginalName`
+  ///     to download with the file's original name, or `.named("custom.pdf")` for a custom name.
+  ///   - transform: An image transformation that Storage applies before delivery.
+  ///   - versionID: The version the URL serves.
+  ///   - cacheNonce: A cache-busting nonce sent as the `cacheNonce` query parameter.
+  public init(
+    download: DownloadBehavior? = nil,
+    transform: ImageTransform? = nil,
+    versionID: String? = nil,
+    cacheNonce: String? = nil
+  ) {
+    self.download = download
+    self.transform = transform
+    self.versionID = versionID
+    self.cacheNonce = cacheNonce
   }
 }
 
@@ -292,7 +407,9 @@ public struct DownloadOptions: Sendable {
 /// - ``maxAge(_:)``
 /// - ``noCache``
 /// - ``noStore``
-public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+public struct CacheControl: RawRepresentable, Decodable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
   /// The header value as sent, e.g. `"max-age=3600"`.
   public let rawValue: String
 
@@ -326,7 +443,7 @@ public struct CacheControl: RawRepresentable, Hashable, Sendable, ExpressibleByS
   }
 }
 
-/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:download:cacheNonce:)`` call.
+/// Represents the per-item result of a ``StorageBucket/createSignedURLs(paths:expiresIn:options:)`` call.
 ///
 /// It is guaranteed that exactly one case applies per item: either the URL was signed
 /// successfully, or the path did not exist or was inaccessible.
@@ -403,13 +520,24 @@ public enum SignedURLResult: Sendable {
 /// - ``token``
 public struct SignedUploadURL: Sendable {
   /// The fully constructed signed upload URL.
-  public let signedURL: URL
+  public var signedURL: URL
 
   /// The destination file path within the bucket.
-  public let path: String
+  public var path: String
 
   /// The upload authentication token extracted from ``signedURL``.
-  public let token: String
+  public var token: String
+
+  /// Creates a ``SignedUploadURL``.
+  public init(
+    signedURL: URL,
+    path: String,
+    token: String
+  ) {
+    self.signedURL = signedURL
+    self.path = path
+    self.token = token
+  }
 }
 
 /// The object an upload, update, or signed-URL upload created.
@@ -424,13 +552,13 @@ public struct SignedUploadURL: Sendable {
 public struct UploadedObject: Hashable, Sendable {
   /// The unique identifier assigned to the object. `nil` after a signed-URL or resumable
   /// upload, which Storage answers without one.
-  public let id: UUID?
+  public var id: UUID?
 
   /// The normalized file path within the bucket, as provided to the upload call.
-  public let path: String
+  public var path: String
 
   /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.
-  public let fullPath: String
+  public var fullPath: String
 
   /// Creates an ``UploadedObject``.
   ///
@@ -445,7 +573,7 @@ public struct UploadedObject: Hashable, Sendable {
   }
 }
 
-/// Options for ``StorageBucket/copy(from:to:toBucket:sourceVersionId:options:)``.
+/// Options for ``StorageBucket/copy(from:to:toBucket:sourceVersionID:options:)``.
 ///
 /// ```swift
 /// let copy = try await bucket.copy(
@@ -475,7 +603,7 @@ public struct CopyOptions: Sendable {
   public var copyMetadata: Bool
 
   /// User metadata for the copy, in place of the source's.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// The MIME type of the copy, in place of the source's.
   public var contentType: String?
@@ -494,7 +622,7 @@ public struct CopyOptions: Sendable {
   public init(
     upsert: Bool = false,
     copyMetadata: Bool = true,
-    metadata: [String: JSONValue]? = nil,
+    metadata: JSONObject? = nil,
     contentType: String? = nil,
     cacheControl: CacheControl? = nil
   ) {
@@ -509,23 +637,23 @@ public struct CopyOptions: Sendable {
 /// One version of an object, for ``StorageBucket/remove(versions:)``.
 ///
 /// ```swift
-/// try await bucket.remove(versions: [ObjectVersion(path: "a.png", versionId: oldVersion)])
+/// try await bucket.remove(versions: [ObjectVersion(path: "a.png", versionID: oldVersion)])
 /// ```
 public struct ObjectVersion: Hashable, Sendable {
   /// The object path, e.g. `"folder/image.png"`.
   public var path: String
 
-  /// The version to address, from ``StorageObject/version`` or ``ObjectInfo/version``.
-  public var versionId: String
+  /// The version to address, from ``StorageObject/versionID`` or ``ObjectInfo/versionID``.
+  public var versionID: String
 
   /// Creates an ``ObjectVersion``.
   ///
   /// - Parameters:
   ///   - path: The object path.
-  ///   - versionId: The version to address.
-  public init(path: String, versionId: String) {
+  ///   - versionID: The version to address.
+  public init(path: String, versionID: String) {
     self.path = path
-    self.versionId = versionId
+    self.versionID = versionID
   }
 }
 
@@ -540,7 +668,7 @@ public struct ObjectVersion: Hashable, Sendable {
 ///
 /// - ``name``
 /// - ``id``
-/// - ``version``
+/// - ``versionID``
 /// - ``isFolder``
 ///
 /// ### Timestamps
@@ -568,7 +696,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public var id: UUID?
 
   /// The version identifier of this object. `nil` for a folder row and on older servers.
-  public var version: String?
+  public var versionID: String?
 
   /// The date and time the object was created.
   public var createdAt: Date?
@@ -583,7 +711,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public var metadata: ObjectMetadata?
 
   /// The metadata the uploader attached through ``UploadOptions/metadata``.
-  public var userMetadata: [String: JSONValue]?
+  public var userMetadata: JSONObject?
 
   /// Whether this object was created while the bucket had versioning enabled.
   public var isVersioned: Bool?
@@ -602,19 +730,19 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   public init(
     name: String,
     id: UUID? = nil,
-    version: String? = nil,
+    versionID: String? = nil,
     createdAt: Date? = nil,
     updatedAt: Date? = nil,
     lastAccessedAt: Date? = nil,
     metadata: ObjectMetadata? = nil,
-    userMetadata: [String: JSONValue]? = nil,
+    userMetadata: JSONObject? = nil,
     isVersioned: Bool? = nil,
     isDeleteMarker: Bool? = nil,
     archivedAt: Date? = nil
   ) {
     self.name = name
     self.id = id
-    self.version = version
+    self.versionID = versionID
     self.createdAt = createdAt
     self.updatedAt = updatedAt
     self.lastAccessedAt = lastAccessedAt
@@ -628,7 +756,7 @@ public struct StorageObject: Identifiable, Hashable, Decodable, Sendable {
   enum CodingKeys: String, CodingKey {
     case name
     case id
-    case version
+    case versionID = "version"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
     case lastAccessedAt = "last_accessed_at"
@@ -666,7 +794,7 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   public var mimeType: String?
 
   /// The `Cache-Control` header stored with the object.
-  public var cacheControl: String?
+  public var cacheControl: CacheControl?
 
   /// When the bytes were last written.
   public var lastModified: Date?
@@ -675,17 +803,17 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
   public var contentLength: Int64?
 
   /// Every other key Storage sent, by its wire name.
-  public var additional: [String: JSONValue]
+  public var additional: JSONObject
 
   /// Creates an ``ObjectMetadata``.
   public init(
     eTag: String? = nil,
     size: Int64? = nil,
     mimeType: String? = nil,
-    cacheControl: String? = nil,
+    cacheControl: CacheControl? = nil,
     lastModified: Date? = nil,
     contentLength: Int64? = nil,
-    additional: [String: JSONValue] = [:]
+    additional: JSONObject = [:]
   ) {
     self.eTag = eTag
     self.size = size
@@ -711,26 +839,26 @@ public struct ObjectMetadata: Hashable, Decodable, Sendable {
     eTag = try container.decodeIfPresent(String.self, forKey: .eTag)
     size = try container.decodeIfPresent(Int64.self, forKey: .size)
     mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
-    cacheControl = try container.decodeIfPresent(String.self, forKey: .cacheControl)
+    cacheControl = try container.decodeIfPresent(CacheControl.self, forKey: .cacheControl)
     lastModified = try container.decodeIfPresent(String.self, forKey: .lastModified)?.date
     contentLength = try container.decodeIfPresent(Int64.self, forKey: .contentLength)
 
     let known = Set(CodingKeys.allCases.map(\.rawValue))
-    let all = try decoder.singleValueContainer().decode([String: JSONValue].self)
+    let all = try decoder.singleValueContainer().decode(JSONObject.self)
     additional = all.filter { !known.contains($0.key) }
   }
 }
 
-/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:versionId:)``.
+/// Everything Storage knows about one object, returned by ``StorageBucket/info(path:versionID:)``.
 ///
 /// ## Topics
 ///
 /// ### Identifying the object
 ///
 /// - ``id``
-/// - ``version``
+/// - ``versionID``
 /// - ``name``
-/// - ``bucketId``
+/// - ``bucketID``
 ///
 /// ### Size and content type
 ///
@@ -757,13 +885,13 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var id: UUID
 
   /// The version identifier of this object.
-  public var version: String
+  public var versionID: String
 
   /// The full key of the object within its bucket.
   public var name: String
 
   /// The identifier of the bucket that contains this object.
-  public var bucketId: String?
+  public var bucketID: String?
 
   /// The size in bytes.
   public var size: Int64?
@@ -772,7 +900,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var contentType: String?
 
   /// The `Cache-Control` header stored with the object.
-  public var cacheControl: String?
+  public var cacheControl: CacheControl?
 
   /// The entity tag of the stored bytes.
   public var eTag: String?
@@ -790,7 +918,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   public var lastAccessedAt: Date?
 
   /// The metadata the uploader attached through ``UploadOptions/metadata``.
-  public var userMetadata: [String: JSONValue]?
+  public var userMetadata: JSONObject?
 
   /// Whether this object was created while the bucket had versioning enabled.
   public var isVersioned: Bool?
@@ -804,26 +932,26 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
   /// Creates an ``ObjectInfo``.
   public init(
     id: UUID,
-    version: String,
+    versionID: String,
     name: String,
-    bucketId: String? = nil,
+    bucketID: String? = nil,
     size: Int64? = nil,
     contentType: String? = nil,
-    cacheControl: String? = nil,
+    cacheControl: CacheControl? = nil,
     eTag: String? = nil,
     lastModified: Date? = nil,
     createdAt: Date? = nil,
     updatedAt: Date? = nil,
     lastAccessedAt: Date? = nil,
-    userMetadata: [String: JSONValue]? = nil,
+    userMetadata: JSONObject? = nil,
     isVersioned: Bool? = nil,
     isDeleteMarker: Bool? = nil,
     archivedAt: Date? = nil
   ) {
     self.id = id
-    self.version = version
+    self.versionID = versionID
     self.name = name
-    self.bucketId = bucketId
+    self.bucketID = bucketID
     self.size = size
     self.contentType = contentType
     self.cacheControl = cacheControl
@@ -840,9 +968,9 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 
   enum CodingKeys: String, CodingKey {
     case id
-    case version
+    case versionID = "version"
     case name
-    case bucketId = "bucket_id"
+    case bucketID = "bucket_id"
     case size
     case contentType = "content_type"
     case cacheControl = "cache_control"
@@ -870,7 +998,7 @@ public struct ObjectInfo: Identifiable, Hashable, Decodable, Sendable {
 /// - ``id``
 /// - ``name``
 /// - ``type``
-/// - ``ownerId``
+/// - ``ownerID``
 ///
 /// ### Access and limits
 ///
@@ -898,7 +1026,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   public var type: BucketType?
 
   /// The ID of the user who owns the bucket, if any.
-  public var ownerId: String?
+  public var ownerID: String?
 
   /// Whether the bucket is publicly accessible without an authorization token.
   public var isPublic: Bool
@@ -925,7 +1053,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
   ///   - id: Unique bucket identifier.
   ///   - name: Human-readable bucket name.
   ///   - type: Whether the bucket holds files or analytics tables.
-  ///   - ownerId: ID of the user who owns the bucket.
+  ///   - ownerID: ID of the user who owns the bucket.
   ///   - isPublic: Whether the bucket is publicly readable.
   ///   - createdAt: Creation timestamp.
   ///   - updatedAt: Last-updated timestamp.
@@ -936,7 +1064,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     id: String,
     name: String,
     type: BucketType? = nil,
-    ownerId: String? = nil,
+    ownerID: String? = nil,
     isPublic: Bool,
     createdAt: Date,
     updatedAt: Date,
@@ -947,7 +1075,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     self.id = id
     self.name = name
     self.type = type
-    self.ownerId = ownerId
+    self.ownerID = ownerID
     self.isPublic = isPublic
     self.createdAt = createdAt
     self.updatedAt = updatedAt
@@ -960,7 +1088,7 @@ public struct Bucket: Identifiable, Hashable, Decodable, Sendable {
     case id
     case name
     case type
-    case ownerId = "owner_id"
+    case ownerID = "owner_id"
     case isPublic = "public"
     case createdAt = "created_at"
     case updatedAt = "updated_at"
@@ -1417,8 +1545,9 @@ extension SortOrder: Encodable {
 /// Controls the `Content-Disposition` header behavior for signed and public URLs.
 ///
 /// ```swift
-/// storage.from("docs").publicURL(path: "report.pdf", download: .withOriginalName)
-/// storage.from("docs").publicURL(path: "report.pdf", download: .named("annual-2024.pdf"))
+/// storage.from("docs").publicURL(path: "report.pdf", options: PublicURLOptions(download: .withOriginalName))
+/// storage.from("docs").publicURL(
+///   path: "report.pdf", options: PublicURLOptions(download: .named("annual-2024.pdf")))
 /// ```
 ///
 /// ## Topics
@@ -1575,15 +1704,16 @@ public struct UpdateBucketOptions: Hashable, Sendable {
 
 /// A server-side image transformation applied before the asset is served.
 ///
-/// Pass an ``ImageTransform`` as the `transform:` argument of
-/// ``StorageBucket/download(path:transform:options:progress:)``,
-/// ``StorageBucket/publicURL(path:download:transform:versionId:cacheNonce:)`` or
-/// ``StorageBucket/createSignedURL(path:expiresIn:download:transform:versionId:cacheNonce:)``
+/// Set an ``ImageTransform`` as the `transform` of the options of
+/// ``StorageBucket/download(path:options:progress:)``,
+/// ``StorageBucket/publicURL(path:options:)`` or
+/// ``StorageBucket/createSignedURL(path:expiresIn:options:)``
 /// to resize, crop, reformat, or adjust the quality of an image on the fly.
 ///
 /// ```swift
 /// let transform = ImageTransform(width: 200, height: 200, resize: .cover, quality: 80)
-/// let thumbnail = try await storage.from("avatars").download(path: "user.png", transform: transform)
+/// let thumbnail = try await storage.from("avatars").download(
+///   path: "user.png", options: DownloadOptions(transform: transform))
 ///   .data()
 /// ```
 ///

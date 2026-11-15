@@ -20,7 +20,7 @@ struct PersistedSessionLoaderTests {
 
     let first = try await PersistedSessionLoader.load(from: storage, key: key)
 
-    expectNoDifference(first?.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(first, PersistedSessionFixtures.expectedSession)
     #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == nil)
     let stored = try #require(try await storage.load(key: key))
     #expect(try PersistedSessionCodec.decode(stored).isCurrentSchema)
@@ -45,7 +45,7 @@ struct PersistedSessionLoaderTests {
 
     let first = try await PersistedSessionLoader.load(from: storage, key: key)
 
-    expectNoDifference(first?.session, PersistedSessionFixtures.expectedSession)
+    expectNoDifference(first, PersistedSessionFixtures.expectedSession)
     #expect(first?.receivedAt == PersistedSessionFixtures.expectedReceivedAt)
     #expect(storage.saves.value == [key])
 
@@ -65,26 +65,6 @@ struct PersistedSessionLoaderTests {
 
     #expect(loaded == nil)
     #expect(storage.saves.value.isEmpty)
-  }
-
-  @Test
-  func synchronousLoadMovesALegacySessionLikeTheAsynchronousOne() throws {
-    let storage = InMemoryLocalStorage()
-    try storage.store(
-      key: PersistedSessionLoader.legacyKey,
-      value: json(named: "persisted-session-v2-camel-case")
-    )
-
-    let loaded = try PersistedSessionLoader.load(from: storage, key: key)
-
-    expectNoDifference(loaded?.session, PersistedSessionFixtures.expectedSession)
-    #expect(try storage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
-    let stored = try #require(try storage.retrieve(key: key))
-    expectNoDifference(
-      String(decoding: stored, as: UTF8.self),
-      String(decoding: json(named: PersistedSessionFixtures.schema1), as: UTF8.self)
-    )
-    expectNoDifference(try PersistedSessionLoader.load(from: storage, key: key), loaded)
   }
 
   @Test
@@ -109,17 +89,6 @@ struct PersistedSessionLoaderTests {
       try await PersistedSessionLoader.load(from: storage, key: key)
     }
     #expect(try await storage.load(key: PersistedSessionLoader.legacyKey) == legacyData)
-  }
-
-  @Test
-  func synchronousLoadRemovesUndecodableLegacyDataAndThrows() throws {
-    let storage = InMemoryLocalStorage()
-    try storage.store(key: PersistedSessionLoader.legacyKey, value: Data("not-json".utf8))
-
-    #expect(throws: DecodingError.self) {
-      try PersistedSessionLoader.load(from: storage, key: key)
-    }
-    #expect(try storage.retrieve(key: PersistedSessionLoader.legacyKey) == nil)
   }
 
   @Test

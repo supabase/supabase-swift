@@ -40,12 +40,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
     guard let url = URLContexts.first?.url else { return }
 
-    ApplicationDelegate.shared.application(
-      UIApplication.shared,
-      open: url,
-      sourceApplication: nil,
-      annotation: [UIApplication.OpenURLOptionsKey.annotation]
-    )
+    Task {
+      guard await !supabaseClient.auth.isAuthRedirect(url) else { return }
+
+      ApplicationDelegate.shared.application(
+        UIApplication.shared,
+        open: url,
+        sourceApplication: nil,
+        annotation: [UIApplication.OpenURLOptionsKey.annotation]
+      )
+    }
   }
 }
 
@@ -53,24 +57,25 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 struct ExamplesApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+  @State private var auth = AuthModel(client: supabaseClient.auth)
+
   var body: some Scene {
     WindowGroup {
       RootView()
-        .environment(AuthController())
-        .onOpenURL {
-          supabase.handle($0)
-        }
+        .environment(\.supabase, supabaseClient)
+        .environment(auth)
         .task {
-          _ = try? await supabase.storage.resumableUploads.resumeAll()
+          _ = try? await supabaseClient.storage.resumableUploads.resumeAll()
         }
     }
   }
 }
 
-let supabase = SupabaseClient(
+// swift-format-ignore: NeverUseForceTry
+let supabaseClient = try! SupabaseClient(
   supabaseURL: URL(string: SupabaseConfig["SUPABASE_URL"]!)!,
   supabaseKey: (SupabaseConfig["SUPABASE_PUBLISHABLE_KEY"] ?? SupabaseConfig["SUPABASE_ANON_KEY"])!,
-  options: .init(
-    auth: .init(redirectToURL: Constants.redirectToURL)
+  configuration: .init(
+    auth: .init(redirectTo: Constants.redirectToURL)
   )
 )

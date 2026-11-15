@@ -9,7 +9,7 @@ public import Foundation
 
 /// Admin operations for managing a user's multi-factor authentication factors.
 ///
-/// Access this namespace via ``AuthAdmin/mfa``.
+/// Access this namespace via ``AuthAdminClient/mfa``.
 ///
 /// > Warning: These methods require the secret key. Never expose this key
 /// > in a browser or mobile app. Call these methods from a secure server-side environment only.
@@ -20,26 +20,31 @@ public import Foundation
 /// - ``listFactors(forUser:)``
 /// - ``deleteFactor(id:forUser:)``
 public struct AuthAdminMFA: Sendable {
-  let admin: AuthAdmin
+  let admin: AuthAdminClient
 
   var api: APIClient { admin.api }
   var authAPI: AuthAPI { admin.authAPI }
 
   /// Lists the MFA factors enrolled by a user.
   ///
-  /// - Parameter userId: The user's unique identifier.
+  /// - Parameter userID: The user's unique identifier.
+  /// - Returns: The user's factors.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func listFactors(forUser userId: UUID) async throws -> [Factor] {
-    try await api.execute(authAPI.adminListFactors(userId: userId))
+  public func listFactors(forUser userID: UUID) async throws -> [Factor] {
+    try await api.execute(authAPI.adminListFactors(userID: userID))
   }
 
   /// Deletes an MFA factor enrolled by a user, and downgrades that user's sessions to AAL1.
   ///
   /// - Parameters:
   ///   - id: The identifier of the factor to delete, as found on ``Factor/id``.
-  ///   - userId: The user's unique identifier.
+  ///   - userID: The user's unique identifier.
+  /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
+  ///   cancelled.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
-  public func deleteFactor(id: UUID, forUser userId: UUID) async throws {
-    try await api.execute(authAPI.adminDeleteFactor(id: id, userId: userId))
+  public func deleteFactor(id: UUID, forUser userID: UUID) async throws {
+    try await api.execute(authAPI.adminDeleteFactor(id: id, userID: userID))
   }
 }

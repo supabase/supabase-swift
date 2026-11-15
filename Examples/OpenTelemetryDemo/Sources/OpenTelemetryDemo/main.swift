@@ -27,12 +27,6 @@ final class RequestPrintingProtocol: URLProtocol {
   override func stopLoading() {}
 }
 
-struct NoOpAuthLocalStorage: AuthLocalStorage {
-  func store(key: String, value: Data) throws {}
-  func retrieve(key: String) throws -> Data? { nil }
-  func remove(key: String) throws {}
-}
-
 let tracerProvider = TracerProviderBuilder()
   .add(spanProcessor: SimpleSpanProcessor(spanExporter: StdoutSpanExporter(isDebug: true)))
   .build()
@@ -42,11 +36,11 @@ let tracer = tracerProvider.get(instrumentationName: "OpenTelemetryDemo")
 let config = URLSessionConfiguration.ephemeral
 config.protocolClasses = [RequestPrintingProtocol.self]
 
-let supabase = SupabaseClient(
+let supabase = try SupabaseClient(
   supabaseURL: URL(string: "https://example.supabase.co")!,
   supabaseKey: "demo-anon-key",
-  options: SupabaseClientOptions(
-    auth: .init(storage: NoOpAuthLocalStorage(), automaticallyRefreshesToken: false),
+  configuration: SupabaseClient.Configuration(
+    auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
     global: .init(
       http: .init(transport: URLSessionTransport(session: URLSession(configuration: config)))
     )

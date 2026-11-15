@@ -17,13 +17,13 @@ public import HTTPTypes
 /// ```swift
 /// } catch let error as any SupabaseError {
 ///   if let response = error.response {
-///     print(response.statusCode, response.requestID ?? "no request id")
+///     print(response.status.code, response.requestID ?? "no request id")
 ///   }
 /// }
 /// ```
 public struct HTTPErrorResponse: Sendable, Hashable {
-  /// The HTTP status code, e.g. `404`.
-  public var statusCode: Int
+  /// The HTTP status, e.g. `404 Not Found`.
+  public var status: HTTPResponse.Status
 
   /// Every response header. Import `HTTPTypes` to spell header names.
   public var headers: HTTPFields
@@ -39,16 +39,16 @@ public struct HTTPErrorResponse: Sendable, Hashable {
     headers[.sbRequestID]
   }
 
-  /// Creates a response summary.
-  public init(statusCode: Int, headers: HTTPFields, body: Data) {
-    self.statusCode = statusCode
+  /// Creates a response summary, for tests and mocks.
+  public init(status: HTTPResponse.Status, headers: HTTPFields, body: Data) {
+    self.status = status
     self.headers = headers
     self.body = body
   }
 
   /// Summarizes a response head and the body that came with it.
   package init(_ response: HTTPResponse, body: Data) {
-    self.init(statusCode: response.status.code, headers: response.headerFields, body: body)
+    self.init(status: response.status, headers: response.headerFields, body: body)
   }
 }
 

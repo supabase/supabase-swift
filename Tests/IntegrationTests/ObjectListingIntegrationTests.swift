@@ -27,7 +27,7 @@ struct ObjectListingIntegrationTests {
     let (name, bucket) = try await Self.seededBucket()
     defer { StorageIntegration.dropBucket(name) }
 
-    var pages: [ObjectListing.Page] = []
+    var pages: [ObjectPage] = []
     for try await page in bucket.objects(
       prefix: "2026/", options: ObjectListingOptions(pageSize: 2)
     ).pages {

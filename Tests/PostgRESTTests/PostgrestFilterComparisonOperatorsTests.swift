@@ -93,7 +93,7 @@ struct PostgrestFilterComparisonOperatorsTests {
 
   @Test
   func operatorsWorkInsideWhere() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .select()
       .where { $0.priority > 3 || $0.dueDate == nil }

@@ -21,9 +21,11 @@ struct ComputedMemberChannelFeed {
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestComputedMemberIntegrationTests {
-  let client = PostgrestClient(
-    url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
-    headers: ["apikey": DotEnv.supabasePublishableKey]
+  let client = try! PostgrestClient(
+    configuration: .init(
+      url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
+      headers: [.apikey: DotEnv.supabasePublishableKey]
+    )
   )
 
   @Test
@@ -34,7 +36,7 @@ struct PostgrestComputedMemberIntegrationTests {
       .execute()
 
     #expect(response.value.map(\.slug) == ["public", "random"])
-    let rows = try JSONSerialization.jsonObject(with: response.data) as? [[String: Any]]
+    let rows = try JSONSerialization.jsonObject(with: response.body) as? [[String: Any]]
     #expect(rows?.map { Set($0.keys) } == [["id", "slug"], ["id", "slug"]])
   }
 

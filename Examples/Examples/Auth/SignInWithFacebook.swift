@@ -4,6 +4,7 @@ import Supabase
 import SwiftUI
 
 struct SignInWithFacebook: View {
+  @Environment(\.supabase) private var supabase
   @State private var actionState = ActionState<Void, Error>.idle
 
   static let logger = Logger(subsystem: "com.supabase.examples", category: "SignInWithFacebook")
@@ -39,8 +40,8 @@ struct SignInWithFacebook: View {
 
             Task {
               do {
-                try await supabase.auth.signInWithIdToken(
-                  credentials: OpenIDConnectCredentials(
+                try await supabase.auth.signInWithIDToken(
+                  IDTokenCredentials(
                     provider: .facebook,
                     idToken: idToken
                   )
@@ -63,4 +64,5 @@ struct SignInWithFacebook: View {
 
 #Preview {
   SignInWithFacebook()
+    .environment(\.supabase, supabaseClient)
 }

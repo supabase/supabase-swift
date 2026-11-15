@@ -1,6 +1,6 @@
 import ConcurrencyExtras
 public import Foundation
-import HTTPTypes
+public import HTTPTypes
 import Helpers
 import IssueReporting
 import Logging
@@ -16,7 +16,7 @@ import Logging
 /// Create one instance per Supabase project and share it across your app.
 ///
 /// ```swift
-/// let supabase = SupabaseClient(
+/// let supabase = try SupabaseClient(
 ///   supabaseURL: URL(string: "https://your-project.supabase.co")!,
 ///   supabaseKey: "your-anon-key"
 /// )
@@ -25,8 +25,9 @@ import Logging
 /// ## Topics
 ///
 /// ### Creating a Client
-/// - ``init(supabaseURL:supabaseKey:)``
-/// - ``init(supabaseURL:supabaseKey:options:)``
+/// - ``init(supabaseURL:supabaseKey:configuration:)``
+/// - ``configuration``
+/// - ``Configuration``
 ///
 /// ### Supabase Services
 /// - ``auth``
@@ -42,12 +43,12 @@ import Logging
 ///
 /// ### Realtime Channels
 /// - ``channels``
-/// - ``channel(_:options:)``
+/// - ``channel(_:configure:)``
 /// - ``removeChannel(_:)``
 /// - ``removeAllChannels()``
 ///
 /// ### Deep Links
-/// - ``handle(_:)``
+/// - ``handleRedirect(_:)``
 ///
 /// ### Configuration
 /// - ``headers``
@@ -81,26 +82,26 @@ public final class SupabaseClient: Sendable {
       .map { "sb-\($0)-auth-token" }
   }
 
-  let options: SupabaseClientOptions
+  /// The configuration this client was created with.
+  public let configuration: Configuration
   let supabaseURL: URL
   let supabaseKey: String
   let storageURL: URL
   let databaseURL: URL
   let functionsURL: URL
-  let clock: any Clock<Duration>
 
-  private let _auth: AuthClient
+  let _auth: AuthClient
 
   /// The Auth client for managing user sessions and authentication.
   ///
   /// Use this property to sign users in and out, retrieve the current session,
   /// and listen for authentication state changes.
   ///
-  /// > Warning: Do not access this property when ``SupabaseClientOptions/AuthOptions/accessToken``
+  /// > Warning: Do not access this property when ``SupabaseClient/Configuration/Auth/accessToken``
   /// > is configured — the client will emit a runtime issue. Use a separate ``SupabaseClient``
   /// > without `accessToken` if you need both Supabase Auth and a third-party auth provider.
   public var auth: AuthClient {
-    if options.auth.accessToken != nil {
+    if configuration.auth.accessToken != nil {
       reportIssue(
         """
         Supabase Client is configured with the auth.accessToken option,
@@ -112,31 +113,46 @@ public final class SupabaseClient: Sendable {
   }
 
   var rest: PostgrestClient {
-    PostgrestClient(
-      url: databaseURL,
-      schema: options.db.schema,
-      headers: dataHeaders.dictionary,
-      logger: options.global.logger,
-      http: authenticatedHTTP,
-      encoder: options.db.encoder,
-      decoder: options.db.decoder,
-      retryEnabled: options.db.retry
+    // `init` checked `supabaseURL`, so `databaseURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    try! PostgrestClient(
+      configuration: .init(
+        url: databaseURL,
+        schema: configuration.database.schema,
+        headers: dataHeaders,
+        http: Self.resolveHTTP(
+          global: configuration.global.http,
+          override: configuration.database.http,
+          sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .postgrest)]
+        ),
+        logger: configuration.database.logger ?? configuration.global.logger,
+        encoder: configuration.database.encoder,
+        decoder: configuration.database.decoder,
+        retryEnabled: configuration.database.retryEnabled,
+        clock: configuration.database.clock ?? configuration.global.clock
+      )
     )
   }
 
   /// The Storage client for uploading, downloading, and managing files.
   public var storage: StorageClient {
-    var configuration = StorageClientConfiguration(
+    var storageConfiguration = StorageClient.Configuration(
       url: storageURL,
       headers: dataHeaders,
-      http: authenticatedHTTP,
-      logger: options.global.logger,
-      usesNewHostname: options.storage.usesNewHostname,
-      retryEnabled: options.storage.retryEnabled
+      usesNewHostname: configuration.storage.usesNewHostname,
+      http: Self.resolveHTTP(
+        global: configuration.global.http,
+        override: configuration.storage.http,
+        sdkMiddlewares: [bearerMiddleware(staleTokenRejection: .storage)]
+      ),
+      logger: configuration.storage.logger ?? configuration.global.logger,
+      retryEnabled: configuration.storage.retryEnabled,
+      clock: configuration.storage.clock ?? configuration.global.clock
     )
-    configuration.clock = clock
-    configuration.resumable = options.storage.resumable
-    return StorageClient(configuration: configuration)
+    storageConfiguration.resumable = configuration.storage.resumable
+    // `init` checked `supabaseURL`, so every URL derived from it passes `StorageClient`'s check.
+    // swift-format-ignore: NeverUseForceTry
+    return try! StorageClient(configuration: storageConfiguration)
   }
 
   /// The Realtime client for subscribing to database changes and broadcasting presence events.
@@ -153,7 +169,7 @@ public final class SupabaseClient: Sendable {
 
   /// The Functions client for invoking Supabase Edge Functions.
   ///
-  /// Built on first access from ``SupabaseClientOptions/FunctionsOptions`` and the global HTTP
+  /// Built on first access from ``SupabaseClient/Configuration/Functions`` and the global HTTP
   /// configuration, then cached.
   public var functions: FunctionsClient {
     mutableState.withValue {
@@ -166,23 +182,20 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  /// ``_headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
-  /// bearer is ``AccessTokenMiddleware``'s job, so a per-call header and the session token both
-  /// win over the key.
+  /// ``headers`` without the static `Authorization`, for PostgREST, Storage and Functions: their
+  /// bearer is the bearer middleware's job, so a per-call header and the session token both win
+  /// over the key.
   var dataHeaders: HTTPFields {
-    var headers = _headers
+    var headers = self.headers
     headers[.authorization] = nil
     return headers
   }
 
-  let _headers: HTTPFields
   /// The HTTP headers included in every request made by sub-clients.
   ///
-  /// This dictionary is read-only. To supply custom headers, set
-  /// ``SupabaseClientOptions/GlobalOptions/headers`` when initializing the client.
-  public var headers: [String: String] {
-    _headers.dictionary
-  }
+  /// These headers are read-only. To supply custom headers, set
+  /// ``SupabaseClient/Configuration/Global/headers`` when initializing the client.
+  public let headers: HTTPFields
 
   struct MutableState {
     var listenForAuthEventsTask: Task<Void, Never>?
@@ -194,32 +207,31 @@ public final class SupabaseClient: Sendable {
 
   let mutableState = LockIsolated(MutableState())
 
-  /// Creates a client with default options.
+  /// Creates a client.
   /// - Parameters:
   ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
   ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-  public convenience init(supabaseURL: URL, supabaseKey: String) {
-    self.init(
-      supabaseURL: supabaseURL,
-      supabaseKey: supabaseKey,
-      options: SupabaseClientOptions()
-    )
-  }
-
-  /// Creates a client with custom options.
-  /// - Parameters:
-  ///   - supabaseURL: Your Supabase project URL, found in the project dashboard.
-  ///   - supabaseKey: Your Supabase project anon key, found in the project dashboard.
-  ///   - options: Configuration options for the client and its sub-clients.
+  ///   - configuration: Settings for the client and its sub-clients.
+  /// - Throws: ``SupabaseClientError`` with kind
+  ///   ``SupabaseClientError/Kind-swift.struct/invalidConfiguration`` if `supabaseURL` has no
+  ///   scheme or no host.
   public init(
     supabaseURL: URL,
     supabaseKey: String,
-    options: SupabaseClientOptions
-  ) {
+    configuration: Configuration = .init()
+  ) throws {
+    guard supabaseURL.hasSchemeAndHost,
+      URLComponents(url: supabaseURL, resolvingAgainstBaseURL: false) != nil,
+      let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL)
+    else {
+      throw SupabaseClientError(
+        kind: .invalidConfiguration,
+        message: "supabaseURL must be a valid URL with a scheme and a host, got \(supabaseURL).")
+    }
+
     self.supabaseURL = supabaseURL
     self.supabaseKey = supabaseKey
-    self.options = options
-    self.clock = options.global.clock
+    self.configuration = configuration
 
     APIKeyFormat.checkFormat(supabaseKey)
 
@@ -227,43 +239,31 @@ public final class SupabaseClient: Sendable {
     databaseURL = supabaseURL.appendingPathComponent("/rest/v1")
     functionsURL = supabaseURL.appendingPathComponent("/functions/v1")
 
-    _headers = HTTPFields(defaultHeaders)
-      .merging(
-        with: HTTPFields(
-          [
-            "Authorization": "Bearer \(supabaseKey)",
-            "Apikey": supabaseKey,
-          ]
-        )
-      )
-      .merging(with: HTTPFields(options.global.headers))
+    headers =
+      defaultHeaders
+      .merging(with: [.authorization: "Bearer \(supabaseKey)", .apikey: supabaseKey])
+      .merging(with: configuration.global.headers)
 
-    guard let defaultStorageKey = Self.defaultStorageKey(for: supabaseURL) else {
-      preconditionFailure(
-        """
-        supabaseURL must have a host to derive the auth storage key from, got \(supabaseURL).
-        """
-      )
-    }
-
-    _auth = AuthClient(
+    let authConfiguration = AuthClient.Configuration(
       url: supabaseURL.appendingPathComponent("/auth/v1"),
-      headers: _headers.dictionary,
-      flowType: options.auth.flowType,
-      redirectToURL: options.auth.redirectToURL,
-      storageKey: options.auth.storageKey ?? defaultStorageKey,
-      localStorage: options.auth.storage,
-      logger: options.global.logger,
-      http: HTTPClientConfiguration(
-        transport: options.global.http.transport ?? URLSessionTransport(),
-        middlewares: options.global.http.middlewares + [TraceContextMiddleware()],
-        timeout: options.global.http.timeout
+      storageKey: configuration.auth.storageKey ?? defaultStorageKey,
+      headers: headers,
+      storage: configuration.auth.storage,
+      redirectTo: configuration.auth.redirectTo,
+      autoRefresh: configuration.auth.accessToken == nil
+        ? configuration.auth.autoRefresh : .disabled,
+      observesAppLifecycle: configuration.auth.observesAppLifecycle,
+      http: Self.resolveHTTP(
+        global: configuration.global.http,
+        override: configuration.auth.http
       ),
-      automaticallyRefreshesToken: options.auth.automaticallyRefreshesToken,
-      clock: clock
+      logger: configuration.auth.logger ?? configuration.global.logger,
+      retryEnabled: configuration.auth.retryEnabled,
+      clock: configuration.auth.clock ?? configuration.global.clock
     )
+    _auth = try AuthClient(configuration: authConfiguration)
 
-    if options.auth.accessToken == nil {
+    if configuration.auth.accessToken == nil {
       listenForAuthEvents()
     }
   }
@@ -287,6 +287,7 @@ public final class SupabaseClient: Sendable {
     rest.from(relation)
   }
 
+  /// Unavailable. Names the SPI import that the typed `from(_:)` needs.
   @available(
     *, unavailable,
     message:
@@ -302,7 +303,8 @@ public final class SupabaseClient: Sendable {
   ///   - params: The parameters to pass to the function.
   ///   - count: The count algorithm to apply to rows returned by set-returning functions.
   /// - Returns: A filter builder for further narrowing the result set.
-  /// - Throws: If encoding `params` fails or the function call returns an error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `params` does not encode.
+  ///   Nothing is sent until you call `execute()`.
   public func rpc(
     _ fn: String,
     params: some Encodable,
@@ -316,13 +318,46 @@ public final class SupabaseClient: Sendable {
   ///   - fn: The name of the function to call.
   ///   - count: The count algorithm to apply to rows returned by set-returning functions.
   /// - Returns: A filter builder for further narrowing the result set.
-  /// - Throws: If the function call returns an error.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if the request cannot be built.
+  ///   Nothing is sent until you call `execute()`.
   public func rpc(
     _ fn: String,
     count: CountOption? = nil
   ) throws -> PostgrestFilterBuilder {
     try rest.rpc(fn, count: count)
   }
+
+  /// Calls a database function with typed arguments. See ``PostgrestClient/rpc(_:)``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `function` does not encode.
+  @_spi(Experimental)
+  public func rpc<F: _PostgrestFunction>(_ function: F) throws -> _PostgrestFunctionQuery<F.Result>
+  {
+    try rest.rpc(function)
+  }
+
+  // See the unavailable `from(_:_:)` twin: it names the missing SPI import.
+  /// Unavailable. Names the SPI import that the typed `rpc(_:)` needs.
+  @available(
+    *, unavailable,
+    message:
+      "The typed query API is experimental. Opt in with `@_spi(Experimental) import Supabase`."
+  )
+  public func rpc<F: _PostgrestFunction>(_ function: F, _: Void = ()) throws
+    -> _PostgrestFunctionQuery<F.Result>
+  {
+    fatalError()
+  }
+
+  /// The generated database function methods. See ``PostgrestClient/rpc``.
+  ///
+  /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
+  /// > Opt in with `@_spi(Experimental) import Supabase`.
+  @_spi(Experimental)
+  public var rpc: _PostgrestFunctions { rest.rpc }
 
   /// Returns a database client scoped to the given Postgres schema.
   ///
@@ -335,7 +370,7 @@ public final class SupabaseClient: Sendable {
 
   /// Returns a scope that only queries relations declared to live in the given schema.
   ///
-  /// - Precondition: ``SupabaseClientOptions/DatabaseOptions/schema`` is not set.
+  /// - Precondition: ``SupabaseClient/Configuration/Database/schema`` is not set.
   ///
   /// > Warning: The typed query API is experimental. Its shape may change in a minor release.
   /// > Opt in with `@_spi(Experimental) import Supabase`.
@@ -347,6 +382,7 @@ public final class SupabaseClient: Sendable {
     rest.schema(schema)
   }
 
+  /// Unavailable. Names the SPI import that the typed `schema(_:)` needs.
   @available(
     *, unavailable,
     message:
@@ -359,20 +395,32 @@ public final class SupabaseClient: Sendable {
   }
 
   /// All active Realtime channels.
+  ///
+  /// The Realtime client owns its channels, so the read is `async`.
   public var channels: [RealtimeChannel] {
-    get async { Array(await realtime.channels.values) }
+    get async { await realtime.channels }
   }
 
-  /// Creates a Realtime channel with support for Broadcast, Presence, and Postgres Changes.
+  /// Returns the Realtime channel for `name`, creating it when it does not exist, with support
+  /// for Broadcast, Presence, and Postgres Changes.
+  ///
+  /// `configure` runs on the caller's actor before the call reaches the Realtime client.
+  ///
+  /// ```swift
+  /// let channel = await supabase.channel("room:lobby") { $0.broadcast.receivesOwnMessages = true }
+  /// try await channel.subscribe()
+  /// ```
+  ///
   /// - Parameters:
   ///   - name: A unique name for the channel.
-  ///   - options: A closure to configure broadcast, presence, and Postgres change options.
+  ///   - configure: A closure that sets the channel's ``RealtimeChannelConfiguration``. A
+  ///     channel that already exists for `name` keeps its configuration.
   /// - Returns: A configured ``RealtimeChannel`` ready to subscribe.
   public func channel(
     _ name: String,
-    options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    configure: (inout RealtimeChannelConfiguration) -> Void = { _ in }
   ) async -> RealtimeChannel {
-    await realtime.channel(name, options: options)
+    await realtime.channel(name, configure: configure)
   }
 
   /// Unsubscribes from and removes a Realtime channel.
@@ -386,92 +434,84 @@ public final class SupabaseClient: Sendable {
     await realtime.removeAllChannels()
   }
 
-  /// Passes an incoming URL to the Auth client for processing deep links and OAuth callbacks.
+  /// Finishes the auth flow that a redirect URL reports. Forwards to
+  /// ``AuthClient/handleRedirect(_:)``.
   ///
-  /// Call this from your app's URL-handling entry points so Auth can complete OAuth and
-  /// magic-link flows.
+  /// Pass the URLs that reach your auth callback. ``AuthClient/isAuthRedirect(_:)`` checks one. A
+  /// URL that is not an auth redirect returns `nil`: only a URL that opens
+  /// ``SupabaseClient/Configuration/Auth/redirectTo`` or the redirect URL of a pending flow is
+  /// one. The same URL can arrive more than once; the later deliveries get the first result and
+  /// send no request.
   ///
-  /// ## Usage example:
-  ///
-  /// ### UIKit app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
-  ///
-  /// ```swift
-  /// public func application(
-  ///   _ application: UIApplication,
-  ///   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  /// ) -> Bool {
-  ///   if let url = launchOptions?[.url] as? URL {
-  ///     supabase.handle(url)
-  ///   }
-  ///
-  ///   return true
-  /// }
-  ///
-  /// func application(
-  ///   _ app: UIApplication,
-  ///   open url: URL,
-  ///   options: [UIApplication.OpenURLOptionsKey: Any]
-  /// ) -> Bool {
-  ///   supabase.handle(url)
-  ///   return true
-  /// }
-  /// ```
-  ///
-  /// ### UIKit app lifecycle with scenes
-  ///
-  /// In your `SceneDelegate.swift`:
-  ///
-  /// ```swift
-  /// func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-  ///   guard let url = URLContexts.first?.url else { return }
-  ///   supabase.handle(url)
-  /// }
-  /// ```
-  ///
-  /// ### SwiftUI app lifecycle
-  ///
-  /// In your `AppDelegate.swift`:
+  /// A URL with tokens (`#access_token=…`) signs in the account that the tokens belong to. Pass
+  /// only URLs that reach your own callback.
   ///
   /// ```swift
   /// SomeView()
   ///   .onOpenURL { url in
-  ///     supabase.handle(url)
+  ///     Task { try await supabase.handleRedirect(url) }
   ///   }
   /// ```
-  public func handle(_ url: URL) {
-    auth.handle(url)
+  ///
+  /// - Parameter url: The URL that opened the app.
+  /// - Returns: `nil` when `url` is not an auth redirect, else what the redirect did.
+  /// - Throws: The error of ``AuthClient/handleRedirect(_:)``.
+  @discardableResult
+  public func handleRedirect(_ url: URL) async throws -> RedirectResult? {
+    try await auth.handleRedirect(url)
   }
 
   deinit {
     mutableState.listenForAuthEventsTask?.cancel()
   }
 
-  /// The resolved transport shared by every sub-client.
-  private var transport: any ClientTransport {
-    options.global.http.transport ?? URLSessionTransport()
+  /// A module's HTTP configuration: `override` on top of `global`, field by field.
+  ///
+  /// A `nil` transport or timeout in `override` falls back to the global one, and the transport
+  /// to ``URLSessionTransport`` when neither sets one. The middlewares run in this order: the
+  /// global ones, the module's own, ``TraceContextMiddleware``, then `sdkMiddlewares`.
+  private static func resolveHTTP(
+    global: HTTPClientConfiguration,
+    override: HTTPClientConfiguration?,
+    sdkMiddlewares: [any ClientMiddleware] = []
+  ) -> HTTPClientConfiguration {
+    HTTPClientConfiguration(
+      transport: override?.transport ?? global.transport ?? URLSessionTransport(),
+      middlewares: global.middlewares + (override?.middlewares ?? []) + [TraceContextMiddleware()]
+        + sdkMiddlewares,
+      timeout: override?.timeout ?? global.timeout
+    )
   }
 
-  /// The shared transport plus the user's middlewares followed by the SDK's, for PostgREST and
-  /// Storage. The bearer is the session token, else the key.
+  /// The SDK middleware that sets the bearer: the session token, else the key.
   ///
-  /// ``AccessTokenMiddleware`` captures only the dependencies it needs — never `self` — because
-  /// each sub-client stores its middlewares for its whole lifetime: the cached ``realtime`` and
-  /// ``functions`` sub-clients are held in ``mutableState`` for the lifetime of the client, and a
-  /// caller may hold any sub-client for that long too. Capturing `self` here would form a
-  /// `self -> sub-client -> middleware -> self` retain cycle that keeps ``deinit`` from ever
-  /// running.
-  private var authenticatedHTTP: HTTPClientConfiguration {
-    HTTPClientConfiguration(
-      transport: transport,
-      middlewares: options.global.http.middlewares + [
-        TraceContextMiddleware(),
-        AccessTokenMiddleware(getAccessToken: { [provider = accessTokenProvider, supabaseKey] in
-          try await provider() ?? supabaseKey
-        }),
-      ],
-      timeout: options.global.http.timeout
+  /// It captures only the dependencies it needs, never `self`, because each sub-client stores its
+  /// middlewares for its whole lifetime: the cached ``realtime`` and ``functions`` sub-clients are
+  /// held in ``mutableState`` for the lifetime of the client, and a caller may hold any sub-client
+  /// for that long too. Capturing `self` here would form a `self -> sub-client -> middleware ->
+  /// self` retain cycle that keeps ``deinit`` from ever running.
+  ///
+  /// - Parameters:
+  ///   - staleTokenRejection: How the sub-client's service tells that it rejected the access
+  ///     token. Not used with a third-party token provider.
+  ///   - bearerToken: Maps the token to the bearer to send, `nil` for none. It sees the key and
+  ///     a third-party provider's token, not a session token.
+  /// - Returns: The middleware to add to a sub-client's chain.
+  private func bearerMiddleware(
+    staleTokenRejection: StaleTokenRejection,
+    bearerToken: @escaping @Sendable (String) -> String? = { $0 }
+  ) -> any ClientMiddleware {
+    guard configuration.auth.accessToken == nil else {
+      return AccessTokenMiddleware(getAccessToken: {
+        [provider = accessTokenProvider, supabaseKey] in
+        bearerToken(try await provider() ?? supabaseKey)
+      })
+    }
+    return AuthMiddleware(
+      auth: _auth,
+      fallbackToken: bearerToken(supabaseKey),
+      staleTokenRejection: staleTokenRejection,
+      autoRefresh: configuration.auth.autoRefresh
     )
   }
 
@@ -480,15 +520,15 @@ public final class SupabaseClient: Sendable {
   /// Swallows only ``AuthError/sessionMissing`` — the expected "no signed-in user" case, which
   /// should resolve to `nil` (falling back to the anon key) rather than failing the caller. Every
   /// other error (a network failure refreshing the session, or one thrown by a configured
-  /// ``SupabaseClientOptions/AuthOptions/accessToken`` third-party auth provider) propagates, so
+  /// ``SupabaseClient/Configuration/Auth/accessToken`` third-party auth provider) propagates, so
   /// callers of this closure never need their own knowledge of which auth errors are benign.
   private var accessTokenProvider: @Sendable () async throws -> String? {
-    { [accessToken = options.auth.accessToken, auth = _auth] in
+    { [accessToken = configuration.auth.accessToken, auth = _auth] in
       do {
         if let accessToken {
           return try await accessToken()
         }
-        return try await auth.session.accessToken
+        return try await auth.session().accessToken
       } catch let error as AuthError where error.kind == .sessionMissing {
         return nil
       }
@@ -501,15 +541,16 @@ public final class SupabaseClient: Sendable {
 
   /// Mirrors Auth state onto the Realtime V2 sub-client for the client's lifetime.
   ///
-  /// `authStateChanges` never finishes on its own, so the observing task must not capture `self`
-  /// strongly: it would keep the client alive forever, and ``deinit`` — the only place that
-  /// cancels this task — could never run. The stream is therefore resolved up front (so the task
-  /// doesn't need `self` to reach `auth`) and `self` is captured weakly.
+  /// `events()` finishes only when the Auth client is released, and this client owns it, so the
+  /// observing task must not capture `self` strongly: it would keep the client alive forever, and
+  /// ``deinit`` — the only place that cancels this task — could never run. The stream is
+  /// therefore resolved up front (so the task doesn't need `self` to reach `auth`) and `self` is
+  /// captured weakly.
   private func listenForAuthEvents() {
-    let task = Task { [weak self, authStateChanges = _auth.authStateChanges] in
-      for await (event, session) in authStateChanges {
+    let task = Task.named("supabase.client.authEvents") { [weak self, events = _auth.events()] in
+      for await change in events {
         guard let self else { return }
-        await self.handleTokenChanged(event: event, session: session)
+        await self.handleTokenChanged(event: change.event, session: change.session)
       }
     }
     mutableState.withValue {
@@ -517,91 +558,85 @@ public final class SupabaseClient: Sendable {
     }
   }
 
-  private func handleTokenChanged(event: AuthChangeEvent, session: Session?) async {
-    let accessToken: String? = mutableState.withValue {
-      if [.initialSession, .signedIn, .tokenRefreshed].contains(event),
-        $0.changedAccessToken != session?.accessToken
-      {
-        $0.changedAccessToken = session?.accessToken
-        return session?.accessToken ?? supabaseKey
-      }
+  /// Pushes the new token to the Realtime client only when it already exists. Building it here
+  /// would install its observers in apps that never use Realtime; a client built later pulls
+  /// the current token itself.
+  func handleTokenChanged(event: AuthEvent, session: Session?) async {
+    if let accessToken = realtimeTokenToPush(event: event, session: session),
+      let realtime = mutableState.realtime
+    {
+      await realtime.setAuth(accessToken)
+    }
+  }
 
+  /// The token Realtime has to receive for this change, or `nil` when it already has it.
+  ///
+  /// The token is derived from the session, not from the event kind: any event can carry a new
+  /// one. A recovery or email-change verification, an MFA step-up, or a linked identity replaces
+  /// the session without a `.signedIn`. A signed-out change resets Realtime to the API key.
+  ///
+  /// Calling it records the token as pushed, so call it once per change.
+  func realtimeTokenToPush(event: AuthEvent, session: Session?) -> String? {
+    mutableState.withValue {
       if event == .signedOut {
         $0.changedAccessToken = nil
         return supabaseKey
       }
 
-      return nil
-    }
-
-    if let accessToken {
-      await realtime.setAuth(accessToken)
+      guard $0.changedAccessToken != session?.accessToken else { return nil }
+      $0.changedAccessToken = session?.accessToken
+      return session?.accessToken ?? supabaseKey
     }
   }
 
   private func _initFunctionsClient() -> FunctionsClient {
-    let http = options.functions.http ?? options.global.http
-    return FunctionsClient(
+    // `init` checked `supabaseURL`, so `functionsURL`, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    try! FunctionsClient(
       configuration: .init(
         url: functionsURL,
         headers: dataHeaders,
-        region: options.functions.region,
-        http: HTTPClientConfiguration(
-          transport: http.transport ?? transport,
-          middlewares: options.global.http.middlewares
-            + (options.functions.http?.middlewares ?? [])
-            + [
-              TraceContextMiddleware(),
-              AccessTokenMiddleware(getAccessToken: {
-                [provider = accessTokenProvider, supabaseKey] in
-                APIKeyFormat.functionsBearerToken(
-                  accessToken: try await provider() ?? supabaseKey, supabaseKey: supabaseKey)
-              }),
-            ],
-          timeout: http.timeout ?? options.global.http.timeout
+        region: configuration.functions.region,
+        http: Self.resolveHTTP(
+          global: configuration.global.http,
+          override: configuration.functions.http,
+          sdkMiddlewares: [
+            bearerMiddleware(staleTokenRejection: .functions) { [supabaseKey] in
+              APIKeyFormat.functionsBearerToken(accessToken: $0, supabaseKey: supabaseKey)
+            }
+          ]
         ),
-        logger: options.functions.logger ?? options.global.logger,
-        decoder: options.functions.decoder
+        logger: configuration.functions.logger ?? configuration.global.logger,
+        decoder: configuration.functions.decoder
       )
     )
   }
 
   private func _initRealtimeClient() -> RealtimeClient {
-    var realtimeOptions = options.realtime
-    realtimeOptions.headers.merge(with: _headers)
+    let realtime = configuration.realtime
 
-    realtimeOptions.logger = options.global.logger
-    realtimeOptions.logger[metadataKey: "system"] = "realtime"
-
-    if realtimeOptions.http.transport == nil {
-      realtimeOptions.http = HTTPClientConfiguration(
-        transport: transport,
-        middlewares: options.global.http.middlewares + realtimeOptions.http.middlewares
-          + [TraceContextMiddleware()],
-        timeout: realtimeOptions.http.timeout ?? options.global.http.timeout
+    // `init` checked `supabaseURL`, so the Realtime URL, derived from it, passes the check too.
+    // swift-format-ignore: NeverUseForceTry
+    return try! RealtimeClient(
+      configuration: .init(
+        url: supabaseURL.appendingPathComponent("/realtime/v1"),
+        headers: headers.merging(with: realtime.headers),
+        heartbeatInterval: realtime.heartbeatInterval,
+        requestTimeout: realtime.requestTimeout,
+        connectsOnSubscribe: realtime.connectsOnSubscribe,
+        disconnectOnEmptyChannelsAfter: realtime.disconnectOnEmptyChannelsAfter,
+        observesAppLifecycle: realtime.observesAppLifecycle,
+        monitorsNetworkPath: realtime.monitorsNetworkPath,
+        serverLogLevel: realtime.serverLogLevel,
+        accessToken: { [weak self] in try await self?._getAccessToken() },
+        webSocketTransport: realtime.webSocketTransport,
+        http: Self.resolveHTTP(
+          global: configuration.global.http,
+          override: realtime.http
+        ),
+        logger: realtime.logger ?? configuration.global.logger,
+        clock: realtime.clock ?? configuration.global.clock
       )
-    }
-
-    if realtimeOptions.accessToken == nil {
-      realtimeOptions.accessToken = { [weak self] in
-        try await self?._getAccessToken()
-      }
-    } else {
-      reportIssue(
-        """
-        You assigned a custom `accessToken` closure to the RealtimeClient. This might not work as you expect
-        as SupabaseClient uses Auth for pulling an access token to send on the realtime channels.
-
-        Please make sure you know what you're doing.
-        """
-      )
-    }
-
-    realtimeOptions.clock = clock
-
-    return RealtimeClient(
-      url: supabaseURL.appendingPathComponent("/realtime/v1"),
-      options: realtimeOptions
     )
   }
 }

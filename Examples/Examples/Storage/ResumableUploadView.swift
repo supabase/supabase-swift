@@ -12,7 +12,7 @@ import SwiftUI
 @Observable @MainActor
 final class ResumableUploadModel {
   private(set) var upload: ResumableUpload?
-  private(set) var state: ResumableUpload.State = .pending
+  private(set) var status: ResumableUpload.Status = .pending
   private(set) var progress: TransferProgress?
   private(set) var pending: [ResumableUpload] = []
   var error: Error?
@@ -21,7 +21,7 @@ final class ResumableUploadModel {
   private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
   var isActive: Bool {
-    switch state {
+    switch status {
     case .pending, .uploading, .paused: upload != nil
     case .completed, .failed, .cancelled: false
     }
@@ -36,7 +36,7 @@ final class ResumableUploadModel {
     } catch {
       self.error = error
     }
-    refreshPending()
+    await refreshPending()
   }
 
   func pause() async {
@@ -46,7 +46,7 @@ final class ResumableUploadModel {
   func resume() async {
     guard let upload else { return }
     do {
-      if case .pending = await upload.state {
+      if case .pending = await upload.status {
         try await upload.start()
       } else {
         try await upload.resume()
@@ -58,7 +58,7 @@ final class ResumableUploadModel {
 
   func cancel() async {
     await upload?.cancel()
-    refreshPending()
+    await refreshPending()
   }
 
   func resume(_ pending: ResumableUpload) async {
@@ -66,9 +66,9 @@ final class ResumableUploadModel {
     await resume()
   }
 
-  func refreshPending() {
+  func refreshPending() async {
     do {
-      pending = try supabase.storage.resumableUploads.pending()
+      pending = try await supabaseClient.storage.resumableUploads.pending()
     } catch {
       self.error = error
     }
@@ -80,14 +80,14 @@ final class ResumableUploadModel {
     progress = nil
     observers = [
       Task { [weak self] in
-        for await state in upload.states {
+        for await status in upload.statusChanges() {
           guard let self else { return }
-          self.state = state
-          extendBackgroundExecution(while: state)
+          self.status = status
+          extendBackgroundExecution(while: status)
         }
       },
       Task { [weak self] in
-        for await progress in upload.progress {
+        for await progress in upload.progress() {
           self?.progress = progress
         }
       },
@@ -96,8 +96,8 @@ final class ResumableUploadModel {
 
   /// Asks iOS for a short extension while a chunk is in flight, so a user who backgrounds the
   /// app mid-chunk does not lose it; the SDK resumes from the last confirmed offset either way.
-  private func extendBackgroundExecution(while state: ResumableUpload.State) {
-    if case .uploading = state {
+  private func extendBackgroundExecution(while status: ResumableUpload.Status) {
+    if case .uploading = status {
       guard backgroundTask == .invalid else { return }
       backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "resumable-upload") {
         [weak self] in
@@ -168,7 +168,7 @@ struct ResumableUploadView: View {
       if let upload = model.upload {
         Section("Transfer") {
           VStack(alignment: .leading, spacing: 8) {
-            Text("\(upload.bucketId)/\(upload.path)")
+            Text("\(upload.bucketID)/\(upload.path)")
               .font(.caption)
             ProgressView(value: model.progress?.fractionCompleted ?? 0)
             Text(
@@ -179,7 +179,7 @@ struct ResumableUploadView: View {
           }
 
           HStack {
-            switch model.state {
+            switch model.status {
             case .uploading:
               Button("Pause") { Task { await model.pause() } }
             case .paused, .pending:
@@ -202,7 +202,7 @@ struct ResumableUploadView: View {
               Task { await model.resume(pending) }
             } label: {
               VStack(alignment: .leading) {
-                Text("\(pending.bucketId)/\(pending.path)")
+                Text("\(pending.bucketID)/\(pending.path)")
                 Text(formatBytes(pending.totalBytes))
                   .font(.caption)
                   .foregroundColor(.secondary)
@@ -222,9 +222,9 @@ struct ResumableUploadView: View {
     .navigationTitle("Resumable Upload")
     .gitHubSourceLink()
     .task {
-      model.refreshPending()
+      await model.refreshPending()
       do {
-        buckets = try await supabase.storage.listBuckets()
+        buckets = try await supabaseClient.storage.listBuckets()
         selectedBucket = buckets.first?.id ?? ""
       } catch {
         model.error = error
@@ -236,7 +236,7 @@ struct ResumableUploadView: View {
         guard let picked = try? await item.loadTransferable(type: PickedFile.self) else { return }
         selectedPhoto = nil
         await model.start {
-          try supabase.storage.from(selectedBucket)
+          try supabaseClient.storage.from(selectedBucket)
             .resumableUpload(path: filePath, fileURL: picked.url)
         }
         try? FileManager.default.removeItem(at: picked.url)
@@ -248,14 +248,15 @@ struct ResumableUploadView: View {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         await model.start {
-          try supabase.storage.from(selectedBucket).resumableUpload(path: filePath, fileURL: url)
+          try supabaseClient.storage.from(selectedBucket).resumableUpload(
+            path: filePath, fileURL: url)
         }
       }
     }
   }
 
   private var stateLabel: String {
-    switch model.state {
+    switch model.status {
     case .pending: "Pending"
     case .uploading: "Uploading"
     case .paused: "Paused"

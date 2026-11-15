@@ -1,9 +1,9 @@
 import Foundation
 import Logging
 
-/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:date:pkce:urlOpener:)``.
+/// Everything an `AuthClient` needs, wired once by ``live(configuration:http:logger:pkce:platform:beforeRefreshingHeldSession:)``.
 ///
-/// Immutable on purpose. The test seams (`date`, `pkce`, `urlOpener`) are injected at
+/// Immutable on purpose. The test seams (`pkce`, `platform`) are injected at
 /// construction and never mutated afterwards, so plain `let` storage is enough and nothing needs a
 /// lock or a process-global registry.
 struct Dependencies: Sendable {
@@ -11,21 +11,21 @@ struct Dependencies: Sendable {
   let http: HTTPClient
   /// Builds every request and decodes every response.
   let authAPI: AuthAPI
-  /// Session-free requests. What `AuthAdmin` runs on.
-  let api: APIClient
   /// Session-aware requests. What `AuthClient`, `AuthMFA`, and `AuthOAuthServer` run on.
   let sessionAPI: SessionAPIClient
-  let codeVerifierStorage: CodeVerifierStorage
+  /// The pending PKCE flows, one stored record each.
+  let flowStore: FlowStore
+  /// Makes a repeated delivery of one redirect reuse the first result.
+  let redirectDeduplicator: RedirectDeduplicator<RedirectResult>
   /// Owns the session.
   let sessionStore: SessionStore
   let sessionManager: SessionManager
-  let date: @Sendable () -> Date
-  let urlOpener: URLOpener
+  /// Sends one refresh request. Stores nothing and emits no event.
+  let refreshRequest: @Sendable (_ refreshToken: String) async throws -> Session
+  let autoRefresh: AutoRefreshController
+  let platform: AuthPlatform
   let pkce: PKCE
   let logger: Logging.Logger
-
-  var resolvedEncoder: JSONEncoder { configuration.resolvedEncoder }
-  var resolvedDecoder: JSONDecoder { configuration.resolvedDecoder }
 }
 
 extension Dependencies {
@@ -33,48 +33,70 @@ extension Dependencies {
     configuration: AuthClient.Configuration,
     http: HTTPClient? = nil,
     logger: Logging.Logger? = nil,
-    date: @escaping @Sendable () -> Date = { Date() },
     pkce: PKCE = .live,
-    urlOpener: URLOpener = .live
+    platform: AuthPlatform = .live,
+    beforeRefreshingHeldSession: @escaping @Sendable () async -> Void = {}
   ) -> Dependencies {
     let http = http ?? HTTPClient(configuration: configuration)
     let logger = logger ?? configuration.logger
     let authAPI = AuthAPI(
       url: configuration.url,
-      headers: configuration.headers,
-      defaultRedirectURL: configuration.redirectToURL,
-      encoder: configuration.resolvedEncoder,
-      decoder: configuration.resolvedDecoder
+      headers: AuthClient.Configuration.defaultHeaders.merging(with: configuration.headers),
+      defaultRedirectURL: configuration.redirectTo,
+      encoder: AuthClient.Configuration.jsonEncoder,
+      decoder: AuthClient.Configuration.jsonDecoder,
+      now: configuration.now
     )
     let api = APIClient(http: http)
-    let storageKey = configuration.storageKey ?? defaultStorageKey
-    let localStorage = configuration.localStorage
+    let storageKey = configuration.storageKey
+    let storage = MisconfigurationReportingStorage(configuration.storage)
+    let refresh: @Sendable (_ refreshToken: String) async throws -> Session = { refreshToken in
+      try await api.execute(authAPI.refreshSession(refreshToken: refreshToken))
+    }
+    let startupRefresh: SessionStore.StartupRefresh? =
+      configuration.autoRefresh == .automatic && configuration.initialRefreshTimeout > .zero
+      ? SessionStore.StartupRefresh(
+        request: refresh, clock: configuration.clock, deadline: configuration.initialRefreshTimeout)
+      : nil
     let sessionStore = SessionStore(
-      storage: AuthLocalStorageAdapter(localStorage: localStorage),
+      storage: storage,
       key: storageKey,
-      now: date,
-      initialLoad: { try PersistedSessionLoader.load(from: localStorage, key: storageKey) }
+      now: configuration.now,
+      startupRefresh: startupRefresh
     )
     let sessionManager = SessionManager.live(
-      configuration: configuration,
-      authAPI: authAPI,
-      api: api,
+      policy: configuration.autoRefresh,
       sessionStore: sessionStore,
-      logger: logger
+      logger: logger,
+      request: refresh,
+      beforeRefreshingHeldSession: beforeRefreshingHeldSession
+    )
+    let autoRefresh = AutoRefreshController(
+      policy: configuration.autoRefresh,
+      startsInForeground: !(configuration.observesAppLifecycle && platform.hasBackgroundState),
+      store: sessionStore,
+      driver: Refresher.Driver(clock: configuration.clock, logger: logger, request: refresh)
     )
 
     return Dependencies(
       configuration: configuration,
       http: http,
       authAPI: authAPI,
-      api: api,
       sessionAPI: SessionAPIClient(
         api: api, sessionManager: sessionManager, sessionStore: sessionStore),
-      codeVerifierStorage: .live(configuration: configuration),
+      flowStore: FlowStore(
+        storage: storage,
+        storageKey: storageKey,
+        pkce: pkce,
+        now: configuration.now,
+        logger: logger
+      ),
+      redirectDeduplicator: RedirectDeduplicator(),
       sessionStore: sessionStore,
       sessionManager: sessionManager,
-      date: date,
-      urlOpener: urlOpener,
+      refreshRequest: refresh,
+      autoRefresh: autoRefresh,
+      platform: platform,
       pkce: pkce,
       logger: logger
     )

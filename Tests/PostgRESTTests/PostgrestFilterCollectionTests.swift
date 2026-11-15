@@ -102,15 +102,17 @@ struct PostgrestFilterCollectionTests {
 
   @Test(
     arguments: [
-      { (c: Post.Columns) in c.metadata.containsJSON(["n": .double(.nan)]) },
-      { (c: Post.Columns) in c.metadata.containedByJSON(.double(.infinity)) },
-      { (c: Post.Columns) in c.content.eq("x") || !c.metadata.containsJSON([.double(.nan)]) },
+      { (c: Post.Columns) in c.metadata.containsJSON(["n": .number(JSONNumber("1e-400")!)]) },
+      { (c: Post.Columns) in c.metadata.containedByJSON(.number(JSONNumber("1e-400")!)) },
+      { (c: Post.Columns) in
+        c.content.eq("x") || !c.metadata.containsJSON([.number(JSONNumber("1e-400")!)])
+      },
     ] as [@Sendable (Post.Columns) -> _PostgrestFilter<Post>]
   )
   func aJSONOperandWithNoJSONFormFailsTheRequestBeforeItIsSent(
     filter: @Sendable (Post.Columns) -> _PostgrestFilter<Post>
   ) async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     do {
       _ = try await capture.client.from(Post.self).select().where(filter).execute()
       Issue.record("Expected an error")

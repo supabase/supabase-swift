@@ -1,0 +1,126 @@
+//
+//  RealtimeCore+Push.swift
+//  Realtime
+//
+
+import Foundation
+import Helpers
+import Logging
+
+extension RealtimeCore {
+  /// Sends `event` on `channel`. With a waiter, the push waits, bounded by the
+  /// timeout, for the server's reply; without one, it is fire-and-forget.
+  ///
+  /// Only a subscribed channel sends. Otherwise the waiter fails with
+  /// ``RealtimeError/notSubscribed``, and nothing is kept to send later.
+  mutating func push(
+    _ channel: ChannelID, event: String, payload: JSONObject, waiter: WaiterID?
+  ) -> [Effect] {
+    guard let record = channels[channel], let joinRef = subscribedJoinRef(channel) else {
+      logger.debug("Dropping push '\(event)' for channel '\(topic(of: channel))': not subscribed")
+      return waiter.map { [.resume($0, .failure(.notSubscribed))] } ?? []
+    }
+    let ref = makeRef()
+    let message = RealtimeMessage(
+      joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
+      payload: payload)
+    guard let waiter else { return [.send(message)] }
+    if event == ChannelEvent.presence, payload["event"]?.stringValue == "track" {
+      channels.update(channel) { _ = $0.pendingTracks.insert(ref) }
+    }
+    return [.send(message)] + awaitReply(channel, ref: ref, waiter: waiter)
+  }
+
+  /// Sends a broadcast on `channel` as a binary frame. The waiter returns once the
+  /// frame is out, or, when the channel acknowledges broadcasts, once the server replies.
+  ///
+  /// Only a subscribed channel sends; otherwise the waiter fails with
+  /// ``RealtimeError/notSubscribed``. The frame gives each header field a one-byte length, so on
+  /// a subscribed channel an `event` or wire topic over ``RealtimeSerializer/maxHeaderFieldBytes``
+  /// fails the waiter with ``RealtimeError/Kind-swift.struct/invalidRequest``, and nothing is sent.
+  mutating func broadcast(
+    _ channel: ChannelID, event: String, payload: BroadcastPushPayload, waiter: WaiterID
+  ) -> [Effect] {
+    guard let record = channels[channel], let joinRef = subscribedJoinRef(channel) else {
+      logger.debug(
+        "Dropping broadcast '\(event)' for channel '\(topic(of: channel))': not subscribed")
+      return [.resume(waiter, .failure(.notSubscribed))]
+    }
+    let limit = RealtimeSerializer.maxHeaderFieldBytes
+    guard event.utf8.count <= limit, record.wireTopic.utf8.count <= limit else {
+      let message = """
+        A broadcast event and the channel topic with its `realtime:` prefix must each be at \
+        most \(limit) UTF-8 bytes.
+        """
+      return [.resume(waiter, .failure(.invalidRequest(message)))]
+    }
+    let ref = makeRef()
+    let send = Effect.sendBroadcast(
+      joinRef: joinRef, ref: ref, topic: record.wireTopic, event: event,
+      payload: payload)
+    guard record.configuration.broadcast.acknowledgesMessages else {
+      return [send, .resume(waiter, .success)]
+    }
+    return [send] + awaitReply(channel, ref: ref, waiter: waiter)
+  }
+
+  /// Settles the push `ref` with the server's reply: `error` fails it with the server's reason,
+  /// and any other status resolves it. A track that succeeds turns presence on for the live join.
+  mutating func receivePushReply(_ message: RealtimeMessage, ref: Ref, on channel: ChannelID)
+    -> [Effect]
+  {
+    guard let status = message.status else {
+      logger.debug(
+        "Dropping a reply without a status on '\(topic(of: channel))': \(message.payload)")
+      return []
+    }
+    let waiter = channels.update(channel) { record -> WaiterID? in
+      guard let waiter = record.pendingPushes.removeValue(forKey: ref) else { return nil }
+      if record.pendingTracks.remove(ref) != nil, status != .error {
+        record.hasTrackedSinceJoin = true
+      }
+      return waiter
+    }
+    guard let waiter = waiter ?? nil else { return [] }
+    let outcome: WaiterOutcome
+    if status == .error {
+      let reason = message.replyReason(default: "The server rejected the push.")
+      outcome = .failure(.ackError(reason: reason))
+    } else {
+      outcome = .success
+    }
+    return [.resume(waiter, outcome), .cancel(.pushTimeout(channel: channel, ref: ref))]
+  }
+
+  mutating func pushTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
+    guard
+      let waiter = channels.update(channel, { $0.pendingPushes.removeValue(forKey: ref) }) ?? nil
+    else { return [] }
+    logger.debug("Push \(ref) on '\(topic(of: channel))' timed out")
+    return [.resume(waiter, .failure(.pushTimeout))]
+  }
+
+  /// Fails every push of `channel` that waits for a reply, in the order they were sent, and stops
+  /// their timeouts.
+  mutating func failPendingPushes(_ channel: ChannelID, with error: RealtimeError) -> [Effect] {
+    guard let pushes = channels[channel]?.pendingPushes, !pushes.isEmpty else { return [] }
+    channels.update(channel) { $0.pendingPushes = [:] }
+    return pushes.sorted { (UInt64($0.key) ?? 0) < (UInt64($1.key) ?? 0) }
+      .flatMap { ref, waiter -> [Effect] in
+        [.resume(waiter, .failure(error)), .cancel(.pushTimeout(channel: channel, ref: ref))]
+      }
+  }
+
+  private mutating func awaitReply(_ channel: ChannelID, ref: Ref, waiter: WaiterID) -> [Effect] {
+    channels.update(channel) { $0.pendingPushes[ref] = waiter }
+    return [.schedule(.pushTimeout(channel: channel, ref: ref), after: options.timeout)]
+  }
+
+  /// The join ref of `channel` when it is subscribed on a connected socket.
+  private func subscribedJoinRef(_ channel: ChannelID) -> Ref? {
+    guard case .subscribed(let joinRef)? = channels[channel]?.phase, isConnected else {
+      return nil
+    }
+    return joinRef
+  }
+}

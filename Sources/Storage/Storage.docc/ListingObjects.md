@@ -8,11 +8,11 @@ A bucket has two listing methods.
 
 | | ``StorageBucket/objects(prefix:options:)`` | ``StorageBucket/list(path:options:)`` |
 | --- | --- | --- |
-| Returns | an ``ObjectListing``, fetched as you iterate | one array, in one request |
+| Returns | a `PageSequence`, fetched as you iterate | one array, in one request |
 | Paging | a cursor, carried for you | `limit` and `offset` |
 | Depth | one level with folders, or every key | one level |
 | Names | full keys, `"2026/beach.png"` | relative to the path, `"beach.png"` |
-| Folders | ``ObjectListing/Page/folders`` | rows with ``StorageObject/isFolder`` |
+| Folders | ``ObjectPage/folders`` | rows with ``StorageObject/isFolder`` |
 | Options | ``ObjectListingOptions`` | ``ListOptions`` |
 
 Prefer `objects`. Use `list` when you need its `search` filter or the
@@ -39,8 +39,8 @@ Nothing is sent until you iterate. A failed request ends the loop with the error
 
 Storage has no real folders. A folder is the part of a key up to a `/`. With the default
 `delimited: true`, a page lists one level: the objects directly under the prefix, and each
-deeper key collapsed into a folder. Iterate ``ObjectListing/pages`` to see them, as a file
-browser does.
+deeper key collapsed into a folder. Iterate the listing's `pages` to see them, as a file
+browser does. Each page is an ``ObjectPage``.
 
 ```swift
 var folders: [String] = []
@@ -56,8 +56,8 @@ one folder. An empty prefix lists the whole bucket.
 
 ### Cursors
 
-To fetch one page at a time, for example as a list scrolls, call ``ObjectListing/page(after:)``
-and keep the page's ``ObjectListing/Page/nextCursor``.
+To fetch one page at a time, for example as a list scrolls, call the listing's `page(after:)`
+and keep the page's ``ObjectPage/nextCursor``.
 
 ```swift
 let listing = supabase.storage.from("photos").objects(
@@ -70,7 +70,7 @@ if let cursor = first.nextCursor {
 ```
 
 A cursor carries the sort and filters of its listing. Pass it only to the listing it came from.
-``ObjectListing/Page/hasNext`` is `false` on the last page.
+``ObjectPage/hasNext`` is `false` on the last page.
 
 ### Listing options
 

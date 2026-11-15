@@ -62,36 +62,31 @@ struct BinaryBroadcastView: View {
         Button("Send") {
           sendBinary()
         }
-        .disabled(inputText.isEmpty)
+        .disabled(inputText.isEmpty || channel == nil)
       }
       .padding()
     }
     .navigationTitle("Binary Broadcast")
     .gitHubSourceLink()
     .task {
-      await subscribe()
-    }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
+      await observeFrames()
     }
   }
 
-  func subscribe() async {
-    let channel = await supabase.channel("binary-broadcast-example") {
-      $0.broadcast.receiveOwnBroadcasts = true
+  func observeFrames() async {
+    let channel = await supabaseClient.channel("binary-broadcast-example") {
+      $0.broadcast.receivesOwnMessages = true
     }
 
-    let dataStream = await channel.broadcastData(event: "binary_message")
+    let messages = await channel.broadcasts(event: "binary_message")
 
     do {
+      error = nil
       try await channel.subscribe()
       self.channel = channel
 
-      for await data in dataStream {
+      for await message in messages {
+        guard case .binary(let data) = message.payload else { continue }
         let frame = BinaryFrame(
           data: data,
           decodedText: String(data: data, encoding: .utf8) ?? "<non-UTF-8 data>",
@@ -101,24 +96,26 @@ struct BinaryBroadcastView: View {
         receivedFrames.append(frame)
       }
     } catch {
-      self.error = error
+      if !Task.isCancelled {
+        self.error = error
+      }
     }
+
+    self.channel = nil
+    await supabaseClient.removeChannel(channel)
   }
 
   func sendBinary() {
-    guard !inputText.isEmpty else { return }
+    guard let channel, !inputText.isEmpty else { return }
+
+    let data = Data(inputText.utf8)
 
     Task {
-      let data = Data(inputText.utf8)
       do {
-        try await channel?.broadcast(event: "binary_message", data: data)
-        await MainActor.run {
-          inputText = ""
-        }
+        try await channel.broadcast(event: "binary_message", data: data)
+        inputText = ""
       } catch {
-        await MainActor.run {
-          self.error = error
-        }
+        self.error = error
       }
     }
   }

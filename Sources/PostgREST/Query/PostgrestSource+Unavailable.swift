@@ -20,6 +20,7 @@
 // itself is a compile failure, which a Swift Testing test cannot assert.
 
 extension _PostgrestSource {
+  /// Unavailable on a read-only relation. `delete()` needs a ``_PostgrestWritableRelation``.
   @available(
     *, unavailable,
     message: "delete() needs a _PostgrestWritableRelation; this relation is read-only"
@@ -28,6 +29,8 @@ extension _PostgrestSource {
     fatalError()
   }
 
+  /// Unavailable for these values. Pass the relation's `Draft`, which only a
+  /// ``_PostgrestWritableRelation`` has.
   @_disfavoredOverload
   @available(
     *, unavailable,
@@ -40,12 +43,15 @@ extension _PostgrestSource {
   // Closure form only: a `_PostgrestUpdate<R>` cannot be built for a read-only `R`. The closure's
   // `$0` has nothing to infer from here, so the error is "cannot infer type of closure parameter"
   // rather than this message, but it lands on `update` instead of on `from`.
+  /// Unavailable on a read-only relation. `update(_:)` needs a ``_PostgrestWritableRelation``.
   @_disfavoredOverload
   @available(*, unavailable, message: "update(_:) needs a _PostgrestWritableRelation")
   public func update<T>(_ build: (inout T) -> Void) -> Never {
     fatalError()
   }
 
+  /// Unavailable on a relation without a primary key. Use a ``_PostgrestWritableRelation`` that
+  /// has a `@PrimaryKey`, or name a unique constraint with `upsert(_:onConflict:)`.
   @_disfavoredOverload
   @available(
     *, unavailable,
@@ -59,6 +65,8 @@ extension _PostgrestSource {
     fatalError()
   }
 
+  /// Unavailable for these arguments. Pass the relation's `Draft`, which only a
+  /// ``_PostgrestWritableRelation`` has, and key paths to its stored columns.
   @_disfavoredOverload
   @available(
     *, unavailable,
@@ -74,6 +82,8 @@ extension _PostgrestSource {
     fatalError()
   }
 
+  /// Unavailable for this selection. Pass a selection declared against this relation, so that
+  /// its `Source` is `R`.
   @_disfavoredOverload
   @available(
     *, unavailable,

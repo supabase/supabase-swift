@@ -9,7 +9,7 @@ import Supabase
 import SwiftUI
 
 struct BroadcastView: View {
-  @State var messages: [BroadcastMessage] = []
+  @State var messages: [ChatMessage] = []
   @State var messageText: String = ""
   @State var channel: RealtimeChannel?
   @State var error: Error?
@@ -49,60 +49,64 @@ struct BroadcastView: View {
         Button("Send") {
           sendMessage()
         }
-        .disabled(messageText.isEmpty)
+        .disabled(messageText.isEmpty || channel == nil)
       }
       .padding()
     }
     .navigationTitle("Broadcast")
     .gitHubSourceLink()
     .task {
-      await subscribe()
-    }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
-      }
+      await observeMessages()
     }
   }
 
-  func subscribe() async {
-    let channel = await supabase.channel("broadcast-example") {
-      $0.broadcast.receiveOwnBroadcasts = true
+  func observeMessages() async {
+    let channel = await supabaseClient.channel("broadcast-example") {
+      $0.broadcast.receivesOwnMessages = true
     }
 
-    do {
-      let broadcast = await channel.broadcasts(event: "message")
+    let broadcasts = await channel.broadcasts(event: "message")
 
+    do {
+      error = nil
       try await channel.subscribe()
       self.channel = channel
 
-      for await message in broadcast {
-        if let payload = try message["payload"]?.decode(as: BroadcastMessage.self) {
-          messages.append(payload)
+      for await broadcast in broadcasts {
+        // One malformed message should not end the subscription.
+        do {
+          messages.append(try broadcast.decode(as: ChatMessage.self))
+        } catch {
+          self.error = error
         }
       }
     } catch {
-      print(error)
+      if !Task.isCancelled {
+        self.error = error
+      }
     }
+
+    self.channel = nil
+    await supabaseClient.removeChannel(channel)
   }
 
   func sendMessage() {
-    guard !messageText.isEmpty else { return }
+    guard let channel, !messageText.isEmpty else { return }
+
+    let message = ChatMessage(text: messageText)
 
     Task {
-      let message = BroadcastMessage(text: messageText, timestamp: Date())
-      try await channel?.broadcast(event: "message", message: message)
-
-      await MainActor.run {
+      do {
+        try await channel.broadcast(event: "message", payload: message)
         messageText = ""
+      } catch {
+        self.error = error
       }
     }
   }
 }
 
-nonisolated struct BroadcastMessage: Codable, Identifiable {
+nonisolated struct ChatMessage: Codable, Identifiable {
   var id: UUID = UUID()
   let text: String
   var timestamp: Date = Date()

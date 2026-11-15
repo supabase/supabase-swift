@@ -22,7 +22,7 @@ package struct LoggerInterceptor: ClientMiddleware {
   static let maxLoggedBodyBytes: Int64 = 64 * 1024
 
   package init(logger: Logging.Logger) {
-    self.logger = logger
+    self.logger = logger.redactingSecrets()
   }
 
   package func intercept(
@@ -37,17 +37,19 @@ package struct LoggerInterceptor: ClientMiddleware {
     var logger = logger
     logger[metadataKey: "requestID"] = "\(id)"
 
-    let (requestBody, requestBodyText) = try await Self.loggable(body)
+    let traces = logger.logLevel <= .trace
+    let (requestBody, requestBodyText) = traces ? try await Self.loggable(body) : (body, "")
     logger.trace(
       """
-      Request: \(request.method.rawValue) \(request.url?.absoluteString.removingPercentEncoding ?? "")
+      Request: \(request.method.rawValue) \(Self.loggable(request.url))
       Body: \(requestBodyText)
       """
     )
 
     do {
       let (head, responseBody) = try await next(request, requestBody)
-      let (loggedBody, responseBodyText) = try await Self.loggable(responseBody)
+      let (loggedBody, responseBodyText) =
+        traces ? try await Self.loggable(responseBody) : (responseBody, "")
       logger.trace(
         """
         Response: Status code: \(head.status.code) Content-Length: \(head.headerFields[.contentLength] ?? "-")
@@ -56,25 +58,51 @@ package struct LoggerInterceptor: ClientMiddleware {
       )
       return (head, loggedBody)
     } catch {
-      logger.error("Response: Failure \(error)")
+      logger.error("Response: Failure (\(LogRedaction.summary(of: error)))")
       throw error
     }
   }
 
+  /// The URL without its query and fragment, which can hold a signed token or a filter value.
+  private static func loggable(_ url: URL?) -> String {
+    guard let url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+      return ""
+    }
+    components.query = nil
+    components.fragment = nil
+    return components.string?.removingPercentEncoding ?? ""
+  }
+
+  /// Bytes collected from a small declared body before logging gives up on it. Larger than
+  /// ``maxLoggedBodyBytes`` because with transparent gzip `Content-Length` is the compressed size
+  /// while the decoded bytes come out.
+  static let maxCollectedBodyBytes = Int(maxLoggedBodyBytes) * 16
+
   /// Buffers small known-length bodies for logging and re-wraps them; passes everything else
   /// through unconsumed.
   ///
-  /// The declared length only decides *whether* to buffer. Collecting uses a much larger ceiling,
-  /// because a body can deliver more bytes than it claims — with transparent gzip,
-  /// `Content-Length` is the compressed size while the decoded bytes come out. Capping at the
-  /// claim would throw ``HTTPBodyTooLargeError`` out of a logging middleware and fail the request,
-  /// which is unrecoverable once the body has been consumed.
+  /// The declared length only decides *whether* to buffer, since a body can deliver more bytes
+  /// than it claims. One that passes ``maxCollectedBodyBytes`` is handed on whole and logged as
+  /// truncated: logging must never fail a request.
   private static func loggable(_ body: HTTPBody?) async throws -> (HTTPBody?, String) {
     guard let body else { return (nil, "<none>") }
     guard case .known(let count) = body.length, count <= maxLoggedBodyBytes else {
       return (body, "<streamed>")
     }
-    let data = try await Data(collecting: body, upTo: Int(maxLoggedBodyBytes) * 16)
+
+    var data = Data()
+    var iterator = body.makeAsyncIterator()
+    while let chunk = try await iterator.next() {
+      data.append(contentsOf: chunk)
+      if data.count > maxCollectedBodyBytes {
+        // A cut prefix is not valid JSON, so it could not be redacted; log only the marker. The
+        // declared length is now known to be wrong, so the handed-on body drops it.
+        let marker = "<truncated: over \(maxCollectedBodyBytes) bytes>"
+        if body.iterationBehavior == .multiple { return (body, marker) }
+        return (HTTPBody(data, followedBy: iterator), marker)
+      }
+    }
+
     let rewrapped = HTTPBody(data)
     return (body.onUploadProgress.map(rewrapped.reportingProgress) ?? rewrapped, stringify(data))
   }
@@ -88,11 +116,25 @@ func stringify(_ data: Data?) -> String {
   do {
     let object = try JSONSerialization.jsonObject(with: data, options: [])
     let prettyData = try JSONSerialization.data(
-      withJSONObject: object,
+      withJSONObject: redactingSecrets(in: object),
       options: [.prettyPrinted, .sortedKeys]
     )
     return String(data: prettyData, encoding: .utf8) ?? "<failed>"
   } catch {
     return String(data: data, encoding: .utf8) ?? "<failed>"
   }
+}
+
+private func redactingSecrets(in object: Any) -> Any {
+  if let dictionary = object as? [String: Any] {
+    return dictionary.reduce(into: [String: Any]()) { result, entry in
+      result[entry.key] =
+        LogRedaction.isSensitive(jsonKey: entry.key)
+        ? LogRedaction.placeholder : redactingSecrets(in: entry.value)
+    }
+  }
+  if let array = object as? [Any] {
+    return array.map(redactingSecrets(in:))
+  }
+  return object
 }

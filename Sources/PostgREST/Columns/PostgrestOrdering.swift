@@ -43,8 +43,10 @@ public struct _PostgrestOrdering<Root: _PostgrestRelation>: Sendable {
 
 /// Where `NULL`s sort relative to other values.
 public struct _PostgrestNullPlacement: RawRepresentable, Hashable, Sendable {
+  /// The token PostgREST expects, such as `"nullsfirst"`.
   public let rawValue: String
 
+  /// Creates a ``_PostgrestNullPlacement`` from a raw string value.
   public init(rawValue: String) {
     self.rawValue = rawValue
   }

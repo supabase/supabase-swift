@@ -33,7 +33,7 @@ struct PostgrestQueryTests {
 
   @Test
   func countAsksForTheTotalWithoutTransferringRows() async throws {
-    let capture = QueryCapture(responseHeaders: ["Content-Range": "*/42"])
+    let capture = try QueryCapture(responseHeaders: ["Content-Range": "*/42"])
     let total = try await capture.client.from(Todo.self).select().count(.exact)
     #expect(total == 42)
     #expect(capture.httpMethod == "HEAD")
@@ -42,7 +42,7 @@ struct PostgrestQueryTests {
 
   @Test
   func countRespectsFilters() async throws {
-    let capture = QueryCapture(responseHeaders: ["Content-Range": "*/3"])
+    let capture = try QueryCapture(responseHeaders: ["Content-Range": "*/3"])
     _ = try await capture.client.from(Todo.self).select()
       .where { $0.isDone.eq(false) }.count(.planned)
     #expect(capture.query?.contains("is_done=eq.false") == true)
@@ -51,7 +51,7 @@ struct PostgrestQueryTests {
 
   @Test
   func countThrowsWhenTheServerSendsNoTotal() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     await #expect(throws: PostgrestError.self) {
       _ = try await capture.client.from(Todo.self).select().count(.exact)
     }
@@ -59,7 +59,7 @@ struct PostgrestQueryTests {
 
   @Test
   func executeWithACountReturnsBothRowsAndTotal() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"[{"id":1,"task":"buy milk"}]"#,
       responseHeaders: ["Content-Range": "0-0/42"]
     )
@@ -73,14 +73,14 @@ struct PostgrestQueryTests {
 
   @Test
   func executeWithoutACountAsksForNoPreference() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().execute()
     #expect(capture.header("Prefer") == nil)
   }
 
   @Test
   func aMutationCountsAffectedRowsWithoutReturningThem() async throws {
-    let capture = QueryCapture(responseHeaders: ["Content-Range": "*/7"])
+    let capture = try QueryCapture(responseHeaders: ["Content-Range": "*/7"])
     let response = try await capture.client.from(Todo.self).delete()
       .where { $0.isDone.eq(true) }.execute(count: .exact)
     #expect(response.count == 7)
@@ -91,7 +91,7 @@ struct PostgrestQueryTests {
 
   @Test
   func aMutationCountComposesWithReturning() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"[{"id":1,"task":"buy milk"}]"#,
       responseHeaders: ["Content-Range": "0-0/1"]
     )
@@ -106,7 +106,7 @@ struct PostgrestQueryTests {
 
   @Test
   func whereAfterOrderStillFilters() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select()
       .order { $0.id.asc() }.limit(5).where { $0.isDone.eq(false) }.execute()
     #expect(capture.query?.contains("order=id.asc") == true)
@@ -116,7 +116,7 @@ struct PostgrestQueryTests {
 
   @Test
   func rangeSendsOffsetAndInclusiveLimit() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().range(10...19).execute()
     #expect(capture.query?.contains("offset=10") == true)
     #expect(capture.query?.contains("limit=10") == true)
@@ -124,7 +124,7 @@ struct PostgrestQueryTests {
 
   @Test
   func singleDecodesOneRow() async throws {
-    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    let capture = try QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
     let todo: Todo = try await capture.client.from(Todo.self).select().single().execute().value
     #expect(todo.task == "buy milk")
     #expect(capture.header("Accept") == "application/vnd.pgrst.object+json")
@@ -132,7 +132,7 @@ struct PostgrestQueryTests {
 
   @Test
   func maybeSingleDecodesOneRow() async throws {
-    let capture = QueryCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
     let todo: Todo? = try await capture.client.from(Todo.self).select().maybeSingle().execute()
       .value
     #expect(todo?.task == "buy milk")
@@ -141,14 +141,14 @@ struct PostgrestQueryTests {
 
   @Test
   func maybeSingleTurnsNoRowsIntoNil() async throws {
-    let capture = QueryCapture(body: "[]")
+    let capture = try QueryCapture(body: "[]")
     let todo = try await capture.client.from(Todo.self).select().maybeSingle().execute().value
     #expect(todo == nil)
   }
 
   @Test
   func maybeSingleThrowsForMoreThanOneRow() async throws {
-    let capture = QueryCapture(body: #"[{"id":1,"task":"a"},{"id":2,"task":"b"}]"#)
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"a"},{"id":2,"task":"b"}]"#)
     let error = await #expect(throws: PostgrestError.self) {
       _ = try await capture.client.from(Todo.self).select().maybeSingle().execute()
     }
@@ -157,7 +157,7 @@ struct PostgrestQueryTests {
 
   @Test
   func singleThrowsForNoRows() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"""
         {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
         "details":"The result contains 0 rows","hint":null}
@@ -171,21 +171,21 @@ struct PostgrestQueryTests {
 
   @Test
   func stripNullsAsksForTheStrippedArrayMediaType() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self).select().stripNulls().execute()
     #expect(capture.header("Accept") == "application/vnd.pgrst.array+json;nulls=stripped")
   }
 
   @Test
   func stripNullsBeforeSingleAsksForTheStrippedObjectMediaType() async throws {
-    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    let capture = try QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
     _ = try await capture.client.from(Todo.self).select().stripNulls().single().execute()
     #expect(capture.header("Accept") == "application/vnd.pgrst.object+json;nulls=stripped")
   }
 
   @Test
   func whereWorksAfterReturning() async throws {
-    let capture = QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
+    let capture = try QueryCapture(body: #"{"id":1,"task":"buy milk"}"#)
     let todo = try await capture.client.from(Todo.self).delete().all().returning()
       .where { $0.id.eq(1) }.single().execute().value
     #expect(todo.id == 1)

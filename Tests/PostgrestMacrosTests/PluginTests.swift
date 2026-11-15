@@ -5,6 +5,7 @@
 //  Created by Guilherme Souza on 21/08/26.
 //
 
+import Foundation
 import Testing
 
 @testable import PostgrestMacros
@@ -13,6 +14,7 @@ import Testing
 struct PluginTests {
   @Test
   func macroModuleReExportsPostgREST() {
-    #expect(PostgrestClient.Configuration.defaultHeaders["X-Client-Info"] != nil)
+    let configuration = PostgrestClient.Configuration(url: URL(string: "https://example.com")!)
+    #expect(configuration.schema == nil)
   }
 }

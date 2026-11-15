@@ -36,14 +36,14 @@ struct TableMacroTests {
         @Column("due_at") var dueDate: Date?
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let task = _PostgrestColumn<Todo, String>("task")
           let isDone = _PostgrestColumn<Todo, Bool>("is_done")
@@ -57,20 +57,20 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
           case isDone = "is_done"
           case dueDate = "due_at"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int?
           var task: String
           var isDone: Bool?
           var dueDate: Date?
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
             case isDone = "is_done"
@@ -104,14 +104,14 @@ struct TableMacroTests {
         var id: Int
       }
 
-      extension ActiveTodo {
+      nonisolated extension ActiveTodo {
         static let relationName = "active_todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<ActiveTodo, Int>("id")
 
           init() {
@@ -120,7 +120,7 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
         }
       }
@@ -145,14 +145,14 @@ struct TableMacroTests {
         @Column("back\\slash") var backSlash: String
       }
 
-      extension Weird {
+      nonisolated extension Weird {
         static let relationName = "we\"ird\\name"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let sayHi = _PostgrestColumn<Weird, String>("say \"hi\"")
           let backSlash = _PostgrestColumn<Weird, String>("back\\slash")
 
@@ -164,16 +164,16 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["say \"hi\""]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case sayHi = "say \"hi\""
           case backSlash = "back\\slash"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var sayHi: String
           var backSlash: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case sayHi = "say \"hi\""
             case backSlash = "back\\slash"
           }
@@ -198,19 +198,19 @@ struct TableMacroTests {
       }
       """
     } expansion: {
-      #"""
+      """
       struct AuditEvent {
         var action: String
       }
 
-      extension AuditEvent {
+      nonisolated extension AuditEvent {
         static let relationName = "audit_events"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let action = _PostgrestColumn<AuditEvent, String>("action")
 
           init() {
@@ -219,14 +219,14 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case action = "action"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var action: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case action = "action"
           }
 
@@ -235,7 +235,7 @@ struct TableMacroTests {
           }
         }
       }
-      """#
+      """
     }
   }
 
@@ -256,14 +256,14 @@ struct TableMacroTests {
         var task: String
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         public static let relationName = "todos"
 
         public typealias Schema = AppSchema
 
         public static let selectString = "*"
 
-        public struct Columns: Sendable {
+        public nonisolated struct Columns: Sendable {
           public let id = _PostgrestColumn<Todo, Int>("id")
           public let task = _PostgrestColumn<Todo, String>("task")
 
@@ -275,16 +275,16 @@ struct TableMacroTests {
 
         public static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
         }
 
-        public struct Draft: Encodable, Sendable {
+        public nonisolated struct Draft: Encodable, Sendable {
           public var id: Int
           public var task: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
           }
@@ -318,14 +318,14 @@ struct TableMacroTests {
         var summary: String { htmlURL }
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let htmlURL = _PostgrestColumn<Todo, String>("html_url")
 
           init() {
@@ -334,14 +334,14 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case htmlURL = "html_url"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var htmlURL: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case htmlURL = "html_url"
           }
 
@@ -372,14 +372,14 @@ struct TableMacroTests {
         var draft, review: String
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let task = _PostgrestColumn<Todo, String>("task")
           let note = _PostgrestColumn<Todo, String>("note")
@@ -394,7 +394,7 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
           case note = "note"
@@ -402,14 +402,14 @@ struct TableMacroTests {
           case review = "review"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
           var note: String
           var draft: String
           var review: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
             case note = "note"
@@ -447,14 +447,14 @@ struct TableMacroTests {
         @Default var isAdmin, isOwner: Bool
       }
 
-      extension Membership {
+      nonisolated extension Membership {
         static let relationName = "memberships"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let userID = _PostgrestColumn<Membership, Int>("user_id")
           let teamID = _PostgrestColumn<Membership, Int>("team_id")
           let isAdmin = _PostgrestColumn<Membership, Bool>("is_admin")
@@ -468,20 +468,20 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["user_id", "team_id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case userID = "user_id"
           case teamID = "team_id"
           case isAdmin = "is_admin"
           case isOwner = "is_owner"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var userID: Int
           var teamID: Int
           var isAdmin: Bool?
           var isOwner: Bool?
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case userID = "user_id"
             case teamID = "team_id"
             case isAdmin = "is_admin"
@@ -519,14 +519,14 @@ struct TableMacroTests {
         @Generated @Column("updated_at") var updatedAt: Date?
       }
 
-      extension Counter {
+      nonisolated extension Counter {
         static let relationName = "counters"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestGeneratedColumn<Counter, Int, _PostgrestNotNull>("id")
           let count = _PostgrestColumn<Counter, Int>("count")
           let updatedAt = _PostgrestGeneratedColumn<Counter, Date, _PostgrestNullable>("updated_at")
@@ -539,16 +539,16 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case count = "count"
           case updatedAt = "updated_at"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var count: Int
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case count = "count"
           }
 
@@ -588,14 +588,14 @@ struct TableMacroTests {
         }
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let task = _PostgrestColumn<Todo, String>("task")
 
@@ -607,16 +607,16 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int
           var task: String
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
           }
@@ -650,14 +650,14 @@ struct TableMacroTests {
         var grantedAt: Date
       }
 
-      extension UserRole {
+      nonisolated extension UserRole {
         static let relationName = "user_roles"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let userID = _PostgrestColumn<UserRole, UUID>("user_id")
           let roleID = _PostgrestColumn<UserRole, UUID>("role_id")
           let grantedAt = _PostgrestColumn<UserRole, Date>("granted_at")
@@ -670,18 +670,18 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case userID = "user_id"
           case roleID = "role_id"
           case grantedAt = "granted_at"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var userID: UUID
           var roleID: UUID
           var grantedAt: Date
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case userID = "user_id"
             case roleID = "role_id"
             case grantedAt = "granted_at"
@@ -715,14 +715,14 @@ struct TableMacroTests {
         @PrimaryKey var roleID: UUID
       }
 
-      extension UserRole {
+      nonisolated extension UserRole {
         static let relationName = "user_roles"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let userID = _PostgrestColumn<UserRole, UUID>("user_id")
           let roleID = _PostgrestColumn<UserRole, UUID>("role_id")
 
@@ -734,16 +734,16 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["user_id", "role_id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case userID = "user_id"
           case roleID = "role_id"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var userID: UUID
           var roleID: UUID
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case userID = "user_id"
             case roleID = "role_id"
           }
@@ -778,14 +778,14 @@ struct TableMacroTests {
         @Default var tag: Optional<String>
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let task = _PostgrestColumn<Todo, String>("task")
           let note = _PostgrestNullableColumn<Todo, String>("note")
@@ -799,20 +799,20 @@ struct TableMacroTests {
 
         static let primaryKeyColumns: [String] = ["id"]
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case task = "task"
           case note = "note"
           case tag = "tag"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int?
           var task: String
           var note: Optional<String>
           var tag: Optional<String>
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case task = "task"
             case note = "note"
@@ -848,14 +848,14 @@ struct TableMacroTests {
         @Column("due_at") var dueDate: Date?
       }
 
-      extension Todo {
+      nonisolated extension Todo {
         static let relationName = "todos"
 
         typealias Schema = PostgREST._PublicSchema
 
         static let selectString = "*"
 
-        struct Columns: Sendable {
+        nonisolated struct Columns: Sendable {
           let id = _PostgrestColumn<Todo, Int>("id")
           let dueDate = _PostgrestNullableColumn<Todo, Date>("due_at")
 
@@ -865,16 +865,16 @@ struct TableMacroTests {
 
         static let columns = Columns()
 
-        enum CodingKeys: String, CodingKey {
+        nonisolated enum CodingKeys: String, CodingKey {
           case id = "id"
           case dueDate = "due_at"
         }
 
-        struct Draft: Encodable, Sendable {
+        nonisolated struct Draft: Encodable, Sendable {
           var id: Int
           var dueDate: Date?
 
-          enum CodingKeys: String, CodingKey {
+          nonisolated enum CodingKeys: String, CodingKey {
             case id = "id"
             case dueDate = "due_at"
           }

@@ -15,9 +15,9 @@ struct TransferProgressTests {
     #expect(TransferProgress(completedBytes: 0, totalBytes: 0).fractionCompleted == nil)
   }
 
-  private func makeBucket() -> StorageBucket {
-    StorageClient(
-      configuration: StorageClientConfiguration(
+  private func makeBucket() throws -> StorageBucket {
+    try StorageClient(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
         http: .init(

@@ -12,11 +12,11 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestFilterTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.supabasePublishableKey
+        .apikey: DotEnv.supabasePublishableKey
       ]
     )
   )

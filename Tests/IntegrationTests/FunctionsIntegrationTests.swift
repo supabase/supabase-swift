@@ -29,19 +29,20 @@ struct FunctionsIntegrationTests {
   static func client(
     apikey: String? = DotEnv.supabasePublishableKey,
     accessToken: (@Sendable () async throws -> String?)? = { DotEnv.supabasePublishableKey }
-  ) -> FunctionsClient {
+  ) throws -> FunctionsClient {
     var headers: HTTPFields = [:]
-    if let apikey { headers[HTTPField.Name("apikey")!] = apikey }
-    return FunctionsClient(
+    if let apikey { headers[.apikey] = apikey }
+    return try FunctionsClient(
       configuration: .init(
         url: URL(string: "\(DotEnv.supabaseURL)/functions/v1")!,
         headers: headers,
-        accessToken: accessToken
+        http: .init(
+          middlewares: accessToken.map { [AccessTokenMiddleware(getAccessToken: $0)] } ?? [])
       )
     )
   }
 
-  let client = Self.client()
+  let client = try! Self.client()
 
   @Test
   func jsonBodyRoundTrips() async throws {
@@ -114,24 +115,24 @@ struct FunctionsIntegrationTests {
       try await client.invoke("does-not-exist")
     }
     #expect(error?.kind == .server)
-    #expect(error?.response?.statusCode == 404)
+    #expect(error?.response?.status == 404)
   }
 
   @Test
   func missingAuthorizationIsPlatformError() async throws {
-    let client = Self.client(apikey: nil, accessToken: nil)
+    let client = try Self.client(apikey: nil, accessToken: nil)
     let error = await #expect(throws: FunctionsError.self) {
       try await client.invoke("echo")
     }
     #expect(error?.kind == .server)
-    #expect(error?.response?.statusCode == 401)
+    #expect(error?.response?.status == 401)
     #expect(error?.code == .unauthorizedNoAuthHeader)
     #expect(error?.isPlatformError == true)
   }
 
   @Test
   func newFormatPublishableKeyPassesVerifyJWTWithoutSession() async throws {
-    let client = Self.client(apikey: DotEnv.supabaseNewFormatPublishableKey, accessToken: nil)
+    let client = try Self.client(apikey: DotEnv.supabaseNewFormatPublishableKey, accessToken: nil)
     let echo: Echo = try await client.invoke("echo")
     #expect(echo.headers["authorization"] == nil)
   }

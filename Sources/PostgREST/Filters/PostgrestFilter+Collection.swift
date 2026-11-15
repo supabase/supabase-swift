@@ -37,6 +37,7 @@ extension _PostgrestFilterableExpression {
   /// Matches rows where this range column contains `range`.
   ///
   /// - Parameter range: A range of the column's own type, for example `"[2,3)"`.
+  /// - Returns: A filter to return from a `where` closure.
   public func containsRange<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
   where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .contains, value: range)
@@ -57,6 +58,7 @@ extension _PostgrestFilterableExpression {
   /// Matches rows where this range column is strictly to the left of `range`.
   ///
   /// - Parameter range: A range of the column's own type, for example `"[2024-01-01,2024-02-01)"`.
+  /// - Returns: A filter to return from a `where` closure.
   public func rangeLt<B>(_ range: _PostgresRange<B>) -> _PostgrestFilter<Root>
   where Value == _PostgresRange<B> {
     _PostgrestFilter(column: postgrestExpression, operator: .rangeLt, value: range)
@@ -96,6 +98,7 @@ extension _PostgrestFilterableExpression where Value == JSONValue {
   ///
   /// - Parameter json: Any JSON value. An object matches rows holding at least those keys and
   ///   values; on an array column, `[20]` or `20` matches arrays holding `20`.
+  /// - Returns: A filter to return from a `where` closure.
   public func containsJSON(_ json: JSONValue) -> _PostgrestFilter<Root> {
     _PostgrestFilter(column: postgrestExpression, operator: .contains, value: json)
   }
@@ -114,6 +117,7 @@ extension _PostgrestFilterableExpression where Value == String {
   ///   - config: The text-search configuration, for example `"english"`. Defaults to `nil`,
   ///     which leaves the database default in place.
   ///   - type: How to turn `query` into a `tsquery`. Defaults to `nil`, meaning `to_tsquery`.
+  /// - Returns: A filter to return from a `where` closure.
   public func textSearch(
     _ query: String,
     config: String? = nil,

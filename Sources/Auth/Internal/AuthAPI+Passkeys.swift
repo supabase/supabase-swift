@@ -9,6 +9,17 @@ import Foundation
 import HTTPTypes
 
 extension AuthAPI {
+  /// The credential is a `JSONValue`, so its W3C field names reach the server as they are.
+  private struct VerifyBody: Encodable {
+    let challengeID: UUID
+    let credential: JSONValue
+
+    private enum CodingKeys: String, CodingKey {
+      case challengeID = "challenge_id"
+      case credential
+    }
+  }
+
   func passkeyRegistrationOptions(
     accessToken: String
   ) -> AuthRequest<PasskeyRegistrationOptions> {
@@ -18,16 +29,13 @@ extension AuthAPI {
   }
 
   func verifyPasskeyRegistration(
-    challengeId: String,
-    credentialResponse: JSONValue,
+    challengeID: UUID,
+    credential: JSONValue,
     accessToken: String
   ) throws -> AuthRequest<PasskeyListItem> {
     try request(
       .post, "passkeys/registration/verify", authorization: bearer(accessToken),
-      body: encodeWebAuthnBody([
-        "challenge_id": .string(challengeId),
-        "credential": credentialResponse,
-      ]),
+      body: encodeBody(VerifyBody(challengeID: challengeID, credential: credential)),
       decode: decoding(PasskeyListItem.self))
   }
 
@@ -38,16 +46,13 @@ extension AuthAPI {
   }
 
   func verifyPasskeyAuthentication(
-    challengeId: String,
-    credentialResponse: JSONValue
-  ) throws -> AuthRequest<AuthResponse> {
+    challengeID: UUID,
+    credential: JSONValue
+  ) throws -> AuthRequest<Session> {
     try request(
       .post, "passkeys/authentication/verify",
-      body: encodeWebAuthnBody([
-        "challenge_id": .string(challengeId),
-        "credential": credentialResponse,
-      ]),
-      decode: decoding(AuthResponse.self))
+      body: encodeBody(VerifyBody(challengeID: challengeID, credential: credential)),
+      decode: decodingSession())
   }
 
   func listPasskeys(accessToken: String) -> AuthRequest<[PasskeyListItem]> {
@@ -63,7 +68,7 @@ extension AuthAPI {
   ) throws -> AuthRequest<PasskeyListItem> {
     try request(
       .patch, "passkeys/\(id)", authorization: bearer(accessToken),
-      body: encoder.encode(["friendly_name": friendlyName]), decode: decoding(PasskeyListItem.self))
+      body: encodeBody(["friendly_name": friendlyName]), decode: decoding(PasskeyListItem.self))
   }
 
   func deletePasskey(id: UUID, accessToken: String) -> AuthRequest<Void> {

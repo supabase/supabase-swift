@@ -8,6 +8,10 @@
 import ConcurrencyExtras
 public import Foundation
 
+#if canImport(Android)
+  import Android
+#endif
+
 /// A streaming HTTP body: an async sequence of byte chunks with a length hint and an
 /// iteration-behavior flag.
 ///
@@ -25,6 +29,7 @@ public import Foundation
 /// second iteration throws ``HTTPBodyAlreadyConsumedError``. Retrying middleware must check
 /// the flag before replaying a request.
 public final class HTTPBody: AsyncSequence, @unchecked Sendable {
+  /// One chunk of the body's bytes.
   public typealias Element = ArraySlice<UInt8>
 
   /// How many bytes the body holds, when known up front.
@@ -153,11 +158,15 @@ public final class HTTPBody: AsyncSequence, @unchecked Sendable {
   public struct Iterator: AsyncIteratorProtocol {
     var base: AsyncThrowingStream<ArraySlice<UInt8>, any Error>.Iterator
 
+    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
+    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
     /// Advances to the next chunk. Throws ``HTTPBodyAlreadyConsumedError`` when a `.single`
     /// body is iterated a second time, and `CancellationError` when the iterating task is
     /// cancelled, so a body cut short never looks complete.
-    // `@concurrent` because `AsyncThrowingStream.Iterator.next(isolation:)` needs macOS 15 /
-    // iOS 18; the plain `next()` it calls is `@concurrent`, so `base` cannot stay on the caller.
+    ///
+    /// - Returns: The next chunk, or `nil` when the body has no more bytes.
+    /// - Throws: ``HTTPBodyAlreadyConsumedError``, `CancellationError`, or the error of the
+    ///   chunk source.
     @concurrent public mutating func next() async throws -> ArraySlice<UInt8>? {
       guard let chunk = try await base.next() else {
         // `AsyncThrowingStream` ends cleanly when its consumer is cancelled.
@@ -210,6 +219,8 @@ extension Data {
   /// - Parameters:
   ///   - body: The body to drain.
   ///   - maxBytes: Throw ``HTTPBodyTooLargeError`` once more than this many bytes arrive.
+  /// - Throws: ``HTTPBodyTooLargeError`` when the body holds more than `maxBytes` bytes, or the
+  ///   error the body throws while it is iterated.
   public init(collecting body: HTTPBody, upTo maxBytes: Int) async throws {
     var data = Data()
     if case .known(let count) = body.length, count > 0 {
@@ -223,6 +234,19 @@ extension Data {
     }
     self = data
   }
+
+  /// Collects `body` and stops after `cap` bytes instead of throwing, for bodies that are only
+  /// reported, never used.
+  package init(collecting body: HTTPBody, truncatingAt cap: Int) async throws {
+    self.init()
+    if case .known(let count) = body.length, count > 0 {
+      reserveCapacity(Int(clamping: Swift.min(count, Int64(cap))))
+    }
+    for try await chunk in body {
+      append(contentsOf: chunk.prefix(cap - count))
+      if count >= cap { break }
+    }
+  }
 }
 
 extension HTTPBody {
@@ -231,6 +255,8 @@ extension HTTPBody {
   /// The bytes go to a temporary file next to `fileURL`, which then replaces `fileURL` in one
   /// move. So `fileURL` holds either its old contents or the whole body, never a partial one, and
   /// a failed or cancelled write leaves no temporary file behind. The directory must exist.
+  ///
+  /// - Throws: The error from the body's stream, or the file system error when the write fails.
   public func write(to fileURL: URL) async throws {
     let fileManager = FileManager.default
     let temporary = fileURL.deletingLastPathComponent().appendingPathComponent(
@@ -328,6 +354,24 @@ extension HTTPBody {
         } catch {
           throw transform(error)
         }
+      }
+    }
+  }
+}
+
+extension HTTPBody {
+  /// A one-pass, unknown-length body that yields `head`, then the chunks still left in `rest`.
+  /// Hands on a body that was partly read through its iterator.
+  package convenience init(_ head: Data, followedBy rest: Iterator) {
+    let rest = Box(rest)
+    let head = Box<Data?>(head.isEmpty ? nil : head)
+    self.init(storage: .stream, length: .unknown, iterationBehavior: .single) {
+      AsyncThrowingStream {
+        if let data = head.value {
+          head.value = nil
+          return ArraySlice(data)
+        }
+        return try await rest.value.next()
       }
     }
   }

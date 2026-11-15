@@ -145,7 +145,7 @@ struct FileSearchView: View {
         Section("File Details") {
           DetailRow(label: "Name", value: selectedFile.name)
           DetailRow(label: "ID", value: selectedFile.id.uuidString)
-          DetailRow(label: "Version", value: selectedFile.version)
+          DetailRow(label: "Version", value: selectedFile.versionID)
 
           if let contentType = selectedFile.contentType {
             DetailRow(label: "Content Type", value: contentType)
@@ -159,7 +159,7 @@ struct FileSearchView: View {
           }
 
           if let cacheControl = selectedFile.cacheControl {
-            DetailRow(label: "Cache Control", value: cacheControl)
+            DetailRow(label: "Cache Control", value: cacheControl.rawValue)
           }
 
           if let createdAt = selectedFile.createdAt {
@@ -276,7 +276,7 @@ struct FileSearchView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -301,7 +301,7 @@ struct FileSearchView: View {
         search: searchText.isEmpty ? nil : searchText
       )
 
-      files = try await supabase.storage
+      files = try await supabaseClient.storage
         .from(selectedBucket)
         .list(
           path: folderPath.isEmpty ? nil : folderPath,
@@ -319,7 +319,7 @@ struct FileSearchView: View {
       isLoading = true
       defer { isLoading = false }
 
-      selectedFile = try await supabase.storage
+      selectedFile = try await supabaseClient.storage
         .from(selectedBucket)
         .info(path: path)
     } catch {

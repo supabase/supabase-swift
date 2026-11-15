@@ -99,16 +99,6 @@ struct RealtimeClientAccessTokenTests {
   }
 
   @Test
-  func theTimerDoesNotCallTheCallbackWhenDisconnected() async {
-    let provider = TokenProvider { _ in "token" }
-    let host = await makeHost(provider)
-
-    await host.client.refreshAccessTokenIfConnected()
-
-    #expect(provider.calls == 0)
-  }
-
-  @Test
   func twoQuickSetAuthCallsCallTheCallbackOnceAndPushOnce() async throws {
     let provider = TokenProvider { call in "token-\(call)" }
     let host = await makeHost(provider)
@@ -187,7 +177,7 @@ struct RealtimeClientAccessTokenTests {
   func aJoinDuringARefreshWaitsForTheNewToken() async {
     let gate = CallbackGate()
     let provider = TokenProvider { _ in await gate.park() }
-    let host = await makeHost(provider, headers: ["Authorization": "Bearer anon-key"])
+    let host = await makeHost(provider, headers: [.authorization: "Bearer anon-key"])
 
     let first = Task { await host.client.currentAccessToken() }
     await gate.waitForCall()
@@ -273,8 +263,10 @@ struct RealtimeClientAccessTokenTests {
     let gate = CallbackGate()
     let provider = TokenProvider { call in call == 1 ? await gate.park() : "second" }
     let client = RealtimeClient(
-      url: URL(string: "http://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(accessToken: provider.callback, handleAppLifecycle: false),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "http://localhost:54321/realtime/v1")!,
+        observesAppLifecycle: false,
+        accessToken: provider.callback),
       wsTransport: { _, _ in FakeWebSocket.fakes().0 },
       http: HTTPClient(transport: RecordingTransport()),
       clock: clock
@@ -282,7 +274,7 @@ struct RealtimeClientAccessTokenTests {
 
     async let token = client.currentAccessToken()
     await gate.waitForCall()
-    await clock.advance(by: RealtimeClientOptions.defaultTimeout)
+    await clock.advance(by: RealtimeClient.Configuration.defaultRequestTimeout)
     #expect(await token == nil)
 
     await client.setAuth()
@@ -290,45 +282,6 @@ struct RealtimeClientAccessTokenTests {
 
     gate.release("too late")
     #expect(await client.accessToken == "second")
-  }
-
-  @Test
-  func aRefreshForRejoinIgnoresTheInterval() async throws {
-    let provider = TokenProvider { call in "token-\(call)" }
-    let host = await makeHost(provider)
-    try await subscribe(host)
-
-    await host.client.setAuth()
-    #expect(provider.calls == 1)
-
-    await host.client.refreshTokenForRejoin()
-    #expect(provider.calls == 2)
-    #expect(await host.client.accessToken == "token-2")
-  }
-
-  @Test
-  func aRefreshForRejoinCallsAgainAfterACallThatStartedBeforeTheRefusal() async {
-    let gate = CallbackGate()
-    let provider = TokenProvider { call in call == 1 ? await gate.park() : "fresh" }
-    let host = await makeHost(provider)
-
-    let refresh = Task { await host.client.setAuth() }
-    await gate.waitForCall()
-    let rejoins = await host.client.withIsolation { client in
-      let rejoins = [
-        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
-        Task.immediateIfAvailable { await client.refreshTokenForRejoin() },
-      ]
-      gate.release("refused")
-      return rejoins
-    }
-    for rejoin in rejoins {
-      await rejoin.value
-    }
-    await refresh.value
-
-    #expect(await host.client.accessToken == "fresh")
-    #expect(provider.calls == 2)
   }
 
   // MARK: Helpers
@@ -415,23 +368,26 @@ struct RealtimeClientAccessTokenTests {
   }
 
   private func hasRefreshTimer(_ host: RealtimeTestHost) async -> Bool {
-    await host.client.withIsolation { !$0.tasks.tasks(at: .accessTokenRefresh).isEmpty }
+    await host.client.withIsolation { $0.timers.task(for: .tokenRefresh) != nil }
   }
 
   /// An `exp` `seconds` after the host client's own now, so the refresh delay is exact.
   private func expiresIn(_ seconds: TimeInterval, on host: RealtimeTestHost) -> TimeInterval {
-    host.client.now().addingTimeInterval(seconds).timeIntervalSince1970
+    let client = host.client
+    return client.startDate.addingTimeInterval(client.elapsed().timeInterval + seconds)
+      .timeIntervalSince1970
   }
 
   private func makeHost(
-    _ provider: TokenProvider, headers: [String: String] = [:]
+    _ provider: TokenProvider, headers: HTTPFields = [:]
   ) async -> RealtimeTestHost {
     await RealtimeTestHost(
-      options: RealtimeClientOptions(
+      configuration: RealtimeClient.Configuration(
+        url: RealtimeTestHost.url,
         headers: headers,
         heartbeatInterval: .seconds(3600),
-        accessToken: provider.callback,
-        handleAppLifecycle: false
+        observesAppLifecycle: false,
+        accessToken: provider.callback
       )
     )
   }
@@ -454,5 +410,14 @@ extension RealtimeClient {
   fileprivate func withIsolation<T: Sendable>(_ body: @Sendable (isolated RealtimeClient) -> T) -> T
   {
     body(self)
+  }
+}
+
+extension RealtimeClient {
+  /// The stored token after a refresh from the `accessToken` callback, which waits for a call
+  /// in flight. Drives the socket path's refresh from a test.
+  func currentAccessToken() async -> String? {
+    await refreshAccessToken()
+    return accessToken
   }
 }

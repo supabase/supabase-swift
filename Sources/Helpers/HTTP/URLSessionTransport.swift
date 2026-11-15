@@ -162,10 +162,23 @@ public struct URLSessionTransport: ClientTransport {
         task.cancel()
       }
       let head = try Self.makeHead(response)
-      let length: HTTPBody.Length =
-        response.expectedContentLength >= 0 ? .known(response.expectedContentLength) : .unknown
+      let length = Self.responseBodyLength(
+        expectedContentLength: response.expectedContentLength, head: head)
       let body = HTTPBody(storage: .stream, length: length, iterationBehavior: .single) { chunks }
       return (head, body)
+    }
+
+    static func responseBodyLength(
+      expectedContentLength: Int64, head: HTTPTypes.HTTPResponse
+    ) -> HTTPBody.Length {
+      guard expectedContentLength >= 0 else { return .unknown }
+      // URLSession decodes a compressed body, but some OS versions report the encoded
+      // `Content-Length` as the expected length.
+      let encoding = head.headerFields[.contentEncoding]?.trimmingCharacters(in: .whitespaces)
+      if let encoding, encoding.lowercased() != "identity" {
+        return .unknown
+      }
+      return .known(expectedContentLength)
     }
   #endif
 

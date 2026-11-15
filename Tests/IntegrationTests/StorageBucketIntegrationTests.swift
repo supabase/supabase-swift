@@ -30,7 +30,7 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageBucketIntegrationTests {
-  let storage = StorageIntegration.client()
+  let storage = try! StorageIntegration.client()
 
   var bucketName = ""
   var file = Data()
@@ -58,7 +58,7 @@ final class StorageBucketIntegrationTests {
   @Test
   func getPublicURLWithDownloadQueryString() throws {
     let publicURL = storage.from(bucketName).publicURL(
-      path: uploadPath, download: .withOriginalName)
+      path: uploadPath, options: PublicURLOptions(download: .withOriginalName))
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download="
@@ -68,7 +68,7 @@ final class StorageBucketIntegrationTests {
   @Test
   func getPublicURLWithCustomDownload() throws {
     let publicURL = storage.from(bucketName).publicURL(
-      path: uploadPath, download: .named("test.jpg"))
+      path: uploadPath, options: PublicURLOptions(download: .named("test.jpg")))
     #expect(
       publicURL.absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/\(uploadPath)?download=test.jpg"
@@ -92,7 +92,8 @@ final class StorageBucketIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .withOriginalName)
+      path: uploadPath, expiresIn: .seconds(2000),
+      options: SignedURLOptions(download: .withOriginalName))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -105,7 +106,8 @@ final class StorageBucketIntegrationTests {
     _ = try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(2000), download: .named("test.jpg"))
+      path: uploadPath, expiresIn: .seconds(2000),
+      options: SignedURLOptions(download: .named("test.jpg")))
     #expect(
       url.absoluteString.contains(
         "\(DotEnv.supabaseURL)/storage/v1/object/sign/\(bucketName)/\(uploadPath)")
@@ -146,9 +148,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Payload too large")
-      #expect(error.serverError?.code == .entityTooLarge)
+      #expect(error.code == .entityTooLarge)
       #expect(error.message == "The object exceeded the maximum allowed size")
-      #expect(error.serverStatusCode == 413)
+      #expect(error.serverError?.statusCode == 413)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -190,9 +192,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "invalid_mime_type")
-      #expect(error.serverError?.code == .invalidMimeType)
+      #expect(error.code == .invalidMimeType)
       #expect(error.message == "mime type image/jpeg is not supported")
-      #expect(error.serverStatusCode == 415)
+      #expect(error.serverError?.statusCode == 415)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -244,9 +246,9 @@ final class StorageBucketIntegrationTests {
     } catch let error as StorageError {
       #expect(error.kind == .server)
       #expect(error.serverError?.error == "Duplicate")
-      #expect(error.serverError?.code == .keyAlreadyExists)
+      #expect(error.code == .keyAlreadyExists)
       #expect(error.message == "The resource already exists")
-      #expect(error.serverStatusCode == 409)
+      #expect(error.serverError?.statusCode == 409)
       #expect(error.response != nil)
     } catch {
       Issue.record("Unexpected error \(error)")
@@ -333,12 +335,12 @@ final class StorageBucketIntegrationTests {
   func getPublishURLWithTransformationOptions() throws {
     let res = storage.from(bucketName).publicURL(
       path: uploadPath,
-      transform: ImageTransform(
-        width: 700,
-        height: 300,
-        quality: 70
-      )
-    )
+      options: PublicURLOptions(
+        transform: ImageTransform(
+          width: 700,
+          height: 300,
+          quality: 70
+        )))
 
     #expect(
       res.absoluteString
@@ -475,7 +477,7 @@ final class StorageBucketIntegrationTests {
 
     #expect(error?.kind == .server)
     #expect(error?.code == .invalidKey)
-    #expect(error?.serverStatusCode == 400)
+    #expect(error?.serverError?.statusCode == 400)
     #expect(error?.message == "Invalid key: \(input)")
   }
 
@@ -516,8 +518,8 @@ final class StorageBucketIntegrationTests {
       let error = await StorageIntegration.storageError(operation)
       #expect(error?.kind == .server)
       #expect(error?.code == .noSuchKey)
-      #expect(error?.serverStatusCode == 404)
-      #expect(error?.response?.statusCode == 400)
+      #expect(error?.serverError?.statusCode == 404)
+      #expect(error?.response?.status == 400)
       #expect(error?.isNotFound == true)
       #expect(error?.serverError?.error == "not_found")
       #expect(error?.message == "Object not found")
@@ -543,7 +545,7 @@ final class StorageBucketIntegrationTests {
     }
     #expect(error?.code == .noSuchBucket)
     #expect(error?.isNotFound == true)
-    #expect(error?.serverStatusCode == 404)
+    #expect(error?.serverError?.statusCode == 404)
   }
 
   @Test
@@ -555,7 +557,7 @@ final class StorageBucketIntegrationTests {
       try await api.upload(path: uploadPath, data: file)
     }
     #expect(error?.code == .keyAlreadyExists)
-    #expect(error?.serverStatusCode == 409)
+    #expect(error?.serverError?.statusCode == 409)
     #expect(error?.serverError?.error == "Duplicate")
 
     let replacement = Data("replacement".utf8)
@@ -566,9 +568,9 @@ final class StorageBucketIntegrationTests {
   @Test
   func anonRoleIsFilteredByRowLevelSecurity() async throws {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
-    let anon = StorageIntegration.client(headers: [
+    let anon = try StorageIntegration.client(headers: [
       .authorization: "Bearer \(DotEnv.supabasePublishableKey)",
-      .init("apikey")!: DotEnv.supabasePublishableKey,
+      .apikey: DotEnv.supabasePublishableKey,
     ])
 
     #expect(try await anon.from(bucketName).list().isEmpty)
@@ -577,7 +579,7 @@ final class StorageBucketIntegrationTests {
       try await anon.from(bucketName).upload(path: "anon.txt", data: file)
     }
     #expect(error?.code == .accessDenied)
-    #expect(error?.serverStatusCode == 403)
+    #expect(error?.serverError?.statusCode == 403)
     #expect(error?.message == "new row violates row-level security policy")
   }
 
@@ -597,15 +599,15 @@ final class StorageBucketIntegrationTests {
     let info = try await api.info(path: "options.txt")
     #expect(info.id == uploaded.id)
     #expect(info.name == "options.txt")
-    #expect(info.bucketId == bucketName)
+    #expect(info.bucketID == bucketName)
     #expect(info.size == Int64(payload.count))
     #expect(info.contentType == "text/plain")
-    #expect(info.cacheControl == "no-cache")
+    #expect(info.cacheControl == CacheControl.noCache)
     #expect(info.userMetadata == metadata)
     #expect(info.eTag != nil)
     #expect(info.lastModified != nil)
     #expect(info.createdAt != nil)
-    #expect(!info.version.isEmpty)
+    #expect(!info.versionID.isEmpty)
 
     let (_, response) = try await StorageIntegration.fetch(api.publicURL(path: "options.txt"))
     #expect(response.value(forHTTPHeaderField: "Cache-Control") == "no-cache")
@@ -625,7 +627,7 @@ final class StorageBucketIntegrationTests {
 
     try await api.upload(path: path, data: file, options: UploadOptions(cacheControl: cacheControl))
 
-    #expect(try await api.info(path: path).cacheControl == header)
+    #expect(try await api.info(path: path).cacheControl?.rawValue == header)
     let (_, response) = try await StorageIntegration.fetch(api.publicURL(path: path))
     #expect(response.value(forHTTPHeaderField: "Cache-Control") == header)
   }
@@ -644,14 +646,14 @@ final class StorageBucketIntegrationTests {
     let fileRow = try #require(rows.first { $0.name == "a.txt" })
     #expect(fileRow.id != nil)
     #expect(!fileRow.isFolder)
-    #expect(fileRow.version != nil)
+    #expect(fileRow.versionID != nil)
     #expect(fileRow.createdAt != nil)
     #expect(fileRow.updatedAt != nil)
     let metadata = try #require(fileRow.metadata)
     #expect(metadata.size == Int64(payload.count))
     #expect(metadata.contentLength == Int64(payload.count))
     #expect(metadata.mimeType == "text/plain")
-    #expect(metadata.cacheControl == "max-age=3600")
+    #expect(metadata.cacheControl == CacheControl.maxAge(.seconds(3600)))
     #expect(metadata.eTag != nil)
     #expect(metadata.lastModified != nil)
     #expect(metadata.additional["httpStatusCode"] == 200)
@@ -742,14 +744,14 @@ final class StorageBucketIntegrationTests {
     let api = storage.from(bucketName)
     try await api.upload(path: uploadPath, data: file)
 
-    let url = try await api.createSignedURL(path: uploadPath, expiresIn: .seconds(1))
+    let url = try await api.createSignedURL(path: uploadPath, expiresIn: .seconds(5))
     #expect(url.host == StorageIntegration.url.host)
     #expect(url.path.hasSuffix("/object/sign/\(bucketName)/\(uploadPath)"))
     let (bytes, response) = try await StorageIntegration.fetch(url)
     #expect(response.statusCode == 200)
     #expect(bytes == file)
 
-    try await Task.sleep(for: .seconds(3))
+    try await Task.sleep(for: .seconds(7))
     let (expiredBody, expired) = try await StorageIntegration.fetch(url)
     #expect(expired.statusCode == 400)
     #expect(String(decoding: expiredBody, as: UTF8.self).contains("InvalidJWT"))
@@ -781,13 +783,13 @@ final class StorageBucketIntegrationTests {
     try await api.upload(path: uploadPath, data: file)
 
     let signed = try await api.createSignedURL(
-      path: uploadPath, expiresIn: .seconds(60), download: download)
+      path: uploadPath, expiresIn: .seconds(60), options: SignedURLOptions(download: download))
     let (_, signedResponse) = try await StorageIntegration.fetch(signed)
     #expect(
       signedResponse.value(forHTTPHeaderField: "Content-Disposition")?.contains(expected) == true)
 
     let (_, publicResponse) = try await StorageIntegration.fetch(
-      api.publicURL(path: uploadPath, download: download))
+      api.publicURL(path: uploadPath, options: PublicURLOptions(download: download)))
     #expect(
       publicResponse.value(forHTTPHeaderField: "Content-Disposition")?.contains(expected) == true)
   }
@@ -822,7 +824,8 @@ final class StorageBucketIntegrationTests {
     try await storage.from(bucketName).upload(path: uploadPath, data: file)
 
     let url = try await storage.from(bucketName).createSignedURL(
-      path: uploadPath, expiresIn: .seconds(60), transform: ImageTransform(width: 10, height: 10))
+      path: uploadPath, expiresIn: .seconds(60),
+      options: SignedURLOptions(transform: ImageTransform(width: 10, height: 10)))
 
     #expect(url.query?.contains("token=") == true)
   }
@@ -835,15 +838,17 @@ final class StorageBucketIntegrationTests {
       api.publicURL(path: "/folder//my file.png").absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/folder/my%20file.png")
     #expect(
-      api.publicURL(path: "a+b.png", download: .named("x y.png")).absoluteString
+      api.publicURL(path: "a+b.png", options: PublicURLOptions(download: .named("x y.png")))
+        .absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/a%2Bb.png?download=x%20y.png"
     )
     #expect(
       api.publicURL(
         path: "img.png",
-        transform: ImageTransform(
-          width: 10, resize: .cover, format: .webp, gravity: .focalPoint,
-          focalPoint: .init(x: 0.5, y: 0.25))
+        options: PublicURLOptions(
+          transform: ImageTransform(
+            width: 10, resize: .cover, format: .webp, gravity: .focalPoint,
+            focalPoint: .init(x: 0.5, y: 0.25)))
       ).absoluteString
         == "\(DotEnv.supabaseURL)/storage/v1/render/image/public/\(bucketName)/img.png?width=10&resize=cover&format=webp&gravity=fp&x_offset=0.5&y_offset=0.25"
     )

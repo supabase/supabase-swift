@@ -30,12 +30,13 @@ jobs:
   # Skipped jobs count as passed in ci-success, so a skipped matrix never blocks a merge.
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 5
     outputs:
       package: ${{ github.event_name != 'pull_request' || steps.filter.outputs.package }}
       integration: ${{ github.event_name != 'pull_request' || steps.filter.outputs.integration }}
       examples: ${{ github.event_name != 'pull_request' || steps.filter.outputs.examples }}
+      compliance: ${{ github.event_name != 'pull_request' || steps.filter.outputs.compliance }}
     steps:
       # Reads the PR's changed files from the API, so no checkout is needed.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -70,6 +71,10 @@ jobs:
               - Examples/**
               - scripts/xcodebuild.sh
               - .github/workflows/ci.yml
+            compliance:
+              - *swift
+              - sdk-compliance.yaml
+              - .sdk-parse-ignore
 
   macos:
     name: xcodebuild (macOS latest)
@@ -235,21 +240,27 @@ jobs:
         if: matrix.config == 'debug'
         run: ./scripts/check-compile-failures.sh debug
 
+  # Each suite runs in its own job so the slow ones overlap instead of queueing behind one
+  # another. The nightly toolchain only runs outside pull requests: it is allowed to fail, so
+  # on a PR it would hold a runner for the longest leg without gating anything.
   linux:
-    name: Linux (${{ matrix.container }})
+    name: Linux (${{ matrix.container }}, ${{ matrix.suite }})
     needs: changes
     if: needs.changes.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 30
     continue-on-error: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     container: ${{ matrix.container }}
+    # Tests read this to skip what the nightly toolchain cannot run yet (SDK-2597).
+    env:
+      SWIFT_NIGHTLY: ${{ matrix.container == 'swiftlang/swift:nightly-main-noble' }}
     strategy:
       fail-fast: false
       matrix:
         # The stable releases live under the `swift` image; nightly snapshots are only
         # published under `swiftlang/swift` (there is no `swift:nightly`).
-        container:
-          ["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]
+        container: ${{ fromJSON(github.event_name == 'pull_request' && '["swift:6.2-noble", "swift:6.3-noble"]' || '["swift:6.2-noble", "swift:6.3-noble", "swiftlang/swift:nightly-main-noble"]') }}
+        suite: [package, opentelemetry, typegen]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Official Swift images run as root, so files the container writes into the
@@ -257,27 +268,42 @@ jobs:
       # action's post-step (it stats the workspace from the runner's own, non-root
       # context), so this key can't depend on hashFiles('**/Package.resolved') the way
       # the uncontainerized jobs' keys do.
+      #
+      # Blacksmith's sticky disks mount on the host after the job container starts, so the
+      # container cannot see them. This job keeps actions/cache.
       - name: "Cache Swift Package"
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .build
             tools/supabase-typegen/.build
-          key: ${{ runner.os }}-spm-${{ matrix.container }}-typegen-${{ github.sha }}
+          key: ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-spm-${{ matrix.container }}-typegen-
-      - name: "Build Swift Package"
-        run: swift build --explicit-target-dependency-import-check error
+            ${{ runner.os }}-spm-${{ matrix.container }}-${{ matrix.suite }}-
       # RealtimeTests run serially on Linux: in a parallel run the process can stall with no
       # worker threads and every in-flight test parked on a timer that never fires. The other
       # targets keep the parallel runner.
+      # On nightly, each test step has its own time limit, about twice its usual run time. A
+      # stalled test process then fails the step, which continue-on-error tolerates, instead of
+      # reaching the job limit, where the job is cancelled and CI Success fails (SDK-2597).
+      - name: "Build Swift Package"
+        if: matrix.suite == 'package'
+        run: swift build --explicit-target-dependency-import-check error
       - name: "Test Swift Package"
+        if: matrix.suite == 'package'
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --skip IntegrationTests --skip RealtimeTests
       - name: "Test RealtimeTests (serial)"
+        if: matrix.suite == 'package'
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 5 || 30 }}
         run: swift test --filter RealtimeTests --no-parallel
       - name: "Test Swift Package (OpenTelemetry trait)"
+        if: matrix.suite == 'opentelemetry'
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 7 || 30 }}
         run: swift test --traits OpenTelemetry --filter SupabaseTests
       - name: "Test supabase-typegen"
+        if: matrix.suite == 'typegen'
+        timeout-minutes: ${{ env.SWIFT_NIGHTLY == 'true' && 3 || 30 }}
         run: swift test --package-path tools/supabase-typegen
 
   integration-tests:
@@ -294,7 +320,7 @@ jobs:
           # turn on the Storage features the CLI leaves off (lifecycles, analytics buckets, CDN
           # purge), and their full integration tests run here. The native stack cannot.
           - name: Linux
-            runner: ubuntu-latest
+            runner: blacksmith-8vcpu-ubuntu-2404
             storage-features: true
           # The CLI's experimental stack backend runs every service as a native process on macOS
           # arm64, so no Docker is needed. Only macOS runs RealtimeIntegrationTests (the Swift
@@ -320,7 +346,17 @@ jobs:
         run: |
           sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
           echo "SUPABASE_EXPERIMENTAL_STACK=1" >> "$GITHUB_ENV"
+      # Linux runs on the host, not in a container, so it can use a sticky disk: the build
+      # directory stays on the runner's disk instead of being zipped and uploaded each run.
+      # Sticky disks are Linux-only, so macOS keeps actions/cache.
+      - name: "Mount Swift build disk"
+        if: runner.os == 'Linux'
+        uses: useblacksmith/stickydisk@3f6be1451e3cad893b778bc93495c80452a5da26 # v1.7.2
+        with:
+          key: ${{ github.repository }}-integration-${{ matrix.name }}
+          path: .build
       - name: "Cache Swift Package"
+        if: runner.os != 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build
@@ -329,13 +365,17 @@ jobs:
             ${{ runner.os }}-integration-${{ matrix.name }}-${{ hashFiles('**/Package.resolved') }}-
             ${{ runner.os }}-integration-${{ matrix.name }}-
       - name: "Setup Supabase CLI"
-        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
         with:
           version: latest
       # start applies migrations and seed itself, so no `db reset` is needed.
       - name: "Start Supabase"
         working-directory: Tests/IntegrationTests
         run: supabase start ${{ matrix.start-flags }}
+      # The experimental stack picks its own ports, so export the endpoints the tests read.
+      - name: "Export Supabase endpoints"
+        if: matrix.start-flags
+        run: ./scripts/stack-env.sh Tests/IntegrationTests >> "$GITHUB_ENV"
       - name: "Enable Storage test features"
         if: matrix.storage-features
         run: |
@@ -358,6 +398,9 @@ jobs:
       - name: "Start Supabase (secure email change)"
         working-directory: Tests/IntegrationTests/supabase-secure-email-change
         run: supabase start ${{ matrix.start-flags }}
+      - name: "Export Supabase endpoints (secure email change)"
+        if: matrix.start-flags
+        run: ./scripts/stack-env.sh Tests/IntegrationTests/supabase-secure-email-change >> "$GITHUB_ENV"
       - name: "Run Secure Email Change Integration Test"
         run: swift test ${{ matrix.swift-flags }} --filter verifyOTPForSecureEmailChange --no-parallel
       - name: "Stop Supabase (secure email change)"
@@ -365,20 +408,84 @@ jobs:
         if: always()
         run: supabase stop
 
-  # android:
-  #   name: Android
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - name: "Remove IntegrationTests"
-  #       run: rm -r Tests/IntegrationTests/*
-  #     - name: "Test Swift Package"
-  #       uses: skiptools/swift-android-action@v2
-  #       with:
-  #         # need to copy over the Tests folder because it contains __Snapshots__
-  #         copy-files: Tests
-  #         # tests are not yet passing on Android
-  #         run-tests: false
+  # Cross-compiles the unit test targets with the Swift SDK for Android and runs them on an
+  # x86_64 emulator through scripts/test-android.sh. Android is not officially supported, so the
+  # job may fail and stays out of ci-success until it passes on several runs (SDK-2833).
+  # GitHub's ubuntu-latest runners expose KVM; Blacksmith runners are not known to.
+  android:
+    name: Android (emulator)
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    env:
+      SWIFTLY_VERSION: "1.2.0"
+      SWIFTLY_SHA256: "0b26b568811404374c7d7f07276b6aad4145db5d1893a45f307de6a94ca8d9c3"
+      # The host toolchain must match the Swift SDK for Android exactly.
+      SWIFT_VERSION: "6.4.0"
+      SWIFT_ANDROID_SDK_SHA256: "21fb555122a3d801ad943d48df7ebffdd8824de61c25c180bb792d3edaee0b43"
+      ANDROID_NDK_VERSION: "r30"
+      ANDROID_NDK_SHA256: "753611f410d002cfcd3f3dc2ef49aad532089d3180b436c060a90bf0fcb64df2"
+      # Read by scripts/test-android.sh; must name the SDK that the install step below installs.
+      SWIFT_SDK: "swift-6.4.0-RELEASE_android"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/swiftly.tar.gz" \
+            "https://download.swift.org/swiftly/linux/swiftly-${SWIFTLY_VERSION}-x86_64.tar.gz"
+          echo "${SWIFTLY_SHA256}  $RUNNER_TEMP/swiftly.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/swiftly.tar.gz" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/swiftly" init --assume-yes --quiet-shell-followup --skip-install
+          . "$HOME/.local/share/swiftly/env.sh"
+          # swiftly only lists the system packages the toolchain needs; run what it writes.
+          swiftly install "$SWIFT_VERSION" --use --assume-yes --post-install-file "$RUNNER_TEMP/post-install.sh"
+          if [[ -s "$RUNNER_TEMP/post-install.sh" ]]; then sudo bash "$RUNNER_TEMP/post-install.sh"; fi
+          echo "SWIFTLY_HOME_DIR=$SWIFTLY_HOME_DIR" >> "$GITHUB_ENV"
+          echo "SWIFTLY_BIN_DIR=$SWIFTLY_BIN_DIR" >> "$GITHUB_ENV"
+          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
+      - name: Install Android NDK ${{ env.ANDROID_NDK_VERSION }}
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/ndk.zip" \
+            "https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip"
+          echo "${ANDROID_NDK_SHA256}  $RUNNER_TEMP/ndk.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/ndk.zip" -d "$RUNNER_TEMP"
+          rm "$RUNNER_TEMP/ndk.zip"
+          echo "ANDROID_NDK_HOME=$RUNNER_TEMP/android-ndk-${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+      - name: Install the Swift SDK for Android
+        run: |
+          swift sdk install \
+            "https://download.swift.org/swift-${SWIFT_VERSION}-release/android-sdk/swift-${SWIFT_VERSION}-RELEASE/swift-${SWIFT_VERSION}-RELEASE_android.artifactbundle.tar.gz" \
+            --checksum "$SWIFT_ANDROID_SDK_SHA256"
+          # SwiftPM picks the SDK folder per platform and setup, so find the bundle instead of guessing.
+          bundle=$(find "$HOME" -maxdepth 5 -type d -name "${SWIFT_SDK}.artifactbundle" -print -quit)
+          [[ -n "$bundle" ]] || { echo "::error::${SWIFT_SDK}.artifactbundle not found under $HOME"; exit 1; }
+          "$bundle/swift-android/scripts/setup-android-sdk.sh"
+      - name: Cache Android build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build-android
+          key: ${{ runner.os }}-android-${{ env.SWIFT_VERSION }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-android-${{ env.SWIFT_VERSION }}-${{ hashFiles('**/Package.resolved') }}-
+            ${{ runner.os }}-android-${{ env.SWIFT_VERSION }}-
+      # Builds before the emulator boots, so a compile error costs no emulator time.
+      - name: Build tests for Android
+        run: ARCH=x86_64 BUILD_ONLY=1 ./scripts/test-android.sh
+      - name: Test on the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+          disable-animations: true
+          script: ARCH=x86_64 ./scripts/test-android.sh
 
   examples:
     name: Examples (${{ matrix.scheme }})
@@ -388,7 +495,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix:
-        scheme: [Examples, SlackClone, UserManagement]
+        scheme: [Examples, SlackClone, UserManagement, Reminders]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Cache derived data
@@ -432,13 +539,13 @@ jobs:
         working-directory: Examples/${{ matrix.example }}
         run: swift build
 
-  # cSpell runs on Node, which the ubuntu-latest image already provides, so this
+  # cSpell runs on Node, which the Blacksmith Ubuntu image already provides, so this
   # job needs no setup-go and no setup-node - the runner's Node is part of the
-  # trusted image baseline, the same category as the OS and `ubuntu-latest`
+  # trusted image baseline, the same category as the OS and the runner label
   # itself.
   spell-check:
     name: Spell check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -465,6 +572,32 @@ jobs:
       - name: Test docs
         run: ./scripts/test-docs.sh
 
+  # The undeclared public symbols must match scripts/compliance-baseline.txt, so new public API
+  # cannot land without an sdk-compliance.yaml entry.
+  compliance:
+    name: SDK compliance
+    needs: changes
+    if: needs.changes.outputs.compliance == 'true'
+    runs-on: blacksmith-6vcpu-macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Cache Swift build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: |
+            compliance-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            compliance-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}-
+            compliance-${{ runner.os }}-
+      # The baseline was recorded with this Xcode; another SDK can change the symbol graph.
+      # Not Xcode 27: its Swift 6.4 drops --include-spi-symbols, which the check needs.
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+      - name: Check sdk-compliance.yaml
+        run: ./scripts/check-compliance.sh
+
   format-check:
     name: Format check
     runs-on: blacksmith-6vcpu-macos-latest
@@ -472,12 +605,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint formatting
         run: swift format lint --strict --recursive Sources Tests Package.swift Examples tools/supabase-typegen/Sources tools/supabase-typegen/Tests tools/supabase-typegen/Package.swift
-      - name: Forbid yield loops in Realtime tests
+      - name: Check that the compiled doc snippets match the docs
+        run: ./scripts/check-doc-snippets.sh
+      - name: Forbid yield loops and sleeps in Realtime tests
         run: ./scripts/check-no-yield-loops.sh
+      - name: Check main-actor call sites cover the Auth API
+        run: ./scripts/check-isolation-coverage.sh Auth Tests/DefaultIsolationTests/AuthIsolationTests.swift
+      - name: Check main-actor call sites cover the Realtime API
+        run: ./scripts/check-isolation-coverage.sh Realtime Tests/DefaultIsolationTests/RealtimeIsolationTests.swift
+      - name: Check main-actor call sites cover the Supabase API
+        run: ./scripts/check-isolation-coverage.sh Supabase Tests/DefaultIsolationTests/SupabaseIsolationTests.swift
+      - name: Check main-actor call sites cover the Functions API
+        run: ./scripts/check-isolation-coverage.sh Functions Tests/DefaultIsolationTests/FunctionsIsolationTests.swift
+      - name: Check main-actor call sites cover the PostgREST API
+        run: ./scripts/check-isolation-coverage.sh PostgREST Tests/DefaultIsolationTests/PostgRESTIsolationTests.swift
+      - name: Check main-actor call sites cover the Storage API
+        run: ./scripts/check-isolation-coverage.sh Storage Tests/DefaultIsolationTests/StorageIsolationTests.swift
 
   lint:
     name: SwiftLint
-    runs-on: macos-26
+    runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 10
     env:
       SWIFTLINT_VERSION: "0.65.0"
@@ -525,10 +672,11 @@ jobs:
         examples-spm,
         spell-check,
         docs,
+        compliance,
         format-check,
         lint,
       ]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check all jobs
         run: |
@@ -558,7 +706,7 @@ jobs:
     # so a red main blocks it silently (no new release PR, no update to the open
     # one) unless someone happens to look at Actions. Alert instead of relying on that.
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-success.result == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Send Slack alert
         env:

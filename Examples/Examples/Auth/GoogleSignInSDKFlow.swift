@@ -12,6 +12,7 @@ import SwiftUI
 
 @MainActor
 struct GoogleSignInSDKFlow: View {
+  @Environment(\.supabase) private var supabase
   var body: some View {
     GoogleSignInButton(action: handleSignIn)
   }
@@ -26,8 +27,8 @@ struct GoogleSignInSDKFlow: View {
           return
         }
 
-        try await supabase.auth.signInWithIdToken(
-          credentials: OpenIDConnectCredentials(
+        try await supabase.auth.signInWithIDToken(
+          IDTokenCredentials(
             provider: .google,
             idToken: idToken
           )
@@ -51,4 +52,5 @@ struct GoogleSignInSDKFlow: View {
 
 #Preview {
   GoogleSignInSDKFlow()
+    .environment(\.supabase, supabaseClient)
 }

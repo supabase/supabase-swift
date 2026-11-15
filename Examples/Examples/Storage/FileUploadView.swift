@@ -164,7 +164,7 @@ struct FileUploadView: View {
   @MainActor
   func loadBuckets() async {
     do {
-      buckets = try await supabase.storage.listBuckets()
+      buckets = try await supabaseClient.storage.listBuckets()
       if let firstBucket = buckets.first {
         selectedBucket = firstBucket.id
       }
@@ -195,7 +195,7 @@ struct FileUploadView: View {
         upsert: upsertEnabled
       )
 
-      let response = try await supabase.storage
+      let response = try await supabaseClient.storage
         .from(selectedBucket)
         .upload(
           path: filePath, data: imageData, options: options,
@@ -229,7 +229,7 @@ struct FileUploadView: View {
         upsert: upsertEnabled
       )
 
-      let response = try await supabase.storage
+      let response = try await supabaseClient.storage
         .from(selectedBucket)
         .upload(
           path: filePath, fileURL: selectedDocument, options: options,
@@ -268,7 +268,7 @@ struct FileUploadView: View {
         upsert: upsertEnabled
       )
 
-      let response = try await supabase.storage
+      let response = try await supabaseClient.storage
         .from(selectedBucket)
         .upload(
           path: filePath, data: data, options: options,

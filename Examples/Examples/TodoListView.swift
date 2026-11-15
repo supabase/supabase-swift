@@ -6,11 +6,12 @@
 //
 
 import IdentifiedCollections
+import Supabase
 import SwiftUI
 import SwiftUINavigation
 
 struct TodoListView: View {
-  @Environment(AuthController.self) var auth
+  @Environment(AuthModel.self) var auth
 
   @State var todos: IdentifiedArrayOf<Todo> = []
   @State var error: Error?
@@ -55,16 +56,14 @@ struct TodoListView: View {
     .toolbar {
       ToolbarItem(placement: .primaryAction) {
         if createTodoRequest == nil {
-          Button {
-            withAnimation {
-              createTodoRequest = .init(
-                description: "",
-                isComplete: false,
-                ownerID: auth.currentUserID
-              )
+          if let ownerID = auth.user?.id {
+            Button {
+              withAnimation {
+                createTodoRequest = .init(description: "", isComplete: false, ownerID: ownerID)
+              }
+            } label: {
+              Label("Add", systemImage: "plus")
             }
-          } label: {
-            Label("Add", systemImage: "plus")
           }
         } else {
           Button("Cancel", role: .cancel) {
@@ -79,7 +78,7 @@ struct TodoListView: View {
       do {
         error = nil
         todos = try await IdentifiedArrayOf(
-          uniqueElements: supabase.from("todos")
+          uniqueElements: supabaseClient.from("todos")
             .select()
             .execute()
             .value as [Todo]
@@ -93,6 +92,8 @@ struct TodoListView: View {
   @MainActor
   func toggleCompletion(of todo: Todo) async {
     var updatedTodo = todo
+    guard let ownerID = auth.user?.id else { return }
+
     updatedTodo.isComplete.toggle()
     todos[id: todo.id] = updatedTodo
 
@@ -101,9 +102,9 @@ struct TodoListView: View {
 
       let updateRequest = UpdateTodoRequest(
         isComplete: updatedTodo.isComplete,
-        ownerID: auth.currentUserID
+        ownerID: ownerID
       )
-      updatedTodo = try await supabase.from("todos")
+      updatedTodo = try await supabaseClient.from("todos")
         .update(updateRequest, returning: .representation)
         .eq("id", value: updatedTodo.id)
         .single()
@@ -126,7 +127,7 @@ struct TodoListView: View {
 
       todos.remove(atOffsets: offset)
 
-      try await supabase.from("todos")
+      try await supabaseClient.from("todos")
         .delete()
         .in("id", values: todosToDelete.map(\.id))
         .execute()

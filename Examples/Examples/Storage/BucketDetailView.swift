@@ -29,7 +29,7 @@ struct BucketDetailView: View {
             Button("createSignedUploadURL") {
               Task {
                 do {
-                  let response = try await supabase.storage.from(bucket.id)
+                  let response = try await supabaseClient.storage.from(bucket.id)
                     .createSignedUploadURL(path: "\(UUID().uuidString).txt")
                   lastActionResult = ("createSignedUploadURL", response)
                 } catch {}
@@ -76,20 +76,20 @@ struct BucketDetailView: View {
           value: .object([
             "id": .string(bucket.id),
             "name": .string(bucket.name),
-            "ownerId": bucket.ownerId.map(JSONValue.string) ?? .null,
+            "ownerId": bucket.ownerID.map(JSONValue.string) ?? .null,
             "type": bucket.type.map { .string($0.rawValue) } ?? .null,
             "isPublic": .bool(bucket.isPublic),
             "createdAt": .string(bucket.createdAt.description),
             "updatedAt": .string(bucket.updatedAt.description),
             "allowedMimeTypes": bucket.allowedMimeTypes.map { .array($0.map(JSONValue.string)) }
               ?? .null,
-            "fileSizeLimit": bucket.fileSizeLimit.map { .integer(Int($0)) } ?? .null,
+            "fileSizeLimit": bucket.fileSizeLimit.map { .number(JSONNumber($0)) } ?? .null,
           ])
         )
       }
     }
     .navigationDestination(for: StorageObject.self) {
-      FileObjectDetailView(api: supabase.storage.from(bucket.id), fileObject: $0)
+      FileObjectDetailView(api: supabaseClient.storage.from(bucket.id), fileObject: $0)
     }
   }
 
@@ -98,7 +98,7 @@ struct BucketDetailView: View {
     fileObjects = .inFlight
     fileObjects = await .result(
       Result { @Sendable in
-        try await supabase.storage.from(bucket.id).list()
+        try await supabaseClient.storage.from(bucket.id).list()
       }
     )
   }
@@ -109,7 +109,7 @@ struct BucketDetailView: View {
     bucket: Bucket(
       id: UUID().uuidString,
       name: "name",
-      ownerId: "owner",
+      ownerID: "owner",
       isPublic: false,
       createdAt: Date(),
       updatedAt: Date(),

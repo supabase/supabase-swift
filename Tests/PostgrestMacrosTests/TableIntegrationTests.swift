@@ -130,12 +130,12 @@ struct TableIntegrationTests {
 
   @Test
   func aGeneratedColumnNeverReachesAWriteBody() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client.from(IntegrationCounter.self)
       .insert(IntegrationCounter.Draft(count: 1)).execute()
     #expect(capture.bodyString == #"{"count":1}"#)
 
-    let update = RequestCapture()
+    let update = try RequestCapture()
     _ = try await update.client.from(IntegrationCounter.self)
       .update { $0.count = 2 }.where { $0.id.eq(1) }.execute()
     #expect(update.bodyString == #"{"count":2}"#)
@@ -148,7 +148,7 @@ struct TableIntegrationTests {
     #expect(IntegrationCounter.columns.id.postgrestExpression == "id")
     #expect(IntegrationCounter.columns.updatedAt.postgrestExpression == "updated_at")
 
-    let capture = RequestCapture(body: #"[{"id":1,"count":3,"updated_at":null}]"#)
+    let capture = try RequestCapture(body: #"[{"id":1,"count":3,"updated_at":null}]"#)
     let rows = try await capture.client.from(IntegrationCounter.self).select()
       .where { $0.updatedAt.isNull() && $0.id.gt(0) }
       .order { $0.id.desc() }
@@ -176,7 +176,7 @@ struct TableIntegrationTests {
 
   @Test
   func aKeylessRelationCanStillUpsertOnAnExplicitTarget() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationAuditEvent.self)
       .upsert(
@@ -210,7 +210,7 @@ struct TableIntegrationTests {
 
   @Test
   func aMacroTypeCanClearANullableColumn() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.dueDate = nil }
@@ -222,7 +222,7 @@ struct TableIntegrationTests {
 
   @Test
   func aMacroTypeFlowsThroughTheTypedQuery() async throws {
-    let capture = RequestCapture(
+    let capture = try RequestCapture(
       body: #"[{"id":1,"task":"buy milk","is_done":false,"due_at":null}]"#
     )
     let todos = try await capture.client
@@ -242,7 +242,7 @@ struct TableIntegrationTests {
 
   @Test
   func aMacroTypeFlowsThroughATypedWrite() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .insert(Todo.Draft(task: "buy milk"))
@@ -254,7 +254,7 @@ struct TableIntegrationTests {
 
   @Test
   func aReadOnlyRelationIsStillQueryable() async throws {
-    let capture = RequestCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
+    let capture = try RequestCapture(body: #"[{"id":1,"task":"buy milk"}]"#)
     let rows = try await capture.client
       .from(IntegrationActiveTodo.self)
       .select()
@@ -269,7 +269,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertCarriesTheConflictKey() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
@@ -281,7 +281,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertReturningKeepsTheConflictResolutionPreference() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
@@ -293,7 +293,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertExecuteAloneKeepsAMinimalReturnPreference() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
@@ -304,7 +304,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedInsertReturningSendsExactlyOneReturnPreference() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .insert(Todo.Draft(task: "buy milk"))
@@ -316,7 +316,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertCanIgnoreDuplicatesInsteadOfMergingThem() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
@@ -328,7 +328,7 @@ struct TableIntegrationTests {
 
   @Test
   func anIgnoreDuplicatesResolutionSurvivesReturning() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
@@ -340,7 +340,7 @@ struct TableIntegrationTests {
 
   @Test
   func anExplicitConflictTargetTakesAResolution() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationNote.self)
       .upsert(
@@ -356,7 +356,7 @@ struct TableIntegrationTests {
 
   @Test
   func aBulkUpsertTakesAResolutionOnEitherConflictTarget() async throws {
-    let derived = RequestCapture()
+    let derived = try RequestCapture()
     _ = try await derived.client
       .from(Todo.self)
       .upsert(
@@ -367,7 +367,7 @@ struct TableIntegrationTests {
 
     #expect(derived.prefer == "resolution=ignore-duplicates,return=minimal")
 
-    let explicit = RequestCapture()
+    let explicit = try RequestCapture()
     _ = try await explicit.client
       .from(IntegrationNote.self)
       .upsert(
@@ -382,7 +382,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
@@ -393,7 +393,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertDerivesACompoundConflictTarget() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
       .upsert(IntegrationUserRole.Draft(userID: 1, roleID: 2))
@@ -404,7 +404,7 @@ struct TableIntegrationTests {
 
   @Test
   func aTypedUpsertTakesAnExplicitConflictTarget() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationNote.self)
       .upsert(IntegrationNote.Draft(body: "remember the milk", tag: "home"), onConflict: \.tag)
@@ -415,7 +415,7 @@ struct TableIntegrationTests {
 
   @Test
   func anExplicitConflictTargetMapsEveryColumnName() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(task: "buy milk"), onConflict: \.task, \.isDone)
@@ -426,7 +426,7 @@ struct TableIntegrationTests {
 
   @Test
   func updateCanChangeAKeyColumn() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
       .update { $0.roleID = 3 }
@@ -438,7 +438,7 @@ struct TableIntegrationTests {
 
   @Test
   func updateStillOmitsAKeyItIsNotChanging() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .update { $0.task = "buy oat milk" }

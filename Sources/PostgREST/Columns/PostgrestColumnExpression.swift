@@ -120,10 +120,14 @@ public struct _PostgrestStoredColumn<
   Value,
   Nullability: _PostgrestNullability
 >: _PostgrestFilterableExpression, _PostgrestOrderableExpression {
+  /// Every position: `select`, `order`, and the left of a filter operator.
   public typealias Position = _PostgrestEveryPosition
 
+  /// The database column name, as PostgREST expects it.
   public let postgrestExpression: String
 
+  /// Creates a stored column.
+  ///
   /// - Parameter name: The database column name.
   public init(_ name: String) {
     self.postgrestExpression = name
@@ -155,10 +159,14 @@ public struct _PostgrestGeneratedColumn<
   Value,
   Nullability: _PostgrestNullability
 >: _PostgrestFilterableExpression, _PostgrestOrderableExpression {
+  /// Every position: `select`, `order`, and the left of a filter operator.
   public typealias Position = _PostgrestEveryPosition
 
+  /// The database column name, as PostgREST expects it.
   public let postgrestExpression: String
 
+  /// Creates a generated column.
+  ///
   /// - Parameter name: The database column name.
   public init(_ name: String) {
     self.postgrestExpression = name
@@ -193,10 +201,14 @@ public struct _PostgrestComputedField<Root: _PostgrestRelation, Value>:
   _PostgrestNullableExpression,
   _PostgrestOrderableExpression
 {
+  /// Every position: `select`, `order`, and the left of a filter operator.
   public typealias Position = _PostgrestEveryPosition
 
+  /// The function name, as PostgREST expects it.
   public let postgrestExpression: String
 
+  /// Creates a computed field.
+  ///
   /// - Parameter name: The function name.
   public init(_ name: String) {
     self.postgrestExpression = name

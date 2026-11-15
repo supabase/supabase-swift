@@ -35,8 +35,7 @@ docs/migrations/v<N>/Realtime.md
 ```
 
 A change in one module goes into that module's file. A change that affects every module goes into
-the overview. Leave one-off feature guides such as `docs/migrations/RealtimeV2 Migration Guide.md`
-alone.
+the overview. Leave one-off feature guides in `docs/migrations/` alone.
 
 Completion criterion: you know the exact file path.
 
@@ -90,4 +89,4 @@ Completion criterion: `./scripts/spell-check.sh` passes.
 | A long "why" paragraph | Cut it, or keep half a sentence |
 | A behavior change in the rename table | Put it under "Silent changes" |
 | Pseudocode in the code sample | Real Swift from a real call site |
-| Renaming `docs/migrations/RealtimeV2 Migration Guide.md` to fit the pattern | Leave feature guides alone |
+| Renaming a one-off feature guide in `docs/migrations/` to fit the pattern | Leave feature guides alone |

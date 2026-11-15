@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import HTTPTypes
 import Testing
 
 @testable import Helpers
@@ -23,6 +24,18 @@ struct RetryPolicyTests {
     #expect(
       policy.retryableStatuses == [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 530])
     #expect(policy.retryableMethods == [.get, .head, .options])
+  }
+
+  @Test
+  func rateLimitIsRetryableOnlyWithRetryAfter() {
+    let policy = RetryPolicy.default
+
+    #expect(!policy.retries(HTTPTypes.HTTPResponse(status: .tooManyRequests)))
+    #expect(
+      policy.retries(
+        HTTPTypes.HTTPResponse(status: .tooManyRequests, headerFields: [.retryAfter: "5"])))
+    #expect(policy.retries(HTTPTypes.HTTPResponse(status: .serviceUnavailable)))
+    #expect(!policy.retries(HTTPTypes.HTTPResponse(status: .notFound)))
   }
 
   @Test
@@ -63,6 +76,14 @@ struct RetryPolicyTests {
   @Test
   func retryAfterDeltaSeconds() {
     #expect(RetryPolicy.retryAfterDelay("3", now: now) == .seconds(3))
+  }
+
+  @Test
+  func retryAfterZeroDeltaSecondsIsAnImmediateRetry() {
+    #expect(RetryPolicy.retryAfterDelay("0", now: now) == .zero)
+
+    let policy = RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(20))
+    #expect(policy.delay(retry: 1, retryAfter: "0", now: now) == .zero)
   }
 
   @Test

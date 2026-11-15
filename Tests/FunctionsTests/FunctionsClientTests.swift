@@ -1,7 +1,6 @@
 import Foundation
 import HTTPTypes
 import Helpers
-import Mocker
 import TestHelpers
 import Testing
 
@@ -21,34 +20,20 @@ private actor CapturedRequestBox {
   }
 }
 
-/// `.serialized`: Mocker registers stubs in a process-global table with no per-test isolation, so
-/// tests that stub overlapping URLs (e.g. `hello-world`) would otherwise race against each other
-/// under Swift Testing's default parallel execution. `.mockerSerialized` (see
-/// `TestHelpers/MockerSerialization.swift`) extends that guarantee across test *targets* too --
-/// StorageTests and PostgRESTTests have their own Mocker-backed suites, and without it this suite
-/// can still run concurrently with theirs and race on Mocker's shared registry.
-@Suite(.serialized, .mockerSerialized)
+@Suite
 struct FunctionsClientTests {
   let url = URL(string: "http://localhost:5432/functions/v1")!
   let apiKey =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+  let transport = RecordingTransport()
 
-  private var headers: HTTPFields { [HTTPField.Name("apikey")!: apiKey] }
+  private var headers: HTTPFields { [.apikey: apiKey] }
 
   private func makeSUT(
     region: FunctionRegion? = nil,
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) -> FunctionsClient {
-    Mocker.removeAll()
-
-    let sessionConfiguration = URLSessionConfiguration.ephemeral
-    sessionConfiguration.protocolClasses = [MockingURLProtocol.self]
-    let session = URLSession(configuration: sessionConfiguration)
-    return makeClient(
-      region: region,
-      http: .init(transport: URLSessionTransport(session: session)),
-      accessToken: accessToken
-    )
+  ) throws -> FunctionsClient {
+    try makeClient(region: region, http: .init(transport: transport), accessToken: accessToken)
   }
 
   private func makeSUT(
@@ -56,38 +41,54 @@ struct FunctionsClientTests {
       @escaping @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
         HTTPTypes.HTTPResponse, HTTPBody?
       )
-  ) -> FunctionsClient {
-    makeClient(http: .init(transport: ClosureTransport(handler: transport)))
+  ) throws -> FunctionsClient {
+    try makeClient(http: .init(transport: ClosureTransport(handler: transport)))
   }
 
   private func makeClient(
     region: FunctionRegion? = nil,
     http: HTTPClientConfiguration,
     decoder: JSONDecoder = .supabase(),
+    headers extraHeaders: HTTPFields = [:],
     accessToken: (@Sendable () async throws -> String?)? = nil
-  ) -> FunctionsClient {
-    FunctionsClient(
+  ) throws -> FunctionsClient {
+    var http = http
+    if let accessToken {
+      http.middlewares.append(AccessTokenMiddleware(getAccessToken: accessToken))
+    }
+    return try FunctionsClient(
       configuration: .init(
-        url: url, headers: headers, region: region, http: http, decoder: decoder,
-        accessToken: accessToken))
+        url: url, headers: headers.merging(with: extraHeaders), region: region, http: http,
+        decoder: decoder))
   }
 
   @Test
-  func `init`() async {
-    let client = FunctionsClient(
+  func `init`() async throws {
+    let client = try FunctionsClient(
       configuration: .init(url: url, headers: headers, region: .saEast1))
 
     #expect(client.configuration.region == .saEast1)
-    #expect(client.configuration.headers[.init("apikey")!] == apiKey)
+    #expect(client.configuration.headers[.apikey] == apiKey)
     #expect(client.configuration.url == url)
   }
 
+  @Test(arguments: [
+    "project-ref", "https:///v1", "//project-ref.supabase.co/v1", "mailto:someone@example.com",
+  ])
+  func initThrowsWhenTheURLHasNoSchemeOrHost(url: String) throws {
+    let url = try #require(URL(string: url))
+    let error = #expect(throws: FunctionsError.self) {
+      try FunctionsClient(configuration: .init(url: url))
+    }
+    #expect(error?.kind == .invalidConfiguration)
+  }
+
   @Test
-  func initWithCustomDecoder() async {
+  func initWithCustomDecoder() async throws {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
 
-    let client = FunctionsClient(
+    let client = try FunctionsClient(
       configuration: .init(url: url, headers: headers, decoder: decoder))
 
     #expect(client.configuration.decoder === decoder)
@@ -95,19 +96,18 @@ struct FunctionsClientTests {
 
   @Test
   func invokeReturnsTheResponseHead() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello"),
-      statusCode: 200,
-      data: [.post: Data("hi".utf8)],
-      additionalHeaders: [
-        "Content-Type": "text/plain",
-        "x-sb-edge-region": "eu-central-2",
-        "x-deno-execution-id": "exec-1",
+    transport.stub(
+      .post,
+      url.appendingPathComponent("hello"),
+      data: Data("hi".utf8),
+      headers: [
+        .contentType: "text/plain",
+        .xSbEdgeRegion: "eu-central-2",
+        .xDenoExecutionID: "exec-1",
       ]
     )
-    .register()
 
     let response = try await sut.invoke("hello")
 
@@ -120,14 +120,13 @@ struct FunctionsClientTests {
 
   @Test
   func invokeDecodesISO8601DatesByDefault() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello"),
-      statusCode: 200,
-      data: [.post: Data(#"{"at":"2026-10-05T12:34:56.789Z"}"#.utf8)]
+    transport.stub(
+      .post,
+      url.appendingPathComponent("hello"),
+      data: Data(#"{"at":"2026-10-05T12:34:56.789Z"}"#.utf8)
     )
-    .register()
 
     struct Payload: Decodable {
       var at: Date
@@ -139,14 +138,10 @@ struct FunctionsClientTests {
 
   @Test
   func perCallDecoderWinsOverTheClientDecoder() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello"),
-      statusCode: 200,
-      data: [.post: Data(#"{"user_name":"a"}"#.utf8)]
-    )
-    .register()
+    transport.stub(
+      .post, url.appendingPathComponent("hello"), data: Data(#"{"user_name":"a"}"#.utf8))
 
     struct Payload: Decodable {
       var userName: String
@@ -159,12 +154,12 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invokeWithABodyThatFailsToEncodeSendsNothing() async {
+  func invokeWithABodyThatFailsToEncodeSendsNothing() async throws {
     struct Failing: Encodable {
       struct Reason: Error {}
       func encode(to encoder: any Encoder) throws { throw Reason() }
     }
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       Issue.record("transport should not be called")
       return (HTTPTypes.HTTPResponse(status: .ok), nil)
     }
@@ -181,27 +176,21 @@ struct FunctionsClientTests {
 
   @Test
   func invoke() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: self.url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("hello_world")) {
       #"""
       curl \
       	--request POST \
       	--header "Content-Length: 19" \
       	--header "Content-Type: application/json" \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Custom-Key: value" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--data "{\"name\":\"Supabase\"}" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
     }
-    .register()
 
     try await sut.invoke(
       "hello_world",
@@ -212,25 +201,21 @@ struct FunctionsClientTests {
 
   @Test
   func invokeReturningDecodable() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello"),
-      statusCode: 200,
-      data: [
-        .post: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post,
+      url.appendingPathComponent("hello"),
+      data: #"{"message":"Hello, world!","status":"ok"}"#.data(using: .utf8)!
+    ) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello"
       """#
     }
-    .register()
 
     struct Payload: Decodable {
       var message: String
@@ -247,49 +232,34 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithCustomMethod() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
-      data: [.delete: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.delete, url.appendingPathComponent("hello-world")) {
       #"""
       curl \
       	--request DELETE \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
-    .register()
 
     try await sut.invoke("hello-world", options: .init(method: .delete))
   }
 
   @Test
   func invokeWithQuery() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [
-        .post: Data()
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("hello-world")) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world?key=value"
       """#
     }
-    .register()
 
     try await sut.invoke(
       "hello-world",
@@ -301,97 +271,64 @@ struct FunctionsClientTests {
 
   @Test
   func invokeWithRegionDefinedInClient() async throws {
-    let sut = makeSUT(region: .caCentral1)
+    let sut = try makeSUT(region: .caCentral1)
 
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("hello-world")) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
       """#
     }
-    .register()
 
     try await sut.invoke("hello-world")
   }
 
   @Test
   func invokeWithRegion() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      ignoreQuery: true,
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("hello-world")) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	--header "x-region: ca-central-1" \
       	"http://localhost:5432/functions/v1/hello-world?forceFunctionRegion=ca-central-1"
       """#
     }
-    .register()
 
     try await sut.invoke("hello-world", options: .init(region: .caCentral1))
   }
 
   @Test
   func invokeWithoutRegion() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello-world"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("hello-world")) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello-world"
       """#
     }
-    .register()
 
     try await sut.invoke("hello-world")
   }
 
   @Test
-  func invoke_badServerResponse_wrapsAsTransport() async {
-    let sut = makeSUT()
+  func invoke_badServerResponse_wrapsAsTransport() async throws {
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()],
-      requestError: URLError(.badServerResponse)
-    )
-    .snapshotRequest {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:5432/functions/v1/hello_world"
-      """#
+    transport.stub(.post, url.appendingPathComponent("hello_world")) { _, _ in
+      throw URLError(.badServerResponse)
     }
-    .register()
 
     do {
       try await sut.invoke("hello_world")
@@ -402,34 +339,38 @@ struct FunctionsClientTests {
     } catch {
       Issue.record("Unexpected error thrown \(error)")
     }
-  }
 
-  @Test
-  func invoke_shouldThrow_FunctionsError_httpError() async {
-    let sut = makeSUT()
-
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 300,
-      data: [.post: Data()]
-    )
-    .snapshotRequest {
+    try transport.assertFirstRequestSnapshot(.post, url.appendingPathComponent("hello_world")) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
     }
-    .register()
+  }
+
+  @Test
+  func invoke_shouldThrow_FunctionsError_httpError() async throws {
+    let sut = try makeSUT()
+
+    transport.stub(.post, url.appendingPathComponent("hello_world"), status: .multipleChoices) {
+      #"""
+      curl \
+      	--request POST \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
+      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
+      	"http://localhost:5432/functions/v1/hello_world"
+      """#
+    }
 
     do {
       try await sut.invoke("hello_world")
       Issue.record("Invoke should fail.")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 300)
+      #expect(error.response?.status == 300)
       #expect(error.response?.body == Data())
     } catch {
       Issue.record("Unexpected error thrown \(error)")
@@ -437,27 +378,20 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_shouldThrow_FunctionsError_relayError() async {
-    let sut = makeSUT()
+  func invoke_shouldThrow_FunctionsError_relayError() async throws {
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, url.appendingPathComponent("hello_world"), headers: [.xRelayError: "true"]
+    ) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
     }
-    .register()
 
     do {
       try await sut.invoke("hello_world")
@@ -470,27 +404,21 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async {
-    let sut = makeSUT()
+  func invoke_relayErrorWithNon2xxStatus_shouldThrowRelayError() async throws {
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 500,
-      data: [.post: Data()],
-      additionalHeaders: [
-        "x-relay-error": "true"
-      ]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post, url.appendingPathComponent("hello_world"), status: .internalServerError,
+      headers: [.xRelayError: "true"]
+    ) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/hello_world"
       """#
     }
-    .register()
 
     do {
       try await sut.invoke("hello_world")
@@ -503,8 +431,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_transportFailure_wrapsURLError() async {
-    let sut = makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
+  func invoke_transportFailure_wrapsURLError() async throws {
+    let sut = try makeSUT { _, _ in throw URLError(.notConnectedToInternet) }
 
     do {
       try await sut.invoke("hello_world")
@@ -519,8 +447,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancellation_isNotWrapped() async {
-    let sut = makeSUT { _, _ in throw CancellationError() }
+  func invoke_cancellation_isNotWrapped() async throws {
+    let sut = try makeSUT { _, _ in throw CancellationError() }
 
     await #expect(throws: CancellationError.self) {
       try await sut.invoke("hello_world")
@@ -528,8 +456,8 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async {
-    let sut = makeSUT { _, _ in throw URLError(.cancelled) }
+  func invoke_cancelledURLErrorWithoutTaskCancellation_isWrapped() async throws {
+    let sut = try makeSUT { _, _ in throw URLError(.cancelled) }
 
     do {
       try await sut.invoke("hello_world")
@@ -543,24 +471,18 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_cancellingTheTask_throwsCancellationError() async {
-    let sut = makeSUT()
-    let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
+  func invoke_cancellingTheTask_throwsCancellationError() async throws {
+    let sut = try makeSUT()
+    let inFlight = Gate()
 
-    var mock = Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data()]
-    )
-    // `MockingURLProtocol` runs the request callback before it schedules the delayed response,
-    // so the cancel below always lands while the request is in flight. The delay is never
-    // waited out: cancelling makes `stopLoading()` drop the pending response.
-    mock.delay = .seconds(10)
-    mock.onRequestHandler = OnRequestHandler(requestCallback: { _ in onRequestStarted.yield() })
-    mock.register()
+    // URLSession fails a cancelled task with `URLError(.cancelled)`, not `CancellationError`.
+    transport.stub(.post, url.appendingPathComponent("hello_world")) { _, _ in
+      await inFlight.pass()
+      throw URLError(.cancelled)
+    }
 
     let task = Task { try await sut.invoke("hello_world") }
-    for await _ in requestStarted { break }
+    await inFlight.arrivals(1)
     task.cancel()
 
     do {
@@ -573,17 +495,13 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_serverErrorBody_isCappedKeepingThePrefix() async {
-    let sut = makeSUT()
-    let cap = FunctionsAPI.maxErrorBodyBytes
+  func invoke_serverErrorBody_isCappedKeepingThePrefix() async throws {
+    let sut = try makeSUT()
+    let cap = HTTPClient.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 500,
-      data: [.post: body]
-    )
-    .register()
+    transport.stub(
+      .post, url.appendingPathComponent("hello_world"), status: .internalServerError, data: body)
 
     do {
       try await sut.invoke("hello_world")
@@ -597,9 +515,9 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_customFetchError_isNotWrapped() async {
+  func invoke_customFetchError_isNotWrapped() async throws {
     struct FetchError: Error {}
-    let sut = makeSUT { _, _ in throw FetchError() }
+    let sut = try makeSUT { _, _ in throw FetchError() }
 
     await #expect(throws: FetchError.self) {
       try await sut.invoke("hello_world")
@@ -607,15 +525,10 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func invoke_undecodableBody_wrapsDecodingError() async {
-    let sut = makeSUT()
+  func invoke_undecodableBody_wrapsDecodingError() async throws {
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("hello_world"),
-      statusCode: 200,
-      data: [.post: Data("not json".utf8)]
-    )
-    .register()
+    transport.stub(.post, url.appendingPathComponent("hello_world"), data: Data("not json".utf8))
 
     do {
       let _: [String: String] = try await sut.invoke("hello_world")
@@ -632,7 +545,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithTimeoutOverride() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -648,7 +561,7 @@ struct FunctionsClientTests {
   @Test
   func invokeWithDefaultTimeout() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -664,7 +577,7 @@ struct FunctionsClientTests {
   @Test
   func configuredTimeoutIntervalReplacesTheFunctionsDefault() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: RequestTimeout.current)
@@ -684,7 +597,7 @@ struct FunctionsClientTests {
   @Test
   func accessTokenProviderSetsAuthorizationHeader() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -713,7 +626,7 @@ struct FunctionsClientTests {
     let tokenBox = TokenBox()
     let capture = Capture()
 
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await capture.record(request.headerFields[.authorization])
@@ -733,7 +646,7 @@ struct FunctionsClientTests {
   @Test
   func invokeOptionsHeaderOverridesAccessTokenProvider() async throws {
     let box = CapturedRequestBox()
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
           await box.set(request, timeout: nil)
@@ -752,46 +665,29 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func callerMiddlewareDoesNotSeeTheAccessToken() async throws {
-    struct Capture: ClientMiddleware {
-      let box: CapturedRequestBox
-      func intercept(
-        _ request: HTTPTypes.HTTPRequest, body: HTTPBody?,
-        next:
-          @Sendable (HTTPTypes.HTTPRequest, HTTPBody?) async throws -> (
-            HTTPTypes.HTTPResponse, HTTPBody?
-          )
-      ) async throws -> (HTTPTypes.HTTPResponse, HTTPBody?) {
-        await box.set(request, timeout: nil)
-        return try await next(request, body)
-      }
-    }
-
-    let seenByMiddleware = CapturedRequestBox()
-    let seenByTransport = CapturedRequestBox()
-    let sut = makeClient(
+  func staticAuthorizationHeaderWinsOverTheAccessTokenMiddleware() async throws {
+    let box = CapturedRequestBox()
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { request, _ in
-          await seenByTransport.set(request, timeout: nil)
+          await box.set(request, timeout: nil)
           return (HTTPTypes.HTTPResponse(status: .ok), nil)
-        },
-        middlewares: [Capture(box: seenByMiddleware)]),
-      accessToken: { "access.token" }
+        }),
+      headers: [.authorization: "Bearer static"],
+      accessToken: { "provider.token" }
     )
 
     try await sut.invoke("hello-world")
 
-    let middlewareRequest = await seenByMiddleware.request
-    #expect(middlewareRequest?.headerFields[.authorization] == nil)
-    let transportRequest = await seenByTransport.request
-    #expect(transportRequest?.headerFields[.authorization] == "Bearer access.token")
+    let capturedRequest = await box.request
+    #expect(capturedRequest?.headerFields[.authorization] == "Bearer static")
   }
 
   @Test
-  func accessTokenProviderErrorPropagatesToInvoke() async throws {
+  func accessTokenProviderErrorFailsInvokeAsAFunctionsError() async throws {
     struct TokenError: Error {}
 
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
@@ -800,15 +696,17 @@ struct FunctionsClientTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: FunctionsError.self) {
       try await sut.invoke("hello-world")
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test
   func streamReturnsTheHeadBeforeTheBodyAndYieldsEachChunk() async throws {
     let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(
           status: .ok,
@@ -833,7 +731,7 @@ struct FunctionsClientTests {
 
   @Test
   func streamWithNoBodyYieldsAnEmptyBody() async throws {
-    let sut = makeSUT { _, _ in (HTTPTypes.HTTPResponse(status: .ok), nil) }
+    let sut = try makeSUT { _, _ in (HTTPTypes.HTTPResponse(status: .ok), nil) }
 
     let response = try await sut.stream("stream")
 
@@ -842,24 +740,22 @@ struct FunctionsClientTests {
 
   @Test
   func streamDeliversAMockedEventStreamAsBytes() async throws {
-    let sut = makeSUT()
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("data: a\n\nevent: delta\ndata: b\n\n".utf8)],
-      additionalHeaders: ["Content-Type": "text/event-stream"]
-    )
-    .snapshotRequest {
+    transport.stub(
+      .post,
+      url.appendingPathComponent("stream"),
+      data: Data("data: a\n\nevent: delta\ndata: b\n\n".utf8),
+      headers: [.contentType: "text/event-stream"]
+    ) {
       #"""
       curl \
       	--request POST \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
       """#
     }
-    .register()
 
     let response = try await sut.stream("stream")
 
@@ -871,24 +767,18 @@ struct FunctionsClientTests {
 
   @Test
   func streamUsesAccessTokenProvider() async throws {
-    let sut = makeSUT(accessToken: { "stream.token" })
+    let sut = try makeSUT(accessToken: { "stream.token" })
 
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("hello world".utf8)]
-    )
-    .snapshotRequest {
+    transport.stub(.post, url.appendingPathComponent("stream"), data: Data("hello world".utf8)) {
       #"""
       curl \
       	--request POST \
       	--header "Authorization: Bearer stream.token" \
-      	--header "X-Client-Info: functions-swift/0.0.0" \
+      	--header "X-Client-Info: functions-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
       	"http://localhost:5432/functions/v1/stream"
       """#
     }
-    .register()
 
     let response = try await sut.stream("stream")
 
@@ -896,9 +786,9 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func streamDoesNotWrapAccessTokenError() async {
+  func accessTokenProviderErrorFailsStreamAsAFunctionsError() async throws {
     struct TokenError: Error {}
-    let sut = makeClient(
+    let sut = try makeClient(
       http: .init(
         transport: ClosureTransport { _, _ in
           Issue.record("transport should not be called when the access token provider throws")
@@ -907,30 +797,28 @@ struct FunctionsClientTests {
       accessToken: { throw TokenError() }
     )
 
-    await #expect(throws: TokenError.self) {
+    let error = await #expect(throws: FunctionsError.self) {
       try await sut.stream("stream")
     }
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
   }
 
   @Test
-  func stream_serverErrorBody_isCappedKeepingThePrefix() async {
-    let sut = makeSUT()
-    let cap = FunctionsAPI.maxErrorBodyBytes
+  func stream_serverErrorBody_isCappedKeepingThePrefix() async throws {
+    let sut = try makeSUT()
+    let cap = HTTPClient.maxErrorBodyBytes
     let body = Data((0..<(cap + 4096)).map { UInt8(truncatingIfNeeded: $0) })
 
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 500,
-      data: [.post: body]
-    )
-    .register()
+    transport.stub(
+      .post, url.appendingPathComponent("stream"), status: .internalServerError, data: body)
 
     do {
       _ = try await sut.stream("stream")
       Issue.record("Expected failure")
     } catch let error as FunctionsError {
       #expect(error.kind == .server)
-      #expect(error.response?.statusCode == 500)
+      #expect(error.response?.status == 500)
       #expect(error.response?.body == body.prefix(cap))
     } catch {
       Issue.record("Unexpected error thrown \(error)")
@@ -938,16 +826,15 @@ struct FunctionsClientTests {
   }
 
   @Test
-  func streamRelayErrorThrowsRelay() async {
-    let sut = makeSUT()
+  func streamRelayErrorThrowsRelay() async throws {
+    let sut = try makeSUT()
 
-    Mock(
-      url: url.appendingPathComponent("stream"),
-      statusCode: 200,
-      data: [.post: Data("relay failed".utf8)],
-      additionalHeaders: ["x-relay-error": "true"]
+    transport.stub(
+      .post,
+      url.appendingPathComponent("stream"),
+      data: Data("relay failed".utf8),
+      headers: [.xRelayError: "true"]
     )
-    .register()
 
     do {
       _ = try await sut.stream("stream")
@@ -966,7 +853,7 @@ struct FunctionsClientTests {
       $0.yield(ArraySlice("partial".utf8))
       $0.finish(throwing: URLError(.networkConnectionLost))
     }
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(status: .ok),
         HTTPBody(chunks, length: .unknown, iterationBehavior: .single)
@@ -990,7 +877,7 @@ struct FunctionsClientTests {
   @Test
   func streamCancellingTheIteratingTaskThrowsCancellationError() async throws {
     let (chunks, continuation) = AsyncStream<ArraySlice<UInt8>>.makeStream()
-    let sut = makeSUT { _, _ in
+    let sut = try makeSUT { _, _ in
       (
         HTTPTypes.HTTPResponse(status: .ok),
         HTTPBody(chunks, length: .unknown, iterationBehavior: .single)

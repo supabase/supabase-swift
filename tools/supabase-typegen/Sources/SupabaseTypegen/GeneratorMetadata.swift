@@ -19,6 +19,9 @@ struct GeneratorMetadata: Decodable {
   var primaryKeys: [PrimaryKey]
   var functions: [Function]
   var types: [PostgresType]
+  /// The functions PostgREST exposes under `/rpc`, with their overloads resolved. Absent from
+  /// documents produced before postgrest-typegen 0.5.0.
+  var rpcFunctions: [RpcFunction]?
 
   struct Schema: Decodable {
     var name: String
@@ -92,6 +95,49 @@ struct GeneratorMetadata: Decodable {
     struct Argument: Decodable {
       var mode: String
       var typeId: Int
+    }
+  }
+
+  struct RpcFunction: Decodable {
+    var schema: String
+    var name: String
+    var overloads: [Overload]
+
+    struct Overload: Decodable {
+      /// The input parameters, in name order.
+      var args: [Argument]
+      var returns: Returns
+      /// Whether the response is an array of rows or values.
+      var isSetReturning: Bool
+      /// The relation this function is a computed field of, if any.
+      var computedFieldOf: Int?
+      /// Why PostgREST cannot resolve a call to this overload, when it cannot.
+      var error: String?
+    }
+
+    struct Argument: Decodable {
+      /// Empty for an unnamed parameter.
+      var name: String
+      var format: String?
+      var typeSchema: String?
+      var hasDefault: Bool
+      /// The relation whose row type this parameter has.
+      var relationId: Int?
+    }
+
+    struct Returns: Decodable {
+      var format: String?
+      var typeSchema: String?
+      /// The relation whose rows the function returns.
+      var relationId: Int?
+      /// The columns of a `RETURNS TABLE` or `OUT` parameter result, in name order.
+      var columns: [Column]?
+    }
+
+    struct Column: Decodable {
+      var name: String
+      var format: String?
+      var typeSchema: String?
     }
   }
 

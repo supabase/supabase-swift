@@ -292,4 +292,50 @@ struct HTTPBodyTests {
 
     await #expect(throws: CancellationError.self) { try await task.value }
   }
+
+  @Test
+  func aPartlyReadBodyYieldsItsHeadThenTheRest() async throws {
+    let source = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        $0.yield([1, 2])
+        $0.yield([3])
+        $0.yield([4, 5])
+        $0.finish()
+      },
+      length: .known(5), iterationBehavior: .single)
+    var iterator = source.makeAsyncIterator()
+    let first = try #require(try await iterator.next())
+
+    let body = HTTPBody(Data(first), followedBy: iterator)
+
+    #expect(body.length == .unknown)
+    #expect(body.iterationBehavior == .single)
+    #expect(try await Data(collecting: body, upTo: .max) == Data([1, 2, 3, 4, 5]))
+    await #expect(throws: HTTPBodyAlreadyConsumedError.self) {
+      _ = try await Data(collecting: body, upTo: .max)
+    }
+  }
+
+  @Test
+  func aPartlyReadBodyWithAnEmptyHeadYieldsOnlyTheRest() async throws {
+    let body = HTTPBody(Data(), followedBy: HTTPBody(Data([9])).makeAsyncIterator())
+
+    var chunks: [ArraySlice<UInt8>] = []
+    for try await chunk in body { chunks.append(chunk) }
+
+    #expect(chunks == [[9]])
+  }
+
+  @Test
+  func aPartlyReadBodyPassesOnTheRestsError() async throws {
+    struct Failure: Error {}
+    let rest = HTTPBody(
+      AsyncThrowingStream<ArraySlice<UInt8>, any Error> { $0.finish(throwing: Failure()) },
+      length: .unknown, iterationBehavior: .single
+    ).makeAsyncIterator()
+
+    let body = HTTPBody(Data([1]), followedBy: rest)
+
+    await #expect(throws: Failure.self) { _ = try await Data(collecting: body, upTo: .max) }
+  }
 }

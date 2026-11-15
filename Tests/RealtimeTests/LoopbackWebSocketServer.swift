@@ -156,15 +156,16 @@ struct LoopbackError: Error {
       self.handle = handle
     }
 
-    static func refusing(status: Int, reason: String) throws -> (
+    static func refusing(status: Int, reason: String, headers: [String: String] = [:]) throws -> (
       LoopbackTCPServer, LockIsolated<String>
     ) {
+      let extraHeaders = headers.map { "\($0.key): \($0.value)\r\n" }.joined()
       let request = LockIsolated("")
       let server = try LoopbackTCPServer { connection in
         connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, _, _ in
           request.setValue(String(decoding: data ?? Data(), as: UTF8.self))
           let response =
-            "HTTP/1.1 \(status) \(reason)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            "HTTP/1.1 \(status) \(reason)\r\n\(extraHeaders)Content-Length: 0\r\nConnection: close\r\n\r\n"
           connection.send(
             content: Data(response.utf8), isComplete: true,
             completion: .contentProcessed { _ in connection.cancel() })

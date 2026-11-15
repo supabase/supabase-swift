@@ -21,14 +21,14 @@ struct HTTPErrorResponseTests {
   func requestIDReadsTheSupabaseHeader() {
     var headers = HTTPFields()
     headers[.sbRequestID] = "019b1e49-6e1a-7556-92dc-909063bc3313"
-    let response = HTTPErrorResponse(statusCode: 404, headers: headers, body: Data())
+    let response = HTTPErrorResponse(status: 404, headers: headers, body: Data())
 
     #expect(response.requestID == "019b1e49-6e1a-7556-92dc-909063bc3313")
   }
 
   @Test
   func requestIDIsNilWithoutTheHeader() {
-    let response = HTTPErrorResponse(statusCode: 500, headers: HTTPFields(), body: Data())
+    let response = HTTPErrorResponse(status: 500, headers: HTTPFields(), body: Data())
 
     #expect(response.requestID == nil)
   }
@@ -42,7 +42,7 @@ struct HTTPErrorResponseTests {
 
     let response = HTTPErrorResponse(head, body: Data("body".utf8))
 
-    #expect(response.statusCode == 429)
+    #expect(response.status == .tooManyRequests)
     #expect(response.body == Data("body".utf8))
     #expect(response.requestID == "abc")
     #expect(response.headers[.contentType] == "application/json")
@@ -50,8 +50,8 @@ struct HTTPErrorResponseTests {
 
   @Test
   func isHashable() {
-    let a = HTTPErrorResponse(statusCode: 400, headers: HTTPFields(), body: Data("x".utf8))
-    let b = HTTPErrorResponse(statusCode: 400, headers: HTTPFields(), body: Data("x".utf8))
+    let a = HTTPErrorResponse(status: 400, headers: HTTPFields(), body: Data("x".utf8))
+    let b = HTTPErrorResponse(status: 400, headers: HTTPFields(), body: Data("x".utf8))
 
     #expect(a == b)
     #expect(Set([a, b]).count == 1)

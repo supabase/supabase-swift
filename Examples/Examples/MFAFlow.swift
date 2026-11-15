@@ -49,10 +49,11 @@ struct MFAFlow: View {
 }
 
 struct MFAEnrollView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
   @State private var verificationCode = ""
 
-  @State private var enrollResponse: AuthMFAEnrollResponse?
+  @State private var enrollment: TOTPEnrollment?
   @State private var error: Error?
   @State private var isLoading = false
 
@@ -64,7 +65,7 @@ struct MFAEnrollView: View {
           .foregroundColor(.secondary)
       }
 
-      if let totp = enrollResponse?.totp {
+      if let totp = enrollment {
         Section("QR Code") {
           VStack(spacing: 12) {
             SVGView(string: totp.qrCode)
@@ -129,11 +130,9 @@ struct MFAEnrollView: View {
         CodeExample(
           code: """
             // Enroll in MFA
-            let response = try await supabase.auth.mfa.enroll(
-              params: .totp()
-            )
+            let enrollment = try await supabase.auth.mfa.enrollTOTP()
 
-            // response.totp contains:
+            // enrollment contains:
             // - qrCode: SVG string for QR code
             // - secret: Secret key for manual entry
             // - uri: URI for authenticator apps
@@ -144,10 +143,8 @@ struct MFAEnrollView: View {
           code: """
             // Verify the enrollment
             try await supabase.auth.mfa.challengeAndVerify(
-              params: MFAChallengeAndVerifyParams(
-                factorId: response.id,
-                code: "123456"
-              )
+              factorID: enrollment.id,
+              code: "123456"
             )
             """
         )
@@ -206,7 +203,7 @@ struct MFAEnrollView: View {
       isLoading = true
       defer { isLoading = false }
 
-      enrollResponse = try await supabase.auth.mfa.enroll(params: .totp())
+      enrollment = try await supabase.auth.mfa.enrollTOTP()
     } catch {
       self.error = error
     }
@@ -221,7 +218,7 @@ struct MFAEnrollView: View {
         defer { isLoading = false }
 
         try await supabase.auth.mfa.challengeAndVerify(
-          params: MFAChallengeAndVerifyParams(factorId: enrollResponse!.id, code: verificationCode)
+          factorID: enrollment!.id, code: verificationCode
         )
         dismiss()
       } catch {
@@ -232,6 +229,7 @@ struct MFAEnrollView: View {
 }
 
 struct MFAVerifyView: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.dismiss) private var dismiss
   @State private var verificationCode = ""
   @State private var error: Error?
@@ -271,19 +269,17 @@ struct MFAVerifyView: View {
         CodeExample(
           code: """
             // List all MFA factors
-            let factors = try await supabase.auth.mfa.listFactors()
+            let factors = try await supabase.auth.mfa.factors()
 
             // Get the TOTP factor
-            guard let totpFactor = factors.totp.first else {
+            guard let totpFactor = factors.verified.first(where: { $0.factorType == .totp }) else {
               return
             }
 
             // Verify with code from authenticator app
             try await supabase.auth.mfa.challengeAndVerify(
-              params: MFAChallengeAndVerifyParams(
-                factorId: totpFactor.id,
-                code: "123456"
-              )
+              factorID: totpFactor.id,
+              code: "123456"
             )
             """
         )
@@ -327,14 +323,14 @@ struct MFAVerifyView: View {
         isLoading = true
         defer { isLoading = false }
 
-        let factors = try await supabase.auth.mfa.listFactors()
-        guard let totpFactor = factors.totp.first else {
+        let factors = try await supabase.auth.mfa.factors()
+        guard let totpFactor = factors.verified.first(where: { $0.factorType == .totp }) else {
           debugPrint("No TOTP factor found.")
           return
         }
 
         try await supabase.auth.mfa.challengeAndVerify(
-          params: MFAChallengeAndVerifyParams(factorId: totpFactor.id, code: verificationCode)
+          factorID: totpFactor.id, code: verificationCode
         )
         dismiss()
       } catch {
@@ -345,11 +341,11 @@ struct MFAVerifyView: View {
 }
 
 struct MFAVerifiedView: View {
-  @Environment(AuthController.self) var auth
+  @Environment(\.supabase) private var supabase
+  @Environment(AuthModel.self) private var auth
 
-  @MainActor
   var factors: [Factor] {
-    auth.session?.user.factors ?? []
+    auth.user?.factors ?? []
   }
 
   var body: some View {
@@ -394,7 +390,7 @@ struct MFAVerifiedView: View {
                   Text("Type:")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                  Text(factor.factorType)
+                  Text(factor.factorType.rawValue)
                     .font(.caption)
                 }
               }
@@ -414,19 +410,17 @@ struct MFAVerifiedView: View {
         CodeExample(
           code: """
             // List all MFA factors
-            let factors = try await supabase.auth.mfa.listFactors()
+            let factors = try await supabase.auth.mfa.factors()
 
-            // Access current user's factors
-            let userFactors = supabase.auth.session?.user.factors
+            // Read the current user's factors from the observable model
+            let userFactors = auth.user?.factors ?? []
             """
         )
 
         CodeExample(
           code: """
             // Unenroll (remove) an MFA factor
-            try await supabase.auth.mfa.unenroll(
-              params: MFAUnenrollParams(factorId: factor.id)
-            )
+            try await supabase.auth.mfa.unenroll(factorID: factor.id)
             """
         )
       }
@@ -465,7 +459,7 @@ struct MFAVerifiedView: View {
     do {
       let factorsToRemove = indexSet.map { factors[$0] }
       for factor in factorsToRemove {
-        try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
+        try await supabase.auth.mfa.unenroll(factorID: factor.id)
       }
     } catch {
       debug("Failed to unenroll factor: \(error)")

@@ -85,14 +85,14 @@ struct AggregationsView: View {
       defer { isLoading = false }
 
       let totalResponse =
-        try await supabase
+        try await supabaseClient
         .from("todos")
         .select("*", count: .exact)
         .execute()
       totalTodos = totalResponse.count
 
       let completedResponse =
-        try await supabase
+        try await supabaseClient
         .from("todos")
         .select("*", count: .exact)
         .eq("is_complete", value: true)
@@ -100,7 +100,7 @@ struct AggregationsView: View {
       completedTodos = completedResponse.count
 
       let incompleteResponse =
-        try await supabase
+        try await supabaseClient
         .from("todos")
         .select("*", count: .exact)
         .eq("is_complete", value: false)

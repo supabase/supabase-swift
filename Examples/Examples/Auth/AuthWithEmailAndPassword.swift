@@ -5,9 +5,11 @@
 //  Demonstrates email and password authentication with sign up and sign in
 //
 
+import Supabase
 import SwiftUI
 
 struct AuthWithEmailAndPassword: View {
+  @Environment(\.supabase) private var supabase
   enum Mode {
     case signIn, signUp
   }
@@ -15,8 +17,6 @@ struct AuthWithEmailAndPassword: View {
   enum Result {
     case needsEmailConfirmation
   }
-
-  @Environment(AuthController.self) var auth
 
   @State var email = ""
   @State var password = ""
@@ -134,11 +134,6 @@ struct AuthWithEmailAndPassword: View {
     }
     .navigationTitle("Email & Password")
     .gitHubSourceLink()
-    .onOpenURL { url in
-      Task {
-        await onOpenURL(url)
-      }
-    }
     .animation(.default, value: mode)
     .sheet(isPresented: $isPresentingResetPassword) {
       ResetPasswordView()
@@ -153,13 +148,13 @@ struct AuthWithEmailAndPassword: View {
       case .signIn:
         try await supabase.auth.signIn(email: email, password: password)
       case .signUp:
-        let response = try await supabase.auth.signUp(
+        let result = try await supabase.auth.signUp(
           email: email,
           password: password,
-          redirectTo: Constants.redirectToURL
+          options: SignUpOptions(redirectTo: Constants.redirectToURL)
         )
 
-        if case .user = response {
+        if case .confirmationRequired = result {
           actionState = .result(.success(.needsEmailConfirmation))
         }
       }
@@ -167,15 +162,6 @@ struct AuthWithEmailAndPassword: View {
       withAnimation {
         actionState = .result(.failure(error))
       }
-    }
-  }
-
-  @MainActor
-  private func onOpenURL(_ url: URL) async {
-    do {
-      try await supabase.auth.session(from: url)
-    } catch {
-      debug("Fail to init session with url: \(url)")
     }
   }
 
@@ -191,5 +177,5 @@ struct AuthWithEmailAndPassword: View {
 
 #Preview {
   AuthWithEmailAndPassword()
-    .environment(AuthController())
+    .environment(\.supabase, supabaseClient)
 }

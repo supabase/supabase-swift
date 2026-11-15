@@ -16,12 +16,12 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct AuthOAuthServerIntegrationTests {
-  let authClient = AuthClientIntegrationTests.makeClient()
+  let authClient = try! AuthClientIntegrationTests.makeClient()
 
   private func createPendingAuthorization(
     accessToken: String,
-    clientId: UUID,
-    redirectUri: String,
+    clientID: UUID,
+    redirectURI: String,
     scope: String
   ) async throws -> String {
     var components = URLComponents(
@@ -30,8 +30,8 @@ struct AuthOAuthServerIntegrationTests {
     )!
     components.queryItems = [
       URLQueryItem(name: "response_type", value: "code"),
-      URLQueryItem(name: "client_id", value: clientId.uuidString),
-      URLQueryItem(name: "redirect_uri", value: redirectUri),
+      URLQueryItem(name: "client_id", value: clientID.uuidString),
+      URLQueryItem(name: "redirect_uri", value: redirectURI),
       URLQueryItem(name: "scope", value: scope),
       URLQueryItem(name: "state", value: "test-state"),
       URLQueryItem(name: "code_challenge", value: String(repeating: "a", count: 43)),
@@ -50,7 +50,7 @@ struct AuthOAuthServerIntegrationTests {
       let httpResponse = response as? HTTPURLResponse,
       let location = httpResponse.value(forHTTPHeaderField: "Location"),
       let locationComponents = URLComponents(string: location),
-      let authorizationId = locationComponents.queryItems?.first(where: {
+      let authorizationID = locationComponents.queryItems?.first(where: {
         $0.name == "authorization_id"
       })?.value
     else {
@@ -58,7 +58,7 @@ struct AuthOAuthServerIntegrationTests {
       throw AuthError.sessionMissing
     }
 
-    return authorizationId
+    return authorizationID
   }
 
   @Test
@@ -67,47 +67,62 @@ struct AuthOAuthServerIntegrationTests {
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
 
-    let serviceRoleClient = AuthClientIntegrationTests.makeClient(serviceRole: true)
-    let redirectUri = "https://example.com/callback"
-    let oauthClient = try await serviceRoleClient.admin.oauth.createClient(
-      params: CreateOAuthClientParams(
+    let admin = AuthClientIntegrationTests.makeAdminClient()
+    let redirectURI = "https://example.com/callback"
+    let oauthClient = try await admin.oauth.createClient(
+      CreateOAuthClient(
         clientName: "Integration Test Client",
-        redirectUris: [redirectUri]
+        redirectURIs: [URL(string: redirectURI)!]
       )
     )
+    #expect(oauthClient.redirectURIs == [URL(string: redirectURI)!])
 
-    let session = try await authClient.session
-    let authorizationId = try await createPendingAuthorization(
+    let session = try await authClient.session()
+    let authorizationID = try await createPendingAuthorization(
       accessToken: session.accessToken,
-      clientId: oauthClient.clientId,
-      redirectUri: redirectUri,
+      clientID: oauthClient.clientID,
+      redirectURI: redirectURI,
       scope: "email"
     )
 
     let detailsResponse = try await authClient.oauthServer.authorizationDetails(
-      id: authorizationId
+      id: authorizationID
     )
 
     guard case .details(let details) = detailsResponse else {
       Issue.record("Expected pending .details, got \(detailsResponse)")
       return
     }
-    #expect(details.client.id == oauthClient.clientId)
+    #expect(details.client.id == oauthClient.clientID)
     #expect(details.scope == "email")
 
     let approveRedirect = try await authClient.oauthServer.approveAuthorization(
-      id: authorizationId
+      id: authorizationID
     )
     #expect(approveRedirect.redirectURL.query?.contains("code=") == true)
     let grants = try await authClient.oauthServer.listGrants()
-    #expect(grants.contains { $0.client.id == oauthClient.clientId })
+    #expect(grants.contains { $0.client.id == oauthClient.clientID })
 
-    try await authClient.oauthServer.revokeGrant(id: oauthClient.clientId)
+    try await authClient.oauthServer.revokeGrant(clientID: oauthClient.clientID)
 
     let grantsAfterRevoke = try await authClient.oauthServer.listGrants()
-    #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientId })
+    #expect(!grantsAfterRevoke.contains { $0.client.id == oauthClient.clientID })
 
-    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
+    try await admin.oauth.deleteClient(id: oauthClient.clientID)
+  }
+
+  @Test
+  func listClientsReturnsCreatedClients() async throws {
+    let admin = AuthClientIntegrationTests.makeAdminClient()
+    let created = try await admin.oauth.createClient(
+      CreateOAuthClient(
+        clientName: "Listed Client", redirectURIs: [URL(string: "https://example.com/callback")!])
+    )
+
+    let clients = try await admin.oauth.listClients()
+    #expect(clients.contains { $0.clientID == created.clientID })
+
+    try await admin.oauth.deleteClient(id: created.clientID)
   }
 
   @Test
@@ -116,20 +131,21 @@ struct AuthOAuthServerIntegrationTests {
     let password = mockPassword()
     try await signUpIfNeededOrSignIn(email: email, password: password)
 
-    let serviceRoleClient = AuthClientIntegrationTests.makeClient(serviceRole: true)
-    let redirectUri = "https://example.com/callback"
-    let oauthClient = try await serviceRoleClient.admin.oauth.createClient(
-      params: CreateOAuthClientParams(
+    let admin = AuthClientIntegrationTests.makeAdminClient()
+    let redirectURI = "https://example.com/callback"
+    let oauthClient = try await admin.oauth.createClient(
+      CreateOAuthClient(
         clientName: "Integration Test Client (deny)",
-        redirectUris: [redirectUri]
+        redirectURIs: [URL(string: redirectURI)!]
       )
     )
+    #expect(oauthClient.redirectURIs == [URL(string: redirectURI)!])
 
-    let session = try await authClient.session
-    let authorizationId = try await createPendingAuthorization(
+    let session = try await authClient.session()
+    let authorizationID = try await createPendingAuthorization(
       accessToken: session.accessToken,
-      clientId: oauthClient.clientId,
-      redirectUri: redirectUri,
+      clientID: oauthClient.clientID,
+      redirectURI: redirectURI,
       scope: "email"
     )
 
@@ -137,24 +153,24 @@ struct AuthOAuthServerIntegrationTests {
     // claims the authorization for the calling user server-side (the backend
     // creates the row with no owner, to support unauthenticated visitors, and
     // only the GET assigns it). Skipping straight to consent 404s.
-    _ = try await authClient.oauthServer.authorizationDetails(id: authorizationId)
+    _ = try await authClient.oauthServer.authorizationDetails(id: authorizationID)
 
     let denyRedirect = try await authClient.oauthServer.denyAuthorization(
-      id: authorizationId
+      id: authorizationID
     )
     #expect(denyRedirect.redirectURL.query?.contains("error=access_denied") == true)
 
-    try await serviceRoleClient.admin.oauth.deleteClient(id: oauthClient.clientId)
+    try await admin.oauth.deleteClient(id: oauthClient.clientID)
   }
 
   @discardableResult
   private func signUpIfNeededOrSignIn(
     email: String,
     password: String
-  ) async throws -> AuthResponse {
+  ) async throws -> SignUpResult {
     do {
       let session = try await authClient.signIn(email: email, password: password)
-      return .session(session)
+      return .signedIn(session)
     } catch {
       return try await authClient.signUp(email: email, password: password)
     }

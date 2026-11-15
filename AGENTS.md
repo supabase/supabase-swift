@@ -30,7 +30,7 @@ Read the matching file before you act:
 - Run `swiftlint lint --strict` before committing; it must not report new violations
 - Any change to public API (add, remove, rename, or move a symbol) updates
   `sdk-compliance.yaml` in the same commit — run `./scripts/check-compliance.sh`
-  to check for stale entries before committing (see "Capability Compliance" in
+  to check for stale entries and undeclared symbols before committing (see "Capability Compliance" in
   [CONTRIBUTING.md](CONTRIBUTING.md))
 - Ensure new public APIs have DocC documentation comments
 - Update the "Supabase Service Compatibility" section of the READMEs if the

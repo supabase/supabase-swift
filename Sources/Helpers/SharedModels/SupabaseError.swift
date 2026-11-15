@@ -9,8 +9,9 @@ public import Foundation
 
 /// The root of every error the Supabase SDK throws.
 ///
-/// `AuthError`, `PostgrestError`, `StorageError`, `FunctionsError` and `RealtimeError` all
-/// conform. Catch the existential to handle failures from any module in one place:
+/// `AuthError`, `PostgrestError`, `StorageError`, `FunctionsError`, `RealtimeError` and
+/// `SupabaseClientError` all conform. Catch the existential to handle failures from any module in
+/// one place:
 ///
 /// ```swift
 /// do {
@@ -44,20 +45,24 @@ public protocol SupabaseError: Error, Sendable, LocalizedError, CustomStringConv
 }
 
 extension SupabaseError {
+  /// The error's ``message``, so `localizedDescription` returns it.
   public var errorDescription: String? { message }
 }
 
 extension SupabaseError {
   /// Shared `description` layout for every module error:
-  /// `TypeName(kind): message [status 404, request abc]`.
-  package func formattedDescription(kind: String) -> String {
+  /// `TypeName(kind): message [status 404, request abc] [code xyz]`.
+  package func formattedDescription(kind: String, code: String? = nil) -> String {
     var text = "\(String(describing: Self.self))(\(kind)): \(message)"
     if let response {
-      text += " [status \(response.statusCode)"
+      text += " [status \(response.status.code)"
       if let requestID = response.requestID {
         text += ", request \(requestID)"
       }
       text += "]"
+    }
+    if let code {
+      text += " [code \(code)]"
     }
     return text
   }

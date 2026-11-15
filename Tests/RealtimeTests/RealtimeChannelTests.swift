@@ -19,24 +19,28 @@ import Testing
 
 @Suite
 struct RealtimeChannelTests {
-  let sut = RealtimeChannel(
-    topic: "topic",
-    config: RealtimeChannelConfig(
-      broadcast: BroadcastJoinConfig(),
-      presence: PresenceJoinConfig(),
-      isPrivate: false
-    ),
-    client: RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"])
-    ),
-    logger: supabaseDefaultLogger(label: "io.supabase.realtime")
-  )
+  let client: RealtimeClient
+  let sut: RealtimeChannel
+
+  init() async throws {
+    client = try RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"])
+    )
+    sut = await client.channel("topic")
+  }
+
+  @Test
+  func statusIsUnsubscribedBeforeTheFirstSubscribe() async {
+    let status: RealtimeChannelStatus = await sut.status
+    #expect(status.isSame(as: .unsubscribed))
+  }
 
   @Test
   func typedFilterAndSelectAreBufferedIntoPostgresJoinConfig() async {
     let stream = await sut.postgresChanges(
-      UpdateAction.self,
+      event: .update,
       table: "orders",
       filter: .and([
         .gt("amount", value: 100),
@@ -45,7 +49,7 @@ struct RealtimeChannelTests {
       select: ["id", "name"]
     )
 
-    let changes = await sut.clientChanges
+    let changes = await client.bindings(of: sut)
     #expect(changes.count == 1)
     #expect(changes.first?.event == .update)
     #expect(changes.first?.table == "orders")
@@ -62,9 +66,9 @@ struct RealtimeChannelTests {
     func presenceChangeCallbackRejectedWhileSubscribing() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          headers: ["apikey": "test-key"],
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
@@ -79,7 +83,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "heartbeat" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "phoenix",
@@ -99,13 +103,13 @@ struct RealtimeChannelTests {
       await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
       #expect(await channel.status == .subscribing)
 
-      let listenerCountBefore = await channel.listeners.count
+      let listenerCountBefore = await socket.streamCounts(of: channel).presenceChanges
 
       await withKnownIssue {
         _ = await channel.presenceChanges()
       }
 
-      #expect(await channel.listeners.count == listenerCountBefore)
+      #expect(await socket.streamCounts(of: channel).presenceChanges == listenerCountBefore)
 
       subscribeTask.cancel()
       await socket.disconnect()
@@ -118,9 +122,9 @@ struct RealtimeChannelTests {
     func presenceChangeCallbackRejectedWhileSubscribed() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          headers: ["apikey": "test-key"],
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
@@ -135,7 +139,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "realtime:test-topic",
@@ -155,124 +159,13 @@ struct RealtimeChannelTests {
       try? await channel.subscribe()
       #expect(await channel.status == .subscribed)
 
-      let listenerCountBefore = await channel.listeners.count
+      let listenerCountBefore = await socket.streamCounts(of: channel).presenceChanges
 
       await withKnownIssue {
         _ = await channel.presenceChanges()
       }
 
-      #expect(await channel.listeners.count == listenerCountBefore)
-
-      await socket.disconnect()
-    }
-  #endif
-
-  #if canImport(Darwin)
-    @Test
-    @MainActor
-    func postgresChangeCallbackRejectedWhileSubscribing() async throws {
-      let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          headers: ["apikey": "test-key"],
-          accessToken: { "test-token" }
-        ),
-        wsTransport: { _, _ in client },
-        http: HTTPClient(transport: RecordingTransport()),
-        clock: ContinuousClock()
-      )
-
-      let channel = await socket.channel("test-topic")
-
-      let serverTask3 = Task { @Sendable [server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "heartbeat" {
-            server.send(
-              RealtimeMessageV2(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "phoenix",
-                event: "phx_reply",
-                payload: ["response": [:]]
-              )
-            )
-          }
-        }
-      }
-      defer { serverTask3.cancel() }
-
-      try await socket.connect()
-
-      let subscribeTask = Task { try? await channel.subscribe() }
-
-      await waitForChannelStatus(.subscribing, channel: channel, timeout: 2.0)
-      #expect(await channel.status == .subscribing)
-
-      let listenerCountBefore = await channel.listeners.count
-
-      await withKnownIssue {
-        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
-      }
-
-      #expect(await channel.listeners.count == listenerCountBefore)
-
-      subscribeTask.cancel()
-      await socket.disconnect()
-    }
-  #endif
-
-  #if canImport(Darwin)
-    @Test
-    @MainActor
-    func postgresChangeCallbackRejectedWhileSubscribed() async throws {
-      let (client, server) = FakeWebSocket.fakes()
-      let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          headers: ["apikey": "test-key"],
-          accessToken: { "test-token" }
-        ),
-        wsTransport: { _, _ in client },
-        http: HTTPClient(transport: RecordingTransport()),
-        clock: ContinuousClock()
-      )
-
-      let channel = await socket.channel("test-topic")
-
-      let serverTask4 = Task { @Sendable [server] in
-        for await event in server.events {
-          guard let msg = event.realtimeMessage else { continue }
-          if msg.event == "phx_join" {
-            server.send(
-              RealtimeMessageV2(
-                joinRef: msg.joinRef,
-                ref: msg.ref,
-                topic: "realtime:test-topic",
-                event: "phx_reply",
-                payload: [
-                  "response": ["postgres_changes": []],
-                  "status": "ok",
-                ]
-              )
-            )
-          }
-        }
-      }
-      defer { serverTask4.cancel() }
-
-      try await socket.connect()
-      try? await channel.subscribe()
-      #expect(await channel.status == .subscribed)
-
-      let listenerCountBefore = await channel.listeners.count
-
-      await withKnownIssue {
-        _ = await channel.postgresChanges(AnyAction.self, schema: "public")
-      }
-
-      #expect(await channel.listeners.count == listenerCountBefore)
+      #expect(await socket.streamCounts(of: channel).presenceChanges == listenerCountBefore)
 
       await socket.disconnect()
     }
@@ -280,42 +173,29 @@ struct RealtimeChannelTests {
 
   @Test
   func attachCallbacks() async {
-    let streams: [any Sendable] = [
+    let streams: [any Sendable] = await [
       await sut.postgresChanges(
-        AnyAction.self,
         schema: "public",
         table: "users",
         filter: .eq("id", value: 1)
       ),
-      await sut.postgresChanges(InsertAction.self, schema: "private"),
-      await sut.postgresChanges(UpdateAction.self, table: "messages"),
-      await sut.postgresChanges(DeleteAction.self),
-      await sut.broadcasts(event: "test"),
-      await sut.broadcasts(event: "cursor-pos"),
-      await sut.presenceChanges(),
-      await sut.events(),
+      sut.postgresChanges(event: .insert, schema: "private"),
+      sut.postgresChanges(event: .update, table: "messages"),
+      sut.postgresChanges(event: .delete),
+      sut.broadcasts(event: "test"),
+      sut.broadcasts(event: "cursor-pos"),
+      sut.presenceChanges(),
+      sut.presenceStates(),
+      sut.events(),
     ]
 
-    let kinds = await sut.listeners.map { entry -> String in
-      switch entry.listener {
-      case .postgres: "postgres"
-      case .broadcast(let event, _): "broadcast(\(event))"
-      case .broadcastData(let event, _): "broadcastData(\(event))"
-      case .presence: "presence"
-      case .events: "events"
-      case .status: "status"
-      }
-    }
     #expect(
-      kinds == [
-        "postgres", "postgres", "postgres", "postgres",
-        "broadcast(test)", "broadcast(cursor-pos)",
-        "presence", "events",
-      ]
-    )
-    #expect(await sut.hasPresenceListener)
+      await client.streamCounts(of: sut)
+        == RealtimeClient.StreamCounts(
+          events: 1, broadcasts: 2, presenceChanges: 1, presenceStates: 1, postgres: 4))
+    #expect(await client.hasPresenceListener(sut))
 
-    let clientChanges = await sut.clientChanges
+    let clientChanges = await client.bindings(of: sut)
     assertInlineSnapshot(of: clientChanges, as: .dump) {
       """
       ▿ 4 elements
@@ -366,9 +246,9 @@ struct RealtimeChannelTests {
     let (client, server) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -379,15 +259,13 @@ struct RealtimeChannelTests {
     // Create a channel without a presence stream initially
     let channel = await socket.channel("test-topic")
 
-    #expect(!channel.config.presence.enabled)
-
     try await socket.connect()
 
     // Open a presence stream before subscribing
     let presence = await channel.presenceChanges()
 
     // Verify that the presence listener exists
-    #expect(await channel.hasPresenceListener)
+    #expect(await socket.hasPresenceListener(channel))
 
     Task {
       try? await channel.subscribe()
@@ -417,44 +295,68 @@ struct RealtimeChannelTests {
 
   }
 
-  @Test
-  func httpSendThrowsWhenAccessTokenIsMissing() async {
+  @Test(arguments: [false, true])
+  func httpSendWithoutAnAccessTokenSendsOnlyTheAPIKey(binary: Bool) async throws {
     let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"]),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-
     let channel = await socket.channel("test-topic")
 
-    do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
-      Issue.record("Expected httpSend to throw an error when access token is missing")
-    } catch {
-      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
-      #expect(error.localizedDescription == "Access token is required for httpSend()")
+    if binary {
+      try await channel.httpSend(event: "test", data: Data([0x01]))
+    } else {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.apikey] == "test-key")
+    #expect(headers[.authorization] == nil)
   }
 
   @Test
+  func httpSendWithAnAccessTokenCallbackThatReturnsNilSendsOnlyTheAPIKey() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { nil }),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
+
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.authorization] == nil)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
   func httpSendThrowsCancellationErrorWhenTheTaskIsCancelled() async {
     let (requestStarted, onRequestStarted) = AsyncStream<Void>.makeStream()
     let httpClient = RecordingTransport { _, _ in
       onRequestStarted.yield()
-      try? await Task.sleep(for: .seconds(10))
+      await Gate().pass()
       throw URLError(.cancelled)
     }
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -463,7 +365,7 @@ struct RealtimeChannelTests {
     )
     let channel = await socket.channel("test-topic")
 
-    let task = Task { try await channel.httpSend(event: "test", message: ["data": "test"]) }
+    let task = Task { try await channel.httpSend(event: "test", payload: ["data": "test"]) }
     for await _ in requestStarted { break }
     task.cancel()
 
@@ -482,9 +384,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -513,9 +415,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -527,7 +429,7 @@ struct RealtimeChannelTests {
       config.isPrivate = true
     }
 
-    try await channel.httpSend(event: "test-event", message: ["data": "explicit"])
+    try await channel.httpSend(event: "test-event", payload: ["data": "explicit"])
 
     let requests = httpClient.requests
     #expect(requests.count == 1)
@@ -539,11 +441,103 @@ struct RealtimeChannelTests {
     )
     #expect(request.head.method == .post)
     #expect(request.head.headerFields[.authorization] == "Bearer test-token")
-    #expect(request.head.headerFields[.apiKey] == "test-key")
+    #expect(request.head.headerFields[.apikey] == "test-key")
     #expect(request.head.headerFields[.contentType] == "application/json")
 
     let body = try JSONDecoder().decode([String: String].self, from: request.body ?? Data())
     #expect(body == ["data": "explicit"])
+  }
+
+  private func makeHTTPSendSUT(
+    accessToken: @escaping @Sendable () async throws -> String?,
+    httpClient: RecordingTransport
+  ) -> RealtimeClient {
+    let (client, _) = FakeWebSocket.fakes()
+    return RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: accessToken
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+  }
+
+  @Test
+  func httpSendThrowsAccessTokenWhenTheProviderFails() async {
+    struct TokenError: Error {}
+    let httpClient = RecordingTransport()
+    let socket = makeHTTPSendSUT(accessToken: { throw TokenError() }, httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
+    }
+
+    #expect(error?.kind == .accessToken)
+    #expect(error?.underlyingError is TokenError)
+    #expect(httpClient.requests.isEmpty)
+  }
+
+  @Test
+  func httpSendCallsTheProviderForEveryRequest() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let calls = LockIsolated(0)
+    let socket = makeHTTPSendSUT(
+      accessToken: {
+        calls.withValue { $0 += 1 }
+        return "token-\(calls.value)"
+      },
+      httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "1"])
+    try await channel.httpSend(event: "test", payload: ["data": "2"])
+
+    #expect(
+      httpClient.requests.map { $0.head.headerFields[.authorization] } == [
+        "Bearer token-1", "Bearer token-2",
+      ])
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func httpSendTimesOutWhenTheProviderIgnoresCancellation() async {
+    let parked = LockIsolated<CheckedContinuation<Void, Never>?>(nil)
+    let httpClient = RecordingTransport()
+    let socket = makeHTTPSendSUT(
+      accessToken: {
+        // Ignores cancellation: only the release below resumes it.
+        await withCheckedContinuation { parked.setValue($0) }
+        return "late"
+      },
+      httpClient: httpClient)
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(
+        event: "test", payload: ["data": "test"], timeout: .milliseconds(50))
+    }
+
+    #expect(error?.kind == .timeout)
+    #expect(httpClient.requests.isEmpty)
+    await waitUntil { parked.value != nil }
+    parked.value?.resume()
+  }
+
+  @Test
+  func httpSendFallsBackToTheStoredTokenWhenTheProviderReturnsNil() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let socket = makeHTTPSendSUT(accessToken: { nil }, httpClient: httpClient)
+    await socket.setAuth("stored-token")
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
+
+    #expect(httpClient.requests.first?.head.headerFields[.authorization] == "Bearer stored-token")
   }
 
   @Test
@@ -555,9 +549,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -567,7 +561,7 @@ struct RealtimeChannelTests {
 
     let channel = await socket.channel("room/one")
 
-    try await channel.httpSend(event: "cursor move", message: ["x": 1])
+    try await channel.httpSend(event: "cursor move", payload: ["x": 1])
 
     let requests = httpClient.requests
     #expect(
@@ -585,9 +579,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -613,30 +607,6 @@ struct RealtimeChannelTests {
   }
 
   @Test
-  func httpSendWithBinaryDataThrowsWhenAccessTokenIsMissing() async {
-    let httpClient = RecordingTransport()
-    let (client, _) = FakeWebSocket.fakes()
-
-    let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(headers: ["apikey": "test-key"]),
-      wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
-      clock: ContinuousClock()
-    )
-
-    let channel = await socket.channel("test-topic")
-
-    do {
-      try await channel.httpSend(event: "test", data: Data([0x01]))
-      Issue.record("Expected httpSend to throw an error when access token is missing")
-    } catch {
-      #expect((error as? RealtimeError)?.kind == .accessTokenMissing)
-      #expect(error.localizedDescription == "Access token is required for httpSend()")
-    }
-  }
-
-  @Test
   func httpSendThrowsOnNon202Status() async {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
@@ -646,9 +616,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -659,12 +629,12 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on non-202 status")
     } catch let error as RealtimeError {
       #expect(error.kind == .server)
       #expect(error.message == "Server error")
-      #expect(error.response?.statusCode == 500)
+      #expect(error.response?.status == 500)
     } catch {
       Issue.record("Unexpected error \(error)")
     }
@@ -676,9 +646,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw URLError(.timedOut) }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -686,7 +657,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected failure")
     } catch let error as RealtimeError {
       #expect(error.kind == .transport)
@@ -702,9 +673,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw CancellationError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -712,7 +684,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     await #expect(throws: CancellationError.self) {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
   }
 
@@ -724,9 +696,10 @@ struct RealtimeChannelTests {
     httpClient.respond { _, _ in throw FetchError() }
     let (client, _) = FakeWebSocket.fakes()
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"], accessToken: { "test-token" }),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
@@ -734,64 +707,149 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     await #expect(throws: FetchError.self) {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
   }
 
   @Test
-  func httpSendRespectsCustomTimeout() async throws {
+  func httpSendKeepsTheHTTPClientIdleTimeoutForTheRequest() async throws {
+    let seen = LockIsolated<[Duration?]>([])
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in
-      (HTTPResponse(status: .init(code: 202)), Data())
+      seen.withValue { $0.append(RequestTimeout.current) }
+      return (HTTPResponse(status: .init(code: 202)), Data())
     }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        timeout: .seconds(5),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient, timeout: .seconds(42)),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: .seconds(3))
+
+    #expect(seen.value == [.seconds(42)])
+  }
+
+  @Test(
+    .timeLimit(.minutes(1)),
+    arguments: [
+      (requestTimeout: Duration.milliseconds(50), callTimeout: Duration?.none),
+      (requestTimeout: Duration.seconds(30), callTimeout: Duration?.some(.milliseconds(50))),
+    ])
+  func httpSendThatRunsPastItsDeadlineTimesOut(
+    requestTimeout: Duration, callTimeout: Duration?
+  ) async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in
+      await Gate().pass()
+      throw CancellationError()
+    }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        // A static token: a token callback would also be bounded by `requestTimeout`.
+        headers: [.apikey: "test-key", .authorization: "Bearer test-token"],
+        requestTimeout: requestTimeout
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    let error = await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"], timeout: callTimeout)
+    }
+    #expect(error?.kind == .timeout)
+  }
+
+  @Test
+  func httpSendStartsFromTheClientHeaders() async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [
+          .apikey: "test-key",
+          HTTPField.Name("X-Custom")!: "custom",
+          .authorization: "Bearer static-key",
+          .contentType: "text/plain",
+        ],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-
     let channel = await socket.channel("test-topic")
 
-    try await channel.httpSend(event: "test", message: ["data": "test"], timeout: .seconds(3))
+    try await channel.httpSend(event: "test", data: Data([0x01]))
 
-    let requests = httpClient.requests
-    #expect(requests.count == 1)
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[.xClientInfo] == RealtimeClient.defaultHeaders[.xClientInfo])
+    #expect(headers[.xClientInfo]?.hasPrefix("realtime-swift/") == true)
+    #expect(headers[HTTPField.Name("X-Custom")!] == "custom")
+    #expect(headers[.apikey] == "test-key")
+    #expect(headers[.authorization] == "Bearer test-token")
+    #expect(headers[.contentType] == "application/octet-stream")
+    #expect(headers[values: .authorization].count == 1)
+    #expect(headers[values: .contentType].count == 1)
   }
 
   @Test
-  func httpSendUsesDefaultTimeoutWhenNotSpecified() async throws {
+  func httpSendKeepsAnXClientInfoTheAppSets() async throws {
     let httpClient = RecordingTransport()
-    httpClient.respond { _, _ in
-      (HTTPResponse(status: .init(code: 202)), Data())
-    }
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
     let (client, _) = FakeWebSocket.fakes()
-
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
-        timeout: .seconds(5),
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key", .xClientInfo: "supabase-swift/9.9.9"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
       http: HTTPClient(transport: httpClient),
       clock: ContinuousClock()
     )
-
     let channel = await socket.channel("test-topic")
 
-    try await channel.httpSend(event: "test", message: ["data": "test"])
+    try await channel.httpSend(event: "test", payload: ["data": "test"])
 
-    let requests = httpClient.requests
-    #expect(requests.count == 1)
+    let headers = try #require(httpClient.requests.first).head.headerFields
+    #expect(headers[values: .xClientInfo] == ["supabase-swift/9.9.9"])
+  }
+
+  @Test
+  func httpSendDoesNotRetry() async {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 503)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    await #expect(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
+    }
+    #expect(httpClient.requests.count == 1)
   }
 
   @Test
@@ -804,9 +862,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -817,7 +875,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 400 status")
     } catch {
       #expect(error.localizedDescription == "Invalid request")
@@ -833,9 +891,9 @@ struct RealtimeChannelTests {
     let (client, _) = FakeWebSocket.fakes()
 
     let socket = RealtimeClient(
-      url: URL(string: "https://localhost:54321/realtime/v1")!,
-      options: RealtimeClientOptions(
-        headers: ["apikey": "test-key"],
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
         accessToken: { "test-token" }
       ),
       wsTransport: { _, _ in client },
@@ -846,7 +904,7 @@ struct RealtimeChannelTests {
     let channel = await socket.channel("test-topic")
 
     do {
-      try await channel.httpSend(event: "test", message: ["data": "test"])
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
       Issue.record("Expected httpSend to throw an error on 503 status")
     } catch {
       let description = error.localizedDescription.lowercased()
@@ -860,12 +918,12 @@ struct RealtimeChannelTests {
   #if canImport(Darwin)
     @Test
     @MainActor
-    func channelErrorResetsSubscribedStatus() async throws {
+    func channelErrorWaitsToRejoin() async throws {
       let (client, server) = FakeWebSocket.fakes()
       let socket = RealtimeClient(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        options: RealtimeClientOptions(
-          headers: ["apikey": "test-key"],
+        configuration: RealtimeClient.Configuration(
+          url: URL(string: "https://localhost:54321/realtime/v1")!,
+          headers: [.apikey: "test-key"],
           accessToken: { "test-token" }
         ),
         wsTransport: { _, _ in client },
@@ -880,7 +938,7 @@ struct RealtimeChannelTests {
           guard let msg = event.realtimeMessage else { continue }
           if msg.event == "phx_join" {
             server.send(
-              RealtimeMessageV2(
+              RealtimeMessage(
                 joinRef: msg.joinRef,
                 ref: msg.ref,
                 topic: "realtime:test-topic",
@@ -899,9 +957,19 @@ struct RealtimeChannelTests {
       try await socket.connect()
       try? await channel.subscribe()
       #expect(await channel.status == .subscribed)
+      // The rejoin runs on the real clock, so read the status stream: it keeps every change.
+      let sawRejoinWait = LockIsolated(false)
+      let statuses = await channel.statusChanges()
+      let watcher = Task {
+        for await status in statuses where status == .resubscribing {
+          sawRejoinWait.setValue(true)
+          return
+        }
+      }
+      defer { watcher.cancel() }
 
       server.send(
-        RealtimeMessageV2(
+        RealtimeMessage(
           joinRef: nil,
           ref: nil,
           topic: "realtime:test-topic",
@@ -910,8 +978,8 @@ struct RealtimeChannelTests {
         )
       )
 
-      await waitForChannelStatus(.unsubscribed, channel: channel, timeout: 2.0)
-      #expect(await channel.status == .unsubscribed)
+      await waitUntil(timeout: 2) { sawRejoinWait.value }
+      #expect(sawRejoinWait.value)
 
       await socket.disconnect()
     }
@@ -933,23 +1001,12 @@ extension RealtimeChannelTests {
   private func waitForEvents(
     in socket: FakeWebSocket,
     event: String,
-    timeout: TimeInterval,
-    pollInterval: UInt64 = 10_000_000
-  ) async -> [RealtimeMessageV2] {
-    let deadline = Date().addingTimeInterval(timeout)
-
-    while Date() < deadline {
-      let events = socket.receivedEvents.compactMap { $0.realtimeMessage }.filter {
-        $0.event == event
-      }
-
-      if !events.isEmpty {
-        return events
-      }
-
-      try? await Task.sleep(nanoseconds: pollInterval)
+    timeout: TimeInterval
+  ) async -> [RealtimeMessage] {
+    @Sendable func events() -> [RealtimeMessage] {
+      socket.receivedEvents.compactMap { $0.realtimeMessage }.filter { $0.event == event }
     }
-
-    return []
+    await waitUntil(timeout: timeout) { !events().isEmpty }
+    return events()
   }
 }

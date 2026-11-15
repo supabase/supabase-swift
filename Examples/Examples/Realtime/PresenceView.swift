@@ -9,9 +9,8 @@ import Supabase
 import SwiftUI
 
 struct PresenceView: View {
-  @Environment(AuthController.self) var auth
+  @Environment(AuthModel.self) var auth
   @State var onlineUsers: [PresenceUser] = []
-  @State var channel: RealtimeChannel?
   @State var error: Error?
 
   var body: some View {
@@ -48,44 +47,65 @@ struct PresenceView: View {
     .navigationTitle("Presence")
     .gitHubSourceLink()
     .task {
-      await subscribe()
+      guard let userID = auth.user?.id else { return }
+      await observePresence(of: userID)
     }
-    .onDisappear {
-      Task {
-        if let channel {
-          await supabase.removeChannel(channel)
-        }
+  }
+
+  func observePresence(of userID: UUID) async {
+    let user = PresenceUser(id: userID.uuidString, username: "User \(userID.uuidString.prefix(8))")
+
+    // One key per user, so a user signed in on two devices counts once.
+    let channel = await supabaseClient.channel("presence-example") {
+      $0.presence.key = user.id
+    }
+
+    // Presence streams shape the join request, so open them before `subscribe()`.
+    let states = await channel.presenceStates()
+    let events = await channel.events()
+
+    do {
+      error = nil
+      try await channel.subscribe()
+      try await channel.track(user)
+
+      await withTaskGroup(of: Void.self) { group in
+        group.addTask { await trackAgain(user, on: channel, after: events) }
+        group.addTask { await showOnlineUsers(in: states) }
+      }
+    } catch {
+      if !Task.isCancelled {
+        self.error = error
+      }
+    }
+
+    await supabaseClient.removeChannel(channel)
+  }
+
+  /// The server forgets the tracked payload when the channel joins again.
+  func trackAgain(
+    _ user: PresenceUser, on channel: RealtimeChannel,
+    after events: AsyncStream<RealtimeChannelEvent>
+  ) async {
+    for await event in events where event == .resubscribed {
+      do {
+        try await channel.track(user)
+      } catch {
+        self.error = error
       }
     }
   }
 
-  func subscribe() async {
-    do {
-      let channel = await supabase.channel("presence-example")
-
-      let presence = await channel.presenceChanges()
-
-      try await channel.subscribe()
-      self.channel = channel
-
-      let userId = auth.currentUserID
-      try await channel.track(
-        PresenceUser(
-          id: userId.uuidString,
-          username: "User \(userId.uuidString.prefix(8))"
-        )
-      )
-
-      for await state in presence {
-        var users: [PresenceUser] = []
-        for (_, presence) in state.joins {
-          let decoded = try presence.decodeState(as: PresenceUser.self)
-          users.append(decoded)
-        }
-        onlineUsers = users
+  /// Each state holds everyone who is present, so joins and leaves both show up.
+  func showOnlineUsers(in states: AsyncStream<PresenceState>) async {
+    for await state in states {
+      do {
+        onlineUsers = try state.decode(as: PresenceUser.self).values
+          .compactMap(\.first)
+          .sorted { $0.username < $1.username }
+      } catch {
+        self.error = error
       }
-    } catch {
-      print("Error: \(error)")
     }
   }
 }

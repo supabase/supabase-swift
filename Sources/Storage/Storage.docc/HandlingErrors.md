@@ -17,29 +17,30 @@ passes its cap.
 | ``StorageError/Kind-swift.struct/transport`` | No response arrived, or the connection dropped while a body streamed. | ``StorageError/underlyingError``, usually a `URLError` |
 | ``StorageError/Kind-swift.struct/decoding`` | A 2xx body could not be used. | ``StorageError/underlyingError``, the `DecodingError` |
 | ``StorageError/Kind-swift.struct/invalidRequest`` | The SDK refused to send, for example an empty path or a `..` segment. | ``StorageError/message`` |
+| ``StorageError/Kind-swift.struct/accessToken`` | The access token provider threw. Nothing was sent. | ``StorageError/underlyingError``, the provider's error |
 
 ``StorageError/Kind-swift.struct`` is an open set. Keep a fallback branch.
 
 ### Body status and HTTP status
 
 On the object, bucket and render routes, Storage answers nearly every failure with HTTP 400. The
-real outcome is in the body. So branch on ``StorageError/code`` or
-``StorageError/serverStatusCode``, not on `response?.statusCode`.
+real outcome is in the body. So branch on ``StorageError/code`` or the status in
+``StorageError/serverError``, not on `response?.status`.
 
 ```swift
 do {
   try await supabase.storage.from("avatars").upload(path: "user123.png", data: imageData)
-} catch let error as StorageError where error.code == .keyAlreadyExists {
+} catch StorageError.Code.keyAlreadyExists {
   askToReplace()
-} catch let error as StorageError where error.serverStatusCode == 413 {
+} catch let error as StorageError where error.serverError?.statusCode == 413 {
   showTooLarge()
 }
 ```
 
 - ``StorageError/code`` is the machine-readable code, such as ``StorageError/Code/noSuchKey``.
-- ``StorageError/serverStatusCode`` is the status Storage put in the body, such as `404`.
-- ``StorageError/serverError`` is the whole decoded body. It is `nil` when the body was not a
-  Storage error payload, for example a page from a proxy.
+- ``StorageError/serverError`` is the rest of the decoded body. Its `statusCode` is the status
+  Storage put in the body, such as `404`. It is `nil` when the body was not a Storage error
+  payload, for example a page from a proxy.
 - ``StorageError/response`` holds the HTTP status, the headers and the body, capped at 1 MiB. Its
   `requestID` is the value to quote to Supabase support.
 
@@ -71,7 +72,7 @@ already happen.
 The SDK retries reads for you: `GET` and `HEAD` requests, ``StorageBucket/list(path:options:)``
 and each page of ``StorageBucket/objects(prefix:options:)``, up to three attempts with jittered
 backoff. It never replays an upload, a move, a copy, a
-removal or a bucket change. Turn retries off with ``StorageClientConfiguration/retryEnabled``.
+removal or a bucket change. Turn retries off with ``StorageClient/Configuration/retryEnabled``.
 
 A transport failure can also arrive after a download returned, while you read
 ``DownloadResponse/body``. Handle errors around the read, not only around the call.
@@ -92,5 +93,6 @@ do {
 }
 ```
 
-Errors from your own code inside the exchange, such as a custom transport, a middleware or the
-access token provider, reach you as themselves.
+Errors from your own code inside the exchange, such as a custom transport or a middleware, reach
+you as themselves. An error from the access token provider is a ``StorageError`` with kind
+``StorageError/Kind-swift.struct/accessToken``.

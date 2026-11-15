@@ -52,11 +52,27 @@ struct RetryRequestInterceptorTests {
       let callCount = LockIsolated(0)
       let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
         callCount.withValue { $0 += 1 }
-        return self.makeResponse(statusCode: callCount.value < 2 ? code : 200)
+        guard callCount.value < 2 else { return self.makeResponse(statusCode: 200) }
+        return self.makeResponse(
+          statusCode: code, headers: code == 429 ? [.retryAfter: "0"] : [:])
       }
       #expect(head.status.code == 200, "Should retry on \(code) and succeed")
       #expect(callCount.value == 2, "Should have called next twice for \(code)")
     }
+  }
+
+  @Test
+  func rateLimitIsRetriedOnlyWithRetryAfter() async throws {
+    let interceptor = makeInterceptor()
+    let callCount = LockIsolated(0)
+
+    let (head, _) = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
+      callCount.withValue { $0 += 1 }
+      return self.makeResponse(statusCode: 429)
+    }
+
+    #expect(head.status.code == 429)
+    #expect(callCount.value == 1)
   }
 
   @Test

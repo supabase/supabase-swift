@@ -1,5 +1,6 @@
 import ConcurrencyExtras
 import Foundation
+import Helpers
 import TestHelpers
 import Testing
 
@@ -10,14 +11,35 @@ struct RealtimeReconnectRecoveryTests {
   let url = URL(string: "http://localhost:54321/realtime/v1")!
   let apiKey = "anon.api.key"
 
-  private func makeOptions(timeout: Duration = .seconds(3)) -> RealtimeClientOptions {
-    RealtimeClientOptions(
-      headers: ["apikey": apiKey],
+  private func makeConfiguration(timeout: Duration = .seconds(3)) -> RealtimeClient.Configuration {
+    RealtimeClient.Configuration(
+      url: url,
+      headers: [.apikey: apiKey],
       heartbeatInterval: .seconds(10),
-      reconnectDelay: .milliseconds(50),
-      timeout: timeout,
+      requestTimeout: timeout,
       accessToken: { "token" }
     )
+  }
+
+  /// Returns once the client has handled every frame `socket` delivered before this call.
+  ///
+  /// The client reads a socket's frames in order, so a broadcast that reaches `barrier` shows
+  /// that a stale frame sent before it has already been handled, and a test can check that the
+  /// frame had no effect without waiting a fixed time. `barrier` is the stream of
+  /// `broadcasts(event: "barrier")` on `channel`, opened before the stale frame.
+  private func settled(
+    _ barrier: AsyncStream<BroadcastMessage>, after socket: AsyncFakeWebSocket,
+    on channel: RealtimeChannel
+  ) async throws {
+    socket.reply(
+      RealtimeMessage(
+        joinRef: nil, ref: nil, topic: channel.wireTopic, event: "broadcast",
+        payload: ["type": "broadcast", "event": "barrier", "payload": [:]]
+      )
+    )
+    _ = try await withTimeout(.seconds(5)) {
+      await barrier.first(where: { _ in true })
+    }
   }
 
   /// stale latch could bite. Now `RealtimeClient` keeps retrying with
@@ -27,8 +49,7 @@ struct RealtimeReconnectRecoveryTests {
     let connectAttempts = LockIsolated(0)
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let attempt = connectAttempts.withValue { count -> Int in
           count += 1
@@ -43,7 +64,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-1")
@@ -71,8 +93,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -80,7 +101,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-close")
@@ -91,25 +113,27 @@ struct RealtimeReconnectRecoveryTests {
     let joinRef = socket.sentMessages.first { $0.event == "phx_join" }?.ref
     #expect(joinRef != nil)
 
+    let barrier = await channel.broadcasts(event: "barrier")
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
     )
 
-    try? await Task.sleep(nanoseconds: 300_000_000)
+    try await settled(barrier, after: socket, on: channel)
     #expect(await channel.status == .subscribed, "Stale phx_close killed the current subscription")
-    #expect(await sut.channels[channel.topic] != nil, "Stale phx_close removed the channel")
+    #expect(
+      await sut.liveChannel(for: channel.topic) != nil, "Stale phx_close removed the channel")
 
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: joinRef,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_close",
         payload: [:]
       )
@@ -125,8 +149,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(),
+      configuration: makeConfiguration(),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -134,7 +157,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-error")
@@ -142,30 +166,41 @@ struct RealtimeReconnectRecoveryTests {
     #expect(await channel.status == .subscribed)
 
     let socket = sockets.value[0]
+    let barrier = await channel.broadcasts(event: "barrier")
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: "stale-join-ref",
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )
     )
 
-    try? await Task.sleep(nanoseconds: 300_000_000)
+    try await settled(barrier, after: socket, on: channel)
     #expect(await channel.status == .subscribed, "Stale phx_error killed the current subscription")
+    // The rejoin runs on the real clock, so read the status stream: it keeps every change.
+    let sawRejoinWait = LockIsolated(false)
+    let statuses = await channel.statusChanges()
+    let watcher = Task {
+      for await status in statuses where status == .resubscribing {
+        sawRejoinWait.setValue(true)
+        return
+      }
+    }
+    defer { watcher.cancel() }
 
     socket.reply(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: nil,
         ref: nil,
-        topic: channel.topic,
+        topic: channel.wireTopic,
         event: "phx_error",
         payload: [:]
       )
     )
-    await waitUntil(timeout: 2) { await channel.status == .unsubscribed }
-    #expect(await channel.status == .unsubscribed)
+    await waitUntil(timeout: 2) { sawRejoinWait.value }
+    #expect(sawRejoinWait.value)
 
     await sut.disconnect()
   }
@@ -175,8 +210,7 @@ struct RealtimeReconnectRecoveryTests {
     let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
 
     let sut = RealtimeClient(
-      url: url,
-      options: makeOptions(timeout: .seconds(3)),
+      configuration: makeConfiguration(timeout: .seconds(3)),
       wsTransport: { _, _ in
         let socket = AsyncFakeWebSocket()
         socket.serverResponder = AsyncFakeWebSocket.realtimeServerResponder()
@@ -184,7 +218,8 @@ struct RealtimeReconnectRecoveryTests {
         return socket
       },
       http: HTTPClient(transport: RecordingTransport()),
-      clock: ContinuousClock()
+      clock: ContinuousClock(),
+      reconnectBackoff: .fullJitter(base: .milliseconds(50), cap: .seconds(30))
     )
 
     let channel = await sut.channel("room-leave")
@@ -194,7 +229,8 @@ struct RealtimeReconnectRecoveryTests {
     sockets.value[0].receiveFromServer(.close(code: 4001, reason: "auth"))
     await waitUntil(timeout: 2) { await sut.status == .disconnected }
     #expect(await sut.status == .disconnected)
-    #expect(await channel.status == .subscribed)
+    // The channel waits for the next socket to rejoin.
+    #expect(await channel.status == .subscribing)
 
     let start = ContinuousClock.now
     await sut.removeChannel(channel)
@@ -203,15 +239,164 @@ struct RealtimeReconnectRecoveryTests {
       elapsed < .seconds(1.5),
       "removeChannel on a dead socket stalled waiting for phx_close (\(elapsed))"
     )
+    // A removed channel reads `.unsubscribed`.
     #expect(await channel.status == .unsubscribed)
 
     try await sut.connect()
     #expect(await sut.status == .connected)
-    try? await Task.sleep(nanoseconds: 200_000_000)
+    // The client writes frames in order, so a join queued now follows a stale leave, if any.
+    let probe = await sut.channel("room-probe")
+    try await probe.subscribe()
 
     let leaves = sockets.value[1].sentMessages.filter { $0.event == "phx_leave" }
     #expect(leaves.isEmpty, "Stale phx_leave was flushed into the new connection")
 
     await sut.disconnect()
+  }
+
+  /// A removal whose `phx_leave` is in flight when the socket drops ends with the removal. The
+  /// reconnect's rejoin used to reset the channel being removed and subscribe it again: its
+  /// `phx_join` reached the new socket after the client had forgotten the channel, so the server
+  /// closed the topic's next channel when the stray join was retried.
+  @Test
+  func removalSpanningReconnectDoesNotRejoinTheRemovedChannel() async throws {
+    let sockets = LockIsolated<[AsyncFakeWebSocket]>([])
+
+    let sut = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: url,
+        headers: [.apikey: apiKey],
+        heartbeatInterval: .seconds(10),
+        requestTimeout: .seconds(1),
+        observesAppLifecycle: false,
+        accessToken: { "token" }
+      ),
+      wsTransport: { _, _ in
+        let socket = AsyncFakeWebSocket()
+        // The first socket dies before it answers the removal's `phx_leave`.
+        socket.serverResponder = AsyncFakeWebSocket.phoenixResponder(
+          answersLeave: !sockets.value.isEmpty
+        )
+        sockets.withValue { $0.append(socket) }
+        return socket
+      },
+      http: HTTPClient(transport: RecordingTransport()),
+      clock: ContinuousClock(),
+      reconnectBackoff: .steps([.milliseconds(50)])
+    )
+
+    // Another channel keeps the client connected once the topic's channel is removed.
+    let other = await sut.channel("other")
+    try await other.subscribe()
+    let removed = await sut.channel("room")
+    try await removed.subscribe()
+
+    let removal = Task { await sut.removeChannel(removed) }
+    await waitUntil(timeout: 2) {
+      sockets.value[0].sentMessages.contains {
+        $0.event == "phx_leave" && $0.topic == removed.wireTopic
+      }
+    }
+    sockets.value[0].receiveFromServer(.close(code: 1006, reason: "network lost"))
+    await removal.value
+
+    // The reconnect rejoins the other channel on the new socket.
+    let rejoined = await waitUntil(timeout: 5) {
+      // Join first, then status: a status read before the rejoin's reset is still the old one.
+      guard sockets.value.count == 2,
+        sockets.value[1].sentMessages.contains(where: {
+          $0.event == "phx_join" && $0.topic == other.wireTopic
+        })
+      else { return false }
+      return await other.status == .subscribed
+    }
+    try #require(rejoined, "The other channel did not rejoin after the reconnect")
+    // The client writes frames in order, so a join queued now follows a stray one, if any.
+    let probe = await sut.channel("probe")
+    try await probe.subscribe()
+
+    let newSocket = sockets.value[1]
+    let strayJoins = newSocket.sentMessages.filter {
+      $0.event == "phx_join" && $0.topic == removed.wireTopic
+    }
+    #expect(strayJoins.isEmpty, "The reconnect rejoined the channel being removed: \(strayJoins)")
+    #expect(await removed.status == .unsubscribed)
+    #expect(await !sut.channels.contains { $0 === removed })
+
+    // The app joins the topic again; the channel must survive the server's handling of any
+    // earlier join of the topic on this socket. No stray join went out, so none is retried.
+    let next = await sut.channel("room")
+    #expect(next !== removed)
+    do {
+      try await next.subscribe()
+    } catch {
+      Issue.record("The topic's next channel failed to subscribe: \(error)")
+    }
+
+    #expect(await next.status == .subscribed)
+    #expect(await sut.channels.contains { $0 === next }, "The topic's next channel was removed")
+    let joins = newSocket.sentMessages.filter { $0.event == "phx_join" }
+    #expect(joins.allSatisfy { $0.joinRef != nil }, "A phx_join went out without a join_ref")
+
+    await sut.disconnect()
+  }
+}
+
+extension AsyncFakeWebSocket {
+  /// A Phoenix-like server for one socket: it acks heartbeats and confirms joins, answers
+  /// `phx_leave` (when `answersLeave`) with a reply and the channel's `phx_close`, and closes the
+  /// earlier join of a topic when a second join of that topic arrives on the same socket, with a
+  /// `phx_close` carrying the earlier join's `join_ref` (Phoenix's duplicate-join rule).
+  static func phoenixResponder(answersLeave: Bool)
+    -> @Sendable (RealtimeMessage, AsyncFakeWebSocket) -> Void
+  {
+    let joins = LockIsolated<[String: String?]>([:])
+    return { message, socket in
+      switch message.event {
+      case "heartbeat":
+        socket.reply(
+          RealtimeMessage(
+            joinRef: nil, ref: message.ref, topic: "phoenix", event: "phx_reply",
+            payload: ["response": [:], "status": "ok"]
+          )
+        )
+      case "phx_join":
+        let previous = joins.withValue { joins -> String?? in
+          defer { joins[message.topic] = .some(message.joinRef) }
+          return joins[message.topic]
+        }
+        if let previous {
+          socket.reply(
+            RealtimeMessage(
+              joinRef: previous, ref: previous, topic: message.topic, event: "phx_close",
+              payload: [:]
+            )
+          )
+        }
+        socket.reply(
+          RealtimeMessage(
+            joinRef: message.joinRef, ref: message.ref, topic: message.topic, event: "phx_reply",
+            payload: ["response": ["postgres_changes": []], "status": "ok"]
+          )
+        )
+      case "phx_leave":
+        guard answersLeave else { return }
+        joins.withValue { _ = $0.removeValue(forKey: message.topic) }
+        socket.reply(
+          RealtimeMessage(
+            joinRef: message.joinRef, ref: message.ref, topic: message.topic, event: "phx_reply",
+            payload: ["response": [:], "status": "ok"]
+          )
+        )
+        socket.reply(
+          RealtimeMessage(
+            joinRef: message.joinRef, ref: message.joinRef, topic: message.topic,
+            event: "phx_close", payload: [:]
+          )
+        )
+      default:
+        break
+      }
+    }
   }
 }

@@ -14,13 +14,13 @@ extension StorageClient {
     supabaseURL: String,
     apiKey: String,
     http: HTTPClientConfiguration = .init()
-  ) -> StorageClient {
-    StorageClient(
-      configuration: StorageClientConfiguration(
+  ) throws -> StorageClient {
+    try StorageClient(
+      configuration: StorageClient.Configuration(
         url: URL(string: supabaseURL)!,
         headers: [
           .authorization: "Bearer \(apiKey)",
-          .init("Apikey")!: apiKey,
+          .apikey: apiKey,
           .xClientInfo: "storage-swift/x.y.z",
         ],
         http: http)

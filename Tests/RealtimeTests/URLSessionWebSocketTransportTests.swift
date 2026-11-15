@@ -8,10 +8,15 @@
 import ConcurrencyExtras
 import Foundation
 import HTTPTypes
+import Helpers
 import TestHelpers
 import Testing
 
 @testable import Realtime
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 #if canImport(Network)
   import Network
@@ -22,12 +27,37 @@ struct URLSessionWebSocketTransportTests {
   let transport = URLSessionWebSocketTransport()
 
   @Test
-  func rejectsANonWebSocketSchemeWithANonRetryableTransportError() async {
+  func laterChangesToTheConfigurationDoNotReachTheTransport() {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 5
+    let transport = URLSessionWebSocketTransport(configuration: configuration)
+
+    configuration.timeoutIntervalForRequest = 99
+
+    #expect(transport.configuration.timeoutIntervalForRequest == 5)
+    #expect(transport.configuration !== configuration)
+  }
+
+  @Test
+  func rejectsANonWebSocketSchemeAsANonRetryableInvalidRequest() async {
     let error = await #expect(throws: RealtimeError.self) {
       _ = try await transport.connect(to: URL(string: "https://example.com")!, headerFields: [:])
     }
-    #expect(error?.kind == .transport)
+    #expect(error?.kind == .invalidRequest)
     #expect(error?.isRetryable == false)
+  }
+
+  @Test
+  func watchOSWithoutOptInFailsFastWithANonRetryableErrorCitingTN3135() async {
+    let transport = URLSessionWebSocketTransport(isWatchOS: true)
+
+    let error = await #expect(throws: RealtimeError.self) {
+      _ = try await transport.connect(to: URL(string: "ws://127.0.0.1:1")!, headerFields: [:])
+    }
+    #expect(error?.kind == .invalidRequest)
+    #expect(error?.isRetryable == false)
+    #expect(error?.message.contains("TN3135") == true)
+    #expect(error?.message.contains("allowsWatchOSConnections") == true)
   }
 
   #if canImport(Network)
@@ -129,7 +159,24 @@ struct URLSessionWebSocketTransportTests {
     }
 
     @Test
-    func refusedUpgradeThrowsANonRetryableTransportErrorWithTheStatus() async throws {
+    func refusedUpgradeKeepsTheResponseHeaders() async throws {
+      let (server, _) = try LoopbackTCPServer.refusing(
+        status: 429, reason: "Too Many Requests",
+        headers: ["Retry-After": "30", "sb-request-id": "req-1"])
+      let port = try server.start()
+      defer { server.stop() }
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await connect(port: port)
+      }
+      #expect(error?.kind == .rateLimited)
+      #expect(error?.response?.headers[HTTPField.Name("Retry-After")!] == "30")
+      #expect(error?.response?.requestID == "req-1")
+      #expect(error?.isRetryable == true)
+    }
+
+    @Test
+    func refusedUpgradeThrowsANonRetryableUnauthorizedErrorWithTheStatus() async throws {
       let (server, _) = try LoopbackTCPServer.refusing(status: 401, reason: "Unauthorized")
       let port = try server.start()
       defer { server.stop() }
@@ -137,7 +184,8 @@ struct URLSessionWebSocketTransportTests {
       let error = await #expect(throws: RealtimeError.self) {
         _ = try await connect(port: port)
       }
-      #expect(error?.kind == .transport)
+      #expect(error?.kind == .unauthorized)
+      #expect(error?.response?.status.code == 401)
       #expect(error?.isRetryable == false)
       #expect(error?.message.contains("401") == true)
     }
@@ -169,13 +217,72 @@ struct URLSessionWebSocketTransportTests {
     }
 
     @Test
-    func cancellingConnectRethrowsCancellationError() async throws {
+    func watchOSHandshakeThatNeverCompletesTimesOutCitingTN3135() async throws {
       let server = try LoopbackTCPServer.stalling()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(
+        allowsWatchOSConnections: true, isWatchOS: true, handshakeTimeout: 0.2)
+
+      let error = await #expect(throws: RealtimeError.self) {
+        _ = try await transport.connect(
+          to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+      }
+      #expect(error?.kind == .transport)
+      #expect(error?.isRetryable == true)
+      #expect(error?.message.contains("TN3135") == true)
+      #expect((error?.underlyingError as? URLError)?.code == .timedOut)
+    }
+
+    @Test(arguments: [0, -1, TimeInterval.infinity])
+    func watchOSHandshakeDeadlineIsSkippedWhenTheTimeoutIsNotAPositiveFiniteNumber(
+      timeout: TimeInterval
+    ) async throws {
+      let server = try LoopbackWebSocketServer()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(
+        allowsWatchOSConnections: true, isWatchOS: true, handshakeTimeout: timeout)
+
+      let connection = try await transport.connect(
+        to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+
+      connection.close(code: .normalClosure, reason: nil)
+    }
+
+    @Test
+    func handshakeTimeoutDoesNotApplyOutsideWatchOS() async throws {
+      let server = try LoopbackTCPServer.stalling()
+      let port = try server.start()
+      defer { server.stop() }
+      let transport = URLSessionWebSocketTransport(isWatchOS: false, handshakeTimeout: 0.2)
+
+      let (finished, didFinish) = AsyncStream<Void>.makeStream()
+      let task = Task {
+        defer { didFinish.yield() }
+        return try await transport.connect(
+          to: URL(string: "ws://127.0.0.1:\(port)")!, headerFields: [:])
+      }
+      // The 0.2 s watchOS handshake deadline would have ended the connect within this wait.
+      await #expect(throws: TimeoutError.self) {
+        try await withTimeout(.milliseconds(600)) { await finished.first(where: { _ in true }) }
+      }
+      task.cancel()
+
+      await #expect(throws: CancellationError.self) {
+        _ = try await task.value
+      }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func cancellingConnectRethrowsCancellationError() async throws {
+      let (accepted, didAccept) = AsyncStream<Void>.makeStream()
+      let server = try LoopbackTCPServer { _ in didAccept.yield() }
       let port = try server.start()
       defer { server.stop() }
 
       let task = Task { try await connect(port: port) }
-      try await Task.sleep(for: .milliseconds(100))
+      for await _ in accepted { break }
       task.cancel()
 
       await #expect(throws: CancellationError.self) {

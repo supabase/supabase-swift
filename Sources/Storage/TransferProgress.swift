@@ -20,9 +20,9 @@ import Foundation
 /// ```
 public struct TransferProgress: Hashable, Sendable {
   /// The bytes moved so far.
-  public let completedBytes: Int64
+  public var completedBytes: Int64
   /// The bytes the transfer will move in total, or `nil` when the size is not known up front.
-  public let totalBytes: Int64?
+  public var totalBytes: Int64?
 
   /// Creates a progress value.
   public init(completedBytes: Int64, totalBytes: Int64?) {

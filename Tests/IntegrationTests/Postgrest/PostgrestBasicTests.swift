@@ -12,11 +12,11 @@ import Testing
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 struct PostgrestBasicTests {
-  let client = PostgrestClient(
+  let client = try! PostgrestClient(
     configuration: PostgrestClient.Configuration(
       url: URL(string: "\(DotEnv.supabaseURL)/rest/v1")!,
       headers: [
-        "apikey": DotEnv.supabasePublishableKey
+        .apikey: DotEnv.supabasePublishableKey
       ]
     )
   )
@@ -109,7 +109,7 @@ struct PostgrestBasicTests {
 
   @Test
   func rPCReturnsVoid() async throws {
-    let response = try await client.rpc("void_func").execute().data
+    let response = try await client.rpc("void_func").execute().body
     #expect(response == Data())
   }
 

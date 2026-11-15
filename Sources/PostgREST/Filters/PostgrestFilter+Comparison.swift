@@ -64,6 +64,7 @@ extension _PostgrestFilterableExpression {
   /// > ``_PostgrestFilter/raw(_:_:)``.
   ///
   /// - Parameter operand: Everything after the `=`, for example `"eq.10"`.
+  /// - Returns: A filter to return from a `where` closure.
   public func raw(_ operand: String) -> _PostgrestFilter<Root> {
     _PostgrestFilter(rawColumn: postgrestExpression, operand: operand)
   }

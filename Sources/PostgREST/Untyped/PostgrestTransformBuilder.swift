@@ -193,7 +193,7 @@ extension PostgrestRequestBuilder where Phase: PostgrestTransformablePhase {
 
   /// Sets the response format to CSV.
   ///
-  /// The raw CSV text is available in ``PostgrestResponse/data``. Convert it to a `String`
+  /// The raw CSV text is available in ``PostgrestResponse/body``. Convert it to a `String`
   /// using ``PostgrestResponse/string(encoding:)``.
   ///
   /// > Note: ``csv()`` cannot be combined with ``stripNulls()``.

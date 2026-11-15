@@ -6,51 +6,32 @@
 //
 
 import Foundation
-import Mocker
 import PostgREST
 import TestHelpers
-import Testing
-
-#if canImport(FoundationNetworking)
-  import FoundationNetworking
-#endif
-
-/// Shared serialization boundary for the Mocker-backed PostgREST test suites: Mocker's mock
-/// registry is process-global, and these suites stub overlapping URLs (e.g. `users`, `rpc/*`), so
-/// running them concurrently would let one suite's stub satisfy another's request. `.serialized`
-/// on a suite applies recursively to its nested suites, so nesting all of them under this empty
-/// namespace serializes them against each other within this target. Each nested suite also carries
-/// `.mockerSerialized` (see `TestHelpers/MockerSerialization.swift`) to extend that guarantee
-/// across test *targets* too -- StorageTests has its own Mocker-backed suites, and without it the
-/// two targets' suites can still run concurrently with each other and race on Mocker's shared
-/// registry.
-@Suite(.serialized)
-enum PostgrestMockerTests {}
 
 struct PostgrestQueryFixture {
   static let url = URL(string: "http://localhost:54321/rest/v1")!
 
   var url: URL { Self.url }
 
+  let transport = RecordingTransport()
   let sut: PostgrestClient
 
-  init() {
-    let configuration = URLSessionConfiguration.default
-    configuration.protocolClasses = [MockingURLProtocol.self]
-    let session = URLSession(configuration: configuration)
-
-    sut = PostgrestClient(
-      url: Self.url,
-      headers: [
-        "apikey":
-          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
-      ],
-      http: .init(transport: URLSessionTransport(session: session)),
-      encoder: {
-        let encoder = PostgrestClient.Configuration.jsonEncoder
-        encoder.outputFormatting = [.sortedKeys]
-        return encoder
-      }()
+  init() throws {
+    sut = try PostgrestClient(
+      configuration: .init(
+        url: Self.url,
+        headers: [
+          .apikey:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+        ],
+        http: .init(transport: transport),
+        encoder: {
+          let encoder = JSONEncoder.supabase()
+          encoder.outputFormatting = [.sortedKeys]
+          return encoder
+        }()
+      )
     )
   }
 }

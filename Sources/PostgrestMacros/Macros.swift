@@ -60,6 +60,44 @@ public macro Table(
   readOnly: Bool = false
 ) = #externalMacro(module: "PostgrestMacrosPlugin", type: "TableMacro")
 
+/// Declares a struct as a database function and its arguments, called through `rpc/<name>`.
+///
+/// Each stored property is one argument, encoded under its database name — `@Column` first,
+/// camelCase-to-snake_case otherwise. Declare `typealias Result` for what the function returns;
+/// leave it out for a function that returns nothing. An array of a `@Table` type makes the rows
+/// filterable and orderable:
+///
+/// ```swift
+/// @Function("search_todos")
+/// struct SearchTodos {
+///   typealias Result = [Todo]
+///   var keyword: String
+/// }
+///
+/// let hits = try await client.rpc(SearchTodos(keyword: "groceries"))
+///   .where { $0.isDone.eq(false) }
+///   .execute().value
+/// ```
+///
+/// A function is not a relation. `from(SearchTodos.self)` does not compile; only
+/// ``PostgREST/PostgrestClient/rpc(_:)`` takes one, and only with its arguments supplied.
+///
+/// The annotated type must be declared at file scope, for the same reason as ``Table(_:schema:readOnly:)``.
+///
+/// - Parameters:
+///   - name: The function's name as PostgREST addresses it.
+///   - schema: The type naming the Postgres schema, written as `PrivateSchema.self`. Defaults to
+///     ``PostgREST/_PublicSchema``.
+@attached(
+  extension,
+  conformances: Encodable, Sendable, _PostgrestFunction,
+  names: named(functionName), named(Schema), named(CodingKeys)
+)
+public macro Function(
+  _ name: String,
+  schema: any _PostgrestSchema.Type = _PublicSchema.self
+) = #externalMacro(module: "PostgrestMacrosPlugin", type: "FunctionMacro")
+
 /// Overrides the database column name for a property.
 ///
 /// Use it for any name the camelCase-to-snake_case convention cannot produce.
@@ -201,6 +239,10 @@ public macro Relationship(_ foreignKey: AnyKeyPath) =
 ///
 /// Scopes work as for a foreign-key embed: ``PostgREST/_PostgrestQuery/embedded(_:_:)`` and
 /// ``PostgREST/_PostgrestQuery/requiring(_:_:)``.
+///
+/// In a module built with `.defaultIsolation(MainActor.self)`, declare the relationship in a
+/// `nonisolated extension Channel.Columns`. The generated code reads it from a nonisolated
+/// context, so a main-actor-isolated property does not compile.
 ///
 /// - Parameter computed: A key path to the relationship on the relation's `Columns`, for example
 ///   `\Channel.Columns.getMessages`.

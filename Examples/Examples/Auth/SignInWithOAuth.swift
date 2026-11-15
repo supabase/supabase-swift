@@ -5,15 +5,14 @@
 //  Created by Guilherme Souza on 10/04/24.
 //
 
-import AuthenticationServices
 import Supabase
 import SwiftUI
 
 struct SignInWithOAuth: View {
+  @Environment(\.supabase) private var supabase
   let providers = knownProviders
 
   @State var provider = knownProviders[0]
-  @Environment(\.webAuthenticationSession) var webAuthenticationSession
 
   var body: some View {
     VStack {
@@ -27,14 +26,8 @@ struct SignInWithOAuth: View {
         Task {
           do {
             try await supabase.auth.signInWithOAuth(
-              provider: provider,
-              redirectTo: Constants.redirectToURL,
-              launchFlow: { @MainActor url in
-                try await webAuthenticationSession.authenticate(
-                  using: url,
-                  callbackURLScheme: Constants.redirectToURL.scheme!
-                )
-              }
+              provider,
+              options: OAuthOptions(redirectTo: Constants.redirectToURL)
             )
           } catch {
             debug("Failed to sign-in with OAuth flow: \(error)")
@@ -88,9 +81,9 @@ struct SignInWithOAuth: View {
     @objc func signInButtonTapped() {
       Task {
         do {
-          try await supabase.auth.signInWithOAuth(
-            provider: provider,
-            redirectTo: Constants.redirectToURL
+          try await supabaseClient.auth.signInWithOAuth(
+            provider,
+            options: OAuthOptions(redirectTo: Constants.redirectToURL)
           )
         } catch {
           debug("Failed to sign-in with OAuth flow: \(error)")
@@ -123,4 +116,5 @@ struct SignInWithOAuth: View {
 
 #Preview("SwiftUI") {
   SignInWithOAuth()
+    .environment(\.supabase, supabaseClient)
 }

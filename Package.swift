@@ -27,7 +27,7 @@ let package = Package(
     "OpenTelemetry"
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0"..<"6.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", "4.0.0"..<"6.0.0"),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.3.0"),
     .package(url: "https://github.com/swiftlang/swift-syntax", "601.0.0"..<"605.0.0"),
     .package(url: "https://github.com/apple/swift-log.git", "1.5.0"..<"2.0.0"),
@@ -38,7 +38,6 @@ let package = Package(
     .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.6.0"),
     .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", from: "1.17.0"),
     .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.0"),
-    .package(url: "https://github.com/WeTransfer/Mocker", from: "3.0.0"),
     .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1.git", from: "0.23.2"),
   ],
   targets: [
@@ -60,7 +59,6 @@ let package = Package(
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         "Helpers",
-        "Mocker",
         "TestHelpers",
       ]
     ),
@@ -69,6 +67,7 @@ let package = Package(
       dependencies: [
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "CryptoExtras", package: "swift-crypto"),
         .product(name: "HTTPTypes", package: "swift-http-types"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "Logging", package: "swift-log"),
@@ -81,15 +80,10 @@ let package = Package(
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "CustomDump", package: "swift-custom-dump"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Auth",
         "Helpers",
-        "Mocker",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ],
       resources: [.process("Resources")]
     ),
@@ -97,7 +91,6 @@ let package = Package(
       name: "Functions",
       dependencies: [
         .product(name: "HTTPTypes", package: "swift-http-types"),
-        .product(name: "IssueReporting", package: "swift-issue-reporting"),
         .product(name: "Logging", package: "swift-log"),
         "Helpers",
       ]
@@ -110,7 +103,6 @@ let package = Package(
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
         "Functions",
-        "Mocker",
         "TestHelpers",
       ]
     ),
@@ -150,14 +142,10 @@ let package = Package(
     .testTarget(
       name: "PostgRESTTests",
       dependencies: [
-        .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+        .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         "Helpers",
-        "Mocker",
         "PostgREST",
         "TestHelpers",
-      ],
-      exclude: [
-        "__Snapshots__"
       ]
     ),
     .macro(
@@ -182,6 +170,7 @@ let package = Package(
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         "PostgrestMacros",
         "PostgrestMacrosPlugin",
+        "TestHelpers",
       ]
     ),
     .testTarget(
@@ -243,7 +232,6 @@ let package = Package(
         .product(name: "Clocks", package: "swift-clocks"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
-        "Mocker",
         "TestHelpers",
         "Storage",
       ],
@@ -292,6 +280,11 @@ let package = Package(
     ),
     .testTarget(
       name: "DefaultIsolationTests",
+      dependencies: ["PostgrestMacros", "Supabase"]
+    ),
+    // Compiles the Swift snippets of README.md; see scripts/check-doc-snippets.sh.
+    .testTarget(
+      name: "DocSnippetsTests",
       dependencies: ["Supabase"]
     ),
     .target(
@@ -301,9 +294,9 @@ let package = Package(
         .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
         .product(name: "InlineSnapshotTesting", package: "swift-snapshot-testing"),
         .product(name: "IssueReporting", package: "swift-issue-reporting"),
+        .product(name: "Logging", package: "swift-log"),
         "Auth",
         "Helpers",
-        "Mocker",
         "Realtime",
       ]
     ),
@@ -323,8 +316,18 @@ for target in package.targets {
     swiftSettings.append(.enableUpcomingFeature("MemberImportVisibility"))
   }
 
-  if target.name == "DefaultIsolationTests" {
+  // The typegen output targets compile generated code the way an app with default MainActor
+  // isolation does; SupabaseTypegenOutputTests keeps the default, nonisolated mode.
+  if [
+    "DefaultIsolationTests",
+    "SupabaseTypegenPostgrestTypegenOutputTests",
+    "SupabaseTypegenHostileOutputTests",
+  ].contains(target.name) {
     swiftSettings.append(.defaultIsolation(MainActor.self))
+    if target.name != "DefaultIsolationTests" {
+      // Xcode 26 "Approachable Concurrency" turns this on with default MainActor isolation.
+      swiftSettings.append(.enableUpcomingFeature("InferIsolatedConformances"))
+    }
   }
 
   // Apple platforms only: on Linux, Foundation is not built with library evolution, so the

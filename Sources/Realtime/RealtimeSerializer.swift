@@ -23,7 +23,7 @@ package struct DecodedBroadcast: Sendable {
   }
 }
 
-/// Handles encoding/decoding between ``RealtimeMessageV2`` and the Realtime protocol 2.0.0 wire format.
+/// Handles encoding/decoding between ``RealtimeMessage`` and the Realtime protocol 2.0.0 wire format.
 ///
 /// Protocol 2.0.0 uses:
 /// - JSON array text frames for non-broadcast messages: `[joinRef, ref, topic, event, payload]`
@@ -32,6 +32,9 @@ package struct DecodedBroadcast: Sendable {
 ///   broadcasts on either transport, so the client must be able to handle both.
 package struct RealtimeSerializer: Sendable {
   package init() {}
+
+  /// The most UTF-8 bytes a binary frame header field holds: its length prefix is one byte.
+  package static let maxHeaderFieldBytes = 255
 
   package enum BinaryKind: UInt8 {
     /// Client -> server broadcast push.
@@ -45,8 +48,8 @@ package struct RealtimeSerializer: Sendable {
     case json = 1
   }
 
-  /// Encodes a ``RealtimeMessageV2`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
-  package func encodeText(_ message: RealtimeMessageV2) throws -> String {
+  /// Encodes a ``RealtimeMessage`` as a JSON array string: `[joinRef, ref, topic, event, payload]`.
+  package func encodeText(_ message: RealtimeMessage) throws -> String {
     let array: [JSONValue] = [
       message.joinRef.map { .string($0) } ?? .null,
       message.ref.map { .string($0) } ?? .null,
@@ -59,8 +62,8 @@ package struct RealtimeSerializer: Sendable {
     return String(decoding: data, as: UTF8.self)
   }
 
-  /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessageV2``.
-  package func decodeText(_ text: String) throws -> RealtimeMessageV2 {
+  /// Decodes a JSON array string `[joinRef, ref, topic, event, payload]` into a ``RealtimeMessage``.
+  package func decodeText(_ text: String) throws -> RealtimeMessage {
     let data = Data(text.utf8)
     let array = try JSONDecoder().decode([JSONValue].self, from: data)
 
@@ -82,7 +85,7 @@ package struct RealtimeSerializer: Sendable {
       throw RealtimeError.decoding("Expected object for payload at index 4.")
     }
 
-    return RealtimeMessageV2(
+    return RealtimeMessage(
       joinRef: joinRef,
       ref: ref,
       topic: topic,
@@ -148,14 +151,15 @@ package struct RealtimeSerializer: Sendable {
     let eventBytes = Data(event.utf8)
     let metaBytes = Data()
 
-    guard joinRefBytes.count <= 255,
-      refBytes.count <= 255,
-      topicBytes.count <= 255,
-      eventBytes.count <= 255,
-      metaBytes.count <= 255
+    let limit = Self.maxHeaderFieldBytes
+    guard joinRefBytes.count <= limit,
+      refBytes.count <= limit,
+      topicBytes.count <= limit,
+      eventBytes.count <= limit,
+      metaBytes.count <= limit
     else {
-      throw RealtimeError.encoding(
-        "Binary frame header fields must not exceed 255 bytes each."
+      throw RealtimeError.invalidRequest(
+        "Binary frame header fields must not exceed \(limit) bytes each."
       )
     }
 

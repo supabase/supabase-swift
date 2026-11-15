@@ -46,8 +46,8 @@ struct PersistedUser: Codable, Sendable {
   var phone: String?
   var newEmail: String?
   var actionLink: String?
-  var appMetadata: [String: JSONValue]
-  var userMetadata: [String: JSONValue]
+  var appMetadata: JSONObject
+  var userMetadata: JSONObject
   var isAnonymous: Bool
   var createdAt: Date
   var updatedAt: Date
@@ -90,20 +90,22 @@ struct PersistedUser: Codable, Sendable {
 
 struct PersistedIdentity: Codable, Sendable {
   var id: String
-  var identityId: UUID
-  var userId: UUID
-  var identityData: [String: JSONValue]?
+  var identityID: UUID
+  var userID: UUID
+  var identityData: JSONObject?
   var provider: String
+  var email: String?
   var createdAt: Date?
   var lastSignInAt: Date?
   var updatedAt: Date?
 
   enum CodingKeys: String, CodingKey {
     case id
-    case identityId = "identity_id"
-    case userId = "user_id"
+    case identityID = "identity_id"
+    case userID = "user_id"
     case identityData = "identity_data"
     case provider
+    case email
     case createdAt = "created_at"
     case lastSignInAt = "last_sign_in_at"
     case updatedAt = "updated_at"
@@ -129,15 +131,14 @@ struct PersistedFactor: Codable, Sendable {
 }
 
 extension PersistedSession {
-  init(_ received: ReceivedSession) {
-    let session = received.session
+  init(_ session: Session) {
     self.init(
       schema: Self.currentSchema,
-      receivedAt: received.receivedAt,
+      receivedAt: session.receivedAt,
       accessToken: session.accessToken,
       tokenType: session.tokenType,
-      expiresIn: session.expiresIn,
-      expiresAt: session.expiresAt,
+      expiresIn: session.expiresIn.timeInterval,
+      expiresAt: session.expiresAt.timeIntervalSince1970,
       refreshToken: session.refreshToken,
       providerToken: session.providerToken,
       providerRefreshToken: session.providerRefreshToken,
@@ -146,20 +147,23 @@ extension PersistedSession {
     )
   }
 
-  var receivedSession: ReceivedSession {
-    ReceivedSession(
-      session: Session(
-        providerToken: providerToken,
-        providerRefreshToken: providerRefreshToken,
-        accessToken: accessToken,
-        tokenType: tokenType,
-        expiresIn: expiresIn,
-        expiresAt: expiresAt,
-        refreshToken: refreshToken,
-        weakPassword: weakPassword.map { WeakPassword(reasons: $0.reasons) },
-        user: user.user
-      ),
-      receivedAt: receivedAt
+  func session() throws -> Session {
+    guard let expiresIn = Duration(validSeconds: expiresIn) else {
+      throw DecodingError.dataCorrupted(
+        DecodingError.Context(
+          codingPath: [CodingKeys.expiresIn], debugDescription: "expires_in is out of range."))
+    }
+    return Session(
+      providerToken: providerToken,
+      providerRefreshToken: providerRefreshToken,
+      accessToken: accessToken,
+      tokenType: tokenType,
+      expiresIn: expiresIn,
+      expiresAt: Date(timeIntervalSince1970: expiresAt),
+      receivedAt: receivedAt,
+      refreshToken: refreshToken,
+      weakPassword: weakPassword.map { WeakPassword(reasons: $0.reasons) },
+      user: user.user
     )
   }
 }
@@ -173,7 +177,7 @@ extension PersistedUser {
       email: user.email,
       phone: user.phone,
       newEmail: user.newEmail,
-      actionLink: user.actionLink,
+      actionLink: user.actionLink?.absoluteString,
       appMetadata: user.appMetadata,
       userMetadata: user.userMetadata,
       isAnonymous: user.isAnonymous,
@@ -203,7 +207,7 @@ extension PersistedUser {
       emailChangeSentAt: emailChangeSentAt,
       newEmail: newEmail,
       invitedAt: invitedAt,
-      actionLink: actionLink,
+      actionLink: actionLink.flatMap(URL.init(string:)),
       email: email,
       phone: phone,
       createdAt: createdAt,
@@ -223,11 +227,12 @@ extension PersistedUser {
 extension PersistedIdentity {
   init(_ identity: UserIdentity) {
     self.init(
-      id: identity.id,
-      identityId: identity.identityId,
-      userId: identity.userId,
+      id: identity.providerUserID,
+      identityID: identity.id,
+      userID: identity.userID,
       identityData: identity.identityData,
-      provider: identity.provider,
+      provider: identity.provider.rawValue,
+      email: identity.email,
       createdAt: identity.createdAt,
       lastSignInAt: identity.lastSignInAt,
       updatedAt: identity.updatedAt
@@ -235,18 +240,17 @@ extension PersistedIdentity {
   }
 
   var identity: UserIdentity {
-    var identity = UserIdentity(
-      id: id,
-      identityId: identityId,
-      userId: userId,
-      identityData: [:],
-      provider: provider,
+    UserIdentity(
+      id: identityID,
+      providerUserID: id,
+      userID: userID,
+      provider: Provider(rawValue: provider),
+      identityData: identityData ?? [:],
+      email: email,
       createdAt: createdAt,
       lastSignInAt: lastSignInAt,
       updatedAt: updatedAt
     )
-    identity.identityData = identityData
-    return identity
   }
 }
 
@@ -255,7 +259,7 @@ extension PersistedFactor {
     self.init(
       id: factor.id,
       friendlyName: factor.friendlyName,
-      factorType: factor.factorType,
+      factorType: factor.factorType.rawValue,
       status: factor.status.rawValue,
       createdAt: factor.createdAt,
       updatedAt: factor.updatedAt
@@ -266,7 +270,7 @@ extension PersistedFactor {
     Factor(
       id: id,
       friendlyName: friendlyName,
-      factorType: factorType,
+      factorType: FactorType(rawValue: factorType),
       status: FactorStatus(rawValue: status),
       createdAt: createdAt,
       updatedAt: updatedAt

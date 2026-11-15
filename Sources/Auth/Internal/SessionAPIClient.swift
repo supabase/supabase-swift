@@ -3,13 +3,14 @@ import Foundation
 /// Which session a request may sign out when the server says the session it was issued for is
 /// gone.
 enum SessionOwnership: Sendable {
-  /// The request was issued for no particular session, such as sign-in or sign-up. A rejection
-  /// of it says nothing about the current session, so it never signs out.
+  /// The request was issued for no particular session, such as sign-in or sign-up, or for a
+  /// token that is not the current session's. A rejection of it says nothing about the current
+  /// session, so it never signs out.
   case unscoped
-  /// The session the request was issued for, read before the request went out; `nil` when no
-  /// session was held then. A rejection signs out only while the store still holds exactly this,
-  /// so a request that outlived a sign-out cannot sign out whoever signed in after it.
-  case snapshot(Session?)
+  /// The session the request was issued for, read before the request went out. A rejection
+  /// signs out only while the store still holds exactly this, so a request that outlived a
+  /// sign-out cannot sign out whoever signed in after it.
+  case snapshot(Session)
 }
 
 /// ``APIClient`` plus the session bookkeeping the user-facing client needs: the access token of
@@ -33,7 +34,7 @@ struct SessionAPIClient: Sendable {
     } catch let error as AuthError where error.invalidatesSession {
       if case .snapshot(let session) = ownership {
         try? await sessionStore.commit(
-          .invalidated(SignOutReason(invalidatedBy: error), refreshToken: session?.refreshToken)
+          .invalidated(SignOutReason(invalidatedBy: error), refreshToken: session.refreshToken)
         )
       }
       throw error

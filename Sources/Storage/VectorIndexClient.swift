@@ -14,10 +14,10 @@ import HTTPTypes
 
 /// A client scoped to a single vector index, for reading and writing its vector data.
 ///
-/// Obtain an instance via ``VectorBucketClient/index(_:)``:
+/// Obtain an instance via ``VectorBucketClient/from(_:)``:
 ///
 /// ```swift
-/// let index = client.storage.vectors.from("documents").index("embeddings")
+/// let index = client.storage.vectors.from("documents").from("embeddings")
 ///
 /// try await index.putVectors([
 ///   VectorEntry(key: "doc-1", data: VectorData(float32: [0.1, 0.2, 0.3]), metadata: ["title": "Intro"])
@@ -26,7 +26,7 @@ import HTTPTypes
 /// let results = try await index.queryVectors(
 ///   VectorData(float32: [0.1, 0.2, 0.3]),
 ///   topK: 5,
-///   returnMetadata: true
+///   options: QueryVectorsOptions(returnMetadata: true)
 /// )
 /// ```
 ///
@@ -43,9 +43,9 @@ import HTTPTypes
 ///
 /// ### Reading vectors
 ///
-/// - ``vectors(keys:returnData:returnMetadata:)``
-/// - ``listVectors(maxResults:returnData:returnMetadata:segment:)``
-/// - ``queryVectors(_:topK:filter:returnDistance:returnMetadata:)``
+/// - ``vectors(keys:options:)``
+/// - ``listVectors(options:)``
+/// - ``queryVectors(_:topK:options:)``
 @_spi(Experimental)
 public struct VectorIndexClient: Sendable {
   /// The name of the vector bucket containing ``indexName``.
@@ -101,22 +101,21 @@ public struct VectorIndexClient: Sendable {
   /// Retrieves vectors by key, in batches of up to 100 keys.
   ///
   /// ```swift
-  /// let vectors = try await index.vectors(keys: ["doc-1", "doc-2"], returnMetadata: true)
+  /// let vectors = try await index.vectors(
+  ///   keys: ["doc-1", "doc-2"], options: GetVectorsOptions(returnMetadata: true))
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
   /// - Parameters:
   ///   - keys: The keys of the vectors to retrieve.
-  ///   - returnData: Whether to include vector embedding data in the response. Defaults to `false`.
-  ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
+  ///   - options: Whether the response includes embedding data and metadata.
   /// - Returns: The matching vectors, in no particular order.
   /// - Throws: ``StorageError`` when the API rejects the request, including for fewer than 1 or
   ///   more than 100 keys.
   public func vectors(
     keys: [String],
-    returnData: Bool = false,
-    returnMetadata: Bool = false
+    options: GetVectorsOptions = GetVectorsOptions()
   ) async throws -> [VectorMatch] {
     let response: GetVectorsResponseBody = try await api.execute(
       HTTPRequest(
@@ -128,8 +127,8 @@ public struct VectorIndexClient: Sendable {
           vectorBucketName: vectorBucketName,
           indexName: indexName,
           keys: keys,
-          returnData: returnData,
-          returnMetadata: returnMetadata
+          returnData: options.returnData,
+          returnMetadata: options.returnMetadata
         )
       )
     )
@@ -139,29 +138,24 @@ public struct VectorIndexClient: Sendable {
 
   /// Lists the vectors in this index, one page per request as you iterate.
   ///
-  /// Use `segment` to scan the index in parallel across multiple workers.
+  /// Use ``ListVectorsOptions/segment`` to scan the index in parallel across multiple workers.
   ///
   /// ```swift
-  /// for try await vector in index.listVectors(maxResults: 500, returnMetadata: true) {
+  /// let options = ListVectorsOptions(pageSize: 500, returnMetadata: true)
+  /// for try await vector in index.listVectors(options: options) {
   ///   print(vector.key)
   /// }
   /// ```
   ///
   /// - Warning: Experimental. See ``StorageVectorsClient``.
   ///
-  /// - Parameters:
-  ///   - maxResults: The maximum number of vectors per page (up to 1000).
-  ///   - returnData: Whether to include vector embedding data in the response. Defaults to `false`.
-  ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
-  ///   - segment: Scans only the given slice of the index, for parallel listing.
-  /// - Returns: The listing. Iterating it throws ``StorageError`` when the API rejects a request.
+  /// - Parameter options: The page size, the response contents and the scan segment.
+  /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError``
+  ///   when the API rejects a request.
   public func listVectors(
-    maxResults: Int? = nil,
-    returnData: Bool = false,
-    returnMetadata: Bool = false,
-    segment: VectorListSegment? = nil
-  ) -> PagedListing<ListVectorsResponse, VectorMatch> {
-    PagedListing(
+    options: ListVectorsOptions = ListVectorsOptions()
+  ) -> PageSequence<VectorMatch, VectorPage, String> {
+    PageSequence(
       fetch: { [api, vectorBucketName, indexName] nextToken in
         let response: ListVectorsResponseBody = try await api.execute(
           HTTPRequest(
@@ -172,19 +166,19 @@ public struct VectorIndexClient: Sendable {
             ListVectorsBody(
               vectorBucketName: vectorBucketName,
               indexName: indexName,
-              maxResults: maxResults,
+              maxResults: options.pageSize,
               nextToken: nextToken,
-              returnData: returnData,
-              returnMetadata: returnMetadata,
-              segmentCount: segment?.count,
-              segmentIndex: segment?.index
+              returnData: options.returnData,
+              returnMetadata: options.returnMetadata,
+              segmentCount: options.segment?.count,
+              segmentIndex: options.segment?.index
             )
           )
         )
         .decoded(decoder: .vectors)
-        return ListVectorsResponse(vectors: response.vectors, nextToken: response.nextToken)
+        return VectorPage(vectors: response.vectors, nextToken: response.nextToken)
       },
-      nextToken: \.nextToken,
+      nextCursor: \.nextToken,
       elements: \.vectors
     )
   }
@@ -196,9 +190,8 @@ public struct VectorIndexClient: Sendable {
   /// let results = try await index.queryVectors(
   ///   VectorData(float32: [0.1, 0.2, 0.3]),
   ///   topK: 5,
-  ///   filter: ["category": "technical"],
-  ///   returnDistance: true,
-  ///   returnMetadata: true
+  ///   options: QueryVectorsOptions(
+  ///     filter: ["category": "technical"], returnDistance: true, returnMetadata: true)
   /// )
   /// ```
   ///
@@ -207,21 +200,13 @@ public struct VectorIndexClient: Sendable {
   /// - Parameters:
   ///   - queryVector: The vector to find similar vectors for. Must match the index's dimension.
   ///   - topK: The number of nearest neighbors to return (up to 100).
-  ///   - filter: A metadata filter expression. Supports field operators (`$eq`, `$ne`, `$gt`,
-  ///     `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$exists`) and logical operators (`$and`, `$or`)
-  ///     with arbitrary nesting, e.g. `["category": "technical"]` or
-  ///     `["price": ["$gte": 10]]`.
-  ///   - returnDistance: Whether to include the similarity distance for each match. Defaults to
-  ///     `false`.
-  ///   - returnMetadata: Whether to include metadata in the response. Defaults to `false`.
+  ///   - options: The metadata filter and the response contents.
   /// - Returns: The nearest vectors, ordered by ascending distance.
   /// - Throws: ``StorageError`` when the API rejects the request.
   public func queryVectors(
     _ queryVector: VectorData,
     topK: Int,
-    filter: [String: JSONValue]? = nil,
-    returnDistance: Bool = false,
-    returnMetadata: Bool = false
+    options: QueryVectorsOptions = QueryVectorsOptions()
   ) async throws -> QueryVectorsResponse {
     let response: QueryVectorsResponseBody = try await api.execute(
       HTTPRequest(
@@ -234,9 +219,9 @@ public struct VectorIndexClient: Sendable {
           indexName: indexName,
           queryVector: queryVector,
           topK: topK,
-          filter: filter,
-          returnDistance: returnDistance,
-          returnMetadata: returnMetadata
+          filter: options.filter,
+          returnDistance: options.returnDistance,
+          returnMetadata: options.returnMetadata
         )
       )
     )
@@ -307,7 +292,7 @@ private struct QueryVectorsBody: Encodable {
   var indexName: String
   var queryVector: VectorData
   var topK: Int
-  var filter: [String: JSONValue]?
+  var filter: JSONObject?
   var returnDistance: Bool
   var returnMetadata: Bool
 }
@@ -351,7 +336,7 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   public var data: VectorData
 
   /// Arbitrary metadata to store alongside the vector.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// Creates a ``VectorEntry``.
   ///
@@ -359,16 +344,16 @@ public struct VectorEntry: Encodable, Sendable, Hashable {
   ///   - key: A unique identifier for the vector within its index.
   ///   - data: The vector's embedding data.
   ///   - metadata: Arbitrary metadata to store alongside the vector.
-  public init(key: String, data: VectorData, metadata: [String: JSONValue]? = nil) {
+  public init(key: String, data: VectorData, metadata: JSONObject? = nil) {
     self.key = key
     self.data = data
     self.metadata = metadata
   }
 }
 
-/// A vector returned from ``VectorIndexClient/vectors(keys:returnData:returnMetadata:)``,
-/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``, or
-/// ``VectorIndexClient/queryVectors(_:topK:filter:returnDistance:returnMetadata:)``.
+/// A vector returned from ``VectorIndexClient/vectors(keys:options:)``,
+/// ``VectorIndexClient/listVectors(options:)``, or
+/// ``VectorIndexClient/queryVectors(_:topK:options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -380,16 +365,35 @@ public struct VectorMatch: Decodable, Sendable, Hashable {
   public var data: VectorData?
 
   /// The vector's metadata, present when the request set `returnMetadata: true`.
-  public var metadata: [String: JSONValue]?
+  public var metadata: JSONObject?
 
   /// The similarity distance from the query vector, present when the request set
   /// `returnDistance: true`. Only populated by
-  /// ``VectorIndexClient/queryVectors(_:topK:filter:returnDistance:returnMetadata:)``.
+  /// ``VectorIndexClient/queryVectors(_:topK:options:)``.
   public var distance: Double?
+
+  /// Creates a ``VectorMatch``.
+  ///
+  /// - Parameters:
+  ///   - key: The vector's unique key.
+  ///   - data: The vector's embedding data, if returned.
+  ///   - metadata: The vector's metadata, if returned.
+  ///   - distance: The similarity distance from the query vector, if returned.
+  public init(
+    key: String,
+    data: VectorData? = nil,
+    metadata: JSONObject? = nil,
+    distance: Double? = nil
+  ) {
+    self.key = key
+    self.data = data
+    self.metadata = metadata
+    self.distance = distance
+  }
 }
 
 /// A parallel scan segment for
-/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``.
+/// ``VectorIndexClient/listVectors(options:)``.
 ///
 /// Splitting a list operation across `count` segments and listing each `index` concurrently lets
 /// multiple workers scan a large index in parallel.
@@ -414,21 +418,124 @@ public struct VectorListSegment: Sendable, Hashable {
   }
 }
 
-/// A page of vectors, as returned by
-/// ``VectorIndexClient/listVectors(maxResults:returnData:returnMetadata:segment:)``.
+/// Options for ``VectorIndexClient/vectors(keys:options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
-public struct ListVectorsResponse: Sendable {
+public struct GetVectorsOptions: Sendable, Hashable {
+  /// Whether the response includes the embedding data. Defaults to `false`.
+  public var returnData: Bool
+
+  /// Whether the response includes the metadata. Defaults to `false`.
+  public var returnMetadata: Bool
+
+  /// Creates a ``GetVectorsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - returnData: Whether the response includes the embedding data.
+  ///   - returnMetadata: Whether the response includes the metadata.
+  public init(returnData: Bool = false, returnMetadata: Bool = false) {
+    self.returnData = returnData
+    self.returnMetadata = returnMetadata
+  }
+}
+
+/// Options for ``VectorIndexClient/listVectors(options:)``.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct ListVectorsOptions: Sendable, Hashable {
+  /// The maximum number of vectors per page (up to 1000). `nil` uses the server default.
+  public var pageSize: Int?
+
+  /// Whether the response includes the embedding data. Defaults to `false`.
+  public var returnData: Bool
+
+  /// Whether the response includes the metadata. Defaults to `false`.
+  public var returnMetadata: Bool
+
+  /// Scans only the given slice of the index, for parallel listing. `nil` scans the whole index.
+  public var segment: VectorListSegment?
+
+  /// Creates a ``ListVectorsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - pageSize: The maximum number of vectors per page (up to 1000).
+  ///   - returnData: Whether the response includes the embedding data.
+  ///   - returnMetadata: Whether the response includes the metadata.
+  ///   - segment: Scans only the given slice of the index, for parallel listing.
+  public init(
+    pageSize: Int? = nil,
+    returnData: Bool = false,
+    returnMetadata: Bool = false,
+    segment: VectorListSegment? = nil
+  ) {
+    self.pageSize = pageSize
+    self.returnData = returnData
+    self.returnMetadata = returnMetadata
+    self.segment = segment
+  }
+}
+
+/// Options for ``VectorIndexClient/queryVectors(_:topK:options:)``.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct QueryVectorsOptions: Sendable, Hashable {
+  /// A metadata filter expression. Supports field operators (`$eq`, `$ne`, `$gt`, `$gte`, `$lt`,
+  /// `$lte`, `$in`, `$nin`, `$exists`) and logical operators (`$and`, `$or`) with arbitrary
+  /// nesting, e.g. `["category": "technical"]` or `["price": ["$gte": 10]]`. `nil` matches all
+  /// vectors.
+  public var filter: JSONObject?
+
+  /// Whether the response includes the similarity distance for each match. Defaults to `false`.
+  public var returnDistance: Bool
+
+  /// Whether the response includes the metadata. Defaults to `false`.
+  public var returnMetadata: Bool
+
+  /// Creates a ``QueryVectorsOptions`` value.
+  ///
+  /// - Parameters:
+  ///   - filter: A metadata filter expression.
+  ///   - returnDistance: Whether the response includes the similarity distance for each match.
+  ///   - returnMetadata: Whether the response includes the metadata.
+  public init(
+    filter: JSONObject? = nil,
+    returnDistance: Bool = false,
+    returnMetadata: Bool = false
+  ) {
+    self.filter = filter
+    self.returnDistance = returnDistance
+    self.returnMetadata = returnMetadata
+  }
+}
+
+/// A page of vectors, as returned by
+/// ``VectorIndexClient/listVectors(options:)``.
+///
+/// - Warning: Experimental. See ``StorageVectorsClient``.
+@_spi(Experimental)
+public struct VectorPage: Sendable {
   /// The vectors in this page.
   public var vectors: [VectorMatch]
 
   /// The pagination token to pass to fetch the next page, or `nil` when there are no more results.
   public var nextToken: String?
+
+  /// Creates a ``VectorPage``.
+  ///
+  /// - Parameters:
+  ///   - vectors: The vectors in this page.
+  ///   - nextToken: The pagination token for the next page, or `nil` for the last page.
+  public init(vectors: [VectorMatch], nextToken: String? = nil) {
+    self.vectors = vectors
+    self.nextToken = nextToken
+  }
 }
 
 /// The result of a similarity search, as returned by
-/// ``VectorIndexClient/queryVectors(_:topK:filter:returnDistance:returnMetadata:)``.
+/// ``VectorIndexClient/queryVectors(_:topK:options:)``.
 ///
 /// - Warning: Experimental. See ``StorageVectorsClient``.
 @_spi(Experimental)
@@ -438,4 +545,14 @@ public struct QueryVectorsResponse: Sendable {
 
   /// The distance metric used for the similarity search.
   public var distanceMetric: VectorDistanceMetric?
+
+  /// Creates a ``QueryVectorsResponse``.
+  ///
+  /// - Parameters:
+  ///   - vectors: The nearest vectors, ordered by ascending distance.
+  ///   - distanceMetric: The distance metric used for the similarity search.
+  public init(vectors: [VectorMatch], distanceMetric: VectorDistanceMetric? = nil) {
+    self.vectors = vectors
+    self.distanceMetric = distanceMetric
+  }
 }

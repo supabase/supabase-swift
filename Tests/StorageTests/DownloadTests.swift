@@ -26,9 +26,9 @@ struct DownloadTests {
     status: HTTPResponse.Status = .ok,
     headers: HTTPFields = [:],
     body: @escaping @Sendable () -> HTTPBody?
-  ) -> StorageBucket {
-    StorageClient(
-      configuration: StorageClientConfiguration(
+  ) throws -> StorageBucket {
+    try StorageClient(
+      configuration: StorageClient.Configuration(
         url: URL(string: "http://localhost:54321/storage/v1")!,
         headers: [:],
         http: .init(
@@ -43,13 +43,12 @@ struct DownloadTests {
   @Test
   func sendsRangeVersionNonceAndHeaders() async throws {
     let sent = LockIsolated<HTTPRequest?>(nil)
-    let bucket = Self.makeBucket(sent: sent) { HTTPBody(Data("abc".utf8)) }
+    let bucket = try Self.makeBucket(sent: sent) { HTTPBody(Data("abc".utf8)) }
 
     _ = try await bucket.download(
       path: "file.txt",
-      transform: ImageTransform(width: 10),
       options: DownloadOptions(
-        range: 0...1023, versionId: "v1", cacheNonce: "n",
+        range: 0...1023, versionID: "v1", cacheNonce: "n", transform: ImageTransform(width: 10),
         headers: [.init("x-custom")!: "1", .ifNoneMatch: "\"etag\""]))
 
     let request = try #require(sent.value)
@@ -65,7 +64,7 @@ struct DownloadTests {
   @Test
   func headersOverrideTheRange() async throws {
     let sent = LockIsolated<HTTPRequest?>(nil)
-    let bucket = Self.makeBucket(sent: sent) { nil }
+    let bucket = try Self.makeBucket(sent: sent) { nil }
 
     _ = try await bucket.download(
       path: "file.txt", options: DownloadOptions(range: 0...9, headers: [.range: "bytes=5-"]))
@@ -76,7 +75,7 @@ struct DownloadTests {
   @Test
   func reportsProgressAsTheBodyIsRead() async throws {
     let reports = LockIsolated<[TransferProgress]>([])
-    let bucket = Self.makeBucket { Self.chunks(8, of: 64 << 10) }
+    let bucket = try Self.makeBucket { Self.chunks(8, of: 64 << 10) }
 
     let response = try await bucket.download(path: "file.bin") { progress in
       reports.withValue { $0.append(progress) }
@@ -93,7 +92,7 @@ struct DownloadTests {
 
   @Test
   func aNetworkFailureMidBodyIsATransportError() async throws {
-    let bucket = Self.makeBucket {
+    let bucket = try Self.makeBucket {
       Self.chunks(2, of: 10, length: .unknown, then: URLError(.networkConnectionLost))
     }
 
@@ -108,7 +107,8 @@ struct DownloadTests {
 
   @Test
   func aServerErrorIsDecoded() async throws {
-    let bucket = Self.makeBucket(status: .notFound, headers: [.contentType: "application/json"]) {
+    let bucket = try Self.makeBucket(status: .notFound, headers: [.contentType: "application/json"])
+    {
       HTTPBody(Data(#"{"statusCode":"404","error":"not_found","message":"Object not found"}"#.utf8))
     }
 
@@ -123,7 +123,7 @@ struct DownloadTests {
   @Test
   func returnsTheHeadBeforeTheBodyIsRead() async throws {
     let pulled = LockIsolated(0)
-    let bucket = Self.makeBucket(
+    let bucket = try Self.makeBucket(
       status: .partialContent,
       headers: [
         .contentType: "text/plain",
@@ -145,13 +145,13 @@ struct DownloadTests {
       path: "file.txt", options: DownloadOptions(range: 0...19))
 
     #expect(pulled.value == 0)
-    #expect(response.httpResponse.status == .partialContent)
+    #expect(response.status == .partialContent)
     #expect(response.contentType == "text/plain")
     #expect(response.contentLength == 20)
     #expect(response.contentRange == "bytes 0-19/100")
     #expect(response.eTag == "\"abc\"")
     #expect(response.lastModified == Date(timeIntervalSince1970: 1_791_903_600))
-    #expect(response.cacheControl == "max-age=3600")
+    #expect(response.cacheControl == CacheControl.maxAge(.seconds(3600)))
 
     let data = try await response.data()
     #expect(data.count == 20)

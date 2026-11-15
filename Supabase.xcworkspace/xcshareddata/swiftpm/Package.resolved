@@ -1,5 +1,5 @@
 {
-  "originHash" : "12df0e226c097895032e0ff49e6ccabb1e99b104ac49aa3a51782a25ec7d9f81",
+  "originHash" : "d7ffb8721549e9bd4e0665dd534242e0af8d9153d398f3400680bac70f03e7d2",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -80,15 +80,6 @@
       "state" : {
         "revision" : "924d91bb3e98a5383c3082d6d5ba3ddac9e1c565",
         "version" : "0.8.10"
-      }
-    },
-    {
-      "identity" : "mocker",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/WeTransfer/Mocker",
-      "state" : {
-        "revision" : "95fa785c751f6bc40c49e112d433c3acf8417a97",
-        "version" : "3.0.2"
       }
     },
     {
@@ -177,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "45305d32cfb830faebcaa9a7aea66ad342637518",
-        "version" : "3.11.1"
+        "revision" : "f8fad2f95ad67b45f6340c0960e2396094d67e07",
+        "version" : "5.1.1"
       }
     },
     {

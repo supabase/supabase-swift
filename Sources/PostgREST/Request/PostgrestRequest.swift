@@ -79,6 +79,12 @@ public struct _PostgrestRequest: Sendable {
   ///   - client: Supplies the base URL, headers, schema, access token and transport.
   ///   - decode: Turns a 2xx body into the value. It carries its own decoder, so the core never
   ///     reads ``PostgrestClient/Configuration/decoder``.
+  /// - Returns: A ``PostgrestResponse`` whose `value` is the result of `decode`.
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` if the request cannot be sent,
+  ///   `.server` if PostgREST returns a non-2xx status, `.transport` if the request never
+  ///   completes, `.accessToken` if the access token provider fails, or `.decoding` if `decode`
+  ///   throws an error that is not a ``PostgrestError``. `CancellationError` if the task is
+  ///   cancelled.
   func execute<T>(
     on client: PostgrestClient,
     decode: (Data) throws -> T
@@ -93,30 +99,14 @@ public struct _PostgrestRequest: Sendable {
     }
 
     let configuration = client.configuration
-    var request = httpRequest(for: configuration)
-
-    if let accessToken = configuration.accessToken, request.headerFields[.authorization] == nil {
-      let token: String?
-      do {
-        token = try await accessToken()
-      } catch {
-        throw PostgrestError(
-          kind: .accessToken,
-          message: "The access token provider failed, so the request was not sent.",
-          underlyingError: error
-        )
-      }
-      if let token {
-        request.headerFields[.authorization] = "Bearer \(token)"
-      }
-    }
+    let request = httpRequest(for: configuration)
 
     let retries = retryEnabled ?? configuration.retryEnabled
     let http = HTTPClient(
       configuration: configuration.http,
       retrying: RetryRequestInterceptor(
         policy: retries ? PostgrestClient.Configuration.retryPolicy : .disabled,
-        clock: client.clock),
+        clock: client.configuration.clock),
       appending: [LoggerInterceptor(logger: configuration.logger)])
 
     let response: HTTPTypes.HTTPResponse
@@ -126,15 +116,22 @@ public struct _PostgrestRequest: Sendable {
     } catch let urlError as URLError {
       throw PostgrestError(
         kind: .transport, message: urlError.localizedDescription, underlyingError: urlError)
+    } catch let failure as AccessTokenFailure {
+      throw PostgrestError(
+        kind: .accessToken,
+        message: AccessTokenFailure.message,
+        underlyingError: failure.underlyingError
+      )
     }
 
-    func decoded(_ body: Data) throws -> PostgrestResponse<T> {
+    func decoded(_ response: HTTPTypes.HTTPResponse, body: Data) throws -> PostgrestResponse<T> {
       do {
-        return PostgrestResponse(data: data, response: response, value: try decode(body))
+        return PostgrestResponse(response, body: body, value: try decode(body))
       } catch let error as PostgrestError {
         throw error
       } catch {
-        configuration.logger.error("Failed to decode type '\(T.self)' with error: \(error)")
+        configuration.logger.error(
+          "Failed to decode type '\(T.self)' with error: \(LogRedaction.summary(of: error))")
         throw PostgrestError(
           kind: .decoding,
           message: "Failed to decode the PostgREST response as \(T.self).",
@@ -144,26 +141,20 @@ public struct _PostgrestRequest: Sendable {
     }
 
     if 200..<300 ~= response.status.code {
-      return try decoded(data)
+      return try decoded(response, body: data)
     }
 
-    guard let serverError = try? JSONDecoder().decode(PostgrestError.ServerError.self, from: data)
-    else {
-      throw PostgrestError(
-        kind: .server,
-        message: "Unexpected response with status code \(response.status.code).",
-        response: HTTPErrorResponse(response, body: data)
-      )
+    let error = PostgrestError.server(response, body: data)
+    if nullOnNoRows, error.code == "PGRST116", error.serverError?.matchedZeroRows == true {
+      // No row is a success for `maybeSingle()`, so the response reads as `200 OK` with the
+      // `null` body the value comes from, not as the 406 PostgREST answered.
+      var success = response
+      success.status = .ok
+      success.headerFields[.contentLength] = nil
+      success.headerFields[.proxyStatus] = nil
+      return try decoded(success, body: Data("null".utf8))
     }
-    if nullOnNoRows, serverError.code == "PGRST116", serverError.matchedZeroRows {
-      return try decoded(Data("null".utf8))
-    }
-    throw PostgrestError(
-      kind: .server,
-      message: serverError.message,
-      serverError: serverError,
-      response: HTTPErrorResponse(response, body: data)
-    )
+    throw error
   }
 
   func httpRequest(for configuration: PostgrestClient.Configuration) -> HTTPTypes.HTTPRequest {
@@ -203,11 +194,14 @@ extension PostgrestClient {
     method: HTTPTypes.HTTPRequest.Method = .get
   ) -> _PostgrestRequest {
     _PostgrestRequest(
-      method: method, relation: relation, headerFields: HTTPFields(configuration.headers))
+      method: method, relation: relation,
+      headerFields: PostgrestClient.Configuration.defaultHeaders.merging(
+        with: configuration.headers))
   }
 }
 
 extension HTTPField.Name {
   static let acceptProfile = Self("Accept-Profile")!
   static let contentProfile = Self("Content-Profile")!
+  static let proxyStatus = Self("Proxy-Status")!
 }

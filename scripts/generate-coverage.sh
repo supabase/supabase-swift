@@ -48,10 +48,12 @@ for TEST_BUNDLE in $TEST_BUNDLES; do
 
   echo "Exporting coverage data for binary: $BINARY_PATH"
   EXPORT_STDERR="$TEMP_COVERAGE_DIR/$BINARY_NAME.stderr"
+  # PostgrestMacrosPlugin runs inside the compiler, never in a test bundle, so it would only
+  # count as uncovered. PostgrestMacrosTests checks its expansions on the host.
   xcrun llvm-cov export \
     -format=lcov \
     -instr-profile "$PROFDATA_FILE" \
-    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift" \
+    -ignore-filename-regex "Tests/|.build|DerivedData|.derivedData|Deprecated/|Deprecated.swift|PostgrestMacrosPlugin/" \
     "$BINARY_PATH" > "$TEMP_COVERAGE_DIR/$BINARY_NAME.info" 2> "$EXPORT_STDERR"
   EXPORT_STATUS=$?
   cat "$EXPORT_STDERR" >&2

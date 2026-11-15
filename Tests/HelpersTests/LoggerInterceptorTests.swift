@@ -157,6 +157,70 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func aFailureLogsAnSDKSummaryAndNotTheFailingURL() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+    let signedURL = "https://x.supabase.co/storage/v1/object/upload/sign/b/f?token=st-secret-1"
+
+    await #expect(throws: URLError.self) {
+      _ = try await interceptor.intercept(self.createTestRequest(), body: nil) { _, _ in
+        throw URLError(
+          .timedOut,
+          userInfo: [
+            NSURLErrorFailingURLStringErrorKey: signedURL,
+            NSURLErrorFailingURLErrorKey: URL(string: signedURL)!,
+          ])
+      }
+    }
+
+    #expect(
+      capture.errorLogs == ["Response: Failure (NSURLErrorDomain \(URLError.timedOut.rawValue))"])
+  }
+
+  @Test
+  func theRequestLineDropsTheQueryAndFragment() async throws {
+    let (logger, capture) = makeLogger()
+    let interceptor = LoggerInterceptor(logger: logger)
+    let request = createTestRequest(
+      url: "https://api.example.com/rest/v1/my%20invites?code=eq.pg%20secret%20one#frag")
+
+    _ = try await interceptor.intercept(request, body: nil) { _, _ in
+      (self.createTestResponse(), nil)
+    }
+
+    #expect(
+      capture.verboseLogs[0].hasPrefix("Request: GET https://api.example.com/rest/v1/my invites\n"))
+    #expect(!capture.verboseLogs.contains { $0.contains("secret") || $0.contains("frag") })
+  }
+
+  @Test
+  func belowTraceTheBodiesPassThroughUnread() async throws {
+    var (logger, capture) = makeLogger()
+    logger.logLevel = .debug
+    let interceptor = LoggerInterceptor(logger: logger)
+
+    let (_, body) = try await interceptor.intercept(createTestRequest(), body: nil) { _, _ in
+      (self.createTestResponse(), HTTPBody(Data("ok".utf8)))
+    }
+
+    #expect(capture.verboseLogs.isEmpty)
+    #expect(try await Data(collecting: try #require(body), upTo: 10) == Data("ok".utf8))
+  }
+
+  @Test
+  func stringifyRedactsSignedURLs() {
+    let data = Data(
+      #"{"signedURL":"/object/sign/b/f?token=s-1","signedUrl":"/x?token=s-2","url":"/y?token=s-3"}"#
+        .utf8)
+
+    let result = stringify(data)
+
+    #expect(!result.contains("s-1"))
+    #expect(!result.contains("s-2"))
+    #expect(!result.contains("s-3"))
+  }
+
+  @Test
   func interceptorWithJSONBody() async throws {
     let (logger, capture) = makeLogger()
     let interceptor = LoggerInterceptor(logger: logger)
@@ -315,6 +379,35 @@ struct LoggerInterceptorTests {
   }
 
   @Test
+  func stringifyRedactsSecretsAtAnyDepth() {
+    let json = """
+      {
+        "name": "Acme",
+        "client_secret": "provider-secret",
+        "users": [{"email": "a@example.com", "password": "hunter2"}],
+        "session": {"access_token": "jwt", "refresh_token": "rt"},
+        "verify": {"token": "123456", "token_hash": "th"},
+        "properties": {
+          "email_otp": "654321", "hashed_token": "ht", "action_link": "https://link.example"
+        }
+      }
+      """.data(using: .utf8)!
+
+    let result = stringify(json)
+
+    #expect(result.contains("Acme"))
+    #expect(result.contains("a@example.com"))
+    let secrets = [
+      "provider-secret", "hunter2", "\"jwt\"", "\"rt\"", "123456", "\"th\"", "654321",
+      "\"ht\"", "link.example",
+    ]
+    for secret in secrets {
+      #expect(!result.contains(secret))
+    }
+    #expect(result.contains("<redacted>"))
+  }
+
+  @Test
   func stringifyWithNullJSON() {
     let nullJSON = #"{"value": null}"#.data(using: .utf8)!
     let result = stringify(nullJSON)
@@ -448,5 +541,66 @@ struct LoggerInterceptorTests {
     }
 
     #expect(seen.value == Data(repeating: 7, count: 100))
+  }
+
+  @Test
+  func aSmallDeclaredBodyThatDecodesPastTheCeilingStillReachesTheCallerWhole() async throws {
+    let (logger, capture) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let chunk = ArraySlice(repeating: UInt8(7), count: 64 * 1024)
+    let body = HTTPBody(
+      AsyncStream<ArraySlice<UInt8>> {
+        for _ in 0..<32 { $0.yield(chunk) }
+        $0.finish()
+      },
+      length: .known(10), iterationBehavior: .single)
+
+    let (head, returned) = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .get, url: URL(string: "https://example.com")!),
+      body: nil
+    ) { _, _ in (HTTPTypes.HTTPResponse(status: .ok), body) }
+
+    #expect(head.status == .ok)
+    #expect(returned?.length == .unknown)
+    #expect(
+      try await Data(collecting: try #require(returned), upTo: .max)
+        == Data(repeating: 7, count: 2 * 1024 * 1024))
+    #expect(capture.verboseLogs[1].contains("<truncated"))
+  }
+
+  @Test
+  func aRepeatableBodyPastTheCeilingIsHandedOnUnchanged() async throws {
+    let (logger, capture) = makeLogger()
+    let sut = LoggerInterceptor(logger: logger)
+    let bytes = [UInt8](repeating: 7, count: 2 * 1024 * 1024)
+    let body = HTTPBody(
+      ReplayedChunk(chunk: ArraySlice(bytes)), length: .known(10), iterationBehavior: .multiple)
+
+    let forwarded = LockIsolated<HTTPBody?>(nil)
+    _ = try await sut.intercept(
+      HTTPTypes.HTTPRequest(method: .post, url: URL(string: "https://example.com")!),
+      body: body
+    ) { _, next in
+      forwarded.setValue(next)
+      return (HTTPTypes.HTTPResponse(status: .ok), nil)
+    }
+
+    let handedOn = try #require(forwarded.value)
+    #expect(handedOn === body)
+    #expect(try await Data(collecting: handedOn, upTo: .max) == Data(bytes))
+    #expect(capture.verboseLogs[0].contains("<truncated"))
+  }
+}
+
+/// Yields the same chunk on every iteration, like a re-readable source.
+private struct ReplayedChunk: AsyncSequence, Sendable {
+  let chunk: ArraySlice<UInt8>
+
+  func makeAsyncIterator() -> AsyncStream<ArraySlice<UInt8>>.Iterator {
+    let chunk = chunk
+    return AsyncStream {
+      $0.yield(chunk)
+      $0.finish()
+    }.makeAsyncIterator()
   }
 }

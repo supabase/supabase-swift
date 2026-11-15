@@ -29,19 +29,24 @@ final class RealtimeTestHost: Sendable {
   private struct State {
     var sockets: [FakeWebSocket] = []
     var servers: [FakeWebSocket] = []
-    var frames: [RealtimeMessageV2] = []
+    var frames: [RealtimeMessage] = []
     var statuses: [RealtimeClientStatus] = []
     var observers: [Task<Void, Never>] = []
   }
+
+  static let url = URL(string: "http://localhost:54321/realtime/v1")!
 
   private let state = LockIsolated(State())
   private let signal: AsyncStream<Void>
   private let signalContinuation: AsyncStream<Void>.Continuation
 
   init(
-    url: URL = URL(string: "http://localhost:54321/realtime/v1")!,
-    options: RealtimeClientOptions = RealtimeClientOptions(handleAppLifecycle: false),
-    http: HTTPClient = HTTPClient(transport: RecordingTransport())
+    configuration: RealtimeClient.Configuration = RealtimeClient.Configuration(
+      url: RealtimeTestHost.url,
+      observesAppLifecycle: false, monitorsNetworkPath: false),
+    http: HTTPClient = HTTPClient(transport: RecordingTransport()),
+    lifecycleEvents: @escaping @Sendable () async -> AsyncStream<AppLifecycleEvent> =
+      noLifecycleEvents
   ) async {
     // Newest-1: a wait only needs to know that something changed since it last looked.
     (signal, signalContinuation) = AsyncStream<Void>.makeStream(
@@ -51,8 +56,7 @@ final class RealtimeTestHost: Sendable {
     let continuation = signalContinuation
 
     client = RealtimeClient(
-      url: url,
-      options: options,
+      configuration: configuration,
       wsTransport: { _, _ in
         let (socket, server) = FakeWebSocket.fakes()
         let observer = Task {
@@ -74,7 +78,8 @@ final class RealtimeTestHost: Sendable {
         return socket
       },
       http: http,
-      clock: clock
+      clock: clock,
+      lifecycleEvents: lifecycleEvents
     )
 
     let statusChanges = await client.statusChanges()
@@ -109,7 +114,7 @@ final class RealtimeTestHost: Sendable {
   var connectCount: Int { state.value.sockets.count }
 
   /// Every text frame the client sent, decoded, across all sockets.
-  var frames: [RealtimeMessageV2] { state.value.frames }
+  var frames: [RealtimeMessage] { state.value.frames }
 
   /// Every client status observed, starting with the one at creation.
   var statuses: [RealtimeClientStatus] { state.value.statuses }
@@ -120,13 +125,13 @@ final class RealtimeTestHost: Sendable {
   /// an issue after `timeout` of wall-clock time.
   func waitUntil(
     timeout: Duration = .seconds(5),
-    _ condition: @escaping @Sendable () -> Bool,
+    _ condition: @escaping @Sendable () async -> Bool,
     sourceLocation: SourceLocation = #_sourceLocation
   ) async {
-    if condition() { return }
+    if await condition() { return }
     do {
       try await withTimeout(timeout, clock: ContinuousClock()) {
-        for await _ in signal where condition() {
+        for await _ in signal where await condition() {
           return
         }
       }
@@ -137,10 +142,10 @@ final class RealtimeTestHost: Sendable {
 
   /// The first frame the client sent that matches `predicate`, waiting for it if needed.
   func receive(
-    where predicate: @escaping @Sendable (RealtimeMessageV2) -> Bool,
+    where predicate: @escaping @Sendable (RealtimeMessage) -> Bool,
     timeout: Duration = .seconds(5),
     sourceLocation: SourceLocation = #_sourceLocation
-  ) async throws -> RealtimeMessageV2 {
+  ) async throws -> RealtimeMessage {
     await waitUntil(
       timeout: timeout, { [state] in state.value.frames.contains(where: predicate) },
       sourceLocation: sourceLocation
@@ -153,7 +158,7 @@ final class RealtimeTestHost: Sendable {
     event: String,
     timeout: Duration = .seconds(5),
     sourceLocation: SourceLocation = #_sourceLocation
-  ) async throws -> RealtimeMessageV2 {
+  ) async throws -> RealtimeMessage {
     try await receive(
       where: { $0.event == event }, timeout: timeout, sourceLocation: sourceLocation)
   }
@@ -161,9 +166,9 @@ final class RealtimeTestHost: Sendable {
   // MARK: Scripting the server
 
   /// Answers `message` from the server with a `phx_reply`.
-  func reply(to message: RealtimeMessageV2, status: PushStatus = .ok, response: JSONObject = [:]) {
+  func reply(to message: RealtimeMessage, status: PushStatus = .ok, response: JSONObject = [:]) {
     server?.send(
-      RealtimeMessageV2(
+      RealtimeMessage(
         joinRef: message.joinRef,
         ref: message.ref,
         topic: message.topic,
@@ -174,7 +179,169 @@ final class RealtimeTestHost: Sendable {
   }
 
   /// Confirms a `phx_join` the way the server does: a `phx_reply` carrying `postgres_changes`.
-  func confirmJoin(_ join: RealtimeMessageV2, postgresChanges: [JSONValue] = []) {
+  func confirmJoin(_ join: RealtimeMessage, postgresChanges: [JSONValue] = []) {
     reply(to: join, response: ["postgres_changes": .array(postgresChanges)])
+  }
+
+  /// Subscribes `channel` and confirms its join. Returns the join.
+  @discardableResult
+  func subscribe(_ channel: RealtimeChannel) async throws -> RealtimeMessage {
+    let subscription = Task { try await channel.subscribe() }
+    let join = try await receive {
+      $0.event == ChannelEvent.join && $0.topic == channel.wireTopic
+    }
+    confirmJoin(join)
+    try await subscription.value
+    return join
+  }
+
+  /// Tracks a payload on `channel` and confirms the push.
+  func track(_ channel: RealtimeChannel) async throws {
+    async let tracked: Void = channel.track(["name": "ana"])
+    reply(to: try await receive(event: ChannelEvent.presence))
+    try await tracked
+  }
+
+  /// Reports an error on the channel that `join` opened, as the server does with `phx_error`.
+  func sendError(for join: RealtimeMessage) {
+    send(ChannelEvent.error, for: join)
+  }
+
+  /// Closes the channel that `join` opened, as the server does with `phx_close`.
+  func sendClose(for join: RealtimeMessage) {
+    send(ChannelEvent.close, for: join)
+  }
+
+  private func send(_ event: String, for join: RealtimeMessage) {
+    server?.send(
+      RealtimeMessage(
+        joinRef: join.joinRef, ref: nil, topic: join.topic, event: event, payload: [:]))
+  }
+}
+
+/// Records an issue unless `action` throws a ``RealtimeError`` with the failure of `expected`.
+func expectError(
+  _ expected: RealtimeError,
+  sourceLocation: SourceLocation = #_sourceLocation,
+  _ action: () async throws -> Void
+) async {
+  do {
+    try await action()
+    Issue.record("Expected \(expected.kind)", sourceLocation: sourceLocation)
+  } catch let error as RealtimeError {
+    #expect(error.isSameFailure(as: expected), sourceLocation: sourceLocation)
+  } catch {
+    Issue.record("Unexpected \(error)", sourceLocation: sourceLocation)
+  }
+}
+
+extension RealtimeClient {
+  /// The id of the core record for `topic`, if there is one: the live channel's record first,
+  /// then any other record of the topic, such as one still leaving.
+  private func recordID(for topic: String) -> ChannelID? {
+    if let id = liveChannelState(for: topic)?.handle.id, core.channels[id] != nil { return id }
+    return core.channels.first { $0.value.topic == topic }?.key
+  }
+
+  /// The channel ``channel(_:configure:)`` returns for `topic`, without creating one.
+  func liveChannel(for topic: String) -> RealtimeChannel? {
+    liveChannelState(for: topic)?.handle
+  }
+
+  /// Ends every stream of `channel`, as removing it would, but keeps it registered. A test then
+  /// reads what a stream had buffered without waiting for more.
+  func finishStreams(of channel: RealtimeChannel) {
+    state(of: channel)?.finishAll()
+  }
+
+  /// The Postgres bindings of the open streams of `channel`, in registration order.
+  func bindings(of channel: RealtimeChannel) -> [PostgresJoinConfig] {
+    state(of: channel)?.joinSnapshot.bindings ?? []
+  }
+
+  /// Whether a presence stream of `channel` is open, which enables presence on its join.
+  func hasPresenceListener(_ channel: RealtimeChannel) -> Bool {
+    state(of: channel)?.joinSnapshot.presenceEnabled ?? false
+  }
+
+  /// How many streams of each kind `channel` feeds.
+  struct StreamCounts: Equatable {
+    var events = 0
+    var broadcasts = 0
+    var presenceChanges = 0
+    var presenceStates = 0
+    var postgres = 0
+  }
+
+  func streamCounts(of channel: RealtimeChannel) -> StreamCounts {
+    guard let state = state(of: channel) else { return StreamCounts() }
+    return StreamCounts(
+      events: state.events.count,
+      broadcasts: state.broadcasts.count,
+      presenceChanges: state.presenceChanges.count,
+      presenceStates: state.presenceStates.count,
+      postgres: state.joinSnapshot.bindings.count)
+  }
+
+  /// Gives the core a subscribed channel for `topic`, as a confirmed join with presence on would,
+  /// so frames for it reach the channel's streams without a socket, and presence streams open on
+  /// it. The client must have a channel for `topic`.
+  func installSubscribedRecord(_ topic: String, joinRef: String = "1") {
+    guard let id = liveChannelState(for: topic)?.handle.id else {
+      preconditionFailure("No channel for '\(topic)'")
+    }
+    var record = ChannelRecord(topic: topic, configuration: RealtimeChannelConfiguration())
+    record.phase = .subscribed(joinRef: joinRef)
+    record.snapshot.presenceEnabled = true
+    record.hasBeenSubscribed = true
+    core.channels.setRecord(record, for: id)
+  }
+
+  /// Whether the core has a record for `topic`.
+  func hasRecord(for topic: String) -> Bool {
+    recordID(for: topic) != nil
+  }
+
+  /// How many pushes on the channel for `topic` wait for a reply.
+  func pendingPushCount(for topic: String) -> Int {
+    recordID(for: topic).flatMap { core.channels[$0]?.pendingPushes.count } ?? 0
+  }
+
+  /// The error the connection state carries.
+  var connectionError: RealtimeError? { core.connection.error }
+
+  /// The ref of the heartbeat the server has not acknowledged yet.
+  var pendingHeartbeatRef: String? { core.pendingHeartbeat?.ref }
+
+  /// The ref of the join the core can still confirm, or already confirmed, for `topic`.
+  func joinRef(for topic: String) -> String? {
+    recordID(for: topic).flatMap { core.channels[$0]?.currentJoinRef }
+  }
+
+  /// What the join in flight for `topic` waits for, or `nil` when no join is in flight.
+  func joinStage(for topic: String) -> ChannelRecord.JoinStage? {
+    guard let id = recordID(for: topic),
+      case .joining(_, _, let stage)? = core.channels[id]?.phase
+    else { return nil }
+    return stage
+  }
+}
+
+extension RealtimeChannel {
+  /// The ref of the join the server can still confirm, or already confirmed.
+  var joinRef: String? {
+    get async { await client?.joinRef(for: topic) }
+  }
+
+  /// What the join in flight waits for, or `nil` when no join is in flight.
+  var joinStage: ChannelRecord.JoinStage? {
+    get async { await client?.joinStage(for: topic) }
+  }
+}
+
+extension RealtimeMessage {
+  /// The `config.presence.enabled` flag of a `phx_join` payload.
+  var presenceEnabled: Bool? {
+    payload["config"]?.objectValue?["presence"]?.objectValue?["enabled"]?.boolValue
   }
 }

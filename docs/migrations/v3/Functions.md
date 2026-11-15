@@ -2,7 +2,7 @@
 
 This file covers the changes to `FunctionsClient` and the Edge Functions API from v2 to v3. See
 [the v3 migration overview](../../../V3_MIGRATION.md) for steps that apply to every module,
-including `supabase.functions` and `SupabaseClientOptions.FunctionsOptions`.
+including `supabase.functions` and `SupabaseClient.Configuration.Functions`.
 
 ## Silent changes
 
@@ -45,9 +45,10 @@ Changes that still compile but behave differently. Check each one by hand.
 ## `FunctionsClient` takes a `Configuration`
 
 The flat initializers and `setAuth(token:)` are gone. Pass a `FunctionsClient.Configuration`.
-Give the token through `accessToken`, which runs before each request. Do not put
-`Authorization` in `headers`. `fetch:` is replaced by `http:`; see the overview for transports.
-`logger:` takes a swift-log `Logger`.
+Give the token through an `AccessTokenMiddleware` in `http`, which runs before each request. A
+provider that throws fails the call with a `FunctionsError` of kind `.accessToken`. A static
+`Authorization` in `headers` wins over the middleware. `fetch:` is replaced by `http:`; see the
+overview for transports. `logger:` takes a swift-log `Logger`.
 
 ```swift
 // v2
@@ -55,17 +56,15 @@ let functions = FunctionsClient(url: url, headers: ["apikey": apiKey], region: .
 functions.setAuth(token: session.accessToken)
 
 // v3
-let functions = FunctionsClient(
+let functions = try FunctionsClient(
   configuration: .init(
     url: url,
-    headers: [HTTPField.Name("apikey")!: apiKey],
+    headers: [.apikey: apiKey],
     region: .usEast1,
-    accessToken: { await tokenStore.currentAccessToken }
+    http: .init(middlewares: [AccessTokenMiddleware { await tokenStore.currentAccessToken }])
   )
 )
 ```
-
-`init(configuration:)` traps if `url` has no host.
 
 ## The body is an `invoke` argument
 
@@ -133,13 +132,15 @@ for try await chunk in response.body {
 
 ## `FunctionsError` is a struct
 
-The enum cases are gone. Match on `kind` instead. The status and body are in `response`.
-`Kind` is an open set, so keep a fallback branch.
+The enum cases are gone. Match on `kind` instead. The status and body are in `response`, and
+the platform's `sb-error-code` header is in `code`. `Kind` and `Code` are open sets, so keep a
+fallback branch. A `catch` clause can name a kind or a code directly, as in
+`catch FunctionsError.Kind.transport` or `catch FunctionsError.Code.notFound`.
 
 | v2 | v3 |
 | --- | --- |
 | `FunctionsError.relayError` | `error.kind == .relay` |
-| `FunctionsError.httpError(code:data:)` | `error.kind == .server`, `error.response?.statusCode`, `error.response?.body` |
+| `FunctionsError.httpError(code:data:)` | `error.kind == .server`, `error.response?.status`, `error.response?.body` |
 
 ```swift
 // v2
@@ -154,7 +155,7 @@ do {
   try await supabase.functions.invoke("hello")
 } catch let error as FunctionsError where error.kind == .server {
   if let response = error.response {
-    print(response.statusCode, String(decoding: response.body, as: UTF8.self))
+    print(response.status.code, String(decoding: response.body, as: UTF8.self))
   }
 }
 ```

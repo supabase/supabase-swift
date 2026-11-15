@@ -98,15 +98,15 @@ struct PostgrestDerivedColumnTests {
 
   @Test(
     arguments: [
-      { (c: Item.Columns) in c.data.jsonObject("a").eq(.double(.nan)) },
-      { (c: Item.Columns) in c.data.jsonObject("a").in([1, .double(.infinity)]) },
-      { (c: Item.Columns) in c.cost.eq(2) || c.data.eq(["n": .double(.nan)]) },
+      { (c: Item.Columns) in c.data.jsonObject("a").eq(.number(JSONNumber("1e-400")!)) },
+      { (c: Item.Columns) in c.data.jsonObject("a").in([1, .number(JSONNumber("1e-400")!)]) },
+      { (c: Item.Columns) in c.cost.eq(2) || c.data.eq(["n": .number(JSONNumber("1e-400")!)]) },
     ] as [@Sendable (Item.Columns) -> _PostgrestFilter<Item>]
   )
   func aComparisonWithNoJSONFormFailsTheRequestBeforeItIsSent(
     filter: @Sendable (Item.Columns) -> _PostgrestFilter<Item>
   ) async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     do {
       _ = try await capture.client.from(Item.self).select().where(filter).execute()
       Issue.record("Expected an error")
@@ -173,7 +173,7 @@ struct PostgrestDerivedColumnTests {
 
   @Test
   func orderAcceptsJSONPaths() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     _ = try await capture.client.from(Item.self)
       .select()
       .order { $0.data.jsonText("name").asc() }

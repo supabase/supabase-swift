@@ -48,7 +48,7 @@ struct AuthView: View {
     .onOpenURL(perform: { url in
       Task {
         do {
-          try await supabase.auth.session(from: url)
+          try await supabase.auth.handleRedirect(url)
         } catch {
           result = .failure(error)
         }
@@ -64,7 +64,8 @@ struct AuthView: View {
       do {
         try await supabase.auth.signInWithOTP(
           email: email,
-          redirectTo: URL(string: "io.supabase.user-management://login-callback")
+          options: EmailOTPOptions(
+            redirectTo: URL(string: "io.supabase.user-management://login-callback"))
         )
         result = .success(())
       } catch {

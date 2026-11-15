@@ -89,6 +89,9 @@ public struct _PostgrestUpdate<R: _PostgrestWritableRelation>: Encodable, Sendab
     }
   }
 
+  /// Encodes the assigned columns as one object, keyed by database column name.
+  ///
+  /// A column assigned `nil` encodes as an explicit `null`.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: PostgrestUpdateColumnKey.self)
     for (column, value) in values {

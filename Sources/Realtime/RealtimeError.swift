@@ -10,11 +10,10 @@ public import Helpers
 
 /// An error thrown by the Realtime client and channels.
 ///
-/// Check ``kind`` to learn what failed. ``serverCode`` carries the code the server put in
-/// front of a join or channel error reason. ``isRetryable`` says whether the same call can
-/// succeed later without the caller changing anything. ``response`` is set only for
-/// ``Kind-swift.struct/server`` errors from the REST broadcast endpoint used by `httpSend`.
-/// WebSocket failures carry the transport error in ``underlyingError`` when there is one.
+/// Check ``kind`` to learn what failed. ``code`` carries the code the server put in
+/// front of a join or channel error reason. ``response`` is set when the server
+/// answered over HTTP: the REST broadcast endpoint that `httpSend` uses, or a refused WebSocket
+/// upgrade. WebSocket failures carry the transport error in ``underlyingError`` when there is one.
 ///
 /// ```swift
 /// do {
@@ -26,58 +25,81 @@ public import Helpers
 public struct RealtimeError: SupabaseError {
   /// What failed. Compare against the static members and keep a fallback branch.
   public struct Kind: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The kind's name, such as `"timeout"`.
     public let rawValue: String
 
+    /// Creates a kind from its name.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a kind from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
 
     /// A subscribe, push, heartbeat or REST broadcast did not complete within the configured
-    /// timeout. Retry, or raise `RealtimeClientOptions.timeoutInterval` if it happens often.
+    /// timeout. Retry, or raise ``RealtimeClient/Configuration/requestTimeout`` if it happens often.
     public static let timeout: Kind = "timeout"
     /// A send was attempted on a channel that is not subscribed. Call `subscribe()` first.
     public static let notSubscribed: Kind = "notSubscribed"
     /// The socket went away while a reply was pending: the client reconnects on its own, so retry
-    /// the call once the status is back to connected. Also thrown, with
-    /// ``RealtimeError/isRetryable`` `false`, when `subscribe()` found the client disconnected and
-    /// `connectOnSubscribe` is off, or when `disconnect()` stopped a subscribe in flight. Call
-    /// `connect()` before you subscribe again.
+    /// the call once the status is back to connected. Also thrown when `subscribe()` found the
+    /// client disconnected and `connectsOnSubscribe` is off, or when `disconnect()` stopped a
+    /// subscribe in flight. Call `connect()` before you subscribe again.
     public static let notConnected: Kind = "notConnected"
-    /// `httpSend` needs an access token and none was available. Sign in, or pass an
-    /// `accessToken` closure, before sending. No request was sent.
-    public static let accessTokenMissing: Kind = "accessTokenMissing"
-    /// The server rejected the token or the topic's RLS policy denied access. Retrying as-is
-    /// will not help; ``RealtimeError/serverCode`` says which check failed.
+    /// The `accessToken` closure threw when `httpSend` asked it for a token. No request was sent.
+    /// ``RealtimeError/underlyingError`` is the closure's error.
+    public static let accessToken: Kind = "accessToken"
+    /// The server rejected the token or the topic's RLS policy denied access, or refused the
+    /// WebSocket upgrade with 401 or 403. Retrying as-is will not help;
+    /// ``RealtimeError/code`` says which check failed, and ``RealtimeError/response`` has
+    /// the status of a refused upgrade.
     public static let unauthorized: Kind = "unauthorized"
-    /// The server applied a rate limit. ``RealtimeError/serverCode`` names which one. A channel
-    /// waits 30 s before it joins again.
+    /// The server applied a rate limit. ``RealtimeError/code`` names which one. A channel
+    /// waits 30 s before it joins again. A WebSocket upgrade refused with 429 has this kind too,
+    /// with ``RealtimeError/response`` set; the client then reconnects with its usual backoff.
     public static let rateLimited: Kind = "rateLimited"
     /// The server closed the channel (`phx_close`) with a `system` error. The message carries
     /// the server's reason.
     public static let channelClosed: Kind = "channelClosed"
     /// A broadcast with `ack` was rejected because the payload is over the project's limit.
     public static let payloadTooLarge: Kind = "payloadTooLarge"
-    /// The server closed the channel while a subscribe was in flight. Goes away with the v2
-    /// module (SDK-2109); v3 reports this as ``channelClosed``.
+    /// The server closed the channel while a subscribe was in flight.
     public static let channelClosedByServer: Kind = "channelClosedByServer"
-    /// The server answered a join or REST broadcast with an error this SDK has no narrower kind
-    /// for. Read ``RealtimeError/serverCode`` and ``RealtimeError/message``, or
-    /// ``RealtimeError/response`` on the REST path.
+    /// The server reported an error on the channel (`phx_error`). The channel joins again on
+    /// its own, and ``RealtimeChannelEvent/resubscribed`` follows the rejoin. Pushes that
+    /// waited for a reply fail with this kind.
+    public static let channelError: Kind = "channelError"
+    /// The call used a channel that ``RealtimeClient/removeChannel(_:)`` removed or that the
+    /// server closed (`phx_close`), or the removal ended a subscribe in flight. Get a new channel
+    /// from ``RealtimeClient/channel(_:configure:)``.
+    public static let channelRemoved: Kind = "channelRemoved"
+    /// The server answered a join, a REST broadcast or the WebSocket upgrade with an error this
+    /// SDK has no narrower kind for. Read ``RealtimeError/code`` and
+    /// ``RealtimeError/message``, or ``RealtimeError/response`` on the REST path and for a refused
+    /// upgrade.
     public static let server: Kind = "server"
-    /// The network path failed: a REST broadcast never completed, the WebSocket upgrade was
-    /// refused, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
+    /// The network path failed: a REST broadcast never completed, the WebSocket handshake did
+    /// not finish, or the socket closed. ``RealtimeError/underlyingError`` is the `URLError` when
     /// there was one; `closeCode` the close status when the socket closed.
     public static let transport: Kind = "transport"
     /// A frame from the server could not be decoded, or a message had an unexpected shape.
     /// Nothing to retry; report it.
     public static let decoding: Kind = "decoding"
+    /// ``RealtimeClient/init(configuration:)`` refused the configuration: its URL has no scheme
+    /// or no host. Fix the configuration. No client was created.
+    public static let invalidConfiguration: Kind = "invalidConfiguration"
 
-    /// A frame could not be encoded for sending. Never thrown to callers; it only appears in logs.
-    static let encoding: Kind = "encoding"
+    /// The SDK refused to send: a payload did not encode as JSON, or the transport cannot open
+    /// the URL on this platform. Nothing was sent. ``RealtimeError/underlyingError`` is the cause,
+    /// such as the `EncodingError`.
+    public static let invalidRequest: Kind = "invalidRequest"
+
+    /// Kinds that no retry can fix: the caller must change something first.
+    static let nonRetryable: Set<Kind> = [
+      .unauthorized, .invalidRequest, .invalidConfiguration, .decoding,
+    ]
   }
 
   /// The code the server prefixes to a join or channel error reason, as in
@@ -85,46 +107,75 @@ public struct RealtimeError: SupabaseError {
   ///
   /// The server owns this set and adds to it without notice, so compare against the static
   /// members and keep a fallback branch.
-  public struct ServerCode: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+  public struct Code: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral {
+    /// The code as the server sends it, such as `"Unauthorized"`.
     public let rawValue: String
 
+    /// Creates a code from the value the server sends.
     public init(rawValue: String) {
       self.rawValue = rawValue
     }
 
+    /// Creates a code from a string literal.
     public init(stringLiteral value: String) {
       self.init(rawValue: value)
     }
 
-    public static let topicNameRequired: ServerCode = "TopicNameRequired"
-    public static let invalidJWTToken: ServerCode = "InvalidJWTToken"
-    public static let malformedJWT: ServerCode = "MalformedJWT"
-    public static let jwtSignatureError: ServerCode = "JwtSignatureError"
-    public static let jwtSignerError: ServerCode = "JwtSignerError"
-    public static let unauthorized: ServerCode = "Unauthorized"
-    public static let privateOnly: ServerCode = "PrivateOnly"
-    public static let tenantNotFound: ServerCode = "TenantNotFound"
-    public static let realtimeDisabledForTenant: ServerCode = "RealtimeDisabledForTenant"
-    public static let realtimeDisabledForConfiguration: ServerCode =
+    /// The join had no topic.
+    public static let topicNameRequired: Code = "TopicNameRequired"
+    /// The server rejected the token, for example because it expired.
+    public static let invalidJWTToken: Code = "InvalidJWTToken"
+    /// The token is not a well-formed JWT.
+    public static let malformedJWT: Code = "MalformedJWT"
+    /// The server could not verify the token's signature.
+    public static let jwtSignatureError: Code = "JwtSignatureError"
+    /// The server could not set up the signer to verify the token.
+    public static let jwtSignerError: Code = "JwtSignerError"
+    /// A row level security policy on `realtime.messages` denied the join.
+    public static let unauthorized: Code = "Unauthorized"
+    /// The project allows only private channels.
+    public static let privateOnly: Code = "PrivateOnly"
+    /// The server does not know the project.
+    public static let tenantNotFound: Code = "TenantNotFound"
+    /// Realtime is turned off for the project.
+    public static let realtimeDisabledForTenant: Code = "RealtimeDisabledForTenant"
+    /// The server cannot serve the channel's configuration.
+    public static let realtimeDisabledForConfiguration: Code =
       "RealtimeDisabledForConfiguration"
-    public static let unableToReplayMessages: ServerCode = "UnableToReplayMessages"
-    public static let channelRateLimitReached: ServerCode = "ChannelRateLimitReached"
-    public static let connectionRateLimitReached: ServerCode = "ConnectionRateLimitReached"
-    public static let clientJoinRateLimitReached: ServerCode = "ClientJoinRateLimitReached"
-    public static let realtimeRestarting: ServerCode = "RealtimeRestarting"
-    public static let initializingProjectConnection: ServerCode = "InitializingProjectConnection"
-    public static let increaseConnectionPool: ServerCode = "IncreaseConnectionPool"
-    public static let databaseLackOfConnections: ServerCode = "DatabaseLackOfConnections"
-    public static let databaseConnectionRateLimitReached: ServerCode =
+    /// The server could not replay broadcast messages with the requested replay options.
+    public static let unableToReplayMessages: Code = "UnableToReplayMessages"
+    /// The project has too many channels open.
+    public static let channelRateLimitReached: Code = "ChannelRateLimitReached"
+    /// The project has too many clients connected.
+    public static let connectionRateLimitReached: Code = "ConnectionRateLimitReached"
+    /// The project sent too many joins per second.
+    public static let clientJoinRateLimitReached: Code = "ClientJoinRateLimitReached"
+    /// The Realtime server is restarting.
+    public static let realtimeRestarting: Code = "RealtimeRestarting"
+    /// The server is still connecting to the project's database.
+    public static let initializingProjectConnection: Code = "InitializingProjectConnection"
+    /// The server's connection pool to the project's database is full.
+    public static let increaseConnectionPool: Code = "IncreaseConnectionPool"
+    /// The project's database has no free connections.
+    public static let databaseLackOfConnections: Code = "DatabaseLackOfConnections"
+    /// The server tried to connect to the project's database too often.
+    public static let databaseConnectionRateLimitReached: Code =
       "DatabaseConnectionRateLimitReached"
-    public static let unableToConnectToProject: ServerCode = "UnableToConnectToProject"
-    public static let queryCanceled: ServerCode = "QueryCanceled"
-    public static let missingPartition: ServerCode = "MissingPartition"
-    public static let timeoutOnRpcCall: ServerCode = "TimeoutOnRpcCall"
-    public static let errorOnRpcCall: ServerCode = "ErrorOnRpcCall"
-    public static let postgresChangesSubscribeTimeout: ServerCode =
+    /// The server could not connect to the project's database.
+    public static let unableToConnectToProject: Code = "UnableToConnectToProject"
+    /// The database canceled a query the server ran for the channel.
+    public static let queryCanceled: Code = "QueryCanceled"
+    /// The database is missing the `realtime.messages` partition the server needs.
+    public static let missingPartition: Code = "MissingPartition"
+    /// A call between Realtime server nodes timed out.
+    public static let timeoutOnRpcCall: Code = "TimeoutOnRpcCall"
+    /// A call between Realtime server nodes failed.
+    public static let errorOnRpcCall: Code = "ErrorOnRpcCall"
+    /// The server did not set up the channel's Postgres changes in time.
+    public static let postgresChangesSubscribeTimeout: Code =
       "PostgresChangesSubscribeTimeout"
-    public static let unknownErrorOnChannel: ServerCode = "UnknownErrorOnChannel"
+    /// The server met an error it has no code for.
+    public static let unknownErrorOnChannel: Code = "UnknownErrorOnChannel"
 
     /// Codes the server emits for conditions the caller must fix: a bad token, a denied
     /// policy, a disabled tenant, invalid replay parameters. Retrying as-is cannot succeed.
@@ -132,63 +183,100 @@ public struct RealtimeError: SupabaseError {
     /// The server's catalog at https://github.com/supabase/realtime/blob/main/ERROR_CODES.md
     /// lists codes without saying which are permanent, so these sets are this SDK's policy: a
     /// code is fatal when the server would give the same answer on retry; the rest retries.
-    static let fatal: Set<ServerCode> = [
+    static let fatal: Set<Code> = [
       .topicNameRequired, .malformedJWT, .jwtSignatureError, .jwtSignerError, .invalidJWTToken,
       .unauthorized, .privateOnly, .tenantNotFound, .realtimeDisabledForTenant,
       .realtimeDisabledForConfiguration, .unableToReplayMessages,
+      .postgresChangesSubscribeTimeout,
     ]
 
-    static let authentication: Set<ServerCode> = [
+    static let authentication: Set<Code> = [
       .unauthorized, .invalidJWTToken, .malformedJWT, .jwtSignatureError, .jwtSignerError,
     ]
 
-    static let rateLimit: Set<ServerCode> = [
+    static let rateLimit: Set<Code> = [
       .channelRateLimitReached, .connectionRateLimitReached, .clientJoinRateLimitReached,
       .databaseConnectionRateLimitReached,
     ]
 
     /// The code in front of the first `": "`, or `nil` for the server's bare-string reasons.
     /// A prefix with whitespace is prose, not a code.
-    static func parse(_ reason: String) -> ServerCode? {
+    static func parse(_ reason: String) -> Code? {
       guard let separator = reason.range(of: ": ") else { return nil }
       let prefix = reason[..<separator.lowerBound]
       guard !prefix.isEmpty, !prefix.contains(where: \.isWhitespace) else { return nil }
-      return ServerCode(rawValue: String(prefix))
+      return Code(rawValue: String(prefix))
     }
   }
 
+  /// What failed. Check it first.
   public var kind: Kind
+  /// A description of the failure, from the server or from the SDK.
   public var message: String
   /// The code parsed from a server error reason, when the reason carried one.
-  public var serverCode: ServerCode?
+  public var code: Code?
   /// The close status, when a WebSocket close caused this error.
   package var closeCode: WebSocketCloseCode?
-  /// Whether the same operation can succeed later without the caller changing anything.
+  /// Whether the client and its channels try again after this error.
   ///
   /// `false` for errors the user must act on: a rejected token, a denied policy, a refused
-  /// upgrade with 401/403/404. The client stops reconnecting when it meets one.
-  public var isRetryable: Bool
+  /// upgrade with 401/403/404. The client stops reconnecting when it meets one. Follows ``kind``
+  /// unless the SDK set it for this error.
+  package var isRetryable: Bool {
+    retryOverride ?? !Kind.nonRetryable.contains(kind)
+  }
+  private var retryOverride: Bool?
+  /// The HTTP error response, for an error from the REST broadcast endpoint that `httpSend` uses
+  /// or from a refused WebSocket upgrade.
   public var response: HTTPErrorResponse?
+  /// The error that caused this one, such as a `URLError` or a `DecodingError`.
   public var underlyingError: (any Error)?
 
+  /// Creates an error.
+  ///
+  /// The kind decides whether the client tries again: ``Kind-swift.struct/unauthorized``,
+  /// ``Kind-swift.struct/invalidRequest``, ``Kind-swift.struct/invalidConfiguration`` and
+  /// ``Kind-swift.struct/decoding`` stop it; every other kind lets it retry.
+  ///
+  /// - Parameters:
+  ///   - kind: What failed.
+  ///   - message: A description of the failure.
+  ///   - code: The code from the server's error reason, if any.
+  ///   - response: The HTTP error response, if any.
+  ///   - underlyingError: The error that caused this one, if any.
   public init(
     kind: Kind,
     message: String,
-    serverCode: ServerCode? = nil,
-    isRetryable: Bool = true,
+    code: Code? = nil,
     response: HTTPErrorResponse? = nil,
     underlyingError: (any Error)? = nil
   ) {
     self.kind = kind
     self.message = message
-    self.serverCode = serverCode
-    self.isRetryable = isRetryable
+    self.code = code
     self.response = response
     self.underlyingError = underlyingError
   }
 
+  package init(
+    kind: Kind,
+    message: String,
+    code: Code? = nil,
+    isRetryable: Bool,
+    response: HTTPErrorResponse? = nil,
+    underlyingError: (any Error)? = nil
+  ) {
+    self.init(
+      kind: kind, message: message, code: code, response: response,
+      underlyingError: underlyingError)
+    retryOverride = isRetryable
+  }
+
+  /// The kind and the message, plus the HTTP status and the code when there are any, for logs.
   public var description: String {
-    formattedDescription(kind: kind.rawValue)
+    // A server reason already leads with its code (`"InvalidJWTToken: …"`), so print it once.
+    let code = code.flatMap { message.hasPrefix("\($0.rawValue): ") ? nil : $0.rawValue }
+    return formattedDescription(kind: kind.rawValue, code: code)
   }
 }
 
@@ -197,18 +285,28 @@ extension RealtimeError {
   public static let channelClosedByServer = RealtimeError(
     kind: .channelClosedByServer, message: "Channel was closed by the server while subscribing.")
 
-  static let accessTokenMissing = RealtimeError(
-    kind: .accessTokenMissing, message: "Access token is required for httpSend()",
+  /// The server reported an error on the channel (`phx_error`).
+  static let channelError = RealtimeError(
+    kind: .channelError, message: "The server reported an error on the channel.")
+
+  /// The channel was removed with ``RealtimeClient/removeChannel(_:)``, or the server closed it.
+  static let channelRemoved = RealtimeError(
+    kind: .channelRemoved,
+    message: "The channel was removed from the client or closed by the server.",
     isRetryable: false)
 
   static let heartbeatTimeout = RealtimeError(kind: .timeout, message: "heartbeat timeout")
 
   static func decoding(_ message: String) -> RealtimeError {
-    RealtimeError(kind: .decoding, message: message, isRetryable: false)
+    RealtimeError(kind: .decoding, message: message)
   }
 
-  static func encoding(_ message: String) -> RealtimeError {
-    RealtimeError(kind: .encoding, message: message, isRetryable: false)
+  static func invalidRequest(_ message: String, underlyingError: (any Error)? = nil)
+    -> RealtimeError
+  {
+    RealtimeError(
+      kind: .invalidRequest, message: message,
+      underlyingError: underlyingError)
   }
 
   static func transport(_ message: String, underlyingError: (any Error)? = nil) -> RealtimeError {
@@ -221,12 +319,12 @@ extension RealtimeError {
   /// bare strings. It is retryable unless ``JoinRecovery`` says the join fails for good: an
   /// expired-token `InvalidJWTToken` is retryable because a fresh token can fix it.
   package static func joinError(reason: String) -> RealtimeError {
-    let code = ServerCode.parse(reason)
-    let recovery = JoinRecovery(serverCode: code, reason: reason)
+    let code = Code.parse(reason)
+    let recovery = JoinRecovery(code: code, reason: reason)
     let kind: Kind
     switch (code, recovery) {
-    case (.some(let code), _) where ServerCode.authentication.contains(code): kind = .unauthorized
-    case (.some(let code), _) where ServerCode.rateLimit.contains(code): kind = .rateLimited
+    case (.some(let code), _) where Code.authentication.contains(code): kind = .unauthorized
+    case (.some(let code), _) where Code.rateLimit.contains(code): kind = .rateLimited
     // Without a code, the wording is all there is: an expired token or a revoked permission is
     // an auth failure, a rate limit is a rate limit.
     case (nil, .refreshToken), (nil, .fail): kind = .unauthorized
@@ -234,21 +332,21 @@ extension RealtimeError {
     default: kind = .server
     }
     return RealtimeError(
-      kind: kind, message: reason, serverCode: code, isRetryable: recovery != .fail)
+      kind: kind, message: reason, code: code, isRetryable: recovery != .fail)
   }
 
   /// The error for a `phx_reply` with `status: "error"` to a push sent with `ack`.
   ///
   /// The server answers a payload over the project's size limit with the bare string
   /// `"payload_size_exceeded"`; anything else is reported as it came, with the code in front
-  /// of a `"<Code>: <message>"` reason in ``serverCode``.
+  /// of a `"<Code>: <message>"` reason in ``code``.
   package static func ackError(reason: String) -> RealtimeError {
     if reason == "payload_size_exceeded" {
       return RealtimeError(
         kind: .payloadTooLarge, message: "Broadcast payload is over the project's size limit.",
         isRetryable: false)
     }
-    return RealtimeError(kind: .server, message: reason, serverCode: ServerCode.parse(reason))
+    return RealtimeError(kind: .server, message: reason, code: Code.parse(reason))
   }
 
   /// The error for a WebSocket that closed while the client still needed it.
@@ -265,21 +363,41 @@ extension RealtimeError {
   /// rarely `Equatable`, and two errors with the same kind, message and codes mean the same.
   func isSameFailure(as other: RealtimeError?) -> Bool {
     guard let other else { return false }
-    return kind == other.kind && message == other.message && serverCode == other.serverCode
-      && closeCode == other.closeCode && isRetryable == other.isRetryable
+    return kind == other.kind && message == other.message && code == other.code
+      && closeCode == other.closeCode
   }
 
   /// The error for an HTTP upgrade the server refused.
   ///
   /// 401, 403 and 404 mean the key, tenant or project is wrong and a retry cannot help. Every
-  /// other status (429 and 5xx in practice) is transient.
-  package static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
+  /// other status (429 and 5xx in practice) is transient. A custom ``WebSocketTransport`` throws
+  /// this error so the client knows whether to retry.
+  ///
+  /// The kind follows the status: 401 and 403 are ``Kind-swift.struct/unauthorized``, 429 is
+  /// ``Kind-swift.struct/rateLimited``, and every other status is ``Kind-swift.struct/server``.
+  /// ``response`` carries the status, or is `nil` when `status` is outside `0...999`.
+  ///
+  /// - Parameters:
+  ///   - status: The HTTP status the server answered the upgrade with.
+  ///   - underlyingError: The transport's own error, if any.
+  /// - Returns: The error for a transport to throw.
+  public static func upgradeFailed(status: Int, underlyingError: (any Error)? = nil)
     -> RealtimeError
   {
-    RealtimeError(
-      kind: .transport,
+    let kind: Kind =
+      switch status {
+      case 401, 403: .unauthorized
+      case 429: .rateLimited
+      default: .server
+      }
+    return RealtimeError(
+      kind: kind,
       message: "WebSocket upgrade failed with HTTP status \(status).",
       isRetryable: ![401, 403, 404].contains(status),
+      // `HTTPResponse.Status` traps outside 0...999, and a custom transport passes any `Int`.
+      response: (0...999).contains(status)
+        ? HTTPErrorResponse(status: HTTPResponse.Status(code: status), headers: [:], body: Data())
+        : nil,
       underlyingError: underlyingError
     )
   }
@@ -299,13 +417,13 @@ extension RealtimeError {
 
     /// A server code decides when the reason has one. The server sends a few reasons without a
     /// code; those fall back to their wording.
-    init(serverCode: ServerCode?, reason: String) {
-      if let code = serverCode {
+    init(code: Code?, reason: String) {
+      if let code {
         if code == .invalidJWTToken, reason.contains("expired") {
           self = .refreshToken
-        } else if ServerCode.fatal.contains(code) {
+        } else if Code.fatal.contains(code) {
           self = .fail
-        } else if ServerCode.rateLimit.contains(code) {
+        } else if Code.rateLimit.contains(code) {
           self = .backOff
         } else {
           self = .retry
@@ -326,6 +444,106 @@ extension RealtimeError {
 
   /// How a channel recovers from this error when a join attempt fails with it.
   var joinRecovery: JoinRecovery {
-    isRetryable ? JoinRecovery(serverCode: serverCode, reason: message) : .fail
+    isRetryable ? JoinRecovery(code: code, reason: message) : .fail
+  }
+}
+
+extension RealtimeError {
+  /// The channel is not subscribed, so the push cannot be delivered.
+  static let notSubscribed = RealtimeError(
+    kind: .notSubscribed,
+    message: "The channel is not subscribed. Call `subscribe()` first, or use `httpSend()`.",
+    isRetryable: false
+  )
+
+  /// The channel's client was released, so the channel can never connect again.
+  static let clientReleased = RealtimeError(
+    kind: .notConnected, message: "The realtime client was released.", isRetryable: false)
+
+  /// `subscribe()` found no connection and `connectsOnSubscribe` is off.
+  static let notConnectedToSubscribe = RealtimeError(
+    kind: .notConnected,
+    message:
+      "The realtime client is not connected and `connectsOnSubscribe` is off. Call `connect()` first.",
+    isRetryable: false
+  )
+
+  /// The server confirmed the join with `postgres_changes` the client cannot decode. A retry
+  /// gets the same reply.
+  static func unreadableJoinReply(_ error: any Error) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server's join reply has `postgres_changes` the client cannot read: \(error)",
+      isRetryable: false
+    )
+  }
+
+  /// ``RealtimeClient/disconnect(code:reason:)`` was called while the channel was subscribing.
+  static let disconnectedWhileSubscribing = RealtimeError(
+    kind: .notConnected,
+    message: "The realtime client was disconnected while the channel was subscribing.",
+    isRetryable: false
+  )
+
+  /// The server did not report "Subscribed to PostgreSQL" within
+  /// ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``.
+  static let postgresChangesTimeout = RealtimeError(
+    kind: .timeout,
+    message:
+      "The server did not set up the channel's Postgres changes within the subscription timeout.",
+    isRetryable: false
+  )
+
+  /// The server could not set up the channel's Postgres changes bindings.
+  package static func postgresChangesFailed(reason: String) -> RealtimeError {
+    RealtimeError(
+      kind: .server,
+      message: "The server could not set up the channel's Postgres changes: \(reason)",
+      isRetryable: false
+    )
+  }
+
+  /// The server did not confirm a `phx_join` within the client's configured timeout.
+  static let joinTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not confirm the join within the timeout.")
+
+  /// The socket is not connected, so the push cannot be answered.
+  static let notConnected = RealtimeError(
+    kind: .notConnected, message: "The realtime client is not connected.")
+
+  /// No `phx_reply` arrived for the push within the client's configured timeout.
+  static let pushTimeout = RealtimeError(
+    kind: .timeout, message: "The server did not reply to the push within the timeout.")
+}
+
+extension RealtimeError.Kind {
+  /// Matches a ``RealtimeError`` of this ``RealtimeError/kind``, so a `catch` clause can name the kind
+  /// directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await channel.subscribe()
+  /// } catch RealtimeError.Kind.unauthorized {
+  ///   showSignIn()
+  /// }
+  /// ```
+  public static func ~= (kind: RealtimeError.Kind, error: any Error) -> Bool {
+    (error as? RealtimeError)?.kind == kind
+  }
+}
+
+extension RealtimeError.Code {
+  /// Matches a ``RealtimeError`` with this ``RealtimeError/code``, so a `catch` clause can name the code
+  /// directly.
+  ///
+  /// ```swift
+  /// do {
+  ///   try await channel.subscribe()
+  /// } catch RealtimeError.Code.privateOnly {
+  ///   usePrivateChannel()
+  /// }
+  /// ```
+  public static func ~= (code: RealtimeError.Code, error: any Error) -> Bool {
+    (error as? RealtimeError)?.code == code
   }
 }

@@ -62,42 +62,54 @@ struct PostgrestRequestTests {
   }
 
   @Test
-  func makeRequestSeedsTheClientHeaders() {
-    let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["apikey": "key"])
+  func makeRequestSeedsTheClientHeaders() throws {
+    let client = try PostgrestClient(
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: [.apikey: "key"]
+      )
+    )
     let request = client.makeRequest("todos")
-    #expect(request.headerFields[HTTPField.Name("apikey")!] == "key")
+    #expect(request.headerFields[.apikey] == "key")
   }
 
   @Test
-  func aRequestHeaderReplacesTheClientHeader() {
-    let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["Prefer": "tx=rollback"])
+  func aRequestHeaderReplacesTheClientHeader() throws {
+    let client = try PostgrestClient(
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: [HTTPField.Name("Prefer")!: "tx=rollback"]
+      )
+    )
     var request = client.makeRequest("todos")
     request.headerFields[.prefer] = "count=exact"
     #expect(request.httpRequest(for: client.configuration).headerFields[.prefer] == "count=exact")
   }
 
   @Test
-  func aClientHeaderRemovedFromTheRequestStaysRemoved() {
-    let client = PostgrestClient(
-      url: URL(string: "https://example.supabase.co")!, headers: ["apikey": "key"])
+  func aClientHeaderRemovedFromTheRequestStaysRemoved() throws {
+    let client = try PostgrestClient(
+      configuration: .init(
+        url: URL(string: "https://example.supabase.co")!,
+        headers: [.apikey: "key"]
+      )
+    )
     var request = client.makeRequest("todos")
-    request.headerFields[HTTPField.Name("apikey")!] = nil
+    request.headerFields[.apikey] = nil
     let sent = request.httpRequest(for: client.configuration)
-    #expect(sent.headerFields[HTTPField.Name("apikey")!] == nil)
+    #expect(sent.headerFields[.apikey] == nil)
   }
 
   @Test
   func rpcParamsAreNotReplacedByALaterTransform() async throws {
-    let capture = QueryCapture()
+    let capture = try QueryCapture()
     try await capture.client.rpc("f", params: ["limit": 5], get: true).limit(10).execute()
     #expect(capture.query == "limit=5&limit=10")
   }
 
   @Test
   func nullOnNoRowsReportsADecodingError() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"""
         {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
         "details":"The result contains 0 rows","hint":null}
@@ -116,7 +128,7 @@ struct PostgrestRequestTests {
 
   @Test
   func typedPreferMergesWithTheClientPrefer() async throws {
-    let capture = QueryCapture(headers: ["Prefer": "tx=rollback"])
+    let capture = try QueryCapture(headers: [HTTPField.Name("Prefer")!: "tx=rollback"])
     try await capture.client.from(Todo.self).delete().all().execute(count: .exact)
     let prefer = try #require(capture.header("Prefer"))
     #expect(prefer.contains("tx=rollback"))
@@ -126,7 +138,7 @@ struct PostgrestRequestTests {
 
   @Test
   func nullOnNoRowsDecodesNull() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"""
         {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
         "details":"The result contains 0 rows","hint":null}
@@ -139,11 +151,13 @@ struct PostgrestRequestTests {
       try JSONDecoder().decode(Int?.self, from: $0)
     }
     #expect(response.value == nil)
+    #expect(response.status == .ok)
+    #expect(String(decoding: response.body, as: UTF8.self) == "null")
   }
 
   @Test
   func withoutNullOnNoRowsPGRST116Throws() async throws {
-    let capture = QueryCapture(
+    let capture = try QueryCapture(
       body: #"""
         {"code":"PGRST116","message":"Cannot coerce the result to a single JSON object",\#
         "details":"The result contains 0 rows","hint":null}

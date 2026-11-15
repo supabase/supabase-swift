@@ -50,13 +50,15 @@
 
 Add `supabase-swift` as a Swift Package Manager dependency:
 
+<!-- x-release-please-start-version -->
+<!-- snippet: no-compile -->
 ```swift
 let package = Package(
     ...
     dependencies: [
         .package(
             url: "https://github.com/supabase/supabase-swift.git",
-            from: "2.0.0"
+            from: "3.0.0-alpha.1"
         ),
     ],
     targets: [
@@ -69,15 +71,16 @@ let package = Package(
     ]
 )
 ```
+<!-- x-release-please-end -->
 
 If you're using Xcode, [use this guide](https://developer.apple.com/documentation/swift_packages/adding_package_dependencies_to_your_app) to add `supabase-swift` to your project. Use `https://github.com/supabase/supabase-swift.git` for the URL when Xcode asks.
 
-You can also add individual libraries (`Auth`, `Realtime`, `Storage`, `PostgREST`, `Functions`) instead of the full `Supabase` product.
+You can also add individual libraries (`Auth`, `Functions`, `PostgREST`, `PostgrestMacros`, `Realtime`, `Storage`) instead of the full `Supabase` product.
 
 ### Initialize the client
 
 ```swift
-let client = SupabaseClient(
+let client = try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key"
 )
@@ -86,23 +89,115 @@ let client = SupabaseClient(
 ### Initialize with custom options
 
 ```swift
-let client = SupabaseClient(
+let client = try SupabaseClient(
     supabaseURL: URL(string: "https://xyzcompany.supabase.co")!,
     supabaseKey: "your-publishable-key",
-    options: SupabaseClientOptions(
-        db: .init(
+    configuration: SupabaseClient.Configuration(
+        database: .init(
             schema: "public"
         ),
         auth: .init(
-            storage: MyCustomLocalStorage(),
-            flowType: .pkce
+            storage: MyCustomAuthStorage()
         ),
         global: .init(
-            headers: ["x-my-custom-header": "my-app-name"],
+            headers: [HTTPField.Name("x-my-custom-header")!: "my-app-name"],
             http: .init(transport: URLSessionTransport(session: URLSession.myCustomSession))
         )
     )
 )
+```
+
+### Sign in and track the session
+
+```swift
+// Sign in. The session is stored for you.
+try await client.auth.signIn(email: "user@example.com", password: "secret")
+
+// React to every change: sign-in, sign-out, token refresh, and more.
+for await change in client.auth.events() {
+    print(change.event, change.session?.user.email ?? "signed out")
+}
+```
+
+In SwiftUI, `AuthModel` (iOS 17, macOS 14, tvOS 17, watchOS 10, visionOS 1 or later) is an
+`@Observable` view of the session. Gate your root view on its `status`:
+
+<!-- snippet: no-compile -->
+```swift
+@State private var auth = AuthModel(client: client.auth)
+
+var body: some View {
+    switch auth.status {
+    case .loading: ProgressView()
+    case .signedOut: SignInView()
+    case .signedIn: HomeView()
+    }
+}
+```
+
+Send every auth link that opens your app to `handleRedirect`. It handles OAuth callbacks,
+magic links, and password-reset links, and it is safe to call twice with the same URL. A
+password-reset link signs the user in, so check the result to show an "update password" screen:
+
+<!-- snippet: no-compile -->
+```swift
+.onOpenURL { url in
+    Task {
+        if case .signedIn(_, verification: .recovery)? = try await client.handleRedirect(url) {
+            isPasswordRecovery = true
+        }
+    }
+}
+```
+
+On Apple platforms the session is stored in the Keychain. On iOS, tvOS, watchOS and visionOS it
+stays on the device. On Linux, Android and Windows the default storage keeps the session in
+memory, so pass your own `AuthStorage` to keep it across launches.
+
+### Query the database
+
+```swift
+struct Todo: Codable {
+    let id: Int
+    let task: String
+}
+
+// Read rows. The result decodes as the type you ask for.
+let todos: [Todo] = try await client.from("todos")
+    .select()
+    .eq("is_done", value: false)
+    .order("id")
+    .execute()
+    .value
+
+// Insert a row, and get it back.
+let created: Todo = try await client.from("todos")
+    .insert(["task": "Write the docs"])
+    .select()
+    .single()
+    .execute()
+    .value
+```
+
+### Upload a file
+
+```swift
+let avatars = client.storage.from("avatars")
+
+try await avatars.upload(path: "user123.png", data: Data("hello".utf8))
+let data = try await avatars.download(path: "user123.png").data()
+```
+
+### Listen for Realtime messages
+
+```swift
+let channel = await client.channel("room:42")
+let messages = await channel.broadcasts(event: "message")
+
+try await channel.subscribe()
+for await message in messages {
+    print(message)
+}
 ```
 
 ### Invoke an Edge Function
@@ -136,13 +231,15 @@ to install it by hand only when the CLI cannot do that, for example without netw
 uses the `supabase-typegen` it finds on your `PATH`. Install the build that matches the
 supabase-swift version your project uses:
 
+<!-- x-release-please-start-version -->
 ```bash
-VERSION=2.55.1 # your supabase-swift version
+VERSION=3.0.0-alpha.1 # your supabase-swift version
 ASSET=supabase-typegen-macos-universal.tar.gz # or supabase-typegen-linux-x86_64.tar.gz
 mkdir -p ~/.local/bin
 curl -fsSL "https://github.com/supabase/supabase-swift/releases/download/v$VERSION/$ASSET" | tar -xz -C ~/.local/bin
 supabase-typegen --version
 ```
+<!-- x-release-please-end -->
 
 Put `~/.local/bin` on your `PATH` if it is not there yet. Then generate the file:
 
@@ -155,6 +252,17 @@ does not set the quarantine flag. To clear it from a browser download, run
 `xattr -d com.apple.quarantine ~/.local/bin/supabase-typegen`.
 
 Additional examples are available in the [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples) directory.
+
+## Documentation
+
+- [API documentation](https://swiftpackageindex.com/supabase/supabase-swift/documentation/supabase)
+  on the Swift Package Index. It has a guide for each library: getting started, error handling,
+  standalone use, and testing with a stub transport.
+- [V3 migration guide](V3_MIGRATION.md), to move an app from v2.
+- [Examples](https://github.com/supabase/supabase-swift/tree/main/Examples).
+
+CI compiles the Swift snippets in this file, except the `Package.swift` and SwiftUI fragments. See
+[DEVELOPMENT.md](DEVELOPMENT.md#documentation).
 
 ## Support Policy
 

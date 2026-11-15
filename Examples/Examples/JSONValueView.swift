@@ -15,8 +15,7 @@ struct JSONValueView: View {
     switch value {
     case .null: Text("<nil>")
     case .bool(let value): Text(value.description)
-    case .double(let value): Text(value.description)
-    case .integer(let value): Text(value.description)
+    case .number(let value): Text(value.description)
     case .string(let value): Text(value)
     case .array(let value):
       ForEach(0..<value.count, id: \.self) { index in
@@ -56,7 +55,7 @@ struct JSONValueView: View {
 extension JSONValue {
   var isPrimitive: Bool {
     switch self {
-    case .null, .bool, .integer, .double, .string:
+    case .null, .bool, .number, .string:
       true
     case .object, .array:
       false

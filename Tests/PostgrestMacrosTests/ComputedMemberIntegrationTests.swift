@@ -59,7 +59,7 @@ struct ComputedChannelFeed {
 struct ComputedMemberIntegrationTests {
   @Test
   func aWholeRowSelectLeavesComputedMembersOut() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client.from(ComputedUser.self).select().execute()
 
     #expect(capture.query == "select=*")
@@ -72,7 +72,7 @@ struct ComputedMemberIntegrationTests {
 
   @Test
   func aComputedFieldFiltersAndOrders() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(ComputedUser.self)
       .select(ComputedUserName.self)
@@ -97,7 +97,7 @@ struct ComputedMemberIntegrationTests {
 
   @Test
   func requiringMarksAComputedRelationshipInner() async throws {
-    let capture = RequestCapture()
+    let capture = try RequestCapture()
     _ = try await capture.client
       .from(ComputedChannel.self)
       .select(ComputedChannelFeed.self)

@@ -5,9 +5,11 @@
 //  Demonstrates phone number authentication with OTP verification
 //
 
+import Supabase
 import SwiftUI
 
 struct SignInWithPhone: View {
+  @Environment(\.supabase) private var supabase
   @Environment(\.openURL) private var openURL
   @State var phone = ""
   @State var code = ""
@@ -194,4 +196,5 @@ struct SignInWithPhone: View {
 
 #Preview {
   SignInWithPhone()
+    .environment(\.supabase, supabaseClient)
 }

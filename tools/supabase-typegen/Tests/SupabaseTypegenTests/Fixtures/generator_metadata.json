@@ -1719,6 +1719,50 @@
   ],
   "functions": [
     {
+      "id": 17896,
+      "schema": "public",
+      "name": "channel_message_counts",
+      "language": "sql",
+      "definition": "\n    SELECT c.id, c.slug, count(m.id)\n    FROM public.channels c LEFT JOIN public.messages m ON m.channel_id = c.id\n    GROUP BY c.id, c.slug\n    HAVING count(m.id) >= min_messages\n  ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.channel_message_counts(min_messages integer DEFAULT 0)\n RETURNS TABLE(channel_id integer, slug text, message_count bigint)\n LANGUAGE sql\n STABLE\nAS $function$\n    SELECT c.id, c.slug, count(m.id)\n    FROM public.channels c LEFT JOIN public.messages m ON m.channel_id = c.id\n    GROUP BY c.id, c.slug\n    HAVING count(m.id) >= min_messages\n  $function$\n",
+      "args": [
+        {
+          "mode": "table",
+          "name": "channel_id",
+          "type_id": 23,
+          "has_default": null
+        },
+        {
+          "mode": "table",
+          "name": "message_count",
+          "type_id": 20,
+          "has_default": null
+        },
+        {
+          "mode": "in",
+          "name": "min_messages",
+          "type_id": 23,
+          "has_default": true
+        },
+        {
+          "mode": "table",
+          "name": "slug",
+          "type_id": 25,
+          "has_default": null
+        }
+      ],
+      "argument_types": "min_messages integer DEFAULT 0",
+      "identity_argument_types": "min_messages integer",
+      "return_type_id": 2249,
+      "return_type": "TABLE(channel_id integer, slug text, message_count bigint)",
+      "return_type_relation_id": null,
+      "is_set_returning_function": true,
+      "prorows": 1000,
+      "behavior": "STABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
       "id": 16768,
       "schema": "public",
       "name": "channel_messages",
@@ -1764,6 +1808,32 @@
       "config_params": {
         "search_path": "pg_catalog, public, pg_temp"
       }
+    },
+    {
+      "id": 17900,
+      "schema": "public",
+      "name": "echo",
+      "language": "sql",
+      "definition": " SELECT $1 ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.echo(json)\n RETURNS json\n LANGUAGE sql\n IMMUTABLE\nAS $function$ SELECT $1 $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "",
+          "type_id": 114,
+          "has_default": false
+        }
+      ],
+      "argument_types": "json",
+      "identity_argument_types": "json",
+      "return_type_id": 114,
+      "return_type": "json",
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null,
+      "behavior": "IMMUTABLE",
+      "security_definer": false,
+      "config_params": null
     },
     {
       "id": 16769,
@@ -1884,6 +1954,200 @@
       "is_set_returning_function": true,
       "prorows": 1000,
       "behavior": "VOLATILE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17895,
+      "schema": "public",
+      "name": "message_by_id",
+      "language": "sql",
+      "definition": " SELECT * FROM public.messages WHERE id = message_id ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.message_by_id(message_id integer)\n RETURNS messages\n LANGUAGE sql\n STABLE\nAS $function$ SELECT * FROM public.messages WHERE id = message_id $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "message_id",
+          "type_id": 23,
+          "has_default": false
+        }
+      ],
+      "argument_types": "message_id integer",
+      "identity_argument_types": "message_id integer",
+      "return_type_id": 16673,
+      "return_type": "messages",
+      "return_type_relation_id": 16671,
+      "is_set_returning_function": false,
+      "prorows": null,
+      "behavior": "STABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17899,
+      "schema": "public",
+      "name": "message_ids",
+      "language": "sql",
+      "definition": "\n    SELECT m.id FROM public.messages m JOIN public.users u ON u.username = m.username\n    WHERE u.status = ANY (statuses) ORDER BY m.id\n  ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.message_ids(statuses user_status[])\n RETURNS SETOF integer\n LANGUAGE sql\n STABLE\nAS $function$\n    SELECT m.id FROM public.messages m JOIN public.users u ON u.username = m.username\n    WHERE u.status = ANY (statuses) ORDER BY m.id\n  $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "statuses",
+          "type_id": 16633,
+          "has_default": false
+        }
+      ],
+      "argument_types": "statuses user_status[]",
+      "identity_argument_types": "statuses user_status[]",
+      "return_type_id": 23,
+      "return_type": "SETOF integer",
+      "return_type_relation_id": null,
+      "is_set_returning_function": true,
+      "prorows": 1000,
+      "behavior": "STABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17897,
+      "schema": "public",
+      "name": "messages_of",
+      "language": "sql",
+      "definition": " SELECT * FROM public.messages m WHERE m.channel_id = messages_of.channel_id ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.messages_of(channel_id integer)\n RETURNS SETOF messages\n LANGUAGE sql\n STABLE\nAS $function$ SELECT * FROM public.messages m WHERE m.channel_id = messages_of.channel_id $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "channel_id",
+          "type_id": 23,
+          "has_default": false
+        }
+      ],
+      "argument_types": "channel_id integer",
+      "identity_argument_types": "channel_id integer",
+      "return_type_id": 16673,
+      "return_type": "SETOF messages",
+      "return_type_relation_id": 16671,
+      "is_set_returning_function": true,
+      "prorows": 1000,
+      "behavior": "STABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17898,
+      "schema": "public",
+      "name": "messages_of",
+      "language": "sql",
+      "definition": "\n    SELECT m.* FROM public.messages m JOIN public.channels c ON c.id = m.channel_id\n    WHERE c.slug = channel_slug ORDER BY m.id LIMIT max_count\n  ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.messages_of(channel_slug text, max_count integer)\n RETURNS SETOF messages\n LANGUAGE sql\n STABLE\nAS $function$\n    SELECT m.* FROM public.messages m JOIN public.channels c ON c.id = m.channel_id\n    WHERE c.slug = channel_slug ORDER BY m.id LIMIT max_count\n  $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "channel_slug",
+          "type_id": 25,
+          "has_default": false
+        },
+        {
+          "mode": "in",
+          "name": "max_count",
+          "type_id": 23,
+          "has_default": false
+        }
+      ],
+      "argument_types": "channel_slug text, max_count integer",
+      "identity_argument_types": "channel_slug text, max_count integer",
+      "return_type_id": 16673,
+      "return_type": "SETOF messages",
+      "return_type_relation_id": 16671,
+      "is_set_returning_function": true,
+      "prorows": 1000,
+      "behavior": "STABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17901,
+      "schema": "public",
+      "name": "price_label",
+      "language": "sql",
+      "definition": " SELECT amount::text ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.price_label(amount integer)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\nAS $function$ SELECT amount::text $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "amount",
+          "type_id": 23,
+          "has_default": false
+        }
+      ],
+      "argument_types": "amount integer",
+      "identity_argument_types": "amount integer",
+      "return_type_id": 25,
+      "return_type": "text",
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null,
+      "behavior": "IMMUTABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17902,
+      "schema": "public",
+      "name": "price_label",
+      "language": "sql",
+      "definition": " SELECT amount ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.price_label(amount text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\nAS $function$ SELECT amount $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "amount",
+          "type_id": 25,
+          "has_default": false
+        }
+      ],
+      "argument_types": "amount text",
+      "identity_argument_types": "amount text",
+      "return_type_id": 25,
+      "return_type": "text",
+      "return_type_relation_id": null,
+      "is_set_returning_function": false,
+      "prorows": null,
+      "behavior": "IMMUTABLE",
+      "security_definer": false,
+      "config_params": null
+    },
+    {
+      "id": 17894,
+      "schema": "public",
+      "name": "search_messages",
+      "language": "sql",
+      "definition": "\n    SELECT * FROM public.messages m\n    WHERE m.message ILIKE '%' || query || '%'\n      AND (search_messages.channel_id IS NULL OR m.channel_id = search_messages.channel_id)\n  ",
+      "complete_statement": "CREATE OR REPLACE FUNCTION public.search_messages(query text, channel_id integer DEFAULT NULL::integer)\n RETURNS SETOF messages\n LANGUAGE sql\n STABLE\nAS $function$\n    SELECT * FROM public.messages m\n    WHERE m.message ILIKE '%' || query || '%'\n      AND (search_messages.channel_id IS NULL OR m.channel_id = search_messages.channel_id)\n  $function$\n",
+      "args": [
+        {
+          "mode": "in",
+          "name": "channel_id",
+          "type_id": 23,
+          "has_default": true
+        },
+        {
+          "mode": "in",
+          "name": "query",
+          "type_id": 25,
+          "has_default": false
+        }
+      ],
+      "argument_types": "query text, channel_id integer DEFAULT NULL::integer",
+      "identity_argument_types": "query text, channel_id integer",
+      "return_type_id": 16673,
+      "return_type": "SETOF messages",
+      "return_type_relation_id": 16671,
+      "is_set_returning_function": true,
+      "prorows": 1000,
+      "behavior": "STABLE",
       "security_definer": false,
       "config_params": null
     },
@@ -8581,6 +8845,641 @@
       "attributes": [],
       "comment": null,
       "type_relation_id": 16594
+    }
+  ],
+  "rpcFunctions": [
+    {
+      "schema": "public",
+      "name": "channel_message_counts",
+      "overloads": [
+        {
+          "function_id": 17896,
+          "args": [
+            {
+              "name": "min_messages",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": true,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 2249,
+            "format": "record",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": [
+              {
+                "name": "channel_id",
+                "type_id": 23,
+                "format": "int4",
+                "type_schema": "pg_catalog"
+              },
+              {
+                "name": "message_count",
+                "type_id": 20,
+                "format": "int8",
+                "type_schema": "pg_catalog"
+              },
+              {
+                "name": "slug",
+                "type_id": 25,
+                "format": "text",
+                "type_schema": "pg_catalog"
+              }
+            ]
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "channel_messages",
+      "overloads": [
+        {
+          "function_id": 16768,
+          "args": [
+            {
+              "name": "",
+              "mode": "in",
+              "type_id": 16664,
+              "format": "channels",
+              "type_schema": "public",
+              "has_default": false,
+              "relation_id": 16662
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": {
+            "from": "channels",
+            "to": "messages",
+            "is_one_to_one": false,
+            "is_setof_return": true
+          },
+          "computed_field_of": 16662,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "delete_user",
+      "overloads": [
+        {
+          "function_id": 16702,
+          "args": [],
+          "returns": {
+            "type_id": 2278,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "echo",
+      "overloads": [
+        {
+          "function_id": 17900,
+          "args": [
+            {
+              "name": "",
+              "mode": "in",
+              "type_id": 114,
+              "format": "json",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 114,
+            "format": "json",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "first_message",
+      "overloads": [
+        {
+          "function_id": 16769,
+          "args": [
+            {
+              "name": "",
+              "mode": "in",
+              "type_id": 16664,
+              "format": "channels",
+              "type_schema": "public",
+              "has_default": false,
+              "relation_id": 16662
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": {
+            "from": "channels",
+            "to": "messages",
+            "is_one_to_one": true,
+            "is_setof_return": false
+          },
+          "computed_field_of": 16662,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "get_array_element",
+      "overloads": [
+        {
+          "function_id": 16704,
+          "args": [
+            {
+              "name": "arr",
+              "mode": "in",
+              "type_id": 1007,
+              "format": "_int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            },
+            {
+              "name": "index",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 23,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "get_status",
+      "overloads": [
+        {
+          "function_id": 16700,
+          "args": [
+            {
+              "name": "name_param",
+              "mode": "in",
+              "type_id": 25,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 25,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "get_username_and_status",
+      "overloads": [
+        {
+          "function_id": 16703,
+          "args": [
+            {
+              "name": "name_param",
+              "mode": "in",
+              "type_id": 25,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 2249,
+            "format": "record",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": [
+              {
+                "name": "status",
+                "type_id": 16634,
+                "format": "user_status",
+                "type_schema": "public"
+              },
+              {
+                "name": "username",
+                "type_id": 25,
+                "format": "text",
+                "type_schema": "pg_catalog"
+              }
+            ]
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "message_by_id",
+      "overloads": [
+        {
+          "function_id": 17895,
+          "args": [
+            {
+              "name": "message_id",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": {
+            "from": "*",
+            "to": "messages",
+            "is_one_to_one": true,
+            "is_setof_return": false
+          },
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "message_ids",
+      "overloads": [
+        {
+          "function_id": 17899,
+          "args": [
+            {
+              "name": "statuses",
+              "mode": "in",
+              "type_id": 16633,
+              "format": "_user_status",
+              "type_schema": "public",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 23,
+            "format": "int4",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "messages_of",
+      "overloads": [
+        {
+          "function_id": 17897,
+          "args": [
+            {
+              "name": "channel_id",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": {
+            "from": "*",
+            "to": "messages",
+            "is_one_to_one": false,
+            "is_setof_return": true
+          },
+          "computed_field_of": null,
+          "error": null
+        },
+        {
+          "function_id": 17898,
+          "args": [
+            {
+              "name": "channel_slug",
+              "mode": "in",
+              "type_id": 25,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            },
+            {
+              "name": "max_count",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": {
+            "from": "*",
+            "to": "messages",
+            "is_one_to_one": false,
+            "is_setof_return": true
+          },
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "price_label",
+      "overloads": [
+        {
+          "function_id": 17901,
+          "args": [
+            {
+              "name": "amount",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 25,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": "Could not choose the best candidate function between: public.price_label(amount => int4), public.price_label(amount => text). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+        },
+        {
+          "function_id": 17902,
+          "args": [
+            {
+              "name": "amount",
+              "mode": "in",
+              "type_id": 25,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 25,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": "Could not choose the best candidate function between: public.price_label(amount => int4), public.price_label(amount => text). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "search_messages",
+      "overloads": [
+        {
+          "function_id": 17894,
+          "args": [
+            {
+              "name": "channel_id",
+              "mode": "in",
+              "type_id": 23,
+              "format": "int4",
+              "type_schema": "pg_catalog",
+              "has_default": true,
+              "relation_id": null
+            },
+            {
+              "name": "query",
+              "mode": "in",
+              "type_id": 25,
+              "format": "text",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 16673,
+            "format": "messages",
+            "type_schema": "public",
+            "relation_id": 16671,
+            "columns": null
+          },
+          "is_set_returning": true,
+          "rows_estimate": 1000,
+          "setof_options": {
+            "from": "*",
+            "to": "messages",
+            "is_one_to_one": false,
+            "is_setof_return": true
+          },
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "shouted_slug",
+      "overloads": [
+        {
+          "function_id": 16767,
+          "args": [
+            {
+              "name": "",
+              "mode": "in",
+              "type_id": 16664,
+              "format": "channels",
+              "type_schema": "public",
+              "has_default": false,
+              "relation_id": 16662
+            }
+          ],
+          "returns": {
+            "type_id": 25,
+            "format": "text",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": 16662,
+          "error": "the function public.shouted_slug with parameter or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache"
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "sleep_for",
+      "overloads": [
+        {
+          "function_id": 16759,
+          "args": [
+            {
+              "name": "seconds",
+              "mode": "in",
+              "type_id": 701,
+              "format": "float8",
+              "type_schema": "pg_catalog",
+              "has_default": false,
+              "relation_id": null
+            }
+          ],
+          "returns": {
+            "type_id": 2278,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
+    },
+    {
+      "schema": "public",
+      "name": "void_func",
+      "overloads": [
+        {
+          "function_id": 16701,
+          "args": [],
+          "returns": {
+            "type_id": 2278,
+            "format": "void",
+            "type_schema": "pg_catalog",
+            "relation_id": null,
+            "columns": null
+          },
+          "is_set_returning": false,
+          "rows_estimate": null,
+          "setof_options": null,
+          "computed_field_of": null,
+          "error": null
+        }
+      ]
     }
   ]
 }

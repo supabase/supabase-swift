@@ -88,16 +88,23 @@ struct ResumableUploadTests {
     try Data((0..<20).map(UInt8.init)).write(to: fileURL)
   }
 
-  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) -> StorageBucket
+  private func makeBucket(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
+    -> StorageBucket
   {
-    var configuration = StorageClientConfiguration(
+    try makeStorage(script, retryTimeout: retryTimeout).from("bucket")
+  }
+
+  private func makeStorage(_ script: Script, retryTimeout: Duration = .seconds(60)) throws
+    -> StorageClient
+  {
+    var configuration = StorageClient.Configuration(
       url: URL(string: "http://localhost:54321/storage/v1")!,
       headers: [:],
       http: .init(transport: ClosureTransport { try await script.send($0, body: $1) }))
     configuration.resumable = ResumableUploadConfiguration(
       chunkSize: 8, retryTimeout: retryTimeout, directory: root.appendingPathComponent("store"))
     configuration.clock = ImmediateClock()
-    return StorageClient(configuration: configuration).from("bucket")
+    return try StorageClient(configuration: configuration)
   }
 
   private var store: ResumableStore {
@@ -111,11 +118,11 @@ struct ResumableUploadTests {
       Self.appended(offset: 20, complete: true),
     ])
     let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
-    let progress = upload.progress
-    let states = upload.states
+    let progress = upload.progress()
+    let statuses = upload.statusChanges()
 
     #expect(upload.totalBytes == 20)
-    #expect(upload.bucketId == "bucket")
+    #expect(upload.bucketID == "bucket")
     #expect(upload.path == "video.mp4")
     try await upload.start()
     let object = try await upload.result
@@ -139,13 +146,13 @@ struct ResumableUploadTests {
     #expect(completed.last == 20, "a late reader gets the newest value, as the stream buffers one")
     #expect(completed == completed.sorted())
     var seen: [String] = []
-    for await state in states {
-      seen.append(state.name)
-      if case .completed = state { break }
+    for await status in statuses {
+      seen.append(status.name)
+      if case .completed = status { break }
     }
-    #expect(seen == ["uploading", "completed"])
+    #expect(seen == ["pending", "uploading", "completed"])
     #expect(try store.records().isEmpty)
-    guard case .completed(let final) = await upload.state else {
+    guard case .completed(let final) = await upload.status else {
       Issue.record("not completed"); return
     }
     #expect(final == object)
@@ -158,8 +165,9 @@ struct ResumableUploadTests {
 
     let error = await #expect(throws: StorageError.self) { try await upload.start() }
 
-    #expect(error?.code == StorageError.Code.entityTooLarge)
-    guard case .failed = await upload.state else { Issue.record("not failed"); return }
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
+    guard case .failed = await upload.status else { Issue.record("not failed"); return }
     await #expect(throws: StorageError.self) { try await upload.result }
   }
 
@@ -238,7 +246,8 @@ struct ResumableUploadTests {
     try await upload.start()
     let error = await #expect(throws: StorageError.self) { try await upload.result }
 
-    #expect(error?.code == StorageError.Code.entityTooLarge)
+    #expect(error?.code == nil)
+    #expect(error?.serverError?.statusCode == 413)
     #expect(script.log.value.count == 2)
     #expect(try store.records().isEmpty)
   }
@@ -259,11 +268,11 @@ struct ResumableUploadTests {
     while script.log.value.count < 2 { await Task.yield() }
 
     await upload.pause()
-    guard case .paused = await upload.state else { Issue.record("not paused"); return }
+    guard case .paused = await upload.status else { Issue.record("not paused"); return }
     open.yield()
     while await upload.isRunning { await Task.yield() }
     #expect(script.log.value.count == 2)
-    #expect(try store.record(fingerprint: upload.id.rawValue)?.lastKnownOffset == 8)
+    #expect(try store.record(fingerprint: upload.fingerprint)?.lastKnownOffset == 8)
 
     try await upload.resume()
     _ = try await upload.result
@@ -293,10 +302,391 @@ struct ResumableUploadTests {
 
     await upload.cancel()
 
-    guard case .cancelled = await upload.state else { Issue.record("not cancelled"); return }
+    guard case .cancelled = await upload.status else { Issue.record("not cancelled"); return }
     #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
     #expect(try store.records().isEmpty)
     await #expect(throws: CancellationError.self) { try await upload.result }
+  }
+
+  @Test
+  func cancelWhileStartCreatesTheUploadTerminatesItAndRemovesTheRecord() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.created(offset: 0)(request, data)
+      },
+      { _, _ in (HTTPResponse(status: .noContent), Data()) },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    let starting = Task { try await upload.start() }
+    while script.log.value.isEmpty { await Task.yield() }
+
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    await cancelling.value
+
+    #expect(
+      script.log.value == [
+        "POST /storage/v1/upload/resumable", "DELETE /storage/v1/upload/resumable/abc",
+      ],
+      "cancel() returns only after the upload start() created is gone")
+    #expect(try store.records().isEmpty)
+    try await starting.value
+    guard case .cancelled = await upload.status else { Issue.record("not cancelled"); return }
+  }
+
+  @Test
+  func cancelWhileStartFailsKeepsTheUploadCancelled() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.status(413)(request, data)
+      }
+    ])
+    let upload = try makeBucket(script).resumableUpload(
+      path: "video.mp4", data: Data((0..<20).map(UInt8.init)))
+    let starting = Task { try await upload.start() }
+    while script.log.value.isEmpty { await Task.yield() }
+
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    await cancelling.value
+    try await starting.value
+
+    #expect(script.log.value == ["POST /storage/v1/upload/resumable"])
+    #expect(
+      try FileManager.default.contentsOfDirectory(atPath: store.directory.path).isEmpty,
+      "the sandbox copy start() made has no record, so cancel() removes it by fingerprint")
+    guard case .cancelled = await upload.status else {
+      Issue.record("not cancelled: \(await upload.status)")
+      return
+    }
+  }
+
+  @Test
+  func cancelWhileStartLooksUpAnEarlierRecordRemovesItWhenTheLookupFails() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0), Self.transportFailure,
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.status(403)(request, data)
+      },
+      { _, _ in (HTTPResponse(status: .noContent), Data()) },
+    ])
+    let storage = try makeStorage(script, retryTimeout: .zero)
+    let earlier = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await earlier.start()
+    await #expect(throws: StorageError.self) { try await earlier.result }
+    #expect(try store.records().count == 1)
+
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    let starting = Task { try await upload.start() }
+    while script.log.value.count < 3 { await Task.yield() }
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    await cancelling.value
+    try await starting.value
+
+    #expect(
+      script.log.value.dropFirst(2) == [
+        "HEAD /storage/v1/upload/resumable/abc", "DELETE /storage/v1/upload/resumable/abc",
+      ])
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func pendingDuringCancelCleanupReturnsTheCancelledHandle() async throws {
+    let (createGate, openCreate) = AsyncStream<Void>.makeStream()
+    let (deleteGate, openDelete) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      { request, data in
+        for await _ in createGate { break }
+        return try await Self.created(offset: 0)(request, data)
+      },
+      { _, _ in
+        for await _ in deleteGate { break }
+        return (HTTPResponse(status: .noContent), Data())
+      },
+    ])
+    let storage = try makeStorage(script)
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    let starting = Task { try await upload.start() }
+    while script.log.value.isEmpty { await Task.yield() }
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    openCreate.yield()
+    while script.log.value.count < 2 { await Task.yield() }
+
+    let pending = try await storage.resumableUploads.pending()
+
+    #expect(
+      pending.allSatisfy { $0 === upload },
+      "no second handle takes the record while cancel() deletes it")
+    openDelete.yield()
+    await cancelling.value
+    try await starting.value
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func aSecondCancelReturnsOnlyAfterTheFirstCancelCleansUp() async throws {
+    let (chunkGate, _) = AsyncStream<Void>.makeStream()
+    let (deleteGate, openDelete) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0),
+      { _, _ in
+        for await _ in chunkGate {}
+        throw CancellationError()
+      },
+      { _, _ in
+        for await _ in deleteGate { break }
+        return (HTTPResponse(status: .noContent), Data())
+      },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    while script.log.value.count < 2 { await Task.yield() }
+    let first = Task { await upload.cancel() }
+    while script.log.value.count < 3 { await Task.yield() }
+
+    let secondReturned = LockIsolated(false)
+    let second = Task {
+      await upload.cancel()
+      secondReturned.setValue(true)
+    }
+    for _ in 0..<100 { await Task.yield() }
+
+    #expect(!secondReturned.value, "the second cancel() waits while the DELETE is in flight")
+    #expect(try store.records().count == 1)
+    openDelete.yield()
+    await first.value
+    await second.value
+    #expect(try store.records().isEmpty)
+    #expect(script.log.value.filter { $0.hasPrefix("DELETE") }.count == 1)
+  }
+
+  @Test
+  func cancelWhileResumeWaitsForThePausedChunkKeepsTheUploadCancelled() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0),
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.appended(offset: 8)(request, data)
+      },
+      { _, _ in (HTTPResponse(status: .noContent), Data()) },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    while script.log.value.count < 2 { await Task.yield() }
+    await upload.pause()
+
+    let resuming = Task { try await upload.resume() }
+    for _ in 0..<100 { await Task.yield() }
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    try await resuming.value
+    await cancelling.value
+
+    guard case .cancelled = await upload.status else {
+      Issue.record("not cancelled: \(await upload.status)")
+      return
+    }
+    #expect(await !upload.isRunning)
+    #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func cancelOnAPendingHandleLeavesTheUploadAnotherHandleIsResuming() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0), Self.appended(offset: 8), Self.transportFailure,
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.head(offset: 8)(request, data)
+      },
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let storage = try makeStorage(script, retryTimeout: .zero)
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+    let other = try #require(try await storage.resumableUploads.pending().first)
+    #expect(other !== upload)
+
+    let resuming = Task { try await upload.resume() }
+    while script.log.value.count < 4 { await Task.yield() }
+    await other.cancel()
+
+    guard case .cancelled = await other.status else {
+      Issue.record("not cancelled: \(await other.status)")
+      return
+    }
+    #expect(!script.log.value.contains { $0.hasPrefix("DELETE") })
+    #expect(try store.record(fingerprint: upload.fingerprint) != nil)
+    open.yield()
+    try await resuming.value
+    _ = try await upload.result
+    #expect(script.log.value.count == 6)
+  }
+
+  @Test
+  func resumeAfterAFailedStartCreatesTheUpload() async throws {
+    let script = Script([
+      Self.transportFailure, Self.created(offset: 0), Self.appended(offset: 8),
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    let error = await #expect(throws: StorageError.self) { try await upload.start() }
+    #expect(error?.kind == .transport)
+
+    try await upload.resume()
+    let object = try await upload.result
+
+    #expect(object.fullPath == "bucket/video.mp4")
+    #expect(script.log.value.filter { $0.hasPrefix("POST") }.count == 2)
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func cancelWhileResumeCreatesTheUploadAgainTerminatesIt() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.transportFailure,
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.created(offset: 0)(request, data)
+      },
+      { _, _ in (HTTPResponse(status: .noContent), Data()) },
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    await #expect(throws: StorageError.self) { try await upload.start() }
+    let resuming = Task { try await upload.resume() }
+    while script.log.value.count < 2 { await Task.yield() }
+
+    let cancelling = Task { await upload.cancel() }
+    while await upload.status.name != "cancelled" { await Task.yield() }
+    open.yield()
+    await cancelling.value
+    try await resuming.value
+
+    #expect(script.log.value.last == "DELETE /storage/v1/upload/resumable/abc")
+    #expect(try store.records().isEmpty)
+    guard case .cancelled = await upload.status else {
+      Issue.record("not cancelled: \(await upload.status)")
+      return
+    }
+  }
+
+  @Test
+  func resumeAfterAFailedStartLeavesTheUploadAnotherHandleStarted() async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.transportFailure, Self.created(offset: 0),
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.appended(offset: 8)(request, data)
+      },
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let storage = try makeStorage(script)
+    let failed = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    await #expect(throws: StorageError.self) { try await failed.start() }
+    let other = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    #expect(other !== failed)
+    try await other.start()
+    while script.log.value.count < 3 { await Task.yield() }
+
+    try await failed.resume()
+
+    #expect(
+      script.log.value.count == 3, "the failed handle sends nothing for an upload it does not own")
+    guard case .failed = await failed.status else {
+      Issue.record("not failed: \(await failed.status)")
+      return
+    }
+    open.yield()
+    _ = try await other.result
+    #expect(script.log.value.filter { $0.hasPrefix("POST") }.count == 2)
+  }
+
+  @Test
+  func resumeAfterTheServerRejectsTheCreationThrowsWithoutAnotherRequest() async throws {
+    let script = Script([Self.status(413)])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+    await #expect(throws: StorageError.self) { try await upload.start() }
+
+    let error = await #expect(throws: StorageError.self) { try await upload.resume() }
+
+    #expect(error?.serverError?.statusCode == 413)
+    #expect(script.log.value.count == 1)
+  }
+
+  @Test
+  func resultAfterResumingAFailedUploadReportsTheNewOutcome() async throws {
+    let script = Script([
+      Self.created(offset: 0), Self.appended(offset: 8), Self.transportFailure,
+      Self.head(offset: 8), Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let upload = try makeBucket(script, retryTimeout: .zero).resumableUpload(
+      path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+
+    try await upload.resume()
+    let statuses = upload.statusChanges()
+    let object = try await upload.result
+
+    #expect(object.fullPath == "bucket/video.mp4")
+    var seen: [String] = []
+    for await status in statuses {
+      seen.append(status.name)
+      if case .completed = status { break }
+    }
+    #expect(seen.last == "completed")
+  }
+
+  @Test(arguments: [false, true])
+  func clearKeepsTheRecordOfAFailedUploadThatIsResuming(
+    whileAnotherHandleIsPending: Bool
+  ) async throws {
+    let (gate, open) = AsyncStream<Void>.makeStream()
+    let script = Script([
+      Self.created(offset: 0), Self.appended(offset: 8), Self.transportFailure,
+      { request, data in
+        for await _ in gate { break }
+        return try await Self.head(offset: 8)(request, data)
+      },
+      Self.appended(offset: 16), Self.appended(offset: 20, complete: true),
+    ])
+    let storage = try makeStorage(script, retryTimeout: .zero)
+    let upload = try storage.from("bucket").resumableUpload(path: "video.mp4", fileURL: fileURL)
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+    let pending = whileAnotherHandleIsPending ? try await storage.resumableUploads.pending() : []
+    #expect(pending.allSatisfy { $0 !== upload })
+
+    let resuming = Task { try await upload.resume() }
+    while script.log.value.count < 4 { await Task.yield() }
+    try await storage.resumableUploads.clear()
+
+    #expect(try store.record(fingerprint: upload.fingerprint) != nil)
+    open.yield()
+    try await resuming.value
+    while await upload.isRunning { await Task.yield() }
+    guard case .completed = await upload.status else {
+      Issue.record("not completed: \(await upload.status)")
+      return
+    }
+    withExtendedLifetime(pending) {}
   }
 
   @Test
@@ -392,7 +782,7 @@ struct ResumableUploadTests {
   }
 }
 
-extension ResumableUpload.State {
+extension ResumableUpload.Status {
   fileprivate var name: String {
     switch self {
     case .pending: "pending"

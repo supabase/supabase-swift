@@ -25,17 +25,16 @@ extension PostgrestClient {
   /// - Returns: A ``_PostgrestSource`` for that relation.
   @_spi(Experimental)
   public func from<R: _PostgrestRelation>(_ relation: R.Type) -> _PostgrestSource<R> {
-    let client =
-      configuration.schema == nil && R.schema != _PublicSchema.name
-      ? schema(R.schema)
-      : self
-    return _PostgrestSource(client: client)
+    _PostgrestSource(client: scoped(toDeclaredSchema: R.schema))
   }
 
   // Without the SPI import the solver blames the argument instead: "cannot convert value of type
   // 'Todo.Type' to expected argument type 'String'". This visible twin catches the call and names
   // the fix. The extra `Void` parameter only avoids a redeclaration; with the SPI import, the
   // available overload ranks above it.
+
+  /// Unavailable. Opt in to the typed query API with `@_spi(Experimental) import Supabase`, then
+  /// use ``from(_:)-(R.Type)``.
   @available(
     *, unavailable,
     message:
@@ -92,5 +91,13 @@ public struct _PostgrestSource<R: _PostgrestRelation>: Sendable {
     var request = request
     request.query.append(URLQueryItem(name: "select", value: columns))
     return _PostgrestQuery(client: client, request: request)
+  }
+}
+
+extension PostgrestClient {
+  /// The client a typed entry point sends through: scoped to the schema its type declares, unless
+  /// that is `public` or the client was already scoped to one, which wins.
+  func scoped(toDeclaredSchema name: String) -> PostgrestClient {
+    configuration.schema == nil && name != _PublicSchema.name ? schema(name) : self
   }
 }
