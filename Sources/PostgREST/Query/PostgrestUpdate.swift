@@ -111,8 +111,12 @@ struct PostgrestUpdateValue: Encodable, Sendable {
     self.value = value
   }
 
+  /// Goes through a single-value container rather than `value.encode(to:)`, so the encoder sees
+  /// the value's type and applies its strategies: a `Date` called directly encodes as seconds
+  /// since 2001 and skips the date strategy.
   func encode(to encoder: any Encoder) throws {
-    try value.encode(to: encoder)
+    var container = encoder.singleValueContainer()
+    try container.encode(value)
   }
 }
 
