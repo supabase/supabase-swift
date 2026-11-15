@@ -7,6 +7,7 @@
 
 import CustomDump
 import Foundation
+import Helpers
 import Testing
 
 @testable import PostgREST
@@ -20,17 +21,23 @@ struct PostgrestUpdateTests {
     var id: Int
     var task: String
     var dueAt: String?
+    var remindAt: Date
+    var snoozedUntil: Date?
 
     enum CodingKeys: String, CodingKey {
       case id
       case task
       case dueAt = "due_at"
+      case remindAt = "remind_at"
+      case snoozedUntil = "snoozed_until"
     }
 
     struct Columns: Sendable {
       let id = _PostgrestColumn<Todo, Int>("id")
       let task = _PostgrestColumn<Todo, String>("task")
       let dueAt = _PostgrestNullableColumn<Todo, String>("due_at")
+      let remindAt = _PostgrestColumn<Todo, Date>("remind_at")
+      let snoozedUntil = _PostgrestNullableColumn<Todo, Date>("snoozed_until")
     }
 
     static let columns = Columns()
@@ -94,6 +101,25 @@ struct PostgrestUpdateTests {
     let update = _PostgrestUpdate<Todo> { _ in }
     #expect(update.isEmpty)
     expectNoDifference(try encoded(update), [:])
+  }
+
+  /// A `Date` must reach the encoder's date strategy. Encoding it through its own
+  /// `encode(to:)` bypasses the strategy and sends seconds since 2001 as a number.
+  @Test
+  func aDateUsesTheEncodersDateStrategy() throws {
+    let date = Date(timeIntervalSince1970: 0)
+    let update = _PostgrestUpdate<Todo> {
+      $0.remindAt = date
+      $0.snoozedUntil = date
+    }
+    let body = try PostgrestClient.Configuration.jsonEncoder.encode(update)
+    let decoded = try JSONDecoder().decode([String: JSONValue].self, from: body)
+    #expect(
+      decoded == [
+        "remind_at": .string(date.iso8601String),
+        "snoozed_until": .string(date.iso8601String),
+      ]
+    )
   }
 
   @Test

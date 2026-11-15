@@ -76,4 +76,29 @@ struct PostgrestTemporalRoundTripIntegrationTests {
     #expect(row.onDay == day)
     try await deleteRow()
   }
+
+  @Test
+  func typedUpdateWritesDates() async throws {
+    try await insertRow()
+    let laterInstant = instant.addingTimeInterval(3_600)
+    let laterDay = day.addingTimeInterval(86_400)
+
+    try await client.from(TemporalValues.self)
+      .update {
+        $0.atLocal = laterInstant
+        $0.onDay = laterDay
+      }
+      .where { $0.atInstant.eq(instant) }
+      .execute()
+
+    let row = try await client.from(TemporalValues.self)
+      .select()
+      .where { $0.atInstant.eq(instant) }
+      .single()
+      .execute()
+      .value
+    #expect(row.atLocal == laterInstant)
+    #expect(row.onDay == laterDay)
+    try await deleteRow()
+  }
 }
