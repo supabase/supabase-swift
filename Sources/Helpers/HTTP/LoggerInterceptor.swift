@@ -30,7 +30,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
 
       logger.verbose(
         """
-        Request: \(urlRequest.httpMethod ?? "") \(urlRequest.url?.absoluteString.removingPercentEncoding ?? "")
+        Request: \(urlRequest.httpMethod ?? "") \(LogRedaction.loggable(urlRequest.url))
         Body: \(stringify(request.body))
         """
       )
@@ -47,7 +47,7 @@ package struct LoggerInterceptor: HTTPClientInterceptor {
         )
         return response
       } catch {
-        logger.error("Response: Failure \(error)")
+        logger.error("Response: Failure \(LogRedaction.summary(of: error))")
         throw error
       }
     }
@@ -62,7 +62,7 @@ func stringify(_ data: Data?) -> String {
   do {
     let object = try JSONSerialization.jsonObject(with: data, options: [])
     let prettyData = try JSONSerialization.data(
-      withJSONObject: object,
+      withJSONObject: LogRedaction.redactingSecrets(in: object),
       options: [.prettyPrinted, .sortedKeys]
     )
     return String(data: prettyData, encoding: .utf8) ?? "<failed>"
