@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.55.7](https://github.com/supabase/supabase-swift/compare/v2.55.6...v2.55.7) (2026-11-16)
+
+
+### Bug Fixes
+
+* **auth:** clear the stored session when a refresh is refused with user_banned ([#1631](https://github.com/supabase/supabase-swift/issues/1631)) ([37a4560](https://github.com/supabase/supabase-swift/commit/37a456047fdc7315d66c096fa7ce7e81d085aab7)), closes [#1613](https://github.com/supabase/supabase-swift/issues/1613)
+* **auth:** exchangeCodeForSession fails before the request when the PKCE verifier is missing (v2 backport) ([#1681](https://github.com/supabase/supabase-swift/issues/1681)) ([0d92fea](https://github.com/supabase/supabase-swift/commit/0d92fea25b587f15eae0f50464df984618265809))
+* **ci:** repair release/v2 integration tests and spell check ([#1825](https://github.com/supabase/supabase-swift/issues/1825)) ([c3258c6](https://github.com/supabase/supabase-swift/commit/c3258c699a6123218c5ffa47af2ae91cf7c4c1bd))
+* **security:** redact secrets in verbose HTTP logs (v2 backport) ([#1822](https://github.com/supabase/supabase-swift/issues/1822)) ([3b96aea](https://github.com/supabase/supabase-swift/commit/3b96aea8d74d1e2fe5b59a683dc439d18af6d562)), closes [#1705](https://github.com/supabase/supabase-swift/issues/1705)
+
 ## [2.55.6](https://github.com/supabase/supabase-swift/compare/v2.55.5...v2.55.6) (2026-10-29)
 
 

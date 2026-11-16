@@ -1,0 +1,79 @@
+appId: com.supabase.Reminders
+env:
+  EMAIL: lists-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+
+# A list needs a name that is not empty and not only spaces.
+- tapOn:
+    id: home.addList
+- assertVisible:
+    id: listEditor.save
+    enabled: false
+- tapOn:
+    id: listEditor.name
+- inputText: "   "
+- assertVisible:
+    id: listEditor.save
+    enabled: false
+- eraseText: 10
+- inputText: Groceries
+- tapOn:
+    id: listEditor.color.green
+- tapOn:
+    id: listEditor.icon.cart
+- tapOn:
+    id: listEditor.save
+- extendedWaitUntil:
+    visible:
+      id: home.list.Groceries
+    timeout: 10000
+
+# Rename the list from its detail screen.
+- tapOn:
+    id: home.list.Groceries
+- tapOn:
+    id: listDetail.menu
+- tapOn: Edit List
+- tapOn:
+    id: listEditor.name
+- eraseText: 20
+- inputText: Food
+- tapOn:
+    id: listEditor.save
+- assertVisible: Food
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: home.list.Food
+- assertNotVisible:
+    id: home.list.Groceries
+
+# Delete the list.
+- tapOn:
+    id: home.list.Food
+- tapOn:
+    id: listDetail.menu
+- tapOn: Delete List
+- tapOn:
+    id: listDetail.confirmDelete
+- extendedWaitUntil:
+    notVisible:
+      id: home.list.Food
+    timeout: 10000
+- assertVisible:
+    id: home.addList
+
+# The change is on the server: it is still gone after a restart.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: home.addList
+    timeout: 15000
+- assertNotVisible:
+    id: home.list.Food

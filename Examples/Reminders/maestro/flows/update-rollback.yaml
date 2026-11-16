@@ -1,0 +1,87 @@
+# An update shows at once. If the server refuses it, the row goes back to its old value.
+# The launch argument `-failUpdates YES` makes every update call fail (debug builds only).
+appId: com.supabase.Reminders
+env:
+  EMAIL: rollback-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Home
+- tapOn:
+    id: home.list.Home
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Milk
+
+- stopApp
+- launchApp:
+    arguments:
+      failUpdates: "YES"
+- extendedWaitUntil:
+    visible:
+      id: home.list.Home
+    timeout: 15000
+- tapOn:
+    id: home.list.Home
+
+# Complete fails: the reminder is open again.
+- tapOn:
+    id: reminder.Milk.toggle
+- extendedWaitUntil:
+    visible:
+      id: error.ok
+    timeout: 5000
+- tapOn:
+    id: error.ok
+- assertVisible:
+    id: reminder.Milk
+
+# A title edit fails: the old title is back.
+- tapOn:
+    id: reminder.Milk.info
+- tapOn:
+    id: reminderDetail.title
+- eraseText: 10
+- inputText: Bread
+- tapOn:
+    id: reminderDetail.done
+- extendedWaitUntil:
+    visible:
+      id: error.ok
+    timeout: 5000
+- tapOn:
+    id: error.ok
+- assertVisible:
+    id: reminder.Milk
+- assertNotVisible:
+    id: reminder.Bread
+
+# A list rename fails: the old name is back.
+- tapOn:
+    id: listDetail.menu
+- tapOn: Edit List
+- tapOn:
+    id: listEditor.name
+- eraseText: 10
+- inputText: Office
+- tapOn:
+    id: listEditor.save
+- extendedWaitUntil:
+    visible:
+      id: error.ok
+    timeout: 5000
+- tapOn:
+    id: error.ok
+- tapOn:
+    id: BackButton
+- assertVisible:
+    id: home.list.Home
+- assertNotVisible:
+    id: home.list.Office
