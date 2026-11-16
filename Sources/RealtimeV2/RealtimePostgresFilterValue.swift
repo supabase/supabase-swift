@@ -19,6 +19,14 @@ public protocol RealtimePostgresFilterValue {
   var rawValue: String { get }
 }
 
+extension RealtimePostgresFilterValue {
+  /// The text of the value in a Postgres filter. The same as ``rawValue``.
+  ///
+  /// v3 names the protocol requirement `realtimeFilterValue`. On this version a conforming type
+  /// still implements ``rawValue``.
+  public var realtimeFilterValue: String { rawValue }
+}
+
 extension String: RealtimePostgresFilterValue {
   /// The string itself.
   public var rawValue: String { self }

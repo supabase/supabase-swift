@@ -448,17 +448,116 @@ features:
 
   # ── Realtime ───────────────────────────────────────────────────────────────
 
-  realtime.client.connect: implemented
+  realtime.client.connect:
+    status: implemented
+    supporting_symbols:
+      - RealtimeError
+      - RealtimeError.Kind
+      - RealtimeError.Kind.rawValue
+      - RealtimeError.Kind.init
+      - RealtimeError.Kind.timeout
+      - RealtimeError.Kind.notSubscribed
+      - RealtimeError.Kind.notConnected
+      - RealtimeError.Kind.accessToken
+      - RealtimeError.Kind.unauthorized
+      - RealtimeError.Kind.rateLimited
+      - RealtimeError.Kind.channelClosed
+      - RealtimeError.Kind.payloadTooLarge
+      - RealtimeError.Kind.channelClosedByServer
+      - RealtimeError.Kind.channelError
+      - RealtimeError.Kind.channelRemoved
+      - RealtimeError.Kind.server
+      - RealtimeError.Kind.transport
+      - RealtimeError.Kind.decoding
+      - RealtimeError.Kind.invalidConfiguration
+      - RealtimeError.Kind.invalidRequest
+      - RealtimeError.Code
+      - RealtimeError.Code.rawValue
+      - RealtimeError.Code.init
+      - RealtimeError.Code.topicNameRequired
+      - RealtimeError.Code.invalidJWTToken
+      - RealtimeError.Code.malformedJWT
+      - RealtimeError.Code.jwtSignatureError
+      - RealtimeError.Code.jwtSignerError
+      - RealtimeError.Code.unauthorized
+      - RealtimeError.Code.privateOnly
+      - RealtimeError.Code.tenantNotFound
+      - RealtimeError.Code.realtimeDisabledForTenant
+      - RealtimeError.Code.realtimeDisabledForConfiguration
+      - RealtimeError.Code.unableToReplayMessages
+      - RealtimeError.Code.channelRateLimitReached
+      - RealtimeError.Code.connectionRateLimitReached
+      - RealtimeError.Code.clientJoinRateLimitReached
+      - RealtimeError.Code.realtimeRestarting
+      - RealtimeError.Code.initializingProjectConnection
+      - RealtimeError.Code.increaseConnectionPool
+      - RealtimeError.Code.databaseLackOfConnections
+      - RealtimeError.Code.databaseConnectionRateLimitReached
+      - RealtimeError.Code.unableToConnectToProject
+      - RealtimeError.Code.queryCanceled
+      - RealtimeError.Code.missingPartition
+      - RealtimeError.Code.timeoutOnRpcCall
+      - RealtimeError.Code.errorOnRpcCall
+      - RealtimeError.Code.postgresChangesSubscribeTimeout
+      - RealtimeError.Code.unknownErrorOnChannel
+      - RealtimeError.kind
+      - RealtimeError.message
+      - RealtimeError.code
+      - RealtimeError.underlyingError
+      - RealtimeError.errorDescription
+      - RealtimeError.description
+      - RealtimeError.init
+      - RealtimeError.channelClosedByServer
+      - RealtimeError.Kind.~=
+      - RealtimeError.Code.~=
+      - RealtimeClientOptions.observesAppLifecycle
+      - RealtimeClientOptions.defaultConnectsOnSubscribe
+      - RealtimeClientOptions.defaultObservesAppLifecycle
+      - RealtimeServerLogLevel
+      - RealtimeServerLogLevel.info
+      - RealtimeServerLogLevel.warn
+      - RealtimeServerLogLevel.error
+      - RealtimeServerLogLevel.warning
+      - RealtimeServerLogLevel.init
   realtime.client.disconnect: implemented
   realtime.client.get_channels: implemented
   realtime.client.remove_channel: implemented
   realtime.client.remove_all_channels: implemented
-  realtime.client.connection_state: implemented
-  realtime.client.listen_heartbeats: implemented
+  realtime.client.connection_state:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.statusChanges
+    supporting_symbols:
+      - RealtimeClientStatus.isConnected
+  realtime.client.listen_heartbeats:
+    status: implemented
+    symbols:
+      - RealtimeClientV2.heartbeats
+    supporting_symbols:
+      - HeartbeatEvent
+      - HeartbeatEvent.sent
+      - HeartbeatEvent.acknowledged
+      - HeartbeatEvent.timedOut
   realtime.client.set_auth_token: implemented
-  realtime.client.channel: implemented
+  realtime.client.channel:
+    status: implemented
+    supporting_symbols:
+      - RealtimeChannelConfig.init
+      - RealtimeChannelConfiguration
+      - RealtimeChannelV2.configuration
 
-  realtime.channel.subscribe: implemented
+  realtime.channel.subscribe:
+    status: implemented
+    supporting_symbols:
+      - RealtimeChannelV2.events
+      - RealtimeChannelV2.statusChanges
+      - RealtimeChannelEvent
+      - RealtimeChannelEvent.resubscribed
+      - RealtimeChannelEvent.postgresChangesReady
+      - RealtimeChannelEvent.postgresChangesFailed
+      - RealtimeChannelEvent.replicationReady
+      - RealtimeChannelEvent.replicationFailed
+      - RealtimeChannelStatus.isSubscribed
   realtime.channel.unsubscribe: implemented
   realtime.channel.broadcast: implemented
   realtime.channel.broadcast_http: implemented
@@ -467,8 +566,72 @@ features:
     status: implemented
     symbols:
       - BroadcastJoinConfig.replicationReady
-  realtime.subscriptions.postgres_changes: implemented
-  realtime.subscriptions.subscribe_presence: implemented
+      - BroadcastJoinConfig.waitsForReplication
+      - RealtimeChannelV2.broadcasts
+    supporting_symbols:
+      - BroadcastPayload
+      - BroadcastPayload.json
+      - BroadcastPayload.binary
+      - BroadcastMessage
+      - BroadcastMessage.event
+      - BroadcastMessage.payload
+      - BroadcastMessage.id
+      - BroadcastMessage.isReplayed
+      - BroadcastMessage.init
+      - BroadcastMessage.decode
+      - RealtimeChannelConfig.Broadcast
+  realtime.subscriptions.postgres_changes:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.postgresChanges
+    supporting_symbols:
+      - PostgresChange
+      - PostgresChange.Kind
+      - PostgresChange.Kind.rawValue
+      - PostgresChange.Kind.init
+      - PostgresChange.Kind.insert
+      - PostgresChange.Kind.update
+      - PostgresChange.Kind.delete
+      - PostgresChange.kind
+      - PostgresChange.schema
+      - PostgresChange.table
+      - PostgresChange.commitTimestamp
+      - PostgresChange.columns
+      - PostgresChange.record
+      - PostgresChange.oldRecord
+      - PostgresChange.errors
+      - PostgresChange.init
+      - PostgresColumn
+      - PostgresColumn.name
+      - PostgresColumn.type
+      - PostgresColumn.init
+      - PostgresRow
+      - PostgresRow.values
+      - PostgresRow.init
+      - PostgresRow.subscript
+      - PostgresRow.decode
+      - TypedPostgresChange
+      - TypedPostgresChange.raw
+      - TypedPostgresChange.kind
+      - TypedPostgresChange.oldRecord
+      - TypedPostgresChange.row
+  realtime.subscriptions.subscribe_presence:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.presenceChanges
+    supporting_symbols:
+      - PresenceEntry
+      - PresenceEntry.ref
+      - PresenceEntry.previousRef
+      - PresenceEntry.payload
+      - PresenceEntry.init
+      - PresenceEntry.decode
+      - PresenceChange
+      - PresenceChange.joins
+      - PresenceChange.leaves
+      - PresenceChange.init
+      - RealtimeChannelConfig.Presence
+      - PresenceJoinConfig.isEnabled
   realtime.subscriptions.postgres_changes_filter:
     status: implemented
     symbols:
@@ -485,17 +648,64 @@ features:
       - RealtimePostgresIsValue.true
       - RealtimePostgresIsValue.false
       - RealtimePostgresIsValue.unknown
+    supporting_symbols:
+      - RealtimePostgresFilterValue.realtimeFilterValue
   realtime.subscriptions.private_channel: implemented
-  realtime.subscriptions.broadcast_self: implemented
-  realtime.subscriptions.broadcast_ack: implemented
-  realtime.subscriptions.broadcast_replay: implemented
+  realtime.subscriptions.broadcast_self:
+    status: implemented
+    supporting_symbols:
+      - BroadcastJoinConfig.receivesOwnMessages
+  realtime.subscriptions.broadcast_ack:
+    status: implemented
+    supporting_symbols:
+      - BroadcastJoinConfig.acknowledgesMessages
+  realtime.subscriptions.broadcast_replay:
+    status: implemented
+    supporting_symbols:
+      - BroadcastJoinConfig.Replay
 
   realtime.presence.track: implemented
   realtime.presence.untrack: implemented
-  realtime.presence.presence_state: not_implemented
+  realtime.presence.presence_state:
+    status: implemented
+    symbols:
+      - RealtimeChannelV2.presenceState
+      - RealtimeChannelV2.presenceStates
+    supporting_symbols:
+      - PresenceState
+      - PresenceState.entries
+      - PresenceState.init
+      - PresenceState.decode
   realtime.presence.presence_key: implemented
 
-  realtime.configuration.custom_websocket_transport: implemented
+  realtime.configuration.custom_websocket_transport:
+    status: implemented
+    symbols:
+      - RealtimeClientOptions.webSocketTransport
+    supporting_symbols:
+      - RealtimeError.upgradeFailed
+      - URLSessionWebSocketTransport
+      - URLSessionWebSocketTransport.init
+      - URLSessionWebSocketTransport.connect
+      - WebSocketTransport
+      - WebSocketTransport.connect
+      - WebSocketConnection
+      - WebSocketConnection.events
+      - WebSocketConnection.send
+      - WebSocketConnection.close
+      - WebSocketFrame
+      - WebSocketFrame.text
+      - WebSocketFrame.binary
+      - WebSocketEvent
+      - WebSocketEvent.frame
+      - WebSocketEvent.closed
+      - WebSocketCloseCode
+      - WebSocketCloseCode.rawValue
+      - WebSocketCloseCode.init
+      - WebSocketCloseCode.normalClosure
+      - WebSocketCloseCode.goingAway
+      - WebSocketCloseCode.protocolError
+      - WebSocketCloseCode.abnormalClosure
   realtime.configuration.reconnect_backoff: implemented
   realtime.configuration.heartbeat_interval: implemented
   realtime.configuration.access_token_callback: implemented

@@ -18,6 +18,7 @@ public import Foundation
 /// - ``state``
 /// ### Decoding
 /// - ``decodeState(as:decoder:)``
+@available(*, deprecated, message: "Use PresenceEntry instead.")
 public struct PresenceV2: Hashable, Sendable {
   /// The server-assigned presence reference string that uniquely identifies this presence entry.
   public let ref: String
@@ -27,6 +28,7 @@ public struct PresenceV2: Hashable, Sendable {
   public let state: JSONObject
 }
 
+@available(*, deprecated, message: "Use PresenceEntry instead.")
 extension PresenceV2: Codable {
   struct _StringCodingKey: CodingKey {
     var stringValue: String
@@ -98,6 +100,7 @@ extension PresenceV2: Codable {
   ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
   /// - Returns: An instance of `T` decoded from the state data.
   /// - Throws: A `DecodingError` if the state cannot be decoded into `T`.
+  @available(*, deprecated, message: "Use PresenceEntry.decode(as:decoder:) instead.")
   public func decodeState<T: Decodable>(
     as _: T.Type = T.self,
     decoder: JSONDecoder = AnyJSON.decoder
@@ -118,6 +121,7 @@ extension PresenceV2: Codable {
 /// ### Decoding Helpers
 /// - ``decodeJoins(as:ignoreOtherTypes:decoder:)``
 /// - ``decodeLeaves(as:ignoreOtherTypes:decoder:)``
+@available(*, deprecated, message: "Use PresenceChange instead.")
 public protocol PresenceAction: Sendable, HasRawMessage {
   /// A map of presence entries that joined the channel since the last event, keyed by the
   /// client-defined presence key (configured via ``PresenceJoinConfig/key``).
@@ -128,6 +132,7 @@ public protocol PresenceAction: Sendable, HasRawMessage {
   var leaves: [String: PresenceV2] { get }
 }
 
+@available(*, deprecated, message: "Use PresenceEntry.decode(as:decoder:) instead.")
 extension PresenceAction {
   /// Decodes all ``joins`` entries into an array of `Decodable` values.
   ///
@@ -138,6 +143,7 @@ extension PresenceAction {
   ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
   /// - Returns: An array of `T` values decoded from the joined presences.
   /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
+  @available(*, deprecated, message: "Use PresenceEntry.decode(as:decoder:) instead.")
   public func decodeJoins<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,
@@ -159,6 +165,7 @@ extension PresenceAction {
   ///   - decoder: A `JSONDecoder` to use. Defaults to `AnyJSON.decoder`.
   /// - Returns: An array of `T` values decoded from the leaving presences.
   /// - Throws: A `DecodingError` when `ignoreOtherTypes` is `false` and any presence cannot be decoded.
+  @available(*, deprecated, message: "Use PresenceEntry.decode(as:decoder:) instead.")
   public func decodeLeaves<T: Decodable>(
     as _: T.Type = T.self,
     ignoreOtherTypes: Bool = true,
@@ -172,8 +179,44 @@ extension PresenceAction {
   }
 }
 
+@available(*, deprecated, message: "Use PresenceChange instead.")
 struct PresenceActionImpl: PresenceAction {
   var joins: [String: PresenceV2]
   var leaves: [String: PresenceV2]
   var rawMessage: RealtimeMessageV2
+}
+
+@available(*, deprecated, message: "Use PresenceChange instead.")
+extension PresenceActionImpl {
+  /// The v2 action for a presence message. `nil` for a delivery with no message, or when the
+  /// message does not decode the way v2 reads it.
+  init?(_ delivery: PresenceDelivery) {
+    guard let wire = delivery.wire else { return nil }
+    do {
+      self.init(
+        joins: try wire.joins?.decode(as: [String: PresenceV2].self) ?? [:],
+        leaves: try wire.leaves?.decode(as: [String: PresenceV2].self) ?? [:],
+        rawMessage: wire.rawMessage
+      )
+    } catch {
+      return nil
+    }
+  }
+
+  var delivery: PresenceDelivery {
+    func encode(_ presences: [String: PresenceV2]) -> AnyJSON {
+      .object(
+        presences.mapValues { presence in
+          var meta = presence.state
+          meta["phx_ref"] = .string(presence.ref)
+          return ["metas": [.object(meta)]]
+        })
+    }
+    return PresenceDelivery(
+      wire: PresenceDelivery.Wire(
+        joins: encode(joins), leaves: encode(leaves), rawMessage: rawMessage),
+      change: nil,
+      state: PresenceState()
+    )
+  }
 }

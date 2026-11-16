@@ -5,7 +5,7 @@
 //  Created by Guilherme Souza on 24/12/23.
 //
 
-import Foundation
+public import Foundation
 
 // cspell:ignore pvzp
 struct RealtimeJoinPayload: Codable {
@@ -44,7 +44,8 @@ struct RealtimeJoinConfig: Codable, Hashable {
 /// - ``since``
 /// - ``limit``
 /// ### Initialization
-/// - ``init(since:limit:)``
+/// - ``init(since:limit:)-(Date,_)``
+/// - ``init(since:limit:)-(Int,_)``
 public struct ReplayOption: Codable, Hashable, Sendable {
   /// Unix timestamp in milliseconds. Messages broadcast after this point will be replayed.
   public var since: Int
@@ -57,45 +58,80 @@ public struct ReplayOption: Codable, Hashable, Sendable {
   /// - Parameters:
   ///   - since: Unix timestamp in milliseconds from which to start replaying messages.
   ///   - limit: Maximum number of messages to replay, or `nil` for no limit.
+  @available(*, deprecated, message: "Use init(since: Date, limit:) instead.")
   public init(since: Int, limit: Int? = nil) {
     self.since = since
+    self.limit = limit
+  }
+
+  /// Creates a replay window.
+  ///
+  /// - Parameters:
+  ///   - since: The server replays messages sent after this date.
+  ///   - limit: The most messages the server replays, or `nil` for the server's default.
+  ///
+  /// > Note: On this version ``since`` stays an `Int` of milliseconds. v3 stores the `Date`.
+  public init(since: Date, limit: Int? = nil) {
+    self.since = Int((since.timeIntervalSince1970 * 1000).rounded())
     self.limit = limit
   }
 }
 
 /// Configuration for the broadcast feature of a Realtime channel.
 ///
-/// Pass an instance to ``RealtimeChannelConfig/broadcast`` when creating a channel.
+/// Pass an instance to ``RealtimeChannelConfig/broadcast-swift.property`` when creating a
+/// channel. ``RealtimeChannelConfig/Broadcast-swift.typealias`` is the v3 name of this
+/// type.
 ///
 /// ## Topics
 /// ### Properties
-/// - ``acknowledgeBroadcasts``
-/// - ``receiveOwnBroadcasts``
+/// - ``acknowledgesMessages``
+/// - ``receivesOwnMessages``
 /// - ``replay``
+/// - ``waitsForReplication``
 /// ### Initialization
-/// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:)``
+/// - ``init(acknowledgeBroadcasts:receiveOwnBroadcasts:replay:replicationReady:)``
 public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
-  /// When `true`, the server acknowledges each broadcast message before delivering it.
-  ///
-  /// Useful in combination with ``RealtimeChannelV2/broadcast(event:message:)-2pvzp``
-  /// to ensure delivery before continuing.
-  public var acknowledgeBroadcasts: Bool = false
+  /// Which broadcast messages the server replays when the channel joins.
+  public typealias Replay = ReplayOption
 
-  /// When `true`, broadcast messages are echoed back to the sender in addition to all other subscribers.
-  ///
-  /// By default, broadcast messages are only sent to other clients.
-  public var receiveOwnBroadcasts: Bool = false
+  /// Whether the server acknowledges each broadcast message. Defaults to `false`.
+  public var acknowledgesMessages: Bool = false
+
+  /// Whether the server sends this client's own broadcasts back to it. Defaults to `false`.
+  public var receivesOwnMessages: Bool = false
 
   /// When set, the server replays broadcast messages starting from the given timestamp on join.
   public var replay: ReplayOption?
+
+  /// Whether the server sends a `system` message once the Postgres replication connection behind
+  /// the channel is ready. Defaults to `false`.
+  ///
+  /// The message's `status` is `.ok` (message `"Replication connection established"`) on
+  /// success, or `.error` if the connection is not ready in time.
+  public var waitsForReplication: Bool = false
+
+  /// When `true`, the server acknowledges each broadcast message before delivering it.
+  @available(*, deprecated, message: "Use acknowledgesMessages instead.")
+  public var acknowledgeBroadcasts: Bool {
+    get { acknowledgesMessages }
+    set { acknowledgesMessages = newValue }
+  }
+
+  /// When `true`, broadcast messages are echoed back to the sender in addition to all other subscribers.
+  @available(*, deprecated, message: "Use receivesOwnMessages instead.")
+  public var receiveOwnBroadcasts: Bool {
+    get { receivesOwnMessages }
+    set { receivesOwnMessages = newValue }
+  }
+
   /// Instructs the server to emit a `system` event once the Postgres replication
   /// connection backing this channel is established and ready to stream changes.
-  ///
-  /// Listen for it with ``RealtimeChannelV2/onSystem(callback:)-(_)`` (or the
-  /// ``RealtimeChannelV2/system()`` async stream): the message's `status` is
-  /// `.ok` (message `"Replication connection established"`) on success, or
-  /// `.error` if the connection is not ready in time.
-  public var replicationReady: Bool = false
+  @available(*, deprecated, message: "Use waitsForReplication instead.")
+  public var replicationReady: Bool {
+    get { waitsForReplication }
+    set { waitsForReplication = newValue }
+  }
 
   /// Creates a ``BroadcastJoinConfig``.
   ///
@@ -109,27 +145,29 @@ public struct BroadcastJoinConfig: Codable, Hashable, Sendable {
     replay: ReplayOption? = nil,
     replicationReady: Bool = false
   ) {
-    self.acknowledgeBroadcasts = acknowledgeBroadcasts
-    self.receiveOwnBroadcasts = receiveOwnBroadcasts
+    self.acknowledgesMessages = acknowledgeBroadcasts
+    self.receivesOwnMessages = receiveOwnBroadcasts
     self.replay = replay
-    self.replicationReady = replicationReady
+    self.waitsForReplication = replicationReady
   }
 
   enum CodingKeys: String, CodingKey {
-    case acknowledgeBroadcasts = "ack"
-    case receiveOwnBroadcasts = "self"
+    case acknowledgesMessages = "ack"
+    case receivesOwnMessages = "self"
     case replay
-    case replicationReady = "replication_ready"
+    case waitsForReplication = "replication_ready"
   }
 }
 
 /// Configuration for the presence feature of a Realtime channel.
 ///
-/// Pass an instance to ``RealtimeChannelConfig/presence`` when creating a channel.
+/// Pass an instance to ``RealtimeChannelConfig/presence-swift.property`` when creating a
+/// channel. ``RealtimeChannelConfig/Presence-swift.typealias`` is the v3 name of this type.
 ///
 /// ## Topics
 /// ### Properties
 /// - ``key``
+/// - ``isEnabled``
 /// ### Initialization
 /// - ``init(key:)``
 public struct PresenceJoinConfig: Codable, Hashable, Sendable {
@@ -139,7 +177,21 @@ public struct PresenceJoinConfig: Codable, Hashable, Sendable {
   /// and ``PresenceAction/leaves``. Defaults to an empty string, which lets the server
   /// assign a random unique key.
   public var key: String = ""
+
+  /// Whether the channel joins with presence on.
+  ///
+  /// A presence stream that is open when the channel subscribes turns presence on by itself.
+  /// Set this to `true` to turn it on with no stream, for example to read
+  /// ``RealtimeChannelV2/presenceState`` only. Defaults to `false`.
+  public var isEnabled = false
+
+  /// What the join sends: ``isEnabled``, or a presence stream or callback on the channel.
   var enabled: Bool = false
+
+  enum CodingKeys: String, CodingKey {
+    case key
+    case enabled
+  }
 }
 
 extension PresenceJoinConfig {

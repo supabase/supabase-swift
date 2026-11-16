@@ -13,11 +13,28 @@ extension RealtimeChannelV2 {
     statusStorage.value.status
   }
 
+  /// Returns an async stream of the channel's subscription status.
+  ///
+  /// The stream emits the current status at once, then each change. It is registered before
+  /// this method returns.
+  ///
+  /// > Note: On this version the stream yields the v2 ``RealtimeChannelStatus``, which has four
+  /// > cases and no payloads. The v3 status adds `resubscribing` and `failed` cases and carries
+  /// > the error and the attempt number.
+  public func statusChanges() async -> AsyncStream<RealtimeChannelStatus> {
+    makeStatusStream()
+  }
+
   /// An async stream that emits channel subscription status changes.
   ///
   /// The stream emits the current status immediately upon iteration and then each
-  /// subsequent change. Use ``onStatusChange(_:)`` for a closure-based alternative.
+  /// subsequent change.
+  @available(*, deprecated, message: "Use statusChanges() instead.")
   public var statusChange: AsyncStream<RealtimeChannelStatus> {
+    makeStatusStream()
+  }
+
+  private func makeStatusStream() -> AsyncStream<RealtimeChannelStatus> {
     let id = UUID()
     let (stream, continuation) = AsyncStream<RealtimeChannelStatus>.makeStream()
     let lastStatus = statusStorage.withValue {
@@ -41,14 +58,14 @@ extension RealtimeChannelV2 {
   /// - Parameter listener: A `@Sendable` closure called with the new ``RealtimeChannelStatus`` on every change.
   /// - Returns: A ``RealtimeSubscription`` token. Retain it — the subscription is cancelled when the token is deallocated.
   ///
-  /// > Note: Use ``statusChange`` if you prefer async iteration over closures.
+  @available(*, deprecated, message: "Use statusChanges() instead.")
   public func onStatusChange(
     _ listener: @escaping @Sendable (RealtimeChannelStatus) -> Void
   ) -> RealtimeSubscription {
     // Subscribe synchronously, before spawning the observer Task — otherwise
     // a status change could race ahead of the Task actually starting to
     // iterate, silently dropping it (including the initial replay).
-    let stream = statusChange
+    let stream = makeStatusStream()
     let task = Task {
       for await status in stream {
         listener(status)
