@@ -169,6 +169,14 @@ Features:
 - Inline code examples
 - Educational tooltips
 
+## Other Example Apps
+
+This folder also has complete apps. Each one is a target in `Examples.xcodeproj`:
+
+- **[Reminders](Reminders/README.md)**: a clone of the iOS Reminders app with Auth, Row Level Security, Realtime sync, list sharing, and image attachments. It uses a local Supabase stack with declarative schemas, and it has database tests and UI tests.
+- **SlackClone**: a chat app with Realtime.
+- **UserManagement**: profile management with Auth and Storage.
+
 ## Prerequisites
 
 - Xcode 15.0 or later

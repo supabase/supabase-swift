@@ -1,0 +1,14 @@
+# Opens the system photo picker from the reminder details and picks the newest photo.
+#
+# The picker runs in a different process. Its photos have no stable text or id, so the
+# flow taps the first cell by position. run.sh adds the fixture photo before the flows,
+# which makes it the first cell.
+appId: com.supabase.Reminders
+---
+- tapOn:
+    id: reminderDetail.addImage
+- extendedWaitUntil:
+    visible: Collections
+    timeout: 10000
+- tapOn:
+    point: 16%,25%
