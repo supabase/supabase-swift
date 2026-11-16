@@ -1,0 +1,75 @@
+# Two people change the same list at the same time. `scripts/server.js` plays the other
+# person. The script finds rows by title, so the titles here are in no other flow.
+appId: com.supabase.Reminders
+env:
+  EMAIL: shared-edits-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Journey
+- tapOn:
+    id: home.list.Journey
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Boarding pass
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Visa
+
+# A save from the details sheet sends only what the user changed. The other person
+# completes the reminder while the sheet is open, and that change must stay.
+- tapOn:
+    id: reminder.Boarding pass.info
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: complete_reminder
+      TITLE: Boarding pass
+- tapOn:
+    id: reminderDetail.notes
+- inputText: Window seat
+- tapOn:
+    id: reminderDetail.done
+- extendedWaitUntil:
+    notVisible:
+      id: reminderDetail.done
+    timeout: 5000
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: assert_reminder
+      TITLE: Boarding pass
+      NOTES: Window seat
+      COMPLETED: "true"
+
+# The other person moves a reminder to a list that this user cannot read. Realtime
+# sends no event for that. The next edit finds no row, and the reminder goes away
+# with no error.
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: hide_reminder
+      TITLE: Visa
+      OTHER_EMAIL: shared-edits-b@example.com
+- tapOn:
+    id: reminder.Visa.toggle
+- extendedWaitUntil:
+    notVisible:
+      id: reminder.Visa
+    timeout: 5000
+- assertNotVisible:
+    id: error.ok

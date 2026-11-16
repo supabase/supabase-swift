@@ -1,0 +1,45 @@
+appId: com.supabase.Reminders
+env:
+  EMAIL: search-a@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: ../subflows/sign-up.yaml
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Home
+- tapOn:
+    id: home.list.Home
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Milk
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Bread
+- tapOn:
+    id: BackButton
+
+# Search finds reminders in every list. Case does not matter.
+- tapOn: Search
+- inputText: mil
+- assertVisible:
+    id: reminder.Milk
+- assertNotVisible:
+    id: reminder.Bread
+- assertNotVisible:
+    id: home.smart.today
+
+# A reminder can be completed from the results.
+- tapOn:
+    id: reminder.Milk.toggle
+- eraseText: 3
+- inputText: zzz
+- assertVisible: "No Results.*"
+- eraseText: 3
+- assertVisible:
+    id: home.smart.today
