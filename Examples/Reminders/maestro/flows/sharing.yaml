@@ -1,0 +1,186 @@
+# Two accounts share a list. A owns it, B is invited by email.
+appId: com.supabase.Reminders
+env:
+  EMAIL_A: share-a@example.com
+  EMAIL_B: share-b@example.com
+  PASSWORD: password123
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# 1. A creates a list and invites B.
+- runFlow:
+    file: ../subflows/sign-up.yaml
+    env:
+      EMAIL: ${EMAIL_A}
+- runFlow:
+    file: ../subflows/create-list.yaml
+    env:
+      NAME: Trip
+- tapOn:
+    id: home.list.Trip
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Passport
+- tapOn:
+    id: listDetail.menu
+- tapOn: Share List
+
+# A cannot invite their own email.
+- tapOn:
+    id: share.email
+- inputText: ${EMAIL_A}
+- tapOn:
+    id: share.invite
+- extendedWaitUntil:
+    visible: You cannot invite yourself.
+    timeout: 5000
+
+# Capital letters in the email do not matter.
+- tapOn:
+    id: share.email
+- eraseText: 40
+- inputText: Share-B@Example.com
+- tapOn:
+    id: share.invite
+- extendedWaitUntil:
+    visible:
+      id: share.pending.share-b@example.com
+    timeout: 5000
+
+# A second invitation for the same person is refused.
+- tapOn:
+    id: share.email
+- inputText: ${EMAIL_B}
+- tapOn:
+    id: share.invite
+- extendedWaitUntil:
+    visible: This person already has an invitation.
+    timeout: 5000
+- tapOn:
+    id: share.done
+- tapOn:
+    id: BackButton
+- runFlow: ../subflows/sign-out.yaml
+
+# 2. B accepts and works in the list.
+- runFlow:
+    file: ../subflows/sign-up.yaml
+    env:
+      EMAIL: ${EMAIL_B}
+- assertNotVisible:
+    id: home.list.Trip
+- assertVisible:
+    id: home.invitations.badge
+    text: "1"
+- tapOn:
+    id: home.invitations
+- tapOn:
+    id: invitation.Trip.accept
+- extendedWaitUntil:
+    visible:
+      id: home.list.Trip
+    timeout: 10000
+- assertVisible:
+    id: home.list.Trip.shared
+- assertNotVisible:
+    id: home.invitations
+- tapOn:
+    id: home.list.Trip
+- assertVisible:
+    id: reminder.Passport
+- runFlow:
+    file: ../subflows/add-reminder.yaml
+    env:
+      TITLE: Tickets
+# A member cannot delete the list or invite people, and can leave.
+- tapOn:
+    id: listDetail.menu
+- assertNotVisible: Delete List
+- tapOn: Share List
+- assertVisible:
+    id: share.member.share-a@example.com
+- assertVisible:
+    id: share.leave
+- assertNotVisible:
+    id: share.invite
+- tapOn:
+    id: share.done
+- tapOn:
+    id: BackButton
+- runFlow: ../subflows/sign-out.yaml
+
+# 3. A sees B's reminder, removes B, and invites B again.
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${EMAIL_A}
+- assertVisible:
+    id: home.list.Trip.shared
+- tapOn:
+    id: home.list.Trip
+- assertVisible:
+    id: reminder.Tickets
+- tapOn:
+    id: listDetail.menu
+- tapOn: Share List
+- assertVisible:
+    id: share.member.share-b@example.com
+- tapOn:
+    id: share.remove.share-b@example.com
+- extendedWaitUntil:
+    notVisible:
+      id: share.member.share-b@example.com
+    timeout: 5000
+- tapOn:
+    id: share.email
+- inputText: ${EMAIL_B}
+- tapOn:
+    id: share.invite
+- extendedWaitUntil:
+    visible:
+      id: share.pending.share-b@example.com
+    timeout: 5000
+- tapOn:
+    id: share.done
+- tapOn:
+    id: BackButton
+- runFlow: ../subflows/sign-out.yaml
+
+# 4. B lost the list, accepts the new invitation, and is removed while the list is open.
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${EMAIL_B}
+- assertNotVisible:
+    id: home.list.Trip
+- tapOn:
+    id: home.invitations
+- tapOn:
+    id: invitation.Trip.accept
+- extendedWaitUntil:
+    visible:
+      id: home.list.Trip
+    timeout: 10000
+- tapOn:
+    id: home.list.Trip
+- assertVisible:
+    id: reminder.Passport
+- runScript:
+    file: ../scripts/server.js
+    env:
+      SUPABASE_URL: ${SUPABASE_URL}
+      KEY: ${SUPABASE_SECRET_KEY}
+      ACTION: remove_member
+      EMAIL: ${EMAIL_B}
+# The screen closes. There is no error.
+- extendedWaitUntil:
+    visible:
+      id: home.addList
+    timeout: 5000
+- assertNotVisible:
+    id: home.list.Trip
+- assertNotVisible:
+    id: error.ok
