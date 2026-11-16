@@ -341,8 +341,6 @@ features:
     status: implemented
     symbols:
       - PostgrestError.details
-      - PostgrestError.serverError
-      - PostgrestError.Code
   database.query.select: implemented
   database.query.schema_selection: implemented
   database.query.rpc: implemented
@@ -611,3 +609,66 @@ features:
   storage.analytics.update_table: not_implemented
   storage.analytics.rename_table: not_implemented
   storage.analytics.delete_table: not_implemented
+
+# Types and members that several features share, and so belong to no single feature.
+supporting_symbols:
+  # PostgrestBuilder.settingHeader has no feature in the capability matrix (no per-request header capability).
+  - PostgrestBuilder.settingHeader
+  # Shared by the database.mutate.* features.
+  - PostgrestReturning
+  # Shared by database.using_filters.not and database.using_filters.raw.
+  - PostgrestOperator
+  - PostgrestOperator.eq
+  - PostgrestOperator.neq
+  - PostgrestOperator.gt
+  - PostgrestOperator.gte
+  - PostgrestOperator.lt
+  - PostgrestOperator.lte
+  - PostgrestOperator.like
+  - PostgrestOperator.ilike
+  - PostgrestOperator.match
+  - PostgrestOperator.imatch
+  - PostgrestOperator.is
+  - PostgrestOperator.isdistinct
+  - PostgrestOperator.in
+  - PostgrestOperator.cs
+  - PostgrestOperator.cd
+  - PostgrestOperator.sl
+  - PostgrestOperator.sr
+  - PostgrestOperator.nxl
+  - PostgrestOperator.nxr
+  - PostgrestOperator.adj
+  - PostgrestOperator.ov
+  - PostgrestOperator.fts
+  - PostgrestOperator.plfts
+  - PostgrestOperator.phfts
+  - PostgrestOperator.wfts
+  - PostgrestOperator.init
+  # Shared by every database.* request.
+  - PostgrestResponse.body
+  - PostgrestResponse.headers
+  - PostgrestResponse.requestID
+  # Shared by every database.* request.
+  - PostgrestError.serverError
+  - PostgrestError.Code
+  - PostgrestError.Code.rawValue
+  - PostgrestError.Code.init
+  - PostgrestError.Code.uniqueViolation
+  - PostgrestError.Code.foreignKeyViolation
+  - PostgrestError.Code.notNullViolation
+  - PostgrestError.Code.checkViolation
+  - PostgrestError.Code.invalidTextRepresentation
+  - PostgrestError.Code.insufficientPrivilege
+  - PostgrestError.Code.undefinedTable
+  - PostgrestError.Code.undefinedColumn
+  - PostgrestError.Code.undefinedFunction
+  - PostgrestError.Code.serializationFailure
+  - PostgrestError.Code.deadlockDetected
+  - PostgrestError.Code.queryCanceled
+  - PostgrestError.Code.raiseException
+  - PostgrestError.ServerError
+  - PostgrestError.ServerError.message
+  - PostgrestError.ServerError.details
+  - PostgrestError.ServerError.hint
+  - PostgrestError.ServerError.init
+  - PostgrestError.Code.~=
