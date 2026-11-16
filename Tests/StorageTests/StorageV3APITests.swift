@@ -703,7 +703,14 @@ struct StorageV3UploadTests {
     #expect(recorder.header("Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true)
     #expect(field("cacheControl", in: recorder.lastBody) == "3600")
     #expect(recorder.lastBody?.contains("name=\"metadata\"") == false)
-    #expect(recorder.lastBody?.contains("filename=\"a.png\"\r\nContent-Type: image/png") == true)
+    #if canImport(UniformTypeIdentifiers)
+      #expect(
+        recorder.lastBody?.contains("filename=\"a.png\"\r\nContent-Type: image/png") == true)
+    #else
+      #expect(
+        recorder.lastBody?.contains(
+          "filename=\"a.png\"\r\nContent-Type: application/octet-stream") == true)
+    #endif
     #expect(recorder.lastBody?.contains("hello") == true)
   }
 
@@ -782,7 +789,11 @@ struct StorageV3UploadTests {
     let uploaded = try await bucket.upload(path: "folder/a", fileURL: fileURL)
     #expect(uploaded.path == "folder/a")
     #expect(recorder.last?.httpMethod == "POST")
-    #expect(recorder.lastBody?.contains("Content-Type: text/plain") == true)
+    #if canImport(UniformTypeIdentifiers)
+      #expect(recorder.lastBody?.contains("Content-Type: text/plain") == true)
+    #else
+      #expect(recorder.lastBody?.contains("Content-Type: application/octet-stream") == true)
+    #endif
     #expect(recorder.lastBody?.contains("from disk") == true)
 
     try await bucket.update(path: "folder/a", fileURL: fileURL)
