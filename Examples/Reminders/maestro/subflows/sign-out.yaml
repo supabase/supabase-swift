@@ -1,0 +1,11 @@
+# Signs out from the Home screen and ends on the Auth screen.
+appId: com.supabase.Reminders
+---
+- tapOn:
+    id: home.accountMenu
+# Items inside a SwiftUI Menu do not expose their identifier. Match the title.
+- tapOn: Sign Out
+- extendedWaitUntil:
+    visible:
+      id: auth.signIn
+    timeout: 15000
