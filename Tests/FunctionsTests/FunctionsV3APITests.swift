@@ -147,6 +147,55 @@ struct FunctionsV3APITests {
   }
 
   @Test
+  func responsesExposeGatewayHeadersAndADescription() {
+    let headers: HTTPFields = [
+      .contentType: "text/plain",
+      .xSbEdgeRegion: "us-east-1",
+      .xDenoExecutionID: "exec-1",
+      .sbRequestID: "req-1",
+    ]
+
+    let response = FunctionResponse(status: .ok, headers: headers, body: Data("hi".utf8))
+    #expect(response.region == .usEast1)
+    #expect(response.executionID == "exec-1")
+    #expect(response.requestID == "req-1")
+    #expect(
+      response.description == "FunctionResponse(status: 200, contentType: text/plain, bytes: 2)")
+
+    let stream = FunctionStreamResponse(
+      status: .ok, headers: headers, body: AsyncThrowingStream { $0.finish() })
+    #expect(stream.region == .usEast1)
+    #expect(stream.executionID == "exec-1")
+    #expect(stream.requestID == "req-1")
+    #expect(stream.description == "FunctionStreamResponse(status: 200, contentType: text/plain)")
+
+    let bare = FunctionStreamResponse(
+      status: .ok, headers: [:], body: AsyncThrowingStream { $0.finish() })
+    #expect(bare.region == nil)
+    #expect(bare.description == "FunctionStreamResponse(status: 200, contentType: none)")
+  }
+
+  @available(*, deprecated, message: "Covers the deprecated v2 closure overload.")
+  @Test
+  func deprecatedClosureOverloadStillWorks() async throws {
+    let sut = makeSUT()
+    Mock(
+      url: url.appendingPathComponent("hello"),
+      statusCode: 200,
+      data: [.post: Data(#"{"message":"hi"}"#.utf8)]
+    ).register()
+
+    struct Payload: Decodable { var message: String }
+
+    let viaClosure = try await sut.invoke("hello", options: FunctionInvokeOptions()) {
+      data, response in
+      #expect(response.statusCode == 200)
+      return try JSONDecoder().decode(Payload.self, from: data)
+    }
+    #expect(viaClosure.message == "hi")
+  }
+
+  @Test
   func v2CallFormsKeepTheVoidOverload() async throws {
     let sut = makeSUT()
     Mock(url: url.appendingPathComponent("fn"), statusCode: 200, data: [.post: Data("ok".utf8)])
