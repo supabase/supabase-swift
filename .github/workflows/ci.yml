@@ -113,6 +113,10 @@ jobs:
         run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Update mtime for incremental builds
         uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+      - name: Clear cached module cache
+        # A restored clang module cache is invalid once the runner image updates the Xcode
+        # toolchain headers ("file ... has been modified since the module file ... was built").
+        run: rm -rf ~/.derivedData/*/ModuleCache.noindex
       - name: Debug
         if: matrix.skip_debug != '1'
         run: CONFIG=Debug PLATFORM="${{ matrix.platform }}" XCODEBUILD_ARGUMENT="${{ matrix.command }}" ./scripts/xcodebuild.sh
