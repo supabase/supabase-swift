@@ -761,6 +761,12 @@ public actor RealtimeClient {
     let encodedEvent =
       event.addingPercentEncoding(withAllowedCharacters: .sbURLPathComponentAllowed) ?? event
 
+    if components.scheme == "wss" {
+      components.scheme = "https"
+    } else if components.scheme == "ws" {
+      components.scheme = "http"
+    }
+
     var path = components.percentEncodedPath
     if path.hasSuffix("/") { path.removeLast() }
     path += "/api/broadcast/\(encodedTopic)/events/\(encodedEvent)"

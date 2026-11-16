@@ -570,6 +570,34 @@ struct RealtimeChannelTests {
     )
   }
 
+  @Test(arguments: [
+    ("wss://localhost:54321/realtime/v1", "https://localhost:54321/realtime/v1"),
+    ("ws://localhost:54321/realtime/v1", "http://localhost:54321/realtime/v1"),
+    ("http://localhost:54321/realtime/v1", "http://localhost:54321/realtime/v1"),
+  ])
+  func httpSendPostsToTheHTTPSchemeOfTheConfiguredURL(configured: String, expected: String)
+    async throws
+  {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: 202)), Data()) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: configured)!,
+        headers: [.apikey: "test-key"]),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("room")
+
+    try await channel.httpSend(event: "ping", payload: ["x": 1])
+
+    #expect(
+      httpClient.requests.first?.head.url?.absoluteString
+        == "\(expected)/api/broadcast/room/events/ping")
+  }
+
   @Test
   func httpSendWithBinaryDataSendsOctetStream() async throws {
     let httpClient = RecordingTransport()
