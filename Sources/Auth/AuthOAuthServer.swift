@@ -56,9 +56,23 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: Either the details to present for consent, or a redirect if already approved.
+  @available(*, deprecated, message: "Use authorizationDetails(id:) instead.")
   public func getAuthorizationDetails(
     authorizationId: String
   ) async throws -> OAuthAuthorizationDetailsResponse {
+    try await authorizationDetails(id: authorizationId)
+  }
+
+  /// Fetches the details of an authorization request, to show a consent screen.
+  ///
+  /// Call this before ``approveAuthorization(id:)`` or ``denyAuthorization(id:)``. It claims the
+  /// request for the signed-in user.
+  ///
+  /// - Parameter id: The opaque identifier of the authorization request.
+  /// - Returns: The details to show, or a redirect when the user already gave consent.
+  public func authorizationDetails(
+    id authorizationId: String
+  ) async throws -> OAuthAuthorizationDetailsResult {
     try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url
@@ -79,7 +93,18 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, completing the third-party app's OAuth flow.
+  @available(*, deprecated, message: "Use approveAuthorization(id:) instead.")
   public func approveAuthorization(authorizationId: String) async throws -> OAuthRedirect {
+    try await approveAuthorization(id: authorizationId)
+  }
+
+  /// Approves an authorization request for the signed-in user.
+  ///
+  /// Call ``authorizationDetails(id:)`` for this request first.
+  ///
+  /// - Parameter id: The opaque identifier of the authorization request.
+  /// - Returns: The URL to send the user to.
+  public func approveAuthorization(id authorizationId: String) async throws -> OAuthRedirect {
     try await consent(authorizationId: authorizationId, action: "approve")
   }
 
@@ -97,7 +122,18 @@ public struct AuthOAuthServer: Sendable {
   ///
   /// - Parameter authorizationId: The opaque identifier of the authorization request.
   /// - Returns: The URL to redirect the user to, carrying the OAuth error.
+  @available(*, deprecated, message: "Use denyAuthorization(id:) instead.")
   public func denyAuthorization(authorizationId: String) async throws -> OAuthRedirect {
+    try await denyAuthorization(id: authorizationId)
+  }
+
+  /// Denies an authorization request for the signed-in user.
+  ///
+  /// Call ``authorizationDetails(id:)`` for this request first.
+  ///
+  /// - Parameter id: The opaque identifier of the authorization request.
+  /// - Returns: The URL to send the user to.
+  public func denyAuthorization(id authorizationId: String) async throws -> OAuthRedirect {
     try await consent(authorizationId: authorizationId, action: "deny")
   }
 
@@ -134,7 +170,15 @@ public struct AuthOAuthServer: Sendable {
   /// OAuth client, and invalidates its associated refresh tokens.
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client to revoke access for.
+  @available(*, deprecated, message: "Use revokeGrant(clientID:) instead.")
   public func revokeGrant(clientId: UUID) async throws {
+    try await revokeGrant(clientID: clientId)
+  }
+
+  /// Revokes the signed-in user's grant for an OAuth client.
+  ///
+  /// - Parameter clientID: The ID of the client to revoke.
+  public func revokeGrant(clientID clientId: UUID) async throws {
     _ = try await api.authorizedExecute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("user/oauth/grants"),

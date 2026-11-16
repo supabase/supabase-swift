@@ -1,6 +1,11 @@
 public import Foundation
 
 /// An event emitted when the authentication state of the current user changes.
+///
+/// The name that the next major version uses for ``AuthChangeEvent``.
+public typealias AuthEvent = AuthChangeEvent
+
+/// An event emitted when the authentication state of the current user changes.
 public enum AuthChangeEvent: String, Sendable {
   /// Emitted when an initial session is loaded from local storage on startup.
   case initialSession = "INITIAL_SESSION"
@@ -21,6 +26,7 @@ public enum AuthChangeEvent: String, Sendable {
   case userUpdated = "USER_UPDATED"
 
   /// Emitted when the user's account is deleted.
+  @available(*, deprecated, message: "The client never emits this event.")
   case userDeleted = "USER_DELETED"
 
   /// Emitted when an MFA challenge is successfully verified.
@@ -140,9 +146,24 @@ public struct Session: Codable, Hashable, Sendable {
   /// Returns `true` if the access token is expired or will expire within the next 30 seconds.
   ///
   /// The 30-second buffer accounts for network latency.
+  @available(*, deprecated, message: "Use isExpired(at:leeway:) instead.")
   public var isExpired: Bool {
     let expiresAt = Date(timeIntervalSince1970: expiresAt)
     return expiresAt.timeIntervalSinceNow < defaultExpiryMargin
+  }
+
+  /// Whether the access token is expired at `date`, or expires within `leeway` after it.
+  ///
+  /// The leeway accounts for network latency. The expiry is ``expiresAt``.
+  ///
+  /// - Parameters:
+  ///   - date: The time to judge the session at. Defaults to now.
+  ///   - leeway: How long before the expiry the session counts as expired. Defaults to 30 seconds.
+  /// - Returns: `true` when less than `leeway` of the session's lifetime remains at `date`.
+  public func isExpired(at date: Date = .now, leeway: Duration = .seconds(30)) -> Bool {
+    let remaining = Date(timeIntervalSince1970: expiresAt).timeIntervalSince(date)
+    let (seconds, attoseconds) = leeway.components
+    return remaining < TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
   }
 }
 
@@ -158,7 +179,14 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
   public var userMetadata: [String: AnyJSON]
 
   /// The audience claim (`aud`) of the user's JWT.
-  public var aud: String
+  public var audience: String
+
+  /// The audience claim (`aud`) of the user's JWT.
+  @available(*, deprecated, message: "Use audience instead.")
+  public var aud: String {
+    get { audience }
+    set { audience = newValue }
+  }
 
   /// Timestamp when a confirmation email was last sent to this user.
   public var confirmationSentAt: Date?
@@ -266,7 +294,7 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.id = id
     self.appMetadata = appMetadata
     self.userMetadata = userMetadata
-    self.aud = aud
+    self.audience = aud
     self.confirmationSentAt = confirmationSentAt
     self.recoverySentAt = recoverySentAt
     self.emailChangeSentAt = emailChangeSentAt
@@ -287,13 +315,38 @@ public struct User: Codable, Hashable, Identifiable, Sendable {
     self.factors = factors
   }
 
+  enum CodingKeys: String, CodingKey {
+    case id
+    case appMetadata
+    case userMetadata
+    case audience = "aud"
+    case confirmationSentAt
+    case recoverySentAt
+    case emailChangeSentAt
+    case newEmail
+    case invitedAt
+    case actionLink
+    case email
+    case phone
+    case createdAt
+    case confirmedAt
+    case emailConfirmedAt
+    case phoneConfirmedAt
+    case lastSignInAt
+    case role
+    case updatedAt
+    case identities
+    case isAnonymous
+    case factors
+  }
+
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     id = try container.decode(UUID.self, forKey: .id)
     appMetadata = try container.decodeIfPresent([String: AnyJSON].self, forKey: .appMetadata) ?? [:]
     userMetadata =
       try container.decodeIfPresent([String: AnyJSON].self, forKey: .userMetadata) ?? [:]
-    aud = try container.decode(String.self, forKey: .aud)
+    audience = try container.decode(String.self, forKey: .audience)
     confirmationSentAt = try container.decodeIfPresent(Date.self, forKey: .confirmationSentAt)
     recoverySentAt = try container.decodeIfPresent(Date.self, forKey: .recoverySentAt)
     emailChangeSentAt = try container.decodeIfPresent(Date.self, forKey: .emailChangeSentAt)
@@ -324,7 +377,21 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   public var identityId: UUID
 
   /// The user this identity belongs to.
-  public var userId: UUID
+  public var userID: UUID
+
+  /// The user this identity belongs to.
+  @available(*, deprecated, message: "Use userID instead.")
+  public var userId: UUID {
+    get { userID }
+    set { userID = newValue }
+  }
+
+  /// The ID the provider gives this user, such as the `sub` of an OAuth identity. The same
+  /// value as ``id``.
+  public var providerUserID: String {
+    get { id }
+    set { id = newValue }
+  }
 
   /// Provider-specific identity data returned by the third-party.
   public var identityData: [String: AnyJSON]?
@@ -364,7 +431,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
   ) {
     self.id = id
     self.identityId = identityId
-    self.userId = userId
+    self.userID = userId
     self.identityData = identityData
     self.provider = provider
     self.createdAt = createdAt
@@ -372,10 +439,10 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     self.updatedAt = updatedAt
   }
 
-  enum CodingKeys: CodingKey {
+  enum CodingKeys: String, CodingKey {
     case id
     case identityId
-    case userId
+    case userID = "userId"
     case identityData
     case provider
     case createdAt
@@ -390,7 +457,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
     identityId =
       try container.decodeIfPresent(UUID.self, forKey: .identityId)
       ?? UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
-    userId = try container.decode(UUID.self, forKey: .userId)
+    userID = try container.decode(UUID.self, forKey: .userID)
     identityData = try container.decodeIfPresent([String: AnyJSON].self, forKey: .identityData)
     provider = try container.decode(String.self, forKey: .provider)
     createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
@@ -403,7 +470,7 @@ public struct UserIdentity: Codable, Hashable, Identifiable, Sendable {
 
     try container.encode(id, forKey: .id)
     try container.encode(identityId, forKey: .identityId)
-    try container.encode(userId, forKey: .userId)
+    try container.encode(userID, forKey: .userID)
     try container.encodeIfPresent(identityData, forKey: .identityData)
     try container.encode(provider, forKey: .provider)
     try container.encodeIfPresent(createdAt, forKey: .createdAt)
@@ -445,7 +512,70 @@ public enum Provider: String, Identifiable, Codable, CaseIterable, Sendable {
   public var id: RawValue { rawValue }
 }
 
+/// An ID token from a third-party identity provider, and the values the server needs to check
+/// it, for ``AuthClient/signInWithIDToken(_:)`` and ``AuthClient/linkIdentity(idToken:)``.
+///
+/// When the provider takes a nonce, pass the hashed nonce to the provider and the raw nonce
+/// here. The server hashes `nonce` and compares the result with the token's `nonce` claim.
+public struct IDTokenCredentials: Sendable, Hashable {
+  /// The provider that issued the token, such as ``Provider/apple`` or ``Provider/google``.
+  public var provider: Provider
+
+  /// The ID token the provider issued. Its `iss` claim must match ``provider``.
+  public var idToken: String
+
+  /// The raw nonce used to request the token. Required when the token has a `nonce` claim.
+  public var nonce: String?
+
+  /// The provider's access token. Required when the token has an `at_hash` claim.
+  public var accessToken: String?
+
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
+
+  /// Creates ID token credentials.
+  ///
+  /// - Parameters:
+  ///   - provider: The provider that issued the token.
+  ///   - idToken: The ID token the provider issued.
+  ///   - nonce: The raw nonce used to request the token.
+  ///   - accessToken: The provider's access token.
+  ///   - captchaToken: The token the user received for completing a captcha.
+  public init(
+    provider: Provider,
+    idToken: String,
+    nonce: String? = nil,
+    accessToken: String? = nil,
+    captchaToken: String? = nil
+  ) {
+    self.provider = provider
+    self.idToken = idToken
+    self.nonce = nonce
+    self.accessToken = accessToken
+    self.captchaToken = captchaToken
+  }
+}
+
+struct IDTokenGrantBody: Encodable {
+  var provider: String
+  var idToken: String
+  var accessToken: String?
+  var nonce: String?
+  var gotrueMetaSecurity: AuthMetaSecurity?
+  var linkIdentity: Bool
+
+  init(_ credentials: IDTokenCredentials, linkIdentity: Bool = false) {
+    provider = credentials.provider.rawValue
+    idToken = credentials.idToken
+    accessToken = credentials.accessToken
+    nonce = credentials.nonce
+    gotrueMetaSecurity = credentials.captchaToken.map(AuthMetaSecurity.init(captchaToken:))
+    self.linkIdentity = linkIdentity
+  }
+}
+
 /// Credentials for signing in with an OpenID Connect (OIDC) ID token issued by a third-party.
+@available(*, deprecated, message: "Use IDTokenCredentials instead.")
 public struct OpenIDConnectCredentials: Codable, Hashable, Sendable {
   /// Provider name or OIDC `iss` value identifying which provider should be used to verify the
   /// provided token. Supported names: `google`, `apple`, `azure`, `facebook`.
@@ -569,6 +699,13 @@ public struct Web3Credentials: Codable, Hashable, Sendable {
     self.signature = signature
     self.gotrueMetaSecurity = captchaToken.map(AuthMetaSecurity.init(captchaToken:))
   }
+
+  /// The token the user received for completing a captcha. The same value as
+  /// ``gotrueMetaSecurity``.
+  public var captchaToken: String? {
+    get { gotrueMetaSecurity?.captchaToken }
+    set { gotrueMetaSecurity = newValue.map(AuthMetaSecurity.init(captchaToken:)) }
+  }
 }
 
 struct OTPParams: Codable, Hashable, Sendable {
@@ -618,6 +755,11 @@ struct VerifyMobileOTPParams: Encodable, Hashable {
   var type: MobileOTPType
   var gotrueMetaSecurity: AuthMetaSecurity?
 }
+
+/// The OTP type used when verifying a phone (SMS/WhatsApp) one-time password.
+///
+/// The name that the next major version uses for ``MobileOTPType``.
+public typealias PhoneOTPType = MobileOTPType
 
 /// The OTP type used when verifying a mobile (SMS/WhatsApp) one-time password.
 public enum MobileOTPType: String, Encodable, Sendable {
@@ -695,7 +837,95 @@ public enum AuthResponse: Codable, Hashable, Sendable {
   }
 }
 
+/// The changes a user can make to their own account, for ``AuthClient/updateUser(_:redirectTo:)``.
+public struct UpdateUser: Encodable, Hashable, Sendable {
+  /// The user's email.
+  public var email: String?
+
+  /// The user's phone.
+  public var phone: String?
+
+  /// The user's password.
+  public var password: String?
+
+  /// The user's current password.
+  ///
+  /// Set it with ``password`` when the project requires the current password to change the
+  /// password.
+  public var currentPassword: String?
+
+  /// The nonce sent for reauthentication if the user's password is to be updated.
+  ///
+  /// > Note: Call ``AuthClient/reauthenticate()`` to obtain the nonce first.
+  public var nonce: String?
+
+  /// Data to merge into the user's metadata, in the `auth.users.raw_user_meta_data` column. The
+  /// user can change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  var codeChallenge: String?
+  var codeChallengeMethod: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case phone
+    case password
+    case currentPassword = "current_password"
+    case nonce
+    case codeChallenge = "code_challenge"
+    case codeChallengeMethod = "code_challenge_method"
+    case userMetadata = "data"
+  }
+
+  /// Creates the changes for ``AuthClient/updateUser(_:redirectTo:)``.
+  ///
+  /// - Parameters:
+  ///   - email: New email address.
+  ///   - phone: New phone number.
+  ///   - password: New password.
+  ///   - currentPassword: Current password, required when the project requires it to change the
+  ///     password.
+  ///   - nonce: Reauthentication nonce, required when updating the password.
+  ///   - userMetadata: Data to merge into the user's metadata.
+  public init(
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    currentPassword: String? = nil,
+    nonce: String? = nil,
+    userMetadata: JSONObject? = nil
+  ) {
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.currentPassword = currentPassword
+    self.nonce = nonce
+    self.userMetadata = userMetadata
+  }
+}
+
+/// Options for ``AuthClient/resetPassword(email:options:)``.
+public struct ResetPasswordOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates password reset options.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
 /// Attributes that a user can update for their own account.
+@available(*, deprecated, message: "Use UpdateUser instead.")
 public struct UserAttributes: Codable, Hashable, Sendable {
   /// The user's email.
   public var email: String?
@@ -749,7 +979,234 @@ public struct UserAttributes: Codable, Hashable, Sendable {
   }
 }
 
+/// The new user for ``AuthAdmin/createUser(_:)``.
+public struct AdminCreateUser: Encodable, Hashable, Sendable {
+  /// The user's ID. `nil` lets the server pick one.
+  public var id: UUID?
+
+  /// The user's email.
+  public var email: String?
+
+  /// The user's phone.
+  public var phone: String?
+
+  /// The user's password. Leave it `nil` with ``passwordHash`` to import a hashed password.
+  public var password: String?
+
+  /// A password hash to import, in bcrypt or Argon2 format. Do not set it with ``password``.
+  public var passwordHash: String?
+
+  /// Confirms the user's email address if set to `true`.
+  public var confirmsEmail: Bool?
+
+  /// Confirms the user's phone number if set to `true`.
+  public var confirmsPhone: Bool?
+
+  /// The role claim set in the user's access token JWT.
+  public var role: String?
+
+  /// Data for the user's metadata, in the `auth.users.raw_user_meta_data` column. The user can
+  /// change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  /// Data for the user's application metadata, in the `auth.users.raw_app_meta_data` column.
+  public var appMetadata: JSONObject?
+
+  /// How long to ban the user, counted from the time of the request.
+  public var banDuration: Duration?
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case email
+    case phone
+    case password
+    case passwordHash = "password_hash"
+    case confirmsEmail = "email_confirm"
+    case confirmsPhone = "phone_confirm"
+    case role
+    case userMetadata = "user_metadata"
+    case appMetadata = "app_metadata"
+    case banDuration = "ban_duration"
+  }
+
+  /// Creates the new user for ``AuthAdmin/createUser(_:)``.
+  ///
+  /// - Parameters:
+  ///   - id: The user's ID. `nil` lets the server pick one.
+  ///   - email: The user's email address.
+  ///   - phone: The user's phone number.
+  ///   - password: Plain-text password.
+  ///   - passwordHash: Pre-hashed password to import.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
+  ///   - role: The JWT role claim.
+  ///   - userMetadata: User-supplied metadata.
+  ///   - appMetadata: Application-level metadata.
+  ///   - banDuration: How long to ban the user.
+  public init(
+    id: UUID? = nil,
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    passwordHash: String? = nil,
+    confirmsEmail: Bool? = nil,
+    confirmsPhone: Bool? = nil,
+    role: String? = nil,
+    userMetadata: JSONObject? = nil,
+    appMetadata: JSONObject? = nil,
+    banDuration: Duration? = nil
+  ) {
+    self.id = id
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.passwordHash = passwordHash
+    self.confirmsEmail = confirmsEmail
+    self.confirmsPhone = confirmsPhone
+    self.role = role
+    self.userMetadata = userMetadata
+    self.appMetadata = appMetadata
+    self.banDuration = banDuration
+  }
+
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(id, forKey: .id)
+    try container.encodeIfPresent(email, forKey: .email)
+    try container.encodeIfPresent(phone, forKey: .phone)
+    try container.encodeIfPresent(password, forKey: .password)
+    try container.encodeIfPresent(passwordHash, forKey: .passwordHash)
+    try container.encodeIfPresent(confirmsEmail, forKey: .confirmsEmail)
+    try container.encodeIfPresent(confirmsPhone, forKey: .confirmsPhone)
+    try container.encodeIfPresent(role, forKey: .role)
+    try container.encodeIfPresent(userMetadata, forKey: .userMetadata)
+    try container.encodeIfPresent(appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(banDuration?.goBanDurationString, forKey: .banDuration)
+  }
+}
+
+/// The changes for ``AuthAdmin/updateUser(id:_:)``. The server changes only the fields
+/// you set.
+public struct AdminUpdateUser: Encodable, Hashable, Sendable {
+  /// The user's new email.
+  public var email: String?
+
+  /// The user's new phone.
+  public var phone: String?
+
+  /// The user's new password.
+  public var password: String?
+
+  /// Confirms the user's email address if set to `true`.
+  public var confirmsEmail: Bool?
+
+  /// Confirms the user's phone number if set to `true`.
+  public var confirmsPhone: Bool?
+
+  /// The role claim set in the user's access token JWT.
+  public var role: String?
+
+  /// Data to merge into the user's metadata, in the `auth.users.raw_user_meta_data` column. The
+  /// user can change it, so do not use it for authorization.
+  public var userMetadata: JSONObject?
+
+  /// Data to merge into the user's application metadata, in the `auth.users.raw_app_meta_data`
+  /// column.
+  public var appMetadata: JSONObject?
+
+  /// How long to ban the user, counted from the time of the request.
+  ///
+  /// Pass `.zero` to lift an existing ban. `nil` leaves the ban as it is.
+  public var banDuration: Duration?
+
+  private enum CodingKeys: String, CodingKey {
+    case email
+    case phone
+    case password
+    case confirmsEmail = "email_confirm"
+    case confirmsPhone = "phone_confirm"
+    case role
+    case userMetadata = "user_metadata"
+    case appMetadata = "app_metadata"
+    case banDuration = "ban_duration"
+  }
+
+  /// Creates the changes for ``AuthAdmin/updateUser(id:_:)``.
+  ///
+  /// - Parameters:
+  ///   - email: The user's new email address.
+  ///   - phone: The user's new phone number.
+  ///   - password: The new plain-text password.
+  ///   - confirmsEmail: Whether to mark the email as confirmed.
+  ///   - confirmsPhone: Whether to mark the phone as confirmed.
+  ///   - role: The JWT role claim.
+  ///   - userMetadata: User-supplied metadata to merge.
+  ///   - appMetadata: Application-level metadata to merge.
+  ///   - banDuration: How long to ban the user. Pass `.zero` to lift a ban.
+  public init(
+    email: String? = nil,
+    phone: String? = nil,
+    password: String? = nil,
+    confirmsEmail: Bool? = nil,
+    confirmsPhone: Bool? = nil,
+    role: String? = nil,
+    userMetadata: JSONObject? = nil,
+    appMetadata: JSONObject? = nil,
+    banDuration: Duration? = nil
+  ) {
+    self.email = email
+    self.phone = phone
+    self.password = password
+    self.confirmsEmail = confirmsEmail
+    self.confirmsPhone = confirmsPhone
+    self.role = role
+    self.userMetadata = userMetadata
+    self.appMetadata = appMetadata
+    self.banDuration = banDuration
+  }
+
+  /// Encodes the fields that are set. Writes ``banDuration`` in the format the server reads.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(email, forKey: .email)
+    try container.encodeIfPresent(phone, forKey: .phone)
+    try container.encodeIfPresent(password, forKey: .password)
+    try container.encodeIfPresent(confirmsEmail, forKey: .confirmsEmail)
+    try container.encodeIfPresent(confirmsPhone, forKey: .confirmsPhone)
+    try container.encodeIfPresent(role, forKey: .role)
+    try container.encodeIfPresent(userMetadata, forKey: .userMetadata)
+    try container.encodeIfPresent(appMetadata, forKey: .appMetadata)
+    try container.encodeIfPresent(banDuration?.goBanDurationString, forKey: .banDuration)
+  }
+}
+
+extension Duration {
+  /// The ban duration in the format the server reads: `"none"` lifts a ban, any other value is a
+  /// Go duration.
+  fileprivate var goBanDurationString: String {
+    self == .zero ? "none" : goDurationString
+  }
+}
+
+extension Duration {
+  /// The duration in the format of Go's `time.ParseDuration`.
+  var goDurationString: String {
+    let (seconds, attoseconds) = components
+    let (scaled, overflow) = seconds.multipliedReportingOverflow(by: 1_000_000_000)
+    if attoseconds == 0, !overflow { return "\(seconds)s" }
+    let (sum, sumOverflow) = scaled.addingReportingOverflow(attoseconds / 1_000_000_000)
+    // Go's Duration is an Int64 count of nanoseconds, and ParseDuration rejects a larger value,
+    // so a longer duration saturates at about 292 years.
+    var nanoseconds = overflow || sumOverflow ? (self > .zero ? Int64.max : Int64.min) : sum
+    // A non-zero duration under 1 ns must not become 0, which GoTrue reads as "no ban".
+    if nanoseconds == 0 { nanoseconds = self > .zero ? 1 : -1 }
+    return "\(nanoseconds)ns"
+  }
+}
+
 /// Attributes that an administrator can set when creating or updating a user.
+@available(*, deprecated, message: "Use AdminCreateUser or AdminUpdateUser instead.")
 public struct AdminUserAttributes: Encodable, Hashable, Sendable {
 
   /// A custom data object to store the user's application specific metadata. This maps to the `auth.users.app_metadata` column.
@@ -870,22 +1327,22 @@ public enum FactorStatus: String, Codable, Sendable {
 /// An MFA Factor.
 public struct Factor: Identifiable, Codable, Hashable, Sendable {
   /// ID of the factor.
-  public let id: String
+  public var id: String
 
   /// Friendly name of the factor, useful to disambiguate between multiple factors.
-  public let friendlyName: String?
+  public var friendlyName: String?
 
   /// Type of factor. `totp` and `phone` supported with this version.
-  public let factorType: FactorType
+  public var factorType: FactorType
 
   /// Factor's status.
-  public let status: FactorStatus
+  public var status: FactorStatus
 
   /// Timestamp when the factor was created.
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// Timestamp when the factor was last updated.
-  public let updatedAt: Date
+  public var updatedAt: Date
 }
 
 /// The protocol that MFA enrollment parameter types must conform to.
@@ -895,6 +1352,11 @@ public protocol MFAEnrollParamsType: Encodable, Hashable, Sendable {
 }
 
 /// Parameters for enrolling a TOTP (Time-based One-Time Password) MFA factor.
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 public struct MFATotpEnrollParams: MFAEnrollParamsType {
   /// The factor type, always `"totp"`.
   public let factorType: FactorType = "totp"
@@ -916,6 +1378,11 @@ public struct MFATotpEnrollParams: MFAEnrollParamsType {
   }
 }
 
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
   /// Creates parameters for enrolling a TOTP factor.
   ///
@@ -928,6 +1395,11 @@ extension MFAEnrollParamsType where Self == MFATotpEnrollParams {
 }
 
 /// Parameters for enrolling a phone (SMS/WhatsApp) MFA factor.
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
   /// The factor type, always `"phone"`.
   public let factorType: FactorType = "phone"
@@ -949,6 +1421,11 @@ public struct MFAPhoneEnrollParams: MFAEnrollParamsType {
   }
 }
 
+@available(
+  *, deprecated,
+  message:
+    "Use AuthMFA.enrollTOTP(issuer:friendlyName:) or AuthMFA.enrollPhone(_:friendlyName:) instead."
+)
 extension MFAEnrollParamsType where Self == MFAPhoneEnrollParams {
   /// Creates parameters for enrolling a phone factor.
   ///
@@ -1079,6 +1556,7 @@ public struct MFAVerifyParams: Encodable, Hashable {
 }
 
 /// Parameters for unenrolling an MFA factor.
+@available(*, deprecated, message: "Use AuthMFA.unenroll(factorID:) instead.")
 public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
   /// ID of the factor to unenroll. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
@@ -1092,6 +1570,7 @@ public struct MFAUnenrollParams: Encodable, Hashable, Sendable {
 }
 
 /// Parameters for the combined challenge-and-verify operation.
+@available(*, deprecated, message: "Use AuthMFA.challengeAndVerify(factorID:code:) instead.")
 public struct MFAChallengeAndVerifyParams: Encodable, Hashable, Sendable {
   /// ID of the factor to be challenged. Returned in ``AuthMFA/enroll(params:)``.
   public let factorId: String
@@ -1126,6 +1605,7 @@ public struct AuthMFAChallengeResponse: Decodable, Hashable, Sendable {
 }
 
 /// A type alias that maps an MFA verify response to a ``Session``.
+@available(*, deprecated, message: "Use Session instead.")
 public typealias AuthMFAVerifyResponse = Session
 
 /// The response returned after successfully unenrolling an MFA factor.
@@ -1135,6 +1615,7 @@ public struct AuthMFAUnenrollResponse: Decodable, Hashable, Sendable {
 }
 
 /// The response returned by ``AuthMFA/listFactors()``.
+@available(*, deprecated, message: "Use MFAFactors instead.")
 public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
   /// All available factors (verified and unverified).
   public let all: [Factor]
@@ -1149,8 +1630,224 @@ public struct AuthMFAListFactorsResponse: Decodable, Hashable, Sendable {
   @_spi(Experimental) public let webauthn: [Factor]
 }
 
+/// A TOTP factor created by ``AuthMFA/enrollTOTP(issuer:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters a code from their authenticator app in
+/// ``AuthMFA/challengeAndVerify(factorID:code:)``.
+public struct TOTPEnrollment: Identifiable, Hashable, Sendable {
+  /// ID of the new factor.
+  public var id: UUID
+
+  /// Friendly name of the factor, useful to tell several factors apart.
+  public var friendlyName: String?
+
+  /// A QR code that encodes ``uri``, as an SVG document. Display it by prefixing
+  /// `data:image/svg+xml;utf-8,`. Avoid logging this value.
+  public var qrCode: String
+
+  /// The TOTP secret, also encoded in the QR code. Show it in a password-style field for users who
+  /// cannot scan the QR code. Avoid logging this value.
+  public var secret: String
+
+  /// The `otpauth://` URI encoded in the QR code. Avoid logging this value.
+  public var uri: String
+
+  /// Creates a ``TOTPEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    qrCode: String,
+    secret: String,
+    uri: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.qrCode = qrCode
+    self.secret = secret
+    self.uri = uri
+  }
+}
+
+extension TOTPEnrollment: Decodable {
+  // Camel case names: the client's decoder converts snake case keys before it matches them.
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case friendlyName
+    case totp
+  }
+
+  private struct TOTP: Decodable {
+    let qrCode: String
+    let secret: String
+    let uri: String
+  }
+
+  /// Decodes an enrollment. Reads the QR code, the secret, and the URI from the nested `totp`
+  /// object.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let totp = try container.decode(TOTP.self, forKey: .totp)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      friendlyName: try container.decodeIfPresent(String.self, forKey: .friendlyName),
+      qrCode: totp.qrCode,
+      secret: totp.secret,
+      uri: totp.uri
+    )
+  }
+}
+
+/// A phone factor created by ``AuthMFA/enrollPhone(_:friendlyName:)``.
+///
+/// The factor is `unverified` until the user enters the code from
+/// ``AuthMFA/challenge(factorID:channel:)`` in ``AuthMFA/verify(factorID:challengeID:code:)``.
+public struct PhoneEnrollment: Identifiable, Decodable, Hashable, Sendable {
+  /// ID of the new factor.
+  public var id: UUID
+
+  /// Friendly name of the factor, useful to tell several factors apart.
+  public var friendlyName: String?
+
+  /// The phone number of the factor, in E.164 format.
+  public var phone: String
+
+  /// Creates a ``PhoneEnrollment``.
+  public init(
+    id: UUID,
+    friendlyName: String? = nil,
+    phone: String
+  ) {
+    self.id = id
+    self.friendlyName = friendlyName
+    self.phone = phone
+  }
+}
+
+/// A challenge created by ``AuthMFA/challenge(factorID:channel:)``.
+public struct MFAChallenge: Identifiable, Hashable, Sendable {
+  /// ID of the challenge. Pass it to ``AuthMFA/verify(factorID:challengeID:code:)``.
+  public var id: UUID
+
+  /// The type of the factor that was challenged.
+  public var factorType: FactorType
+
+  /// The time after which the challenge can no longer be verified.
+  public var expiresAt: Date
+
+  /// Creates a ``MFAChallenge``.
+  public init(
+    id: UUID,
+    factorType: FactorType,
+    expiresAt: Date
+  ) {
+    self.id = id
+    self.factorType = factorType
+    self.expiresAt = expiresAt
+  }
+}
+
+extension MFAChallenge: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case type
+    case expiresAt
+  }
+
+  /// Decodes a challenge. Reads ``factorType`` from `type` and `expires_at` as a Unix timestamp.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(
+      id: try container.decode(UUID.self, forKey: .id),
+      factorType: try container.decode(FactorType.self, forKey: .type),
+      expiresAt: Date(
+        timeIntervalSince1970: try container.decode(TimeInterval.self, forKey: .expiresAt))
+    )
+  }
+}
+
+/// The user's MFA factors, returned by ``AuthMFA/factors()``.
+public struct MFAFactors: Hashable, Sendable {
+  /// Factors the user has verified. Only these count toward reaching `aal2`.
+  public var verified: [Factor]
+
+  /// Factors the user has enrolled but not verified yet.
+  public var unverified: [Factor]
+
+  /// Creates a ``MFAFactors``.
+  public init(
+    verified: [Factor],
+    unverified: [Factor]
+  ) {
+    self.verified = verified
+    self.unverified = unverified
+  }
+
+  /// Every factor: ``verified`` first, then ``unverified``.
+  public var all: [Factor] { verified + unverified }
+}
+
+extension MFAFactors {
+  /// Splits `factors` by status. A status other than ``FactorStatus/verified`` counts as
+  /// unverified, because only a verified factor can raise the assurance level.
+  init(_ factors: [Factor]) {
+    self.init(
+      verified: factors.filter { $0.status == .verified },
+      unverified: factors.filter { $0.status != .verified }
+    )
+  }
+}
+
+/// The assurance level of the current session, returned by ``AuthMFA/assuranceLevel()``.
+public struct AssuranceLevelInfo: Hashable, Sendable {
+  /// The assurance level of the current access token. `nil` when the token has no `aal` claim.
+  public var currentLevel: AuthenticatorAssuranceLevel?
+
+  /// The highest level the user can reach. When it is above ``currentLevel``, ask the user to
+  /// verify a factor.
+  public var nextLevel: AuthenticatorAssuranceLevel?
+
+  /// The methods attached to the session. Use them to find when the user last verified a factor,
+  /// for example in a step-up flow.
+  public var currentAuthenticationMethods: [AMREntry]
+
+  /// Creates an ``AssuranceLevelInfo``.
+  public init(
+    currentLevel: AuthenticatorAssuranceLevel? = nil,
+    nextLevel: AuthenticatorAssuranceLevel? = nil,
+    currentAuthenticationMethods: [AMREntry]
+  ) {
+    self.currentLevel = currentLevel
+    self.nextLevel = nextLevel
+    self.currentAuthenticationMethods = currentAuthenticationMethods
+  }
+}
+
 /// A string representing an Authenticator Assurance Level (`aal1` or `aal2`).
+@available(*, deprecated, message: "Use AuthenticatorAssuranceLevel instead.")
 public typealias AuthenticatorAssuranceLevels = String
+
+/// An Authenticator Assurance Level (AAL), the `aal` claim of an access token.
+public struct AuthenticatorAssuranceLevel: RawRepresentable, Hashable, Sendable,
+  ExpressibleByStringLiteral
+{
+  /// The level as the `aal` claim holds it, such as `"aal1"`.
+  public let rawValue: String
+
+  /// Creates an ``AuthenticatorAssuranceLevel`` from a raw string value.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+
+  /// Creates an ``AuthenticatorAssuranceLevel`` from a string literal.
+  public init(stringLiteral value: String) {
+    self.init(rawValue: value)
+  }
+
+  /// The user proved one factor, such as a password, a one-time code, or an OAuth sign-in.
+  public static let aal1: AuthenticatorAssuranceLevel = "aal1"
+  /// The user also verified a second factor.
+  public static let aal2: AuthenticatorAssuranceLevel = "aal2"
+}
 
 /// An authentication method reference (AMR) entry.
 ///
@@ -1181,13 +1878,14 @@ extension AMREntry {
 }
 
 /// The response returned by ``AuthMFA/getAuthenticatorAssuranceLevel()``.
+@available(*, deprecated, message: "Use AssuranceLevelInfo instead.")
 public struct AuthMFAGetAuthenticatorAssuranceLevelResponse: Decodable, Hashable, Sendable {
   /// Current AAL level of the session.
-  public let currentLevel: AuthenticatorAssuranceLevels?
+  public let currentLevel: String?
 
   /// Next possible AAL level for the session. If the next level is higher than the current one, the
   /// user should go through MFA.
-  public let nextLevel: AuthenticatorAssuranceLevels?
+  public let nextLevel: String?
 
   /// A list of all authentication methods attached to this session. Use the information here to
   /// detect the last time a user verified a factor, for example if implementing a step-up scenario.
@@ -1225,6 +1923,11 @@ struct ResendEmailParams: Encodable {
   let codeChallengeMethod: String?
 }
 
+/// The type of phone OTP to resend.
+///
+/// The name that the next major version uses for ``ResendMobileType``.
+public typealias ResendPhoneType = ResendMobileType
+
 /// The type of mobile OTP to resend when calling ``AuthClient/resend(phone:type:captchaToken:)``.
 public enum ResendMobileType: String, Hashable, Sendable, Encodable {
   /// Resends the SMS OTP for the current phone sign-in.
@@ -1240,7 +1943,269 @@ struct ResendMobileParams: Encodable {
   let gotrueMetaSecurity: AuthMetaSecurity?
 }
 
+/// Options for ``AuthClient/signInWithOTP(email:options:)``.
+public struct EmailOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the email. The default is `true`.
+  /// When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The URL the email link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates email OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - redirectTo: The URL the email link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/signInWithOTP(phone:options:)``.
+public struct PhoneOTPOptions: Sendable, Hashable {
+  /// Whether the server creates a user when none exists for the phone number. The default is
+  /// `true`. When `false`, the call fails for an unknown user.
+  public var shouldCreateUser: Bool
+
+  /// Data to store on the user if the call creates one.
+  public var userMetadata: JSONObject
+
+  /// The channel that delivers the code. The default is ``MessagingChannel/sms``.
+  ///
+  /// - Note: The ``MessagingChannel/whatsapp`` channel needs a WhatsApp sender on Twilio.
+  public var channel: MessagingChannel
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates phone OTP options.
+  ///
+  /// - Parameters:
+  ///   - shouldCreateUser: Whether the server creates a user when none exists.
+  ///   - userMetadata: Data to store on the user if the call creates one.
+  ///   - channel: The channel that delivers the code.
+  ///   - captchaToken: The captcha verification token.
+  public init(
+    shouldCreateUser: Bool = true,
+    userMetadata: JSONObject = [:],
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.shouldCreateUser = shouldCreateUser
+    self.userMetadata = userMetadata
+    self.channel = channel
+    self.captchaToken = captchaToken
+  }
+}
+
+/// The ID that the SMS provider gave a message. Use it to track delivery problems.
+public struct MessageID: RawRepresentable, Decodable, Hashable, Sendable {
+  /// The ID as the SMS provider wrote it.
+  public let rawValue: String
+
+  /// Creates a ``MessageID`` from the provider's ID.
+  public init(rawValue: String) {
+    self.rawValue = rawValue
+  }
+}
+
+/// The result of ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+///
+/// Switch on the result to learn whether the user is signed in:
+///
+/// ```swift
+/// switch try await client.auth.signUp(email: email, password: password, options: .init()) {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .confirmationRequired(let user):
+///   showCheckYourInbox(for: user)
+/// }
+/// ```
+public enum SignUpResult: Decodable, Hashable, Sendable {
+  /// The account is active and the user is signed in. The client stored the session and emitted
+  /// ``AuthChangeEvent/signedIn``.
+  case signedIn(Session)
+
+  /// The server sent a confirmation email or SMS. The user is not signed in until they confirm.
+  ///
+  /// When email confirmation is on and the email or phone number already belongs to a confirmed
+  /// account, the server does not say so. It returns a fake user with an empty `identities`
+  /// list instead, and sends no message. A real new user has one identity. The SDK returns
+  /// either user as is.
+  case confirmationRequired(User)
+
+  /// Decodes ``signedIn(_:)`` from a session body, and ``confirmationRequired(_:)`` from a user
+  /// body.
+  public init(from decoder: any Decoder) throws {
+    self.init(try AuthResponse(from: decoder))
+  }
+
+  init(_ response: AuthResponse) {
+    switch response {
+    case .session(let session): self = .signedIn(session)
+    case .user(let user): self = .confirmationRequired(user)
+    }
+  }
+
+  /// The user in either case.
+  public var user: User {
+    switch self {
+    case .signedIn(let session): session.user
+    case .confirmationRequired(let user): user
+    }
+  }
+
+  /// The session, or `nil` when the user must confirm first.
+  public var session: Session? {
+    if case .signedIn(let session) = self { return session }
+    return nil
+  }
+}
+
+/// Options for ``AuthClient/signUp(email:password:options:)`` and
+/// ``AuthClient/signUp(phone:password:options:)``.
+public struct SignUpOptions: Sendable, Hashable {
+  /// Data to store on the user, in the `auth.users.raw_user_meta_data` column. The user can
+  /// change it later, so do not use it for authorization.
+  public var userMetadata: JSONObject
+
+  /// The URL the confirmation link sends the user to. Applies to email sign-up only. When `nil`,
+  /// the client uses ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The channel that delivers the confirmation code. Applies to phone sign-up only.
+  public var channel: MessagingChannel
+
+  /// The token the user received for completing a captcha.
+  public var captchaToken: String?
+
+  /// Creates sign-up options.
+  ///
+  /// - Parameters:
+  ///   - userMetadata: Data to store on the user.
+  ///   - redirectTo: The URL the confirmation link sends the user to. Email sign-up only.
+  ///   - channel: The channel that delivers the confirmation code. Phone sign-up only.
+  ///   - captchaToken: The token the user received for completing a captcha.
+  public init(
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil,
+    channel: MessagingChannel = .sms,
+    captchaToken: String? = nil
+  ) {
+    self.userMetadata = userMetadata
+    self.redirectTo = redirectTo
+    self.channel = channel
+    self.captchaToken = captchaToken
+  }
+}
+
+/// The result of ``AuthClient/verifyOTP(email:token:type:)``.
+///
+/// ```swift
+/// let result: VerifyOTPResult = try await client.auth.verifyOTP(
+///   email: email, token: code, type: .email)
+/// switch result {
+/// case .signedIn(let session):
+///   showHome(for: session.user)
+/// case .emailChangePending(let message):
+///   showMessage(message)
+/// }
+/// ```
+public enum VerifyOTPResult: Sendable, Hashable {
+  /// The code was valid and the user is signed in. The client stored the session and emitted
+  /// ``AuthChangeEvent/signedIn``.
+  case signedIn(Session)
+
+  /// The first of the two confirmations of a secure email change. The other address must confirm
+  /// its link too before the change takes effect. The client stored no session and emitted no
+  /// event. `message` comes from the server and is meant for display.
+  case emailChangePending(message: String)
+}
+
+/// A `/verify` response body: a session, or the `{"msg": …}` body of the first half of a secure
+/// email change.
+struct VerifyOTPBody: Decodable {
+  let result: VerifyOTPResult
+
+  // Camel case names: the client's decoder converts snake case keys before it matches them.
+  private enum CodingKeys: String, CodingKey {
+    case accessToken
+    case refreshToken
+    case expiresIn
+    case message = "msg"
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let isSession =
+      container.contains(.accessToken) && container.contains(.refreshToken)
+      && container.contains(.expiresIn)
+    result =
+      try isSession
+      ? .signedIn(Session(from: decoder))
+      : .emailChangePending(message: container.decode(String.self, forKey: .message))
+  }
+}
+
+/// The `{"message_id": …}` body of a phone `/otp` or `/resend` response.
+struct MessageIDBody: Decodable {
+  let messageId: MessageID?
+}
+
+/// Options for ``AuthClient/resend(email:type:options:)``.
+public struct ResendEmailOptions: Sendable, Hashable {
+  /// The URL the link redirects to. When `nil`, the client uses
+  /// ``AuthClient/Configuration/redirectTo``.
+  public var redirectTo: URL?
+
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send an email again.
+  ///
+  /// - Parameters:
+  ///   - redirectTo: The URL the link redirects to.
+  ///   - captchaToken: The captcha verification token.
+  public init(redirectTo: URL? = nil, captchaToken: String? = nil) {
+    self.redirectTo = redirectTo
+    self.captchaToken = captchaToken
+  }
+}
+
+/// Options for ``AuthClient/resend(phone:type:options:)``.
+public struct ResendPhoneOptions: Sendable, Hashable {
+  /// The captcha verification token.
+  public var captchaToken: String?
+
+  /// Creates options to send a phone code again.
+  ///
+  /// - Parameter captchaToken: The captcha verification token.
+  public init(captchaToken: String? = nil) {
+    self.captchaToken = captchaToken
+  }
+}
+
 /// The response returned when resending an SMS OTP.
+@available(*, deprecated, message: "Use MessageID instead.")
 public struct ResendMobileResponse: Decodable, Hashable, Sendable {
   /// Unique ID of the message as reported by the SMS sending provider. Useful for tracking
   /// deliverability problems.
@@ -1257,7 +2222,14 @@ public struct ResendMobileResponse: Decodable, Hashable, Sendable {
 /// Information about why a password is considered weak.
 public struct WeakPassword: Codable, Hashable, Sendable {
   /// List of reasons the password is too weak, could be any of `length`, `characters`, or `pwned`.
-  public let reasons: [String]
+  public var reasons: [String]
+
+  /// Creates a ``WeakPassword``.
+  public init(
+    reasons: [String]
+  ) {
+    self.reasons = reasons
+  }
 }
 
 struct DeleteUserRequest: Encodable {
@@ -1300,6 +2272,7 @@ public struct OAuthResponse: Codable, Hashable, Sendable {
 }
 
 /// Pagination parameters for list endpoints.
+@available(*, deprecated, message: "Use AuthAdmin.listUsers(page:pageSize:) instead.")
 public struct PageParams {
   /// The page number.
   public let page: Int?
@@ -1318,13 +2291,22 @@ public struct PageParams {
   }
 }
 
+/// One page of users, returned by ``AuthAdmin/listUsers(params:)``.
+///
+/// The name that the next major version uses for ``ListUsersPaginatedResponse``.
+public typealias UserPage = ListUsersPaginatedResponse
+
 /// A paginated list of users returned by ``AuthAdmin/listUsers(params:)``.
 public struct ListUsersPaginatedResponse: Hashable, Sendable {
   /// The users on the current page.
-  public let users: [User]
+  public var users: [User]
 
   /// The audience the users belong to.
-  public let aud: String
+  public var audience: String
+
+  /// The audience the users belong to.
+  @available(*, deprecated, message: "Use audience instead.")
+  public var aud: String { audience }
 
   /// The page number of the next page, if one exists.
   public var nextPage: Int?
@@ -1334,7 +2316,27 @@ public struct ListUsersPaginatedResponse: Hashable, Sendable {
 
   /// The total number of users matching the query.
   public var total: Int
+
+  /// Creates a ``UserPage``.
+  public init(
+    users: [User],
+    audience: String,
+    nextPage: Int? = nil,
+    lastPage: Int,
+    total: Int
+  ) {
+    self.users = users
+    self.audience = audience
+    self.nextPage = nextPage
+    self.lastPage = lastPage
+    self.total = total
+  }
 }
+
+/// The link to generate with ``AuthAdmin/generateLink(params:)``.
+///
+/// The name that the next major version uses for ``GenerateLinkParams``.
+public typealias GenerateLink = GenerateLinkParams
 
 /// The parameters for ``AuthAdmin/generateLink(params:)``.
 public struct GenerateLinkParams: Sendable {
@@ -1349,6 +2351,8 @@ public struct GenerateLinkParams: Sendable {
   var redirectTo: URL?
 
   /// Generates a signup link.
+  @available(*, deprecated, message: "Use signUp(email:password:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func signUp(
     email: String,
     password: String,
@@ -1367,6 +2371,8 @@ public struct GenerateLinkParams: Sendable {
   }
 
   /// Generates an invite link.
+  @available(*, deprecated, message: "Use invite(email:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func invite(
     email: String,
     data: [String: AnyJSON]? = nil,
@@ -1383,6 +2389,8 @@ public struct GenerateLinkParams: Sendable {
   }
 
   /// Generates a magic link.
+  @available(*, deprecated, message: "Use magicLink(email:userMetadata:redirectTo:) instead.")
+  @_disfavoredOverload
   public static func magicLink(
     email: String,
     data: [String: AnyJSON]? = nil,
@@ -1393,6 +2401,72 @@ public struct GenerateLinkParams: Sendable {
         type: .magiclink,
         email: email,
         data: data
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a signup link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - password: The user's password.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func signUp(
+    email: String,
+    password: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .signup,
+        email: email,
+        password: password,
+        data: userMetadata
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a invite link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func invite(
+    email: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .invite,
+        email: email,
+        data: userMetadata
+      ),
+      redirectTo: redirectTo
+    )
+  }
+
+  /// Generates a magic link.
+  ///
+  /// - Parameters:
+  ///   - email: The user's email.
+  ///   - userMetadata: Data for the user's metadata.
+  ///   - redirectTo: The URL the link redirects to.
+  public static func magicLink(
+    email: String,
+    userMetadata: JSONObject? = nil,
+    redirectTo: URL? = nil
+  ) -> GenerateLink {
+    GenerateLink(
+      body: .init(
+        type: .magiclink,
+        email: email,
+        data: userMetadata
       ),
       redirectTo: redirectTo
     )
@@ -1604,50 +2678,204 @@ public struct OAuthClientRegistrationType: RawRepresentable, Codable, Hashable, 
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthClient: Codable, Hashable, Sendable {
   /// Unique identifier for the OAuth client
-  public let clientId: UUID
+  public var clientID: UUID
+
+  /// Unique identifier for the OAuth client
+  @available(*, deprecated, message: "Use clientID instead.")
+  public var clientId: UUID { clientID }
 
   /// Human-readable name of the OAuth client
-  public let clientName: String
+  public var clientName: String
 
   /// Client secret (only returned on registration and regeneration)
-  public let clientSecret: String?
+  public var clientSecret: String?
 
   /// Type of OAuth client
-  public let clientType: OAuthClientType
+  public var clientType: OAuthClientType
 
   /// Token endpoint authentication method
-  public let tokenEndpointAuthMethod: String
+  public var tokenEndpointAuthMethod: String
 
   /// Registration type of the client
-  public let registrationType: OAuthClientRegistrationType
+  public var registrationType: OAuthClientRegistrationType
 
   /// URI of the OAuth client
-  public let clientUri: String?
+  public var clientURI: URL? {
+    get { clientURIString.flatMap(URL.init(string:)) }
+    set { clientURIString = newValue?.absoluteString }
+  }
+
+  /// URI of the OAuth client
+  @available(*, deprecated, message: "Use clientURI instead.")
+  public var clientUri: String? { clientURIString }
+
+  var clientURIString: String?
 
   /// URL of the client application's logo
-  public let logoUri: String?
+  public var logoURI: URL? {
+    get { logoURIString.flatMap(URL.init(string:)) }
+    set { logoURIString = newValue?.absoluteString }
+  }
+
+  /// URI of the OAuth client's logo
+  @available(*, deprecated, message: "Use logoURI instead.")
+  public var logoUri: String? { logoURIString }
+
+  var logoURIString: String?
 
   /// Array of allowed redirect URIs
-  public let redirectUris: [String]
+  public var redirectURIs: [URL]? {
+    get { redirectURIStrings.compactMap(URL.init(string:)) }
+    set { redirectURIStrings = newValue?.map(\.absoluteString) ?? [] }
+  }
+
+  /// Array of allowed redirect URIs
+  @available(*, deprecated, message: "Use redirectURIs instead.")
+  public var redirectUris: [String] { redirectURIStrings }
+
+  var redirectURIStrings: [String]
 
   /// Array of allowed grant types
-  public let grantTypes: [OAuthClientGrantType]
+  public var grantTypes: [OAuthClientGrantType]
 
   /// Array of allowed response types
-  public let responseTypes: [OAuthClientResponseType]
+  public var responseTypes: [OAuthClientResponseType]
 
   /// Scope of the OAuth client
-  public let scope: String?
+  public var scope: String?
 
   /// Timestamp when the client was created
-  public let createdAt: Date
+  public var createdAt: Date
 
   /// Timestamp when the client was last updated
-  public let updatedAt: Date
+  public var updatedAt: Date
+
+  private enum CodingKeys: String, CodingKey {
+    case clientID = "clientId"
+    case clientName
+    case clientSecret
+    case clientType
+    case tokenEndpointAuthMethod
+    case registrationType
+    case clientURIString = "clientUri"
+    case logoURIString = "logoUri"
+    case redirectURIStrings = "redirectUris"
+    case grantTypes
+    case responseTypes
+    case scope
+    case createdAt
+    case updatedAt
+  }
+}
+
+/// A new OAuth client for ``AuthAdminOAuth/createClient(_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct CreateOAuthClient: Encodable, Hashable, Sendable {
+  /// Human-readable name of the OAuth client
+  public var clientName: String
+
+  /// URI of the OAuth client
+  public var clientURI: URL?
+
+  /// Array of allowed redirect URIs
+  public var redirectURIs: [URL]
+
+  /// Array of allowed grant types (optional, defaults to authorization_code and refresh_token)
+  public var grantTypes: [OAuthClientGrantType]?
+
+  /// Array of allowed response types (optional, defaults to code)
+  public var responseTypes: [OAuthClientResponseType]?
+
+  /// Scope of the OAuth client
+  public var scope: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+    case responseTypes = "response_types"
+    case scope
+  }
+
+  /// Creates a new OAuth client.
+  ///
+  /// - Parameters:
+  ///   - clientName: Human-readable name for the client.
+  ///   - clientURI: URI of the client application's homepage.
+  ///   - redirectURIs: Allowed redirect URIs.
+  ///   - grantTypes: Allowed grant types; defaults to `authorization_code` and `refresh_token`.
+  ///   - responseTypes: Allowed response types; defaults to `code`.
+  ///   - scope: Requested scope.
+  public init(
+    clientName: String,
+    clientURI: URL? = nil,
+    redirectURIs: [URL],
+    grantTypes: [OAuthClientGrantType]? = nil,
+    responseTypes: [OAuthClientResponseType]? = nil,
+    scope: String? = nil
+  ) {
+    self.clientName = clientName
+    self.clientURI = clientURI
+    self.redirectURIs = redirectURIs
+    self.grantTypes = grantTypes
+    self.responseTypes = responseTypes
+    self.scope = scope
+  }
+}
+
+/// The changes to an OAuth client for ``AuthAdminOAuth/updateClient(id:_:)``.
+/// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+public struct UpdateOAuthClient: Encodable, Hashable, Sendable {
+  /// Human-readable name of the client application
+  public var clientName: String?
+
+  /// URL of the client application's homepage
+  public var clientURI: URL?
+
+  /// URL of the client application's logo
+  public var logoURI: URL?
+
+  /// Array of redirect URIs used by the client
+  public var redirectURIs: [URL]?
+
+  /// OAuth grant types the client is authorized to use
+  public var grantTypes: [OAuthClientGrantType]?
+
+  private enum CodingKeys: String, CodingKey {
+    case clientName = "client_name"
+    case clientURI = "client_uri"
+    case logoURI = "logo_uri"
+    case redirectURIs = "redirect_uris"
+    case grantTypes = "grant_types"
+  }
+
+  /// Creates the changes to an OAuth client.
+  ///
+  /// - Parameters:
+  ///   - clientName: New human-readable name.
+  ///   - clientURI: New URI for the client application.
+  ///   - logoURI: New logo URI.
+  ///   - redirectURIs: Replacement list of redirect URIs.
+  ///   - grantTypes: Replacement list of grant types.
+  public init(
+    clientName: String? = nil,
+    clientURI: URL? = nil,
+    logoURI: URL? = nil,
+    redirectURIs: [URL]? = nil,
+    grantTypes: [OAuthClientGrantType]? = nil
+  ) {
+    self.clientName = clientName
+    self.clientURI = clientURI
+    self.logoURI = logoURI
+    self.redirectURIs = redirectURIs
+    self.grantTypes = grantTypes
+  }
 }
 
 /// Parameters for creating a new OAuth client.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(*, deprecated, message: "Use CreateOAuthClient instead.")
 public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Human-readable name of the OAuth client
   public let clientName: String
@@ -1695,6 +2923,7 @@ public struct CreateOAuthClientParams: Encodable, Hashable, Sendable {
 
 /// Parameters for updating an existing OAuth client.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(*, deprecated, message: "Use UpdateOAuthClient instead.")
 public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
   /// Human-readable name of the client application
   public let clientName: String?
@@ -1736,6 +2965,9 @@ public struct UpdateOAuthClientParams: Encodable, Hashable, Sendable {
 
 /// A paginated list of OAuth clients returned by ``AuthAdminOAuth/listClients(params:)``.
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
+@available(
+  *, deprecated, message: "Use AuthAdminOAuth.listClients() with a [OAuthClient] result instead."
+)
 public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
   /// The OAuth clients on the current page.
   public let clients: [OAuthClient]
@@ -1759,16 +2991,27 @@ public struct ListOAuthClientsPaginatedResponse: Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationClient: Codable, Hashable, Sendable {
   /// Unique identifier for the OAuth client.
-  public let id: UUID
+  public var id: UUID
 
   /// Human-readable name of the OAuth client.
-  public let name: String
+  public var name: String
 
   /// URI of the OAuth client's homepage.
-  public let uri: URL?
+  public var uri: URL?
 
   /// URL of the OAuth client's logo.
-  public let logoUri: URL?
+  public var logoURI: URL?
+
+  /// URL of the client's logo.
+  @available(*, deprecated, message: "Use logoURI instead.")
+  public var logoUri: URL? { logoURI }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case uri
+    case logoURI = "logoUri"
+  }
 }
 
 /// The authenticated user considering the authorization request.
@@ -1787,19 +3030,35 @@ public struct OAuthAuthorizationUser: Codable, Hashable, Sendable {
 /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
 public struct OAuthAuthorizationDetails: Codable, Hashable, Sendable {
   /// Opaque identifier for this authorization request.
-  public let authorizationId: String
+  public var authorizationID: String
+
+  /// The opaque identifier of the authorization request.
+  @available(*, deprecated, message: "Use authorizationID instead.")
+  public var authorizationId: String { authorizationID }
 
   /// The redirect URI the client registered for this request.
-  public let redirectUri: URL
+  public var redirectURI: URL
+
+  /// The URI the user is sent back to after the decision.
+  @available(*, deprecated, message: "Use redirectURI instead.")
+  public var redirectUri: URL { redirectURI }
 
   /// The OAuth client requesting authorization.
-  public let client: OAuthAuthorizationClient
+  public var client: OAuthAuthorizationClient
 
   /// The user considering the request.
-  public let user: OAuthAuthorizationUser
+  public var user: OAuthAuthorizationUser
 
   /// The requested scope.
-  public let scope: String
+  public var scope: String
+
+  private enum CodingKeys: String, CodingKey {
+    case authorizationID = "authorizationId"
+    case redirectURI = "redirectUri"
+    case client
+    case user
+    case scope
+  }
 }
 
 /// A redirect URL returned after approving or denying an OAuth authorization
@@ -1820,6 +3079,11 @@ public struct OAuthRedirect: Codable, Hashable, Sendable {
     case redirectURL = "redirectUrl"
   }
 }
+
+/// The result of ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)``.
+///
+/// The name that the next major version uses for ``OAuthAuthorizationDetailsResponse``.
+public typealias OAuthAuthorizationDetailsResult = OAuthAuthorizationDetailsResponse
 
 /// The response from ``AuthOAuthServer/getAuthorizationDetails(authorizationId:)``.
 ///
@@ -1867,37 +3131,62 @@ public struct OAuthGrant: Codable, Hashable, Sendable {
 /// JSON Web Key (JWK) representation.
 public struct JWK: Codable, Hashable, Sendable {
   /// Key type (e.g., `"RSA"`, `"EC"`, `"oct"`).
-  public let kty: String
+  public var kty: String
 
   /// Key operations (e.g., `["sign", "verify"]`).
-  public let keyOps: [String]?
+  public var keyOps: [String]?
 
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
-  public let alg: String?
+  public var alg: String?
 
   /// Key ID.
-  public let kid: String?
+  public var kid: String?
 
   // RSA-specific fields
   /// RSA modulus (base64url-encoded).
-  public let n: String?
+  public var n: String?
 
   /// RSA exponent (base64url-encoded).
-  public let e: String?
+  public var e: String?
 
   // EC-specific fields
   /// EC curve name (e.g., `"P-256"`).
-  public let crv: String?
+  public var crv: String?
 
   /// EC x coordinate (base64url-encoded).
-  public let x: String?
+  public var x: String?
 
   /// EC y coordinate (base64url-encoded).
-  public let y: String?
+  public var y: String?
 
   // Symmetric key field
   /// Symmetric key value (base64url-encoded).
-  public let k: String?
+  public var k: String?
+
+  /// Creates a ``JWK``.
+  public init(
+    kty: String,
+    keyOps: [String]? = nil,
+    alg: String? = nil,
+    kid: String? = nil,
+    n: String? = nil,
+    e: String? = nil,
+    crv: String? = nil,
+    x: String? = nil,
+    y: String? = nil,
+    k: String? = nil
+  ) {
+    self.kty = kty
+    self.keyOps = keyOps
+    self.alg = alg
+    self.kid = kid
+    self.n = n
+    self.e = e
+    self.crv = crv
+    self.x = x
+    self.y = y
+    self.k = k
+  }
 
   enum CodingKeys: String, CodingKey {
     case kty
@@ -1916,22 +3205,41 @@ public struct JWK: Codable, Hashable, Sendable {
 /// A JSON Web Key Set (JWKS) containing one or more JWKs.
 public struct JWKS: Codable, Hashable, Sendable {
   /// The set of JSON Web Keys.
-  public let keys: [JWK]
+  public var keys: [JWK]
+
+  /// Creates a ``JWKS``.
+  public init(
+    keys: [JWK]
+  ) {
+    self.keys = keys
+  }
 }
 
 /// The header portion of a decoded JSON Web Token.
 public struct JWTHeader: Codable, Hashable, Sendable {
   /// Algorithm (e.g., `"RS256"`, `"ES256"`, `"HS256"`).
-  public let alg: String
+  public var alg: String
 
   /// Key ID used to select the signing key.
-  public let kid: String?
+  public var kid: String?
 
   /// Token type (typically `"JWT"`).
-  public let typ: String?
+  public var typ: String?
+
+  /// Creates a ``JWTHeader``.
+  public init(
+    alg: String,
+    kid: String? = nil,
+    typ: String? = nil
+  ) {
+    self.alg = alg
+    self.kid = kid
+    self.typ = typ
+  }
 }
 
 /// The decoded claims from a JSON Web Token.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public struct JWTClaims: Codable, Hashable, Sendable {
   /// Issuer (`iss` claim).
   public let iss: String?
@@ -2048,6 +3356,7 @@ public struct JWTClaims: Codable, Hashable, Sendable {
 }
 
 /// A JWT `aud` (audience) claim that may be either a single string or an array of strings.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public enum AudienceClaim: Codable, Hashable, Sendable {
   /// A single audience string.
   case string(String)
@@ -2099,6 +3408,7 @@ private struct AnyCodingKey: CodingKey {
 }
 
 /// The result returned by ``AuthClient/getClaims(jwt:options:)``.
+@available(*, deprecated, message: "Use VerifiedClaims instead.")
 public struct JWTClaimsResponse: Sendable {
   /// The decoded JWT claims.
   public let claims: JWTClaims
@@ -2111,6 +3421,7 @@ public struct JWTClaimsResponse: Sendable {
 }
 
 /// Options for ``AuthClient/getClaims(jwt:options:)``.
+@available(*, deprecated, message: "Use ClaimsOptions instead.")
 public struct GetClaimsOptions: Sendable {
   /// When `true`, the `exp` claim is not validated against the current time, allowing expired tokens to be decoded.
   public let allowExpired: Bool

@@ -62,7 +62,7 @@ private actor LiveSessionManager {
         throw AuthError.sessionMissing
       }
 
-      if !currentSession.isExpired {
+      if !currentSession.isExpired() {
         return currentSession
       }
 

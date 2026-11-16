@@ -51,7 +51,16 @@ public struct AuthAdmin: Sendable {
   /// Get user by id.
   /// - Parameter uid: The user's unique identifier.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @available(*, deprecated, message: "Use user(id:) instead.")
   public func getUserById(_ uid: UUID) async throws -> User {
+    try await user(id: uid)
+  }
+
+  /// Fetches a user by ID.
+  ///
+  /// - Parameter id: The user's ID.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  public func user(id uid: UUID) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
@@ -65,7 +74,24 @@ public struct AuthAdmin: Sendable {
   ///   - uid: The user id you want to update.
   ///   - attributes: The data you want to update.
   @discardableResult
+  @available(*, deprecated, message: "Use updateUser(id:_:) instead.")
   public func updateUserById(_ uid: UUID, attributes: AdminUserAttributes) async throws -> User {
+    try await _updateUser(id: uid, body: attributes)
+  }
+
+  /// Updates a user. The server changes only the fields you set.
+  ///
+  /// - Parameters:
+  ///   - id: The ID of the user to update.
+  ///   - changes: The changes to make.
+  /// - Returns: The updated user.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func updateUser(id: UUID, _ changes: AdminUpdateUser) async throws -> User {
+    try await _updateUser(id: id, body: changes)
+  }
+
+  private func _updateUser(id uid: UUID, body attributes: some Encodable) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(uid)"),
@@ -82,7 +108,23 @@ public struct AuthAdmin: Sendable {
   /// - If you are sure that the created user's email or phone number is legitimate and verified, you can set the ``AdminUserAttributes/emailConfirm`` or ``AdminUserAttributes/phoneConfirm`` param to true.
   /// - Warning: Never expose your `secret` key on the client.
   @discardableResult
+  @available(*, deprecated, message: "Use createUser(_:) instead.")
   public func createUser(attributes: AdminUserAttributes) async throws -> User {
+    try await _createUser(body: attributes)
+  }
+
+  /// Creates a user. The server sends no confirmation email; set
+  /// ``AdminCreateUser/confirmsEmail`` or ``AdminCreateUser/confirmsPhone`` to confirm the user.
+  ///
+  /// - Parameter user: The new user.
+  /// - Returns: The created user.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func createUser(_ user: AdminCreateUser) async throws -> User {
+    try await _createUser(body: user)
+  }
+
+  private func _createUser(body attributes: some Encodable) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users"),
@@ -103,17 +145,48 @@ public struct AuthAdmin: Sendable {
   ///   - redirectTo: The URL which will be appended to the email link sent to the user's email address. Once clicked the user will end up on this URL.
   /// - Note: that PKCE is not supported when using ``inviteUserByEmail(_:data:redirectTo:)``. This is because the browser initiating the invite is often different from the browser accepting the invite which makes it difficult to provide the security guarantees required of the PKCE flow.
   @discardableResult
+  @available(*, deprecated, message: "Use inviteUser(email:userMetadata:redirectTo:) instead.")
   public func inviteUserByEmail(
     _ email: String,
     data: [String: AnyJSON]? = nil,
     redirectTo: URL? = nil
+  ) async throws -> User {
+    try await _inviteUser(email: email, data: data, redirectTo: redirectTo)
+  }
+
+  /// Sends an invite link to an email address.
+  ///
+  /// PKCE is not supported, because the browser that accepts the invite is often not the one that
+  /// sent it.
+  ///
+  /// - Parameters:
+  ///   - email: The email address of the user.
+  ///   - userMetadata: Data for the user's metadata, in the `auth.users.raw_user_meta_data`
+  ///     column.
+  ///   - redirectTo: The URL the invite link redirects to. When `nil`, the client uses
+  ///     ``AuthClient/Configuration/redirectTo``.
+  /// - Returns: The invited user.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func inviteUser(
+    email: String,
+    userMetadata: JSONObject = [:],
+    redirectTo: URL? = nil
+  ) async throws -> User {
+    try await _inviteUser(email: email, data: userMetadata, redirectTo: redirectTo)
+  }
+
+  private func _inviteUser(
+    email: String,
+    data: [String: AnyJSON]?,
+    redirectTo: URL?
   ) async throws -> User {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("invite"),
         method: .post,
         query: [
-          (redirectTo ?? configuration.redirectToURL).map {
+          (redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString
@@ -138,7 +211,20 @@ public struct AuthAdmin: Sendable {
   /// from the auth schema.
   ///
   /// - Warning: Never expose your `secret` key on the client.
+  @available(*, deprecated, message: "Use deleteUser(id:softDelete:) instead.")
+  @_disfavoredOverload
   public func deleteUser(id: UUID, shouldSoftDelete: Bool = false) async throws {
+    try await deleteUser(id: id, softDelete: shouldSoftDelete)
+  }
+
+  /// Deletes a user.
+  ///
+  /// - Parameters:
+  ///   - id: The ID of the user to delete.
+  ///   - softDelete: When `true`, the server keeps the row and marks the user as deleted. When
+  ///     `false`, the server removes the user.
+  /// - Warning: Never expose your `service_role` key on the client.
+  public func deleteUser(id: UUID, softDelete shouldSoftDelete: Bool = false) async throws {
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/users/\(id)"),
@@ -176,7 +262,19 @@ public struct AuthAdmin: Sendable {
   /// This function should only be called on a server.
   ///
   /// - Warning: Never expose your `secret` key in the client.
+  @available(*, deprecated, message: "Use listUsers(page:pageSize:) instead.")
+  @_disfavoredOverload
   public func listUsers(params: PageParams? = nil) async throws -> ListUsersPaginatedResponse {
+    try await listUsers(page: params?.page, pageSize: params?.perPage)
+  }
+
+  /// Fetches one page of users.
+  ///
+  /// - Parameters:
+  ///   - page: The page number, from 1. `nil` asks for the first page.
+  ///   - pageSize: The number of users on a page. `nil` uses the server's default.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  public func listUsers(page: Int? = nil, pageSize: Int? = nil) async throws -> UserPage {
     struct Response: Decodable {
       let users: [User]
       let aud: String
@@ -187,8 +285,8 @@ public struct AuthAdmin: Sendable {
         url: configuration.url.appendingPathComponent("admin/users"),
         method: .get,
         query: [
-          URLQueryItem(name: "page", value: params?.page?.description ?? ""),
-          URLQueryItem(name: "per_page", value: params?.perPage?.description ?? ""),
+          URLQueryItem(name: "page", value: page?.description ?? ""),
+          URLQueryItem(name: "per_page", value: pageSize?.description ?? ""),
         ]
       )
     )
@@ -196,9 +294,9 @@ public struct AuthAdmin: Sendable {
     let response = try httpResponse.decoded(
       as: Response.self, decoder: configuration.resolvedDecoder)
 
-    var pagination = ListUsersPaginatedResponse(
+    var pagination = UserPage(
       users: response.users,
-      aud: response.aud,
+      audience: response.aud,
       lastPage: 0,
       total: httpResponse.headers[.xTotalCount].flatMap(Int.init) ?? 0
     )
@@ -227,13 +325,22 @@ public struct AuthAdmin: Sendable {
   /// - Parameter params: The parameters for the link generation.
   /// - Throws: An error if the link generation fails.
   /// - Returns: The generated link.
+  @available(*, deprecated, message: "Use generateLink(_:) instead.")
   public func generateLink(params: GenerateLinkParams) async throws -> GenerateLinkResponse {
+    try await generateLink(params)
+  }
+
+  /// Generates an email link and its one-time code, to send with your own email provider.
+  ///
+  /// - Parameter link: The link to generate.
+  /// - Returns: The generated link and the user it is for.
+  public func generateLink(_ params: GenerateLink) async throws -> GenerateLinkResponse {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/generate_link"),
         method: .post,
         query: [
-          (params.redirectTo ?? configuration.redirectToURL).map {
+          (params.redirectTo ?? configuration.redirectTo).map {
             URLQueryItem(
               name: "redirect_to",
               value: $0.absoluteString

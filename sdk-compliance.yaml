@@ -11,6 +11,19 @@ features:
     status: implemented
     symbols:
       - AuthClient.signUp
+    supporting_symbols:
+      - SignUpResult
+      - SignUpResult.signedIn
+      - SignUpResult.confirmationRequired
+      - SignUpResult.init
+      - SignUpResult.user
+      - SignUpResult.session
+      - SignUpOptions
+      - SignUpOptions.userMetadata
+      - SignUpOptions.redirectTo
+      - SignUpOptions.channel
+      - SignUpOptions.captchaToken
+      - SignUpOptions.init
   auth.sign_in.sign_in_with_password:
     status: implemented
     symbols:
@@ -24,6 +37,22 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithOTP
+    supporting_symbols:
+      - EmailOTPOptions
+      - EmailOTPOptions.shouldCreateUser
+      - EmailOTPOptions.userMetadata
+      - EmailOTPOptions.redirectTo
+      - EmailOTPOptions.captchaToken
+      - EmailOTPOptions.init
+      - PhoneOTPOptions
+      - PhoneOTPOptions.shouldCreateUser
+      - PhoneOTPOptions.userMetadata
+      - PhoneOTPOptions.channel
+      - PhoneOTPOptions.captchaToken
+      - PhoneOTPOptions.init
+      - MessageID
+      - MessageID.rawValue
+      - MessageID.init
   auth.sign_in.sign_in_with_sso:
     status: implemented
     symbols:
@@ -32,6 +61,15 @@ features:
     status: implemented
     symbols:
       - AuthClient.signInWithIdToken
+      - AuthClient.signInWithIDToken
+    supporting_symbols:
+      - IDTokenCredentials
+      - IDTokenCredentials.provider
+      - IDTokenCredentials.idToken
+      - IDTokenCredentials.nonce
+      - IDTokenCredentials.accessToken
+      - IDTokenCredentials.captchaToken
+      - IDTokenCredentials.init
   auth.sign_in.sign_in_anonymously:
     status: implemented
     symbols:
@@ -54,18 +92,40 @@ features:
       - Web3Chain.solana
       - ErrorCode.web3ProviderDisabled
       - ErrorCode.web3UnsupportedChain
+    supporting_symbols:
+      - Web3Credentials.captchaToken
   auth.sign_in.verify_otp:
     status: implemented
     symbols:
       - AuthClient.verifyOTP
+    supporting_symbols:
+      - PhoneOTPType
+      - VerifyOTPResult
+      - VerifyOTPResult.signedIn
+      - VerifyOTPResult.emailChangePending
   auth.sign_in.resend_confirmation:
     status: implemented
     symbols:
       - AuthClient.resend
+    supporting_symbols:
+      - ResendPhoneType
+      - ResendEmailOptions
+      - ResendEmailOptions.redirectTo
+      - ResendEmailOptions.captchaToken
+      - ResendEmailOptions.init
+      - ResendPhoneOptions
+      - ResendPhoneOptions.captchaToken
+      - ResendPhoneOptions.init
   auth.sign_in.send_password_reset_email:
     status: implemented
     symbols:
       - AuthClient.resetPasswordForEmail
+      - AuthClient.resetPassword
+    supporting_symbols:
+      - ResetPasswordOptions
+      - ResetPasswordOptions.redirectTo
+      - ResetPasswordOptions.captchaToken
+      - ResetPasswordOptions.init
   auth.sign_in.reauthenticate:
     status: implemented
     symbols:
@@ -80,15 +140,44 @@ features:
     symbols:
       - AuthClient.session
       - AuthClient.currentSession
+      - AuthClient.status
   auth.session.get_user:
     status: implemented
     symbols:
       - AuthClient.currentUser
       - AuthClient.user
+    supporting_symbols:
+      - User.audience
   auth.session.get_claims:
     status: implemented
     symbols:
       - AuthClient.getClaims
+      - AuthClient.claims
+    supporting_symbols:
+      - VerifiedClaims
+      - VerifiedClaims.subject
+      - VerifiedClaims.issuer
+      - VerifiedClaims.audience
+      - VerifiedClaims.expiresAt
+      - VerifiedClaims.issuedAt
+      - VerifiedClaims.notBefore
+      - VerifiedClaims.role
+      - VerifiedClaims.email
+      - VerifiedClaims.phone
+      - VerifiedClaims.assuranceLevel
+      - VerifiedClaims.amr
+      - VerifiedClaims.sessionID
+      - VerifiedClaims.isAnonymous
+      - VerifiedClaims.appMetadata
+      - VerifiedClaims.userMetadata
+      - VerifiedClaims.additionalClaims
+      - VerifiedClaims.header
+      - VerifiedClaims.signature
+      - VerifiedClaims.init
+      - ClaimsOptions
+      - ClaimsOptions.allowsExpired
+      - ClaimsOptions.jwks
+      - ClaimsOptions.init
   auth.session.refresh_session:
     status: implemented
     symbols:
@@ -97,6 +186,7 @@ features:
     status: implemented
     symbols:
       - AuthClient.setSession
+      - AuthClient.importSession
   auth.session.sign_out:
     status: implemented
     symbols:
@@ -105,11 +195,48 @@ features:
     status: implemented
     symbols:
       - AuthClient.update
+      - AuthClient.updateUser
+    supporting_symbols:
+      - UpdateUser
+      - UpdateUser.email
+      - UpdateUser.phone
+      - UpdateUser.password
+      - UpdateUser.currentPassword
+      - UpdateUser.nonce
+      - UpdateUser.userMetadata
+      - UpdateUser.init
   auth.session.subscribe_auth_events:
     status: implemented
     symbols:
       - AuthClient.authStateChanges
       - AuthClient.onAuthStateChange
+      - AuthClient.events
+    supporting_symbols:
+      - AuthStatus
+      - AuthStatus.loading
+      - AuthStatus.signedOut
+      - AuthStatus.signedIn
+      - SignOutReason
+      - SignOutReason.rawValue
+      - SignOutReason.init
+      - SignOutReason.userInitiated
+      - SignOutReason.sessionExpired
+      - SignOutReason.sessionRevoked
+      - SignOutReason.sessionMissing
+      - AuthChange
+      - AuthChange.event
+      - AuthChange.status
+      - AuthChange.session
+      - AuthChange.signOutReason
+      - AuthChange.init
+      - AuthChange.description
+      - AuthModel
+      - AuthModel.status
+      - AuthModel.session
+      - AuthModel.user
+      - AuthModel.isLoading
+      - AuthModel.init
+      - AuthEvent
   auth.session.auto_refresh:
     status: implemented
     symbols:
@@ -131,15 +258,40 @@ features:
     status: implemented
     symbols:
       - AuthClient.userIdentities
+      - AuthClient.identities
+    supporting_symbols:
+      - UserIdentity.userID
+      - UserIdentity.providerUserID
 
   auth.mfa.enroll:
     status: implemented
     symbols:
       - AuthMFA.enroll
+      - AuthMFA.enrollTOTP
+      - AuthMFA.enrollPhone
+    supporting_symbols:
+      - TOTPEnrollment
+      - TOTPEnrollment.id
+      - TOTPEnrollment.friendlyName
+      - TOTPEnrollment.qrCode
+      - TOTPEnrollment.secret
+      - TOTPEnrollment.uri
+      - TOTPEnrollment.init
+      - PhoneEnrollment
+      - PhoneEnrollment.id
+      - PhoneEnrollment.friendlyName
+      - PhoneEnrollment.phone
+      - PhoneEnrollment.init
   auth.mfa.challenge:
     status: implemented
     symbols:
       - AuthMFA.challenge
+    supporting_symbols:
+      - MFAChallenge
+      - MFAChallenge.id
+      - MFAChallenge.factorType
+      - MFAChallenge.expiresAt
+      - MFAChallenge.init
   auth.mfa.verify:
     status: implemented
     symbols:
@@ -156,15 +308,49 @@ features:
     status: implemented
     symbols:
       - AuthMFA.listFactors
+      - AuthMFA.factors
+    supporting_symbols:
+      - MFAFactors
+      - MFAFactors.verified
+      - MFAFactors.unverified
+      - MFAFactors.init
+      - MFAFactors.all
   auth.mfa.get_authenticator_assurance_level:
     status: implemented
     symbols:
       - AuthMFA.getAuthenticatorAssuranceLevel
+      - AuthMFA.assuranceLevel
+    supporting_symbols:
+      - AssuranceLevelInfo
+      - AssuranceLevelInfo.currentLevel
+      - AssuranceLevelInfo.nextLevel
+      - AssuranceLevelInfo.currentAuthenticationMethods
+      - AssuranceLevelInfo.init
+      - AuthenticatorAssuranceLevel
+      - AuthenticatorAssuranceLevel.rawValue
+      - AuthenticatorAssuranceLevel.init
+      - AuthenticatorAssuranceLevel.aal1
+      - AuthenticatorAssuranceLevel.aal2
 
   auth.admin.create_user:
     status: implemented
     symbols:
       - AuthAdmin.createUser
+    supporting_symbols:
+      - AdminCreateUser
+      - AdminCreateUser.id
+      - AdminCreateUser.email
+      - AdminCreateUser.phone
+      - AdminCreateUser.password
+      - AdminCreateUser.passwordHash
+      - AdminCreateUser.confirmsEmail
+      - AdminCreateUser.confirmsPhone
+      - AdminCreateUser.role
+      - AdminCreateUser.userMetadata
+      - AdminCreateUser.appMetadata
+      - AdminCreateUser.banDuration
+      - AdminCreateUser.init
+      - AdminCreateUser.encode
   auth.admin.delete_user:
     status: implemented
     symbols:
@@ -173,18 +359,38 @@ features:
     status: implemented
     symbols:
       - AuthAdmin.updateUserById
+      - AuthAdmin.updateUser
+    supporting_symbols:
+      - AdminUpdateUser
+      - AdminUpdateUser.email
+      - AdminUpdateUser.phone
+      - AdminUpdateUser.password
+      - AdminUpdateUser.confirmsEmail
+      - AdminUpdateUser.confirmsPhone
+      - AdminUpdateUser.role
+      - AdminUpdateUser.userMetadata
+      - AdminUpdateUser.appMetadata
+      - AdminUpdateUser.banDuration
+      - AdminUpdateUser.init
+      - AdminUpdateUser.encode
   auth.admin.get_user:
     status: implemented
     symbols:
       - AuthAdmin.getUserById
+      - AuthAdmin.user
   auth.admin.list_users:
     status: implemented
     symbols:
       - AuthAdmin.listUsers
+    supporting_symbols:
+      - UserPage
+      - ListUsersPaginatedResponse.audience
+      - ListUsersPaginatedResponse.init
   auth.admin.invite_user:
     status: implemented
     symbols:
       - AuthAdmin.inviteUserByEmail
+      - AuthAdmin.inviteUser
   auth.admin.sign_out:
     status: implemented
     symbols:
@@ -220,6 +426,8 @@ features:
       - GenerateLinkType.recovery
       - GenerateLinkType.emailChangeCurrent
       - GenerateLinkType.emailChangeNew
+    supporting_symbols:
+      - GenerateLink
   auth.admin.list_mfa_factors: not_implemented
   auth.admin.delete_mfa_factor: not_implemented
   auth.admin.create_provider: not_implemented
@@ -242,6 +450,7 @@ features:
       - AuthClient.oauthServer
       - AuthOAuthServer
       - AuthOAuthServer.getAuthorizationDetails
+      - AuthOAuthServer.authorizationDetails
       - OAuthAuthorizationDetailsResponse
       - OAuthAuthorizationDetailsResponse.details
       - OAuthAuthorizationDetailsResponse.redirect
@@ -263,6 +472,11 @@ features:
       - OAuthAuthorizationUser.id
       - OAuthAuthorizationUser.email
       - OAuthAuthorizationUser.init
+    supporting_symbols:
+      - OAuthAuthorizationClient.logoURI
+      - OAuthAuthorizationDetails.authorizationID
+      - OAuthAuthorizationDetails.redirectURI
+      - OAuthAuthorizationDetailsResult
   auth.oauth_server.approve_authorization:
     status: implemented
     symbols:
@@ -295,6 +509,15 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.createClient
+    supporting_symbols:
+      - CreateOAuthClient
+      - CreateOAuthClient.clientName
+      - CreateOAuthClient.clientURI
+      - CreateOAuthClient.redirectURIs
+      - CreateOAuthClient.grantTypes
+      - CreateOAuthClient.responseTypes
+      - CreateOAuthClient.scope
+      - CreateOAuthClient.init
   auth.oauth_admin.delete_client:
     status: implemented
     symbols:
@@ -303,6 +526,12 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.getClient
+      - AuthAdminOAuth.client
+    supporting_symbols:
+      - OAuthClient.clientID
+      - OAuthClient.clientURI
+      - OAuthClient.logoURI
+      - OAuthClient.redirectURIs
   auth.oauth_admin.list_clients:
     status: implemented
     symbols:
@@ -315,6 +544,14 @@ features:
     status: implemented
     symbols:
       - AuthAdminOAuth.updateClient
+    supporting_symbols:
+      - UpdateOAuthClient
+      - UpdateOAuthClient.clientName
+      - UpdateOAuthClient.clientURI
+      - UpdateOAuthClient.logoURI
+      - UpdateOAuthClient.redirectURIs
+      - UpdateOAuthClient.grantTypes
+      - UpdateOAuthClient.init
 
   # ── Client ─────────────────────────────────────────────────────────────────
 
@@ -606,3 +843,31 @@ features:
   storage.analytics.update_table: not_implemented
   storage.analytics.rename_table: not_implemented
   storage.analytics.delete_table: not_implemented
+
+# Types shared by several Auth features.
+supporting_symbols:
+  - AuthClient.Configuration.redirectTo
+  - AuthError.Code
+  - AuthError.Kind
+  - AuthError.Kind.rawValue
+  - AuthError.Kind.init
+  - AuthError.Kind.server
+  - AuthError.Kind.sessionMissing
+  - AuthError.Kind.sessionInvalidated
+  - AuthError.Kind.idTokenMismatch
+  - AuthError.Kind.storageUnavailable
+  - AuthError.Kind.storageMisconfigured
+  - AuthError.Kind.excessiveRefresh
+  - AuthError.Kind.refreshDisabled
+  - AuthError.Kind.oauthFlowFailed
+  - AuthError.Kind.jwtVerificationFailed
+  - AuthError.Kind.transport
+  - AuthError.Kind.decoding
+  - AuthError.Kind.invalidConfiguration
+  - AuthError.Kind.invalidRequest
+  - AuthError.Kind.refreshDiscarded
+  - AuthError.kind
+  - AuthError.code
+  - AuthError.weakPasswordReasons
+  - ErrorCode.~=
+  - AuthError.Kind.~=

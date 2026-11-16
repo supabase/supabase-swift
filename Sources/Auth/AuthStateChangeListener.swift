@@ -11,11 +11,13 @@ import Foundation
 /// A listener that can be removed by calling ``AuthStateChangeListenerRegistration/remove()``.
 ///
 /// - Note: Listener is automatically removed on deinit.
+@available(*, deprecated, message: "Use events() instead.")
 public protocol AuthStateChangeListenerRegistration: Sendable {
   /// Removes the listener. After the initial call, subsequent calls have no effect.
   func remove()
 }
 
+@available(*, deprecated, message: "Use events() instead.")
 extension ObservationToken: AuthStateChangeListenerRegistration {}
 
 /// A closure called whenever the authentication state changes.
@@ -23,6 +25,7 @@ extension ObservationToken: AuthStateChangeListenerRegistration {}
 /// - Parameters:
 ///   - event: The ``AuthChangeEvent`` that triggered this invocation.
 ///   - session: The current ``Session``, or `nil` when the user has signed out.
+@available(*, deprecated, message: "Use events() instead.")
 public typealias AuthStateChangeListener =
   @Sendable (
     _ event: AuthChangeEvent,

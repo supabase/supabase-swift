@@ -36,6 +36,10 @@ public struct AuthAdminOAuth: Sendable {
   /// Only relevant when the OAuth 2.1 server is enabled in Supabase Auth.
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  @available(
+    *, deprecated,
+    message: "Use listClients() instead. Annotate the result as [OAuthClient] to select it."
+  )
   public func listClients(
     params: PageParams? = nil
   ) async throws -> ListOAuthClientsPaginatedResponse {
@@ -89,7 +93,22 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
+  @available(*, deprecated, message: "Use createClient(_:) instead.")
   public func createClient(params: CreateOAuthClientParams) async throws -> OAuthClient {
+    try await _createClient(body: params)
+  }
+
+  /// Creates a new OAuth client.
+  ///
+  /// - Parameter client: The client to create.
+  /// - Returns: The created client, with its secret.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func createClient(_ client: CreateOAuthClient) async throws -> OAuthClient {
+    try await _createClient(body: client)
+  }
+
+  private func _createClient(body params: some Encodable) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients"),
@@ -105,7 +124,16 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  @available(*, deprecated, message: "Use client(id:) instead.")
   public func getClient(clientId: UUID) async throws -> OAuthClient {
+    try await client(id: clientId)
+  }
+
+  /// Fetches an OAuth client by ID.
+  ///
+  /// - Parameter id: The ID of the client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  public func client(id clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -121,9 +149,32 @@ public struct AuthAdminOAuth: Sendable {
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Parameter params: The fields to update.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  @available(*, deprecated, message: "Use updateClient(id:_:) instead.")
   public func updateClient(
     clientId: UUID,
     params: UpdateOAuthClientParams
+  ) async throws -> OAuthClient {
+    try await _updateClient(id: clientId, body: params)
+  }
+
+  /// Updates an OAuth client. The server changes only the fields you set.
+  ///
+  /// - Parameters:
+  ///   - id: The ID of the client to update.
+  ///   - changes: The changes to make.
+  /// - Returns: The updated client.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func updateClient(
+    id: UUID,
+    _ changes: UpdateOAuthClient
+  ) async throws -> OAuthClient {
+    try await _updateClient(id: id, body: changes)
+  }
+
+  private func _updateClient(
+    id clientId: UUID,
+    body params: some Encodable
   ) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
@@ -140,7 +191,16 @@ public struct AuthAdminOAuth: Sendable {
   ///
   /// - Parameter clientId: The unique identifier of the OAuth client to delete.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
+  @available(*, deprecated, message: "Use deleteClient(id:) instead.")
   public func deleteClient(clientId: UUID) async throws {
+    try await deleteClient(id: clientId)
+  }
+
+  /// Deletes an OAuth client.
+  ///
+  /// - Parameter id: The ID of the client to delete.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  public func deleteClient(id clientId: UUID) async throws {
     _ = try await api.execute(
       HTTPRequest(
         url: configuration.url.appendingPathComponent("admin/oauth/clients/\(clientId)"),
@@ -155,7 +215,18 @@ public struct AuthAdminOAuth: Sendable {
   /// - Parameter clientId: The unique identifier of the OAuth client.
   /// - Note: This function should only be called on a server. Never expose your `secret` key in the client.
   @discardableResult
+  @available(*, deprecated, message: "Use regenerateClientSecret(id:) instead.")
   public func regenerateClientSecret(clientId: UUID) async throws -> OAuthClient {
+    try await regenerateClientSecret(id: clientId)
+  }
+
+  /// Creates a new secret for an OAuth client. The old secret stops working.
+  ///
+  /// - Parameter id: The ID of the client.
+  /// - Returns: The client, with its new secret.
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @discardableResult
+  public func regenerateClientSecret(id clientId: UUID) async throws -> OAuthClient {
     try await api.execute(
       HTTPRequest(
         url: configuration.url
@@ -164,5 +235,30 @@ public struct AuthAdminOAuth: Sendable {
       )
     )
     .decoded(decoder: configuration.resolvedDecoder)
+  }
+
+  /// Lists the OAuth clients of the project.
+  ///
+  /// The call needs a result type of `[OAuthClient]` to select this overload:
+  ///
+  /// ```swift
+  /// let clients: [OAuthClient] = try await supabase.auth.admin.oauth.listClients()
+  /// ```
+  ///
+  /// - Note: This function should only be called on a server. Never expose your `secret` key in the browser.
+  @_disfavoredOverload
+  public func listClients() async throws -> [OAuthClient] {
+    struct Response: Decodable {
+      let clients: [OAuthClient]?
+    }
+
+    return try await api.execute(
+      HTTPRequest(
+        url: configuration.url.appendingPathComponent("admin/oauth/clients"),
+        method: .get
+      )
+    )
+    .decoded(as: Response.self, decoder: configuration.resolvedDecoder)
+    .clients ?? []
   }
 }
