@@ -511,19 +511,101 @@ features:
       - StorageByteCount
       - StorageByteCount.init
       - StorageByteCount.intValue
+      - StorageByteCount.bytes
+      - StorageByteCount.rawValue
       - StorageByteCount.kilobytes
       - StorageByteCount.megabytes
       - StorageByteCount.gigabytes
       - StorageByteCount.stringValue
       - StorageByteCount.encode
       - BucketOptions.isPublic
-  storage.file_buckets.get_bucket: implemented
-  storage.file_buckets.list_file_buckets: implemented
-  storage.file_buckets.update_bucket: implemented
+      - CreateBucketOptions.isPublic
+      - BucketType
+      - BucketType.init
+      - BucketType.rawValue
+      - BucketType.encode
+      - BucketType.standard
+      - BucketType.analytics
+      - BucketVersioningCreateStatus
+      - BucketVersioningCreateStatus.init
+      - BucketVersioningCreateStatus.rawValue
+      - BucketVersioningCreateStatus.disabled
+      - BucketVersioningCreateStatus.enabled
+    supporting_symbols:
+      - CreateBucketOptions
+      - CreateBucketOptions.fileSizeLimit
+      - CreateBucketOptions.allowedMimeTypes
+      - CreateBucketOptions.type
+      - CreateBucketOptions.versioningStatus
+      - CreateBucketOptions.init
+      - ByteCount
+  storage.file_buckets.get_bucket:
+    status: implemented
+    symbols:
+      - StorageBucketApi.bucket
+    supporting_symbols:
+      - Bucket.type
+      - Bucket.ownerID
+      - Bucket.versioningStatus
+      - BucketVersioningStatus
+      - BucketVersioningStatus.rawValue
+      - BucketVersioningStatus.init
+      - BucketVersioningStatus.disabled
+      - BucketVersioningStatus.enabled
+      - BucketVersioningStatus.suspended
+  storage.file_buckets.list_file_buckets:
+    status: implemented
+    supporting_symbols:
+      - BucketListOptions
+      - BucketListOptions.limit
+      - BucketListOptions.offset
+      - BucketListOptions.sortBy
+      - BucketListOptions.order
+      - BucketListOptions.search
+      - BucketListOptions.init
+      - BucketSortColumn
+      - BucketSortColumn.rawValue
+      - BucketSortColumn.init
+      - BucketSortColumn.id
+      - BucketSortColumn.name
+      - BucketSortColumn.createdAt
+      - BucketSortColumn.updatedAt
+  storage.file_buckets.update_bucket:
+    status: implemented
+    supporting_symbols:
+      - BucketVersioningUpdateStatus
+      - BucketVersioningUpdateStatus.rawValue
+      - BucketVersioningUpdateStatus.init
+      - BucketVersioningUpdateStatus.enabled
+      - BucketVersioningUpdateStatus.suspended
+      - UpdateBucketOptions
+      - UpdateBucketOptions.isPublic
+      - UpdateBucketOptions.fileSizeLimit
+      - UpdateBucketOptions.allowedMimeTypes
+      - UpdateBucketOptions.versioningStatus
+      - UpdateBucketOptions.init
   storage.file_buckets.delete_file_bucket: implemented
   storage.file_buckets.empty_bucket: implemented
-  storage.file_buckets.access_bucket: implemented
-  storage.file_buckets.upload: implemented
+  storage.file_buckets.access_bucket:
+    status: implemented
+    supporting_symbols:
+      - StorageFileApi.id
+      - StorageBucket
+  storage.file_buckets.upload:
+    status: implemented
+    supporting_symbols:
+      - UploadedObject
+      - UploadedObject.id
+      - UploadedObject.path
+      - UploadedObject.fullPath
+      - UploadedObject.init
+      - UploadOptions
+      - UploadOptions.contentType
+      - UploadOptions.cacheControl
+      - UploadOptions.upsert
+      - UploadOptions.metadata
+      - UploadOptions.headers
+      - UploadOptions.init
   storage.file_buckets.download: implemented
   storage.file_buckets.list_files:
     status: implemented
@@ -534,8 +616,64 @@ features:
       - SortOrder.ascending
       - SortOrder.descending
       - SortOrder.encode
+      - ObjectSortColumn
+      - ObjectSortColumn.init
+      - ObjectSortColumn.rawValue
+      - ObjectSortColumn.name
+      - ObjectSortColumn.updatedAt
+      - ObjectSortColumn.createdAt
+      - ObjectSortColumn.lastAccessedAt
+      - VersionFilter
+      - VersionFilter.init
+      - VersionFilter.rawValue
+      - VersionFilter.exclude
+      - VersionFilter.include
+      - VersionFilter.only
+    supporting_symbols:
+      - ListOptions
+      - ListOptions.limit
+      - ListOptions.offset
+      - ListOptions.sortBy
+      - ListOptions.order
+      - ListOptions.search
+      - ListOptions.exactMatch
+      - ListOptions.versions
+      - ListOptions.deleteMarkers
+      - ListOptions.init
+      - StorageObject
+      - StorageObject.name
+      - StorageObject.id
+      - StorageObject.versionID
+      - StorageObject.createdAt
+      - StorageObject.updatedAt
+      - StorageObject.lastAccessedAt
+      - StorageObject.metadata
+      - StorageObject.userMetadata
+      - StorageObject.isVersioned
+      - StorageObject.isDeleteMarker
+      - StorageObject.archivedAt
+      - StorageObject.isFolder
+      - StorageObject.init
+      - ObjectMetadata
+      - ObjectMetadata.eTag
+      - ObjectMetadata.size
+      - ObjectMetadata.mimeType
+      - ObjectMetadata.cacheControl
+      - ObjectMetadata.lastModified
+      - ObjectMetadata.contentLength
+      - ObjectMetadata.additional
+      - ObjectMetadata.init
   storage.file_buckets.move: implemented
-  storage.file_buckets.copy: implemented
+  storage.file_buckets.copy:
+    status: implemented
+    supporting_symbols:
+      - CopyOptions
+      - CopyOptions.upsert
+      - CopyOptions.copyMetadata
+      - CopyOptions.metadata
+      - CopyOptions.contentType
+      - CopyOptions.cacheControl
+      - CopyOptions.init
   storage.file_buckets.remove: implemented
   storage.file_buckets.get_public_url:
     status: implemented
@@ -543,13 +681,58 @@ features:
       - DownloadBehavior
       - DownloadBehavior.withOriginalName
       - DownloadBehavior.named
-  storage.file_buckets.create_signed_url: implemented
-  storage.file_buckets.create_signed_urls: implemented
-  storage.file_buckets.create_signed_upload_url: implemented
+      - StorageFileApi.publicURL
+    supporting_symbols:
+      - PublicURLOptions
+      - PublicURLOptions.download
+      - PublicURLOptions.transform
+      - PublicURLOptions.versionID
+      - PublicURLOptions.cacheNonce
+      - PublicURLOptions.init
+  storage.file_buckets.create_signed_url:
+    status: implemented
+    supporting_symbols:
+      - SignedURLOptions
+      - SignedURLOptions.download
+      - SignedURLOptions.transform
+      - SignedURLOptions.versionID
+      - SignedURLOptions.cacheNonce
+      - SignedURLOptions.init
+  storage.file_buckets.create_signed_urls:
+    status: implemented
+    supporting_symbols:
+      - SignedURLsOptions
+      - SignedURLsOptions.download
+      - SignedURLsOptions.cacheNonce
+      - SignedURLsOptions.init
+  storage.file_buckets.create_signed_upload_url:
+    status: implemented
+    supporting_symbols:
+      - SignedUploadURL.init
   storage.file_buckets.upload_with_signed_url: implemented
   storage.file_buckets.update_file: implemented
   storage.file_buckets.file_exists: implemented
-  storage.file_buckets.file_info: implemented
+  storage.file_buckets.file_info:
+    status: implemented
+    supporting_symbols:
+      - ObjectInfo
+      - ObjectInfo.id
+      - ObjectInfo.versionID
+      - ObjectInfo.name
+      - ObjectInfo.bucketID
+      - ObjectInfo.size
+      - ObjectInfo.contentType
+      - ObjectInfo.cacheControl
+      - ObjectInfo.eTag
+      - ObjectInfo.lastModified
+      - ObjectInfo.createdAt
+      - ObjectInfo.updatedAt
+      - ObjectInfo.lastAccessedAt
+      - ObjectInfo.userMetadata
+      - ObjectInfo.isVersioned
+      - ObjectInfo.isDeleteMarker
+      - ObjectInfo.archivedAt
+      - ObjectInfo.init
   storage.file_buckets.download_with_transform:
     status: implemented
     symbols:
@@ -567,6 +750,34 @@ features:
       - ImageFormat.webp
       - ImageFormat.avif
       - ImageFormat.encode
+      - Gravity
+      - Gravity.init
+      - Gravity.rawValue
+      - Gravity.north
+      - Gravity.south
+      - Gravity.east
+      - Gravity.west
+      - Gravity.northEast
+      - Gravity.northWest
+      - Gravity.southEast
+      - Gravity.southWest
+      - Gravity.center
+      - Gravity.smart
+      - Gravity.focalPoint
+    supporting_symbols:
+      - ImageTransform
+      - ImageTransform.width
+      - ImageTransform.height
+      - ImageTransform.resize
+      - ImageTransform.quality
+      - ImageTransform.format
+      - ImageTransform.gravity
+      - ImageTransform.focalPoint
+      - ImageTransform.init
+      - FocalPoint
+      - FocalPoint.x
+      - FocalPoint.y
+      - FocalPoint.init
   storage.file_buckets.copy_cross_bucket: implemented
   storage.file_buckets.move_cross_bucket: implemented
   storage.file_buckets.upload_with_metadata: implemented
@@ -606,3 +817,102 @@ features:
   storage.analytics.update_table: not_implemented
   storage.analytics.rename_table: not_implemented
   storage.analytics.delete_table: not_implemented
+
+# Types shared by several Storage features.
+supporting_symbols:
+  - CacheControl
+  - CacheControl.rawValue
+  - CacheControl.init
+  - CacheControl.maxAge
+  - CacheControl.noCache
+  - CacheControl.noStore
+  - StorageApi.settingHeader
+  - StorageBucketApi.settingHeader
+  - StorageError.Kind
+  - StorageError.Kind.rawValue
+  - StorageError.Kind.init
+  - StorageError.Kind.server
+  - StorageError.Kind.transport
+  - StorageError.Kind.decoding
+  - StorageError.Kind.invalidRequest
+  - StorageError.Kind.invalidConfiguration
+  - StorageError.Kind.accessToken
+  - StorageError.Code
+  - StorageError.Code.rawValue
+  - StorageError.Code.init
+  - StorageError.ServerError
+  - StorageError.ServerError.statusCode
+  - StorageError.ServerError.error
+  - StorageError.ServerError.message
+  - StorageError.ServerError.init
+  - StorageError.kind
+  - StorageError.code
+  - StorageError.serverError
+  - StorageError.isNotFound
+  - StorageError.Code.noSuchBucket
+  - StorageError.Code.noSuchLifecycleConfiguration
+  - StorageError.Code.noSuchKey
+  - StorageError.Code.noSuchUpload
+  - StorageError.Code.invalidJWT
+  - StorageError.Code.invalidRequest
+  - StorageError.Code.invalidArgument
+  - StorageError.Code.malformedXML
+  - StorageError.Code.tenantNotFound
+  - StorageError.Code.entityTooLarge
+  - StorageError.Code.internalError
+  - StorageError.Code.resourceAlreadyExists
+  - StorageError.Code.resourceNotEmpty
+  - StorageError.Code.invalidBucketName
+  - StorageError.Code.invalidKey
+  - StorageError.Code.invalidRange
+  - StorageError.Code.invalidMimeType
+  - StorageError.Code.invalidUploadID
+  - StorageError.Code.keyAlreadyExists
+  - StorageError.Code.bucketAlreadyExists
+  - StorageError.Code.databaseTimeout
+  - StorageError.Code.databaseReadOnly
+  - StorageError.Code.databaseTransactionAborted
+  - StorageError.Code.databaseInvalidObjectDefinition
+  - StorageError.Code.databaseSchemaMismatch
+  - StorageError.Code.invalidSignature
+  - StorageError.Code.expiredToken
+  - StorageError.Code.signatureDoesNotMatch
+  - StorageError.Code.accessDenied
+  - StorageError.Code.resourceLocked
+  - StorageError.Code.resourceReferenced
+  - StorageError.Code.databaseError
+  - StorageError.Code.transactionError
+  - StorageError.Code.missingContentLength
+  - StorageError.Code.missingParameter
+  - StorageError.Code.invalidParameter
+  - StorageError.Code.invalidUploadSignature
+  - StorageError.Code.lockTimeout
+  - StorageError.Code.s3Error
+  - StorageError.Code.invalidAccessKeyID
+  - StorageError.Code.maximumCredentialsLimit
+  - StorageError.Code.invalidChecksum
+  - StorageError.Code.missingPart
+  - StorageError.Code.slowDown
+  - StorageError.Code.tusError
+  - StorageError.Code.aborted
+  - StorageError.Code.abortedTerminate
+  - StorageError.Code.featureNotEnabled
+  - StorageError.Code.notSupported
+  - StorageError.Code.icebergMaximumResourceLimit
+  - StorageError.Code.icebergResourceNotEmpty
+  - StorageError.Code.noSuchCatalog
+  - StorageError.Code.unknownError
+  - StorageError.Code.conflictException
+  - StorageError.Code.notFoundException
+  - StorageError.Code.vectorBucketNotEmpty
+  - StorageError.Code.s3VectorMaxBucketsExceeded
+  - StorageError.Code.s3VectorMaxIndexesExceeded
+  - StorageError.Code.noAvailableShard
+  - StorageError.Code.shardNotFound
+  - StorageError.Kind.~=
+  - StorageError.Code.~=
+  - StorageFileApi.settingHeader
+  - StorageClientConfiguration.usesNewHostname
+  - SupabaseStorageClient.settingHeader
+  - StorageClient
+  - SupabaseStorageClient.Configuration

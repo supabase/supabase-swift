@@ -1,6 +1,6 @@
 import ConcurrencyExtras
 import Foundation
-import HTTPTypes
+public import HTTPTypes
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -24,7 +24,7 @@ import HTTPTypes
 ///
 /// ### Customizing headers
 ///
-/// - ``setHeader(_:forKey:)``
+/// - ``settingHeader(name:value:)``
 public class StorageApi: @unchecked Sendable {
   /// The configuration used to initialize this client instance.
   public let configuration: StorageClientConfiguration
@@ -50,7 +50,7 @@ public class StorageApi: @unchecked Sendable {
 
     // if legacy uri is used, replace with new storage host (disables request buffering to allow > 50GB uploads)
     // "project-ref.supabase.co" becomes "project-ref.storage.supabase.co"
-    if configuration.useNewHostname == true {
+    if configuration.usesNewHostname == true {
       guard
         var components = URLComponents(url: configuration.url, resolvingAgainstBaseURL: false),
         let host = components.host
@@ -98,10 +98,42 @@ public class StorageApi: @unchecked Sendable {
   ///   - value: The value of the header field.
   ///   - key: The name of the header field. The key is case-insensitively stored as lowercase.
   /// - Returns: `self`, enabling method chaining.
+  @available(
+    *, deprecated,
+    message:
+      "Use settingHeader(name:value:) instead. It returns a new instance and does not change the receiver."
+  )
   @discardableResult
   public func setHeader(_ value: String, forKey key: String) -> Self {
     mutableState.withValue { $0.headers[key.lowercased()] = value }
     return self
+  }
+
+  /// Returns a new instance with an additional HTTP header, included in all requests made by the
+  /// returned instance.
+  ///
+  /// This method does not change the receiver. Always use the result. A subclass returns an
+  /// instance of its own type.
+  ///
+  /// - Parameters:
+  ///   - name: The header field. Names match case-insensitively.
+  ///   - value: The value of the header field.
+  /// - Returns: A new instance with the header merged into the configuration's headers.
+  public func settingHeader(name: HTTPField.Name, value: String) -> StorageApi {
+    StorageApi(configuration: configuration(settingHeader: name, to: value))
+  }
+
+  /// The configuration for a copy of this instance that also sends `name` with `value`. It
+  /// carries the headers this instance sends now, so a header set with `setHeader` is kept.
+  func configuration(settingHeader name: HTTPField.Name, to value: String)
+    -> StorageClientConfiguration
+  {
+    var configuration = configuration
+    configuration.headers = mutableState.headers.filter {
+      $0.key.caseInsensitiveCompare(name.rawName) != .orderedSame
+    }
+    configuration.headers[name.rawName] = value
+    return configuration
   }
 
   @discardableResult
@@ -133,7 +165,7 @@ extension Helpers.HTTPRequest {
     method: HTTPTypes.HTTPRequest.Method,
     query: [URLQueryItem],
     formData: MultipartFormData,
-    options: FileOptions,
+    cacheControl: String,
     headers: HTTPFields = [:]
   ) throws {
     var headers = headers
@@ -141,7 +173,7 @@ extension Helpers.HTTPRequest {
       headers[.contentType] = formData.contentType
     }
     if headers[.cacheControl] == nil {
-      headers[.cacheControl] = "max-age=\(options.cacheControl)"
+      headers[.cacheControl] = cacheControl
     }
     try self.init(
       url: url,
