@@ -44,7 +44,6 @@ dont
 dragarcia
 dummysignature
 ecdsa
-ERRCODE
 halfvec
 emaillink
 entrancy
