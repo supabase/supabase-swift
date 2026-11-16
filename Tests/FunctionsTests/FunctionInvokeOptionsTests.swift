@@ -70,7 +70,7 @@ struct FunctionInvokeOptionsTests {
     ]
 
     for (method, expected) in testCases {
-      #expect(FunctionInvokeOptions.httpMethod(method) == expected)
+      #expect(method.httpTypesMethod == expected)
     }
   }
 }
