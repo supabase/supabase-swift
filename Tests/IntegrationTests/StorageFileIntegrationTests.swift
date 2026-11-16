@@ -146,10 +146,20 @@ final class StorageFileIntegrationTests {
       assertInlineSnapshot(of: error, as: .dump) {
         """
         ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Payload too large"
+          ▿ code: Optional<Code>
+            ▿ some: Code
+              - rawValue: "EntityTooLarge"
+          ▿ kind: Kind
+            - rawValue: "server"
           - message: "The object exceeded the maximum allowed size"
-          ▿ statusCode: Optional<String>
+          ▿ serverError: Optional<ServerError>
+            ▿ some: ServerError
+              ▿ error: Optional<String>
+                - some: "Payload too large"
+              - message: "The object exceeded the maximum allowed size"
+              ▿ statusCode: Optional<Int>
+                - some: 413
+          ▿ statusCodeText: Optional<String>
             - some: "413"
 
         """
@@ -193,10 +203,20 @@ final class StorageFileIntegrationTests {
       assertInlineSnapshot(of: error, as: .dump) {
         """
         ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "invalid_mime_type"
+          ▿ code: Optional<Code>
+            ▿ some: Code
+              - rawValue: "InvalidMimeType"
+          ▿ kind: Kind
+            - rawValue: "server"
           - message: "mime type image/jpeg is not supported"
-          ▿ statusCode: Optional<String>
+          ▿ serverError: Optional<ServerError>
+            ▿ some: ServerError
+              ▿ error: Optional<String>
+                - some: "invalid_mime_type"
+              - message: "mime type image/jpeg is not supported"
+              ▿ statusCode: Optional<Int>
+                - some: 415
+          ▿ statusCodeText: Optional<String>
             - some: "415"
 
         """
@@ -248,10 +268,20 @@ final class StorageFileIntegrationTests {
       assertInlineSnapshot(of: error, as: .dump) {
         """
         ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Duplicate"
+          ▿ code: Optional<Code>
+            ▿ some: Code
+              - rawValue: "KeyAlreadyExists"
+          ▿ kind: Kind
+            - rawValue: "server"
           - message: "The resource already exists"
-          ▿ statusCode: Optional<String>
+          ▿ serverError: Optional<ServerError>
+            ▿ some: ServerError
+              ▿ error: Optional<String>
+                - some: "Duplicate"
+              - message: "The resource already exists"
+              ▿ statusCode: Optional<Int>
+                - some: 409
+          ▿ statusCodeText: Optional<String>
             - some: "409"
 
         """

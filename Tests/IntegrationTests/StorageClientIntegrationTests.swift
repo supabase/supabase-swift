@@ -77,10 +77,20 @@ struct StorageClientIntegrationTests {
       assertInlineSnapshot(of: error, as: .dump) {
         """
         ▿ StorageError
-          ▿ error: Optional<String>
-            - some: "Bucket not found"
+          ▿ code: Optional<Code>
+            ▿ some: Code
+              - rawValue: "NoSuchBucket"
+          ▿ kind: Kind
+            - rawValue: "server"
           - message: "Bucket not found"
-          ▿ statusCode: Optional<String>
+          ▿ serverError: Optional<ServerError>
+            ▿ some: ServerError
+              ▿ error: Optional<String>
+                - some: "Bucket not found"
+              - message: "Bucket not found"
+              ▿ statusCode: Optional<Int>
+                - some: 404
+          ▿ statusCodeText: Optional<String>
             - some: "404"
 
         """
