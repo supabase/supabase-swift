@@ -262,3 +262,15 @@ creditcard
 conformances
 addmedia
 Migra
+loggable
+idtoken
+providertoken
+codeverifier
+authcode
+tokenhash
+hashedtoken
+emailotp
+clientsecret
+actionlink
+signedurl
+AURL
