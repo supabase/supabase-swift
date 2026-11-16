@@ -449,6 +449,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - timeout: An optional timeout in seconds. Defaults to the socket's configured timeout.
   /// - Throws: A ``RealtimeError`` if the access token is missing or the request fails.
   @available(*, deprecated, message: "Use httpSend(event:payload:encoder:timeout:) instead.")
+  @_disfavoredOverload
   public func httpSend(
     event: String,
     message: some Codable,
@@ -608,6 +609,7 @@ public final class RealtimeChannelV2: Sendable, RealtimeChannelProtocol {
   ///   - event: The broadcast event name.
   ///   - message: A `Codable` value to send as the message payload.
   @available(*, deprecated, message: "Use broadcast(event:payload:encoder:) instead.")
+  @_disfavoredOverload
   public func broadcast(event: String, message: some Codable) async throws {
     try await _broadcast(event: event, message: JSONObject(message))
   }

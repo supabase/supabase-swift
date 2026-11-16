@@ -4,9 +4,13 @@ import Testing
 
 @Suite
 struct SupabaseClientRealtimeV3APITests {
+  // Linux has no initializer without `options`: Auth has no default storage there.
   let client = SupabaseClient(
     supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-    supabaseKey: "publishable.api.key"
+    supabaseKey: "publishable.api.key",
+    options: SupabaseClientOptions(
+      auth: SupabaseClientOptions.AuthOptions(storage: AuthLocalStorageMock())
+    )
   )
 
   @Test
