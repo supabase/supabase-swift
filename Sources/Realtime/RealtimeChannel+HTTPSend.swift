@@ -125,8 +125,10 @@ extension RealtimeChannel {
 
     guard response.status.code == 202 else {
       var errorMessage = "Status Code: \(response.status.code)"
-      if let errorBody = try? data.decoded(as: [String: String].self) {
-        errorMessage = errorBody["error"] ?? errorBody["message"] ?? errorMessage
+      if let errorBody = try? data.decoded(as: JSONObject.self),
+        let message = errorBody["error"]?.stringValue ?? errorBody["message"]?.stringValue
+      {
+        errorMessage = message
       }
       throw RealtimeError(
         kind: .server, message: errorMessage, response: HTTPErrorResponse(response, body: data))

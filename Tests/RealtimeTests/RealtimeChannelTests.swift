@@ -915,6 +915,42 @@ struct RealtimeChannelTests {
     }
   }
 
+  @Test(arguments: [
+    (200, #"{"message":"ok"}"#, "ok"),
+    (400, #"{"error":"Bad topic"}"#, "Bad topic"),
+    (401, #"{"message":"Unauthorized","code":401}"#, "Unauthorized"),
+    (403, #"{"error":{"reason":"denied"},"message":"Forbidden"}"#, "Forbidden"),
+    (422, #"{"errors":{"topic":["can't be blank"]}}"#, "Status Code: 422"),
+    (500, "[1,2,3]", "Status Code: 500"),
+    (502, "<html>Bad Gateway</html>", "Status Code: 502"),
+  ])
+  func httpSendFailureReadsTheMessageFromAnyBodyShape(
+    status: Int, body: String, expectedMessage: String
+  ) async throws {
+    let httpClient = RecordingTransport()
+    httpClient.respond { _, _ in (HTTPResponse(status: .init(code: status)), Data(body.utf8)) }
+    let (client, _) = FakeWebSocket.fakes()
+    let socket = RealtimeClient(
+      configuration: RealtimeClient.Configuration(
+        url: URL(string: "https://localhost:54321/realtime/v1")!,
+        headers: [.apikey: "test-key"],
+        accessToken: { "test-token" }
+      ),
+      wsTransport: { _, _ in client },
+      http: HTTPClient(transport: httpClient),
+      clock: ContinuousClock()
+    )
+    let channel = await socket.channel("test-topic")
+
+    let error = try await #require(throws: RealtimeError.self) {
+      try await channel.httpSend(event: "test", payload: ["data": "test"])
+    }
+    #expect(error.kind == .server)
+    #expect(error.message == expectedMessage)
+    #expect(error.response?.status.code == status)
+    #expect(error.response?.body == Data(body.utf8))
+  }
+
   #if canImport(Darwin)
     @Test
     @MainActor
