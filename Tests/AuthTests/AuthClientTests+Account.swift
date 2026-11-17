@@ -405,6 +405,25 @@ extension AuthClientTests {
   }
 
   @Test
+  func unlinkIdentityIgnoresAFetchedUserWithAnotherID() async throws {
+    let unlinked = try #require(Session.valid.user.identities?.first)
+    var otherUser = Session.valid.user
+    otherUser.id = UUID()
+    transport.stub(.delete, "user/identities/\(unlinked.id.uuidString)", data: Data("{}".utf8))
+    transport.stub(.get, "user", data: try AuthClient.Configuration.jsonEncoder.encode(otherUser))
+    let sut = makeSUT()
+    try await sut.seedSession(.valid)
+
+    try await assertAuthStateChanges(
+      sut: sut,
+      action: { try await sut.unlinkIdentity(unlinked) },
+      expectedEvents: [.initialSession]
+    )
+
+    expectNoDifference(sut.currentUser, Session.valid.user)
+  }
+
+  @Test
   func unlinkIdentityOfAnotherUserEmitsNothing() async throws {
     var identity = try #require(Session.valid.user.identities?.first)
     identity.userID = UUID()
