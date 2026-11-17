@@ -133,7 +133,7 @@ struct PostgrestRequestTests {
     let prefer = try #require(capture.header("Prefer"))
     #expect(prefer.contains("tx=rollback"))
     #expect(prefer.contains("count=exact"))
-    #expect(prefer.contains("return=minimal"))
+    #expect(prefer.contains("return=") == false)
   }
 
   @Test

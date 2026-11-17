@@ -86,7 +86,7 @@ struct PostgrestQueryTests {
     #expect(response.count == 7)
     let prefer = capture.header("Prefer") ?? ""
     #expect(prefer.contains("count=exact"))
-    #expect(prefer.contains("return=minimal"))
+    #expect(prefer.contains("return=") == false)
   }
 
   @Test

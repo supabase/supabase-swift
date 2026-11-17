@@ -292,14 +292,14 @@ struct TableIntegrationTests {
   }
 
   @Test
-  func aTypedUpsertExecuteAloneKeepsAMinimalReturnPreference() async throws {
+  func aTypedUpsertExecuteAloneSendsNoReturnPreference() async throws {
     let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
       .execute()
 
-    #expect(capture.prefer == "resolution=merge-duplicates,return=minimal")
+    #expect(capture.prefer == "resolution=merge-duplicates")
   }
 
   @Test
@@ -322,8 +322,8 @@ struct TableIntegrationTests {
       .upsert(Todo.Draft(id: 1, task: "buy milk"), resolution: .ignoreDuplicates)
       .execute()
 
-    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
-    #expect(capture.query?.contains("on_conflict=id") == true)
+    #expect(capture.prefer == "resolution=ignore-duplicates")
+    #expect(capture.query?.contains("on_conflict") != true)
   }
 
   @Test
@@ -350,7 +350,7 @@ struct TableIntegrationTests {
       )
       .execute()
 
-    #expect(capture.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(capture.prefer == "resolution=ignore-duplicates")
     #expect(capture.query?.contains("on_conflict=tag") == true)
   }
 
@@ -365,7 +365,7 @@ struct TableIntegrationTests {
       )
       .execute()
 
-    #expect(derived.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(derived.prefer == "resolution=ignore-duplicates")
 
     let explicit = try RequestCapture()
     _ = try await explicit.client
@@ -377,29 +377,29 @@ struct TableIntegrationTests {
       )
       .execute()
 
-    #expect(explicit.prefer == "resolution=ignore-duplicates,return=minimal")
+    #expect(explicit.prefer == "resolution=ignore-duplicates")
   }
 
   @Test
-  func aTypedUpsertDerivesTheConflictTargetFromTheKey() async throws {
+  func aTypedUpsertLeavesThePrimaryKeyConflictTargetToTheServer() async throws {
     let capture = try RequestCapture()
     _ = try await capture.client
       .from(Todo.self)
       .upsert(Todo.Draft(id: 1, task: "buy milk"))
       .execute()
 
-    #expect(capture.query?.contains("on_conflict=id") == true)
+    #expect(capture.query?.contains("on_conflict") != true)
   }
 
   @Test
-  func aTypedUpsertDerivesACompoundConflictTarget() async throws {
+  func aTypedUpsertLeavesACompoundPrimaryKeyConflictTargetToTheServer() async throws {
     let capture = try RequestCapture()
     _ = try await capture.client
       .from(IntegrationUserRole.self)
       .upsert(IntegrationUserRole.Draft(userID: 1, roleID: 2))
       .execute()
 
-    #expect(capture.query?.contains("on_conflict=user_id,role_id") == true)
+    #expect(capture.query?.contains("on_conflict") != true)
   }
 
   @Test
