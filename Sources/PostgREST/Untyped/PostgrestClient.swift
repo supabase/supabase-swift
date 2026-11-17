@@ -274,14 +274,7 @@ public struct PostgrestClient: Sendable {
     var request = makeRequest("rpc/\(fn)", method: head ? .head : get ? .get : .post)
 
     if head || get {
-      guard let arguments = Self.queryItems(forJSONObject: bodyData) else {
-        throw PostgrestError(
-          kind: .invalidRequest,
-          message: "Params should be a key-value type when using `GET` or `HEAD` options."
-        )
-      }
-
-      request.leadingQuery.append(contentsOf: arguments)
+      request.leadingQuery.append(contentsOf: try Self.queryArguments(forJSONObject: bodyData))
     } else if !(params is NoParams) {
       request.body = bodyData
     }
@@ -336,6 +329,20 @@ public struct PostgrestClient: Sendable {
     var configuration = configuration
     configuration.schema = schema
     return PostgrestClient(checkedConfiguration: configuration)
+  }
+
+  /// The arguments of a `GET` or `HEAD` function call, as ``queryItems(forJSONObject:)`` renders
+  /// them. The typed and untyped calls share it, so both reject the same arguments the same way.
+  ///
+  /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `body` is not a JSON object.
+  static func queryArguments(forJSONObject body: Data) throws -> [URLQueryItem] {
+    guard let arguments = queryItems(forJSONObject: body) else {
+      throw PostgrestError(
+        kind: .invalidRequest,
+        message: "Params should be a key-value type when using `GET` or `HEAD` options."
+      )
+    }
+    return arguments
   }
 
   /// The arguments in `body`, one query item per key in key order, or `nil` when `body` is not a
