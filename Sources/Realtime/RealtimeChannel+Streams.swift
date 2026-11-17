@@ -227,6 +227,41 @@ extension RealtimeChannel {
       ?? .finished
   }
 
+  /// Returns an async stream of the broadcast messages for a ``BroadcastEvent`` type.
+  ///
+  /// The stream gets the messages whose event is `Event.event`. It does not decode them. Call
+  /// ``TypedBroadcastMessage/payload()`` on each message to decode it as `Event`. A payload that
+  /// does not decode never drops the message or ends the stream; `payload()` throws instead.
+  ///
+  /// The method runs on the caller's actor, so `Event` can have a `Decodable` conformance
+  /// isolated to the main actor. Only the event name crosses to the client.
+  ///
+  /// ```swift
+  /// let cursors = await channel.broadcasts(of: Cursor.self, bufferingPolicy: .bufferingNewest(1))
+  /// try await channel.subscribe()
+  /// for await message in cursors {
+  ///   let cursor = try message.payload()
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - _: The event type. Its ``BroadcastEvent/event`` selects the messages.
+  ///   - bufferingPolicy: What the stream keeps while the consumer is slow. Defaults to
+  ///     `.unbounded`.
+  ///   - decoder: The decoder ``TypedBroadcastMessage/payload()`` uses. `nil` uses
+  ///     `JSONDecoder.supabase()`.
+  /// - Returns: An `AsyncStream` of ``TypedBroadcastMessage`` values.
+  public func broadcasts<Event: BroadcastEvent & Decodable>(
+    of _: Event.Type,
+    bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy = .unbounded,
+    decoder: JSONDecoder? = nil
+  ) async -> AsyncStream<TypedBroadcastMessage<Event>> {
+    let messages = await broadcasts(event: Event.event, bufferingPolicy: bufferingPolicy)
+    return AsyncStream(
+      TypedBroadcasts<Event>(
+        base: messages, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
+  }
+
   /// Returns an async stream of server events about this channel.
   ///
   /// The stream emits ``RealtimeChannelEvent/resubscribed`` when the channel joins again after
@@ -245,6 +280,28 @@ extension RealtimeChannel {
   /// ```
   public func events() async -> AsyncStream<RealtimeChannelEvent> {
     await client?.events(of: self) ?? .finished
+  }
+}
+
+/// Wraps each message of `base` as a ``TypedBroadcastMessage``.
+///
+/// A sequence type instead of `map`, for the reason ``TypedPostgresChanges`` gives.
+private struct TypedBroadcasts<Event>: AsyncSequence, Sendable {
+  let base: AsyncStream<BroadcastMessage>
+  let decoder: UncheckedSendable<JSONDecoder>
+
+  struct AsyncIterator: AsyncIteratorProtocol {
+    var base: AsyncStream<BroadcastMessage>.Iterator
+    let decoder: UncheckedSendable<JSONDecoder>
+
+    @concurrent mutating func next() async -> TypedBroadcastMessage<Event>? {
+      guard let message = await base.next() else { return nil }
+      return TypedBroadcastMessage(raw: message, decoder: decoder)
+    }
+  }
+
+  func makeAsyncIterator() -> AsyncIterator {
+    AsyncIterator(base: base.makeAsyncIterator(), decoder: decoder)
   }
 }
 
