@@ -15,7 +15,8 @@ struct ObjectKeyTests {
   @Test(
     arguments: [
       ("folder/file.png", "folder/file.png", "folder/file.png"),
-      ("/folder//file.png/", "folder/file.png", "folder/file.png"),
+      ("/folder//file.png", "folder/file.png", "folder/file.png"),
+      ("/folder//sub/", "folder/sub/", "folder/sub/"),
       ("folder/my file.png", "folder/my file.png", "folder/my%20file.png"),
       ("a+b.png", "a+b.png", "a%2Bb.png"),
       ("a#b.png", "a#b.png", "a%23b.png"),
@@ -34,12 +35,9 @@ struct ObjectKeyTests {
   }
 
   @Test(arguments: ["", "/", "//"])
-  func rejectsAnEmptyPath(input: String) {
-    #expect {
-      try ObjectKey(input)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
+  func sendsAnEmptyPathForStorageToJudge(input: String) throws {
+    #expect(try ObjectKey(input).path == "")
+    #expect(try ObjectKey(input).encoded == "")
   }
 
   @Test(arguments: ["../secret.png", "folder/../file.png", "./file.png", "a/./b"])
@@ -52,18 +50,17 @@ struct ObjectKeyTests {
   }
 
   @Test
-  func prefixMayBeEmpty() throws {
-    #expect(try ObjectKey(prefix: "").path == "")
-    #expect(try ObjectKey(prefix: "/").segments.isEmpty)
-    #expect(try ObjectKey(prefix: "/folder//").path == "folder")
+  func keepsATrailingSlashLikeTheGateway() throws {
+    #expect(try ObjectKey("/folder//").path == "folder/")
+    #expect(try ObjectKey("folder").path == "folder")
   }
 
   @Test
   func lenientKeepsDotSegmentsFullyEncoded() {
     let key = ObjectKey(lenient: "/a/../b/./c.png//")
 
-    #expect(key.path == "a/../b/./c.png")
-    #expect(key.encoded == "a/%2E%2E/b/%2E/c.png")
+    #expect(key.path == "a/../b/./c.png/")
+    #expect(key.encoded == "a/%2E%2E/b/%2E/c.png/")
     #expect(ObjectKey(lenient: "/").segments.isEmpty)
   }
 

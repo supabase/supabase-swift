@@ -152,7 +152,7 @@ extension StorageBucket {
       fetch: { [api, id] cursor in
         let response = try await api.execute(
           api.requests.objects(
-            bucket: id, prefix: ListPrefix(prefix), options: options, cursor: cursor)
+            bucket: id, prefix: ObjectKey(prefix), options: options, cursor: cursor)
         )
         .decoded(as: ListV2Response.self)
         return ObjectPage(
@@ -176,15 +176,4 @@ struct ListV2Response: Decodable {
   let nextCursor: String?
   let folders: [Folder]?
   let objects: [StorageObject]
-}
-
-/// A list-v2 prefix: normalized like an ``ObjectKey``, but a trailing `/` is kept, because
-/// `photos/` and `photos` select different keys.
-struct ListPrefix {
-  let path: String
-
-  init(_ prefix: String) throws {
-    let key = try ObjectKey(prefix: prefix)
-    path = key.path.isEmpty || !prefix.hasSuffix("/") ? key.path : key.path + "/"
-  }
 }

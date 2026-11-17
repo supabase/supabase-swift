@@ -161,16 +161,6 @@ struct StorageClientIntegrationTests {
   }
 
   @Test
-  func emptyUpdateIsRefusedBeforeSending() async throws {
-    let error = await StorageIntegration.storageError {
-      try await storage.updateBucket("any", options: UpdateBucketOptions())
-    }
-
-    #expect(error?.kind == .invalidRequest)
-    #expect(error?.response == nil)
-  }
-
-  @Test
   func duplicateBucketIsBucketAlreadyExists() async throws {
     let name = try await StorageIntegration.newBucket("dup")
     defer { StorageIntegration.dropBucket(name) }

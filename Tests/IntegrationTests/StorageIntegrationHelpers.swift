@@ -125,7 +125,7 @@ extension String {
   var percentEncodedKey: String {
     var allowed = CharacterSet.alphanumerics
     allowed.insert(charactersIn: "-._~!$&'()*,;=:@")
-    return split(separator: "/")
+    return split(separator: "/", omittingEmptySubsequences: false)
       .map { $0.addingPercentEncoding(withAllowedCharacters: allowed) ?? String($0) }
       .joined(separator: "/")
   }

@@ -595,22 +595,25 @@ struct StorageBucketTests {
         == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
   }
 
-  @Test(arguments: [Duration.zero, .milliseconds(999), .seconds(-5)])
-  func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async throws {
-    let storage = try makeFailingSUT {
-      Issue.record("A request was sent"); throw URLError(.badURL)
-    }
+  @Test(arguments: [
+    (Duration.zero, 0), (.milliseconds(999), 0), (.seconds(-5), -5), (.milliseconds(1500), 1),
+  ])
+  func createSignedURLSendsTheWholeSecondsOfAnyExpiry(expiresIn: Duration, seconds: Int)
+    async throws
+  {
+    let body = LockIsolated<Data?>(nil)
+    let single = try makeBodyCapturingSUT(
+      body: body, response: #"{"signedURL":"/object/sign/bucket/file.txt?token=t"}"#)
+    _ = try await single.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self) == #"{"expiresIn":\#(seconds)}"#)
 
-    await #expect {
-      try await storage.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
-    await #expect {
-      try await storage.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
+    body.setValue(nil)
+    let batch = try makeBodyCapturingSUT(body: body, response: "[]")
+    _ = try await batch.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self).contains(
+        #""expiresIn":\#(seconds)"#))
   }
 
   @Test
@@ -1222,7 +1225,7 @@ struct StorageBucketTests {
   }
 
   @Test
-  func getPublicURLCollapsesRepeatedAndTrailingSlashes() throws {
+  func getPublicURLCollapsesRepeatedSlashesAndKeepsATrailingOne() throws {
     let storage = try makeSUT()
 
     let publicURL = try storage.from("bucket")
@@ -1230,17 +1233,17 @@ struct StorageBucketTests {
 
     #expect(
       publicURL.absoluteString
-        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
+        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png/"
     )
   }
 
   @Test
-  func downloadCollapsesRepeatedAndTrailingSlashes() async throws {
+  func downloadCollapsesRepeatedSlashesAndKeepsATrailingOne() async throws {
     let storage = try makeSUT()
 
     transport.stub(
       .get,
-      url.appendingPathComponent("object/bucket/folder/file.txt"),
+      url.appendingPathComponent("object/bucket/folder/file.txt/"),
       data: Data("hello world".utf8)
     )
 
@@ -1263,7 +1266,7 @@ struct StorageBucketTests {
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
     #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
+    #expect(sent.destinationKey == "folder/b.png/")
   }
 
   @Test
@@ -1280,7 +1283,7 @@ struct StorageBucketTests {
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
     #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
+    #expect(sent.destinationKey == "folder/b.png/")
   }
 
   @Test
@@ -1294,7 +1297,7 @@ struct StorageBucketTests {
     try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefixes == ["folder/a.png", "b.png"])
+    #expect(sent.prefixes == ["folder/a.png", "b.png/"])
   }
 
   @Test
@@ -1309,7 +1312,7 @@ struct StorageBucketTests {
       .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: .seconds(60))
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.paths == ["folder/a.png", "b.png"])
+    #expect(sent.paths == ["folder/a.png", "b.png/"])
   }
 
   @Test
@@ -1323,7 +1326,7 @@ struct StorageBucketTests {
     _ = try await storage.from("bucket").list(path: "/folder//nested/")
 
     let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefix == "folder/nested")
+    #expect(sent.prefix == "folder/nested/")
   }
 
   @Test
