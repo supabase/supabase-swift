@@ -1,3 +1,4 @@
+AAGUID
 Abijmil
 accesstoken
 acks
@@ -31,6 +32,8 @@ Bitbucket
 bpchar
 bytea
 caseless
+CBOR
+cbor
 chan
 checkmark
 circlepath
@@ -42,6 +45,8 @@ conformances
 confirmer
 cooldown
 corelibs
+COSE
+cose
 CREDENTIALW
 dapp
 datastructure
@@ -195,6 +200,7 @@ Resends
 Rlbn
 Rvci
 sadcat
+safeupdate
 secp256k1
 setof
 signposter

@@ -32,7 +32,7 @@ CREATE TABLE personal.places (
 
 INSERT INTO personal.places (id, name, location) VALUES
   (1, 'origin', extensions.ST_SetSRID(extensions.ST_MakePoint(0, 0), 4326)),
-  (2, 'lisbon', extensions.ST_SetSRID(extensions.ST_MakePoint(-9.14, 38.72), 4326));
+  (2, 'harbor', extensions.ST_SetSRID(extensions.ST_MakePoint(-9.14, 38.72), 4326));
 
 GRANT SELECT ON TABLE personal.places TO anon, authenticated, service_role;
 

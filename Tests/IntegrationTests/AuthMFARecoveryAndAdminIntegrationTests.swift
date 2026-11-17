@@ -33,7 +33,7 @@ struct AuthMFARecoveryAndAdminIntegrationTests {
     }
     #expect(missing?.code?.rawValue == "mfa_factor_not_found")
 
-    try await verifyATOTPFactor()
+    try await verifyTOTPFactor()
     let refused = await #expect(throws: AuthError.self) {
       try await auth.mfa.recoveryCodes.generate(friendlyName: "Backup codes")
     }
@@ -49,7 +49,7 @@ struct AuthMFARecoveryAndAdminIntegrationTests {
   func recoveryCodesGenerateVerifyRegenerateAndUnenroll() async throws {
     let email = mockEmail()
     _ = try await auth.signUp(email: email, password: Self.password)
-    try await verifyATOTPFactor()
+    try await verifyTOTPFactor()
 
     let generated = try await auth.mfa.recoveryCodes.generate(friendlyName: "Backup codes")
     #expect(generated.friendlyName == "Backup codes")
@@ -160,7 +160,7 @@ struct AuthMFARecoveryAndAdminIntegrationTests {
   // MARK: - Helpers
 
   /// Enrolls a TOTP factor for the signed-in user and verifies it, so the session is at aal2.
-  private func verifyATOTPFactor() async throws {
+  private func verifyTOTPFactor() async throws {
     let enrollment = try await auth.mfa.enrollTOTP(friendlyName: "Authenticator")
     try await auth.mfa.challengeAndVerify(
       factorID: enrollment.id, code: try totpCode(secret: enrollment.secret))

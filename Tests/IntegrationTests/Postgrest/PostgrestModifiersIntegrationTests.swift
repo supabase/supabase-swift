@@ -172,7 +172,7 @@ struct PostgrestModifiersIntegrationTests {
     #expect(geometries.map { $0["type"] as? String } == ["Point", "Point"])
     #expect(geometries.first?["coordinates"] as? [Double] == [0, 0])
     let names = features.compactMap { ($0["properties"] as? [String: Any])?["name"] as? String }
-    #expect(names == ["origin", "lisbon"])
+    #expect(names == ["origin", "harbor"])
   }
 
   // MARK: - stripNulls
@@ -183,9 +183,10 @@ struct PostgrestModifiersIntegrationTests {
       .eq("username", value: "supabot")
       .execute()
       .body
+    // Decoded as `JSONValue`: on Linux, Foundation does not bridge `NSNull` to `String?`.
     #expect(
-      try JSONSerialization.jsonObject(with: kept) as? [[String: String?]] == [
-        ["username": "supabot", "email": nil]
+      try JSONDecoder().decode([[String: JSONValue]].self, from: kept) == [
+        ["username": .string("supabot"), "email": .null]
       ])
 
     let stripped = try await client.from("users").select("username,email")
@@ -194,8 +195,8 @@ struct PostgrestModifiersIntegrationTests {
       .execute()
       .body
     #expect(
-      try JSONSerialization.jsonObject(with: stripped) as? [[String: String]] == [
-        ["username": "supabot"]
+      try JSONDecoder().decode([[String: JSONValue]].self, from: stripped) == [
+        ["username": .string("supabot")]
       ])
   }
 
