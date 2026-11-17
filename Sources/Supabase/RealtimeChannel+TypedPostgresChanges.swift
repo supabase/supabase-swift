@@ -149,8 +149,7 @@ extension PostgrestFilterNode {
       return "\(column)=\(prefix)\(`operator`.token).\(operand.grouped)"
     case .raw(let column, let operand):
       if negated, operand.hasPrefix("not.") {
-        throw UnsupportedRealtimeFilter(
-          reason: "Realtime filters cannot negate `\(column)=\(operand)` again.")
+        return "\(column)=\(operand.dropFirst("not.".count))"
       }
       return "\(column)=\(prefix)\(operand)"
     case .or where !negated:

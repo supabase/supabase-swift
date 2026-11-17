@@ -74,6 +74,9 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (c.title.raw("eq.milk"), "title=eq.milk"),
       (!c.title.raw("eq.milk"), "title=not.eq.milk"),
       (c.title.raw("not.ilike.%milk%"), "title=not.ilike.%milk%"),
+      (!c.title.raw("not.eq.milk"), "title=eq.milk"),
+      (c.title.raw("not.not.eq.milk"), "title=not.not.eq.milk"),
+      (c.title.raw("eq.a,"), "title=eq.a,"),
       (c.priority.raw("in.(1,2)"), "priority=in.(1,2)"),
       (Filter.raw("title", "isdistinct.milk"), "title=isdistinct.milk"),
       (
@@ -105,7 +108,6 @@ struct RealtimeChannelTypedPostgresChangesTests {
       (!(c.id.eq(1) && c.id.eq(2)), "cannot negate a group"),
       (!(c.id.eq(1) || c.id.eq(2)), "cannot negate a group"),
       (c.data.eq(.number(JSONNumber("1e-400")!)), "has no wire form"),
-      (!c.title.raw("not.eq.milk"), "cannot negate `title=not.eq.milk` again"),
     ]
   }()
 
