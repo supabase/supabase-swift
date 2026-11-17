@@ -2540,6 +2540,9 @@ features:
       - ResumableUpload.progress
       - ResumableUpload.result
       - ResumableUploadRegistry
+      - ResumableUploadRegistry.ResumeOutcome
+      - ResumableUploadRegistry.ResumeOutcome.upload
+      - ResumableUploadRegistry.ResumeOutcome.error
       - ResumableUploadConfiguration
       - ResumableUploadConfiguration.init
       - ResumableUploadConfiguration.chunkSize

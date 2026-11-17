@@ -89,14 +89,20 @@ process ends.
 At launch, ask `storage.resumableUploads` for the uploads a previous run left.
 
 ```swift
-for upload in try await supabase.storage.resumableUploads.resumeAll() {
-  Task { _ = try? await upload.result }
+for outcome in try await supabase.storage.resumableUploads.resumeAll() {
+  if let error = outcome.error {
+    print("\(outcome.upload.path) did not resume: \(error)")
+    continue
+  }
+  Task { _ = try await outcome.upload.result }
 }
 ```
 
 - `pending()` returns a handle for every record, oldest first, without starting them.
-- `resumeAll()` returns the same handles, each started or resumed. A server refusal does not
-  throw there; it shows in that upload's `status` and `result`.
+- `resumeAll()` starts or resumes each of those handles. It returns a `ResumeOutcome` for each:
+  the handle in `upload`, and in `error` the error its start or resume threw, or `nil`. A refusal by the server is in that error, and the upload
+  is `failed`. An upload the server reports as expired or gone is created again from offset 0.
+  A failure after the first request shows in the upload's `result`.
 - `clear()` deletes every record and copy that is not in flight in this process.
 
 A record expires when the server says the upload has, or after 24 hours when the server sends no
