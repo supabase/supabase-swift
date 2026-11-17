@@ -210,6 +210,169 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
+  func broadcast_ofABroadcastEventSendsItUnderTheTypesEventName() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+
+    try await channel.broadcast(Cursor(x: 3))
+
+    let frame = try #require(await client.sentBinaryFrames().last)
+    let push = userBroadcastPush(frame)
+    #expect(push.event == "cursor")
+    #expect(frame[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
+    #expect(try JSONDecoder().decode(Cursor.self, from: push.payload) == Cursor(x: 3))
+  }
+
+  @Test
+  func broadcast_ofABroadcastEventUsesTheGivenEncoder() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+    let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+
+    try await channel.broadcast(SnakeCursor(cursorX: 8), encoder: encoder)
+
+    let frame = try #require(await client.sentBinaryFrames().last)
+    let payload = try JSONDecoder().decode(JSONValue.self, from: userBroadcastPush(frame).payload)
+    #expect(payload == ["cursor_x": 8])
+  }
+
+  /// The event name and the payload bytes of a user broadcast push frame.
+  private func userBroadcastPush(_ frame: Data) -> (event: String, payload: Data) {
+    let bytes = [UInt8](frame)
+    let eventStart = 7 + Int(bytes[1]) + Int(bytes[2]) + Int(bytes[3])
+    let eventEnd = eventStart + Int(bytes[4])
+    let payloadStart = eventEnd + Int(bytes[5])
+    return (
+      String(decoding: bytes[eventStart..<eventEnd], as: UTF8.self), Data(bytes[payloadStart...])
+    )
+  }
+
+  @Test
+  func receive_typedStreamDeliversOnlyItsEventAndDecodesThePayload() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: Cursor.self)
+
+    let messages = await deliver(
+      [cursorBroadcast(event: "other", x: 1), cursorBroadcast(event: "cursor", x: 2)],
+      to: cursors, on: channel)
+    #expect(messages.map(\.raw.event) == ["cursor"])
+    #expect(try messages.first?.payload() == Cursor(x: 2))
+  }
+
+  @Test
+  func receive_typedStreamKeepsDeliveringAfterAPayloadThatDoesNotDecode() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: Cursor.self)
+
+    let bad = DecodedBroadcast(
+      topic: "realtime:test", event: "cursor", payload: .json(["x": .string("bad")]))
+    let messages = await deliver(
+      [bad, cursorBroadcast(event: "cursor", x: 4)], to: cursors, on: channel)
+    #expect(messages.count == 2)
+    #expect(throws: RealtimeError.self) { try messages[0].payload() }
+    #expect(try messages[1].payload() == Cursor(x: 4))
+  }
+
+  @Test
+  func receive_typedStreamDecodesABinaryJSONPayload() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: Cursor.self)
+
+    let binary = DecodedBroadcast(
+      topic: "realtime:test", event: "cursor", payload: .binary(Data(#"{"x":6}"#.utf8)))
+    let messages = await deliver([binary], to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload() } == [Cursor(x: 6)])
+  }
+
+  @Test
+  func receive_typedStreamUsesTheGivenDecoder() async throws {
+    let channel = await sut.channel("test")
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let cursors = await channel.broadcasts(of: SnakeCursor.self, decoder: decoder)
+
+    let broadcast = DecodedBroadcast(
+      topic: "realtime:test", event: "snake-cursor", payload: .json(["cursor_x": 7]))
+    let messages = await deliver([broadcast], to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload() } == [SnakeCursor(cursorX: 7)])
+  }
+
+  @Test
+  func receive_typedStreamHonorsItsBufferingPolicy() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: Cursor.self, bufferingPolicy: .bufferingNewest(1))
+
+    let messages = await deliver(
+      (1...3).map { cursorBroadcast(event: "cursor", x: $0) }, to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload() } == [Cursor(x: 3)])
+  }
+
+  @Test
+  @MainActor
+  func receive_typedStreamDecodesAMainActorIsolatedEvent() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: MainActorCursor.self)
+
+    let messages = await deliver(
+      [cursorBroadcast(event: "main-cursor", x: 5)], to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload().x } == [5])
+  }
+
+  // `reportIssue` reaches `withKnownIssue` only on Darwin.
+  #if canImport(Darwin)
+    @Test
+    func receive_typedStreamForAWildcardEventReportsAnIssue() async {
+      let channel = await sut.channel("test")
+
+      await withKnownIssue {
+        _ = await channel.broadcasts(of: Wildcard.self)
+      }
+    }
+
+    @Test
+    func broadcast_ofAWildcardEventReportsAnIssueAndStillSends() async throws {
+      setupServerAutoResponder()
+      try await sut.connect()
+      let channel = await sut.channel("test")
+      try await channel.subscribe()
+
+      try await withKnownIssue {
+        try await channel.broadcast(Wildcard())
+      }
+
+      let frame = try #require(await client.sentBinaryFrames().last)
+      #expect(userBroadcastPush(frame).event == "*")
+    }
+  #endif
+
+  /// Subscribes the channel, delivers `broadcasts`, ends the channel's streams, and returns what
+  /// `stream` received.
+  private func deliver<Element: Sendable>(
+    _ broadcasts: [DecodedBroadcast], to stream: AsyncStream<Element>, on channel: RealtimeChannel
+  ) async -> [Element] {
+    await sut.installSubscribedRecord("test")
+    for broadcast in broadcasts {
+      await sut.apply(.binaryBroadcast(broadcast))
+    }
+    await channel.client?.finishStreams(of: channel)
+    return await stream.collect()
+  }
+
+  private func cursorBroadcast(event: String, x: Int) -> DecodedBroadcast {
+    DecodedBroadcast(
+      topic: "realtime:test", event: event, payload: .json(["x": JSONValue(integerLiteral: x)]))
+  }
+
+  @Test
   func receive_jsonBroadcastFromBinaryFrame() async throws {
     let channel = await sut.channel("test")
 
@@ -554,4 +717,24 @@ final class RealtimeChannelBroadcastTests: Sendable {
     await channel.client?.finishStreams(of: channel)
     return await stream.first { _ in true }
   }
+}
+
+private struct Cursor: BroadcastEvent, Codable, Equatable {
+  static let event = "cursor"
+  var x: Int
+}
+
+private struct Wildcard: BroadcastEvent, Codable {
+  static let event = "*"
+}
+
+private struct SnakeCursor: BroadcastEvent, Codable, Equatable {
+  static let event = "snake-cursor"
+  var cursorX: Int
+}
+
+@MainActor
+private struct MainActorCursor: BroadcastEvent, Decodable {
+  static let event = "main-cursor"
+  var x: Int
 }

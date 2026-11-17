@@ -153,7 +153,7 @@ extension RealtimeChannel {
       event: event, schema: schema, table: table, filter: rawFilter, select: select
     )
     return AsyncStream(
-      TypedPostgresChanges<Row>(
+      LazilyDecodedSequence<TypedPostgresChange<Row>>(
         base: changes, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
   }
 
@@ -227,6 +227,41 @@ extension RealtimeChannel {
       ?? .finished
   }
 
+  /// Returns an async stream of the broadcast messages for a ``BroadcastEvent`` type.
+  ///
+  /// The stream gets the messages whose event is `Event.event`. It does not decode them. Call
+  /// ``TypedBroadcastMessage/payload()`` on each message to decode it as `Event`. A payload that
+  /// does not decode never drops the message or ends the stream; `payload()` throws instead.
+  ///
+  /// The method runs on the caller's actor, so `Event` can have a `Decodable` conformance
+  /// isolated to the main actor. Only the event name crosses to the client.
+  ///
+  /// ```swift
+  /// let cursors = await channel.broadcasts(of: Cursor.self, bufferingPolicy: .bufferingNewest(1))
+  /// try await channel.subscribe()
+  /// for await message in cursors {
+  ///   let cursor = try message.payload()
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - _: The event type. Its ``BroadcastEvent/event`` selects the messages.
+  ///   - bufferingPolicy: What the stream keeps while the consumer is slow. Defaults to
+  ///     `.unbounded`.
+  ///   - decoder: The decoder ``TypedBroadcastMessage/payload()`` uses. `nil` uses
+  ///     `JSONDecoder.supabase()`.
+  /// - Returns: An `AsyncStream` of ``TypedBroadcastMessage`` values.
+  public func broadcasts<Event: BroadcastEvent & Decodable>(
+    of _: Event.Type,
+    bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy = .unbounded,
+    decoder: JSONDecoder? = nil
+  ) async -> AsyncStream<TypedBroadcastMessage<Event>> {
+    let messages = await broadcasts(event: Event.checkedEvent, bufferingPolicy: bufferingPolicy)
+    return AsyncStream(
+      LazilyDecodedSequence<TypedBroadcastMessage<Event>>(
+        base: messages, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
+  }
+
   /// Returns an async stream of server events about this channel.
   ///
   /// The stream emits ``RealtimeChannelEvent/resubscribed`` when the channel joins again after
@@ -248,21 +283,31 @@ extension RealtimeChannel {
   }
 }
 
-/// Wraps each change of `base` as a ``TypedPostgresChange``.
+/// A typed wrapper that holds a raw element and decodes it only on request.
+protocol LazilyDecoded {
+  associatedtype Raw: Sendable
+  init(raw: Raw, decoder: UncheckedSendable<JSONDecoder>)
+}
+
+extension TypedPostgresChange: LazilyDecoded {}
+extension TypedBroadcastMessage: LazilyDecoded {}
+
+/// Wraps each element of `base` as an `Element`.
 ///
 /// A sequence type instead of `map`: the `map` transform runs off the caller's actor and would
-/// capture `Row.Type`, whose `Decodable` conformance may be isolated to the caller's actor.
-private struct TypedPostgresChanges<Row>: AsyncSequence, Sendable {
-  let base: AsyncStream<PostgresChange>
+/// capture the payload type, whose `Decodable` conformance may be isolated to the caller's
+/// actor.
+private struct LazilyDecodedSequence<Element: LazilyDecoded>: AsyncSequence, Sendable {
+  let base: AsyncStream<Element.Raw>
   let decoder: UncheckedSendable<JSONDecoder>
 
   struct AsyncIterator: AsyncIteratorProtocol {
-    var base: AsyncStream<PostgresChange>.Iterator
+    var base: AsyncStream<Element.Raw>.Iterator
     let decoder: UncheckedSendable<JSONDecoder>
 
-    @concurrent mutating func next() async -> TypedPostgresChange<Row>? {
-      guard let change = await base.next() else { return nil }
-      return TypedPostgresChange(raw: change, decoder: decoder)
+    @concurrent mutating func next() async -> Element? {
+      guard let raw = await base.next() else { return nil }
+      return Element(raw: raw, decoder: decoder)
     }
   }
 

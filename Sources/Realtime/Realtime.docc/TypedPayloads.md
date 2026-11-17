@@ -32,6 +32,34 @@ decoder.keyDecodingStrategy = .convertFromSnakeCase
 let message = try broadcast.decode(as: ChatMessage.self, decoder: decoder)
 ```
 
+### Typed broadcast events
+
+A type that conforms to ``BroadcastEvent`` names its own event, so the sender and the receivers
+cannot disagree on the name. ``RealtimeChannel/broadcasts(of:bufferingPolicy:decoder:)`` binds
+the type to the stream, and ``RealtimeChannel/broadcast(_:encoder:)`` sends a value under the
+type's event name.
+
+```swift
+struct Cursor: BroadcastEvent, Codable {
+  static let event = "cursor"
+  var x: Double
+  var y: Double
+}
+
+let cursors = await channel.broadcasts(of: Cursor.self)
+try await channel.subscribe()
+try await channel.broadcast(Cursor(x: 10, y: 20))
+
+for await message in cursors {
+  if let cursor = try? message.payload() { move(cursor) }
+}
+```
+
+The binding is lazy, as for Postgres changes. Each ``TypedBroadcastMessage`` keeps the raw
+message in ``TypedBroadcastMessage/raw``, and ``TypedBroadcastMessage/payload()`` decodes it when
+you call it. Set ``BroadcastEvent/event`` to a fixed string: clients in other languages listen for
+the same name.
+
 ### Typed Postgres changes
 
 ``RealtimeChannel/postgresChanges(of:event:schema:table:filter:select:decoder:)`` binds a row

@@ -2144,6 +2144,11 @@ features:
       - BroadcastPayload
       - BroadcastPayload.json
       - BroadcastPayload.binary
+      - BroadcastEvent
+      - BroadcastEvent.event
+      - TypedBroadcastMessage
+      - TypedBroadcastMessage.raw
+      - TypedBroadcastMessage.payload
       - RealtimeChannel.events
       - RealtimeChannelEvent.replicationReady
       - RealtimeChannelEvent.replicationFailed
