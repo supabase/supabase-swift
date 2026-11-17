@@ -169,7 +169,8 @@
 
     // MARK: - Postgres changes column subset
 
-    /// `select` limits the change record to the listed columns.
+    /// `select` limits the change record to the listed columns. The server always adds the
+    /// primary key, so selecting `id` alone leaves `body` out of the record.
     @Test
     func postgresChangesSelectLimitsTheRecordToTheListedColumns() async throws {
       let body = "select-\(UUID().uuidString)"
@@ -178,7 +179,7 @@
       let channel = await realtime.channel("postgres-select-\(UUID().uuidString)")
       let changes = await channel.postgresChanges(
         event: .insert, schema: "personal", table: "notes", filter: .eq("body", value: body),
-        select: ["body"])
+        select: ["id"])
       let events = await channel.events()
       try await channel.subscribe()
       _ = try await withTimeout(.seconds(10)) {
@@ -194,15 +195,7 @@
       try await personal.from("notes").delete().eq("body", value: body).execute()
 
       let record = try #require(change?.record)
-      #expect(record.values["body"] == .string(body))
-      withKnownIssue(
-        """
-        Realtime v2.154 (the CLI's stack) echoes `select` in its join reply but still sends the \
-        whole row. Not an SDK bug: a raw WebSocket join gets the same full record.
-        """
-      ) {
-        #expect(record.values.keys.sorted() == ["body"])
-      }
+      #expect(record.values.keys.sorted() == ["id"])
     }
 
     // MARK: - Binary REST broadcast
