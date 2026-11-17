@@ -630,6 +630,7 @@ extension AuthEventMatrixTests.Row {
       let identity = try #require(client.currentUser?.identities?.first)
       world.transport.stub(
         .delete, "user/identities/\(identity.id.uuidString)", data: Data("{}".utf8))
+      world.answerUser(try #require(client.currentUser))
       try await client.unlinkIdentity(identity)
     },
 

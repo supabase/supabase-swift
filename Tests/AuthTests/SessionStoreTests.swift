@@ -23,43 +23,6 @@ struct SessionStoreTests {
   }
 
   @Test
-  func identityUnlinkedRemovesTheIdentityFromTheHeldUser() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
-    try await store.load()
-    try await store.commit(.signedIn(.valid, event: .signedIn))
-    let identities = try #require(Session.valid.user.identities)
-    var changes = store.changes().makeAsyncIterator()
-    _ = await changes.next()
-
-    try await store.commit(
-      .identityUnlinked(identities[0].id, userID: Session.valid.user.id))
-
-    #expect(await changes.next()?.event == .userUpdated)
-    #expect(store.currentSession?.user.identities == Array(identities.dropFirst()))
-    #expect(store.currentSession?.user.appMetadata["providers"] == [])
-  }
-
-  @Test
-  func identityUnlinkedKeepsAProviderThatAnotherIdentityUses() async throws {
-    var session = Session.valid
-    var github = try #require(session.user.identities?.last)
-    session.user.appMetadata["providers"] = ["email", "github"]
-    github.id = UUID()
-    session.user.identities?.append(github)
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
-    try await store.load()
-    try await store.commit(.signedIn(session, event: .signedIn))
-
-    try await store.commit(.identityUnlinked(github.id, userID: session.user.id))
-    #expect(store.currentSession?.user.appMetadata["providers"] == ["email", "github"])
-
-    let lastGitHub = try #require(session.user.identities?[1])
-    try await store.commit(.identityUnlinked(lastGitHub.id, userID: session.user.id))
-    #expect(store.currentSession?.user.appMetadata["providers"] == ["email"])
-    #expect(store.currentSession?.user.identities?.map(\.provider) == ["email"])
-  }
-
-  @Test
   func userChangeVerifiedUpdatesTheSignedInUser() async throws {
     let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
     try await store.load()
@@ -88,23 +51,6 @@ struct SessionStoreTests {
 
     try await store.commit(.userChangeVerified(other))
     #expect(await changes.next() == AuthChange(event: .signedIn, status: .signedIn(other)))
-  }
-
-  @Test
-  func identityUnlinkedChangesNothingUnlessItsUserIsSignedIn() async throws {
-    let store = SessionStore(storage: InMemoryAuthStorage(), key: key, now: { receivedAt })
-    try await store.load()
-    let identity = try #require(Session.valid.user.identities?.first)
-
-    let signedOut = await store.generation
-    try await store.commit(.identityUnlinked(identity.id, userID: Session.valid.user.id))
-    #expect(await store.generation == signedOut)
-
-    try await store.commit(.signedIn(.valid, event: .signedIn))
-    let signedIn = await store.generation
-    try await store.commit(.identityUnlinked(identity.id, userID: UUID()))
-    #expect(await store.generation == signedIn)
-    #expect(store.currentSession == .valid)
   }
 
   @Test

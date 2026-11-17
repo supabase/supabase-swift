@@ -42,10 +42,6 @@ actor SessionStore {
     /// A server that ended a session also ended the refreshes of it, but not a session signed in
     /// after the request went out. Otherwise the commit changes nothing and does not throw.
     case revoked(SignOutReason, refreshToken: String?)
-    /// Removes the identity `identityID` from the held user with ``AuthEvent/userUpdated``, but
-    /// only while the held user is `userID`. Otherwise the commit changes nothing and does not
-    /// throw, so a sign-out or sign-in that lands first keeps its own user.
-    case identityUnlinked(UUID, userID: UUID)
     /// Stores the session from a verified email or phone change. The event is
     /// ``AuthEvent/userUpdated`` when the held user is the session's user, and
     /// ``AuthEvent/signedIn`` otherwise, because the change then signs that user in.
@@ -668,13 +664,6 @@ actor SessionStore {
       next = .signedOut(reason)
       event = .signedOut
 
-    case .identityUnlinked(let identityID, let userID):
-      guard case .signedIn(var current) = published.value.state, current.user.id == userID
-      else { return }
-      current.user.removeIdentity(identityID)
-      next = .signedIn(current)
-      event = .userUpdated
-
     case .userChangeVerified(let session):
       event = held?.user.id == session.user.id ? .userUpdated : .signedIn
       next = .signedIn(session)
@@ -697,7 +686,7 @@ actor SessionStore {
     switch transition {
     case .refreshed(_, let replacedRefreshToken):
       if let replacedRefreshToken { replacedRefreshTokens.insert(replacedRefreshToken) }
-    case .userUpdated, .identityUnlinked:
+    case .userUpdated:
       break
     default:
       replacedRefreshTokens = []
@@ -737,18 +726,5 @@ actor SessionStore {
       }
     }
     armRefresher()
-  }
-}
-
-extension User {
-  /// Removes the identity `identityID`, and its provider from `appMetadata["providers"]` when no
-  /// other identity uses that provider.
-  fileprivate mutating func removeIdentity(_ identityID: UUID) {
-    guard let removed = identities?.first(where: { $0.id == identityID }) else { return }
-    identities?.removeAll { $0.id == identityID }
-    guard identities?.contains(where: { $0.provider == removed.provider }) != true,
-      case .array(let providers) = appMetadata["providers"]
-    else { return }
-    appMetadata["providers"] = .array(providers.filter { $0 != .string(removed.provider.rawValue) })
   }
 }

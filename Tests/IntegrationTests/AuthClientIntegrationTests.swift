@@ -401,6 +401,33 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
+  func unlinkIdentityStoresTheUserFromTheServer() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+    let password = mockPassword()
+    let phone = "1555\(Int.random(in: 1_000_000...9_999_999))"
+    let created = try await admin.createUser(
+      AdminCreateUser(
+        email: email, phone: phone, password: password, confirmsEmail: true, confirmsPhone: true)
+    )
+    defer { Task { try? await admin.deleteUser(id: created.id) } }
+
+    let session = try await authClient.signIn(email: email, password: password)
+    let phoneIdentity = try #require(session.user.identities?.first { $0.provider == "phone" })
+
+    try await expectAuthEvents([.initialSession, .userUpdated]) {
+      try await authClient.unlinkIdentity(phoneIdentity)
+    }
+
+    let user = try #require(authClient.currentUser)
+    #expect(user.identities?.map(\.provider) == ["email"])
+    #expect(user.appMetadata["providers"] == ["email"])
+    #expect(user.phone == nil)
+    let serverUser = try await authClient.user()
+    expectNoDifference(user, serverUser)
+  }
+
+  @Test
   func resetPassword() async throws {
     let email = mockEmail()
     try await authClient.resetPassword(email: email)
