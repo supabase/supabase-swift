@@ -243,7 +243,7 @@ extension RealtimeClient {
     var record = ChannelRecord(topic: channel.topic, configuration: RealtimeChannelConfiguration())
     record.phase = .subscribed(joinRef: "1")
     record.hasBeenSubscribed = true
-    record.serverChanges = serverChanges
+    record.serverChanges = serverChanges.map { ServerPostgresBinding($0) }
     core.channels.setRecord(record, for: channel.id)
   }
 

@@ -356,8 +356,58 @@ struct RealtimeCorePostgresTests {
           ])))
 
     let serverChanges = harness.core.channels[.room]?.serverChanges
-    #expect(serverChanges == [Self.messages])
-    #expect(serverChanges?.map(\.id) == [7])
+    #expect(serverChanges == [ServerPostgresBinding(Self.messages, id: 7)])
+  }
+
+  /// The server may echo an event value this SDK does not know. The join still succeeds.
+  @Test
+  func unknownEchoedEventDoesNotFailTheJoin() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(
+      Self.subscribe(w, configuration: Self.serverWaits, snapshot: Self.withMessages))
+
+    #expect(
+      harness.send(
+        .frame(
+          Self.reply(
+            ref: "1",
+            response: [
+              "postgres_changes": [
+                ["event": "TRUNCATE", "schema": "public", "table": "messages", "id": 7]
+              ]
+            ]))) == [
+          .resume(w, .success),
+          .publishChannelStatus(.room, .subscribed),
+          .cancel(.joinTimeout(channel: .room, ref: "1")),
+        ])
+    #expect(harness.core.channels[.room]?.serverChanges.map(\.event) == ["TRUNCATE"])
+  }
+
+  /// One echoed binding that does not decode is skipped. The others still drive matching.
+  @Test
+  func unreadableEchoedBindingIsSkipped() {
+    var harness = CoreHarness.connected()
+    let w = harness.waiter()
+    _ = harness.send(
+      Self.subscribe(w, configuration: Self.serverWaits, snapshot: Self.withMessages))
+
+    #expect(
+      harness.send(
+        .frame(
+          Self.reply(
+            ref: "1",
+            response: [
+              "postgres_changes": [
+                ["event": "INSERT", "schema": "public", "table": "messages", "id": 7],
+                ["event": "INSERT", "schema": 5],
+              ]
+            ]))) == [
+          .resume(w, .success),
+          .publishChannelStatus(.room, .subscribed),
+          .cancel(.joinTimeout(channel: .room, ref: "1")),
+        ])
+    #expect(harness.core.channels[.room]?.serverChanges.map(\.id) == [7])
   }
 
   @Test
@@ -368,7 +418,7 @@ struct RealtimeCorePostgresTests {
     let unreadable: JSONValue = "not a list"
     let decodingError = try #require(
       #expect(throws: (any Error).self) {
-        try unreadable.decode(as: [PostgresJoinConfig].self)
+        try unreadable.decode(as: [ServerPostgresBinding.Lossy].self)
       })
     let failure = RealtimeError.unreadableJoinReply(decodingError)
 
