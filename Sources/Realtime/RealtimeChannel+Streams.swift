@@ -62,8 +62,8 @@ extension RealtimeChannel {
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name, or `nil` to match all tables.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
-  ///   - select: Restricts the change payload to a subset of columns. Requires an explicit
-  ///     `schema` and `table`.
+  ///   - select: Restricts the change payload to the listed columns. The server always adds
+  ///     the primary key columns. Requires an explicit `schema` and `table`.
   /// - Returns: An `AsyncStream` of ``PostgresChange`` values.
   public func postgresChanges(
     event: PostgresChangeEvent = .all,
@@ -103,7 +103,8 @@ extension RealtimeChannel {
   ///   - schema: The database schema. Defaults to `"public"`.
   ///   - table: The table name.
   ///   - filter: An optional ``RealtimePostgresFilter`` to narrow the rows.
-  ///   - select: Restricts the change payload to a subset of columns.
+  ///   - select: Restricts the change payload to the listed columns. The server always adds
+  ///     the primary key columns.
   ///   - decoder: The decoder ``TypedPostgresChange/row()`` uses. `nil` uses
   ///     `JSONDecoder.supabase()`.
   /// - Returns: An `AsyncStream` of ``TypedPostgresChange`` values.
