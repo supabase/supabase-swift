@@ -85,7 +85,7 @@ struct VersioningTests {
     #expect(sent.value.map(\.request.method) == [.delete])
     #expect(
       sent.value.map(\.body) == [
-        #"{"prefixes":[{"path":"\/a\/\/b.png","versionId":"v1"},{"path":"c.png","versionId":"v2"}]}"#
+        #"{"prefixes":[{"path":"a\/b.png","versionId":"v1"},{"path":"c.png","versionId":"v2"}]}"#
       ])
   }
 }

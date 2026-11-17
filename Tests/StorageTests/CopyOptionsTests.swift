@@ -26,7 +26,7 @@ struct CopyOptionsTests {
     let bucket = try Self.makeBucket(
       sent: sent, response: #"{"Id":"8B1F9F4E-2C61-4E3A-9D53-0F1D2B4C6A7E","Key":"bucket/b.png"}"#)
 
-    let copy = try await bucket.copy(from: "a.png", to: "b.png")
+    let copy = try await bucket.copy(from: "a.png", to: "/b.png")
 
     #expect(copy.id == UUID(uuidString: "8B1F9F4E-2C61-4E3A-9D53-0F1D2B4C6A7E"))
     #expect(copy.path == "b.png")

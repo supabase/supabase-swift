@@ -126,15 +126,14 @@ struct StorageBucketPathTests {
   @Test(
     arguments: operations,
     [
-      ("/folder//my file+#?%.png/", "/folder//my%20file%2B%23%3F%25.png/"),
-      ("café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
-      ("a/../b/./c.png", "a/%2E%2E/b/%2E/c.png"),
-      ("", ""),
+      ("/folder//my file+#?%.png", "folder/my file+#?%.png", "folder/my%20file%2B%23%3F%25.png"),
+      ("/folder//sub/", "folder/sub/", "folder/sub/"),
+      ("café/文件.png", "café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
     ]
   )
-  func sendsTheKeyAsWritten(operation: Operation, input: (raw: String, encoded: String))
-    async throws
-  {
+  func sendsTheNormalizedKey(
+    operation: Operation, input: (raw: String, path: String, encoded: String)
+  ) async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
     let bucket = try makeSUT(response: operation.response, requests: requests, bodies: bodies)
@@ -143,35 +142,47 @@ struct StorageBucketPathTests {
 
     switch operation.placement {
     case .url:
-      let target = try #require(url?.path(percentEncoded: true) ?? requests.value.first?.path)
-      let path = String(target.prefix { $0 != "?" })
+      let path = try #require(url?.path(percentEncoded: true) ?? requests.value.first?.path)
       #expect(path.hasPrefix("/storage/v1/"))
-      #expect(path.hasSuffix("/bucket/\(input.encoded)"))
+      #expect(path.contains("/bucket/\(input.encoded)"))
     case .body:
       let body = try #require(bodies.value.first)
       let json = String(decoding: body, as: UTF8.self)
-      let escaped = input.raw.replacingOccurrences(of: "/", with: "\\/")
-      #expect(json.contains("\"\(escaped)\""))
+      #expect(json.contains(input.path.replacingOccurrences(of: "/", with: "\\/")))
     }
   }
 
-  @Test
-  func returnsThePathAsWritten() async throws {
+  @Test(
+    arguments: operations.filter { $0.name != "list" && $0.name != "publicURL" },
+    ["a/../b.png", "./a.png", "a/./b.png", ".."])
+  func refusesADotSegmentBeforeSending(operation: Operation, input: String) async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
-    let bucket = try makeSUT(
-      response: #"{"Key":"bucket\/\/a\/\/b\/","url":"/object/upload/sign/bucket//a//b/?token=t"}"#,
-      requests: requests, bodies: bodies)
+    let bucket = try makeSUT(response: operation.response, requests: requests, bodies: bodies)
 
-    #expect(try await bucket.upload(path: "/a//b/", data: Data()).path == "/a//b/")
-    #expect(try await bucket.copy(from: "x", to: "/a//b/").path == "/a//b/")
-    #expect(try await bucket.createSignedUploadURL(path: "/a//b/").path == "/a//b/")
-    #expect(
-      try await bucket.uploadToSignedURL(path: "/a//b/", token: "t", data: Data()).path == "/a//b/")
+    await #expect {
+      try await operation.run(bucket, input)
+    } throws: { error in
+      (error as? StorageError)?.kind == .invalidRequest
+    }
+    #expect(requests.value.isEmpty)
+  }
+
+  @Test(arguments: [
+    ("a/../b.png", "/storage/v1/object/public/bucket/a/%2E%2E/b.png"),
+    ("./a.png", "/storage/v1/object/public/bucket/%2E/a.png"),
+    ("", "/storage/v1/object/public/bucket/"),
+  ])
+  func publicURLEncodesWhatOtherMethodsRefuse(input: String, path: String) throws {
+    let requests = LockIsolated<[HTTPRequest]>([])
+    let bodies = LockIsolated<[Data]>([])
+    let bucket = try makeSUT(response: "", requests: requests, bodies: bodies)
+
+    #expect(bucket.publicURL(path: input).path(percentEncoded: true) == path)
   }
 
   @Test
-  func listSendsTheSlashPrefixAsWritten() async throws {
+  func listAcceptsTheEmptyPrefix() async throws {
     let requests = LockIsolated<[HTTPRequest]>([])
     let bodies = LockIsolated<[Data]>([])
     let bucket = try makeSUT(response: "[]", requests: requests, bodies: bodies)
@@ -179,7 +190,7 @@ struct StorageBucketPathTests {
     _ = try await bucket.list(path: "/")
 
     let json = try String(decoding: #require(bodies.value.first), as: UTF8.self)
-    #expect(json.contains(#""prefix":"\/""#))
+    #expect(json.contains(#""prefix":"""#))
   }
 
   @Test

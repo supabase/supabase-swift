@@ -419,8 +419,9 @@ final class StorageBucketIntegrationTests {
     ("a?b.png", "a?b.png"),
     ("a;b=c&d.png", "a;b=c&d.png"),
     ("a:b@c!d$e'(f)*g,h.png", "a:b@c!d$e'(f)*g,h.png"),
-    ("/leading/slash.png", "/leading/slash.png"),
-    ("double//slash/x.png", "double//slash/x.png"),
+    // The gateway drops a leading `/` and collapses `//`; the SDK reports the key it stores.
+    ("/leading/slash.png", "leading/slash.png"),
+    ("double//slash/x.png", "double/slash/x.png"),
     ("trailing/slash.png/", "trailing/slash.png/"),
   ]
 
@@ -480,29 +481,37 @@ final class StorageBucketIntegrationTests {
     #expect(error?.message == "Invalid key: \(input)")
   }
 
-  @Test(arguments: ["", "/", "//", "a/../b.png", "./a.png", "folder/./a.png"])
-  func sendsAnyPathToStorage(input: String) async throws {
+  @Test(arguments: ["", "/", "//"])
+  func sendsAnEmptyPathToStorage(input: String) async throws {
     let error = await StorageIntegration.storageError {
       _ = try await storage.from(bucketName).download(path: input)
     }
 
     #expect(error?.kind == .server)
-    #expect(error?.response != nil)
+    #expect(error?.code == .invalidKey)
+  }
+
+  @Test(arguments: ["a/../b.png", "./a.png", "folder/./a.png"])
+  func refusesADotSegmentWithoutARequest(input: String) async throws {
+    let error = await StorageIntegration.storageError {
+      _ = try await storage.from(bucketName).download(path: input)
+    }
+
+    #expect(error?.kind == .invalidRequest)
+    #expect(error?.response == nil)
   }
 
   @Test
-  func listSendsThePrefixAsWritten() async throws {
+  func listAcceptsAnyFolderSpelling() async throws {
     let api = storage.from(bucketName)
     try await api.upload(path: "nested/deeper/a.txt", data: file)
 
-    for prefix in ["nested/deeper", "nested/deeper/"] {
+    for prefix in ["nested/deeper", "/nested/deeper", "nested//deeper/", "nested/deeper/"] {
       #expect(try await api.list(path: prefix).map(\.name) == ["a.txt"], "prefix \(prefix)")
     }
     #expect(try await api.list(path: "nested").map(\.name) == ["deeper"])
     #expect(try await api.list().map(\.name) == ["nested"])
-    // A leading `/` is part of the prefix: no key here starts with one.
-    #expect(try await api.list(path: "/nested/deeper").isEmpty)
-    #expect(try await api.list(path: "/").isEmpty)
+    #expect(try await api.list(path: "/").map(\.name) == ["nested"])
   }
 
   @Test
@@ -822,7 +831,7 @@ final class StorageBucketIntegrationTests {
 
     #expect(
       api.publicURL(path: "/folder//my file.png").absoluteString
-        == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)//folder//my%20file.png")
+        == "\(DotEnv.supabaseURL)/storage/v1/object/public/\(bucketName)/folder/my%20file.png")
     #expect(
       api.publicURL(path: "a+b.png", options: PublicURLOptions(download: .named("x y.png")))
         .absoluteString

@@ -136,7 +136,7 @@ public struct StorageBucket: Sendable {
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let response = try await sendUpload(
       api.requests.upload(method: method, bucket: id, key: key, body: body, options: options),
       progress: progress)
@@ -256,7 +256,7 @@ public struct StorageBucket: Sendable {
     fileURL: URL,
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
     let fingerprint = try ResumableStore.fingerprint(
       url: api.configuration.url, bucketID: id, path: key.path, fileURL: fileURL)
@@ -285,7 +285,7 @@ public struct StorageBucket: Sendable {
     data: Data,
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let fingerprint = ResumableStore.fingerprint(
       url: api.configuration.url, bucketID: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
@@ -425,7 +425,7 @@ public struct StorageBucket: Sendable {
     sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
-    let destinationKey = ObjectKey(destination)
+    let destinationKey = try ObjectKey(destination)
     let response = try await api.execute(
       api.requests.copy(
         bucket: id, source: ObjectKey(source), destination: destinationKey,
@@ -509,7 +509,7 @@ public struct StorageBucket: Sendable {
   ) async throws -> [SignedURLResult] {
     let response = try await api.execute(
       api.requests.sign(
-        bucket: id, keys: paths.map { ObjectKey($0) }, expiresIn: Self.seconds(expiresIn))
+        bucket: id, keys: paths.map { try ObjectKey($0) }, expiresIn: Self.seconds(expiresIn))
     )
     .decoded(as: [SignedURLsAPIResponse].self)
 
@@ -556,7 +556,7 @@ public struct StorageBucket: Sendable {
   @discardableResult
   public func remove(paths: [String]) async throws -> [StorageObject] {
     try await api.execute(
-      api.requests.remove(bucket: id, keys: paths.map { ObjectKey($0) })
+      api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) })
     )
     .decoded()
   }
@@ -580,7 +580,7 @@ public struct StorageBucket: Sendable {
   public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.remove(
-        bucket: id, versions: versions.map { (ObjectKey($0.path), $0.versionID) })
+        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionID) })
     )
     .decoded()
   }
@@ -737,7 +737,7 @@ public struct StorageBucket: Sendable {
   ///
   /// Never throws: the base URL was validated when the client was created and every path is
   /// percent-encoded into a valid URL. Whether Storage accepts the key is Storage's call, as it
-  /// is for every other method.
+  /// is for every other method; a `.` or `..` segment is sent encoded rather than refused.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
@@ -752,7 +752,7 @@ public struct StorageBucket: Sendable {
       query.append(URLQueryItem(name: "versionId", value: versionID))
     }
     return api.requests.publicURL(
-      bucket: id, key: ObjectKey(path), transform: options.transform?.queryItems ?? [],
+      bucket: id, key: ObjectKey(lenient: path), transform: options.transform?.queryItems ?? [],
       query: query)
   }
 
@@ -785,7 +785,7 @@ public struct StorageBucket: Sendable {
       let url: String
     }
 
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let response = try await api.execute(
       api.requests.createSignedUploadURL(bucket: id, key: key, upsert: upsert)
     )
@@ -899,7 +899,7 @@ public struct StorageBucket: Sendable {
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let response = try await sendUpload(
       api.requests.uploadToSignedURL(
         bucket: id, key: key, token: token, body: body, options: options),

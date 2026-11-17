@@ -512,7 +512,7 @@ public actor ResumableUpload {
   private func createRecord(source: ResumableSource, with tus: TusSession) async throws
     -> ResumableUploadRecord
   {
-    let key = ObjectKey(path)
+    let key = try ObjectKey(path)
     let (_, modificationDate) = try ResumableStore.attributes(
       of: store.fileURL(for: source, fingerprint: fingerprint))
     let created = try await tus.create(

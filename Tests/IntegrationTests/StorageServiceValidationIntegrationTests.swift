@@ -10,7 +10,8 @@ import Storage
 import Testing
 
 /// Values the SDK sends as written, with Storage's own answer: "Validation belongs to the
-/// service".
+/// service". Object paths are the exception: the API gateway rewrites them, so the SDK applies the
+/// same rewrite and refuses a dot segment the gateway would resolve.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["INTEGRATION_TESTS"] != nil))
 final class StorageServiceValidationIntegrationTests {
   let storage = StorageIntegration.admin
@@ -83,38 +84,37 @@ final class StorageServiceValidationIntegrationTests {
   }
 
   @Test
-  func rawSlashesRoundTripAsTheirOwnKey() async throws {
+  func slashesBecomeTheKeyTheGatewayStores() async throws {
     let bucket = storage.from(bucketName)
-    let key = "/a//b/"
+    let input = "/a//b/"
 
-    let uploaded = try await bucket.upload(path: key, data: Data("slashes".utf8))
+    let uploaded = try await bucket.upload(path: input, data: Data("slashes".utf8))
 
-    #expect(uploaded.path == key)
-    #expect(uploaded.fullPath == "\(bucketName)/\(key)")
-    #expect(try await bucket.download(path: key).data() == Data("slashes".utf8))
-    #expect(try await bucket.exists(path: "a/b") == false)
+    #expect(uploaded.path == "a/b/")
+    #expect(uploaded.fullPath == "\(bucketName)/a/b/")
+    #expect(try await bucket.download(path: input).data() == Data("slashes".utf8))
     let names = try await bucket.objects(options: ObjectListingOptions(delimited: false)).page()
       .objects.map(\.name)
-    #expect(names == [key])
+    #expect(names == ["a/b/"])
 
-    try await bucket.remove(paths: [key])
-    #expect(try await bucket.exists(path: key) == false)
+    // Keys in a JSON body get the same rewrite, so removing by the same spelling works.
+    try await bucket.remove(paths: [input])
+    #expect(try await bucket.exists(path: "a/b/") == false)
   }
 
   @Test
-  func aDotSegmentReachesTheServiceAndChangesNoOtherKey() async throws {
+  func aDotSegmentIsRefusedBeforeItCanOverwriteAnotherKey() async throws {
     let bucket = storage.from(bucketName)
     _ = try await bucket.upload(path: "d/y.txt", data: Data("original".utf8))
 
+    // Through the gateway, `d/x/../y.txt` reaches Storage as `d/y.txt`, even as `%2E%2E`.
     for path in ["d/x/../y.txt", "d/./y.txt"] {
       let error = await StorageIntegration.storageError {
         _ = try await bucket.upload(
           path: path, data: Data("other".utf8), options: UploadOptions(upsert: true))
       }
-      // The local file backend refuses the key (`InvalidKey`), but its failed cleanup masks the
-      // answer as a 500 `InternalError`. Either way the refusal is Storage's, not the SDK's.
-      #expect(error?.kind == .server)
-      #expect([.invalidKey, .internalError].contains(error?.code))
+      #expect(error?.kind == .invalidRequest)
+      #expect(error?.response == nil)
     }
 
     #expect(try await bucket.download(path: "d/y.txt").data() == Data("original".utf8))

@@ -143,7 +143,7 @@ extension StorageBucket {
   ///     `"2026"` also matches `"2026-old/a.png"`. Empty lists the whole bucket.
   ///   - options: Page size, folder style, sort and filters.
   /// - Returns: The listing. Iterating it, or calling its `page(after:)`, throws ``StorageError`` if
-  ///   a request fails or the caller is not authorized.
+  ///   a request fails, the caller is not authorized, or `prefix` has a `.` or `..` segment.
   public func objects(
     prefix: String = "",
     options: ObjectListingOptions = ObjectListingOptions()

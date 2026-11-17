@@ -554,7 +554,7 @@ public struct UploadedObject: Hashable, Sendable {
   /// upload, which Storage answers without one.
   public var id: UUID?
 
-  /// The file path within the bucket, as provided to the upload call.
+  /// The file path within the bucket, normalized as the gateway stores it.
   public var path: String
 
   /// The full storage key including the bucket name, e.g. `"avatars/user123.png"`.

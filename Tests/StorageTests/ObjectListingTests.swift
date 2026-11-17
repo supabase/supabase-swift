@@ -114,7 +114,7 @@ struct ObjectListingTests {
 
     #expect(
       bodies.value == [
-        #"{"deleteMarkers":"include","exactMatch":true,"noncurrentVersions":"only","prefix":"\/\/a\/\/b","sortBy":{"column":"name","order":"desc"},"with_delimiter":false}"#
+        #"{"deleteMarkers":"include","exactMatch":true,"noncurrentVersions":"only","prefix":"a\/b","sortBy":{"column":"name","order":"desc"},"with_delimiter":false}"#
       ])
   }
 
@@ -144,12 +144,12 @@ struct ObjectListingTests {
   }
 
   @Test
-  func sendsADotSegmentPrefixAsWritten() async throws {
-    let bodies = LockIsolated<[String]>([])
-    let bucket = try Self.makeBucket(bodies: bodies, responses: [Self.lastPage])
+  func aDotSegmentThrowsWhenIterated() async throws {
+    let bucket = try Self.makeBucket(responses: [])
 
-    _ = try await bucket.objects(prefix: "a/../b").page()
-
-    #expect(bodies.value == [#"{"prefix":"a\/..\/b","with_delimiter":true}"#])
+    let error = await #expect(throws: StorageError.self) {
+      _ = try await bucket.objects(prefix: "a/../b").page()
+    }
+    #expect(error?.kind == .invalidRequest)
   }
 }
