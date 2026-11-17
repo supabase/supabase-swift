@@ -100,9 +100,13 @@ struct RealtimeShellTests {
 
   @Test
   func rejoinBackoffWaitsOneTwoFiveThenTenSeconds() async throws {
+    // The run spans 68 s of test clock. The host never acknowledges a heartbeat, so with the
+    // default 25 s interval the client would drop the socket at 50 s and reconnect in the same
+    // clock advance as the fifth join, which makes the join's timing depend on task scheduling.
     let host = await RealtimeTestHost(
       configuration: RealtimeClient.Configuration(
         url: RealtimeTestHost.url,
+        heartbeatInterval: .seconds(3600),
         requestTimeout: .seconds(10),
         observesAppLifecycle: false))
     let channel = await host.client.channel("room")
