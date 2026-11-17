@@ -38,6 +38,11 @@ Changes that still compile but behave differently. Check each one by hand.
   no longer contains the SDK's default `X-Client-Info`. The client still sends it on every
   request unless you set that header. Search for code that reads
   `configuration.headers[.xClientInfo]`.
+- **Unset options are left out of the request.** An upload without `upsert` sends no `x-upsert`
+  header, and a `list` call sends no `limit`, `offset` or `sortBy` that you did not set. Storage
+  applies its own defaults: no overwrite, 100 entries from offset 0, sorted by name ascending.
+  A `sortBy` without `order` sends no order, and Storage sorts ascending. Update any proxy rule
+  or test fixture that expects these fields.
 
 ## Renames and type changes
 
@@ -128,7 +133,8 @@ file that is too large.
 
 ## `UploadOptions` replaces `FileOptions`
 
-`cacheControl` is a `CacheControl`, not a string of seconds. `headers` is `HTTPFields`. `duplex`
+`cacheControl` is a `CacheControl`, not a string of seconds. `upsert` is a `Bool?`; `nil` (the
+default) lets Storage decide, and Storage does not overwrite. `headers` is `HTTPFields`. `duplex`
 is removed. `uploadToSignedURL` takes `UploadOptions`, not `UploadOptions?`.
 
 ```swift

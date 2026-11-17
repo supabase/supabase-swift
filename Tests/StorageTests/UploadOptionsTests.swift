@@ -11,7 +11,7 @@ struct UploadOptionsTests {
     #expect(options.cacheControl == .maxAge(.seconds(3600)))
     #expect(options.cacheControl.rawValue == "max-age=3600")
     #expect(options.contentType == nil)
-    #expect(!options.upsert)
+    #expect(options.upsert == nil)
     #expect(options.metadata == nil)
     #expect(options.headers.isEmpty)
   }
@@ -29,7 +29,7 @@ struct UploadOptionsTests {
 
     #expect(options.cacheControl == .noCache)
     #expect(options.contentType == "image/jpeg")
-    #expect(options.upsert)
+    #expect(options.upsert == true)
     #expect(options.metadata?["key"] == .string("value"))
     #expect(options.headers[.init("X-Mode")!] == "test")
   }
