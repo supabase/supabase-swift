@@ -61,7 +61,7 @@ public struct PresenceEntry: Sendable, Hashable {
 /// The clients present on a channel, by presence key.
 ///
 /// Read it with ``RealtimeChannel/presenceState`` or observe it with
-/// ``RealtimeChannel/presenceStates()``.
+/// ``RealtimeChannel/presenceStates(bufferingPolicy:)``.
 ///
 /// ## Topics
 /// ### Properties

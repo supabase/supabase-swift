@@ -61,7 +61,7 @@ import Helpers
 /// - ``httpSend(event:data:timeout:)``
 /// ### Presence
 /// - ``presenceState``
-/// - ``presenceStates()``
+/// - ``presenceStates(bufferingPolicy:)``
 /// - ``presenceChanges()``
 /// - ``track(_:encoder:)``
 /// - ``untrack()``
@@ -69,7 +69,7 @@ import Helpers
 /// - ``postgresChanges(event:schema:table:filter:select:)``
 /// - ``postgresChanges(of:event:schema:table:filter:select:decoder:)``
 /// ### Broadcast Events
-/// - ``broadcasts(event:)``
+/// - ``broadcasts(event:bufferingPolicy:)``
 /// ### Channel Events
 /// - ``events()``
 public final class RealtimeChannel: Sendable, Hashable {
@@ -267,7 +267,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// The state is empty until the first sync after ``subscribe()`` and after ``unsubscribe()``.
   /// After a rejoin it keeps the last known clients until the server sends the new state. A
   /// removed channel, or one whose client was released, reads an empty state. To follow the
-  /// state, use ``presenceStates()``.
+  /// state, use ``presenceStates(bufferingPolicy:)``.
   public var presenceState: PresenceState {
     get async { await client?.presenceState(of: self) ?? PresenceState() }
   }

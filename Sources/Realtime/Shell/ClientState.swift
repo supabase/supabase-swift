@@ -114,13 +114,16 @@ final class Fanout<Element: Sendable> {
   /// the fan-out retains one.
   ///
   /// `filter` applies to yielded elements only; the current element is always replayed.
+  /// `bufferingPolicy` sets what the stream keeps while its consumer is slow.
   /// `onTermination` runs when the consumer ends the stream, never when ``finish()`` does.
   func subscribe(
     _ id: StreamID,
     where filter: ((Element) -> Bool)? = nil,
+    bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded,
     onTermination: @escaping @Sendable () -> Void
   ) -> AsyncStream<Element> {
-    let (stream, continuation) = AsyncStream.makeStream(of: Element.self)
+    let (stream, continuation) = AsyncStream.makeStream(
+      of: Element.self, bufferingPolicy: bufferingPolicy)
     if let current { continuation.yield(current) }
     guard !isFinished else {
       continuation.finish()

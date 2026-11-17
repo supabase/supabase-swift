@@ -55,6 +55,40 @@ struct RealtimeChannelPresenceTests {
   }
 
   @Test
+  func presenceStatesSkipToTheLatestStateForASlowConsumer() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var states = await channel.presenceStates().makeAsyncIterator()
+    var changes = await channel.presenceChanges().makeAsyncIterator()
+    try await subscribe(channel, on: host)
+
+    sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
+    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
+    _ = await changes.next()
+    _ = await changes.next()
+
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1", "u2"])
+  }
+
+  @Test
+  func unboundedPresenceStatesKeepEveryStateForASlowConsumer() async throws {
+    let host = await RealtimeTestHost()
+    let channel = await host.client.channel("room")
+    var states = await channel.presenceStates(bufferingPolicy: .unbounded).makeAsyncIterator()
+    var changes = await channel.presenceChanges().makeAsyncIterator()
+    try await subscribe(channel, on: host)
+
+    sendPresenceState(["u1": metas([("r1", "ana")])], on: channel, host: host)
+    sendPresenceDiff(joins: ["u2": metas([("r2", "bo")])], on: channel, host: host)
+    _ = await changes.next()
+    _ = await changes.next()
+
+    #expect(await states.next() == PresenceState())
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1"])
+    #expect(await states.next().map { Set($0.entries.keys) } == ["u1", "u2"])
+  }
+
+  @Test
   func presenceStatesAloneEnablePresenceOnJoin() async throws {
     let host = await RealtimeTestHost()
     let channel = await host.client.channel("room")

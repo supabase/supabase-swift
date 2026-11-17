@@ -110,7 +110,7 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// Whether the channel asks the server for presence even when no presence stream is open at
     /// ``RealtimeChannel/subscribe()``. Defaults to `false`.
     ///
-    /// Set it when the app opens ``RealtimeChannel/presenceStates()`` or
+    /// Set it when the app opens ``RealtimeChannel/presenceStates(bufferingPolicy:)`` or
     /// ``RealtimeChannel/presenceChanges()`` only after the channel subscribes, such as from a
     /// view that appears later, or reads ``RealtimeChannel/presenceState`` with no stream open.
     public var isEnabled = false
