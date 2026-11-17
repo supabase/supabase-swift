@@ -111,7 +111,10 @@ struct TypegenTests {
       "option '--access-control' expects public or internal, got 'private'"
     ),
     (["public"], "unexpected argument 'public'"),
-    (["--schema", "nope"], "the document has no schema 'nope'; it has 'public'"),
+    (
+      ["--schema", "nope"],
+      "the document has no schema 'nope'; it has 'personal', 'public', 'realtime_test'"
+    ),
   ])
   func badOptionPrintsUsageWithExitCode64(arguments: [String], message: String) {
     let result = SupabaseTypegen.run(arguments: arguments) { Fixture.integration }
