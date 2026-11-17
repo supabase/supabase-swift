@@ -300,14 +300,16 @@ struct PostgrestTransformBuilderTests {
       .get, url.appendingPathComponent("countries"),
       data: Data(
         """
-        {
-          "name": "United States"
-        }
+        [
+          {
+            "name": "United States"
+          }
+        ]
         """.utf8)
     ) {
       #"""
       curl \
-      	--header "Accept: application/vnd.pgrst.object+json" \
+      	--header "Accept: application/json" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: postgrest-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
@@ -703,26 +705,19 @@ struct PostgrestTransformBuilderTests {
   @Test
   func maybeSingleFlagSurvivesALaterTransformCall() async throws {
     transport.stub(
-      .get, url.appendingPathComponent("users"), status: 406,
-      data: Data(
-        """
-        {
-          "code": "PGRST116",
-          "details": "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row",
-          "message": "JSON object requested, multiple (or no) rows returned"
-        }
-        """.utf8
-      ))
+      .get, url.appendingPathComponent("users"),
+      data: Data(#"[{"id":1,"username":"a"},{"id":2,"username":"b"}]"#.utf8))
 
-    let user: User? =
-      try await sut
-      .from("users")
-      .select()
-      .maybeSingle()
-      .order("id")
-      .execute()
-      .value
-
-    #expect(user == nil)
+    let error = await #expect(throws: PostgrestError.self) {
+      let _: User? =
+        try await sut
+        .from("users")
+        .select()
+        .maybeSingle()
+        .order("id")
+        .execute()
+        .value
+    }
+    #expect(error?.code == "PGRST116")
   }
 }

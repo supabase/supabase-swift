@@ -276,25 +276,6 @@ extension PostgrestError {
   }
 }
 
-extension PostgrestError.ServerError {
-  /// Whether a `PGRST116` error was caused by the query matching zero rows, as opposed to more
-  /// than one row.
-  ///
-  /// PostgREST reports both cases with the same error code; the row count is only distinguishable
-  /// via the `details` message. The exact wording has varied across PostgREST versions, e.g.
-  /// "Results contain 0 rows, application/vnd.pgrst.object+json requires 1 row" and "The result
-  /// contains 0 rows". Both mention the matched row count immediately before a "row"/"rows" word,
-  /// so look for that instead of matching a fixed prefix.
-  var matchedZeroRows: Bool {
-    guard let details else { return false }
-    let words = details.split(separator: " ")
-    guard let rowsIndex = words.firstIndex(where: { $0.hasPrefix("row") }), rowsIndex > 0,
-      let count = Int(words[rowsIndex - 1])
-    else { return false }
-    return count == 0
-  }
-}
-
 extension JSONEncoder {
   /// Encodes a request body as JSON.
   ///
