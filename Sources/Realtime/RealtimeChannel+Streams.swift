@@ -30,20 +30,29 @@ extension RealtimeChannel {
   /// Returns an async stream of the channel's presence state.
   ///
   /// The stream emits ``presenceState`` at once, then the new state after every presence sync
-  /// that changes it. By default the stream keeps only the latest state: a consumer that falls
-  /// behind skips the states in between and reads the current one. To see every state, pass
-  /// `.unbounded`.
+  /// that changes it. The stream keeps only the latest state: a consumer that falls behind skips
+  /// the states in between and reads the current one. To see every state, use
+  /// ``presenceStates(bufferingPolicy:)`` with `.unbounded`.
   ///
   /// Having a presence stream open when ``subscribe()`` runs is what enables presence on the
   /// channel, so open it before subscribing. Opening one after ``subscribe()`` reports an issue
   /// and returns a stream that ends at once. The stream ends when the iterating task is
   /// cancelled or the channel is removed.
   ///
-  /// - Parameter bufferingPolicy: What the stream keeps while the consumer is slow. Defaults to
-  ///   `.bufferingNewest(1)`.
+  /// - Returns: An `AsyncStream` of ``PresenceState`` values.
+  public func presenceStates() async -> AsyncStream<PresenceState> {
+    await presenceStates(bufferingPolicy: .bufferingNewest(1))
+  }
+
+  /// Returns an async stream of the channel's presence state, with a buffering policy.
+  ///
+  /// The stream works like ``presenceStates()``, which keeps only the latest state. Pass
+  /// `.unbounded` to keep every state until you read it.
+  ///
+  /// - Parameter bufferingPolicy: What the stream keeps while the consumer is slow.
   /// - Returns: An `AsyncStream` of ``PresenceState`` values.
   public func presenceStates(
-    bufferingPolicy: AsyncStream<PresenceState>.Continuation.BufferingPolicy = .bufferingNewest(1)
+    bufferingPolicy: AsyncStream<PresenceState>.Continuation.BufferingPolicy
   ) async -> AsyncStream<PresenceState> {
     await client?.presenceStates(of: self, bufferingPolicy: bufferingPolicy) ?? .finished
   }
@@ -184,9 +193,22 @@ extension RealtimeChannel {
   /// ``BroadcastMessage/decode(as:decoder:)``, or switch over its ``BroadcastMessage/payload``.
   /// The stream ends when the iterating task is cancelled or the channel is removed.
   ///
-  /// By default the stream keeps every message until you read it. For a high-rate event where
-  /// only recent messages matter, such as cursor positions, pass a bounded policy. The stream
-  /// then drops messages when the consumer falls behind:
+  /// The stream keeps every message until you read it. For a high-rate event, use
+  /// ``broadcasts(event:bufferingPolicy:)`` with a bounded policy.
+  ///
+  /// - Parameter event: The broadcast event name to listen for. Pass `"*"` to receive every
+  ///   event.
+  /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
+  public func broadcasts(event: String) async -> AsyncStream<BroadcastMessage> {
+    await broadcasts(event: event, bufferingPolicy: .unbounded)
+  }
+
+  /// Returns an async stream of the broadcast messages for the given event, with a buffering
+  /// policy.
+  ///
+  /// The stream works like ``broadcasts(event:)``. For a high-rate event where only recent
+  /// messages matter, such as cursor positions, pass a bounded policy. The stream then drops
+  /// messages when the consumer falls behind:
   ///
   /// ```swift
   /// let cursors = await channel.broadcasts(event: "cursor", bufferingPolicy: .bufferingNewest(1))
@@ -194,12 +216,11 @@ extension RealtimeChannel {
   ///
   /// - Parameters:
   ///   - event: The broadcast event name to listen for. Pass `"*"` to receive every event.
-  ///   - bufferingPolicy: What the stream keeps while the consumer is slow. Defaults to
-  ///     `.unbounded`.
+  ///   - bufferingPolicy: What the stream keeps while the consumer is slow.
   /// - Returns: An `AsyncStream` of ``BroadcastMessage`` values.
   public func broadcasts(
     event: String,
-    bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy = .unbounded
+    bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy
   ) async -> AsyncStream<BroadcastMessage> {
     await client?.broadcasts(of: self, event: event, bufferingPolicy: bufferingPolicy)
       ?? .finished

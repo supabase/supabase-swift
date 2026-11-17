@@ -6,7 +6,7 @@ Show who is on a channel, across devices, without hitting the server's rate limi
 
 Each client shares a payload with ``RealtimeChannel/track(_:encoder:)``. The server keeps the
 set and sends it to every client on the channel. Read it with
-``RealtimeChannel/presenceState``, ``RealtimeChannel/presenceStates(bufferingPolicy:)`` or
+``RealtimeChannel/presenceState``, ``RealtimeChannel/presenceStates()`` or
 ``RealtimeChannel/presenceChanges()``.
 
 ```swift
@@ -39,7 +39,7 @@ presence stream is open at the time ``RealtimeChannel/subscribe()`` runs, or whe
 
 While presence is on, you can open a stream after you subscribe, for example from a view that
 appears later. The stream gets the changes from the next message on, and
-``RealtimeChannel/presenceStates(bufferingPolicy:)`` first yields the current state. Opened while presence is
+``RealtimeChannel/presenceStates()`` first yields the current state. Opened while presence is
 off, the stream reports an issue and finishes at once.
 
 ```swift

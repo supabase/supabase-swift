@@ -53,7 +53,7 @@ on. Presence and Postgres changes streams also shape the join request; see
 
 ### One stream per call
 
-Each call to a stream method, such as ``RealtimeChannel/broadcasts(event:bufferingPolicy:)`` or
+Each call to a stream method, such as ``RealtimeChannel/broadcasts(event:)`` or
 ``RealtimeChannel/statusChanges()``, opens a new, independent stream. Two consumers need two
 calls.
 
@@ -86,7 +86,7 @@ its actions throw ``RealtimeError/Kind-swift.struct/notConnected``.
 The server sends presence and Postgres changes only to a join that asks for them, so the
 streams you open before ``RealtimeChannel/subscribe()`` decide what the join requests.
 
-- A presence stream, ``RealtimeChannel/presenceStates(bufferingPolicy:)`` or
+- A presence stream, ``RealtimeChannel/presenceStates()`` or
   ``RealtimeChannel/presenceChanges()``, open before ``RealtimeChannel/subscribe()`` turns
   presence on for the join. On a channel that is joining or joined, a new presence stream works
   only when presence is on: a stream was open at subscribe,

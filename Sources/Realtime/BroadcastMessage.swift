@@ -17,7 +17,7 @@ public enum BroadcastPayload: Sendable, Hashable {
 
 /// A message sent to the channel with broadcast.
 ///
-/// Read it from ``RealtimeChannel/broadcasts(event:bufferingPolicy:)``:
+/// Read it from ``RealtimeChannel/broadcasts(event:)``:
 ///
 /// ```swift
 /// for await message in await channel.broadcasts(event: "cursor") {
