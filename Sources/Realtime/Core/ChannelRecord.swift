@@ -20,7 +20,7 @@ struct ChannelRecord {
   /// The bindings the last `phx_join` carried.
   var joinedBindings: [PostgresJoinConfig] = []
   /// The bindings the server echoed in the join reply, with their ids.
-  var serverChanges: [PostgresJoinConfig] = []
+  var serverChanges: [ServerPostgresBinding] = []
   var presence = PresenceTracker()
   /// Whether a track succeeded since the current `phx_join` was sent.
   var hasTrackedSinceJoin = false
