@@ -269,10 +269,7 @@ struct AuthAPITests {
     #expect(try body(api.signInAnonymously(userMetadata: [:], captchaToken: nil)) == [:])
 
     let otp = try api.signInWithOTP(phone: "1", options: PhoneOTPOptions(userMetadata: metadata))
-    #expect(
-      try body(otp) == [
-        "phone": "1", "channel": "sms", "create_user": true, "data": ["name": "Jane"],
-      ])
+    #expect(try body(otp) == ["phone": "1", "data": ["name": "Jane"]])
 
     let update = try api.updateUser(
       UpdateUser(userMetadata: metadata), redirectTo: nil, pkce: nil, accessToken: "t")
@@ -281,6 +278,54 @@ struct AuthAPITests {
       UpdateUser(email: "a@b.c", userMetadata: [:]), redirectTo: nil, pkce: nil,
       accessToken: "t")
     #expect(try body(emptyUpdate) == ["email": "a@b.c"])
+  }
+
+  @Test
+  func defaultOptionsLeaveServiceDefaultsOutOfTheRequest() throws {
+    let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+
+    let emailOTP = try api.signInWithOTP(email: "a@b.c", options: EmailOTPOptions(), pkce: nil)
+    #expect(try body(emailOTP) == ["email": "a@b.c"])
+
+    let phoneOTP = try api.signInWithOTP(phone: "1", options: PhoneOTPOptions())
+    #expect(try body(phoneOTP) == ["phone": "1"])
+
+    let phoneSignUp = try api.signUp(
+      phone: "1", password: "p", channel: SignUpOptions().channel, userMetadata: [:],
+      captchaToken: nil)
+    #expect(try body(phoneSignUp) == ["phone": "1", "password": "p"])
+
+    let delete = try api.adminDeleteUser(id: id, softDelete: nil)
+    #expect(delete.body == nil)
+
+    let invite = try api.adminInviteUser(email: "a@b.c", userMetadata: [:], redirectTo: nil)
+    #expect(try body(invite) == ["email": "a@b.c"])
+  }
+
+  @Test
+  func explicitOptionsAreSentEvenWhenTheyMatchTheServiceDefault() throws {
+    let id = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+
+    let emailOTP = try api.signInWithOTP(
+      email: "a@b.c", options: EmailOTPOptions(shouldCreateUser: true), pkce: nil)
+    #expect(try body(emailOTP) == ["email": "a@b.c", "create_user": true])
+
+    let phoneOTP = try api.signInWithOTP(
+      phone: "1", options: PhoneOTPOptions(shouldCreateUser: false, channel: .sms))
+    #expect(try body(phoneOTP) == ["phone": "1", "create_user": false, "channel": "sms"])
+
+    let phoneSignUp = try api.signUp(
+      phone: "1", password: "p", channel: .sms, userMetadata: [:], captchaToken: nil)
+    #expect(try body(phoneSignUp) == ["phone": "1", "password": "p", "channel": "sms"])
+
+    #expect(
+      try body(api.adminDeleteUser(id: id, softDelete: false)) == ["should_soft_delete": false])
+    #expect(
+      try body(api.adminDeleteUser(id: id, softDelete: true)) == ["should_soft_delete": true])
+
+    let invite = try api.adminInviteUser(
+      email: "a@b.c", userMetadata: ["name": "Jane"], redirectTo: nil)
+    #expect(try body(invite) == ["email": "a@b.c", "data": ["name": "Jane"]])
   }
 
   @Test

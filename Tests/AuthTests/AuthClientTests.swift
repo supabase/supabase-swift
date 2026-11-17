@@ -364,12 +364,12 @@ struct AuthClientTests {
       #"""
       curl \
       	--request POST \
-      	--header "Content-Length: 159" \
+      	--header "Content-Length: 143" \
       	--header "Content-Type: application/json" \
       	--header "X-Client-Info: auth-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
       	--header "X-Supabase-Api-Version: 2024-01-01" \
       	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "{\"channel\":\"sms\",\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\",\"phone\":\"+1 202-918-2132\"}" \
+      	--data "{\"data\":{\"custom_key\":\"custom_value\"},\"gotrue_meta_security\":{\"captcha_token\":\"dummy-captcha\"},\"password\":\"the.pass\",\"phone\":\"+1 202-918-2132\"}" \
       	"http://localhost:54321/auth/v1/signup"
       """#
     }

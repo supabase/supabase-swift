@@ -38,17 +38,19 @@ extension AuthAPI {
     userMetadata: JSONObject,
     redirectTo: URL?
   ) throws -> AuthRequest<User> {
-    try request(
+    var body: JSONObject = ["email": .string(email)]
+    body["data"] = userMetadata.nilIfEmpty.map(JSONValue.object)
+    return try request(
       .post, "invite", query: redirectQuery(redirectTo),
-      body: encodeBody(["email": .string(email), "data": .object(userMetadata)] as JSONObject),
+      body: encodeBody(body),
       decode: decoding(User.self)
     )
   }
 
-  func adminDeleteUser(id: UUID, softDelete: Bool) throws -> AuthRequest<Void> {
+  func adminDeleteUser(id: UUID, softDelete: Bool?) throws -> AuthRequest<Void> {
     try request(
       .delete, "admin/users/\(id)",
-      body: encodeBody(DeleteUserRequest(shouldSoftDelete: softDelete)),
+      body: softDelete.map { try encodeBody(DeleteUserRequest(shouldSoftDelete: $0)) },
       decode: ignoringBody)
   }
 

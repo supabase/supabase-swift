@@ -211,10 +211,11 @@ public struct AuthAdminClient: Sendable {
   /// - Parameters:
   ///   - id: The user's unique identifier.
   ///   - softDelete: When `true`, the server sets `deleted_at` and disables the account but
-  ///     keeps its data. When `false`, the server removes the user.
+  ///     keeps its data. When `false`, the server removes the user. When `nil`, the client sends
+  ///     no body and the server applies its default, which is to remove the user.
   /// - Throws: ``AuthError`` when the request fails. `CancellationError` when the task is
   ///   cancelled.
-  public func deleteUser(id: UUID, softDelete: Bool = false) async throws {
+  public func deleteUser(id: UUID, softDelete: Bool? = nil) async throws {
     try await api.execute(authAPI.adminDeleteUser(id: id, softDelete: softDelete))
   }
 
