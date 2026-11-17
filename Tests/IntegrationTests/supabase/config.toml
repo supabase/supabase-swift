@@ -217,6 +217,14 @@ message_service_sid = ""
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
+# The Docker stack turns off phone login when no provider is enabled, so enable MessageBird with
+# fake values. The phone tests use only the test numbers above, so Auth never calls MessageBird.
+# MessageBird supports only the `sms` channel, so `whatsapp` fails validation.
+[auth.sms.messagebird]
+enabled = true
+originator = "test-originator"
+access_key = "test-access-key"
+
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
 # Control how many MFA factors can be enrolled at once per user.

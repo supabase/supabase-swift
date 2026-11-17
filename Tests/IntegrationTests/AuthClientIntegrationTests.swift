@@ -479,9 +479,9 @@ struct AuthClientIntegrationTests {
     #expect(error?.response?.status == 422)
   }
 
-  /// Default options leave `channel` and `create_user` out. The local stack has no SMS provider, so
-  /// `whatsapp` is not a valid channel there: the default call passing proves that the server
-  /// picked `sms`. The number is a test number from `config.toml`, so the server sends no SMS.
+  /// Default options leave `channel` and `create_user` out. The local stack uses MessageBird, which
+  /// supports only `sms`, so `whatsapp` is not a valid channel there: the default call passing
+  /// proves that the server picked `sms`. The number is a test number from `config.toml`, so the server sends no SMS.
   @Test
   func signInWithPhoneOTPWithDefaultOptionsUsesSMS() async throws {
     let phone = "15550100001"
