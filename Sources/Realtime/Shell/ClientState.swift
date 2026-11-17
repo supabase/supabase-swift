@@ -60,7 +60,7 @@ enum SocketInput: Sendable {
 /// A Postgres change and the bindings the server matched it to.
 struct PostgresDelivery: Sendable, Equatable {
   let change: PostgresChange
-  let matched: [PostgresJoinConfig]
+  let matched: [ServerPostgresBinding]
 }
 
 /// Identifies one stream the client handed out. `channel` is `nil` for client streams.
@@ -114,13 +114,16 @@ final class Fanout<Element: Sendable> {
   /// the fan-out retains one.
   ///
   /// `filter` applies to yielded elements only; the current element is always replayed.
+  /// `bufferingPolicy` sets what the stream keeps while its consumer is slow.
   /// `onTermination` runs when the consumer ends the stream, never when ``finish()`` does.
   func subscribe(
     _ id: StreamID,
     where filter: ((Element) -> Bool)? = nil,
+    bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded,
     onTermination: @escaping @Sendable () -> Void
   ) -> AsyncStream<Element> {
-    let (stream, continuation) = AsyncStream.makeStream(of: Element.self)
+    let (stream, continuation) = AsyncStream.makeStream(
+      of: Element.self, bufferingPolicy: bufferingPolicy)
     if let current { continuation.yield(current) }
     guard !isFinished else {
       continuation.finish()
@@ -281,7 +284,10 @@ final class ChannelState {
     case .broadcast(let message):
       broadcasts.yield(message)
     case .postgres(let delivery):
-      for binding in postgres where binding.configs.contains(where: delivery.matched.contains) {
+      for binding in postgres
+      where binding.configs.contains(where: { config in
+        delivery.matched.contains { $0.matches(config, change: delivery.change) }
+      }) {
         binding.yield(.change(delivery.change))
       }
     case .presence(let change, let state):

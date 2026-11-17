@@ -2,12 +2,48 @@
   "version": 1,
   "schemas": [
     {
+      "id": 16814,
+      "name": "personal",
+      "owner": "postgres"
+    },
+    {
       "id": 2200,
       "name": "public",
       "owner": "pg_database_owner"
+    },
+    {
+      "id": 16811,
+      "name": "realtime_test",
+      "owner": "postgres"
     }
   ],
   "tables": [
+    {
+      "id": 16816,
+      "schema": "personal",
+      "name": "notes",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "replica_identity": "DEFAULT",
+      "bytes": 16384,
+      "size": "16 kB",
+      "live_rows_estimate": 0,
+      "dead_rows_estimate": 0,
+      "comment": null
+    },
+    {
+      "id": 17867,
+      "schema": "personal",
+      "name": "places",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "replica_identity": "DEFAULT",
+      "bytes": 32768,
+      "size": "32 kB",
+      "live_rows_estimate": 2,
+      "dead_rows_estimate": 0,
+      "comment": null
+    },
     {
       "id": 16662,
       "schema": "public",
@@ -188,6 +224,111 @@
   ],
   "materializedViews": [],
   "columns": [
+    {
+      "table_id": 16816,
+      "schema": "personal",
+      "table": "notes",
+      "id": "16816.2",
+      "ordinal_position": 2,
+      "name": "body",
+      "default_value": null,
+      "data_type": "text",
+      "format": "text",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 16816,
+      "schema": "personal",
+      "table": "notes",
+      "id": "16816.1",
+      "ordinal_position": 1,
+      "name": "id",
+      "default_value": null,
+      "data_type": "integer",
+      "format": "int4",
+      "type_schema": "pg_catalog",
+      "is_identity": true,
+      "identity_generation": "BY DEFAULT",
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 17867,
+      "schema": "personal",
+      "table": "places",
+      "id": "17867.1",
+      "ordinal_position": 1,
+      "name": "id",
+      "default_value": null,
+      "data_type": "integer",
+      "format": "int4",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 17867,
+      "schema": "personal",
+      "table": "places",
+      "id": "17867.3",
+      "ordinal_position": 3,
+      "name": "location",
+      "default_value": null,
+      "data_type": "USER-DEFINED",
+      "format": "geometry",
+      "type_schema": "extensions",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
+    {
+      "table_id": 17867,
+      "schema": "personal",
+      "table": "places",
+      "id": "17867.2",
+      "ordinal_position": 2,
+      "name": "name",
+      "default_value": null,
+      "data_type": "text",
+      "format": "text",
+      "type_schema": "pg_catalog",
+      "is_identity": false,
+      "identity_generation": null,
+      "is_generated": false,
+      "is_nullable": false,
+      "is_updatable": true,
+      "is_unique": false,
+      "check": null,
+      "enums": [],
+      "comment": null
+    },
     {
       "table_id": 16662,
       "schema": "public",
@@ -1559,6 +1700,18 @@
   ],
   "primaryKeys": [
     {
+      "table_id": 16816,
+      "schema": "personal",
+      "table_name": "notes",
+      "name": "id"
+    },
+    {
+      "table_id": 17867,
+      "schema": "personal",
+      "table_name": "places",
+      "name": "id"
+    },
+    {
       "table_id": 16662,
       "schema": "public",
       "table_name": "channels",
@@ -1719,7 +1872,7 @@
   ],
   "functions": [
     {
-      "id": 17896,
+      "id": 16804,
       "schema": "public",
       "name": "channel_message_counts",
       "language": "sql",
@@ -1810,7 +1963,7 @@
       }
     },
     {
-      "id": 17900,
+      "id": 16808,
       "schema": "public",
       "name": "echo",
       "language": "sql",
@@ -1958,7 +2111,7 @@
       "config_params": null
     },
     {
-      "id": 17895,
+      "id": 16803,
       "schema": "public",
       "name": "message_by_id",
       "language": "sql",
@@ -1984,7 +2137,7 @@
       "config_params": null
     },
     {
-      "id": 17899,
+      "id": 16807,
       "schema": "public",
       "name": "message_ids",
       "language": "sql",
@@ -2010,7 +2163,7 @@
       "config_params": null
     },
     {
-      "id": 17897,
+      "id": 16805,
       "schema": "public",
       "name": "messages_of",
       "language": "sql",
@@ -2036,7 +2189,7 @@
       "config_params": null
     },
     {
-      "id": 17898,
+      "id": 16806,
       "schema": "public",
       "name": "messages_of",
       "language": "sql",
@@ -2068,7 +2221,7 @@
       "config_params": null
     },
     {
-      "id": 17901,
+      "id": 16809,
       "schema": "public",
       "name": "price_label",
       "language": "sql",
@@ -2094,7 +2247,7 @@
       "config_params": null
     },
     {
-      "id": 17902,
+      "id": 16810,
       "schema": "public",
       "name": "price_label",
       "language": "sql",
@@ -2120,7 +2273,7 @@
       "config_params": null
     },
     {
-      "id": 17894,
+      "id": 16802,
       "schema": "public",
       "name": "search_messages",
       "language": "sql",
@@ -2325,6 +2478,96 @@
       "type_relation_id": 16452
     },
     {
+      "id": 16863,
+      "name": "_box2d",
+      "schema": "extensions",
+      "format": "box2d[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16867,
+      "name": "_box2df",
+      "schema": "extensions",
+      "format": "box2df[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16859,
+      "name": "_box3d",
+      "schema": "extensions",
+      "format": "box3d[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17522,
+      "name": "_geography",
+      "schema": "extensions",
+      "format": "geography[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17539,
+      "name": "_geography_columns",
+      "schema": "extensions",
+      "format": "geography_columns[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16837,
+      "name": "_geometry",
+      "schema": "extensions",
+      "format": "geometry[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17675,
+      "name": "_geometry_columns",
+      "schema": "extensions",
+      "format": "geometry_columns[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17130,
+      "name": "_geometry_dump",
+      "schema": "extensions",
+      "format": "geometry_dump[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16871,
+      "name": "_gidx",
+      "schema": "extensions",
+      "format": "gidx[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
       "id": 16536,
       "name": "_pg_stat_statements",
       "schema": "extensions",
@@ -2339,6 +2582,135 @@
       "name": "_pg_stat_statements_info",
       "schema": "extensions",
       "format": "pg_stat_statements_info[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17137,
+      "name": "_spatial_ref_sys",
+      "schema": "extensions",
+      "format": "spatial_ref_sys[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16828,
+      "name": "_spheroid",
+      "schema": "extensions",
+      "format": "spheroid[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17244,
+      "name": "_valid_detail",
+      "schema": "extensions",
+      "format": "valid_detail[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16860,
+      "name": "box2d",
+      "schema": "extensions",
+      "format": "box2d",
+      "enums": [],
+      "attributes": [],
+      "comment": "postgis type: The type representing a 2-dimensional bounding box.",
+      "type_relation_id": null
+    },
+    {
+      "id": 16864,
+      "name": "box2df",
+      "schema": "extensions",
+      "format": "box2df",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16856,
+      "name": "box3d",
+      "schema": "extensions",
+      "format": "box3d",
+      "enums": [],
+      "attributes": [],
+      "comment": "postgis type: The type representing a 3-dimensional bounding box.",
+      "type_relation_id": null
+    },
+    {
+      "id": 17516,
+      "name": "geography",
+      "schema": "extensions",
+      "format": "geography",
+      "enums": [],
+      "attributes": [],
+      "comment": "postgis type: The type representing spatial features with geodetic (ellipsoidal) coordinate systems.",
+      "type_relation_id": null
+    },
+    {
+      "id": 17540,
+      "name": "geography_columns",
+      "schema": "extensions",
+      "format": "geography_columns",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 17538
+    },
+    {
+      "id": 16829,
+      "name": "geometry",
+      "schema": "extensions",
+      "format": "geometry",
+      "enums": [],
+      "attributes": [],
+      "comment": "postgis type: The type representing spatial features with planar coordinate systems.",
+      "type_relation_id": null
+    },
+    {
+      "id": 17676,
+      "name": "geometry_columns",
+      "schema": "extensions",
+      "format": "geometry_columns",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 17674
+    },
+    {
+      "id": 17131,
+      "name": "geometry_dump",
+      "schema": "extensions",
+      "format": "geometry_dump",
+      "enums": [],
+      "attributes": [
+        {
+          "name": "path",
+          "type_id": 1007
+        },
+        {
+          "name": "geom",
+          "type_id": 16829
+        }
+      ],
+      "comment": "postgis type: A composite type used to describe the parts of complex geometry.",
+      "type_relation_id": 17129
+    },
+    {
+      "id": 16868,
+      "name": "gidx",
+      "schema": "extensions",
+      "format": "gidx",
       "enums": [],
       "attributes": [],
       "comment": null,
@@ -2363,6 +2735,49 @@
       "attributes": [],
       "comment": null,
       "type_relation_id": 16524
+    },
+    {
+      "id": 17138,
+      "name": "spatial_ref_sys",
+      "schema": "extensions",
+      "format": "spatial_ref_sys",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 17136
+    },
+    {
+      "id": 16825,
+      "name": "spheroid",
+      "schema": "extensions",
+      "format": "spheroid",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17245,
+      "name": "valid_detail",
+      "schema": "extensions",
+      "format": "valid_detail",
+      "enums": [],
+      "attributes": [
+        {
+          "name": "valid",
+          "type_id": 16
+        },
+        {
+          "name": "reason",
+          "type_id": 1043
+        },
+        {
+          "name": "location",
+          "type_id": 16829
+        }
+      ],
+      "comment": null,
+      "type_relation_id": 17243
     },
     {
       "id": 13556,
@@ -3843,6 +4258,46 @@
       "attributes": [],
       "comment": null,
       "type_relation_id": null
+    },
+    {
+      "id": 16817,
+      "name": "_notes",
+      "schema": "personal",
+      "format": "personal.notes[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 17868,
+      "name": "_places",
+      "schema": "personal",
+      "format": "personal.places[]",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": null
+    },
+    {
+      "id": 16818,
+      "name": "notes",
+      "schema": "personal",
+      "format": "personal.notes",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 16816
+    },
+    {
+      "id": 17869,
+      "name": "places",
+      "schema": "personal",
+      "format": "personal.places",
+      "enums": [],
+      "attributes": [],
+      "comment": null,
+      "type_relation_id": 17867
     },
     {
       "id": 1034,
@@ -8853,7 +9308,7 @@
       "name": "channel_message_counts",
       "overloads": [
         {
-          "function_id": 17896,
+          "function_id": 16804,
           "args": [
             {
               "name": "min_messages",
@@ -8963,7 +9418,7 @@
       "name": "echo",
       "overloads": [
         {
-          "function_id": 17900,
+          "function_id": 16808,
           "args": [
             {
               "name": "",
@@ -9150,7 +9605,7 @@
       "name": "message_by_id",
       "overloads": [
         {
-          "function_id": 17895,
+          "function_id": 16803,
           "args": [
             {
               "name": "message_id",
@@ -9187,7 +9642,7 @@
       "name": "message_ids",
       "overloads": [
         {
-          "function_id": 17899,
+          "function_id": 16807,
           "args": [
             {
               "name": "statuses",
@@ -9219,7 +9674,7 @@
       "name": "messages_of",
       "overloads": [
         {
-          "function_id": 17897,
+          "function_id": 16805,
           "args": [
             {
               "name": "channel_id",
@@ -9250,7 +9705,7 @@
           "error": null
         },
         {
-          "function_id": 17898,
+          "function_id": 16806,
           "args": [
             {
               "name": "channel_slug",
@@ -9296,7 +9751,7 @@
       "name": "price_label",
       "overloads": [
         {
-          "function_id": 17901,
+          "function_id": 16809,
           "args": [
             {
               "name": "amount",
@@ -9322,7 +9777,7 @@
           "error": "Could not choose the best candidate function between: public.price_label(amount => int4), public.price_label(amount => text). Try renaming the parameters or the function itself in the database so function overloading can be resolved"
         },
         {
-          "function_id": 17902,
+          "function_id": 16810,
           "args": [
             {
               "name": "amount",
@@ -9354,7 +9809,7 @@
       "name": "search_messages",
       "overloads": [
         {
-          "function_id": 17894,
+          "function_id": 16802,
           "args": [
             {
               "name": "channel_id",

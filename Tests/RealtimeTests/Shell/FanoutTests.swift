@@ -42,6 +42,19 @@ struct FanoutTests {
   }
 
   @Test
+  func boundedSubscriberKeepsOnlyTheNewestElements() async {
+    let fanout = Fanout<Int>()
+    let newest = fanout.subscribe(id(1), bufferingPolicy: .bufferingNewest(1), onTermination: {})
+    let all = fanout.subscribe(id(2), onTermination: {})
+
+    for value in 1...3 { fanout.yield(value) }
+    fanout.finish()
+
+    #expect(await newest.collect() == [3])
+    #expect(await all.collect() == [1, 2, 3])
+  }
+
+  @Test
   func retainingFanoutReplaysItsInitialElementBeforeTheFirstYield() async {
     let fanout = Fanout<Int>(retaining: 3)
     let stream = fanout.subscribe(id(1), onTermination: {})

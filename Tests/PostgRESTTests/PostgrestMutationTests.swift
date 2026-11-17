@@ -83,6 +83,44 @@ struct PostgrestMutationTests {
   }
 
   @Test
+  func insertWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).insert(Todo.Draft(task: "buy milk")).execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func updateWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self)
+      .update { $0.task = "done" }.where { $0.id.eq(1) }.execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func deleteWithNoOptionsLeavesTheReturnPreferenceToTheServer() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).delete().where { $0.id.eq(1) }.execute()
+    #expect(capture.header("Prefer") == nil)
+  }
+
+  @Test
+  func upsertWithNoOptionsSendsOnlyTheResolution() async throws {
+    let capture = try QueryCapture()
+    _ = try await capture.client.from(Todo.self).upsert(Todo.Draft(task: "a")).execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates")
+    #expect(capture.query?.contains("on_conflict") != true)
+  }
+
+  @Test
+  func upsertReturningAsksForTheRows() async throws {
+    let capture = try QueryCapture(body: #"[{"id":1,"task":"a","is_done":false}]"#)
+    _ = try await capture.client.from(Todo.self)
+      .upsert(Todo.Draft(task: "a")).returning().execute()
+    #expect(capture.header("Prefer") == "resolution=merge-duplicates,return=representation")
+  }
+
+  @Test
   func updateScopesByFilter() async throws {
     let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
@@ -251,11 +289,11 @@ struct PostgrestMutationTests {
   }
 
   @Test
-  func bulkUpsertDerivesTheConflictTargetFromThePrimaryKey() async throws {
+  func bulkUpsertLeavesThePrimaryKeyConflictTargetToTheServer() async throws {
     let capture = try QueryCapture()
     _ = try await capture.client.from(Todo.self)
       .upsert([Todo.Draft(task: "a"), Todo.Draft(task: "b")]).execute()
-    #expect(capture.query?.contains("on_conflict=id") == true)
+    #expect(capture.query?.contains("on_conflict") != true)
     #expect(capture.bodyString?.hasPrefix("[") == true)
   }
 
@@ -339,7 +377,7 @@ struct PostgrestMutationTests {
       .delete().where { $0.id.eq(1) }
       .dryRun()
       .execute()
-    #expect(capture.header("Prefer") == "return=minimal,tx=rollback")
+    #expect(capture.header("Prefer") == "tx=rollback")
   }
 
   @Test

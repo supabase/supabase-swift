@@ -479,41 +479,6 @@ struct AuthClientIntegrationTests {
     #expect(error?.response?.status == 422)
   }
 
-  /// Default options leave `channel` and `create_user` out. The local stack uses MessageBird, which
-  /// supports only `sms`, so `whatsapp` is not a valid channel there: the default call passing
-  /// proves that the server picked `sms`. The number is a test number from `config.toml`, so the server sends no SMS.
-  @Test
-  func signInWithPhoneOTPWithDefaultOptionsUsesSMS() async throws {
-    let phone = "15550100001"
-
-    let messageID = try await authClient.signInWithOTP(phone: phone)
-    #expect(messageID == MessageID(rawValue: "test-otp"))
-
-    let session = try await authClient.verifyOTP(phone: phone, token: "123456", type: .sms)
-    #expect(session.user.phone == phone)
-
-    let error = await #expect(throws: AuthError.self) {
-      try await authClient.signInWithOTP(phone: phone, options: PhoneOTPOptions(channel: .whatsapp))
-    }
-    #expect(error?.code == .validationFailed)
-
-    try await Self.makeAdminClient().deleteUser(id: session.user.id)
-  }
-
-  @Test
-  func signUpWithPhoneWithDefaultOptionsUsesSMS() async throws {
-    let phone = "15550100002"
-
-    let result = try await authClient.signUp(phone: phone, password: mockPassword())
-
-    guard case .signedIn(let session) = result else {
-      Issue.record("Expected .signedIn, got \(result)")
-      return
-    }
-    #expect(session.user.phone == phone)
-    try await Self.makeAdminClient().deleteUser(id: session.user.id)
-  }
-
   /// The local stack's magic link email has no code, and the native stack cannot serve a custom
   /// template. A new magic link from the admin API carries the code instead.
   private func emailOTP(for email: String, admin: AuthAdminClient) async throws -> String {

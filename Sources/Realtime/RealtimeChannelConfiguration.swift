@@ -61,8 +61,9 @@ public struct RealtimeChannelConfiguration: Sendable, Hashable {
     /// Whether ``RealtimeChannel/broadcast(event:payload:encoder:)`` waits for the server to
     /// acknowledge each message. Defaults to `false`.
     ///
-    /// On a private channel the server does not reply when row level security denies the write,
-    /// so a denied broadcast fails with a timeout.
+    /// On a private channel the server refuses a broadcast that row level security denies. With
+    /// acknowledgements on, that broadcast fails with ``RealtimeError/Kind-swift.struct/server``;
+    /// with them off, the refusal goes unseen.
     public var acknowledgesMessages = false
 
     /// The messages the server replays from history when the channel joins. Private channels

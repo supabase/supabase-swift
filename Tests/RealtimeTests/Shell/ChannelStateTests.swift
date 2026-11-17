@@ -113,11 +113,36 @@ struct ChannelStateTests {
     let changesB = state.addPostgresStream(id(2), tableB, onTermination: {})
     let change = try change(table: "b")
 
-    state.deliver(.postgres(PostgresDelivery(change: change, matched: [tableB])))
+    state.deliver(
+      .postgres(PostgresDelivery(change: change, matched: [ServerPostgresBinding(tableB, id: 1)])))
     state.finishAll()
 
     #expect(await changesA.collect().isEmpty)
     #expect(await changesB.collect() == [change])
+  }
+
+  /// When the server echoes an event value this SDK does not know, the change's own kind decides
+  /// which event bindings get it.
+  @Test
+  func unknownEchoedEventMatchesOnTheChangeKind() async throws {
+    let state = try makeState()
+    var insertsOnA = tableA
+    insertsOnA.event = .insert
+    var deletesOnA = tableA
+    deletesOnA.event = .delete
+    let all = state.addPostgresStream(id(1), tableA, onTermination: {})
+    let inserts = state.addPostgresStream(id(2), insertsOnA, onTermination: {})
+    let deletes = state.addPostgresStream(id(3), deletesOnA, onTermination: {})
+    let change = try change(table: "a")
+    let echoed = ServerPostgresBinding(
+      id: 1, event: "TRUNCATE", schema: "public", table: "a", filter: nil)
+
+    state.deliver(.postgres(PostgresDelivery(change: change, matched: [echoed])))
+    state.finishAll()
+
+    #expect(await all.collect() == [change])
+    #expect(await inserts.collect() == [change])
+    #expect(await deletes.collect().isEmpty)
   }
 
   @Test

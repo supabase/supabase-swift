@@ -229,6 +229,26 @@ final class RealtimeChannelBroadcastTests: Sendable {
   }
 
   @Test
+  func receive_boundedBroadcastStreamKeepsOnlyTheNewestMessage() async throws {
+    let channel = await sut.channel("test")
+
+    let newest = await channel.broadcasts(event: "cursor", bufferingPolicy: .bufferingNewest(1))
+    let all = await channel.broadcasts(event: "cursor")
+
+    await sut.installSubscribedRecord("test")
+    for x in 1...3 {
+      await sut.apply(
+        .binaryBroadcast(
+          DecodedBroadcast(
+            topic: "realtime:test", event: "cursor", payload: .json(["x": .string("\(x)")]))))
+    }
+    await channel.client?.finishStreams(of: channel)
+
+    #expect(await newest.collect().map(\.payload) == [.json(["x": "3"])])
+    #expect(await all.collect().count == 3)
+  }
+
+  @Test
   func receive_binaryBroadcastFromBinaryFrame() async throws {
     let channel = await sut.channel("test")
 

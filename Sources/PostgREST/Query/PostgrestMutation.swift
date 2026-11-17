@@ -144,7 +144,7 @@ extension _PostgrestMutation where Phase == _PostgrestUnscopedPhase {
 extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
   /// Requests the affected rows back, decoded as `[R]`.
   ///
-  /// This replaces only the `return=` preference in the `Prefer` header, so it composes with
+  /// This sets only the `return=` preference in the `Prefer` header, so it composes with
   /// whatever else a write method already set there — `upsert` puts `resolution=` in the same
   /// header, and losing it there would silently turn the upsert into a plain insert.
   /// `return=representation` alone returns every column, so no `select` parameter is needed.
@@ -156,7 +156,9 @@ extension _PostgrestMutation where Phase: _PostgrestExecutableMutationPhase {
     return _PostgrestQuery(client: client, request: request)
   }
 
-  /// Sends the request, discarding the response body.
+  /// Sends the request without asking for the affected rows.
+  ///
+  /// No `return=` preference is sent, so PostgREST applies its own default and returns no body.
   ///
   /// - Throws: ``PostgrestError`` when the request fails.
   @discardableResult
@@ -442,8 +444,10 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   .execute()
   /// ```
   ///
-  /// The conflict target comes from ``_PostgrestKeyedRelation/primaryKeyColumns``, which is why this
-  /// overload exists only where the relation declares a key. On a keyless relation the database has
+  /// The request names no conflict target, so PostgREST merges on the table's primary key, its own
+  /// default. The relation's `@PrimaryKey` columns must therefore be the database's primary key.
+  /// This overload exists only where the relation declares a key
+  /// (``_PostgrestKeyedRelation/primaryKeyColumns``). On a keyless relation the database has
   /// nothing to merge on, so an upsert with no target is not a merge at all — it inserts another row
   /// every call. Requiring the conformance makes that a compile error instead; use
   /// ``upsert(_:onConflict:_:resolution:)-(R.Draft,_,_,_)`` there and name a unique constraint the relation does have.
@@ -481,8 +485,7 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
     _ values: R.Draft,
     resolution: _PostgrestConflictResolution = .mergeDuplicates
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
-    try insertion(
-      values, onConflict: R.primaryKeyColumns.joined(separator: ","), resolution: resolution)
+    try insertion(values, resolution: resolution)
   }
 
   /// Upserts a collection of rows in a single request, merging on the relation's primary key.
@@ -493,8 +496,8 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   .execute()
   /// ```
   ///
-  /// The target comes from ``_PostgrestKeyedRelation/primaryKeyColumns``, exactly as in
-  /// ``upsert(_:resolution:)-(R.Draft,_)``, and applies to every row in the batch. As with the bulk insert, the
+  /// The target is the table's primary key, exactly as in ``upsert(_:resolution:)-(R.Draft,_)``,
+  /// and applies to every row in the batch. As with the bulk insert, the
   /// rows may encode different columns and an empty collection writes nothing rather than throwing.
   ///
   /// > Note: The target only takes effect for a row that carries the key columns in its body. A
@@ -512,8 +515,7 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
     _ values: some Collection<R.Draft>,
     resolution: _PostgrestConflictResolution = .mergeDuplicates
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
-    try insertion(
-      Array(values), onConflict: R.primaryKeyColumns.joined(separator: ","), resolution: resolution)
+    try insertion(Array(values), resolution: resolution)
   }
 }
 
@@ -526,7 +528,7 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
     var request = request
     request.method = method
     request.body = body
-    for preference in preferences + ["return=minimal"] {
+    for preference in preferences {
       request.setPreference(preference)
     }
     return _PostgrestMutation(client: client, request: request)
