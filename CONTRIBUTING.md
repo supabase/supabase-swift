@@ -23,6 +23,20 @@ The `!`/`BREAKING CHANGE:` marker is the same one release-please and the API sta
 off to bump majors and flag reviewers. Every commit carrying it also requires an entry in the
 major-version migration guide (`V<N>_MIGRATION.md` and `docs/migrations/v<N>/`) — see the writing-migration-guides skill for the format.
 
+## Principles and Specs
+
+The [SDK principles](https://github.com/supabase/sdk/pull/308) guide every
+change in every Supabase SDK. Read them before you change behavior. Do not
+copy them into this repo. The document lands at `docs/principles.md` in
+`supabase/sdk` with that pull request. When a principle shapes a change, cite
+it by a link to its heading in your PR description.
+
+Capability specs live in
+[`packages/capability-matrix/specs/`](https://github.com/supabase/sdk/tree/main/packages/capability-matrix/specs)
+in `supabase/sdk`. A change to behavior that a spec describes starts with a
+spec change in `supabase/sdk`. Land the spec first, then change the code here.
+If no spec covers the behavior, say so in your PR description.
+
 ## Capability Compliance
 
 `sdk-compliance.yaml` declares this SDK's public API against the
@@ -63,8 +77,19 @@ Only symbols declared under `Sources/` count, minus the files that
 (SDK-2091).
 
 The symbol graph depends on the platform and the SDK. CI runs the check
-on macOS with Xcode 27.0, so run it there too. On Linux or another Xcode,
-some Apple-only APIs drop out and the check reports false results.
+on macOS with Xcode 26.4 (Swift 6.3), so run it there too. Do not use
+Xcode 27: its Swift 6.4 drops `--include-spi-symbols`, and the script
+fails. On Linux or another Xcode, some Apple-only APIs drop out and the
+check reports false results.
+
+If Xcode 27 is your default, select Xcode 26 for one run. The script runs the
+first `swift` on `PATH`, so put `/usr/bin` first as well. This skips a `swift`
+from swiftly or another toolchain manager:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-26.4.0.app/Contents/Developer PATH="/usr/bin:$PATH" \
+  ./scripts/check-compliance.sh
+```
 
 What to declare: a type together with its public `init` and its members.
 Do not declare a member without its owning type. Declare every public macro.
@@ -82,26 +107,31 @@ sits in a file listed in `release-please-config.json` `extra-files`, with an
 ### Adding a New Feature
 
 1. Create feature branch from `main`
-2. Implement feature with tests
-3. If the feature adds or changes public API, update `sdk-compliance.yaml`
+2. If the feature changes behavior that a capability spec describes, change
+   the spec in `supabase/sdk` first (see "Principles and Specs" above)
+3. Implement feature with tests
+4. If the feature adds or changes public API, update `sdk-compliance.yaml`
    in the same commit (see "Capability Compliance" above) and run
    `./scripts/check-compliance.sh`
-4. Run `./scripts/format.sh` to format code
-5. Run `swift test` to verify tests pass
-6. Add documentation if needed
-7. Create PR with conventional commit title
-8. Ensure CI passes
+5. Run `./scripts/format.sh` to format code
+6. Run `swift test` to verify tests pass
+7. Add documentation if needed
+8. Create PR with conventional commit title
+9. Ensure CI passes
 
 ### Fixing a Bug
 
-1. Add a failing test that reproduces the bug
-2. Fix the bug
-3. If the fix adds, removes, or renames public API, update
+1. If the bug is in behavior that a capability spec describes, and the spec
+   is wrong or silent, change the spec in `supabase/sdk` first (see
+   "Principles and Specs" above)
+2. Add a failing test that reproduces the bug
+3. Fix the bug
+4. If the fix adds, removes, or renames public API, update
    `sdk-compliance.yaml` in the same commit and run
    `./scripts/check-compliance.sh`
-4. Verify test now passes
-5. Run full test suite
-6. Create PR with `fix:` prefix
+5. Verify test now passes
+6. Run full test suite
+7. Create PR with `fix:` prefix
 
 ### Hotfixes for v2
 
