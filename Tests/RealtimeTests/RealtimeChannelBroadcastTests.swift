@@ -234,12 +234,9 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
     let cursors = await channel.broadcasts(of: Cursor.self)
 
-    await sut.installSubscribedRecord("test")
-    await sut.apply(.binaryBroadcast(cursorBroadcast(event: "other", x: 1)))
-    await sut.apply(.binaryBroadcast(cursorBroadcast(event: "cursor", x: 2)))
-    await channel.client?.finishStreams(of: channel)
-
-    let messages = await cursors.collect()
+    let messages = await deliver(
+      [cursorBroadcast(event: "other", x: 1), cursorBroadcast(event: "cursor", x: 2)],
+      to: cursors, on: channel)
     #expect(messages.map(\.raw.event) == ["cursor"])
     #expect(try messages.first?.payload() == Cursor(x: 2))
   }
@@ -249,15 +246,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
     let cursors = await channel.broadcasts(of: Cursor.self)
 
-    await sut.installSubscribedRecord("test")
-    await sut.apply(
-      .binaryBroadcast(
-        DecodedBroadcast(
-          topic: "realtime:test", event: "cursor", payload: .json(["x": .string("bad")]))))
-    await sut.apply(.binaryBroadcast(cursorBroadcast(event: "cursor", x: 4)))
-    await channel.client?.finishStreams(of: channel)
-
-    let messages = await cursors.collect()
+    let bad = DecodedBroadcast(
+      topic: "realtime:test", event: "cursor", payload: .json(["x": .string("bad")]))
+    let messages = await deliver(
+      [bad, cursorBroadcast(event: "cursor", x: 4)], to: cursors, on: channel)
     #expect(messages.count == 2)
     #expect(throws: RealtimeError.self) { try messages[0].payload() }
     #expect(try messages[1].payload() == Cursor(x: 4))
@@ -268,13 +260,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
     let cursors = await channel.broadcasts(of: Cursor.self, bufferingPolicy: .bufferingNewest(1))
 
-    await sut.installSubscribedRecord("test")
-    for x in 1...3 {
-      await sut.apply(.binaryBroadcast(cursorBroadcast(event: "cursor", x: x)))
-    }
-    await channel.client?.finishStreams(of: channel)
+    let messages = await deliver(
+      (1...3).map { cursorBroadcast(event: "cursor", x: $0) }, to: cursors, on: channel)
 
-    #expect(try await cursors.collect().map { try $0.payload() } == [Cursor(x: 3)])
+    #expect(try messages.map { try $0.payload() } == [Cursor(x: 3)])
   }
 
   @Test
@@ -283,11 +272,23 @@ final class RealtimeChannelBroadcastTests: Sendable {
     let channel = await sut.channel("test")
     let cursors = await channel.broadcasts(of: MainActorCursor.self)
 
-    await sut.installSubscribedRecord("test")
-    await sut.apply(.binaryBroadcast(cursorBroadcast(event: "main-cursor", x: 5)))
-    await channel.client?.finishStreams(of: channel)
+    let messages = await deliver(
+      [cursorBroadcast(event: "main-cursor", x: 5)], to: cursors, on: channel)
 
-    #expect(try await cursors.collect().map { try $0.payload().x } == [5])
+    #expect(try messages.map { try $0.payload().x } == [5])
+  }
+
+  /// Subscribes the channel, delivers `broadcasts`, ends the channel's streams, and returns what
+  /// `stream` received.
+  private func deliver<Element: Sendable>(
+    _ broadcasts: [DecodedBroadcast], to stream: AsyncStream<Element>, on channel: RealtimeChannel
+  ) async -> [Element] {
+    await sut.installSubscribedRecord("test")
+    for broadcast in broadcasts {
+      await sut.apply(.binaryBroadcast(broadcast))
+    }
+    await channel.client?.finishStreams(of: channel)
+    return await stream.collect()
   }
 
   private func cursorBroadcast(event: String, x: Int) -> DecodedBroadcast {

@@ -153,7 +153,7 @@ extension RealtimeChannel {
       event: event, schema: schema, table: table, filter: rawFilter, select: select
     )
     return AsyncStream(
-      TypedPostgresChanges<Row>(
+      LazilyDecodedSequence<TypedPostgresChange<Row>>(
         base: changes, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
   }
 
@@ -258,7 +258,7 @@ extension RealtimeChannel {
   ) async -> AsyncStream<TypedBroadcastMessage<Event>> {
     let messages = await broadcasts(event: Event.event, bufferingPolicy: bufferingPolicy)
     return AsyncStream(
-      TypedBroadcasts<Event>(
+      LazilyDecodedSequence<TypedBroadcastMessage<Event>>(
         base: messages, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))
   }
 
@@ -283,43 +283,31 @@ extension RealtimeChannel {
   }
 }
 
-/// Wraps each message of `base` as a ``TypedBroadcastMessage``.
-///
-/// A sequence type instead of `map`, for the reason ``TypedPostgresChanges`` gives.
-private struct TypedBroadcasts<Event>: AsyncSequence, Sendable {
-  let base: AsyncStream<BroadcastMessage>
-  let decoder: UncheckedSendable<JSONDecoder>
-
-  struct AsyncIterator: AsyncIteratorProtocol {
-    var base: AsyncStream<BroadcastMessage>.Iterator
-    let decoder: UncheckedSendable<JSONDecoder>
-
-    @concurrent mutating func next() async -> TypedBroadcastMessage<Event>? {
-      guard let message = await base.next() else { return nil }
-      return TypedBroadcastMessage(raw: message, decoder: decoder)
-    }
-  }
-
-  func makeAsyncIterator() -> AsyncIterator {
-    AsyncIterator(base: base.makeAsyncIterator(), decoder: decoder)
-  }
+/// A typed wrapper that holds a raw element and decodes it only on request.
+protocol LazilyDecoded {
+  associatedtype Raw: Sendable
+  init(raw: Raw, decoder: UncheckedSendable<JSONDecoder>)
 }
 
-/// Wraps each change of `base` as a ``TypedPostgresChange``.
+extension TypedPostgresChange: LazilyDecoded {}
+extension TypedBroadcastMessage: LazilyDecoded {}
+
+/// Wraps each element of `base` as an `Element`.
 ///
 /// A sequence type instead of `map`: the `map` transform runs off the caller's actor and would
-/// capture `Row.Type`, whose `Decodable` conformance may be isolated to the caller's actor.
-private struct TypedPostgresChanges<Row>: AsyncSequence, Sendable {
-  let base: AsyncStream<PostgresChange>
+/// capture the payload type, whose `Decodable` conformance may be isolated to the caller's
+/// actor.
+private struct LazilyDecodedSequence<Element: LazilyDecoded>: AsyncSequence, Sendable {
+  let base: AsyncStream<Element.Raw>
   let decoder: UncheckedSendable<JSONDecoder>
 
   struct AsyncIterator: AsyncIteratorProtocol {
-    var base: AsyncStream<PostgresChange>.Iterator
+    var base: AsyncStream<Element.Raw>.Iterator
     let decoder: UncheckedSendable<JSONDecoder>
 
-    @concurrent mutating func next() async -> TypedPostgresChange<Row>? {
-      guard let change = await base.next() else { return nil }
-      return TypedPostgresChange(raw: change, decoder: decoder)
+    @concurrent mutating func next() async -> Element? {
+      guard let raw = await base.next() else { return nil }
+      return Element(raw: raw, decoder: decoder)
     }
   }
 
