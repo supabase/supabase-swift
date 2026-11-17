@@ -836,6 +836,60 @@
       }
     }
 
+    /// The SDK sends every typed filter the Realtime grammar can write and lets the server judge
+    /// it. The server refuses an operator it does not run and a column that is not a stored
+    /// column, after the join reply, so `subscribe()` throws the server's message.
+    @Test(arguments: ["like(all)", "value->>"])
+    func aTypedFilterTheServerRefusesFailsTheSubscribe(refusedPart: String) async throws {
+      let client = client
+      let filter: (KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage> =
+        refusedPart == "like(all)"
+        ? { $0.key.likeAllOf(["a%"]) } : { $0.value.jsonText("k").eq("x") }
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-refused-filter")
+        let changes = try await channel.postgresChanges(
+          of: KeyValueStorage.self, event: .insert, where: filter)
+        let events = await channel.events()
+
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .server)
+        #expect(error?.isRetryable == false)
+        #expect(error?.message.contains(refusedPart) == true)
+        #expect(await channel.status == .failed)
+
+        let event = try await withTimeout(.seconds(5)) {
+          await events.first(where: {
+            if case .postgresChangesFailed = $0 { true } else { false }
+          })
+        }
+        guard case .postgresChangesFailed(let reason)? = event else {
+          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
+          return
+        }
+        #expect(reason.contains(refusedPart))
+        withExtendedLifetime(changes) {}
+        await client.realtime.removeChannel(channel)
+      }
+    }
+
+    /// A live query whose filter the server refuses ends with the server's error.
+    @Test
+    func streamEndsWithTheServerErrorForAFilterTheServerRefuses() async throws {
+      let client = client
+      let stream = client.stream(
+        of: KeyValueStorage.self, where: { $0.value.jsonText("k").eq("x") })
+
+      let error = await #expect(throws: RealtimeError.self) {
+        try await withTimeout(.seconds(20)) {
+          for try await _ in stream {}
+        }
+      }
+      #expect(error?.kind == .server)
+      #expect(error?.message.contains("value->>") == true)
+    }
+
     @Test
     func streamKeepsTheFilteredRowsInSync() async throws {
       let client = client
