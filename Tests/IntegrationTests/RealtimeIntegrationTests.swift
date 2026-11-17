@@ -1206,16 +1206,13 @@
         let anaStates = await ana.presenceStates()
         try await bob.track(["name": "Bob"] as JSONObject)
 
-        let (first, withBob) = try await withTimeout(.seconds(5)) {
-          () async -> (PresenceState?, PresenceState?) in
-          var states = anaStates.makeAsyncIterator()
-          let first = await states.next()
-          while let state = await states.next() {
-            if state.entries["bob"] != nil { return (first, state) }
-          }
-          return (first, nil)
+        // The stream keeps only the latest state, so the replayed state may be skipped when Bob's
+        // arrives first. Wait for the state with Bob and check that it still has Ana.
+        let withBob = try await withTimeout(.seconds(5)) { () async -> PresenceState? in
+          for await state in anaStates where state.entries["bob"] != nil { return state }
+          return nil
         }
-        #expect(first?.entries["ana"] != nil)
+        #expect(withBob?.entries["ana"] != nil)
         #expect(withBob?.entries["bob"]?.first?.payload == ["name": "Bob"])
 
         await ana.unsubscribe()

@@ -41,17 +41,26 @@ extension RealtimeClient {
   }
 
   func broadcasts(
-    of channel: RealtimeChannel, event: String
+    of channel: RealtimeChannel,
+    event: String,
+    bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy
   ) -> AsyncStream<BroadcastMessage> {
-    openStream(of: channel, \.broadcasts, where: { RealtimeChannel.eventMatches(event, $0.event) })
+    openStream(
+      of: channel, \.broadcasts, where: { RealtimeChannel.eventMatches(event, $0.event) },
+      bufferingPolicy: bufferingPolicy)
   }
 
   func presenceChanges(of channel: RealtimeChannel) -> AsyncStream<PresenceChange> {
     openStream(of: channel, \.presenceChanges, if: canOpenPresenceStream(on:))
   }
 
-  func presenceStates(of channel: RealtimeChannel) -> AsyncStream<PresenceState> {
-    openStream(of: channel, \.presenceStates, if: canOpenPresenceStream(on:))
+  func presenceStates(
+    of channel: RealtimeChannel,
+    bufferingPolicy: AsyncStream<PresenceState>.Continuation.BufferingPolicy
+  ) -> AsyncStream<PresenceState> {
+    openStream(
+      of: channel, \.presenceStates, if: canOpenPresenceStream(on:),
+      bufferingPolicy: bufferingPolicy)
   }
 
   /// Subscribes a new stream to the fan-out `fanout` of `channel`'s state, when the channel is
@@ -60,11 +69,13 @@ extension RealtimeClient {
     of channel: RealtimeChannel,
     _ fanout: KeyPath<ChannelState, Fanout<Element>>,
     if condition: (ChannelState) -> Bool = { _ in true },
-    where filter: ((Element) -> Bool)? = nil
+    where filter: ((Element) -> Bool)? = nil,
+    bufferingPolicy: AsyncStream<Element>.Continuation.BufferingPolicy = .unbounded
   ) -> AsyncStream<Element> {
     guard let state = state(of: channel), condition(state) else { return .finished }
     let id = nextStreamID(channel: channel.id)
-    return state[keyPath: fanout].subscribe(id, where: filter, onTermination: onStreamEnd(id))
+    return state[keyPath: fanout].subscribe(
+      id, where: filter, bufferingPolicy: bufferingPolicy, onTermination: onStreamEnd(id))
   }
 
   /// Registers the binding and hands the core the new join payload in the same actor job, so a

@@ -62,6 +62,7 @@ import Helpers
 /// ### Presence
 /// - ``presenceState``
 /// - ``presenceStates()``
+/// - ``presenceStates(bufferingPolicy:)``
 /// - ``presenceChanges()``
 /// - ``track(_:encoder:)``
 /// - ``untrack()``
@@ -70,6 +71,7 @@ import Helpers
 /// - ``postgresChanges(of:event:schema:table:filter:select:decoder:)``
 /// ### Broadcast Events
 /// - ``broadcasts(event:)``
+/// - ``broadcasts(event:bufferingPolicy:)``
 /// ### Channel Events
 /// - ``events()``
 public final class RealtimeChannel: Sendable, Hashable {
