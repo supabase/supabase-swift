@@ -607,23 +607,8 @@
         // Dropping the stream removes the binding, so it must outlive the subscribe.
         let changes = await channel.postgresChanges(
           event: .insert, schema: "public", table: "no_such_table")
-        let events = await channel.events()
 
-        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-        #expect(error?.kind == .server)
-        #expect(error?.isRetryable == false)
-        #expect(await channel.status == .failed)
-
-        let event = try await withTimeout(.seconds(5)) {
-          await events.first(where: {
-            if case .postgresChangesFailed = $0 { true } else { false }
-          })
-        }
-        guard case .postgresChangesFailed(let reason)? = event else {
-          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
-          return
-        }
-        #expect(reason.contains("no_such_table"))
+        try await expectSubscribeRefused(channel, containing: "no_such_table")
         withExtendedLifetime(changes) {}
       }
     }
@@ -808,7 +793,10 @@
         let changes = try await channel.postgresChanges(
           of: KeyValueStorage.self,
           event: .insert,
-          where: { $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) }
+          // `!raw("not.eq.x")` renders `key=eq.x`, so the server gets plain conditions.
+          where: {
+            $0.key.eq(matchedKey) && !$0.key.eq(skippedKey) && !$0.key.raw("not.eq.\(matchedKey)")
+          }
         )
         let events = await channel.events()
 
@@ -836,40 +824,28 @@
       }
     }
 
-    /// A filter the server refuses, and the part of the server's message that names it.
-    enum RefusedFilter: String, CaseIterable, Sendable {
-      /// An operator the server does not run: `key=like(all).{a%}`.
-      case unsupportedOperator
-      /// A JSON path, which is not a stored column: `value->>"k"=eq.x`.
-      case jsonPath
-      /// Two `not.` prefixes on one condition: `key=not.not.eq.a`.
-      case doubleNegation
-      /// A condition with no value: `key=eq`.
-      case missingValue
-      /// A segment with no `=`: `key=eq.a,undefined`.
-      case segmentWithoutColumn
-      /// An empty segment after a trailing comma: `key=eq.a,`.
-      case emptySegment
+    /// A filter the server refuses.
+    enum RefusedFilter: CaseIterable, Sendable {
+      case unsupportedOperator, jsonPath, doubleNegation, missingValue, segmentWithoutColumn,
+        emptySegment
 
-      func filter(_ c: KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage> {
+      /// The filter, and the part of the server's message that names what it refuses.
+      var refusal:
+        (filter: (KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage>, part: String)
+      {
         switch self {
-        case .unsupportedOperator: c.key.likeAllOf(["a%"])
-        case .jsonPath: c.value.jsonText("k").eq("x")
-        case .doubleNegation: c.key.raw("not.not.eq.a")
-        case .missingValue: c.key.raw("eq")
-        case .segmentWithoutColumn: c.key.raw("eq.a,undefined")
-        case .emptySegment: c.key.raw("eq.a,")
-        }
-      }
-
-      var refusedPart: String {
-        switch self {
-        case .unsupportedOperator: "like(all)"
-        case .jsonPath: "invalid column for filter value->>"
-        case .doubleNegation: #"Error parsing `filter` params: ["not", "eq.a"]"#
-        case .missingValue: #"Error parsing `filter` params: ["eq"]"#
-        case .segmentWithoutColumn: #"Error parsing `filter` params: ["undefined"]"#
-        case .emptySegment: "filter must not contain empty segments"
+        case .unsupportedOperator:  // key=like(all).{a%}
+          ({ $0.key.likeAllOf(["a%"]) }, "like(all)")
+        case .jsonPath:  // value->>"k"=eq.x
+          ({ $0.value.jsonText("k").eq("x") }, "invalid column for filter value->>")
+        case .doubleNegation:  // key=not.not.eq.a
+          ({ $0.key.raw("not.not.eq.a") }, #"Error parsing `filter` params: ["not", "eq.a"]"#)
+        case .missingValue:  // key=eq
+          ({ $0.key.raw("eq") }, #"Error parsing `filter` params: ["eq"]"#)
+        case .segmentWithoutColumn:  // key=eq.a,undefined
+          ({ $0.key.raw("eq.a,undefined") }, #"Error parsing `filter` params: ["undefined"]"#)
+        case .emptySegment:  // key=eq.a,
+          ({ $0.key.raw("eq.a,") }, "filter must not contain empty segments")
         }
       }
     }
@@ -885,66 +861,11 @@
 
         let channel = await client.realtime.channel("postgres-typed-refused-filter")
         let changes = try await channel.postgresChanges(
-          of: KeyValueStorage.self, event: .insert, where: refused.filter)
-        let events = await channel.events()
+          of: KeyValueStorage.self, event: .insert, where: refused.refusal.filter)
 
-        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
-        #expect(error?.kind == .server)
-        #expect(error?.isRetryable == false)
-        #expect(
-          error?.message.contains(refused.refusedPart) == true, "\(String(describing: error))")
-        #expect(await channel.status == .failed)
-
-        let event = try await withTimeout(.seconds(5)) {
-          await events.first(where: {
-            if case .postgresChangesFailed = $0 { true } else { false }
-          })
-        }
-        guard case .postgresChangesFailed(let reason)? = event else {
-          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
-          return
-        }
-        #expect(reason.contains(refused.refusedPart))
+        try await expectSubscribeRefused(channel, containing: refused.refusal.part)
         withExtendedLifetime(changes) {}
         await client.realtime.removeChannel(channel)
-      }
-    }
-
-    /// `!` over a raw condition that starts with `not.` drops the prefix, as `!!` does for a
-    /// typed condition, so the server gets one plain condition and delivers matching changes.
-    @Test
-    func aNegatedRawNegationDeliversTheMatchingChanges() async throws {
-      let client = client
-      try await withMainSerialExecutor {
-        try await client.realtime.connect()
-
-        let channel = await client.realtime.channel("postgres-typed-double-negation")
-        let matchedKey = UUID().uuidString
-        let skippedKey = UUID().uuidString
-
-        let changes = try await channel.postgresChanges(
-          of: KeyValueStorage.self, event: .insert,
-          where: { !$0.key.raw("not.eq.\(matchedKey)") })
-        let events = await channel.events()
-
-        try await channel.subscribe()
-        _ = try await withTimeout(.seconds(10)) {
-          await events.first(where: { $0 == .postgresChangesReady })
-        }
-
-        _ = try await client.from("key_value_storage")
-          .insert(["key": skippedKey, "value": "skipped"]).execute()
-        _ = try await client.from("key_value_storage")
-          .insert(["key": matchedKey, "value": "matched"]).execute()
-
-        let received = try await withTimeout(.seconds(5)) {
-          await changes.prefix(1).collect()
-        }
-        #expect(try received.first?.row().key == matchedKey)
-
-        await channel.unsubscribe()
-        _ = try await client.from("key_value_storage")
-          .delete().in("key", values: [matchedKey, skippedKey]).execute()
       }
     }
 
@@ -1598,6 +1519,32 @@
           try await Task.sleep(for: .milliseconds(50))
         }
       }
+    }
+
+    /// Expects the server to refuse the channel's Postgres changes binding: `subscribe()` throws a
+    /// `.server` error that is not retryable, the channel ends `failed`, and `events()` carries
+    /// the server's message.
+    private func expectSubscribeRefused(
+      _ channel: RealtimeChannel, containing part: String
+    ) async throws {
+      let events = await channel.events()
+
+      let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+      #expect(error?.kind == .server)
+      #expect(error?.isRetryable == false)
+      #expect(error?.message.contains(part) == true, "\(String(describing: error))")
+      #expect(await channel.status == .failed)
+
+      let event = try await withTimeout(.seconds(5)) {
+        await events.first(where: {
+          if case .postgresChangesFailed = $0 { true } else { false }
+        })
+      }
+      guard case .postgresChangesFailed(let reason)? = event else {
+        Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
+        return
+      }
+      #expect(reason.contains(part))
     }
 
     private func subscribeMany(_ channels: [RealtimeChannel]) async throws {
