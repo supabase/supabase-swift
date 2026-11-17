@@ -91,9 +91,6 @@ extension _PostgrestFilter {
   /// The filter in the grammar of a `postgres_changes` binding: `column=operator.value`
   /// conditions joined by commas, which the server ANDs.
   ///
-  /// The server judges the operators and the columns. Only the parts the grammar cannot write
-  /// throw here.
-  ///
   /// - Throws: ``RealtimeError`` with kind ``RealtimeError/Kind-swift.struct/invalidRequest``
   ///   naming the first part the grammar cannot write.
   var realtimeFilter: String {
