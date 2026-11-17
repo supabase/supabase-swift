@@ -28,7 +28,8 @@ public import Foundation
 /// ```
 ///
 /// Set ``event`` to a fixed string. Clients in other languages use the same name, so do not
-/// derive it from the type name.
+/// derive it from the type name. Do not use `"*"`: a stream that listens for `"*"` receives
+/// every broadcast on the channel, so ``TypedBroadcastMessage/payload()`` throws for most of them.
 public protocol BroadcastEvent {
   /// The broadcast event name on the wire.
   static var event: String { get }

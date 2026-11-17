@@ -219,14 +219,37 @@ final class RealtimeChannelBroadcastTests: Sendable {
     try await channel.broadcast(Cursor(x: 3))
 
     let frame = try #require(await client.sentBinaryFrames().last)
-    let eventStart = 7 + Int(frame[1]) + Int(frame[2]) + Int(frame[3])
-    let eventEnd = eventStart + Int(frame[4])
-    let payloadStart = eventEnd + Int(frame[5])
-    let bytes = [UInt8](frame)
-    #expect(String(decoding: bytes[eventStart..<eventEnd], as: UTF8.self) == "cursor")
+    let push = userBroadcastPush(frame)
+    #expect(push.event == "cursor")
     #expect(frame[6] == RealtimeSerializer.PayloadEncoding.json.rawValue)
-    #expect(
-      try JSONDecoder().decode(Cursor.self, from: Data(bytes[payloadStart...])) == Cursor(x: 3))
+    #expect(try JSONDecoder().decode(Cursor.self, from: push.payload) == Cursor(x: 3))
+  }
+
+  @Test
+  func broadcast_ofABroadcastEventUsesTheGivenEncoder() async throws {
+    setupServerAutoResponder()
+    try await sut.connect()
+    let channel = await sut.channel("test")
+    try await channel.subscribe()
+    let encoder = JSONEncoder()
+    encoder.keyEncodingStrategy = .convertToSnakeCase
+
+    try await channel.broadcast(SnakeCursor(cursorX: 8), encoder: encoder)
+
+    let frame = try #require(await client.sentBinaryFrames().last)
+    let payload = try JSONDecoder().decode(JSONValue.self, from: userBroadcastPush(frame).payload)
+    #expect(payload == ["cursor_x": 8])
+  }
+
+  /// The event name and the payload bytes of a user broadcast push frame.
+  private func userBroadcastPush(_ frame: Data) -> (event: String, payload: Data) {
+    let bytes = [UInt8](frame)
+    let eventStart = 7 + Int(bytes[1]) + Int(bytes[2]) + Int(bytes[3])
+    let eventEnd = eventStart + Int(bytes[4])
+    let payloadStart = eventEnd + Int(bytes[5])
+    return (
+      String(decoding: bytes[eventStart..<eventEnd], as: UTF8.self), Data(bytes[payloadStart...])
+    )
   }
 
   @Test
@@ -253,6 +276,32 @@ final class RealtimeChannelBroadcastTests: Sendable {
     #expect(messages.count == 2)
     #expect(throws: RealtimeError.self) { try messages[0].payload() }
     #expect(try messages[1].payload() == Cursor(x: 4))
+  }
+
+  @Test
+  func receive_typedStreamDecodesABinaryJSONPayload() async throws {
+    let channel = await sut.channel("test")
+    let cursors = await channel.broadcasts(of: Cursor.self)
+
+    let binary = DecodedBroadcast(
+      topic: "realtime:test", event: "cursor", payload: .binary(Data(#"{"x":6}"#.utf8)))
+    let messages = await deliver([binary], to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload() } == [Cursor(x: 6)])
+  }
+
+  @Test
+  func receive_typedStreamUsesTheGivenDecoder() async throws {
+    let channel = await sut.channel("test")
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let cursors = await channel.broadcasts(of: SnakeCursor.self, decoder: decoder)
+
+    let broadcast = DecodedBroadcast(
+      topic: "realtime:test", event: "snake-cursor", payload: .json(["cursor_x": 7]))
+    let messages = await deliver([broadcast], to: cursors, on: channel)
+
+    #expect(try messages.map { try $0.payload() } == [SnakeCursor(cursorX: 7)])
   }
 
   @Test
@@ -646,6 +695,11 @@ final class RealtimeChannelBroadcastTests: Sendable {
 private struct Cursor: BroadcastEvent, Codable, Equatable {
   static let event = "cursor"
   var x: Int
+}
+
+private struct SnakeCursor: BroadcastEvent, Codable, Equatable {
+  static let event = "snake-cursor"
+  var cursorX: Int
 }
 
 @MainActor
