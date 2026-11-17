@@ -836,6 +836,134 @@
       }
     }
 
+    /// A filter the server refuses, and the part of the server's message that names it.
+    enum RefusedFilter: String, CaseIterable, Sendable {
+      /// An operator the server does not run: `key=like(all).{a%}`.
+      case unsupportedOperator
+      /// A JSON path, which is not a stored column: `value->>"k"=eq.x`.
+      case jsonPath
+      /// Two `not.` prefixes on one condition: `key=not.not.eq.a`.
+      case doubleNegation
+      /// A condition with no value: `key=eq`.
+      case missingValue
+      /// A segment with no `=`: `key=eq.a,undefined`.
+      case segmentWithoutColumn
+      /// An empty segment after a trailing comma: `key=eq.a,`.
+      case emptySegment
+
+      func filter(_ c: KeyValueStorage.Columns) -> _PostgrestFilter<KeyValueStorage> {
+        switch self {
+        case .unsupportedOperator: c.key.likeAllOf(["a%"])
+        case .jsonPath: c.value.jsonText("k").eq("x")
+        case .doubleNegation: c.key.raw("not.not.eq.a")
+        case .missingValue: c.key.raw("eq")
+        case .segmentWithoutColumn: c.key.raw("eq.a,undefined")
+        case .emptySegment: c.key.raw("eq.a,")
+        }
+      }
+
+      var refusedPart: String {
+        switch self {
+        case .unsupportedOperator: "like(all)"
+        case .jsonPath: "invalid column for filter value->>"
+        case .doubleNegation: #"Error parsing `filter` params: ["not", "eq.a"]"#
+        case .missingValue: #"Error parsing `filter` params: ["eq"]"#
+        case .segmentWithoutColumn: #"Error parsing `filter` params: ["undefined"]"#
+        case .emptySegment: "filter must not contain empty segments"
+        }
+      }
+    }
+
+    /// The SDK sends every typed filter the Realtime grammar can write and lets the server judge
+    /// it. The server refuses a bad filter after the join reply, so `subscribe()` throws the
+    /// server's message.
+    @Test(arguments: RefusedFilter.allCases)
+    func aTypedFilterTheServerRefusesFailsTheSubscribe(_ refused: RefusedFilter) async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-refused-filter")
+        let changes = try await channel.postgresChanges(
+          of: KeyValueStorage.self, event: .insert, where: refused.filter)
+        let events = await channel.events()
+
+        let error = await #expect(throws: RealtimeError.self) { try await channel.subscribe() }
+        #expect(error?.kind == .server)
+        #expect(error?.isRetryable == false)
+        #expect(
+          error?.message.contains(refused.refusedPart) == true, "\(String(describing: error))")
+        #expect(await channel.status == .failed)
+
+        let event = try await withTimeout(.seconds(5)) {
+          await events.first(where: {
+            if case .postgresChangesFailed = $0 { true } else { false }
+          })
+        }
+        guard case .postgresChangesFailed(let reason)? = event else {
+          Issue.record("Expected postgresChangesFailed, got \(String(describing: event))")
+          return
+        }
+        #expect(reason.contains(refused.refusedPart))
+        withExtendedLifetime(changes) {}
+        await client.realtime.removeChannel(channel)
+      }
+    }
+
+    /// `!` over a raw condition that starts with `not.` drops the prefix, as `!!` does for a
+    /// typed condition, so the server gets one plain condition and delivers matching changes.
+    @Test
+    func aNegatedRawNegationDeliversTheMatchingChanges() async throws {
+      let client = client
+      try await withMainSerialExecutor {
+        try await client.realtime.connect()
+
+        let channel = await client.realtime.channel("postgres-typed-double-negation")
+        let matchedKey = UUID().uuidString
+        let skippedKey = UUID().uuidString
+
+        let changes = try await channel.postgresChanges(
+          of: KeyValueStorage.self, event: .insert,
+          where: { !$0.key.raw("not.eq.\(matchedKey)") })
+        let events = await channel.events()
+
+        try await channel.subscribe()
+        _ = try await withTimeout(.seconds(10)) {
+          await events.first(where: { $0 == .postgresChangesReady })
+        }
+
+        _ = try await client.from("key_value_storage")
+          .insert(["key": skippedKey, "value": "skipped"]).execute()
+        _ = try await client.from("key_value_storage")
+          .insert(["key": matchedKey, "value": "matched"]).execute()
+
+        let received = try await withTimeout(.seconds(5)) {
+          await changes.prefix(1).collect()
+        }
+        #expect(try received.first?.row().key == matchedKey)
+
+        await channel.unsubscribe()
+        _ = try await client.from("key_value_storage")
+          .delete().in("key", values: [matchedKey, skippedKey]).execute()
+      }
+    }
+
+    /// A live query whose filter the server refuses ends with the server's error.
+    @Test
+    func streamEndsWithTheServerErrorForAFilterTheServerRefuses() async throws {
+      let client = client
+      let stream = client.stream(
+        of: KeyValueStorage.self, where: { $0.value.jsonText("k").eq("x") })
+
+      let error = await #expect(throws: RealtimeError.self) {
+        try await withTimeout(.seconds(20)) {
+          for try await _ in stream {}
+        }
+      }
+      #expect(error?.kind == .server)
+      #expect(error?.message.contains("invalid column for filter value->>") == true)
+    }
+
     @Test
     func streamKeepsTheFilteredRowsInSync() async throws {
       let client = client
