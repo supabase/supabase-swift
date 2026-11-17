@@ -4,9 +4,30 @@
 import Foundation
 import PostgrestMacros
 
+enum Personal: _PostgrestSchema {
+  static let name = "personal"
+}
+
+enum RealtimeTest: _PostgrestSchema {
+  static let name = "realtime_test"
+}
+
 enum UserStatus: String, Codable, Hashable, Sendable, PostgrestFilterValue {
   case online = "ONLINE"
   case offline = "OFFLINE"
+}
+
+@Table("notes", schema: Personal.self)
+struct PersonalNotes {
+  @PrimaryKey @Default var id: Int
+  var body: String
+}
+
+@Table("places", schema: Personal.self)
+struct PersonalPlaces {
+  @PrimaryKey var id: Int
+  var name: String
+  var location: _PostgresUnmapped
 }
 
 @Table("channels")

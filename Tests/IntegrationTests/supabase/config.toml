@@ -8,7 +8,7 @@ project_id = "IntegrationTests"
 enabled = true
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public"]
+schemas = ["public", "graphql_public", "personal"]
 # Extra schemas to add to the search_path of every request.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -183,17 +183,31 @@ otp_expiry = 3600
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# On for the phone sign-up, OTP and phone MFA tests, which use only the test numbers below.
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+# On, so a phone sign-up sends a code that `resend` and `verifyOTP` can use. Only the phone tests
+# sign up with a phone.
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# Auth sends no SMS to these numbers and accepts the fixed code (AuthPhoneIntegrationTests).
+# Each test uses its own number, so `max_frequency` never throttles one test with another's send.
+[auth.sms.test_otp]
+15550000001 = "123456"
+15550000002 = "123456"
+15550000003 = "123456"
+15550000004 = "123456"
+15550000005 = "123456"
+15550000006 = "123456"
+15550000007 = "123456"
+15550000008 = "123456"
+15550000009 = "123456"
+15550000010 = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]
@@ -208,12 +222,14 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Auth needs a configured provider before it accepts a phone request, even for a test number.
+# These placeholder values never reach Twilio, because the tests use only the test numbers above.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
+enabled = true
+account_sid = "ACintegrationtests"
+message_service_sid = "MGintegrationtests"
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+auth_token = "integration-tests-placeholder"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
@@ -227,8 +243,8 @@ verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 otp_length = 6
 template = "Your code is {{ .Code }}"
 max_frequency = "5s"
