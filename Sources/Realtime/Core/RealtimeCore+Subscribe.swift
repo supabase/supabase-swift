@@ -222,7 +222,7 @@ extension RealtimeCore {
     else { return nil }
     let bindings = entries.compactMap(\.binding)
     if bindings.count < entries.count {
-      logger.debug(
+      logger.warning(
         "Skipped \(entries.count - bindings.count) unreadable Postgres bindings in a join reply")
     }
     return bindings
