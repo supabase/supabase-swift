@@ -214,10 +214,18 @@ extension RealtimeCore {
   }
 
   /// The bindings the server echoed in a join reply, with their ids, or `nil` when it echoed
-  /// none.
-  private func serverChanges(in message: RealtimeMessage) throws -> [PostgresJoinConfig]? {
-    try message.payload["response"]?.objectValue?[ChannelEvent.postgresChanges]?
-      .decode(as: [PostgresJoinConfig].self)
+  /// none. An entry that does not decode is skipped; a reply whose list is not a list throws.
+  private func serverChanges(in message: RealtimeMessage) throws -> [ServerPostgresBinding]? {
+    guard
+      let entries = try message.payload["response"]?.objectValue?[ChannelEvent.postgresChanges]?
+        .decode(as: [ServerPostgresBinding.Lossy].self)
+    else { return nil }
+    let bindings = entries.compactMap(\.binding)
+    if bindings.count < entries.count {
+      logger.debug(
+        "Skipped \(entries.count - bindings.count) unreadable Postgres bindings in a join reply")
+    }
+    return bindings
   }
 
   /// Applies a `system` message: the server's report on the join's Postgres changes or on

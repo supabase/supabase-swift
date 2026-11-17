@@ -60,7 +60,7 @@ enum SocketInput: Sendable {
 /// A Postgres change and the bindings the server matched it to.
 struct PostgresDelivery: Sendable, Equatable {
   let change: PostgresChange
-  let matched: [PostgresJoinConfig]
+  let matched: [ServerPostgresBinding]
 }
 
 /// Identifies one stream the client handed out. `channel` is `nil` for client streams.
@@ -281,7 +281,10 @@ final class ChannelState {
     case .broadcast(let message):
       broadcasts.yield(message)
     case .postgres(let delivery):
-      for binding in postgres where binding.configs.contains(where: delivery.matched.contains) {
+      for binding in postgres
+      where binding.configs.contains(where: { config in
+        delivery.matched.contains { $0.matches(config, change: delivery.change) }
+      }) {
         binding.yield(.change(delivery.change))
       }
     case .presence(let change, let state):
