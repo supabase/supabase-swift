@@ -1567,6 +1567,24 @@ struct StorageBucketTests {
   }
 
   @Test
+  func createSignedUploadURLWithoutATokenIsADecodingError() async throws {
+    let storage = try makeSUT()
+
+    transport.stub(
+      .post,
+      url.appendingPathComponent("object/upload/sign/bucket/file.txt"),
+      data: Data(#"{"url": "object/upload/sign/bucket/file.txt"}"#.utf8)
+    )
+
+    await #expect {
+      try await storage.from("bucket").createSignedUploadURL(path: "file.txt")
+    } throws: { error in
+      let error = error as? StorageError
+      return error?.kind == .decoding && error?.message == "No token returned by API"
+    }
+  }
+
+  @Test
   func createSignedUploadURL_withUpsert() async throws {
     let storage = try makeSUT()
 
