@@ -220,8 +220,8 @@ public final class RealtimeChannel: Sendable, Hashable {
   ///
   /// > Important: On a private channel the server refuses a broadcast that row level security
   /// > denies. With `acknowledgesMessages` on, such a broadcast fails with
-  /// > ``RealtimeError/Kind-swift.struct/server`` and the server's reason. With it off, the call
-  /// > returns and the refusal goes unseen.
+  /// > ``RealtimeError/Kind-swift.struct/server``. With it off, the call returns and the refusal
+  /// > goes unseen.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.

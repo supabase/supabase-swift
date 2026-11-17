@@ -86,8 +86,8 @@ token and the topic, and checks each broadcast and presence call against them. T
 changed policy applies, remove the channel and join again.
 
 With ``RealtimeChannelConfiguration/Broadcast-swift.struct/acknowledgesMessages`` on, a broadcast that a
-policy denies fails with ``RealtimeError/Kind-swift.struct/server`` and the server's reason. With
-it off, the call returns and the refusal goes unseen.
+policy denies fails with ``RealtimeError/Kind-swift.struct/server``. With it off, the call returns
+and the refusal goes unseen.
 
 ### Third-party auth
 
