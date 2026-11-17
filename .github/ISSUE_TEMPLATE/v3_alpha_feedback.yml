@@ -1,0 +1,111 @@
+name: v3 Alpha Feedback
+description: Share feedback on the supabase-swift v3 alpha (bugs, API ergonomics, migration pain)
+title: "[v3 alpha]: "
+labels: ["v3-alpha", "feedback"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the v3 alpha! Your feedback shapes the final API.
+        Please check the [v3 migration guide](https://github.com/supabase/supabase-swift/blob/main/V3_MIGRATION.md) before filing.
+
+  - type: dropdown
+    id: feedback-type
+    attributes:
+      label: Type of feedback
+      options:
+        - Bug
+        - API design / ergonomics
+        - Migration difficulty
+        - Missing feature or regression from v2
+        - Performance
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Alpha version
+      description: Which v3 alpha release are you using?
+      placeholder: ex. 3.0.0-alpha.1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: Affected modules
+      options:
+        - label: Auth
+        - label: PostgREST
+        - label: Realtime
+        - label: Storage
+        - label: Functions
+        - label: Supabase (umbrella client)
+        - label: Helpers / other
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iOS
+        - macOS
+        - tvOS
+        - watchOS
+        - visionOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: swift-version
+    attributes:
+      label: Swift and Xcode version
+      placeholder: ex. Swift 6.1, Xcode 16.4
+    validations:
+      required: true
+
+  - type: dropdown
+    id: coming-from
+    attributes:
+      label: Migrating from v2?
+      options:
+        - "Yes, existing v2 app"
+        - "No, new project on v3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: What happened, or what do you think? For bugs, include what you expected.
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code sample
+      description: A minimal sample showing the issue, or the v2 code next to the v3 code you would like to write.
+      render: swift
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste any logs or errors. This is formatted as code automatically.
+      render: shell
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: Optional. How would you change the API or behavior?
