@@ -122,8 +122,10 @@ struct ResumableUploadRegistryTests {
     respond(.noContent, headers: [.uploadOffset: "16"])
     respond(.noContent, headers: [.uploadOffset: "20", .tusComplete: "1"])
 
-    let uploads = try await storage.resumableUploads.resumeAll()
-    let object = try await uploads[0].result
+    let outcomes = try await storage.resumableUploads.resumeAll()
+    #expect(outcomes.count == 1)
+    #expect(outcomes[0].error == nil)
+    let object = try await outcomes[0].upload.result
 
     #expect(object.fullPath == "bucket/video.mp4")
     #expect(
@@ -132,6 +134,57 @@ struct ResumableUploadRegistryTests {
         "PATCH \(path)",
         "PATCH \(path)",
       ])
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func resumeAllReportsTheUploadTheServerRefusesAndResumesTheOthers() async throws {
+    let refused = try saveRecord(fingerprint: .repeating("a"))
+    let accepted = try saveRecord(fingerprint: .repeating("b"))
+    respond(.forbidden, headers: [.contentType: "text/plain"], body: "signature mismatch")
+    respond(.ok, headers: [.uploadOffset: "8"])
+
+    let outcomes = try await storage.resumableUploads.resumeAll()
+
+    #expect(outcomes.map(\.upload.fingerprint) == [refused.fingerprint, accepted.fingerprint])
+    let error = try #require(outcomes[0].error)
+    #expect(error.kind == .server)
+    #expect(error.serverError?.statusCode == 403)
+    guard case .failed = await outcomes[0].upload.status else {
+      Issue.record("The refused upload is not failed.")
+      return
+    }
+    await #expect(throws: StorageError.self) { try await outcomes[0].upload.result }
+    #expect(outcomes[1].error == nil)
+    guard case .uploading = await outcomes[1].upload.status else {
+      Issue.record("The accepted upload is not uploading.")
+      return
+    }
+    respond(.noContent)
+    await outcomes[1].upload.cancel()
+  }
+
+  @Test
+  func resumeAllCreatesAnExpiredUploadAgainWithoutAnError() async throws {
+    let record = try saveRecord(fingerprint: .repeating("a"))
+    let stalePath = "/storage/v1/upload/resumable/\(record.fingerprint.rawValue)"
+    respond(
+      .gone, headers: [.contentType: "text/plain"],
+      body: "The file for this url no longer exists")
+    respond(.created, headers: [.location: "/storage/v1/upload/resumable/new", .uploadOffset: "0"])
+    respond(.noContent, headers: [.uploadOffset: "8"])
+    respond(.noContent, headers: [.uploadOffset: "16"])
+    respond(.noContent, headers: [.uploadOffset: "20", .tusComplete: "1"])
+
+    let outcomes = try await storage.resumableUploads.resumeAll()
+    let object = try await outcomes[0].upload.result
+
+    #expect(outcomes.count == 1)
+    #expect(outcomes[0].error == nil)
+    #expect(object.fullPath == "bucket/video.mp4")
+    #expect(requests.value.prefix(2) == ["HEAD \(stalePath)", "POST /storage/v1/upload/resumable"])
+    #expect(
+      requests.value.dropFirst(2).allSatisfy { $0 == "PATCH /storage/v1/upload/resumable/new" })
     #expect(try store.records().isEmpty)
   }
 

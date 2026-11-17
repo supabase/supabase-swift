@@ -196,8 +196,9 @@ final class StorageResumableIntegrationTests {
     let second = try client()
     let resumed = try await second.resumableUploads.resumeAll()
     #expect(resumed.count == 1)
-    #expect(resumed.first?.id == upload.id)
-    _ = try await resumed[0].result
+    #expect(resumed.first?.upload.id == upload.id)
+    #expect(resumed.first?.error == nil)
+    _ = try await resumed[0].upload.result
 
     try await expectObject(second, path: "relaunched.bin")
     #expect(try await second.resumableUploads.pending().isEmpty)
@@ -215,8 +216,9 @@ final class StorageResumableIntegrationTests {
 
     let second = try client()
     let resumed = try await second.resumableUploads.resumeAll()
-    #expect(resumed.map(\.id) == [upload.id])
-    _ = try await resumed[0].result
+    #expect(resumed.map(\.upload.id) == [upload.id])
+    #expect(resumed.allSatisfy { $0.error == nil })
+    _ = try await resumed[0].upload.result
 
     try await expectObject(second, path: "corrupt-neighbor.bin")
     #expect(!FileManager.default.fileExists(atPath: corrupt.path))

@@ -22,13 +22,26 @@ extension StorageClient {
 ///
 /// ```swift
 /// // At launch:
-/// for upload in try await storage.resumableUploads.resumeAll() {
-///   Task { try await upload.result }
+/// for outcome in try await storage.resumableUploads.resumeAll() {
+///   if let error = outcome.error {
+///     print("\(outcome.upload.path) did not resume: \(error)")
+///     continue
+///   }
+///   Task { try await outcome.upload.result }
 /// }
 /// ```
 /// - Warning: Experimental. See ``ResumableUpload``.
 @_spi(Experimental)
 public struct ResumableUploadRegistry: Sendable {
+  /// What ``ResumableUploadRegistry/resumeAll()`` did with one upload.
+  public struct ResumeOutcome: Sendable {
+    /// The handle for the upload.
+    public let upload: ResumableUpload
+    /// The error ``ResumableUpload/start()`` or ``ResumableUpload/resume()`` threw, or `nil` when
+    /// the upload went on.
+    public let error: StorageError?
+  }
+
   let api: StorageAPI
 
   private var store: ResumableStore {
@@ -47,21 +60,43 @@ public struct ResumableUploadRegistry: Sendable {
     try store.records().map { ResumableUpload.handle(record: $0, api: api) }
   }
 
-  /// ``pending()``, with every upload started or resumed. A refusal by the server does not
-  /// throw here; it shows in that upload's ``ResumableUpload/status`` and
-  /// ``ResumableUpload/result``.
+  /// ``pending()``, with every upload started or resumed, one at a time.
   ///
-  /// - Throws: ``StorageError`` when the record directory cannot be read.
-  public func resumeAll() async throws -> [ResumableUpload] {
-    let uploads = try await pending()
-    for upload in uploads {
-      switch await upload.status {
-      case .pending: try? await upload.start()
-      case .paused, .failed: try? await upload.resume()
-      case .uploading, .completed, .cancelled: break
+  /// Each ``ResumeOutcome`` holds a handle and the error its ``ResumableUpload/start()`` or
+  /// ``ResumableUpload/resume()`` threw, or `nil` when the upload went on. A failed upload is
+  /// also ``ResumableUpload/Status/failed(_:)``. An upload the server reports as expired or gone
+  /// is created again from offset 0, not failed. A failure after the first request shows in that
+  /// upload's ``ResumableUpload/result``.
+  ///
+  /// ```swift
+  /// for outcome in try await storage.resumableUploads.resumeAll() {
+  ///   if let error = outcome.error {
+  ///     print("\(outcome.upload.path) did not resume: \(error)")
+  ///     continue
+  ///   }
+  ///   Task { _ = try await outcome.upload.result }
+  /// }
+  /// ```
+  ///
+  /// - Returns: One ``ResumeOutcome`` for every upload ``pending()`` returns, in the same order.
+  /// - Throws: ``StorageError`` when the record directory cannot be read, or
+  ///   `CancellationError` when the calling task is cancelled. The uploads that started before
+  ///   go on; ``pending()`` returns their handles.
+  public func resumeAll() async throws -> [ResumeOutcome] {
+    var outcomes: [ResumeOutcome] = []
+    for upload in try await pending() {
+      do {
+        switch await upload.status {
+        case .pending: try await upload.start()
+        case .paused, .failed: try await upload.resume()
+        case .uploading, .completed, .cancelled: break
+        }
+        outcomes.append(ResumeOutcome(upload: upload, error: nil))
+      } catch let error as StorageError {
+        outcomes.append(ResumeOutcome(upload: upload, error: error))
       }
     }
-    return uploads
+    return outcomes
   }
 
   /// Deletes the record and sandbox copy of every upload that is not in flight in this

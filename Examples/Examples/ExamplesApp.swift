@@ -65,7 +65,15 @@ struct ExamplesApp: App {
         .environment(\.supabase, supabaseClient)
         .environment(auth)
         .task {
-          _ = try? await supabaseClient.storage.resumableUploads.resumeAll()
+          do {
+            for outcome in try await supabaseClient.storage.resumableUploads.resumeAll() {
+              if let error = outcome.error {
+                print("Resumable upload \(outcome.upload.path) did not resume: \(error)")
+              }
+            }
+          } catch {
+            print("Resumable uploads could not be read: \(error)")
+          }
         }
     }
   }
