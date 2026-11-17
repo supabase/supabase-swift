@@ -5,7 +5,6 @@
       "versioning": "prerelease",
       "prerelease": true,
       "prerelease-type": "alpha",
-      "release-as": "3.0.0-alpha.1",
       "extra-files": [
         "Sources/Helpers/Version.swift",
         "tools/supabase-typegen/Sources/SupabaseTypegen/Version.swift",
