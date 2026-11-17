@@ -218,9 +218,10 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// stops the wait, not the frame. ``RealtimeClient/disconnect(code:reason:)`` still writes the
   /// frames queued before it, up to the client's request timeout; a lost connection drops them.
   ///
-  /// > Important: On a private channel the server sends no reply when row level security denies
-  /// > the write or the database fails. With `acknowledgesMessages` on, such a broadcast fails with
-  /// > ``RealtimeError/Kind-swift.struct/timeout``.
+  /// > Important: On a private channel the server refuses a broadcast that row level security
+  /// > denies. With `acknowledgesMessages` on, such a broadcast fails with
+  /// > ``RealtimeError/Kind-swift.struct/server`` and the server's reason. With it off, the call
+  /// > returns and the refusal goes unseen.
   ///
   /// - Parameters:
   ///   - event: The broadcast event name.
