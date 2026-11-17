@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.55.7](https://github.com/supabase/supabase-swift/compare/v2.55.6...v2.55.7) (2026-11-16)
+
+### Bug Fixes
+
+* **auth:** clear the stored session when a refresh is refused with user_banned ([#1631](https://github.com/supabase/supabase-swift/issues/1631)) ([37a4560](https://github.com/supabase/supabase-swift/commit/37a456047fdc7315d66c096fa7ce7e81d085aab7)), closes [#1613](https://github.com/supabase/supabase-swift/issues/1613)
+* **auth:** exchangeCodeForSession fails before the request when the PKCE verifier is missing (v2 backport) ([#1681](https://github.com/supabase/supabase-swift/issues/1681)) ([0d92fea](https://github.com/supabase/supabase-swift/commit/0d92fea25b587f15eae0f50464df984618265809))
+* **ci:** repair release/v2 integration tests and spell check ([#1825](https://github.com/supabase/supabase-swift/issues/1825)) ([c3258c6](https://github.com/supabase/supabase-swift/commit/c3258c699a6123218c5ffa47af2ae91cf7c4c1bd))
+* **security:** redact secrets in verbose HTTP logs (v2 backport) ([#1822](https://github.com/supabase/supabase-swift/issues/1822)) ([3b96aea](https://github.com/supabase/supabase-swift/commit/3b96aea8d74d1e2fe5b59a683dc439d18af6d562)), closes [#1705](https://github.com/supabase/supabase-swift/issues/1705)
+
+## [2.55.6](https://github.com/supabase/supabase-swift/compare/v2.55.5...v2.55.6) (2026-10-29)
+
+### Bug Fixes
+
+* **realtime:** import HTTPTypes with an explicit access level in RealtimeV2 ([#1649](https://github.com/supabase/supabase-swift/issues/1649)) ([f9c41ee](https://github.com/supabase/supabase-swift/commit/f9c41ee1bb30129d300dc3cc84e31bb18cc1a96a)), closes [#1647](https://github.com/supabase/supabase-swift/issues/1647)
+
+## [2.55.5](https://github.com/supabase/supabase-swift/compare/v2.55.4...v2.55.5) (2026-10-26)
+
+### Bug Fixes
+
+* **ci:** compute coverage from this run's profile and every test bundle ([#1615](https://github.com/supabase/supabase-swift/issues/1615)) ([#1621](https://github.com/supabase/supabase-swift/issues/1621)) ([dcd45fd](https://github.com/supabase/supabase-swift/commit/dcd45fd8632659b16a2411cd98de3d638ab7b856))
+* **realtime:** don't rejoin a channel the caller unsubscribed across a reconnect (v2 backport) ([#1602](https://github.com/supabase/supabase-swift/issues/1602)) ([bf3123c](https://github.com/supabase/supabase-swift/commit/bf3123ced6a96d7c90b2e42ecd11479635d96682))
+* **realtime:** stale subscribe no longer resets the rejoined channel ([#1606](https://github.com/supabase/supabase-swift/issues/1606)) ([d16ddc7](https://github.com/supabase/supabase-swift/commit/d16ddc762474aa149cc0f2710b6b3289802e7ac5))
+
 ## [2.55.4](https://github.com/supabase/supabase-swift/compare/v2.55.3...v2.55.4) (2026-10-13)
 
 ### Bug Fixes
