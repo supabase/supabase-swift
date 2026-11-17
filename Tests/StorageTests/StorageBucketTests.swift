@@ -595,22 +595,25 @@ struct StorageBucketTests {
         == "\(self.url)/object/upload/sign/bucket/file.txt?token=abc.def.ghi&download=")
   }
 
-  @Test(arguments: [Duration.zero, .milliseconds(999), .seconds(-5)])
-  func createSignedURLRejectsLessThanOneSecondBeforeSending(expiresIn: Duration) async throws {
-    let storage = try makeFailingSUT {
-      Issue.record("A request was sent"); throw URLError(.badURL)
-    }
+  @Test(arguments: [
+    (Duration.zero, 0), (.milliseconds(999), 0), (.seconds(-5), -5), (.milliseconds(1500), 1),
+  ])
+  func createSignedURLSendsTheWholeSecondsOfAnyExpiry(expiresIn: Duration, seconds: Int)
+    async throws
+  {
+    let body = LockIsolated<Data?>(nil)
+    let single = try makeBodyCapturingSUT(
+      body: body, response: #"{"signedURL":"/object/sign/bucket/file.txt?token=t"}"#)
+    _ = try await single.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self) == #"{"expiresIn":\#(seconds)}"#)
 
-    await #expect {
-      try await storage.from("bucket").createSignedURL(path: "file.txt", expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
-    await #expect {
-      try await storage.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
+    body.setValue(nil)
+    let batch = try makeBodyCapturingSUT(body: body, response: "[]")
+    _ = try await batch.from("bucket").createSignedURLs(paths: ["file.txt"], expiresIn: expiresIn)
+    #expect(
+      String(decoding: try #require(body.value), as: UTF8.self).contains(
+        #""expiresIn":\#(seconds)"#))
   }
 
   @Test
@@ -975,34 +978,6 @@ struct StorageBucketTests {
   }
 
   @Test
-  func uploadReturnsCleanedPath() async throws {
-    let storage = try makeSUT()
-
-    transport.stub(
-      .post,
-      url.appendingPathComponent("object/bucket/folder/file.txt"),
-      data: Data(
-        """
-        {
-          "Id": "E621E1F8-C36C-495A-93FC-0C247A3E6E5F",
-          "Key": "bucket/folder/file.txt"
-        }
-        """.utf8
-      )
-    )
-
-    let response = try await storage.from("bucket")
-      .upload(
-        path: "/folder//file.txt",
-        data: Data("hello world!".utf8),
-        options: UploadOptions(contentType: "text/plain")
-      )
-
-    #expect(response.path == "folder/file.txt")
-    #expect(response.fullPath == "bucket/folder/file.txt")
-  }
-
-  @Test
   func uploadFromURL_honorsContentType() async throws {
     let storage = try makeSUT()
 
@@ -1183,147 +1158,6 @@ struct StorageBucketTests {
       publicURL.absoluteString.contains("/render/image/"),
       "Non-empty transform should use /render/image/ path, got: \(publicURL.absoluteString)"
     )
-  }
-
-  @Test
-  func getPublicURLStripsLeadingSlash() throws {
-    let storage = try makeSUT()
-
-    let publicURL = try storage.from("bucket")
-      .publicURL(path: "/folder/image.png")
-
-    #expect(
-      publicURL.absoluteString
-        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
-    )
-  }
-
-  @Test
-  func downloadStripsLeadingSlash() async throws {
-    let storage = try makeSUT()
-
-    transport.stub(
-      .get,
-      url.appendingPathComponent("object/bucket/file.txt"),
-      data: Data("hello world".utf8)
-    ) {
-      #"""
-      curl \
-      	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/object/bucket/file.txt"
-      """#
-    }
-
-    let response = try await storage.from("bucket")
-      .download(path: "/file.txt")
-
-    #expect(try await response.data() == Data("hello world".utf8))
-  }
-
-  @Test
-  func getPublicURLCollapsesRepeatedAndTrailingSlashes() throws {
-    let storage = try makeSUT()
-
-    let publicURL = try storage.from("bucket")
-      .publicURL(path: "folder//image.png/")
-
-    #expect(
-      publicURL.absoluteString
-        == "http://localhost:54321/storage/v1/object/public/bucket/folder/image.png"
-    )
-  }
-
-  @Test
-  func downloadCollapsesRepeatedAndTrailingSlashes() async throws {
-    let storage = try makeSUT()
-
-    transport.stub(
-      .get,
-      url.appendingPathComponent("object/bucket/folder/file.txt"),
-      data: Data("hello world".utf8)
-    )
-
-    let response = try await storage.from("bucket")
-      .download(path: "folder//file.txt/")
-
-    #expect(try await response.data() == Data("hello world".utf8))
-  }
-
-  @Test
-  func moveCleansPaths() async throws {
-    struct Sent: Decodable {
-      let sourceKey: String
-      let destinationKey: String
-    }
-    let body = LockIsolated(Data?.none)
-    let storage = try makeBodyCapturingSUT(body: body, response: "{}")
-
-    try await storage.from("bucket").move(from: "/folder/a.png", to: "folder//b.png/")
-
-    let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
-  }
-
-  @Test
-  func copyCleansPaths() async throws {
-    struct Sent: Decodable {
-      let sourceKey: String
-      let destinationKey: String
-    }
-    let body = LockIsolated(Data?.none)
-    let storage = try makeBodyCapturingSUT(
-      body: body, response: #"{"Key":"bucket/folder/b.png"}"#)
-
-    try await storage.from("bucket").copy(from: "/folder/a.png", to: "folder//b.png/")
-
-    let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.sourceKey == "folder/a.png")
-    #expect(sent.destinationKey == "folder/b.png")
-  }
-
-  @Test
-  func removeCleansPaths() async throws {
-    struct Sent: Decodable {
-      let prefixes: [String]
-    }
-    let body = LockIsolated(Data?.none)
-    let storage = try makeBodyCapturingSUT(body: body, response: "[]")
-
-    try await storage.from("bucket").remove(paths: ["/folder//a.png", "b.png/"])
-
-    let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefixes == ["folder/a.png", "b.png"])
-  }
-
-  @Test
-  func createSignedURLsCleansPaths() async throws {
-    struct Sent: Decodable {
-      let paths: [String]
-    }
-    let body = LockIsolated(Data?.none)
-    let storage = try makeBodyCapturingSUT(body: body, response: "[]")
-
-    _ = try await storage.from("bucket")
-      .createSignedURLs(paths: ["/folder//a.png", "b.png/"], expiresIn: .seconds(60))
-
-    let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.paths == ["folder/a.png", "b.png"])
-  }
-
-  @Test
-  func listCleansPath() async throws {
-    struct Sent: Decodable {
-      let prefix: String
-    }
-    let body = LockIsolated(Data?.none)
-    let storage = try makeBodyCapturingSUT(body: body, response: "[]")
-
-    _ = try await storage.from("bucket").list(path: "/folder//nested/")
-
-    let sent = try JSONDecoder().decode(Sent.self, from: #require(body.value))
-    #expect(sent.prefix == "folder/nested")
   }
 
   @Test
@@ -1600,72 +1434,6 @@ struct StorageBucketTests {
       response.signedURL.absoluteString
         == "http://localhost:54321/storage/v1/object/upload/sign/bucket/file.txt?token=abc.def.ghi"
     )
-  }
-
-  @Test
-  func createSignedUploadURLCleansPath() async throws {
-    let storage = try makeSUT()
-
-    transport.stub(
-      .post,
-      url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
-      data: Data(
-        """
-        {
-          "url": "object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
-        }
-        """.utf8
-      )
-    ) {
-      #"""
-      curl \
-      	--request POST \
-      	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt"
-      """#
-    }
-
-    let response = try await storage.from("bucket")
-      .createSignedUploadURL(path: "/folder//file.txt")
-
-    #expect(response.path == "folder/file.txt")
-    #expect(response.token == "abc.def.ghi")
-  }
-
-  @Test
-  func uploadToSignedURLCleansPath() async throws {
-    let storage = try makeSUT()
-
-    transport.stub(
-      .put,
-      url.appendingPathComponent("object/upload/sign/bucket/folder/file.txt"),
-      data: Data(
-        """
-        {
-          "Key": "bucket/folder/file.txt"
-        }
-        """.utf8)
-    ) {
-      #"""
-      curl \
-      	--request PUT \
-      	--header "Cache-Control: max-age=3600" \
-      	--header "Content-Length: 11" \
-      	--header "Content-Type: text/plain" \
-      	--header "X-Client-Info: storage-swift/0.0.0; platform=macOS; platform-version=0.0.0; runtime=swift; runtime-version=0.0.0" \
-      	--header "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" \
-      	--data "hello world" \
-      	"http://localhost:54321/storage/v1/object/upload/sign/bucket/folder/file.txt?token=abc.def.ghi"
-      """#
-    }
-
-    let response = try await storage.from("bucket")
-      .uploadToSignedURL(
-        path: "/folder//file.txt", token: "abc.def.ghi", data: Data("hello world".utf8))
-
-    #expect(response.path == "folder/file.txt")
-    #expect(response.fullPath == "bucket/folder/file.txt")
   }
 
   @Test

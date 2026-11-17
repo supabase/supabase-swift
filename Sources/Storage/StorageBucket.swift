@@ -136,7 +136,7 @@ public struct StorageBucket: Sendable {
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
-    let key = try ObjectKey(path)
+    let key = ObjectKey(path)
     let response = try await sendUpload(
       api.requests.upload(method: method, bucket: id, key: key, body: body, options: options),
       progress: progress)
@@ -256,7 +256,7 @@ public struct StorageBucket: Sendable {
     fileURL: URL,
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
-    let key = try ObjectKey(path)
+    let key = ObjectKey(path)
     let (size, _) = try ResumableStore.attributes(of: fileURL)
     let fingerprint = try ResumableStore.fingerprint(
       url: api.configuration.url, bucketID: id, path: key.path, fileURL: fileURL)
@@ -285,7 +285,7 @@ public struct StorageBucket: Sendable {
     data: Data,
     options: UploadOptions = UploadOptions()
   ) throws -> ResumableUpload {
-    let key = try ObjectKey(path)
+    let key = ObjectKey(path)
     let fingerprint = ResumableStore.fingerprint(
       url: api.configuration.url, bucketID: id, path: key.path, data: data)
     return ResumableUpload.handle(fingerprint: fingerprint, api: api) {
@@ -425,7 +425,7 @@ public struct StorageBucket: Sendable {
     sourceVersionID: String? = nil,
     options: CopyOptions = CopyOptions()
   ) async throws -> UploadedObject {
-    let destinationKey = try ObjectKey(destination)
+    let destinationKey = ObjectKey(destination)
     let response = try await api.execute(
       api.requests.copy(
         bucket: id, source: ObjectKey(source), destination: destinationKey,
@@ -453,8 +453,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
-  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent;
-  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - expiresIn: How long the URL stays valid, e.g. `.seconds(60)`. Whole seconds are sent,
+  ///     rounded toward zero; Storage rejects less than one second with a 400.
   ///   - options: The download behavior, image transformation, version and cache nonce.
   /// - Returns: A signed `URL` ready to share.
   /// - Throws: ``StorageError`` if the path does not exist or the caller is not authorized.
@@ -496,8 +496,8 @@ public struct StorageBucket: Sendable {
   ///
   /// - Parameters:
   ///   - paths: File paths to sign, e.g. `["folder/image.png", "folder2/image2.png"]`.
-  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent;
-  ///     less than one second throws ``StorageError`` with kind `invalidRequest`.
+  ///   - expiresIn: How long the URLs stay valid, e.g. `.seconds(60)`. Whole seconds are sent,
+  ///     rounded toward zero; Storage rejects less than one second with a 400.
   ///   - options: The download behavior and cache nonce.
   /// - Returns: An array of ``SignedURLResult`` values, one per requested path, preserving order.
   /// - Throws: ``StorageError`` if the request itself fails (e.g. unauthorized). Individual missing
@@ -509,7 +509,7 @@ public struct StorageBucket: Sendable {
   ) async throws -> [SignedURLResult] {
     let response = try await api.execute(
       api.requests.sign(
-        bucket: id, keys: paths.map { try ObjectKey($0) }, expiresIn: Self.seconds(expiresIn))
+        bucket: id, keys: paths.map { ObjectKey($0) }, expiresIn: Self.seconds(expiresIn))
     )
     .decoded(as: [SignedURLsAPIResponse].self)
 
@@ -524,14 +524,9 @@ public struct StorageBucket: Sendable {
     }
   }
 
-  /// The whole seconds the sign routes take. A per-call value, so a bad one throws rather than
-  /// traps.
-  private static func seconds(_ expiresIn: Duration) throws -> Int {
-    guard expiresIn >= .seconds(1) else {
-      throw StorageError(
-        kind: .invalidRequest, message: "A signed URL must expire at least one second from now.")
-    }
-    return Int(expiresIn.components.seconds)
+  /// The whole seconds the sign routes take. Storage judges the value.
+  private static func seconds(_ expiresIn: Duration) -> Int {
+    Int(expiresIn.components.seconds)
   }
 
   /// The `download` and `cacheNonce` query items every URL-returning method appends.
@@ -561,7 +556,7 @@ public struct StorageBucket: Sendable {
   @discardableResult
   public func remove(paths: [String]) async throws -> [StorageObject] {
     try await api.execute(
-      api.requests.remove(bucket: id, keys: paths.map { try ObjectKey($0) })
+      api.requests.remove(bucket: id, keys: paths.map { ObjectKey($0) })
     )
     .decoded()
   }
@@ -585,7 +580,7 @@ public struct StorageBucket: Sendable {
   public func remove(versions: [ObjectVersion]) async throws -> [StorageObject] {
     try await api.execute(
       api.requests.remove(
-        bucket: id, versions: versions.map { (try ObjectKey($0.path), $0.versionID) })
+        bucket: id, versions: versions.map { (ObjectKey($0.path), $0.versionID) })
     )
     .decoded()
   }
@@ -608,7 +603,7 @@ public struct StorageBucket: Sendable {
     options: ListOptions = ListOptions()
   ) async throws -> [StorageObject] {
     try await api.execute(
-      api.requests.list(bucket: id, prefix: ObjectKey(prefix: path ?? ""), options: options)
+      api.requests.list(bucket: id, prefix: ObjectKey(path ?? ""), options: options)
     )
     .decoded()
   }
@@ -742,7 +737,7 @@ public struct StorageBucket: Sendable {
   ///
   /// Never throws: the base URL was validated when the client was created and every path is
   /// percent-encoded into a valid URL. Whether Storage accepts the key is Storage's call, as it
-  /// is for every other method; a `.` or `..` segment is sent encoded rather than refused.
+  /// is for every other method.
   ///
   /// - Parameters:
   ///   - path: The file path including the file name, e.g. `"folder/image.png"`.
@@ -757,7 +752,7 @@ public struct StorageBucket: Sendable {
       query.append(URLQueryItem(name: "versionId", value: versionID))
     }
     return api.requests.publicURL(
-      bucket: id, key: ObjectKey(lenient: path), transform: options.transform?.queryItems ?? [],
+      bucket: id, key: ObjectKey(path), transform: options.transform?.queryItems ?? [],
       query: query)
   }
 
@@ -790,7 +785,7 @@ public struct StorageBucket: Sendable {
       let url: String
     }
 
-    let key = try ObjectKey(path)
+    let key = ObjectKey(path)
     let response = try await api.execute(
       api.requests.createSignedUploadURL(bucket: id, key: key, upsert: upsert)
     )
@@ -904,7 +899,7 @@ public struct StorageBucket: Sendable {
     options: UploadOptions,
     progress: (@Sendable (TransferProgress) -> Void)?
   ) async throws -> UploadedObject {
-    let key = try ObjectKey(path)
+    let key = ObjectKey(path)
     let response = try await sendUpload(
       api.requests.uploadToSignedURL(
         bucket: id, key: key, token: token, body: body, options: options),

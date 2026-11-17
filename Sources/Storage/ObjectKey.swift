@@ -7,45 +7,25 @@
 
 import Foundation
 
-/// One object path, normalized and ready for a URL or a JSON body.
+/// One object path, as the caller wrote it, ready for a URL or a JSON body.
 ///
-/// Storage rejects a leading `/`, an empty segment and `..`, so every path is normalized or
-/// refused here, once, instead of in each route: leading and trailing `/` are stripped, runs of
-/// `/` collapse, and a `.` or `..` segment throws ``StorageError`` with kind `invalidRequest`
-/// (a URL parser would fold it away and silently change the key).
+/// Storage judges the key, so nothing is trimmed, collapsed or refused here: `/a//b/` is its own
+/// key, and an empty key or a `..` segment gets Storage's own `InvalidKey` answer. Only the URL
+/// form is encoded, one segment at a time.
 struct ObjectKey: Hashable, Sendable {
-  /// The path segments, not percent-encoded.
-  let segments: [String]
+  /// The path exactly as the caller passed it, as sent in JSON bodies.
+  let path: String
 
-  /// The normalized path, `folder/file.png`, as sent in JSON bodies and echoed in responses.
-  var path: String { segments.joined(separator: "/") }
-
-  /// The normalized path with each segment percent-encoded, for the path of a URL.
-  var encoded: String { segments.map(Self.encode).joined(separator: "/") }
-
-  /// Normalizes an object path. An empty path is refused: every object route needs a key.
-  init(_ path: String) throws {
-    try self.init(prefix: path)
-    guard !segments.isEmpty else {
-      throw StorageError(kind: .invalidRequest, message: "An object path must not be empty.")
-    }
+  init(_ path: String) {
+    self.path = path
   }
 
-  /// Normalizes a listing prefix, which may be empty to mean the bucket root.
-  init(prefix path: String) throws {
-    self.init(lenient: path)
-    if let dots = segments.first(where: { $0 == "." || $0 == ".." }) {
-      throw StorageError(
-        kind: .invalidRequest,
-        message: "An object path must not contain a '\(dots)' segment: '\(path)'.")
-    }
-  }
-
-  /// Normalizes without refusing anything, for ``StorageBucket/publicURL`` which cannot throw:
-  /// a `.` or `..` segment is kept and fully percent-encoded, so the URL stays valid and no parser
-  /// folds it away; the server then rejects the key.
-  init(lenient path: String) {
-    segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+  /// The path with each segment percent-encoded, for the path of a URL. Empty segments stay, so
+  /// `a//b/` keeps both slashes.
+  var encoded: String {
+    path.split(separator: "/", omittingEmptySubsequences: false)
+      .map { Self.encode(String($0)) }
+      .joined(separator: "/")
   }
 
   /// What stays literal inside one segment: the RFC 3986 path characters minus `+`, which some
@@ -55,6 +35,10 @@ struct ObjectKey: Hashable, Sendable {
     charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*,;=:@")
 
   /// Percent-encodes one segment. Bucket ids go through this for the one segment they occupy.
+  ///
+  /// A `.` or `..` segment is fully encoded: libcurl, which `URLSession` uses on Linux, and
+  /// `URL.standardized` fold a literal one away and would send a different key. The server
+  /// decodes `%2E%2E` back to `..`.
   static func encode(_ segment: String) -> String {
     switch segment {
     case ".": "%2E"

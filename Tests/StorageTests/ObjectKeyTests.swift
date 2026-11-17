@@ -14,57 +14,38 @@ import Testing
 struct ObjectKeyTests {
   @Test(
     arguments: [
-      ("folder/file.png", "folder/file.png", "folder/file.png"),
-      ("/folder//file.png/", "folder/file.png", "folder/file.png"),
-      ("folder/my file.png", "folder/my file.png", "folder/my%20file.png"),
-      ("a+b.png", "a+b.png", "a%2Bb.png"),
-      ("a#b.png", "a#b.png", "a%23b.png"),
-      ("a?b.png", "a?b.png", "a%3Fb.png"),
-      ("100%.png", "100%.png", "100%25.png"),
-      ("café/文件.png", "café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
-      ("a;b=c&d.png", "a;b=c&d.png", "a;b=c&d.png"),
-      ("~!$'()*,:@-_.png", "~!$'()*,:@-_.png", "~!$'()*,:@-_.png"),
+      ("folder/file.png", "folder/file.png"),
+      ("folder/my file.png", "folder/my%20file.png"),
+      ("a+b.png", "a%2Bb.png"),
+      ("a#b.png", "a%23b.png"),
+      ("a?b.png", "a%3Fb.png"),
+      ("100%.png", "100%25.png"),
+      ("café/文件.png", "caf%C3%A9/%E6%96%87%E4%BB%B6.png"),
+      ("a;b=c&d.png", "a;b=c&d.png"),
+      ("~!$'()*,:@-_.png", "~!$'()*,:@-_.png"),
     ]
   )
-  func normalizesAndEncodes(input: String, path: String, encoded: String) throws {
-    let key = try ObjectKey(input)
+  func encodesEachSegment(input: String, encoded: String) {
+    let key = ObjectKey(input)
 
-    #expect(key.path == path)
+    #expect(key.path == input)
     #expect(key.encoded == encoded)
   }
 
-  @Test(arguments: ["", "/", "//"])
-  func rejectsAnEmptyPath(input: String) {
-    #expect {
-      try ObjectKey(input)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
-  }
+  @Test(
+    arguments: [
+      ("", ""),
+      ("/", "/"),
+      ("/folder//file.png/", "/folder//file.png/"),
+      ("a/../b/./c.png", "a/%2E%2E/b/%2E/c.png"),
+      ("..", "%2E%2E"),
+    ]
+  )
+  func keepsThePathAsWritten(input: String, encoded: String) {
+    let key = ObjectKey(input)
 
-  @Test(arguments: ["../secret.png", "folder/../file.png", "./file.png", "a/./b"])
-  func rejectsDotSegments(input: String) {
-    #expect {
-      try ObjectKey(input)
-    } throws: { error in
-      (error as? StorageError)?.kind == .invalidRequest
-    }
-  }
-
-  @Test
-  func prefixMayBeEmpty() throws {
-    #expect(try ObjectKey(prefix: "").path == "")
-    #expect(try ObjectKey(prefix: "/").segments.isEmpty)
-    #expect(try ObjectKey(prefix: "/folder//").path == "folder")
-  }
-
-  @Test
-  func lenientKeepsDotSegmentsFullyEncoded() {
-    let key = ObjectKey(lenient: "/a/../b/./c.png//")
-
-    #expect(key.path == "a/../b/./c.png")
-    #expect(key.encoded == "a/%2E%2E/b/%2E/c.png")
-    #expect(ObjectKey(lenient: "/").segments.isEmpty)
+    #expect(key.path == input)
+    #expect(key.encoded == encoded)
   }
 
   @Test

@@ -46,8 +46,8 @@ public struct StorageError: SupabaseError {
     /// type, or a required field was missing. Nothing to retry; report it.
     /// ``StorageError/underlyingError`` is the `DecodingError` when there was one.
     public static let decoding: Kind = "decoding"
-    /// The SDK refused to send: an object path was empty or contained a `..` segment, or a
-    /// per-call value such as an expiry was out of range. Fix the call. No request was sent.
+    /// The SDK refused to send: a per-call value could not be turned into a request, such as an
+    /// upload source that could not be read. Fix the call. No request was sent.
     public static let invalidRequest: Kind = "invalidRequest"
     /// ``StorageClient/init(configuration:)`` refused the configuration: its URL has no scheme, no
     /// host, or cannot be split into components. Fix the configuration. No client was created.

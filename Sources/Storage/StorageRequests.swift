@@ -482,7 +482,7 @@ struct StorageRequests: Sendable {
   }
 
   /// The cursor locks the sort and filters server-side, so every page sends the same options.
-  func objects(bucket: String, prefix: ListPrefix, options: ObjectListingOptions, cursor: String?)
+  func objects(bucket: String, prefix: ObjectKey, options: ObjectListingOptions, cursor: String?)
     throws -> StorageRequest
   {
     let sortBy =

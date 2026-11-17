@@ -82,7 +82,7 @@ struct TusSessionTests {
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("folder/video.mp4"), length: 20, options: options)
+      bucket: "bucket", key: ObjectKey("folder/video.mp4"), length: 20, options: options)
 
     #expect(created.uploadURL == uploadURL)
     #expect(created.offset == 0)
@@ -96,7 +96,7 @@ struct TusSessionTests {
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+      bucket: "bucket", key: ObjectKey("a"), length: 20, options: options)
 
     #expect(created.offset == 0)
   }
@@ -121,7 +121,7 @@ struct TusSessionTests {
             }))))
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+      bucket: "bucket", key: ObjectKey("video.mp4"), length: 20, options: options)
 
     #expect(
       sent.value == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable"))
@@ -141,7 +141,7 @@ struct TusSessionTests {
     }
 
     let created = try await sut.create(
-      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options,
+      bucket: "bucket", key: ObjectKey("video.mp4"), length: 20, options: options,
       firstChunk: Data(repeating: 1, count: 6))
 
     #expect(created.offset == 6)
@@ -156,7 +156,7 @@ struct TusSessionTests {
 
     await #expect(throws: StorageError.self) {
       try await sut.create(
-        bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options,
+        bucket: "bucket", key: ObjectKey("a"), length: 20, options: options,
         firstChunk: Data(repeating: 1, count: 6))
     }
   }
@@ -169,7 +169,7 @@ struct TusSessionTests {
 
     let error = await #expect(throws: StorageError.self) {
       try await sut.create(
-        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+        bucket: "bucket", key: ObjectKey("video.mp4"), length: 20, options: options)
     }
     #expect(error?.code == nil)
     #expect(error?.serverError?.statusCode == 413)
