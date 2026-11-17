@@ -28,6 +28,12 @@ Changes that still compile but behave differently. Check each one by hand.
 - **Error responses always decode.** A PostgREST error body is decoded with a fixed decoder, not
   your `Configuration.decoder`. Error bodies that failed to decode in v2 and came through as
   `HTTPError` are now a `PostgrestError`.
+- **`maybeSingle()` counts the rows itself.** It now asks for the usual JSON array, as supabase-js
+  does, instead of `application/vnd.pgrst.object+json`. No row is still `nil`, and more than one
+  row still throws `PGRST116` with status 406. But on a write, such as
+  `update(...).select().maybeSingle()`, PostgREST no longer rolls back a write that matches more
+  than one row: the rows are written, then the call throws. Search for `maybeSingle()` after
+  `update`, `upsert` or `delete`, and use `single()` where the rollback matters.
 - **Retries wait with jitter.** PostgREST still retries `GET` and `HEAD` on a transient network
   failure, a 503 or a 520, up to three times. The wait is now random up to `min(30 s, 2^n s)`,
   and a `Retry-After` header is honored. Errors from a custom transport or middleware are no
