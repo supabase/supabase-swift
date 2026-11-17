@@ -483,7 +483,7 @@ public final class SupabaseClient: Sendable {
     )
   }
 
-  /// The SDK middleware that sets the bearer: the session token, else the key.
+  /// The SDK middleware that sets the bearer: the session token, else the key when `keyAsBearer`.
   ///
   /// It captures only the dependencies it needs, never `self`, because each sub-client stores its
   /// middlewares for its whole lifetime: the cached ``realtime`` and ``functions`` sub-clients are

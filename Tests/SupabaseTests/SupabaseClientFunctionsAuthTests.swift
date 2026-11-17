@@ -13,14 +13,17 @@ struct SupabaseClientFunctionsAuthTests {
 
   private func makeClient(
     supabaseKey: String = "PUBLISHABLE_KEY",
-    auth: SupabaseClient.Configuration.Auth
+    auth: SupabaseClient.Configuration.Auth,
+    transport: RecordingTransport? = nil
   ) throws -> SupabaseClient {
     try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: supabaseKey,
       configuration: SupabaseClient.Configuration(
         auth: auth,
-        global: SupabaseClient.Configuration.Global(http: .init(transport: transport))
+        global: SupabaseClient.Configuration.Global(
+          http: .init(transport: transport ?? self.transport)
+        )
       )
     )
   }
@@ -58,10 +61,10 @@ struct SupabaseClientFunctionsAuthTests {
     #expect(request.head.headerFields[.authorization] == "Bearer PUBLISHABLE_KEY")
   }
 
-  @Test
-  func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer() async throws {
+  @Test(arguments: ["sb_publishable_abc123", "sb_secret_abc123"])
+  func functionsInvokeWithNewFormatKeyAndNoSessionSendsNoBearer(supabaseKey: String) async throws {
     let client = try makeClient(
-      supabaseKey: "sb_publishable_abc123",
+      supabaseKey: supabaseKey,
       auth: SupabaseClient.Configuration.Auth(
         storage: InMemoryAuthStorage(),
         autoRefresh: .manual
@@ -72,7 +75,7 @@ struct SupabaseClientFunctionsAuthTests {
 
     let request = try #require(transport.requests.last)
     #expect(request.head.headerFields[.authorization] == nil)
-    #expect(request.head.headerFields[HTTPField.Name("apikey")!] == "sb_publishable_abc123")
+    #expect(request.head.headerFields[HTTPField.Name("apikey")!] == supabaseKey)
   }
 
   @Test
@@ -115,16 +118,13 @@ struct SupabaseClientFunctionsAuthTests {
       (HTTPResponse(status: .ok), sessionJSON(accessToken: "session-jwt", refreshToken: "r"))
     }
     http.respond { _, _ in (HTTPResponse(status: .ok), Data("{}".utf8)) }
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
+    let client = try makeClient(
       supabaseKey: supabaseKey,
-      configuration: SupabaseClient.Configuration(
-        auth: SupabaseClient.Configuration.Auth(
-          storage: InMemoryAuthStorage(),
-          autoRefresh: .manual
-        ),
-        global: SupabaseClient.Configuration.Global(http: .init(transport: http))
-      )
+      auth: SupabaseClient.Configuration.Auth(
+        storage: InMemoryAuthStorage(),
+        autoRefresh: .manual
+      ),
+      transport: http
     )
     _ = try await client.auth.signIn(email: "a@b.c", password: "x")
 
