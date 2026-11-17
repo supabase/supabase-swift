@@ -275,7 +275,7 @@ public final class RealtimeChannel: Sendable, Hashable {
   public func broadcast<Event: BroadcastEvent & Encodable>(
     _ message: Event, encoder: JSONEncoder? = nil
   ) async throws {
-    try await broadcast(event: Event.event, payload: message, encoder: encoder)
+    try await broadcast(event: Event.checkedEvent, payload: message, encoder: encoder)
   }
 
   private func broadcast(event: String, payload: BroadcastPushPayload) async throws {

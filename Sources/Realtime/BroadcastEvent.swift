@@ -5,6 +5,7 @@
 
 import ConcurrencyExtras
 public import Foundation
+import IssueReporting
 
 /// A type that is the payload of one broadcast event.
 ///
@@ -30,9 +31,27 @@ public import Foundation
 /// Set ``event`` to a fixed string. Clients in other languages use the same name, so do not
 /// derive it from the type name. Do not use `"*"`: a stream that listens for `"*"` receives
 /// every broadcast on the channel, so ``TypedBroadcastMessage/payload()`` throws for most of them.
+/// The SDK reports an issue when a typed stream or a typed send uses `"*"`.
 public protocol BroadcastEvent {
   /// The broadcast event name on the wire.
   static var event: String { get }
+}
+
+extension BroadcastEvent {
+  /// ``event``, after it reports an issue if the name is `"*"`. The name is still used, so the
+  /// call behaves as its string-keyed form would.
+  static var checkedEvent: String {
+    let event = Self.event
+    if event == "*" {
+      reportIssue(
+        """
+        \(Self.self).event is "*", which matches every broadcast on the channel. Give the type \
+        its own event name, or use the string-keyed broadcast API to listen to every event.
+        """
+      )
+    }
+    return event
+  }
 }
 
 /// A ``BroadcastMessage`` bound to an event type, usually a ``BroadcastEvent``. Call

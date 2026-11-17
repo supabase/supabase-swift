@@ -256,7 +256,7 @@ extension RealtimeChannel {
     bufferingPolicy: AsyncStream<BroadcastMessage>.Continuation.BufferingPolicy = .unbounded,
     decoder: JSONDecoder? = nil
   ) async -> AsyncStream<TypedBroadcastMessage<Event>> {
-    let messages = await broadcasts(event: Event.event, bufferingPolicy: bufferingPolicy)
+    let messages = await broadcasts(event: Event.checkedEvent, bufferingPolicy: bufferingPolicy)
     return AsyncStream(
       LazilyDecodedSequence<TypedBroadcastMessage<Event>>(
         base: messages, decoder: UncheckedSendable(decoder ?? JSONValue.decoder)))

@@ -327,6 +327,33 @@ final class RealtimeChannelBroadcastTests: Sendable {
     #expect(try messages.map { try $0.payload().x } == [5])
   }
 
+  // `reportIssue` reaches `withKnownIssue` only on Darwin.
+  #if canImport(Darwin)
+    @Test
+    func receive_typedStreamForAWildcardEventReportsAnIssue() async {
+      let channel = await sut.channel("test")
+
+      await withKnownIssue {
+        _ = await channel.broadcasts(of: Wildcard.self)
+      }
+    }
+
+    @Test
+    func broadcast_ofAWildcardEventReportsAnIssueAndStillSends() async throws {
+      setupServerAutoResponder()
+      try await sut.connect()
+      let channel = await sut.channel("test")
+      try await channel.subscribe()
+
+      try await withKnownIssue {
+        try await channel.broadcast(Wildcard())
+      }
+
+      let frame = try #require(await client.sentBinaryFrames().last)
+      #expect(userBroadcastPush(frame).event == "*")
+    }
+  #endif
+
   /// Subscribes the channel, delivers `broadcasts`, ends the channel's streams, and returns what
   /// `stream` received.
   private func deliver<Element: Sendable>(
@@ -695,6 +722,10 @@ final class RealtimeChannelBroadcastTests: Sendable {
 private struct Cursor: BroadcastEvent, Codable, Equatable {
   static let event = "cursor"
   var x: Int
+}
+
+private struct Wildcard: BroadcastEvent, Codable {
+  static let event = "*"
 }
 
 private struct SnakeCursor: BroadcastEvent, Codable, Equatable {
