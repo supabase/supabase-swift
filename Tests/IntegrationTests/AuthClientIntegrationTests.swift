@@ -433,14 +433,6 @@ struct AuthClientIntegrationTests {
   }
 
   @Test
-  func signInWithOTPWithoutCreatingAUserFailsForAnUnknownEmail() async throws {
-    await #expect(throws: AuthError.self) {
-      try await authClient.signInWithOTP(
-        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
-    }
-  }
-
-  @Test
   func signInWithOTPCreatesAUserWithItsMetadata() async throws {
     let admin = Self.makeAdminClient()
     let email = mockEmail()
@@ -456,6 +448,70 @@ struct AuthClientIntegrationTests {
       return
     }
     #expect(session.user.userMetadata["plan"] == "free")
+  }
+
+  /// Default options leave `create_user` out, so this proves that the server creates the user.
+  @Test
+  func signInWithOTPWithDefaultOptionsCreatesTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let email = mockEmail()
+
+    try await authClient.signInWithOTP(email: email)
+    _ = try await MailCatcher().latestLink(to: email)
+    let token = try await emailOTP(for: email, admin: admin)
+    let result = try await authClient.verifyOTP(email: email, token: token, type: .email)
+
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(session.user.email == email)
+    try await admin.deleteUser(id: session.user.id)
+  }
+
+  @Test
+  func signInWithOTPWithoutCreatingAUserFailsWithOTPDisabled() async throws {
+    let error = await #expect(throws: AuthError.self) {
+      try await authClient.signInWithOTP(
+        email: mockEmail(), options: EmailOTPOptions(shouldCreateUser: false))
+    }
+    #expect(error?.code == .otpDisabled)
+    #expect(error?.response?.status == 422)
+  }
+
+  /// Default options leave `channel` and `create_user` out. The local stack has no SMS provider, so
+  /// `whatsapp` is not a valid channel there: the default call passing proves that the server
+  /// picked `sms`. The number is a test number from `config.toml`, so the server sends no SMS.
+  @Test
+  func signInWithPhoneOTPWithDefaultOptionsUsesSMS() async throws {
+    let phone = "15550100001"
+
+    let messageID = try await authClient.signInWithOTP(phone: phone)
+    #expect(messageID == MessageID(rawValue: "test-otp"))
+
+    let session = try await authClient.verifyOTP(phone: phone, token: "123456", type: .sms)
+    #expect(session.user.phone == phone)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await authClient.signInWithOTP(phone: phone, options: PhoneOTPOptions(channel: .whatsapp))
+    }
+    #expect(error?.code == .validationFailed)
+
+    try await Self.makeAdminClient().deleteUser(id: session.user.id)
+  }
+
+  @Test
+  func signUpWithPhoneWithDefaultOptionsUsesSMS() async throws {
+    let phone = "15550100002"
+
+    let result = try await authClient.signUp(phone: phone, password: mockPassword())
+
+    guard case .signedIn(let session) = result else {
+      Issue.record("Expected .signedIn, got \(result)")
+      return
+    }
+    #expect(session.user.phone == phone)
+    try await Self.makeAdminClient().deleteUser(id: session.user.id)
   }
 
   /// The local stack's magic link email has no code, and the native stack cannot serve a custom
@@ -904,6 +960,34 @@ struct AuthClientIntegrationTests {
 
     expectNoDifference(user.email, email)
     #expect(user.invitedAt != nil)
+    expectNoDifference(user.userMetadata, [:])
+    let fetched = try await admin.user(id: user.id)
+    expectNoDifference(fetched.userMetadata, [:])
+  }
+
+  @Test
+  func deleteUserWithDefaultOptionsRemovesTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let user = try await admin.createUser(AdminCreateUser(email: mockEmail()))
+
+    try await admin.deleteUser(id: user.id)
+
+    let error = await #expect(throws: AuthError.self) {
+      try await admin.user(id: user.id)
+    }
+    #expect(error?.code == .userNotFound)
+  }
+
+  @Test
+  func softDeleteUserKeepsTheUser() async throws {
+    let admin = Self.makeAdminClient()
+    let user = try await admin.createUser(AdminCreateUser(email: mockEmail()))
+
+    try await admin.deleteUser(id: user.id, softDelete: true)
+
+    let deleted = try await admin.user(id: user.id)
+    #expect(deleted.id == user.id)
+    #expect(deleted.email != user.email)
   }
 
   @Test

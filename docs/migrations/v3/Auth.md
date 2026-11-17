@@ -313,7 +313,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `Session.isExpired: Bool` | `Session.isExpired(at:leeway:)`; see below |
 | `PasskeyRegistrationOptions.expiresAt: TimeInterval`, `PasskeyAuthenticationOptions.expiresAt: TimeInterval` | `Date` |
 | `AuthClient.admin`, `AuthAdmin` | `AuthAdminClient(configuration: .init(url:secretKey:))`; see below |
-| `AuthAdmin.deleteUser(id: String, shouldSoftDelete:)` | `AuthAdminClient.deleteUser(id: UUID, softDelete:)` |
+| `AuthAdmin.deleteUser(id: String, shouldSoftDelete: Bool = false)` | `AuthAdminClient.deleteUser(id: UUID, softDelete: Bool? = nil)`; `nil` sends no body, and the server hard-deletes |
 | `AuthAdmin.getUserById(_:)` | `AuthAdminClient.user(id:)` |
 | `AuthAdmin.updateUserById(_:attributes:)` | `AuthAdminClient.updateUser(id:_:)`, which takes an `AdminUpdateUser`; see below |
 | `AuthAdmin.createUser(attributes:)` | `AuthAdminClient.createUser(_:)`, which takes an `AdminCreateUser`; see below |
@@ -880,8 +880,10 @@ SignInWithAppleButton { request in
 `signUp(email:)` and `signUp(phone:)` return `SignUpResult` instead of `AuthResponse`. Its cases
 say whether the user is signed in: `.signedIn(Session)` or `.confirmationRequired(User)`. The
 `session` and `user` properties stay. The metadata, redirect URL, channel, and captcha token move
-into `SignUpOptions`, and `data:` is `userMetadata:`. `signUp` is no longer
-`@discardableResult`, so a call that ignores the result warns. Write `_ =` if you do not need it.
+into `SignUpOptions`, and `data:` is `userMetadata:`. `SignUpOptions.channel` is a
+`MessagingChannel?` that defaults to `nil`; the client then leaves `channel` out and the server
+uses SMS. `signUp` is no longer `@discardableResult`, so a call that ignores the result warns.
+Write `_ =` if you do not need it.
 
 ```swift
 // v2
@@ -903,6 +905,9 @@ case .confirmationRequired: showCheckYourInbox()
 `shouldCreateUser`, the metadata, and the captcha token move into the options type, and `data:` is
 `userMetadata:`. Only `EmailOTPOptions` has `redirectTo`, and only `PhoneOTPOptions` has `channel`.
 Phone sign-in returns the `MessageID?` of the SMS, so you can track delivery.
+`shouldCreateUser` is a `Bool?` and `channel` is a `MessagingChannel?`, both `nil` by default.
+The client then leaves the field out, and the server applies its own default: it creates the
+user, and it sends the code by SMS. Code that reads these properties must handle `nil`.
 
 ```swift
 // v2
