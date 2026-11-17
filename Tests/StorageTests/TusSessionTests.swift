@@ -19,6 +19,7 @@ struct TusSessionTests {
   private let uploadURL = URL(string: "http://localhost:54321/storage/v1/upload/resumable/abc")!
 
   private func makeSUT(
+    upsert: Bool = false,
     fetch: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)
   ) throws -> TusSession {
     TusSession(
@@ -37,7 +38,8 @@ struct TusSessionTests {
                 throw URLError(.badServerResponse)
               }
               return (head, data.isEmpty ? nil : HTTPBody(data))
-            }))))
+            }))),
+      upsert: upsert)
   }
 
   private func response(
@@ -118,7 +120,8 @@ struct TusSessionTests {
                   headerFields: [.location: "/storage/v1/upload/resumable/abc", .uploadOffset: "0"]),
                 nil
               )
-            }))))
+            }))),
+      upsert: false)
 
     let created = try await sut.create(
       bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
@@ -235,7 +238,7 @@ struct TusSessionTests {
   @Test
   func appendOffsetConflictThrowsOffsetConflict() async throws {
     let sut = try makeSUT { _ in
-      self.response(409, headers: ["Content-Type": "text/plain"], body: "Offset conflict")
+      self.response(409, headers: ["Content-Type": "text/plain"], body: "Upload-Offset conflict")
     }
 
     let error = await #expect(throws: TusSession.Failure.self) {
@@ -246,6 +249,64 @@ struct TusSessionTests {
       return
     }
     #expect(storageError.serverError?.statusCode == 409)
+  }
+
+  @Test
+  func appendOverAnExistingObjectThrowsKeyAlreadyExists() async throws {
+    let sut = try makeSUT { _ in
+      self.response(
+        409, headers: ["Content-Type": "text/plain"], body: "The resource already exists")
+    }
+
+    let error = await #expect(throws: StorageError.self) {
+      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
+    }
+    #expect(error?.code == .keyAlreadyExists)
+    #expect(error?.serverError?.statusCode == 409)
+  }
+
+  @Test
+  func appendWithAnUnknownConflictThrowsTheServerError() async throws {
+    let sut = try makeSUT { _ in
+      self.response(409, headers: ["Content-Type": "text/plain"], body: "Locked elsewhere")
+    }
+
+    let error = await #expect(throws: StorageError.self) {
+      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
+    }
+    #expect(error?.code == nil)
+    #expect(error?.message == "Locked elsewhere")
+  }
+
+  @Test
+  func createOverAnExistingObjectThrowsKeyAlreadyExists() async throws {
+    let sut = try makeSUT { _ in
+      self.response(
+        409, headers: ["Content-Type": "text/plain"], body: "The resource already exists")
+    }
+
+    let error = await #expect(throws: StorageError.self) {
+      try await sut.create(
+        bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+    }
+    #expect(error?.code == .keyAlreadyExists)
+  }
+
+  @Test
+  func upsertIsSentOnEveryRequestAfterCreation() async throws {
+    let sent = LockIsolated<[URLRequest]>([])
+    let sut = try makeSUT(upsert: true) { request in
+      sent.withValue { $0.append(request) }
+      return self.response(204, headers: ["Upload-Offset": "17"])
+    }
+
+    _ = try await sut.offset(of: uploadURL)
+    _ = try await sut.append(HTTPBody(Data("chunk".utf8)), at: 12, to: uploadURL)
+    await sut.terminate(uploadURL)
+
+    #expect(sent.value.map(\.httpMethod) == ["HEAD", "PATCH", "DELETE"])
+    #expect(
+      sent.value.map { $0.value(forHTTPHeaderField: "x-upsert") } == ["true", "true", "true"])
   }
 
   @Test

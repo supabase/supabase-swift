@@ -65,11 +65,11 @@ struct ResumableUploadTests {
     { _, _ in (HTTPResponse(status: .ok, headerFields: [.uploadOffset: "\(offset)"]), Data()) }
   }
 
-  private static func status(_ code: Int) -> Script.Step {
+  private static func status(_ code: Int, _ message: String = "nope") -> Script.Step {
     { _, _ in
       (
         HTTPResponse(status: .init(code: code), headerFields: [.contentType: "text/plain"]),
-        Data("nope".utf8)
+        Data(message.utf8)
       )
     }
   }
@@ -174,7 +174,8 @@ struct ResumableUploadTests {
   @Test
   func offsetConflictResyncsWithHead() async throws {
     let script = Script([
-      Self.created(offset: 0), Self.status(409), Self.head(offset: 8), Self.appended(offset: 16),
+      Self.created(offset: 0), Self.status(409, "Upload-Offset conflict"), Self.head(offset: 8),
+      Self.appended(offset: 16),
       Self.appended(offset: 20, complete: true),
     ])
     let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
@@ -189,6 +190,44 @@ struct ResumableUploadTests {
         "PATCH /storage/v1/upload/resumable/abc @8 +8",
         "PATCH /storage/v1/upload/resumable/abc @16 +4",
       ])
+  }
+
+  @Test
+  func anExistingObjectFailsTheUploadInsteadOfResyncing() async throws {
+    let script = Script([
+      Self.created(offset: 0), Self.status(409, "The resource already exists"),
+      Self.head(offset: 0),
+    ])
+    let upload = try makeBucket(script).resumableUpload(path: "video.mp4", fileURL: fileURL)
+
+    try await upload.start()
+    let error = await #expect(throws: StorageError.self) { try await upload.result }
+
+    #expect(error?.code == .keyAlreadyExists)
+    #expect(script.log.value.count == 2)
+    #expect(try store.records().isEmpty)
+  }
+
+  @Test
+  func upsertTravelsOnEveryChunk() async throws {
+    let upserts = LockIsolated<[String?]>([])
+    let record: @Sendable (@escaping Script.Step) -> Script.Step = { step in
+      { request, data in
+        upserts.withValue { $0.append(request.headerFields[.xUpsert]) }
+        return try await step(request, data)
+      }
+    }
+    let script = Script([
+      record(Self.created(offset: 0)), record(Self.appended(offset: 8)),
+      record(Self.appended(offset: 16)), record(Self.appended(offset: 20, complete: true)),
+    ])
+    let upload = try makeBucket(script).resumableUpload(
+      path: "video.mp4", fileURL: fileURL, options: UploadOptions(upsert: true))
+
+    try await upload.start()
+    _ = try await upload.result
+
+    #expect(upserts.value == ["true", "true", "true", "true"])
   }
 
   @Test

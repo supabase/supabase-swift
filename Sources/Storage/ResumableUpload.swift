@@ -382,7 +382,7 @@ public actor ResumableUpload {
 
   /// Deletes the server's copy (best effort), the record, and any sandbox copy.
   private func discard(_ record: ResumableUploadRecord) async {
-    await TusSession(api: api).terminate(record.uploadURL)
+    await TusSession(api: api, upsert: options.upsert).terminate(record.uploadURL)
     store.remove(record)
   }
 
@@ -394,7 +394,7 @@ public actor ResumableUpload {
   }
 
   private func run(from start: Int64, next first: Next) async {
-    let tus = TusSession(api: api)
+    let tus = TusSession(api: api, upsert: options.upsert)
     var offset = start
     var next = first
     var retry = 0
@@ -482,7 +482,7 @@ public actor ResumableUpload {
   }
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
-    let tus = TusSession(api: api)
+    let tus = TusSession(api: api, upsert: options.upsert)
     if var existing = try store.record(fingerprint: fingerprint) {
       do {
         existing.lastKnownOffset = try await tus.offset(of: existing.uploadURL)
@@ -504,7 +504,8 @@ public actor ResumableUpload {
   /// Creates the upload again on the server for a record the server no longer knows.
   private func recreate(_ stale: ResumableUploadRecord) async throws -> ResumableUploadRecord {
     try? FileManager.default.removeItem(at: store.recordURL(fingerprint: stale.fingerprint))
-    let record = try await createRecord(source: stale.source, with: TusSession(api: api))
+    let record = try await createRecord(
+      source: stale.source, with: TusSession(api: api, upsert: options.upsert))
     self.record = record
     return record
   }

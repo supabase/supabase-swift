@@ -124,6 +124,35 @@ final class StorageResumableIntegrationTests {
     #expect(try await client.resumableUploads.pending().isEmpty)
   }
 
+  @Test(.timeLimit(.minutes(2)))
+  func upsertOverwritesAnExistingObject() async throws {
+    let client = try client()
+    try await bucket(client).upload(path: "taken.txt", data: Data("old".utf8))
+    let replacement = Data("the new content".utf8)
+
+    let upload = try bucket(client).resumableUpload(
+      path: "taken.txt", data: replacement, options: UploadOptions(upsert: true))
+    try await upload.start()
+    _ = try await upload.result
+
+    #expect(try await bucket(client).download(path: "taken.txt").data() == replacement)
+  }
+
+  @Test(.timeLimit(.minutes(2)))
+  func withoutUpsertAnExistingObjectFailsWithKeyAlreadyExists() async throws {
+    let client = try client()
+    try await bucket(client).upload(path: "kept.txt", data: Data("old".utf8))
+
+    let upload = try bucket(client).resumableUpload(path: "kept.txt", data: Data("new".utf8))
+    let error = await #expect(throws: StorageError.self) {
+      try await upload.start()
+      _ = try await upload.result
+    }
+
+    #expect(error?.code == .keyAlreadyExists)
+    #expect(try await bucket(client).download(path: "kept.txt").data() == Data("old".utf8))
+  }
+
   @Test
   func pauseThenResumeFinishesTheUpload() async throws {
     let client = try client()
