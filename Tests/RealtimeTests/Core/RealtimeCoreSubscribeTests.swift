@@ -55,7 +55,7 @@ struct RealtimeCoreSubscribeTests {
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1))
     #expect(harness.core.channels[.room]?.sentAccessToken == "token")
   }
 
@@ -321,7 +321,7 @@ struct RealtimeCoreSubscribeTests {
         .schedule(.joinTimeout(channel: .room, ref: "1"), after: .seconds(10)),
       ])
     #expect(
-      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1, stage: .reply))
+      harness.core.channels[.room]?.phase == .joining(ref: "1", attempt: 1))
   }
 
   @Test

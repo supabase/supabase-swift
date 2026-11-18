@@ -76,7 +76,7 @@ struct ChannelRecord {
   /// The ref of the join the server can still confirm, or already confirmed.
   var currentJoinRef: Ref? {
     switch phase {
-    case .joining(let ref, _, _), .subscribed(let ref):
+    case .joining(let ref, _), .subscribed(let ref):
       ref
     case .waitingToRetry:
       timedOutJoinRef
@@ -91,40 +91,11 @@ struct ChannelRecord {
     if case .leaving(let joinRef, _) = phase { joinRef } else { currentJoinRef }
   }
 
-  /// Whether the current join waits for "Subscribed to PostgreSQL", so only that message
-  /// confirms it.
-  var awaitsPostgresChanges: Bool {
-    switch phase {
-    case .joining(_, _, .postgres):
-      true
-    case .joining(_, _, .reply):
-      joinWaitsForPostgresChanges
-    case .waitingToRetry:
-      timedOutJoinRef != nil && joinWaitsForPostgresChanges
-    case .unsubscribed, .waitingForSocket, .refreshingToken, .subscribed, .leaving, .failed:
-      false
-    }
-  }
-
-  /// Whether the last join needs "Subscribed to PostgreSQL" after its reply: it has bindings,
-  /// and the server does not hold the reply until they are set up.
-  var joinWaitsForPostgresChanges: Bool {
-    !joinedBindings.isEmpty && !configuration.postgresChanges.waitsForSubscription
-  }
-
-  /// What a `phx_join` waits for.
-  enum JoinStage: Equatable {
-    /// The join reply.
-    case reply
-    /// The `system` message that says the Postgres changes subscriptions are ready.
-    case postgres
-  }
-
   enum Phase: Equatable {
     case unsubscribed
     case waitingForSocket(attempt: Int)
     case refreshingToken(attempt: Int)
-    case joining(ref: Ref, attempt: Int, stage: JoinStage)
+    case joining(ref: Ref, attempt: Int)
     case waitingToRetry(attempt: Int, retryIn: Duration, lastError: RealtimeError)
     case subscribed(joinRef: Ref)
     case leaving(joinRef: Ref, leaveRef: Ref)
@@ -136,7 +107,7 @@ struct ChannelRecord {
       case .unsubscribed:
         .unsubscribed
       case .waitingForSocket(let attempt), .refreshingToken(let attempt),
-        .joining(_, let attempt, _):
+        .joining(_, let attempt):
         .subscribing(attempt: attempt)
       case .waitingToRetry(let attempt, let retryIn, let lastError):
         .resubscribing(attempt: attempt, retryIn: retryIn, lastError: lastError)
@@ -156,8 +127,8 @@ struct ChannelRecord {
       case (.waitingForSocket(let a), .waitingForSocket(let b)),
         (.refreshingToken(let a), .refreshingToken(let b)):
         return a == b
-      case (.joining(let ra, let a, let sa), .joining(let rb, let b, let sb)):
-        return ra == rb && a == b && sa == sb
+      case (.joining(let ra, let a), .joining(let rb, let b)):
+        return ra == rb && a == b
       case (.waitingToRetry(let a, let da, let ea), .waitingToRetry(let b, let db, let eb)):
         return a == b && da == db && ea.isSameFailure(as: eb)
       case (.subscribed(let a), .subscribed(let b)):
@@ -177,10 +148,8 @@ extension ChannelRecord.Phase {
   /// The timer this phase of `channel` waits on, if any.
   func timer(for channel: ChannelID) -> TimerID? {
     switch self {
-    case .joining(let ref, _, .reply):
+    case .joining(let ref, _):
       .joinTimeout(channel: channel, ref: ref)
-    case .joining(let ref, _, .postgres):
-      .postgresTimeout(channel: channel, ref: ref)
     case .waitingToRetry:
       .rejoin(channel: channel)
     case .leaving(_, let leaveRef):

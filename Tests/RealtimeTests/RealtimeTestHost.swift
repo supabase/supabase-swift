@@ -317,25 +317,12 @@ extension RealtimeClient {
   func joinRef(for topic: String) -> String? {
     recordID(for: topic).flatMap { core.channels[$0]?.currentJoinRef }
   }
-
-  /// What the join in flight for `topic` waits for, or `nil` when no join is in flight.
-  func joinStage(for topic: String) -> ChannelRecord.JoinStage? {
-    guard let id = recordID(for: topic),
-      case .joining(_, _, let stage)? = core.channels[id]?.phase
-    else { return nil }
-    return stage
-  }
 }
 
 extension RealtimeChannel {
   /// The ref of the join the server can still confirm, or already confirmed.
   var joinRef: String? {
     get async { await client?.joinRef(for: topic) }
-  }
-
-  /// What the join in flight waits for, or `nil` when no join is in flight.
-  var joinStage: ChannelRecord.JoinStage? {
-    get async { await client?.joinStage(for: topic) }
   }
 }
 

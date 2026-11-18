@@ -169,12 +169,11 @@ public final class RealtimeChannel: Sendable, Hashable {
   /// already-subscribed channel is a no-op, and a second concurrent call waits for the first
   /// attempt instead of starting another.
   ///
-  /// When the channel has Postgres changes streams, the method returns only once the server
-  /// reports that those changes are live. If the server reports a failure, or does not report
-  /// within ``RealtimeChannelConfiguration/PostgresChanges/subscriptionTimeout``, the channel
-  /// leaves the topic and the method throws without a retry. The same holds for the rejoins the
-  /// SDK starts itself, after a reconnect or for a new Postgres changes stream: the channel ends
-  /// ``RealtimeChannelStatus/failed(_:)``. Watch ``statusChanges()`` and call this method again.
+  /// The method returns when the server accepts the join. The server sets up Postgres changes
+  /// after that: ``events()`` emits ``RealtimeChannelEvent/postgresChangesReady`` when they are
+  /// live, or ``RealtimeChannelEvent/postgresChangesFailed(_:)`` when they fail. To return only
+  /// once they are live, set
+  /// ``RealtimeChannelConfiguration/PostgresChanges/waitsForSubscription``.
   ///
   /// When the server closes the channel (`phx_close`), the channel is spent, as after
   /// ``RealtimeClient/removeChannel(_:)``: a join in flight throws

@@ -85,7 +85,7 @@ extension RealtimeCore {
     logger.debug(
       "Sending phx_join for channel '\(topic(of: channel))' (ref: \(ref), attempt: \(attempt))")
 
-    var effects = setPhase(.joining(ref: ref, attempt: attempt, stage: .reply), for: channel)
+    var effects = setPhase(.joining(ref: ref, attempt: attempt), for: channel)
     let payload = RealtimeJoinPayload(
       config: config, accessToken: record.sentAccessToken, version: options.version)
     if let encoded = try? JSONObject(payload) {
@@ -153,7 +153,7 @@ extension RealtimeCore {
     else { return [] }
 
     switch record.phase {
-    case .joining(ref, let attempt, .reply):
+    case .joining(ref, let attempt):
       return receiveReply(message, toJoin: ref, attempt: attempt, on: channel)
     case .waitingToRetry(let attempt, _, _)
     where record.timedOutJoinRef == ref && message.status == .ok:
@@ -189,7 +189,11 @@ extension RealtimeCore {
   }
 
   /// Applies an `ok` to the join `ref`: keeps the bindings the server echoed, then confirms the
-  /// join or waits for its Postgres changes.
+  /// join.
+  ///
+  /// The `ok` confirms the join, as in realtime-js. Without
+  /// ``RealtimeChannelConfiguration/PostgresChanges/waitsForSubscription``, the server then sets
+  /// up the Postgres changes and reports the result in a `system` message.
   private mutating func joinAccepted(
     _ message: RealtimeMessage, ref: Ref, attempt: Int, on channel: ChannelID
   ) -> [Effect] {
@@ -200,17 +204,7 @@ extension RealtimeCore {
     } catch {
       return joinAttemptFailed(channel, attempt: attempt, error: .unreadableJoinReply(error))
     }
-    guard let record = channels[channel], record.joinWaitsForPostgresChanges else {
-      return confirmJoin(channel, ref: ref)
-    }
-    logger.debug("Channel '\(topic(of: channel))' waits for its Postgres changes (ref: \(ref))")
-    channels.update(channel) { $0.timedOutJoinRef = nil }
-    return setPhase(.joining(ref: ref, attempt: attempt, stage: .postgres), for: channel)
-      + [
-        .schedule(
-          .postgresTimeout(channel: channel, ref: ref),
-          after: record.configuration.postgresChanges.subscriptionTimeout)
-      ]
+    return confirmJoin(channel, ref: ref)
   }
 
   /// The bindings the server echoed in a join reply, with their ids, or `nil` when it echoed
@@ -229,9 +223,10 @@ extension RealtimeCore {
   }
 
   /// Applies a `system` message: the server's report on the join's Postgres changes or on
-  /// replication. While the join waits for its Postgres changes, only "Subscribed to
-  /// PostgreSQL" confirms it. The message goes to the channel its `join_ref` names, or to the
-  /// live channel of its topic when it has none.
+  /// replication. An `ok` confirms a join whose reply has not come yet. An error leaves the
+  /// channel as it is: the server may set up the Postgres changes on a later try. The message
+  /// goes to the channel its `join_ref` names, or to the live channel of its topic when it has
+  /// none.
   mutating func receiveSystem(_ message: RealtimeMessage) -> [Effect] {
     guard let channel = routedChannel(message, joinRef: message.joinRef),
       let record = channels[channel]
@@ -239,15 +234,11 @@ extension RealtimeCore {
     let `extension` = message.payload["extension"]?.stringValue
     let isPostgresChanges = `extension` == ChannelEvent.postgresChanges
     let isReplication = `extension` == ChannelEvent.system
-    let joinRef = record.currentJoinRef
-    let isForCurrentJoin = message.joinRef == nil || message.joinRef == joinRef
+    let isForCurrentJoin = message.joinRef == nil || message.joinRef == record.currentJoinRef
 
     switch message.status {
     case .ok where isForCurrentJoin:
-      var effects: [Effect] = []
-      if isPostgresChanges || !record.awaitsPostgresChanges {
-        effects = confirmJoinBySystem(channel)
-      }
+      var effects = confirmJoinBySystem(channel)
       if isPostgresChanges {
         effects.append(.deliver(channel, .event(.postgresChangesReady)))
       } else if isReplication {
@@ -256,24 +247,15 @@ extension RealtimeCore {
       return effects
 
     case .error:
-      // On a subscribed channel the join stands, so broadcast and presence keep working. A
-      // join in flight, or one that timed out while the channel waits to rejoin, fails.
+      // The join stands, so broadcast and presence keep working.
       let reason = message.payload["message"]?.stringValue ?? "\(message.payload)"
       logger.error("Channel '\(topic(of: channel))' reported an error: \(reason)")
-      var effects: [Effect] = []
-      if isPostgresChanges, isForCurrentJoin, record.awaitsPostgresChanges, let ref = joinRef,
-        let timer = record.phase.timer(for: channel)
-      {
-        effects =
-          failPostgresChanges(channel, ref: ref, with: .postgresChangesFailed(reason: reason))
-          + [.cancel(timer)]
-      }
       if isPostgresChanges {
-        effects.append(.deliver(channel, .event(.postgresChangesFailed(reason))))
+        return [.deliver(channel, .event(.postgresChangesFailed(reason)))]
       } else if isReplication {
-        effects.append(.deliver(channel, .event(.replicationFailed(reason))))
+        return [.deliver(channel, .event(.replicationFailed(reason)))]
       }
-      return effects
+      return []
 
     default:
       return []
@@ -281,26 +263,12 @@ extension RealtimeCore {
   }
 
   /// Confirms the current join on a `system` ok, which may come before the join reply, and
-  /// stops the timer of the stage it waited in.
+  /// stops the join's timer.
   private mutating func confirmJoinBySystem(_ channel: ChannelID) -> [Effect] {
     guard let record = channels[channel], let ref = record.currentJoinRef,
       let timer = record.phase.timer(for: channel)
     else { return [] }
     return confirmJoin(channel, ref: ref) + [.cancel(timer)]
-  }
-
-  mutating func postgresTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
-    guard case .joining(ref, _, .postgres)? = channels[channel]?.phase else { return [] }
-    return failPostgresChanges(channel, ref: ref, with: .postgresChangesTimeout)
-  }
-
-  /// Ends a join whose Postgres changes failed: leaves it, so the server drops the half-set-up
-  /// join, and fails the subscribe. No retry: the same bindings fail the same way.
-  private mutating func failPostgresChanges(
-    _ channel: ChannelID, ref: Ref, with error: RealtimeError
-  ) -> [Effect] {
-    logger.error("Failed to subscribe to channel '\(topic(of: channel))': \(error.message)")
-    return sendLeave(channel, joinRef: ref) + failSubscribe(channel, with: error)
   }
 
   mutating func bindingsChanged(_ channel: ChannelID, bindings: [PostgresJoinConfig]) -> [Effect] {
@@ -328,7 +296,7 @@ extension RealtimeCore {
   }
 
   mutating func joinTimedOut(_ channel: ChannelID, ref: Ref) -> [Effect] {
-    guard case .joining(ref, let attempt, .reply)? = channels[channel]?.phase else { return [] }
+    guard case .joining(ref, let attempt)? = channels[channel]?.phase else { return [] }
     logger.debug("Subscribe attempt \(attempt) timed out for channel '\(topic(of: channel))'")
     channels.update(channel) { $0.timedOutJoinRef = ref }
     return waitToRejoin(

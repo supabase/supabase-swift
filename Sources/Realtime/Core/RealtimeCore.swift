@@ -270,8 +270,6 @@ struct RealtimeCore {
       return joinTimedOut(channel, ref: ref)
     case .timerFired(.rejoin(let channel)):
       return rejoinTimerFired(channel)
-    case .timerFired(.postgresTimeout(let channel, let ref)):
-      return postgresTimedOut(channel, ref: ref)
     case .bindingsChanged(let channel, let bindings):
       return bindingsChanged(channel, bindings: bindings)
     case .unsubscribe(let channel, let waiter):
