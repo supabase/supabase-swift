@@ -518,9 +518,12 @@ For a longer timeout on one call, use `PostgrestRequestBuilder.timeout(_:)` or
 // v2
 options: .init(realtime: RealtimeClientOptions(logger: realtimeLogger))
 
-// v3: one logger for every sub-client; filter on `metadata["system"]` to keep Realtime only
+// v3: one swift-log `Logger` for every sub-client. `SystemFilter` is a `LogHandler` that keeps
+// only the entries whose `system` metadata is "realtime"; the article below shows it in full.
 var configuration = SupabaseClient.Configuration()
-configuration.global.logger = realtimeLogger
+configuration.global.logger = Logger(label: "io.supabase") { label in
+  SystemFilter(system: "realtime", base: StreamLogHandler.standardOutput(label: label))
+}
 ```
 
 The "Configuring One Module" article in the Supabase documentation has a complete middleware

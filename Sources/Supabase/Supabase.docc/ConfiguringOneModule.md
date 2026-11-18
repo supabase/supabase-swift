@@ -51,7 +51,9 @@ configuration.global.http.middlewares = [
 
 ### Use another transport for one sub-client
 
-A transport can pick a delegate by path, for example a background `URLSession` for Storage.
+A transport can pick a delegate by path, for example a `URLSession` that keeps Storage off
+cellular data. Do not use a background `URLSession` here: Storage also sends requests that need
+a data task, and a background session does not support data tasks.
 
 ```swift
 struct RoutingTransport: ClientTransport {
@@ -66,8 +68,11 @@ struct RoutingTransport: ClientTransport {
   }
 }
 
+let storageSession = URLSessionConfiguration.default
+storageSession.allowsCellularAccess = false
+
 configuration.global.http.transport = RoutingTransport(
-  storage: URLSessionTransport(session: backgroundSession),
+  storage: URLSessionTransport(session: URLSession(configuration: storageSession)),
   other: URLSessionTransport()
 )
 ```
