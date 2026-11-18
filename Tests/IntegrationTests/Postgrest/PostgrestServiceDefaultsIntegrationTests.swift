@@ -141,6 +141,62 @@ struct PostgrestServiceDefaultsIntegrationTests {
   }
 
   @Test
+  func raggedBulkInsertStoresNullForAMissingColumnByDefault() async throws {
+    let first = UUID()
+    let second = UUID()
+    let rows = [
+      Todos.Draft(id: first, description: "a", isComplete: true),
+      Todos.Draft(id: second, description: "b"),
+    ]
+
+    // `is_complete` is `NOT NULL DEFAULT false`. The second row leaves it out, so it gets `null`.
+    await #expect(throws: PostgrestError.self) {
+      try await client.from(Todos.self).insert(rows).execute()
+    }
+    #expect(try await self.rows(withID: second).isEmpty)
+  }
+
+  @Test
+  func raggedBulkInsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
+    let first = UUID()
+    let second = UUID()
+    let rows = [
+      Todos.Draft(id: first, description: "a", isComplete: true),
+      Todos.Draft(id: second, description: "b"),
+    ]
+
+    let response = try await client.from(Todos.self).insert(rows, defaultToNull: false).execute()
+
+    #expect(response.status.code == 201)
+    #expect(appliedPreferences(response.headers).contains("missing=default"))
+    #expect(try await self.rows(withID: first).map(\.isComplete) == [true])
+    #expect(try await self.rows(withID: second).map(\.isComplete) == [false])
+
+    try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
+  }
+
+  @Test
+  func raggedBulkUpsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
+    let first = UUID()
+    let second = UUID()
+    let rows = [
+      Todos.Draft(id: first, description: "a", isComplete: true),
+      Todos.Draft(id: second, description: "b"),
+    ]
+
+    await #expect(throws: PostgrestError.self) {
+      try await client.from(Todos.self).upsert(rows).execute()
+    }
+
+    try await client.from(Todos.self).upsert(rows, defaultToNull: false).execute()
+
+    #expect(try await self.rows(withID: first).map(\.isComplete) == [true])
+    #expect(try await self.rows(withID: second).map(\.isComplete) == [false])
+
+    try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
+  }
+
+  @Test
   func returningStillReturnsTheRows() async throws {
     let id = UUID()
 
