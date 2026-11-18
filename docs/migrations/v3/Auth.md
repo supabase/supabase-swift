@@ -369,7 +369,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `AuthClient.Configuration.autoRefreshToken: Bool`, `.defaultAutoRefreshToken` | `.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `SupabaseClientOptions.AuthOptions.autoRefreshToken: Bool` | `SupabaseClient.Configuration.Auth.autoRefresh: AuthClient.AutoRefreshPolicy`; see below |
 | `AuthClient(… fetch:)`, `AuthClient.Configuration(… fetch:)`, `AuthClient.FetchHandler` | `http:` (an `HTTPClientConfiguration`); see the overview |
-| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:clock:now:)`; `AuthClient.configuration` is public |
+| `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:logger:http:autoRefresh:...)` | `AuthClient.Configuration(url:storageKey:headers:storage:redirectTo:autoRefresh:observesAppLifecycle:initialRefreshTimeout:http:logger:retryEnabled:)`; `AuthClient.configuration` is public |
 | `Factor.id`, `AuthMFAEnrollResponse.id`, `AuthMFAUnenrollResponse.id`, every `factorId:` | `UUID` (was `String`); the labels are `factorID:` |
 | `AuthMFAChallengeResponse.id`, `MFAVerifyParams.challengeId` | `MFAChallenge.id`, `challengeID:`: `UUID` (was `String`) |
 | `OAuthClient.clientName`, `OAuthAuthorizationClient.name`, `OAuthAuthorizationUser.email`, `OAuthAuthorizationDetails.scope` | `String?` (was `String`) |

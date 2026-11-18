@@ -85,7 +85,7 @@ let auth = try AuthClient(
 
 Your middlewares run in array order. Each retry runs the whole chain again.
 
-### Retries, logger and clock
+### Retries and logger
 
 ``AuthClient/Configuration/retryEnabled`` is `true` by default. The SDK then retries `GET`
 requests that fail with a transient error. See <doc:HandlingErrors>.
@@ -93,8 +93,8 @@ requests that fail with a transient error. See <doc:HandlingErrors>.
 ``AuthClient/Configuration/logger`` is a swift-log `Logger`. The client removes tokens, secrets
 and URL query strings from each line, and tags the logger with `system=auth`.
 
-``AuthClient/Configuration/clock`` and ``AuthClient/Configuration/now`` let a test control token
-refresh and expiry. Keep the two in step.
+Tests can control token refresh and expiry with the `clock` and `now` test hooks. Import Auth
+with `@_spi(Testing)` to set them, and keep the two in step.
 
 ### Admin calls
 

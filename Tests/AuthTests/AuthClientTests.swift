@@ -15,7 +15,7 @@ import InlineSnapshotTesting
 import TestHelpers
 import Testing
 
-@_spi(Experimental) @testable import Auth
+@_spi(Experimental) @_spi(Testing) @testable import Auth
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -971,7 +971,7 @@ struct AuthClientTests {
     redirectTo: URL? = nil,
     acceptsImplicitTokens: Bool = false
   ) -> AuthClient {
-    let configuration = AuthClient.Configuration(
+    var configuration = AuthClient.Configuration(
       url: url,
       storageKey: storageKey,
       headers: [.apikey: apiKey],
@@ -979,8 +979,9 @@ struct AuthClientTests {
       redirectTo: redirectTo,
       acceptsImplicitTokens: acceptsImplicitTokens,
       autoRefresh: autoRefresh,
-      http: .init(transport: transport),
-      now: date)
+      http: .init(transport: transport)
+    )
+    configuration.now = date
 
     var pkce = PKCE.live
     pkce.generateCodeVerifier = {

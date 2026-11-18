@@ -61,7 +61,7 @@ public struct PostgrestClient: Sendable {
   ///
   /// ### Creating Configuration
   ///
-  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:)``
+  /// - ``init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:)``
   ///
   /// ### Configuration Properties
   ///
@@ -73,7 +73,6 @@ public struct PostgrestClient: Sendable {
   /// - ``encoder``
   /// - ``decoder``
   /// - ``retryEnabled``
-  /// - ``clock``
   public struct Configuration: Sendable {
     /// The base URL of the PostgREST endpoint.
     public var url: URL
@@ -165,7 +164,10 @@ public struct PostgrestClient: Sendable {
     /// tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import PostgREST with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// Creates a new ``Configuration``.
     ///
@@ -180,7 +182,6 @@ public struct PostgrestClient: Sendable {
     ///   - decoder: The `JSONDecoder` used for response bodies. Defaults to a new
     ///     `JSONDecoder.supabase()`.
     ///   - retryEnabled: Whether to retry transient errors. Defaults to `true`.
-    ///   - clock: The clock the waits between retries sleep on. Defaults to `ContinuousClock()`.
     public init(
       url: URL,
       schema: String? = nil,
@@ -189,8 +190,7 @@ public struct PostgrestClient: Sendable {
       logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.postgrest"),
       encoder: JSONEncoder = .supabase(),
       decoder: JSONDecoder = .supabase(),
-      retryEnabled: Bool = true,
-      clock: any Clock<Duration> = ContinuousClock()
+      retryEnabled: Bool = true
     ) {
       self.url = url
       self.schema = schema
@@ -200,7 +200,6 @@ public struct PostgrestClient: Sendable {
       self.encoder = encoder
       self.decoder = decoder
       self.retryEnabled = retryEnabled
-      self.clock = clock
     }
   }
 

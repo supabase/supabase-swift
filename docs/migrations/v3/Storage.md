@@ -58,7 +58,7 @@ Changes that still compile but behave differently. Check each one by hand.
 | `StorageClientConfiguration(..., session:)` | `StorageClient.Configuration(..., http:)` (see the overview) |
 | `StorageClientConfiguration(..., encoder:, decoder:)` | removed |
 | `StorageClientConfiguration.useNewHostname` | `StorageClient.Configuration.usesNewHostname` |
-| `StorageClientConfiguration(url:headers:...)`, `headers` required | `StorageClient.Configuration(url:headers:usesNewHostname:http:logger:retryEnabled:clock:)`, `headers` defaults to `[:]` |
+| `StorageClientConfiguration(url:headers:...)`, `headers` required | `StorageClient.Configuration(url:headers:usesNewHostname:http:logger:retryEnabled:)`, `headers` defaults to `[:]` |
 | `StorageHTTPSession` | `any ClientTransport` (see the overview) |
 | `JSONEncoder.defaultStorageEncoder`, `JSONDecoder.defaultStorageDecoder` | removed |
 | `getBucket(_:)` | `bucket(_:)` |

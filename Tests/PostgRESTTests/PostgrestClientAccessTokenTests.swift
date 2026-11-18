@@ -10,7 +10,7 @@ import Foundation
 import TestHelpers
 import Testing
 
-@_spi(Experimental) @testable import PostgREST
+@_spi(Experimental) @_spi(Testing) @testable import PostgREST
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -34,15 +34,16 @@ struct PostgrestClientAccessTokenTests {
         HTTPTypes.HTTPResponse, HTTPBody?
       )
   ) throws -> PostgrestClient {
-    try PostgrestClient(
-      configuration: .init(
-        url: url,
-        headers: headers,
-        http: .init(
-          transport: ClosureTransport(handler: transport),
-          middlewares: [AccessTokenMiddleware(getAccessToken: accessToken)]),
-        clock: ImmediateRetryTestClock()
-      )
+    var configuration = PostgrestClient.Configuration(
+      url: url,
+      headers: headers,
+      http: .init(
+        transport: ClosureTransport(handler: transport),
+        middlewares: [AccessTokenMiddleware(getAccessToken: accessToken)])
+    )
+    configuration.clock = ImmediateRetryTestClock()
+    return try PostgrestClient(
+      configuration: configuration
     )
   }
 

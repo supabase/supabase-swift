@@ -130,6 +130,121 @@ struct TusSessionTests {
         == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable/abc"))
   }
 
+  @Test(arguments: [
+    "https://attacker.example/storage/v1/upload/resumable/abc?x=1",
+    "http://localhost:9999/storage/v1/upload/resumable/abc?x=1",
+    "https://localhost:54321/storage/v1/upload/resumable/abc?x=1",
+    "http://user:pass@localhost:54321/storage/v1/upload/resumable/abc?x=1",
+  ])
+  func createMovesALocationOnAnotherOriginOntoTheStorageOrigin(location: String) async throws {
+    let sent = LockIsolated<[URL]>([])
+    let sut = try makeSUT { request in
+      sent.withValue { $0.append(request.url!) }
+      return request.httpMethod == "POST"
+        ? self.response(201, headers: ["Location": location, "Upload-Offset": "0"])
+        : self.response(204, headers: ["Upload-Offset": "5"])
+    }
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+    _ = try await sut.append(HTTPBody(Data("chunk".utf8)), at: 0, to: created.uploadURL)
+
+    #expect(
+      created.uploadURL
+        == URL(string: "http://localhost:54321/storage/v1/upload/resumable/abc?x=1"))
+    #expect(sent.value.allSatisfy { $0.host == "localhost" && $0.port == 54321 })
+  }
+
+  @Test
+  func createKeepsASignedUploadLocation() async throws {
+    let sut = try makeSUT { _ in
+      self.response(
+        201,
+        headers: ["Location": "/storage/v1/upload/resumable/sign/abc", "Upload-Offset": "0"])
+    }
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+
+    #expect(
+      created.uploadURL
+        == URL(string: "http://localhost:54321/storage/v1/upload/resumable/sign/abc"))
+  }
+
+  @Test
+  func createKeepsTheProjectHostLocationOnTheStorageHost() async throws {
+    let sut = TusSession(
+      api: try StorageAPI(
+        configuration: StorageClient.Configuration(
+          url: URL(string: "https://ref.supabase.co/storage/v1")!,
+          headers: [:],
+          http: .init(
+            transport: ClosureTransport { _, _ in
+              (
+                HTTPResponse(
+                  status: .created,
+                  headerFields: [
+                    .location: "https://ref.supabase.co/storage/v1/upload/resumable/abc",
+                    .uploadOffset: "0",
+                  ]),
+                nil
+              )
+            }))))
+
+    let created = try await sut.create(
+      bucket: "bucket", key: try ObjectKey("video.mp4"), length: 20, options: options)
+
+    #expect(
+      created.uploadURL
+        == URL(string: "https://ref.storage.supabase.co/storage/v1/upload/resumable/abc"))
+  }
+
+  @Test(arguments: [
+    "/storage/v1/object/bucket/a",
+    "/storage/v1/upload/resumable",
+    "/storage/v1/upload/resumable/",
+    "/storage/v1/upload/resumable/../../object/bucket/a",
+    "/storage/v1/upload/resumable/%2E%2E/%2E%2E/object/bucket/a",
+    "/upload/resumable/abc",
+  ])
+  func createRejectsALocationOutsideTheResumablePath(location: String) async throws {
+    let sut = try makeSUT { _ in
+      self.response(201, headers: ["Location": location, "Upload-Offset": "0"])
+    }
+
+    let error = await #expect(throws: StorageError.self) {
+      try await sut.create(
+        bucket: "bucket", key: try ObjectKey("a"), length: 20, options: options)
+    }
+    #expect(error?.kind == .server)
+  }
+
+  @Test(arguments: [
+    "https://attacker.example/storage/v1/upload/resumable/abc",
+    "http://localhost:54321/storage/v1/object/bucket/a",
+    "http://localhost:54321/storage/v1/upload/resumable/%2e%2e/%2e%2e/object/bucket/a",
+  ])
+  func requestsToAnUploadURLOffTheStorageOriginAreNotSent(url: String) async throws {
+    let sent = LockIsolated<[URLRequest]>([])
+    let sut = try makeSUT { request in
+      sent.withValue { $0.append(request) }
+      return self.response(204, headers: ["Upload-Offset": "5"])
+    }
+    let foreign = URL(string: url)!
+
+    let offsetError = await #expect(throws: StorageError.self) {
+      try await sut.offset(of: foreign)
+    }
+    let appendError = await #expect(throws: StorageError.self) {
+      try await sut.append(HTTPBody(Data("chunk".utf8)), at: 0, to: foreign)
+    }
+    await sut.terminate(foreign)
+
+    #expect(offsetError?.kind == .server)
+    #expect(appendError?.kind == .server)
+    #expect(sent.value.isEmpty)
+  }
+
   @Test
   func createWithTheFirstChunkSendsItAsAnOffsetStream() async throws {
     let sut = try makeSUT { request in

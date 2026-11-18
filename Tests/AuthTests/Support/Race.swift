@@ -7,7 +7,7 @@ import Logging
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 /// One project's world: a server behind a `RecordingTransport`, a `SignalingTestClock` that drives
 /// both auto refresh and the injected `now`, and a storage key no other test uses.
@@ -83,20 +83,21 @@ struct Race: Sendable {
   ) -> AuthClient {
     var platform = AuthPlatform.live
     platform.lifecycleEvents = lifecycleEvents
+    var configuration = AuthClient.Configuration(
+      url: clientURL,
+      storageKey: storageKey,
+      storage: storage,
+      redirectTo: redirectTo,
+      acceptsImplicitTokens: acceptsImplicitTokens,
+      autoRefresh: autoRefresh,
+      observesAppLifecycle: false,
+      http: HTTPClientConfiguration(transport: transport),
+      logger: logger
+    )
+    configuration.clock = clock
+    configuration.now = now
     return AuthClient(
-      configuration: AuthClient.Configuration(
-        url: clientURL,
-        storageKey: storageKey,
-        storage: storage,
-        redirectTo: redirectTo,
-        acceptsImplicitTokens: acceptsImplicitTokens,
-        autoRefresh: autoRefresh,
-        observesAppLifecycle: false,
-        http: HTTPClientConfiguration(transport: transport),
-        logger: logger,
-        clock: clock,
-        now: now
-      ),
+      configuration: configuration,
       pkce: .live,
       platform: platform,
       beforeRefreshingHeldSession: beforeRefreshingHeldSession

@@ -10,10 +10,10 @@ import SnapshotTestingCustomDump
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 @testable import Functions
-@testable import Realtime
-@_spi(Experimental) @testable import Supabase
+@_spi(Testing) @testable import Realtime
+@_spi(Experimental) @_spi(Testing) @testable import Supabase
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -60,12 +60,14 @@ struct SupabaseClientTests {
   @Test
   func globalClockReachesEverySubClientThatWaits() throws {
     let clock = TestClock()
+    var global = SupabaseClient.Configuration.Global()
+    global.clock = clock
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: SupabaseClient.Configuration.Auth(storage: InMemoryAuthStorage()),
-        global: SupabaseClient.Configuration.Global(clock: clock)
+        global: global
       )
     )
 
@@ -334,7 +336,7 @@ struct SupabaseClientTests {
           storage: localStorage,
           autoRefresh: .manual
         ),
-        realtime: SupabaseClient.Configuration.Realtime(
+        global: SupabaseClient.Configuration.Global(
           http: .init(transport: ClosureTransport { _, _ in throw URLError(.cancelled) }))
       )
     )
@@ -710,50 +712,17 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func functionsHTTPOverridesTheGlobalTransport() async throws {
-    let globalSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let functionsSeen = LockIsolated<[HTTPTypes.HTTPRequest]>([])
-    let client = try SupabaseClient(
-      supabaseURL: URL(string: "https://project-ref.supabase.co")!,
-      supabaseKey: "PUBLISHABLE_KEY",
-      configuration: SupabaseClient.Configuration(
-        auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
-        global: .init(
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              globalSeen.withValue { $0.append(request) }
-              return (HTTPTypes.HTTPResponse(status: .ok), nil)
-            },
-            middlewares: [TagMiddleware()])),
-        functions: .init(
-          http: .init(
-            transport: ClosureTransport { request, _ in
-              functionsSeen.withValue { $0.append(request) }
-              return (HTTPTypes.HTTPResponse(status: .ok), nil)
-            }))
-      )
-    )
-
-    try await client.functions.invoke("hello")
-
-    #expect(globalSeen.value.isEmpty)
-    let request = try #require(functionsSeen.value.first)
-    #expect(request.headerFields[.tag] == "yes")
-  }
-
-  @Test
-  func functionsLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+  func functionsUsesTheGlobalLogger() throws {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage()),
-        global: .init(logger: Logging.Logger(label: "global")),
-        functions: .init(logger: Logging.Logger(label: "functions"))
+        global: .init(logger: Logging.Logger(label: "global"))
       )
     )
 
-    #expect(client.functions.configuration.logger.label == "functions")
+    #expect(client.functions.configuration.logger.label == "global")
   }
 
   @Test
@@ -834,7 +803,7 @@ struct SupabaseClientTests {
           storage: InMemoryAuthStorage(),
           autoRefresh: .manual
         ),
-        realtime: SupabaseClient.Configuration.Realtime(http: .init(middlewares: [TagMiddleware()]))
+        global: SupabaseClient.Configuration.Global(http: .init(middlewares: [TagMiddleware()]))
       )
     )
 
@@ -878,18 +847,17 @@ struct SupabaseClientTests {
   }
 
   @Test
-  func realtimeLoggerIsNotOverwrittenByTheGlobalLogger() throws {
+  func realtimeUsesTheGlobalLogger() throws {
     let client = try SupabaseClient(
       supabaseURL: URL(string: "https://project-ref.supabase.co")!,
       supabaseKey: "PUBLISHABLE_KEY",
       configuration: SupabaseClient.Configuration(
         auth: .init(storage: InMemoryAuthStorage(), autoRefresh: .manual),
-        global: .init(logger: Logging.Logger(label: "global")),
-        realtime: SupabaseClient.Configuration.Realtime(logger: Logging.Logger(label: "realtime"))
+        global: .init(logger: Logging.Logger(label: "global"))
       )
     )
 
-    #expect(client.realtime.logger.label == "realtime")
+    #expect(client.realtime.logger.label == "global")
     #expect(client.realtime.logger[metadataKey: "system"] == "realtime")
   }
 

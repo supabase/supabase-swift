@@ -12,7 +12,7 @@ import HTTPTypes
 import TestHelpers
 import Testing
 
-@testable import Auth
+@_spi(Testing) @testable import Auth
 
 @Suite
 struct AuthAdminTests {
@@ -58,9 +58,14 @@ struct AuthAdminTests {
       (HTTPResponse(status: .serviceUnavailable), Data())
     }
     let clock = SleepCountingClock()
+    var configuration = AuthAdminClient.Configuration(
+      url: clientURL,
+      secretKey: "secret.key",
+      http: .init(transport: transport)
+    )
+    configuration.clock = clock
     let admin = AuthAdminClient(
-      configuration: .init(
-        url: clientURL, secretKey: "secret.key", http: .init(transport: transport), clock: clock)
+      configuration: configuration
     )
 
     _ = try? await admin.user(id: UUID())
