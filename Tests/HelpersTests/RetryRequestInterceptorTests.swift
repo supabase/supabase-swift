@@ -367,18 +367,22 @@ struct RetryRequestInterceptorTests {
   func waitsJitteredBackoffBetweenAttempts() async throws {
     let clock = RecordingClock()
     let interceptor = makeInterceptor(
-      RetryPolicy(baseDelay: .seconds(1), maxDelay: .seconds(60)), clock: clock)
-    let callCount = LockIsolated(0)
+      RetryPolicy(maxAttempts: 11, baseDelay: .seconds(1), maxDelay: .seconds(1_000)),
+      clock: clock)
 
     _ = try await interceptor.intercept(makeRequest(), body: nil) { _, _ in
-      callCount.withValue { $0 += 1 }
-      return self.makeResponse(statusCode: callCount.value < 3 ? 503 : 200)
+      self.makeResponse(statusCode: 503)
     }
 
     let durations = clock.durations.value
-    #expect(durations.count == 2)
-    #expect((Duration.zero...(.seconds(1))).contains(durations[0]))
-    #expect((Duration.zero...(.seconds(2))).contains(durations[1]))
+    #expect(durations.count == 10)
+    for (index, duration) in durations.enumerated() {
+      let cap = Duration.seconds(1 << index)
+      #expect((Duration.zero...cap).contains(duration), "retry \(index + 1)")
+    }
+    // The window doubles on every retry. If every wait stayed inside the first retry's
+    // window, the interceptor would be passing the wrong retry number.
+    #expect(durations.contains { $0 > .seconds(1) })
   }
 
   @Test

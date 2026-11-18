@@ -10,8 +10,8 @@ package import HTTPTypes
 
 /// How a client retries a request that failed transiently.
 ///
-/// One policy drives every module that retries (Auth, PostgREST, Storage, and the delay math of
-/// Realtime's reconnect). A request is retried when its method is in ``retryableMethods`` and
+/// One policy drives every HTTP module that retries (Auth, PostgREST, Storage). Realtime's
+/// reconnect uses ``BackoffPolicy`` directly, with its own delays. A request is retried when its method is in ``retryableMethods`` and
 /// the attempt either failed with a transient `URLError` or returned a response that
 /// ``retries(_:)`` accepts: a status in ``retryableStatuses``, and for a 429 a `Retry-After`.
 /// The wait between attempts is capped exponential backoff with full jitter —

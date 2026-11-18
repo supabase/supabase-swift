@@ -43,9 +43,12 @@ struct BackoffPolicyTests {
   }
 
   @Test
-  func defaultRandomStaysInsideTheWindow() {
+  func defaultRandomSpreadsInsideTheWindow() {
     let policy = BackoffPolicy.fullJitter(base: .seconds(1), cap: .seconds(30))
+    let delays = (0..<200).map { _ in policy.delay(forAttempt: 3) }
 
-    #expect((Duration.zero...(.seconds(4))).contains(policy.delay(forAttempt: 3)))
+    #expect(delays.allSatisfy { (Duration.zero...(.seconds(4))).contains($0) })
+    #expect(delays.contains { $0 < .seconds(2) })
+    #expect(delays.contains { $0 > .seconds(2) })
   }
 }
