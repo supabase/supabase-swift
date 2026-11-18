@@ -276,15 +276,33 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   /// > filter or a `map` may legitimately have no rows, and making every caller guard for that is a
   /// > worse trade than one wasted round trip.
   ///
-  /// - Parameter values: The rows to insert, in the relation's
-  ///   ``_PostgrestWritableRelation/Draft`` shape.
+  /// A row that leaves a column out gets `null` there, not the column's `DEFAULT`. Pass
+  /// `defaultToNull: false` to get the default:
+  ///
+  /// ```swift
+  /// // `isComplete` is `NOT NULL DEFAULT false`; the second draft leaves it out
+  /// try await client.from(Todo.self)
+  ///   .insert(
+  ///     [Todo.Draft(task: "a", isComplete: true), Todo.Draft(task: "b")],
+  ///     defaultToNull: false
+  ///   )
+  ///   .execute()
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - values: The rows to insert, in the relation's ``_PostgrestWritableRelation/Draft`` shape.
+  ///   - defaultToNull: What a row gets for a column that another row in the batch names and it
+  ///     leaves out. `true`, the default, stores `null` there. `false` sends
+  ///     `Prefer: missing=default`, so the column's `DEFAULT` applies instead. Use `false` when a
+  ///     draft leaves out a `NOT NULL` column that has a default.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.
-  public func insert(_ values: some Collection<R.Draft>) throws -> _PostgrestMutation<
-    R, _PostgrestInsertPhase
-  > {
-    try insertion(Array(values))
+  public func insert(
+    _ values: some Collection<R.Draft>,
+    defaultToNull: Bool = true
+  ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
+    try insertion(Array(values), defaultToNull: defaultToNull)
   }
 
   /// Inserts a row, updating it instead if it conflicts on a unique constraint of your choosing.
@@ -355,6 +373,10 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   ///   - additional: The remaining columns, for a constraint spanning more than one.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
+  ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
+  ///     `null`, as in ``insert(_:defaultToNull:)``.
+  ///     When a row merges into an existing row, that `DEFAULT` or `null` overwrites the stored
+  ///     value.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.
@@ -369,12 +391,14 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
     _ additional: repeat KeyPath<
       R.Columns, _PostgrestStoredColumn<R, each RestValue, each RestNullability>
     >,
-    resolution: _PostgrestConflictResolution = .mergeDuplicates
+    resolution: _PostgrestConflictResolution = .mergeDuplicates,
+    defaultToNull: Bool = true
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
     var names = [R.columns[keyPath: column].postgrestExpression]
     repeat names.append(R.columns[keyPath: each additional].postgrestExpression)
     return try insertion(
-      Array(values), onConflict: names.joined(separator: ","), resolution: resolution)
+      Array(values), onConflict: names.joined(separator: ","), resolution: resolution,
+      defaultToNull: defaultToNull)
   }
 
   /// Updates the rows matched by the filters applied to the returned value.
@@ -508,14 +532,20 @@ extension _PostgrestSource where R: _PostgrestWritableRelation & _PostgrestKeyed
   ///   - values: The rows to upsert, in the relation's ``_PostgrestWritableRelation/Draft`` shape.
   ///   - resolution: What to do with a conflicting row. Defaults to
   ///     ``_PostgrestConflictResolution/mergeDuplicates``, and applies to every row in the batch.
+  ///   - defaultToNull: `false` gives a column that a row leaves out its `DEFAULT` instead of
+  ///     `null`, as in ``insert(_:defaultToNull:)``.
+  ///     When a row merges into an existing row, that `DEFAULT` or `null` overwrites the stored
+  ///     value.
+  ///     A row that leaves out a generated key then gets a new key, so it is inserted.
   /// - Returns: A ``_PostgrestMutation`` to execute, or to request rows back from.
   /// - Throws: ``PostgrestError`` with kind `.invalidRequest` when `values` does not encode. Nothing
   ///   is sent.
   public func upsert(
     _ values: some Collection<R.Draft>,
-    resolution: _PostgrestConflictResolution = .mergeDuplicates
+    resolution: _PostgrestConflictResolution = .mergeDuplicates,
+    defaultToNull: Bool = true
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
-    try insertion(Array(values), resolution: resolution)
+    try insertion(Array(values), resolution: resolution, defaultToNull: defaultToNull)
   }
 }
 
@@ -537,11 +567,16 @@ extension _PostgrestSource where R: _PostgrestWritableRelation {
   fileprivate func insertion(
     _ values: some Encodable,
     onConflict: String? = nil,
-    resolution: _PostgrestConflictResolution? = nil
+    resolution: _PostgrestConflictResolution? = nil,
+    defaultToNull: Bool = true
   ) throws -> _PostgrestMutation<R, _PostgrestInsertPhase> {
     let body = try client.configuration.typedEncoder.encodeRequestBody(values)
+    var preferences = resolution.map { ["resolution=\($0.rawValue)"] } ?? []
+    if !defaultToNull {
+      preferences.append("missing=default")
+    }
     var mutation: _PostgrestMutation<R, _PostgrestInsertPhase> = mutation(
-      .post, body: body, preferences: resolution.map { ["resolution=\($0.rawValue)"] } ?? [])
+      .post, body: body, preferences: preferences)
     if let onConflict {
       mutation.request.query.append(URLQueryItem(name: "on_conflict", value: onConflict))
     }

@@ -140,6 +140,64 @@ struct PostgrestServiceDefaultsIntegrationTests {
     try await client.from(Todos.self).delete().where { $0.id.in([first, second]) }.execute()
   }
 
+  /// Two drafts where only the first names `is_complete`, which is `NOT NULL DEFAULT false`.
+  private func raggedDrafts() -> (ids: [UUID], drafts: [Todos.Draft]) {
+    let ids = [UUID(), UUID()]
+    return (
+      ids,
+      [
+        Todos.Draft(id: ids[0], description: "a", isComplete: true),
+        Todos.Draft(id: ids[1], description: "b"),
+      ]
+    )
+  }
+
+  @Test
+  func raggedBulkInsertFailsOnANotNullColumnByDefault() async throws {
+    let (ids, drafts) = raggedDrafts()
+
+    await #expect(throws: PostgrestError.self) {
+      try await client.from(Todos.self).insert(drafts).execute()
+    }
+    #expect(try await rows(withID: ids[1]).isEmpty)
+  }
+
+  @Test
+  func raggedBulkInsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
+    let (ids, drafts) = raggedDrafts()
+
+    let response = try await client.from(Todos.self)
+      .insert(drafts, defaultToNull: false).returning().execute()
+
+    #expect(response.status.code == 201)
+    #expect(appliedPreferences(response.headers).contains("missing=default"))
+    #expect(response.value.map(\.isComplete) == [true, false])
+
+    try await client.from(Todos.self).delete().where { $0.id.in(ids) }.execute()
+  }
+
+  @Test
+  func raggedBulkUpsertWithoutDefaultToNullAppliesTheColumnDefault() async throws {
+    let (ids, drafts) = raggedDrafts()
+    try await client.from(Todos.self)
+      .insert(Todos.Draft(id: ids[1], description: "stored", isComplete: true)).execute()
+
+    await #expect(throws: PostgrestError.self) {
+      try await client.from(Todos.self).upsert(drafts).execute()
+    }
+
+    let response = try await client.from(Todos.self)
+      .upsert(drafts, defaultToNull: false).returning().execute()
+
+    let applied = appliedPreferences(response.headers)
+    #expect(applied.contains("resolution=merge-duplicates"))
+    #expect(applied.contains("missing=default"))
+    #expect(response.value.map(\.description) == ["a", "b"])
+    #expect(response.value.map(\.isComplete) == [true, false])
+
+    try await client.from(Todos.self).delete().where { $0.id.in(ids) }.execute()
+  }
+
   @Test
   func returningStillReturnsTheRows() async throws {
     let id = UUID()
