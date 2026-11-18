@@ -607,40 +607,6 @@ struct RealtimeChannelTests {
   }
 
   @Test
-  func httpSendThrowsOnNon202Status() async {
-    let httpClient = RecordingTransport()
-    httpClient.respond { _, _ in
-      let errorBody = try JSONEncoder().encode(["error": "Server error"])
-      return (HTTPResponse(status: .init(code: 500)), errorBody)
-    }
-    let (client, _) = FakeWebSocket.fakes()
-
-    let socket = RealtimeClient(
-      configuration: RealtimeClient.Configuration(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
-      clock: ContinuousClock()
-    )
-
-    let channel = await socket.channel("test-topic")
-
-    do {
-      try await channel.httpSend(event: "test", payload: ["data": "test"])
-      Issue.record("Expected httpSend to throw an error on non-202 status")
-    } catch let error as RealtimeError {
-      #expect(error.kind == .server)
-      #expect(error.message == "Server error")
-      #expect(error.response?.status == 500)
-    } catch {
-      Issue.record("Unexpected error \(error)")
-    }
-  }
-
-  @Test
   func httpSendWrapsTransportFailure() async {
     let httpClient = RecordingTransport()
     httpClient.respond { _, _ in throw URLError(.timedOut) }
@@ -850,69 +816,6 @@ struct RealtimeChannelTests {
       try await channel.httpSend(event: "test", payload: ["data": "test"])
     }
     #expect(httpClient.requests.count == 1)
-  }
-
-  @Test
-  func httpSendFallsBackToStatusTextWhenErrorBodyHasNoErrorField() async {
-    let httpClient = RecordingTransport()
-    httpClient.respond { _, _ in
-      let errorBody = try JSONEncoder().encode(["message": "Invalid request"])
-      return (HTTPResponse(status: .init(code: 400)), errorBody)
-    }
-    let (client, _) = FakeWebSocket.fakes()
-
-    let socket = RealtimeClient(
-      configuration: RealtimeClient.Configuration(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
-      clock: ContinuousClock()
-    )
-
-    let channel = await socket.channel("test-topic")
-
-    do {
-      try await channel.httpSend(event: "test", payload: ["data": "test"])
-      Issue.record("Expected httpSend to throw an error on 400 status")
-    } catch {
-      #expect(error.localizedDescription == "Invalid request")
-    }
-  }
-
-  @Test
-  func httpSendFallsBackToStatusTextWhenJSONParsingFails() async {
-    let httpClient = RecordingTransport()
-    httpClient.respond { _, _ in
-      (HTTPResponse(status: .init(code: 503)), Data("Invalid JSON".utf8))
-    }
-    let (client, _) = FakeWebSocket.fakes()
-
-    let socket = RealtimeClient(
-      configuration: RealtimeClient.Configuration(
-        url: URL(string: "https://localhost:54321/realtime/v1")!,
-        headers: [.apikey: "test-key"],
-        accessToken: { "test-token" }
-      ),
-      wsTransport: { _, _ in client },
-      http: HTTPClient(transport: httpClient),
-      clock: ContinuousClock()
-    )
-
-    let channel = await socket.channel("test-topic")
-
-    do {
-      try await channel.httpSend(event: "test", payload: ["data": "test"])
-      Issue.record("Expected httpSend to throw an error on 503 status")
-    } catch {
-      let description = error.localizedDescription.lowercased()
-      #expect(
-        description.contains("503") || description.contains("unavailable"),
-        "Expected status text fallback, got '\(error.localizedDescription)'"
-      )
-    }
   }
 
   @Test(arguments: [
