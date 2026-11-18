@@ -935,7 +935,8 @@ extension AuthClientTests {
 
   @Test
   func sessionWithURL_implicitFlow_keepsStoredSessionIfSessionNotFoundErrorReturned() async throws {
-    let sut = makeSUT(redirectTo: URL(string: "https://dummy-url.com/callback")!)
+    let sut = makeSUT(
+      redirectTo: URL(string: "https://dummy-url.com/callback")!, acceptsImplicitTokens: true)
 
     transport.stub(
       .get, "user", status: .forbidden,

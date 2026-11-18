@@ -60,49 +60,24 @@ extension SupabaseClient {
       /// and HEAD requests. Defaults to `true`.
       public var retryEnabled: Bool
 
-      /// Overrides ``SupabaseClient/Configuration/Global/http`` for database requests, field by
-      /// field: a `nil` transport or timeout falls back to the global one, and its middlewares run
-      /// after the global ones. `nil` uses the global configuration as is.
-      public var http: HTTPClientConfiguration?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/logger`` for the database client. `nil`
-      /// uses the global logger.
-      public var logger: Logging.Logger?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/clock`` for the database client: the
-      /// clock its request-retry backoff sleeps on. `nil` uses the global clock.
-      public var clock: (any Clock<Duration>)?
-
       /// Creates the database settings.
       /// - Parameters:
       ///   - schema: The Postgres schema queries target. `nil` uses `public`.
-      ///   - http: Overrides the global HTTP settings for database requests, field by field.
-      ///     `nil` uses the global value.
-      ///   - logger: Overrides the global logger for the database client. `nil` uses the global
-      ///     value.
       ///   - encoder: The encoder for request bodies of the untyped API. Defaults to a new
       ///     `JSONEncoder.supabase()`.
       ///   - decoder: The decoder for responses of the untyped API. Defaults to a new
       ///     `JSONDecoder.supabase()`.
       ///   - retryEnabled: Whether to retry transient errors on GET and HEAD requests.
-      ///   - clock: Overrides the global clock for the database client. `nil` uses the global
-      ///     value.
       public init(
         schema: String? = nil,
-        http: HTTPClientConfiguration? = nil,
-        logger: Logging.Logger? = nil,
         encoder: JSONEncoder = .supabase(),
         decoder: JSONDecoder = .supabase(),
-        retryEnabled: Bool = true,
-        clock: (any Clock<Duration>)? = nil
+        retryEnabled: Bool = true
       ) {
         self.schema = schema
-        self.http = http
-        self.logger = logger
         self.encoder = encoder
         self.decoder = decoder
         self.retryEnabled = retryEnabled
-        self.clock = clock
       }
     }
 
@@ -114,6 +89,10 @@ extension SupabaseClient {
 
       /// Default URL to be used for redirect on the flows that requires it.
       public var redirectTo: URL?
+
+      /// Whether a redirect URL with tokens (`#access_token=…`) signs in. Defaults to `false`. See
+      /// ``AuthClient/Configuration/acceptsImplicitTokens``.
+      public var acceptsImplicitTokens: Bool
 
       /// Optional key name used for storing tokens in local storage.
       public var storageKey: String?
@@ -130,19 +109,6 @@ extension SupabaseClient {
       /// `true`. See ``AuthClient/Configuration/retryEnabled``.
       public var retryEnabled: Bool
 
-      /// Overrides ``SupabaseClient/Configuration/Global/http`` for Auth, field by field: a `nil`
-      /// transport or timeout falls back to the global one, and its middlewares run after the
-      /// global ones. `nil` uses the global configuration as is.
-      public var http: HTTPClientConfiguration?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/logger`` for Auth. `nil` uses the global
-      /// logger.
-      public var logger: Logging.Logger?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/clock`` for Auth: the clock auto refresh
-      /// and Auth's request-retry backoff sleep on. `nil` uses the global clock.
-      public var clock: (any Clock<Duration>)?
-
       /// Optional function for using a third-party authentication system with Supabase. The function should return an access token or ID token (JWT) by obtaining it from the third-party auth client library.
       /// Note that this function may be called concurrently and many times. Use memoization and locking techniques if this is not supported by the client libraries.
       /// When set, the `auth` namespace of the Supabase client cannot be used.
@@ -158,37 +124,31 @@ extension SupabaseClient {
       /// - Parameters:
       ///   - storage: Where the session is stored. `nil` uses the platform default.
       ///   - redirectTo: The default redirect URL for Auth flows.
+      ///   - acceptsImplicitTokens: Whether a redirect URL with tokens signs in. Defaults to
+      ///     `false`.
       ///   - storageKey: The storage key for the session. `nil` derives it from the project.
       ///   - autoRefresh: When the client refreshes the session.
       ///   - observesAppLifecycle: Whether auto refresh follows the app's foreground state.
-      ///   - http: Overrides the global HTTP settings for Auth requests, field by field. `nil`
-      ///     uses the global value.
-      ///   - logger: Overrides the global logger for Auth. `nil` uses the global value.
       ///   - retryEnabled: Whether to retry transient errors on `GET` requests.
-      ///   - clock: Overrides the global clock for Auth. `nil` uses the global value.
       ///   - accessToken: A third-party token source. When set, ``SupabaseClient/auth`` cannot be
       ///     used.
       public init(
         storage: (any AuthStorage)? = nil,
         redirectTo: URL? = nil,
+        acceptsImplicitTokens: Bool = false,
         storageKey: String? = nil,
         autoRefresh: AuthClient.AutoRefreshPolicy = .automatic,
         observesAppLifecycle: Bool = true,
-        http: HTTPClientConfiguration? = nil,
-        logger: Logging.Logger? = nil,
         retryEnabled: Bool = true,
-        clock: (any Clock<Duration>)? = nil,
         accessToken: (@Sendable () async throws -> String?)? = nil
       ) {
         self.storage = storage
         self.redirectTo = redirectTo
+        self.acceptsImplicitTokens = acceptsImplicitTokens
         self.storageKey = storageKey
         self.autoRefresh = autoRefresh
         self.observesAppLifecycle = observesAppLifecycle
         self.retryEnabled = retryEnabled
-        self.http = http
-        self.logger = logger
-        self.clock = clock
         self.accessToken = accessToken
       }
     }
@@ -202,8 +162,7 @@ extension SupabaseClient {
       /// logger: visible (warning+) in debug builds, silent in release builds.
       public var logger: Logging.Logger
 
-      /// The transport, middleware chain and request timeout every sub-client sends through. A
-      /// module's own `http` setting overrides it field by field.
+      /// The transport, middleware chain and request timeout every sub-client sends through.
       ///
       /// A `nil` ``HTTPClientConfiguration/transport`` (the default) uses ``URLSessionTransport``
       /// over `URLSession.shared`. To send through your own `URLSession`, pass
@@ -213,17 +172,22 @@ extension SupabaseClient {
       /// per attempt.
       /// ``HTTPClientConfiguration/timeout`` is the idle timeout for every request; leave it `nil`
       /// for the defaults (60 seconds; 150 for Edge Functions).
+      ///
+      /// To change the HTTP behavior of one sub-client only, branch on the request path in a
+      /// middleware or a transport: `/auth/v1`, `/rest/v1`, `/storage/v1`, `/functions/v1`, or
+      /// `/realtime/v1`. See <doc:ConfiguringOneModule>.
       public var http: HTTPClientConfiguration
 
       /// The clock the time-based sub-client behaviors sleep on: Auth's token auto-refresh, the
       /// request-retry backoff of Auth, PostgREST and Storage, and Realtime's heartbeat timer and
-      /// reconnect backoff. Each module's own `clock` setting, when set, wins over this one.
+      /// reconnect backoff.
       ///
-      /// Defaults to `ContinuousClock()`. Pass a `TestClock` to drive those behaviors
-      /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
+      /// Defaults to `ContinuousClock()`. A test hook: import Supabase with `@_spi(Testing)` and set
+      /// a `TestClock` here to drive those behaviors deterministically instead of waiting out real
+      /// seconds. `TestClock` comes from
       /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
       /// yourself, as this package does not export it.
-      public var clock: any Clock<Duration>
+      @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
       /// Creates the shared settings.
       /// - Parameters:
@@ -232,18 +196,14 @@ extension SupabaseClient {
       ///     through. A `nil` transport (the default) uses ``URLSessionTransport`` over
       ///     `URLSession.shared`.
       ///   - logger: The logger used across all Supabase sub-packages.
-      ///   - clock: The clock every time-based sub-client behavior sleeps on. Defaults to
-      ///     `ContinuousClock()`.
       public init(
         headers: HTTPFields = [:],
         http: HTTPClientConfiguration = .init(),
-        logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase"),
-        clock: any Clock<Duration> = ContinuousClock()
+        logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase")
       ) {
         self.headers = headers
         self.http = http
         self.logger = logger
-        self.clock = clock
       }
     }
 
@@ -255,32 +215,17 @@ extension SupabaseClient {
       /// The JSON decoder to use for decoding function response bodies.
       public var decoder: JSONDecoder
 
-      /// Overrides ``SupabaseClient/Configuration/Global/http`` for Functions, field by field: a
-      /// `nil` transport or timeout falls back to the global one, and its middlewares run after the
-      /// global ones. `nil` uses the global configuration as is.
-      public var http: HTTPClientConfiguration?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/logger`` for Functions. `nil` uses the
-      /// global logger.
-      public var logger: Logger?
-
       /// Creates the Edge Functions settings.
       /// - Parameters:
       ///   - region: The default region for invocations. `nil` lets the platform pick.
       ///   - decoder: The decoder for function responses. Defaults to a new
       ///     `JSONDecoder.supabase()`.
-      ///   - http: Overrides the global HTTP settings for Functions. `nil` uses the global value.
-      ///   - logger: Overrides the global logger for Functions. `nil` uses the global value.
       public init(
         region: FunctionRegion? = nil,
-        decoder: JSONDecoder = .supabase(),
-        http: HTTPClientConfiguration? = nil,
-        logger: Logger? = nil
+        decoder: JSONDecoder = .supabase()
       ) {
         self.region = region
         self.decoder = decoder
-        self.http = http
-        self.logger = logger
       }
     }
 
@@ -300,40 +245,16 @@ extension SupabaseClient {
       /// - Warning: Experimental. See `ResumableUpload`.
       @_spi(Experimental) public var resumable = ResumableUploadConfiguration()
 
-      /// Overrides ``SupabaseClient/Configuration/Global/http`` for Storage, field by field: a
-      /// `nil` transport or timeout falls back to the global one, and its middlewares run after the
-      /// global ones. `nil` uses the global configuration as is.
-      public var http: HTTPClientConfiguration?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/logger`` for Storage. `nil` uses the
-      /// global logger.
-      public var logger: Logging.Logger?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/clock`` for Storage: the clock its
-      /// request-retry backoff and the resumable-upload retry sleep on. `nil` uses the global
-      /// clock.
-      public var clock: (any Clock<Duration>)?
-
       /// Creates the Storage settings.
       /// - Parameters:
       ///   - usesNewHostname: Whether to use the `project-ref.storage.supabase.co` hostname.
-      ///   - http: Overrides the global HTTP settings for Storage, field by field. `nil` uses the
-      ///     global value.
-      ///   - logger: Overrides the global logger for Storage. `nil` uses the global value.
       ///   - retryEnabled: Whether to retry transient errors on reads.
-      ///   - clock: Overrides the global clock for Storage. `nil` uses the global value.
       public init(
         usesNewHostname: Bool = false,
-        http: HTTPClientConfiguration? = nil,
-        logger: Logging.Logger? = nil,
-        retryEnabled: Bool = true,
-        clock: (any Clock<Duration>)? = nil
+        retryEnabled: Bool = true
       ) {
         self.usesNewHostname = usesNewHostname
-        self.http = http
-        self.logger = logger
         self.retryEnabled = retryEnabled
-        self.clock = clock
       }
     }
 
@@ -378,19 +299,6 @@ extension SupabaseClient {
       /// ``URLSessionWebSocketTransport``.
       public var webSocketTransport: (any WebSocketTransport)?
 
-      /// Overrides ``SupabaseClient/Configuration/Global/http`` for `RealtimeChannel.httpSend`
-      /// calls, field by field: a `nil` transport or timeout falls back to the global one, and its
-      /// middlewares run after the global ones. `nil` uses the global configuration as is.
-      public var http: HTTPClientConfiguration?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/logger`` for Realtime. `nil` uses the
-      /// global logger.
-      public var logger: Logging.Logger?
-
-      /// Overrides ``SupabaseClient/Configuration/Global/clock`` for Realtime: the clock its
-      /// heartbeat timer and reconnect backoff sleep on. `nil` uses the global clock.
-      public var clock: (any Clock<Duration>)?
-
       /// Creates the Realtime settings.
       /// - Parameters:
       ///   - headers: Headers for the WebSocket upgrade request and `httpSend` calls. They win
@@ -403,10 +311,6 @@ extension SupabaseClient {
       ///   - monitorsNetworkPath: Whether the client reconnects when the network comes back.
       ///   - serverLogLevel: The server-side log level. `nil` uses the server default.
       ///   - webSocketTransport: The WebSocket stack. `nil` uses the default transport.
-      ///   - http: Overrides the global HTTP settings for `RealtimeChannel.httpSend` calls, field
-      ///     by field. `nil` uses the global value.
-      ///   - logger: Overrides the global logger for Realtime. `nil` uses the global value.
-      ///   - clock: Overrides the global clock for Realtime. `nil` uses the global value.
       public init(
         headers: HTTPFields = [:],
         heartbeatInterval: Duration = RealtimeClient.Configuration.defaultHeartbeatInterval,
@@ -417,10 +321,7 @@ extension SupabaseClient {
         observesAppLifecycle: Bool = RealtimeClient.Configuration.defaultObservesAppLifecycle,
         monitorsNetworkPath: Bool = RealtimeClient.Configuration.defaultMonitorsNetworkPath,
         serverLogLevel: RealtimeServerLogLevel? = nil,
-        webSocketTransport: (any WebSocketTransport)? = nil,
-        http: HTTPClientConfiguration? = nil,
-        logger: Logging.Logger? = nil,
-        clock: (any Clock<Duration>)? = nil
+        webSocketTransport: (any WebSocketTransport)? = nil
       ) {
         self.headers = headers
         self.heartbeatInterval = heartbeatInterval
@@ -431,9 +332,6 @@ extension SupabaseClient {
         self.monitorsNetworkPath = monitorsNetworkPath
         self.serverLogLevel = serverLogLevel
         self.webSocketTransport = webSocketTransport
-        self.http = http
-        self.logger = logger
-        self.clock = clock
       }
     }
 

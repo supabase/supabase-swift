@@ -156,7 +156,7 @@ struct ResumableStore: Sendable {
   @concurrent
   func prepare(fileURL: URL, fingerprint: Fingerprint) async throws -> ResumableSource {
     let path = fileURL.standardizedFileURL.path
-    if path.hasPrefix(container.path + "/"), !path.hasPrefix(temporaryDirectory.path + "/") {
+    if isInsideContainer(fileURL), !path.hasPrefix(temporaryDirectory.path + "/") {
       return .container(relativePath: String(path.dropFirst(container.path.count + 1)))
     }
     let copy = sandboxCopyURL(fingerprint: fingerprint)
@@ -200,8 +200,9 @@ struct ResumableStore: Sendable {
       to: recordURL(fingerprint: record.fingerprint), options: .atomic)
   }
 
-  /// The record, or `nil` when there is none, it is stale, or it does not decode. A stale or
-  /// corrupt record is removed with its sandbox copy. Only files named by a ``Fingerprint`` are
+  /// The record, or `nil` when there is none, it is stale, or it is corrupt: it does not
+  /// decode, or it holds a value ``isValid(_:)`` refuses. A stale or corrupt record is removed
+  /// with its sandbox copy. Only files named by a ``Fingerprint`` are
   /// touched, since ``directory`` can be a folder the app shares, such as an app group
   /// container.
   ///
@@ -215,7 +216,9 @@ struct ResumableStore: Sendable {
     } catch CocoaError.fileReadNoSuchFile {
       return nil
     }
-    guard let record = try? Self.decoder.decode(ResumableUploadRecord.self, from: data) else {
+    guard let record = try? Self.decoder.decode(ResumableUploadRecord.self, from: data),
+      isValid(record)
+    else {
       removeFiles(fingerprint: fingerprint)
       return nil
     }
@@ -265,6 +268,33 @@ struct ResumableStore: Sendable {
   func removeAll() throws {
     guard FileManager.default.fileExists(atPath: directory.path) else { return }
     try FileManager.default.removeItem(at: directory)
+  }
+
+  /// Refuses what the store never writes, so a record edited on disk cannot name a file outside
+  /// the container or drive the upload loop with an impossible chunk size or offset.
+  private func isValid(_ record: ResumableUploadRecord) -> Bool {
+    guard record.chunkSize > 0, record.lastKnownOffset >= 0,
+      record.lastKnownOffset <= record.totalBytes
+    else { return false }
+    return isValid(record.source)
+  }
+
+  /// Whether `source` names a file the store may read: its sandbox copy, or a file inside the
+  /// container once symbolic links are resolved.
+  func isValid(_ source: ResumableSource) -> Bool {
+    guard case .container(let relativePath) = source else { return true }
+    guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
+      !relativePath.split(separator: "/").contains(where: { $0 == "." || $0 == ".." })
+    else { return false }
+    return isInsideContainer(container.appendingPathComponent(relativePath))
+  }
+
+  /// Checks the path as written and with symbolic links resolved, so a link inside the
+  /// container cannot point the upload at a file outside it.
+  private func isInsideContainer(_ url: URL) -> Bool {
+    url.standardizedFileURL.path.hasPrefix(container.path + "/")
+      && url.resolvingSymlinksInPath().path.hasPrefix(
+        container.resolvingSymlinksInPath().path + "/")
   }
 
   private func isStale(_ record: ResumableUploadRecord) -> Bool {

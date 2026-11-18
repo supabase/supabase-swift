@@ -291,8 +291,9 @@ final class ChannelState {
         binding.yield(.change(delivery.change))
       }
     case .presence(let change, let state):
-      presenceChanges.yield(change)
+      // The state goes first, so a consumer that sees the change can read the state it produced.
       presenceStates.yield(state)
+      presenceChanges.yield(change)
     case .event(let event):
       events.yield(event)
       yieldSignal(.event(event))

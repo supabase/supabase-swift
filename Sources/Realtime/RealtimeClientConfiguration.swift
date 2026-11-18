@@ -39,8 +39,6 @@ extension RealtimeClient {
   /// ### Logging
   /// - ``logger``
   /// - ``serverLogLevel``
-  /// ### Testing
-  /// - ``clock``
   /// ### Default Values
   /// - ``defaultHeartbeatInterval``
   /// - ``defaultRequestTimeout``
@@ -49,7 +47,7 @@ extension RealtimeClient {
   /// - ``defaultObservesAppLifecycle``
   /// - ``defaultMonitorsNetworkPath``
   /// ### Initialization
-  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectsOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:clock:)``
+  /// - ``init(url:headers:heartbeatInterval:requestTimeout:connectsOnSubscribe:disconnectOnEmptyChannelsAfter:observesAppLifecycle:monitorsNetworkPath:serverLogLevel:accessToken:webSocketTransport:http:logger:)``
   public struct Configuration: Sendable {
     /// The Realtime server URL, such as `https://<project>.supabase.co/realtime/v1`.
     public var url: URL
@@ -179,7 +177,10 @@ extension RealtimeClient {
     /// deterministically in tests instead of waiting out real seconds. `TestClock` comes from
     /// [swift-clocks](https://github.com/pointfreeco/swift-clocks); add it to your test target
     /// yourself, as this package does not export it.
-    public var clock: any Clock<Duration>
+    ///
+    /// A test hook: import Realtime with `@_spi(Testing)`, and set it on the configuration before
+    /// you create the client.
+    @_spi(Testing) public var clock: any Clock<Duration> = ContinuousClock()
 
     /// Default interval between heartbeat messages sent to keep the connection alive.
     public static let defaultHeartbeatInterval: Duration = .seconds(25)
@@ -235,9 +236,6 @@ extension RealtimeClient {
     ///   - webSocketTransport: The WebSocket stack to connect with. Defaults to `nil`, which uses ``URLSessionWebSocketTransport``.
     ///   - http: The transport and middleware chain REST broadcast calls go through.
     ///   - logger: The logger used for Realtime client diagnostics. Defaults to a logger labeled `"io.supabase.realtime"`.
-    ///   - clock: The clock the heartbeat timer and reconnect backoff sleep on. Defaults to
-    ///     `ContinuousClock()`; pass a `TestClock` from swift-clocks (add it to your
-    ///     test target yourself) to drive them deterministically in tests.
     public init(
       url: URL,
       headers: HTTPFields = [:],
@@ -251,8 +249,7 @@ extension RealtimeClient {
       accessToken: (@Sendable () async throws -> String?)? = nil,
       webSocketTransport: (any WebSocketTransport)? = nil,
       http: HTTPClientConfiguration = .init(),
-      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime"),
-      clock: any Clock<Duration> = ContinuousClock()
+      logger: Logging.Logger = supabaseDefaultLogger(label: "io.supabase.realtime")
     ) {
       self.url = url
       self.headers = headers
@@ -267,7 +264,6 @@ extension RealtimeClient {
       self.webSocketTransport = webSocketTransport
       self.http = http
       self.logger = logger
-      self.clock = clock
     }
   }
 }

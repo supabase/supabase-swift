@@ -225,6 +225,33 @@ final class StorageResumableIntegrationTests {
   }
 
   @Test
+  func aRecordMovedToAnotherHostIsSkippedAndSendsNothing() async throws {
+    // A failed PATCH ends the upload loop, so no write of the record races the edit below.
+    let failing = FailingTransport()
+    let first = try client(transport: failing, retryTimeout: .zero)
+    let upload = try bucket(first).resumableUpload(path: "moved-host.bin", fileURL: fileURL)
+    failing.failing.setValue([.patch])
+    try await upload.start()
+    await #expect(throws: StorageError.self) { try await upload.result }
+    let recordURL = directory.appendingPathComponent("\(upload.id.rawValue).json")
+    var record = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: recordURL)) as? [String: Any])
+    let storedURL = try #require(record["uploadURL"] as? String)
+    var uploadURL = try #require(URLComponents(string: storedURL))
+    uploadURL.host = "attacker.invalid"
+    record["uploadURL"] = uploadURL.string
+    try JSONSerialization.data(withJSONObject: record).write(to: recordURL)
+
+    let transport = FailingTransport()
+    let second = try client(transport: transport)
+    let resumed = try await second.resumableUploads.resumeAll()
+
+    #expect(resumed.isEmpty)
+    #expect(transport.sent.value.isEmpty)
+    #expect(FileManager.default.fileExists(atPath: recordURL.path))
+  }
+
+  @Test
   func resumeAfterAFailedStartCreatesTheUpload() async throws {
     let transport = FailingTransport()
     let client = try client(transport: transport)

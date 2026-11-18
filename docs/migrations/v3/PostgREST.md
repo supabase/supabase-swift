@@ -53,10 +53,10 @@ Changes that still compile but behave differently. Check each one by hand.
 | --- | --- |
 | `setHeader(name: String, value:)` on a builder | `settingHeader(name: HTTPField.Name, value:)`; returns a new builder |
 | `PostgrestClient.setAuth(_:)` | `AccessTokenMiddleware` in `Configuration.http`; see [Access token](#access-token) |
-| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:clock:))`; the flat init is gone, and `http` now comes before `logger` |
+| `PostgrestClient(url:schema:headers:logger:...)` | `PostgrestClient(configuration: .init(url:schema:headers:http:logger:encoder:decoder:retryEnabled:))`; the flat init is gone, and `http` now comes before `logger` |
 | `Configuration.headers: [String: String]` | `Configuration.headers: HTTPFields`, for example `[.apikey: key]` |
 | `PostgrestClient.Configuration.defaultHeaders` | removed; the client still adds `X-Client-Info` unless you set it |
-| `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` and `Configuration.clock` are public too |
+| `Configuration.encoder`, `decoder` (`let`) | `var`; `Configuration.logger` is public too |
 | `PostgrestClient.Configuration.jsonEncoder`, `.jsonDecoder` | removed; see [Default coders](#default-coders) |
 | `Configuration(… fetch:)` | `http: HTTPClientConfiguration` (see the overview) |
 | `PostgrestClient.FetchHandler` | `any ClientTransport` |
