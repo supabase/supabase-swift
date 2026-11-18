@@ -51,13 +51,17 @@ public struct ResumableUploadRegistry: Sendable {
   /// A handle for every record on disk, oldest first. An upload already in flight in this
   /// process is returned as the same handle; the others are ``ResumableUpload/Status/pending``
   /// until ``ResumableUpload/start()``. A record that does not decode is deleted; one that
-  /// cannot be read, for example while data protection locks it, is skipped. Reads the disk off
-  /// the caller's actor.
+  /// cannot be read, for example while data protection locks it, is skipped. A record whose
+  /// upload URL is not under this client's storage endpoint is skipped and kept, since it can
+  /// belong to another client that shares the record directory. Reads the disk off the
+  /// caller's actor.
   ///
   /// - Throws: ``StorageError`` when the record directory cannot be read.
   @concurrent
   public func pending() async throws -> [ResumableUpload] {
-    try store.records().map { ResumableUpload.handle(record: $0, api: api) }
+    try store.records()
+      .filter { api.requests.isTusUploadURL($0.uploadURL) }
+      .map { ResumableUpload.handle(record: $0, api: api) }
   }
 
   /// ``pending()``, with every upload started or resumed, one at a time.

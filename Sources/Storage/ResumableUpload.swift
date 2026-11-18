@@ -491,6 +491,11 @@ public actor ResumableUpload {
 
   private func loadOrCreateRecord() async throws -> ResumableUploadRecord {
     if var existing = try store.record(fingerprint: fingerprint) {
+      // A record saved before the upload URL was moved onto the storage origin, or edited on
+      // disk, is created again here rather than contacted.
+      guard api.requests.isTusUploadURL(existing.uploadURL) else {
+        return try await recreate(existing)
+      }
       do {
         existing.lastKnownOffset = try await tus.offset(of: existing.uploadURL)
         try store.save(existing)
@@ -519,6 +524,13 @@ public actor ResumableUpload {
   private func createRecord(source: ResumableSource) async throws
     -> ResumableUploadRecord
   {
+    // A handle can keep the source of a record the store has since refused, for example after
+    // a link in its path moved outside the container.
+    guard store.isValid(source) else {
+      throw StorageError(
+        kind: .invalidRequest,
+        message: "The upload source is not inside the app container.")
+    }
     let key = try ObjectKey(path)
     let (_, modificationDate) = try ResumableStore.attributes(
       of: store.fileURL(for: source, fingerprint: fingerprint))

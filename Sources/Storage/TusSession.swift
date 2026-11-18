@@ -13,8 +13,9 @@ import HTTPTypes
 /// logging and user middlewares apply to every chunk.
 ///
 /// Metadata encoding is the only inference it makes; it never decodes the body of a response
-/// beyond the one the final `PATCH` returns, and the upload URL is the `Location` the server
-/// sent, resolved against the request, never rebuilt.
+/// beyond the one the final `PATCH` returns. The upload URL is the path and query of the
+/// `Location` the server sent, on the origin of the tus endpoint, and no request goes to an
+/// upload URL off that origin (see ``StorageRequests/tusUploadURL(location:)``).
 struct TusSession: Sendable {
   struct Created: Hashable, Sendable {
     var uploadURL: URL
@@ -50,10 +51,16 @@ struct TusSession: Sendable {
     try await drain(body)
 
     guard let location = head.headerFields[.location],
-      let uploadURL = URL(string: location, relativeTo: request.head.url)?.absoluteURL
+      let resolved = URL(string: location, relativeTo: request.head.url)?.absoluteURL
     else {
       throw StorageError(
         kind: .server, message: "The resumable upload was created without a Location.",
+        response: HTTPErrorResponse(head, body: Data()))
+    }
+    guard let uploadURL = api.requests.tusUploadURL(location: resolved) else {
+      throw StorageError(
+        kind: .server,
+        message: "The resumable upload was created with a Location outside upload/resumable.",
         response: HTTPErrorResponse(head, body: Data()))
     }
     // Plain creation (no body) answers without Upload-Offset; creation-with-upload must carry it.
@@ -65,6 +72,7 @@ struct TusSession: Sendable {
   }
 
   func offset(of uploadURL: URL) async throws -> Int64 {
+    try check(uploadURL)
     let (head, body) = try await send(
       api.requests.tusOffset(of: uploadURL, upsert: options.upsert), conflictIsOffset: false)
     try await drain(body)
@@ -72,6 +80,7 @@ struct TusSession: Sendable {
   }
 
   func append(_ chunk: HTTPBody, at offset: Int64, to uploadURL: URL) async throws -> Appended {
+    try check(uploadURL)
     let (head, body) = try await send(
       api.requests.tusAppend(chunk, at: offset, to: uploadURL, upsert: options.upsert),
       conflictIsOffset: true)
@@ -84,7 +93,18 @@ struct TusSession: Sendable {
 
   /// Best effort: a failure here leaves an upload the server expires on its own.
   func terminate(_ uploadURL: URL) async {
+    guard api.requests.isTusUploadURL(uploadURL) else { return }
     _ = try? await api.execute(api.requests.tusTerminate(uploadURL, upsert: options.upsert))
+  }
+
+  /// Throws unless `uploadURL` is an upload under the tus endpoint, on its origin, so a record
+  /// edited on disk cannot send the access token to another host.
+  func check(_ uploadURL: URL) throws {
+    guard api.requests.isTusUploadURL(uploadURL) else {
+      throw StorageError(
+        kind: .server,
+        message: "The resumable upload URL is not an upload under this storage endpoint.")
+    }
   }
 
   private func send(_ request: StorageRequest, conflictIsOffset: Bool) async throws

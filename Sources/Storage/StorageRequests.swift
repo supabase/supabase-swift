@@ -282,6 +282,45 @@ struct StorageRequests: Sendable {
     return headers
   }
 
+  /// The upload URL for the resolved `Location` of a tus creation: its path and query on the
+  /// origin of the tus endpoint, or `nil` when the path is not an upload under
+  /// `upload/resumable/`.
+  ///
+  /// The origin is replaced rather than checked, since storage-api builds `Location` from
+  /// `X-Forwarded-Host`, and the hosted gateway sets that to the project host when the request
+  /// came in on a custom domain. So the access token never goes to a host the client was not
+  /// configured with.
+  func tusUploadURL(location: URL) -> URL? {
+    guard let source = URLComponents(url: location, resolvingAgainstBaseURL: true) else {
+      return nil
+    }
+    var components = resumableBase
+    components.percentEncodedPath = source.percentEncodedPath
+    components.percentEncodedQuery = source.percentEncodedQuery
+    guard let url = components.url, isTusUploadURL(url) else { return nil }
+    return url
+  }
+
+  /// Whether `url` is an upload under the tus endpoint, on its scheme, host and port. The
+  /// project host counts as the storage host, as ``StorageAPI/storageHost(_:)`` maps it.
+  func isTusUploadURL(_ url: URL) -> Bool {
+    guard let canonical = try? StorageAPI.storageHost(url),
+      let components = URLComponents(url: canonical, resolvingAgainstBaseURL: false),
+      components.user == nil, components.password == nil,
+      components.scheme?.lowercased() == resumableBase.scheme?.lowercased(),
+      components.host?.lowercased() == resumableBase.host?.lowercased(),
+      Self.effectivePort(of: components) == Self.effectivePort(of: resumableBase)
+    else { return false }
+    let prefix = resumableBase.percentEncodedPath + "/upload/resumable/"
+    return components.percentEncodedPath.hasPrefix(prefix)
+      && components.percentEncodedPath.count > prefix.count
+      && !components.path.split(separator: "/").contains { $0 == "." || $0 == ".." }
+  }
+
+  private static func effectivePort(of components: URLComponents) -> Int? {
+    components.port ?? ["http": 80, "https": 443][components.scheme?.lowercased() ?? ""]
+  }
+
   private func tusMetadata(bucket: String, key: ObjectKey, options: UploadOptions) throws
     -> String
   {
